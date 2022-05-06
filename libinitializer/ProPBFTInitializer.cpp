@@ -24,6 +24,7 @@
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -58,15 +59,10 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
 
 void ProPBFTInitializer::scheduledTask()
 {
-    // reportNodeInfo to gateway and rpc for probing
+    // not enable failover, report nodeInfo to rpc/gw periodly
     reportNodeInfo();
-    // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
-    // will periodically retry to pull the groupInfo until the information is successfully pulled.
-    if (!m_groupNodeInfoFetched)
-    {
-        syncGroupNodeInfo();
-    }
     m_timer->restart();
+    return;
 }
 
 void ProPBFTInitializer::reportNodeInfo()
@@ -95,13 +91,10 @@ void ProPBFTInitializer::reportNodeInfo()
 void ProPBFTInitializer::start()
 {
     PBFTInitializer::start();
-    if (m_timer)
+    if (m_timer && !m_nodeConfig->enableFailOver())
     {
         m_timer->start();
     }
-    m_sealer->start();
-    m_blockSync->start();
-    m_pbft->start();
 }
 
 void ProPBFTInitializer::stop()
@@ -115,19 +108,37 @@ void ProPBFTInitializer::stop()
 
 void ProPBFTInitializer::init()
 {
-    PBFTInitializer::init();
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
-    m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
-        INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
-                              << LOG_KV("nodeName", m_nodeConfig->nodeName());
-        auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
-        if (!nodeInfo)
-        {
-            INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
-                                     << LOG_KV("node", m_nodeConfig->nodeName());
-            return;
-        }
-        nodeInfo->setNodeType(_type);
-        reportNodeInfo();
-    });
+    m_blockSync->config()->registerOnNodeTypeChanged(
+        [this, groupInfoCodec](bcos::protocol::NodeType _type) {
+            INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
+                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
+            auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
+            if (!nodeInfo)
+            {
+                INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
+                                         << LOG_KV("node", m_nodeConfig->nodeName());
+                return;
+            }
+            nodeInfo->setNodeType(_type);
+            // failover enabled, should sync the latest information to the etcd if the node is
+            // leader
+            if (m_leaderElection)
+            {
+                INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange, update the memberConfig");
+                std::string modifiedConfig;
+                groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
+                auto memberInfo = m_memberFactory->createMember();
+                memberInfo->setMemberID(m_nodeConfig->memberID());
+                memberInfo->setMemberConfig(modifiedConfig);
+                m_leaderElection->updateSelfConfig(memberInfo);
+            }
+            else
+            {
+                reportNodeInfo();
+            }
+        });
+    PBFTInitializer::init();
+    reportNodeInfo();
 }

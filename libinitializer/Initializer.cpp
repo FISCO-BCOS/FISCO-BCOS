@@ -188,7 +188,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
             consensusStorage, m_frontServiceInitializer->front());
-        // registerOnNodeTypeChanged
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();

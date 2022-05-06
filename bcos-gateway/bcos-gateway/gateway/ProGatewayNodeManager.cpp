@@ -26,10 +26,6 @@ using namespace bcos::protocol;
 void ProGatewayNodeManager::DetectNodeAlive()
 {
     m_nodeAliveDetector->restart();
-    if (utcTime() - m_startT < c_tarsAdminRefreshInitTime)
-    {
-        return;
-    }
     auto updated = m_localRouterTable->eraseUnreachableNodes();
     if (!updated)
     {
@@ -46,6 +42,7 @@ void ProGatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _
     {
         return;
     }
+    m_nodeAliveDetector->restart();
     increaseSeq();
     syncLatestNodeIDList();
 }

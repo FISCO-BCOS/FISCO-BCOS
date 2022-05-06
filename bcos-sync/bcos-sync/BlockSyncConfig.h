@@ -122,6 +122,7 @@ public:
 
     void setMasterNode(bool _masterNode)
     {
+        Guard l(m_mutex);
         m_masterNode = _masterNode;
         // notify nodeType to the gateway
         if (m_nodeTypeChanged)
@@ -172,6 +173,7 @@ private:
 
     // TODO: ensure thread-safe
     bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
+    bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::None;
 
     std::function<void(bcos::protocol::NodeType)> m_nodeTypeChanged;
 

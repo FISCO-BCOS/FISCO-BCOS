@@ -19,8 +19,8 @@
  * @date 2021-10-11
  */
 #pragma once
-#include <bcos-rpc/jsonrpc/groupmgr/GroupManager.h>
-#include <bcos-rpc/jsonrpc/groupmgr/NodeService.h>
+#include <bcos-rpc/groupmgr/GroupManager.h>
+#include <bcos-rpc/groupmgr/NodeService.h>
 namespace bcos
 {
 namespace rpc

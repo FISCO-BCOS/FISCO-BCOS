@@ -85,8 +85,7 @@ bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto:
     return ret;
 }
 
-bool GatewayNodeManager::unregisterNode(
-    const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID)
+bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string const& _nodeID)
 {
     auto ret = m_localRouterTable->removeNode(_groupID, _nodeID);
     if (ret)

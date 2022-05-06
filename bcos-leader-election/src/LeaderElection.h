@@ -72,6 +72,8 @@ public:
         m_onKeepAliveException = _handler;
     }
 
+    virtual void updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self);
+
 protected:
     // campaign leader
     virtual bool campaignLeader();
@@ -90,6 +92,7 @@ protected:
 
     // for trigger campaign after disconnect
     std::shared_ptr<Timer> m_campaignTimer;
+    int64_t m_leaseID;
 };
 }  // namespace election
 }  // namespace bcos

@@ -45,7 +45,7 @@ public:
     bool insertNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::protocol::NodeType _type, bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
-    bool removeNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
+    bool removeNode(const std::string& _groupID, std::string const& _nodeID);
 
     std::map<std::string, std::set<std::string>> nodeListInfo() const;
 

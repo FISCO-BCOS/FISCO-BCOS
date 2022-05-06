@@ -20,10 +20,13 @@
  */
 #include "GatewayInitializer.h"
 #include "Common/TarsUtils.h"
+#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-leader-election/src/LeaderEntryPoint.h>
+#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 
@@ -48,9 +51,18 @@ void GatewayInitializer::init(std::string const& _configPath)
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
                              << LOG_KV("certPath", m_gatewayConfig->certPath())
                              << LOG_KV("nodePath", m_gatewayConfig->nodePath());
-
+    if (nodeConfig->enableFailOver())
+    {
+        GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
+        auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+        auto leaderEntryPointFactory =
+            std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
+        m_leaderEntryPoint =
+            leaderEntryPointFactory->createLeaderEntryPoint(nodeConfig->failOverClusterUrl(),
+                bcos::election::CONSENSUS_LEADER_DIR, "watchLeaderChange");
+    }
     bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
-    auto gateway = factory.buildGateway(m_gatewayConfig, false);
+    auto gateway = factory.buildGateway(m_gatewayConfig, false, m_leaderEntryPoint);
 
     m_gateway = gateway;
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateway success");
@@ -64,6 +76,11 @@ void GatewayInitializer::start()
         return;
     }
     m_running = true;
+    if (m_leaderEntryPoint)
+    {
+        GATEWAYSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
+        m_leaderEntryPoint->start();
+    }
     // start the gateway
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("start the gateway");
     m_gateway->start();

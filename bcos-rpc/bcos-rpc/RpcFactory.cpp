@@ -20,6 +20,7 @@
  */
 
 #include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
+#include "bcos-rpc/groupmgr/TarsGroupManager.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
@@ -29,6 +30,7 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
@@ -66,12 +68,11 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     wsConfig->setDisableSsl(_nodeConfig->rpcDisableSsl());
     if (_nodeConfig->rpcDisableSsl())
     {
-        BCOS_LOG(INFO) << LOG_BADGE("[RPC][FACTORY][initConfig]")
-                       << LOG_DESC("rpc work in disable ssl model")
-                       << LOG_KV("listenIP", wsConfig->listenIP())
-                       << LOG_KV("listenPort", wsConfig->listenPort())
-                       << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                       << LOG_KV("asServer", wsConfig->asServer());
+        RPC_LOG(INFO) << LOG_BADGE("initConfig") << LOG_DESC("rpc work in disable ssl model")
+                      << LOG_KV("listenIP", wsConfig->listenIP())
+                      << LOG_KV("listenPort", wsConfig->listenPort())
+                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("asServer", wsConfig->asServer());
         return wsConfig;
     }
 
@@ -85,15 +86,14 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         contextConfig->setCertConfig(certConfig);
         contextConfig->setSslType("ssl");
 
-        BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][initConfig]")
-                       << LOG_DESC("rpc work in ssl model")
-                       << LOG_KV("listenIP", wsConfig->listenIP())
-                       << LOG_KV("listenPort", wsConfig->listenPort())
-                       << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                       << LOG_KV("asServer", wsConfig->asServer())
-                       << LOG_KV("caCert", _nodeConfig->caCert())
-                       << LOG_KV("nodeCert", _nodeConfig->nodeCert())
-                       << LOG_KV("nodeKey", _nodeConfig->nodeKey());
+        RPC_LOG(INFO) << LOG_DESC("rpc work in ssl model")
+                      << LOG_KV("listenIP", wsConfig->listenIP())
+                      << LOG_KV("listenPort", wsConfig->listenPort())
+                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("asServer", wsConfig->asServer())
+                      << LOG_KV("caCert", _nodeConfig->caCert())
+                      << LOG_KV("nodeCert", _nodeConfig->nodeCert())
+                      << LOG_KV("nodeKey", _nodeConfig->nodeKey());
     }
     else
     {  // sm ssl
@@ -106,17 +106,16 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         contextConfig->setSmCertConfig(certConfig);
         contextConfig->setSslType("sm_ssl");
 
-        BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][initConfig]")
-                       << LOG_DESC("rpc work in sm ssl model")
-                       << LOG_KV("listenIP", wsConfig->listenIP())
-                       << LOG_KV("listenPort", wsConfig->listenPort())
-                       << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                       << LOG_KV("asServer", wsConfig->asServer())
-                       << LOG_KV("caCert", _nodeConfig->smCaCert())
-                       << LOG_KV("nodeCert", _nodeConfig->smNodeCert())
-                       << LOG_KV("nodeKey", _nodeConfig->smNodeKey())
-                       << LOG_KV("enNodeCert", _nodeConfig->enSmNodeCert())
-                       << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
+        RPC_LOG(INFO) << LOG_DESC("rpc work in sm ssl model")
+                      << LOG_KV("listenIP", wsConfig->listenIP())
+                      << LOG_KV("listenPort", wsConfig->listenPort())
+                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("asServer", wsConfig->asServer())
+                      << LOG_KV("caCert", _nodeConfig->smCaCert())
+                      << LOG_KV("nodeCert", _nodeConfig->smNodeCert())
+                      << LOG_KV("nodeKey", _nodeConfig->smNodeKey())
+                      << LOG_KV("enNodeCert", _nodeConfig->enSmNodeCert())
+                      << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
     }
 
     wsConfig->setContextConfig(contextConfig);
@@ -162,21 +161,22 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     eventSub->setGroupManager(_groupManager);
     eventSub->setMessageFactory(_wsService->messageFactory());
     eventSub->setMatcher(matcher);
-    BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][buildEventSub]") << LOG_DESC("create event sub obj");
+    RPC_LOG(INFO) << LOG_DESC("create event sub obj");
     return eventSub;
 }
 
-Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName)
+Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
+    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto config = initConfig(m_nodeConfig);
     auto wsService = buildWsService(config);
-    auto groupManager = buildGroupManager();
+    auto groupManager = buildGroupManager(_entryPoint);
     auto amopClient = buildAMOPClient(wsService, _gatewayServiceName);
 
-    BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][buildRpc]") << LOG_KV("listenIP", config->listenIP())
-                   << LOG_KV("listenPort", config->listenPort())
-                   << LOG_KV("threadCount", config->threadPoolSize())
-                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
+    RPC_LOG(INFO) << LOG_KV("listenIP", config->listenIP())
+                  << LOG_KV("listenPort", config->listenPort())
+                  << LOG_KV("threadCount", config->threadPoolSize())
+                  << LOG_KV("gatewayServiceName", _gatewayServiceName);
     auto rpc = buildRpc(wsService, groupManager, amopClient);
     return rpc;
 }
@@ -210,10 +210,42 @@ Rpc::Ptr RpcFactory::buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsServic
     return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient);
 }
 
-GroupManager::Ptr RpcFactory::buildGroupManager()
+GroupManager::Ptr RpcFactory::buildGroupManager(
+    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto nodeServiceFactory = std::make_shared<NodeServiceFactory>();
-    return std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
+    if (!_entryPoint)
+    {
+        RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
+        return std::make_shared<TarsGroupManager>(m_chainID, nodeServiceFactory);
+    }
+    RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
+    auto groupManager = std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    _entryPoint->addMemberChangeNotificationHandler(
+        [groupManager, groupInfoCodec](
+            std::string const& _key, bcos::protocol::MemberInterface::Ptr _member) {
+            auto const& groupInfoStr = _member->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            groupManager->updateGroupInfo(groupInfo);
+            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _key)
+                          << LOG_KV("memberID", _member->memberID())
+                          << LOG_KV("modifyIndex", _member->seq())
+                          << LOG_KV("groupID", groupInfo->groupID());
+        });
+
+    _entryPoint->addMemberDeleteNotificationHandler(
+        [groupManager, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint has been deleted")
+                          << LOG_KV("key", _leaderKey) << LOG_KV("memberID", _leader->memberID())
+                          << LOG_KV("modifyIndex", _leader->seq())
+                          << LOG_KV("groupID", groupInfo->groupID());
+            groupManager->removeGroupNodeList(groupInfo);
+        });
+    return groupManager;
 }
 
 AirGroupManager::Ptr RpcFactory::buildAirGroupManager(

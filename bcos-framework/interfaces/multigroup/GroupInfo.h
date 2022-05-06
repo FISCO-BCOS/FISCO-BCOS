@@ -80,16 +80,15 @@ public:
         m_nodeInfos[nodeName] = _nodeInfo;
     }
 
-    virtual bool removeNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
+    virtual bool removeNodeInfo(std::string const& _nodeName)
     {
         UpgradableGuard l(x_nodeInfos);
-        auto const& nodeName = _nodeInfo->nodeName();
-        if (!m_nodeInfos.count(nodeName))
+        if (!m_nodeInfos.count(_nodeName))
         {
             return false;
         }
         UpgradeGuard ul(l);
-        m_nodeInfos.erase(nodeName);
+        m_nodeInfos.erase(_nodeName);
         return true;
     }
 

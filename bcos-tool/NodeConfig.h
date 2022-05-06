@@ -182,7 +182,8 @@ public:
 
     std::string const& memberID() const { return m_memberID; }
     unsigned leaseTTL() const { return m_leaseTTL; }
-    bool enableConsensusBackup() const { return m_enableConsensusBackup; }
+    bool enableFailOver() const { return m_enableFailOver; }
+    std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
@@ -195,6 +196,7 @@ protected:
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadFailOverConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -294,10 +296,12 @@ private:
     uint32_t m_compatibilityVersion;
     std::string m_version;
 
-    // consensus config
+    // failover config
     std::string m_memberID;
     unsigned m_leaseTTL = 0;
-    bool m_enableConsensusBackup = false;
+    bool m_enableFailOver = false;
+    // etcd/zookeeper/consual url
+    std::string m_failOverClusterUrl;
 };
 }  // namespace tool
 }  // namespace bcos

@@ -26,6 +26,7 @@
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
+#include <bcos-framework/interfaces/protocol/MemberInterface.h>
 #include <bcos-framework/interfaces/sealer/SealerInterface.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
@@ -93,7 +94,7 @@ protected:
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
     void syncGroupNodeInfo();
-    virtual void initConsensusLeaderElection(bcos::crypto::KeyInterface::Ptr _nodeID);
+    virtual void initConsensusFailOver(bcos::crypto::KeyInterface::Ptr _nodeID);
 
 protected:
     bcos::initializer::NodeArchitectureType m_nodeArchType;
@@ -114,10 +115,7 @@ protected:
     bcos::group::GroupInfo::Ptr m_groupInfo;
     bcos::group::ChainNodeInfo::Ptr m_nodeInfo;
 
-    // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
-    // will periodically retry to pull the groupInfo until the information is successfully pulled.
-    std::atomic_bool m_groupNodeInfoFetched = {false};
-
+    bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
     bcos::election::LeaderElection::Ptr m_leaderElection;
 };
 }  // namespace initializer

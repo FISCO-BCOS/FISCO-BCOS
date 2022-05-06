@@ -6,6 +6,7 @@ from common.utilities import ConfigInfo
 import shutil
 import os
 from service.tars_service import TarsService
+import uuid
 
 
 class NodeConfigGenerator:
@@ -48,7 +49,9 @@ class NodeConfigGenerator:
         """
         generate the gensis config
         """
-        config_content = configparser.ConfigParser()
+        utilities.log_info("* generate_genesis_config")
+        config_content = configparser.ConfigParser(
+            comment_prefixes='/', allow_no_value=True)
         config_content.read(self.genesis_tpl_config)
         consensus_section = "consensus"
         config_content[consensus_section]["consensus_type"] = self.config.group_config.genesis_config.consensus_type
@@ -63,14 +66,30 @@ class NodeConfigGenerator:
             config_content[consensus_section][key] = value
             i = i + 1
         tx_section = "tx"
-        config_content[tx_section]["gas_limit"] = self.config.group_config.genesis_config.gas_limit
+        config_content[tx_section]["gas_limit"] = str(
+            self.config.group_config.genesis_config.gas_limit)
+        version_section = "version"
+        config_content[version_section]["compatibility_version"] = str(
+            self.config.group_config.genesis_config.compatibility_version)
+        utilities.log_info("* consensus_type: %s" %
+                           config_content[consensus_section]["consensus_type"])
+        utilities.log_info("* block_tx_count_limit: %s" %
+                           config_content[consensus_section]["block_tx_count_limit"])
+        utilities.log_info("* leader_period: %s" %
+                           config_content[consensus_section]["leader_period"])
+        utilities.log_info("* gas_limit: %s" %
+                           config_content[tx_section]["gas_limit"])
+        utilities.log_info("* compatibility_version: %s" %
+                           config_content[version_section]["compatibility_version"])
+        utilities.log_info("* generate_genesis_config success")
         return config_content
 
     def generate_node_config(self, node_config, node_name):
         """
         generate node config: config.ini.tmp
         """
-        ini_config = configparser.ConfigParser()
+        ini_config = configparser.ConfigParser(
+            comment_prefixes='/', allow_no_value=True)
         ini_config.read(self.node_tpl_config)
         chain_section = "chain"
         ini_config[chain_section]["sm_crypto"] = utilities.convert_bool_to_str(
@@ -89,6 +108,12 @@ class NodeConfigGenerator:
             for config_key in node_service_config_item.keys():
                 ini_config[service_section][config_key] = self.config.chain_id + \
                     "." + node_service_config_item[config_key]
+        # generate the member_id for failover
+        failover_section = "failover"
+        ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
+            self.config.enable_failover)
+        ini_config[failover_section]["member_id"] = str(uuid.uuid1())
+        ini_config[failover_section]["cluster_url"] = self.config.failover_cluster_url
 
         executor_section = "executor"
         if self.config.group_config.vm_type == "evm":
@@ -111,10 +136,10 @@ class NodeConfigGenerator:
                     node_config, service, self.ini_config_tmp_file)
                 if os.path.exists(file_path):
                     utilities.log_error(
-                        "* generate ini config for service %s failed, for the config file %s already exists!" % (service, file_path))
+                        "* store ini config for service %s failed, for the config file %s already exists!" % (service, file_path))
                     return False
                 utilities.log_info(
-                    "* generate ini config for service %s\n\tconfig path: %s" % (service, file_path))
+                    "* store ini config for service %s\n\tconfig path: %s" % (service, file_path))
                 utilities.mkfiledir(file_path)
                 with open(file_path, 'w') as configfile:
                     ini_config.write(configfile)
@@ -134,7 +159,8 @@ class NodeConfigGenerator:
         """
         reload node_config after fetch iniConfig
         """
-        ini_config = configparser.ConfigParser()
+        ini_config = configparser.ConfigParser(
+            comment_prefixes='/', allow_no_value=True)
         ini_config.read_string(ini_config_content)
         chain_section = "chain"
         node_config.group_id = ini_config[chain_section]["group_id"]
@@ -190,13 +216,13 @@ class NodeConfigGenerator:
                 #    return False
                 if os.path.exists(ini_config_path):
                     utilities.log_error(
-                        "* generate ini config for %s failed for the config %s already exists." % (service, ini_config_path))
+                        "* store ini config for %s failed for the config %s already exists." % (service, ini_config_path))
                     return False
                 utilities.mkfiledir(ini_config_path)
                 with open(ini_config_path, 'w') as configfile:
                     updated_ini_config.write(configfile)
                 utilities.log_info(
-                    "* generate ini config for service: %s success" % service)
+                    "* store ini config for service: %s success" % service)
                 # generate genesis config
                 genesis_config_path = self.get_node_config_path(
                     node_config, service, self.genesis_tmp_config_file)
@@ -221,13 +247,15 @@ class NodeConfigGenerator:
                     node_config, service, file_name)
                 if os.path.exists(file_path):
                     utilities.log_error(
-                        "* generate genesis config for %s failed for the config %s already exists." % (service, file_path))
+                        "* store genesis config for %s failed for the config %s already exists." % (service, file_path))
                     return False
                 utilities.log_info(
-                    "* generate genesis config for %s\n\t path: %s" % (service, file_path))
+                    "* store genesis config for %s\n\t path: %s" % (service, file_path))
                 utilities.mkfiledir(file_path)
                 with open(file_path, 'w') as configfile:
                     updated_config.write(configfile)
+                    utilities.log_info(
+                        "* store genesis config for %s success" % (service))
         return True
 
     def generate_all_nodes_pem(self):

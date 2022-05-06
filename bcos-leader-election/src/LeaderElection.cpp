@@ -105,6 +105,7 @@ bool LeaderElection::campaignLeader()
         if (m_onCampaignHandler)
         {
             m_onCampaignHandler(true, leader);
+            m_leaseID = leaseID;
         }
         ELECTION_LOG(INFO)
             << LOG_DESC("campaignLeader: establish new keepAlive thread and switch to master-node")
@@ -161,4 +162,33 @@ void LeaderElection::tryToSwitchToBackup()
                        << LOG_KV("memberID", m_config->self()->memberID())
                        << LOG_KV("leader", leader ? leader->memberID() : "no-leader");
     m_onCampaignHandler(false, leader);
+}
+
+void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self)
+{
+    ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig") << LOG_KV("ID", _self->memberID());
+    m_config->updateSelf(_self);
+
+    // update the configuration if the node is leader
+    auto leader = m_config->getLeader();
+    if (!leader || leader->memberID() != _self->memberID())
+    {
+        return;
+    }
+    ELECTION_LOG(INFO) << LOG_DESC(
+        "updateSelfConfig, the node-self is leader, sync the modified memberConfig");
+    auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
+    tx->init_compare(m_leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
+    tx->setup_basic_failure_operation(m_config->leaderKey());
+    tx->setup_basic_create_sequence(m_config->leaderKey(), m_config->leaderValue(), m_leaseID);
+    auto response = m_etcdClient->txn(*tx).get();
+    if (!response.is_ok())
+    {
+        ELECTION_LOG(WARNING) << LOG_DESC("sync the modified memberConfig to storage error")
+                              << LOG_KV("code", response.error_code())
+                              << LOG_KV("msg", response.error_message())
+                              << LOG_KV("lease", m_leaseID)
+                              << LOG_KV("leaderKey", m_config->leaderKey());
+        return;
+    }
 }

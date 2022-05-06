@@ -1099,7 +1099,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
             {
                 if (!entry.has_value())
                 {
-                    LEDGER_LOG(INFO) << "Get transaction failed: " << (*hashes)[i] << " not found";
+                    LEDGER_LOG(TRACE) << "Get transaction failed: " << (*hashes)[i] << " not found";
                 }
                 else
                 {

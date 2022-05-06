@@ -47,13 +47,28 @@ public:
     std::string const& leaderKey() const { return m_leaderKey; }
     virtual bcos::protocol::MemberInterface::Ptr getLeader();
 
-    std::string const& leaderValue() const { return m_leaderValue; }
+    std::string const& leaderValue() const
+    {
+        ReadGuard l(x_self);
+        return m_leaderValue;
+    }
     unsigned leaseTTL() const { return m_leaseTTL; }
-    bcos::protocol::MemberInterface::Ptr self() { return m_self; }
+    bcos::protocol::MemberInterface::Ptr self()
+    {
+        ReadGuard l(x_self);
+        return m_self;
+    }
 
     void registerTriggerCampaignHandler(std::function<bool()> _triggerCampaign)
     {
         m_triggerCampaign = _triggerCampaign;
+    }
+
+    void updateSelf(bcos::protocol::MemberInterface::Ptr _self)
+    {
+        WriteGuard l(x_self);
+        m_self = _self;
+        m_self->encode(m_leaderValue);
     }
 
 protected:
@@ -75,6 +90,7 @@ protected:
     // the campaign leader info, eg: the grpc/tars endpoint address
     bcos::protocol::MemberInterface::Ptr m_self;
     std::string m_leaderValue;
+    mutable SharedMutex x_self;
 
     bcos::protocol::MemberInterface::Ptr m_leader;
     mutable bcos::SharedMutex x_leader;
