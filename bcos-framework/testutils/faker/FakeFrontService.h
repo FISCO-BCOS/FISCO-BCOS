@@ -134,7 +134,6 @@ public:
     void start() override {}
     void stop() override {}
 
-    // TODO: for txs sync
     void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc) override {}
     // for gateway: useless here
     void onReceiveGroupNodeInfo(

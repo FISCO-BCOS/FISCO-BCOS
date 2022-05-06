@@ -92,7 +92,7 @@ protected:
 
     // for trigger campaign after disconnect
     std::shared_ptr<Timer> m_campaignTimer;
-    int64_t m_leaseID;
+    int64_t m_leaseID = 0;
 };
 }  // namespace election
 }  // namespace bcos

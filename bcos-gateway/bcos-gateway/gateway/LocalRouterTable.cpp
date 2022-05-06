@@ -162,9 +162,13 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         // the node is registered
         if (m_nodeList.count(groupID) && m_nodeList[groupID].count(nodeID))
         {
-            // TODO: update the logic here
-            auto nodeType = (m_nodeList.at(groupID).at(nodeID))->nodeType();
-            if (nodeType == nodeInfo->nodeType())
+            auto currentNodeInfo = m_nodeList.at(groupID).at(nodeID);
+            auto nodeType = currentNodeInfo->nodeType();
+            auto protocol = nodeInfo->nodeProtocol();
+            auto currentProtocol = currentNodeInfo->nodeProtocol();
+            if (nodeType == nodeInfo->nodeType() &&
+                (protocol->minVersion() == currentProtocol->minVersion()) &&
+                (protocol->maxVersion() == currentProtocol->maxVersion()))
             {
                 continue;
             }

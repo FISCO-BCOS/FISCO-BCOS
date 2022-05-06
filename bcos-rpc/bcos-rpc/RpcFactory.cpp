@@ -210,6 +210,8 @@ Rpc::Ptr RpcFactory::buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsServic
     return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient);
 }
 
+// Note: _rpcServiceName is used to check the validation of groupInfo when groupManager update
+// groupInfo
 GroupManager::Ptr RpcFactory::buildGroupManager(
     std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {

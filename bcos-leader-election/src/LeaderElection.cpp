@@ -80,6 +80,7 @@ bool LeaderElection::campaignLeader()
             tryToSwitchToBackup();
             return false;
         }
+        m_leaseID = leaseID;
         m_campaignTimer->stop();
         ELECTION_LOG(INFO) << LOG_DESC("campaignLeader success")
                            << LOG_KV("leaderKey", m_config->leaderKey())
@@ -178,7 +179,7 @@ void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self
     ELECTION_LOG(INFO) << LOG_DESC(
         "updateSelfConfig, the node-self is leader, sync the modified memberConfig");
     auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
-    tx->init_compare(m_leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
+    tx->init_lease_compare(m_leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
     tx->setup_basic_failure_operation(m_config->leaderKey());
     tx->setup_compare_and_swap_sequence(m_config->leaderValue(), m_leaseID);
     auto response = m_etcdClient->txn(*tx).get();
@@ -191,4 +192,5 @@ void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self
                               << LOG_KV("leaderKey", m_config->leaderKey());
         return;
     }
+    ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig success");
 }

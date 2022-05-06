@@ -172,7 +172,6 @@ public:
         _callback(nullptr, block);
     }
 
-    // TODO: maybe only RPC module need this interface
     void asyncGetBlockNumberByHash(
         crypto::HashType const&, std::function<void(Error::Ptr, BlockNumber)>) override
     {}
@@ -209,7 +208,6 @@ public:
         _onGetTx(nullptr, txs, nullptr);
     }
 
-    // TODO: maybe for RPC
     void asyncGetTransactionReceiptByHash(crypto::HashType const&, bool,
         std::function<void(Error::Ptr, TransactionReceipt::ConstPtr, MerkleProofPtr)> _onGetTx)
         override

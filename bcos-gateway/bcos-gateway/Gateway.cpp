@@ -389,7 +389,8 @@ bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
             node.second->serviceName(bcos::protocol::ServiceType::GATEWAY);
         if (expectedGatewayService != m_gatewayServiceName)
         {
-            GATEWAY_LOG(INFO) << LOG_DESC("invalid groupInfo for inconsistent gateway service name")
+            GATEWAY_LOG(INFO) << LOG_DESC(
+                                     "unfollowed groupInfo for inconsistent gateway service name")
                               << LOG_KV("expected", expectedGatewayService)
                               << LOG_KV("selfName", m_gatewayServiceName);
             return false;
@@ -405,7 +406,7 @@ void Gateway::asyncNotifyGroupInfo(
     {
         if (_callback)
         {
-            _callback(std::make_shared<Error>(-1, "invalidGroupInfo"));
+            _callback(nullptr);
         }
         return;
     }

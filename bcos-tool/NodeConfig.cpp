@@ -369,6 +369,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
+// Note: In components that do not require failover, do not need to set member_id
 void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
     // only enable leaderElection when using tikv

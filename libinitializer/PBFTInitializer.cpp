@@ -152,6 +152,8 @@ void PBFTInitializer::initChainNodeInfo(
         m_nodeInfo->appendServiceInfo(FRONT, FRONT_SERVANT_NAME);
         m_nodeInfo->appendServiceInfo(TXPOOL, TXPOOL_SERVANT_NAME);
     }
+    // Note: must set the serviceInfo for rpc/gateway to pass the groupInfo check when sync latest
+    // groupInfo to rpc/gateway service
     m_nodeInfo->appendServiceInfo(GATEWAY, m_nodeConfig->gatewayServiceName());
     m_nodeInfo->appendServiceInfo(RPC, m_nodeConfig->rpcServiceName());
     // set protocolInfo

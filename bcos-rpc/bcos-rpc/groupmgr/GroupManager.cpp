@@ -57,7 +57,7 @@ bool GroupManager::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
         auto const& expectedRpcService = node.second->serviceName(bcos::protocol::ServiceType::RPC);
         if (expectedRpcService != m_rpcServiceName)
         {
-            GROUP_LOG(INFO) << LOG_DESC("invalid groupInfo for inconsistent rpc service name")
+            GROUP_LOG(INFO) << LOG_DESC("unfollowed groupInfo for inconsistent rpc service name")
                             << LOG_KV("expected", expectedRpcService)
                             << LOG_KV("selfName", m_rpcServiceName);
             return false;

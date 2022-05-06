@@ -252,6 +252,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
  * @param _config: config parameter object
  * @return void
  */
+// Note: _gatewayServiceName is used to check the validation of groupInfo when localRouter update
+// groupInfo
 std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
     bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
     std::string const& _gatewayServiceName)

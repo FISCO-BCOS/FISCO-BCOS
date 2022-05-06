@@ -99,3 +99,8 @@ hunter_config(tarscpp VERSION 3.0.4-local
     URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5ef1e21daaf1e143e81be5c7560c879f76edf447.tar.gz
 	SHA1 000a070a99d82740f2f238f2defbc2ee7ff3bf76
 )
+
+hunter_config(etcd-cpp-apiv3 VERSION 0.2.5-local
+    URL "https://${URL_BASE}/FISCO-BCOS/etcd-cpp-apiv3/archive/0224827009c4b936f95788a3089911005a0515d5.tar.gz"
+    SHA1 e63a710751bd3c495e465c487f2a6a015521b360
+)
