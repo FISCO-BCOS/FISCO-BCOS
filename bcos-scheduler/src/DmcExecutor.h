@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Executive.h"
+#include "ExecutivePool.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
@@ -38,6 +39,8 @@ namespace bcos::scheduler
 class DmcExecutor
 {
 public:
+    using MessageHint = bcos::scheduler::ExecutivePool::MessageHint;
+
     enum Status : int8_t
     {
         ERROR,
@@ -59,13 +62,13 @@ public:
     {}
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
-    void prepare();
+    bool prepare();        // return true if has schedule out message
     bool unlockPrepare();  // return true if need to detect deadlock
     void releaseOutdatedLock();
     bool detectLockAndRevert();  // return true if detect a tx and revert
 
     void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
-    bool hasFinished() { return m_lockingPool.empty() && m_pendingPool.empty(); }
+    bool hasFinished() { return m_executivePool.empty(); }
 
     void scheduleIn(ExecutiveState::Ptr executive);
 
@@ -80,50 +83,22 @@ public:
         f_onTxFinished = std::move(onTxFinished);
     }
 
-    void forEachExecutive(std::function<void(ContextID, int64_t, ExecutiveState::Ptr)> handler,
-        bool needInOrder = false)
+    void forEachExecutive(std::function<void(ContextID, ExecutiveState::Ptr)> handler)
     {
-        if (needInOrder)
-        {
-            std::set<ContextID, std::less<>> orderedContextID;
-            for (auto it : m_pendingPool)
-            {
-                orderedContextID.insert(it.first);
-            }
-
-            for (auto contextID : orderedContextID)
-            {
-                auto executiveState = m_pendingPool.find(contextID)->second;
-                auto seq = executiveState->message->seq();
-                handler(contextID, seq, executiveState);
-            }
-        }
-        else
-        {
-            for (auto it : m_pendingPool)
-            {
-                auto executiveState = it.second;
-                auto contextID = executiveState->message->contextID();
-                auto seq = executiveState->message->seq();
-                handler(contextID, seq, executiveState);
-            }
-        }
+        m_executivePool.forEach(
+            ExecutivePool::MessageHint::ALL, [handler = std::move(handler)](ContextID contextID,
+                                                 ExecutiveState::Ptr executiveState) {
+                handler(contextID, executiveState);
+                return true;
+            });
     }
-
-    enum MessageHint : int8_t
-    {
-        NEED_SEND,
-        SCHEDULER_OUT,
-        LOCKED,
-        END
-    };
 
 private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
-    void scheduleOut(ContextID contextID);
-    void removeOutdatedStatus();
+    void scheduleOut(ExecutiveState::Ptr executiveState);
 
+    void handleCreateMessage(ExecutiveState::Ptr executive);
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
@@ -134,11 +109,7 @@ private:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     GraphKeyLocks::Ptr m_keyLocks;
     bcos::crypto::Hash::Ptr m_hashImpl;
-    tbb::concurrent_unordered_map<ContextID, ExecutiveState::Ptr> m_pendingPool;
-    tbb::concurrent_set<ContextID> m_needPrepare;
-    tbb::concurrent_set<ContextID> m_lockingPool;
-    tbb::concurrent_set<ContextID> m_needSendPool;
-    tbb::concurrent_set<ContextID> m_needRemove;
+    ExecutivePool m_executivePool;
     // TODO: optimize here, remove these pools
 
     mutable SharedMutex x_concurrentLock;

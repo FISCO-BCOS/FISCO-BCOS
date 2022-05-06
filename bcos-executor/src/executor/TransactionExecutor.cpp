@@ -1389,7 +1389,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 }
                 else
                 {
-                    EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0];
+                    EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0]->message();
                     callback(std::move(error), std::move(messages[0]));
                 }
             });

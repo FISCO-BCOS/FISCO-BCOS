@@ -455,7 +455,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
         auto& address = it.first;
         auto dmcExecutor = it.second;
         dmcExecutor->forEachExecutive(
-            [this, &address](ContextID contextID, int64_t, ExecutiveState::Ptr executiveState) {
+            [this, &address](ContextID contextID, ExecutiveState::Ptr executiveState) {
                 m_executiveStates.emplace(std::make_tuple(address, contextID), executiveState);
             });
     }
@@ -556,7 +556,8 @@ void BlockExecutive::DMCExecute(
     serialPrepareExecutor();
 
     // dump address for omp parallization
-    std::vector<std::string> contractAddress;  // todo: reserve
+    std::vector<std::string> contractAddress;
+    contractAddress.reserve(m_dmcExecutors.size());
     for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
     {
         contractAddress.push_back(it->first);
@@ -944,19 +945,9 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
 
 void BlockExecutive::scheduleExecutive(ExecutiveState::Ptr executiveState)
 {
-    // TODO: add lock
     auto to = std::string(executiveState->message->to());
 
-    DmcExecutor::Ptr dmcExecutor;
-    auto it = m_dmcExecutors.find(to);
-    if (it == m_dmcExecutors.end())
-    {
-        dmcExecutor = registerAndGetDmcExecutor(to);
-    }
-    else
-    {
-        dmcExecutor = it->second;
-    }
+    DmcExecutor::Ptr dmcExecutor = registerAndGetDmcExecutor(to);
 
     dmcExecutor->scheduleIn(executiveState);
 }
@@ -967,8 +958,8 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
 #ifdef DMC_TRACE_LOG_ENABLE
-    DMC_LOG(TRACE) << " 6.GenReceipt:\t\t [^^] " << output->toString() << " -> "
-                   << output->contextID() - m_startContextID << std::endl;
+    DMC_LOG(TRACE) << " 6.GenReceipt:\t\t [^^] " << output->toString()
+                   << " -> contextID:" << output->contextID() - m_startContextID << std::endl;
 #endif
     // write receipt in results
     m_executiveResults[output->contextID() - m_startContextID].receipt =
@@ -984,42 +975,38 @@ void BlockExecutive::serialPrepareExecutor()
     // Notice:
     // For the same DMC lock priority
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
-    // Acquire lock happens in dmcExecutor->prepare()
 
-    // prepare current contract(each DmcExecutor belongs to one contract)
-    std::set<std::string, std::less<>> currentExecutors;
-    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+    /// Handle normal message
+    bool hasScheduleOut;
+    do
     {
-        it->second->releaseOutdatedLock();  // release last round's lock
-        currentExecutors.insert(it->first);
-    }
-    for (auto& address : currentExecutors)  // TODO: ADD & in all this
-    {
-        // TODO: Add more description of the log meaning
-#ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: ----------------- addr:" << address
-                       << " | number:" << m_block->blockHeaderConst()->number()
-                       << " -----------------" << std::endl;
-#endif
-        m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
-    }
+        hasScheduleOut = false;
 
-    // prepare new generated contract
-    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
-    {
-        auto& address = it->first;
-        if (currentExecutors.count(address) == 0)
+        // dump current DmcExecutor
+        std::set<std::string, std::less<>> currentExecutors;
+        for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
         {
-            // is new generated contract
-#ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << "----------------- " << address << " | "
-                           << m_block->blockHeaderConst()->number() << " -----------------"
-                           << std::endl;
-#endif
-            m_dmcExecutors[address]->prepare();
+            it->second->releaseOutdatedLock();  // release last round's lock
+            currentExecutors.insert(it->first);
         }
-    }
 
+        // for each current DmcExecutor
+        for (auto& address : currentExecutors)
+        {
+#ifdef DMC_TRACE_LOG_ENABLE
+            DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: ----------------- addr:" << address
+                           << " | number:" << m_block->blockHeaderConst()->number()
+                           << " -----------------" << std::endl;
+#endif
+            hasScheduleOut |=
+                m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
+        }
+
+        // must all schedule out message has been handled.
+    } while (hasScheduleOut);
+
+
+    /// try to handle locked message
     // try to unlock some locked tx
     bool needDetectDeadlock = true;
     bool allFinished = true;
@@ -1033,7 +1020,7 @@ void BlockExecutive::serialPrepareExecutor()
         }
 #ifdef DMC_TRACE_LOG_ENABLE
         DMC_LOG(TRACE) << " 3.UnlockPrepare: \t |---------------- addr:" << address
-                       << " | number:" << m_block->blockHeaderConst()->number()
+                       << " | number:" << std::to_string(m_block->blockHeaderConst()->number())
                        << " ----------------|" << std::endl;
 #endif
 
