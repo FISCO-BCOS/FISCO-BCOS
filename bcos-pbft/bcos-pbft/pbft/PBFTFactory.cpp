@@ -25,6 +25,8 @@
 #include "protocol/PB/PBFTMessageFactoryImpl.h"
 #include "storage/LedgerStorage.h"
 #include "utilities/Common.h"
+#include <fisco-bcos-tars-service/SchedulerService/SwitchableScheduler.h>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -76,5 +78,17 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
     pbft->setLedgerFetcher(ledgerFetcher);
+
+    // PBFT and scheduler are in the same process here, we just cast m_scheduler to SchedulerService
+    auto schedulerServer =
+        std::dynamic_pointer_cast<bcos::scheduler::SwitchableScheduler>(m_scheduler);
+    schedulerServer->registerOnSwitchTermHandler(
+        [pbftEngine](bcos::protocol::BlockNumber blockNumber) {
+            PBFT_LOG(DEBUG) << LOG_BADGE("Switch")
+                            << "Receive scheduler switch term notify of number " +
+                                   std::to_string(blockNumber);
+            pbftEngine->clearExceptionProposalState(blockNumber);
+        });
+
     return pbft;
 }

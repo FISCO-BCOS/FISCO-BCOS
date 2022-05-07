@@ -31,23 +31,60 @@ namespace executor
 class TransactionExecutorFactory
 {
 public:
-    static TransactionExecutor::Ptr build(txpool::TxPoolInterface::Ptr txpool,
-        storage::MergeableStorageInterface::Ptr cachedStorage,
+    using Ptr = std::shared_ptr<TransactionExecutorFactory>;
+
+    static TransactionExecutor::Ptr build(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
+        std::string name = "executor-" + std::to_string(utcTime()))
     {
         if (isWasm)
         {
-            return std::make_shared<WasmTransactionExecutor>(txpool, cachedStorage, backendStorage,
-                executionMessageFactory, hashImpl, isAuthCheck);
+            return std::make_shared<WasmTransactionExecutor>(ledger, txpool, cachedStorage,
+                backendStorage, executionMessageFactory, hashImpl, isAuthCheck, name);
         }
         else
         {
-            return std::make_shared<EvmTransactionExecutor>(txpool, cachedStorage, backendStorage,
-                executionMessageFactory, hashImpl, isAuthCheck);
+            return std::make_shared<EvmTransactionExecutor>(ledger, txpool, cachedStorage,
+                backendStorage, executionMessageFactory, hashImpl, isAuthCheck, name);
         }
     }
+
+    TransactionExecutorFactory(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cache,
+        storage::TransactionalStorageInterface::Ptr storage,
+        protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
+        std::string name = "executor-" + std::to_string(utcTime()))
+      : m_name(name),
+        m_ledger(ledger),
+        m_txpool(txpool),
+        m_cache(cache),
+        m_storage(storage),
+        m_executionMessageFactory(executionMessageFactory),
+        m_hashImpl(hashImpl),
+        m_isWasm(isWasm),
+        m_isAuthCheck(isAuthCheck)
+    {}
+
+    TransactionExecutor::Ptr build()
+    {
+        return build(m_ledger, m_txpool, m_cache, m_storage, m_executionMessageFactory, m_hashImpl,
+            m_isWasm, m_isAuthCheck, m_name);
+    }
+
+private:
+    std::string m_name;
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
+    txpool::TxPoolInterface::Ptr m_txpool;
+    storage::MergeableStorageInterface::Ptr m_cache;
+    storage::TransactionalStorageInterface::Ptr m_storage;
+    protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
+    bcos::crypto::Hash::Ptr m_hashImpl;
+    bool m_isWasm;
+    bool m_isAuthCheck;
 };
 
 }  // namespace executor

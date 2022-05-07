@@ -128,7 +128,7 @@ class NodeConfigGenerator:
         ini_config[service_section]["gateway"] = self.config.chain_id + \
             "." + node_config.agency_config.gateway_service_name
         ini_config[service_section]["executor"] = self.config.chain_id + \
-            "." + node_config.node_service.service_name
+            "." + node_config.executor_service.service_name
 
     def __update_failover_info(self, ini_config, node_config, node_type):
         # generate the member_id for failover

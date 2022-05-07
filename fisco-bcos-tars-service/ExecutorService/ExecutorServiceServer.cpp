@@ -25,13 +25,13 @@
 
 using namespace bcostars;
 
-bcostars::Error ExecutorServiceServer::nextBlockHeader(
+bcostars::Error ExecutorServiceServer::nextBlockHeader(tars::Int64 schedulerTermId,
     bcostars::BlockHeader const& _blockHeader, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
     auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         m_cryptoSuite, [m_header = _blockHeader]() mutable { return &m_header; });
-    m_executor->nextBlockHeader(header, [_current](bcos::Error::UniquePtr _error) {
+    m_executor->nextBlockHeader(schedulerTermId, header, [_current](bcos::Error::UniquePtr _error) {
         async_response_nextBlockHeader(_current, toTarsError(std::move(_error)));
     });
     return bcostars::Error();

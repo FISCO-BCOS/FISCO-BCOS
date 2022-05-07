@@ -34,13 +34,14 @@ public:
     using Ptr = std::shared_ptr<WasmTransactionExecutor>;
     using ConstPtr = std::shared_ptr<const WasmTransactionExecutor>;
 
-    WasmTransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
-        storage::MergeableStorageInterface::Ptr cachedStorage,
+    WasmTransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
-      : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
-            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, std::string name)
+      : TransactionExecutor(std::move(ledger), std::move(txpool), std::move(cachedStorage),
+            std::move(backendStorage), std::move(executionMessageFactory), std::move(hashImpl),
+            isAuthCheck, std::move(name))
     {
         m_isWasm = true;
         m_schedule = BCOSWASMSchedule;

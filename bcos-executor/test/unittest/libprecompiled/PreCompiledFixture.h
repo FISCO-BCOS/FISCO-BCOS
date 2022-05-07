@@ -80,9 +80,10 @@ public:
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
 
+
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, nullptr, storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth);
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+            storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth);
         createSysTable();
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -110,7 +111,7 @@ public:
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, nullptr, storage, executionResultFactory, smHashImpl, _isWasm, false);
+            ledger, txpool, nullptr, storage, executionResultFactory, smHashImpl, _isWasm, false);
         createSysTable();
         codec = std::make_shared<CodecWrapper>(smHashImpl, _isWasm);
 
@@ -231,13 +232,13 @@ public:
 
         std::promise<void> nextPromise;
         executor->nextBlockHeader(
-            blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
+            0, blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
         nextPromise.get_future().get();
     }
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
-       TwoPCParams commitParams{};
+        TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
         std::promise<void> preparePromise;
@@ -262,7 +263,7 @@ protected:
     StateStorage::Ptr memoryTableFactory;
     TransactionExecutor::Ptr executor;
     std::shared_ptr<MockTxPool> txpool;
-    KeyPairInterface::Ptr keyPair;
+    std::shared_ptr<MockLedger> KeyPairInterface::Ptr keyPair;
 
     CodecWrapper::Ptr codec;
     int64_t gas = 300000000;

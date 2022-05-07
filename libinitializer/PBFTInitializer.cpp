@@ -33,6 +33,7 @@
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
+#include <fisco-bcos-tars-service/SchedulerService/SwitchableScheduler.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
 
@@ -506,6 +507,14 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
             m_blockSync->enableAsMaster(_success);
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
+
+            auto switchableScheduler =
+                std::dynamic_pointer_cast<bcos::scheduler::SwitchableScheduler>(m_scheduler);
+            switchableScheduler->asyncSwitchTerm(_leader->seq(), [_leader](Error::Ptr&& error) {
+                INITIALIZER_LOG(INFO)
+                    << "Notify scheduler switch " << (error ? "success" : "failed") << " with"
+                    << LOG_KV("seq", _leader->seq());
+            });
         });
     INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
                           << LOG_KV("nodeConfig", nodeConfig);

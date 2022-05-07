@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -337,7 +337,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader2->setNumber(2);
 
     std::promise<void> nextPromise2;
-    executor->nextBlockHeader(std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
 
         nextPromise2.set_value();
@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(deployError)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -547,7 +547,7 @@ BOOST_AUTO_TEST_CASE(deployError)
         blockHeader->setNumber(2);
 
         std::promise<void> p1;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             p1.set_value();
         });
@@ -634,7 +634,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -717,7 +717,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     blockHeader2->setNumber(2);
 
     std::promise<void> nextPromise2;
-    executor->nextBlockHeader(std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
 
         nextPromise2.set_value();
@@ -863,7 +863,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         blockHeader->setNumber(1);
 
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -944,7 +944,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         blockHeader->setNumber(2);
 
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -1015,7 +1015,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         blockHeader->setNumber(3);
 
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -1103,7 +1103,7 @@ BOOST_AUTO_TEST_CASE(performance)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
