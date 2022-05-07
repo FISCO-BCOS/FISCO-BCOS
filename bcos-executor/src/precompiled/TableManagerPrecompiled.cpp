@@ -120,7 +120,11 @@ void TableManagerPrecompiled::createTable(
     std::string tableManagerAddress =
         blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
     std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
-    std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
+
+    // here is a trick to set table key field info
+    valueField = keyField + "," + valueField;
+    std::string codeString =
+        getDynamicPrecompiledCodeString(tableAddress, newTableName + "," + valueField);
     auto input = codec->encode(newTableName, codeString);
     auto response = externalRequest(_executive, ref(input), _origin, tableManagerAddress,
         blockContext->isWasm() ? newTableName : "", false, true,
@@ -135,8 +139,6 @@ void TableManagerPrecompiled::createTable(
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
 
-    // here is a trick to set table key field info
-    valueField = keyField + "," + valueField;
     _executive->storage().createTable(getActualTableName(newTableName), valueField);
     callResult->setExecResult(codec->encode(int32_t(CODE_SUCCESS)));
 }

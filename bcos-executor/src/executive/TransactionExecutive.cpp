@@ -807,9 +807,10 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "CallDynamicPrecompiled error code field."));
     }
     callParameters->codeAddress = codeParameters[1];
-    // for scalability
-    auto params = std::vector<std::string>(codeParameters.begin() + 2, codeParameters.end());
-    auto newParams = codec.encode(params, callParameters->data);
+    // for scalability, erase [PRECOMPILED_PREFIX,codeAddress], left actual parameters
+    codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
+    // enc([call precompiled parameters],[user call parameters])
+    auto newParams = codec.encode(codeParameters, callParameters->data);
     callParameters->data = std::move(newParams);
     return std::get<1>(callPrecompiled(std::move(callParameters)));
 }
