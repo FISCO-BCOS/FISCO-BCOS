@@ -24,7 +24,5 @@ project(bcos-leader-election VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 find_package(etcd-cpp-api CONFIG REQUIRED)
-# TODO: modify etcd-cpp-api link to cpprestsdk::cpprest
-find_package(cpprestsdk CONFIG REQUIRED)
 add_library(${LEADER_ELECTION_TARGET} ${SRCS})
-target_link_libraries(${LEADER_ELECTION_TARGET} PUBLIC etcd-cpp-api cpprestsdk::cpprest)
+target_link_libraries(${LEADER_ELECTION_TARGET} PUBLIC etcd-cpp-api)

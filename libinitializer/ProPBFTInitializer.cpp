@@ -59,6 +59,11 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
 
 void ProPBFTInitializer::scheduledTask()
 {
+    if (m_leaderElection && m_leaderElection->electionClusterOk())
+    {
+        m_timer->stop();
+        return;
+    }
     // not enable failover, report nodeInfo to rpc/gw periodly
     reportNodeInfo();
     m_timer->restart();
@@ -106,39 +111,55 @@ void ProPBFTInitializer::stop()
     PBFTInitializer::stop();
 }
 
+void ProPBFTInitializer::onGroupInfoChanged()
+{
+    if (!m_leaderElection || !m_leaderElection->electionClusterOk())
+    {
+        reportNodeInfo();
+        return;
+    }
+    PBFTInitializer::onGroupInfoChanged();
+}
+
+
 void ProPBFTInitializer::init()
 {
-    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
-    m_blockSync->config()->registerOnNodeTypeChanged(
-        [this, groupInfoCodec](bcos::protocol::NodeType _type) {
-            INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
-                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
-            auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
-            if (!nodeInfo)
+    m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
+        INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
+                              << LOG_KV("nodeName", m_nodeConfig->nodeName());
+        auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
+        if (!nodeInfo)
+        {
+            INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
+                                     << LOG_KV("node", m_nodeConfig->nodeName());
+            return;
+        }
+        nodeInfo->setNodeType(_type);
+        onGroupInfoChanged();
+    });
+    PBFTInitializer::init();
+    // Note: m_leaderElection is created after PBFTInitializer::init
+    if (m_leaderElection)
+    {
+        // should report the latest nodeInfo actively to rpc/gateway when the electionCluster is
+        // down
+        m_leaderElection->registerOnElectionClusterException([this]() {
+            if (m_pbft->masterNode())
             {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
-                                         << LOG_KV("node", m_nodeConfig->nodeName());
-                return;
-            }
-            nodeInfo->setNodeType(_type);
-            // failover enabled, should sync the latest information to the etcd if the node is
-            // leader
-            if (m_leaderElection)
-            {
-                INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange, update the memberConfig");
-                std::string modifiedConfig;
-                groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
-                auto memberInfo = m_memberFactory->createMember();
-                memberInfo->setMemberID(m_nodeConfig->memberID());
-                memberInfo->setMemberConfig(modifiedConfig);
-                m_leaderElection->updateSelfConfig(memberInfo);
-            }
-            else
-            {
+                INITIALIZER_LOG(INFO)
+                    << LOG_DESC("OnElectionClusterException: reportNodeInfo to rpc/gateway")
+                    << LOG_KV("nodeName", m_nodeConfig->nodeName());
                 reportNodeInfo();
+                m_timer->start();
             }
         });
-    PBFTInitializer::init();
+        // stop reportNodeInfo to rpc/gateway
+        m_leaderElection->registerOnElectionClusterRecover([this]() {
+            INITIALIZER_LOG(INFO) << LOG_DESC(
+                "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
+            m_timer->stop();
+        });
+    }
     reportNodeInfo();
 }

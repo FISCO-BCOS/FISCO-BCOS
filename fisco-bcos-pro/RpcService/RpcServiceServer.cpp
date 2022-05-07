@@ -16,8 +16,8 @@ bcostars::Error RpcServiceServer::asyncNotifyBlockNumber(const std::string& _gro
         _groupID, _nodeName, blockNumber, [current, blockNumber](bcos::Error::Ptr _error) {
             RPCSERVICE_LOG(DEBUG) << LOG_BADGE("asyncNotifyBlockNumber")
                                   << LOG_KV("blockNumber", blockNumber)
-                                  << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
-                                  << LOG_KV("errorMessage", _error ? _error->errorMessage() : "");
+                                  << LOG_KV("code", _error ? _error->errorCode() : 0)
+                                  << LOG_KV("msg", _error ? _error->errorMessage() : "");
             async_response_asyncNotifyBlockNumber(current, toTarsError(_error));
         });
 

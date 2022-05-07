@@ -20,13 +20,15 @@
  */
 #pragma once
 #include "CampaignConfig.h"
+#include <bcos-framework/interfaces/election/LeaderElectionInterface.h>
 #include <bcos-utilities/Timer.h>
 #include <memory>
 namespace bcos
 {
 namespace election
 {
-class LeaderElection
+class LeaderElection : public LeaderElectionInterface,
+                       public std::enable_shared_from_this<LeaderElection>
 {
 public:
     using Ptr = std::shared_ptr<LeaderElection>;
@@ -36,43 +38,38 @@ public:
         m_config->registerTriggerCampaignHandler(
             boost::bind(&LeaderElection::campaignLeader, this));
         m_campaignTimer = std::make_shared<Timer>(m_config->leaseTTL() * 1000);
-        m_campaignTimer->registerTimeoutHandler(boost::bind(&LeaderElection::campaignLeader, this));
     }
-    virtual ~LeaderElection()
-    {
-        if (m_campaignTimer)
-        {
-            m_campaignTimer->stop();
-        }
-    }
+    ~LeaderElection() override { stop(); }
+    void start() override;
 
-    virtual void start()
-    {
-        if (m_config)
-        {
-            m_config->start();
-        }
-        auto leader = m_config->getLeader();
-        if (!leader)
-        {
-            return;
-        }
-        campaignLeader();
-    }
+    void stop() override;
+    void updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self) override;
+    bool electionClusterOk() const override { return m_config->electionClusterOk(); }
+
     // called when campaign success, this logic should start to work when campaign success
-    virtual void registerOnCampaignHandler(
-        std::function<void(bool, bcos::protocol::MemberInterface::Ptr)> _onCampaignHandler)
+    void registerOnCampaignHandler(
+        std::function<void(bool, bcos::protocol::MemberInterface::Ptr)> _onCampaignHandler) override
     {
         m_onCampaignHandler = _onCampaignHandler;
     }
 
-    // called when keep-alive exception, maybe should stop work when keepAlive exception
-    virtual void registerKeepAliveExceptionHandler(std::function<void(std::exception_ptr)> _handler)
+    // called when keep-alive exception
+    void registerKeepAliveExceptionHandler(
+        std::function<void(std::exception_ptr)> _handler) override
     {
         m_onKeepAliveException = _handler;
     }
 
-    virtual void updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self);
+    // handler called when the election cluster down
+    void registerOnElectionClusterException(std::function<void()> _handler) override
+    {
+        m_config->registerOnElectionClusterException(_handler);
+    }
+    // handler called when the election cluster recover
+    void registerOnElectionClusterRecover(std::function<void()> _handler) override
+    {
+        m_config->registerOnElectionClusterRecover(_handler);
+    }
 
 protected:
     // campaign leader
@@ -92,7 +89,6 @@ protected:
 
     // for trigger campaign after disconnect
     std::shared_ptr<Timer> m_campaignTimer;
-    int64_t m_leaseID;
 };
 }  // namespace election
 }  // namespace bcos

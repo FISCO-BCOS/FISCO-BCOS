@@ -43,7 +43,7 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt)
+void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
     loadChainConfig(_pt);
     loadCertConfig(_pt);
@@ -51,7 +51,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt)
     loadGatewayConfig(_pt);
     loadTxPoolConfig(_pt);
 
-    loadFailOverConfig(_pt);
+    loadFailOverConfig(_pt, _enforceMemberID);
     loadSecurityConfig(_pt);
     loadSealerConfig(_pt);
     loadStorageConfig(_pt);
@@ -369,7 +369,8 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
-void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt)
+// Note: In components that do not require failover, do not need to set member_id
+void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
     // only enable leaderElection when using tikv
     m_enableFailOver = _pt.get("failover.enable", false);
@@ -379,7 +380,7 @@ void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt)
     }
     m_failOverClusterUrl = _pt.get<std::string>("failover.cluster_url", "127.0.0.1:2379");
     m_memberID = _pt.get("failover.member_id", "");
-    if (m_memberID.size() == 0)
+    if (m_memberID.size() == 0 && _enforceMemberID)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set failover.member_id must be non-empty "));

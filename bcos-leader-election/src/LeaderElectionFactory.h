@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "LeaderElection.h"
+#include <bcos-framework/interfaces/election/LeaderElectionInterface.h>
 #include <bcos-framework/interfaces/protocol/MemberInterface.h>
 #include <memory>
 
@@ -27,18 +28,18 @@ namespace bcos
 {
 namespace election
 {
-class LeaderElectionFactory
+class LeaderElectionFactory : public LeaderElectionFactoryInterface
 {
 public:
     using Ptr = std::shared_ptr<LeaderElectionFactory>;
     LeaderElectionFactory(bcos::protocol::MemberFactoryInterface::Ptr _memberFactory)
       : m_memberFactory(_memberFactory)
     {}
-    virtual ~LeaderElectionFactory() {}
+    ~LeaderElectionFactory() override {}
 
-    LeaderElection::Ptr createLeaderElection(std::string const& _memberID,
+    LeaderElectionInterface::Ptr createLeaderElection(std::string const& _memberID,
         std::string const& _memberConfig, std::string const& _etcdEndPoint,
-        std::string const& _leaderKey, std::string const& _purpose, unsigned _leaseTTL)
+        std::string const& _leaderKey, std::string const& _purpose, unsigned _leaseTTL) override
     {
         auto member = m_memberFactory->createMember();
         member->setMemberID(_memberID);

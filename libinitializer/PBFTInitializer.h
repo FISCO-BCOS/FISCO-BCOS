@@ -24,14 +24,15 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/interfaces/election/LeaderElectionInterface.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
+#include <bcos-framework/interfaces/multigroup/GroupInfoCodec.h>
 #include <bcos-framework/interfaces/protocol/MemberInterface.h>
 #include <bcos-framework/interfaces/sealer/SealerInterface.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-leader-election/src/LeaderElectionFactory.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 
 namespace bcos
@@ -82,6 +83,7 @@ public:
 
     bcos::group::GroupInfo::Ptr groupInfo() { return m_groupInfo; }
     bcos::group::ChainNodeInfo::Ptr nodeInfo() { return m_nodeInfo; }
+    virtual void onGroupInfoChanged();
 
 protected:
     virtual void initChainNodeInfo(bcos::initializer::NodeArchitectureType _nodeArchType,
@@ -115,8 +117,9 @@ protected:
     bcos::group::GroupInfo::Ptr m_groupInfo;
     bcos::group::ChainNodeInfo::Ptr m_nodeInfo;
 
+    bcos::group::GroupInfoCodec::Ptr m_groupInfoCodec;
     bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
-    bcos::election::LeaderElection::Ptr m_leaderElection;
+    bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
 };
 }  // namespace initializer
 }  // namespace bcos

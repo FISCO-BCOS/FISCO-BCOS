@@ -46,15 +46,27 @@ void NodeServiceApp::destroyApp()
 
 void NodeServiceApp::initialize()
 {
-    BCOS_LOG(INFO) << LOG_DESC("initGlobalConfig");
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    // Note: since tars Application catch the exception and output the error message with
+    // e.what() which unable to explicitly display specific error messages, we actively catch
+    // and output exception information here
+    try
+    {
+        BCOS_LOG(INFO) << LOG_DESC("initGlobalConfig");
+        g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
-    initConfig();
-    initLog();
-    initNodeService();
-    initTarsNodeService();
-    initServiceInfo(this);
-    m_nodeInitializer->start();
+        initConfig();
+        initLog();
+        initNodeService();
+        initTarsNodeService();
+        initServiceInfo(this);
+        m_nodeInitializer->start();
+    }
+    catch (std::exception const& e)
+    {
+        std::cout << "init NodeService failed, error: " << boost::diagnostic_information(e)
+                  << std::endl;
+        throw e;
+    }
 }
 
 void NodeServiceApp::initLog()
@@ -149,6 +161,8 @@ void NodeServiceApp::initServiceInfo(Application* _application)
         throw std::runtime_error("init NodeService failed for get consensus-service-desc failed");
     }
     nodeInfo->appendServiceInfo(CONSENSUS, consensusServiceDesc.second);
+    // sync the latest groupInfo to rpc/gateway
+    m_nodeInitializer->pbftInitializer()->onGroupInfoChanged();
     BCOS_LOG(INFO) << LOG_DESC("initServiceInfo") << LOG_KV("schedulerDesc", schedulerDesc.second)
                    << LOG_KV("ledgerDesc", ledgerDesc.second)
                    << LOG_KV("frontServiceDesc", frontServiceDesc.second)

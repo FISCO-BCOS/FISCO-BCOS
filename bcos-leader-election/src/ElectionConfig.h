@@ -30,7 +30,7 @@ namespace bcos
 {
 namespace election
 {
-class ElectionConfig
+class ElectionConfig : public std::enable_shared_from_this<ElectionConfig>
 {
 public:
     using Ptr = std::shared_ptr<ElectionConfig>;
@@ -42,24 +42,40 @@ public:
     }
 
     virtual void start();
-    virtual ~ElectionConfig()
+    virtual void stop()
     {
-        if (m_watcher)
-        {
-            m_watcher->Cancel();
-        }
         if (m_watcherTimer)
         {
             m_watcherTimer->stop();
         }
+        if (m_watcher)
+        {
+            m_watcher->Cancel();
+        }
     }
+
+    virtual ~ElectionConfig() { stop(); }
+
     std::string const purpose() const { return m_purpose; }
     std::shared_ptr<etcd::Client> etcdClient() { return m_etcdClient; }
     bcos::protocol::MemberFactoryInterface::Ptr memberFactory() { return m_memberFactory; }
 
+    bool electionClusterOk() const { return m_electionClusterOk.load(); }
+    void registerOnElectionClusterException(std::function<void()> _handler)
+    {
+        m_onElectionClusterException = _handler;
+    }
+
+    void registerOnElectionClusterRecover(std::function<void()> _handler)
+    {
+        m_onElectionClusterRecover = _handler;
+    }
+
 protected:
     virtual void refreshWatcher();
     virtual void reCreateWatcher() = 0;
+    void onElectionClusterRecover();
+    void onElectionClusterDown();
 
 protected:
     std::shared_ptr<etcd::Client> m_etcdClient;
@@ -71,6 +87,13 @@ protected:
     // regularly check the etcdClient inventory, and reset the watcher after disconnection and
     // reconnection
     std::shared_ptr<Timer> m_watcherTimer;
+
+    std::atomic_bool m_electionClusterOk = {true};
+
+    // called when the election-cluster down
+    std::function<void()> m_onElectionClusterException;
+    // called when the election-cluster recover
+    std::function<void()> m_onElectionClusterRecover;
 };
 }  // namespace election
 }  // namespace bcos

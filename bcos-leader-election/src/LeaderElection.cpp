@@ -25,6 +25,41 @@
 using namespace bcos;
 using namespace bcos::election;
 
+void LeaderElection::start()
+{
+    auto self = std::weak_ptr<LeaderElection>(shared_from_this());
+    m_campaignTimer->registerTimeoutHandler([self]() {
+        auto leaderElection = self.lock();
+        if (!leaderElection)
+        {
+            return;
+        }
+        leaderElection->campaignLeader();
+    });
+    if (m_config)
+    {
+        m_config->start();
+    }
+    auto leader = m_config->getLeader();
+    if (!leader)
+    {
+        return;
+    }
+    campaignLeader();
+}
+
+void LeaderElection::stop()
+{
+    if (m_campaignTimer)
+    {
+        m_campaignTimer->stop();
+    }
+    if (m_config)
+    {
+        m_config->stop();
+    }
+}
+
 std::pair<bool, int64_t> LeaderElection::grantLease()
 {
     auto response = m_etcdClient->leasegrant(m_config->leaseTTL()).get();
@@ -105,7 +140,6 @@ bool LeaderElection::campaignLeader()
         if (m_onCampaignHandler)
         {
             m_onCampaignHandler(true, leader);
-            m_leaseID = leaseID;
         }
         ELECTION_LOG(INFO)
             << LOG_DESC("campaignLeader: establish new keepAlive thread and switch to master-node")
@@ -175,20 +209,22 @@ void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self
     {
         return;
     }
-    ELECTION_LOG(INFO) << LOG_DESC(
-        "updateSelfConfig, the node-self is leader, sync the modified memberConfig");
+    auto leaseID = leader->leaseID();
+    ELECTION_LOG(INFO)
+        << LOG_DESC("updateSelfConfig, the node-self is leader, sync the modified memberConfig")
+        << LOG_KV("lease", leaseID);
     auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
-    tx->init_compare(m_leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
+    tx->init_lease_compare(leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
     tx->setup_basic_failure_operation(m_config->leaderKey());
-    tx->setup_basic_create_sequence(m_config->leaderKey(), m_config->leaderValue(), m_leaseID);
+    tx->setup_compare_and_swap_sequence(m_config->leaderValue(), leaseID);
     auto response = m_etcdClient->txn(*tx).get();
     if (!response.is_ok())
     {
         ELECTION_LOG(WARNING) << LOG_DESC("sync the modified memberConfig to storage error")
                               << LOG_KV("code", response.error_code())
-                              << LOG_KV("msg", response.error_message())
-                              << LOG_KV("lease", m_leaseID)
+                              << LOG_KV("msg", response.error_message()) << LOG_KV("lease", leaseID)
                               << LOG_KV("leaderKey", m_config->leaderKey());
         return;
     }
+    ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig success");
 }

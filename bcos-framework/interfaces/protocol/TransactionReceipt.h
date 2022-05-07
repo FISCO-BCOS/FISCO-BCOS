@@ -50,7 +50,7 @@ public:
     }
 
     virtual int32_t version() const = 0;
-    virtual u256 gasUsed() const = 0;  // TODO: remove from hash
+    virtual u256 gasUsed() const = 0;
     virtual std::string_view contractAddress() const = 0;
     virtual int32_t status() const = 0;
     virtual bytesConstRef output() const = 0;

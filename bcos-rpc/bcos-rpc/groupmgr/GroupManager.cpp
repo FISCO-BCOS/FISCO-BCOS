@@ -28,6 +28,10 @@ using namespace bcos::protocol;
 
 bool GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
+    if (!checkGroupInfo(_groupInfo))
+    {
+        return false;
+    }
     bool enforceUpdate = false;
     {
         UpgradableGuard l(x_nodeServiceList);
@@ -44,6 +48,23 @@ bool GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     return updateGroupServices(_groupInfo, enforceUpdate);
 }
 
+bool GroupManager::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+{
+    // check the serviceName
+    auto nodeList = _groupInfo->nodeInfos();
+    for (auto const& node : nodeList)
+    {
+        auto const& expectedRpcService = node.second->serviceName(bcos::protocol::ServiceType::RPC);
+        if (expectedRpcService != m_rpcServiceName)
+        {
+            GROUP_LOG(INFO) << LOG_DESC("unfollowed groupInfo for inconsistent rpc service name")
+                            << LOG_KV("expected", expectedRpcService)
+                            << LOG_KV("selfName", m_rpcServiceName);
+            return false;
+        }
+    }
+    return true;
+}
 bool GroupManager::updateGroupServices(bcos::group::GroupInfo::Ptr _groupInfo, bool _enforce)
 {
     auto ret = false;

@@ -56,15 +56,19 @@ void RpcInitializer::init(std::string const& _configDir)
         auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
         auto leaderEntryPointFactory =
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
-        m_leaderEntryPoint =
-            leaderEntryPointFactory->createLeaderEntryPoint(m_nodeConfig->failOverClusterUrl(),
-                bcos::election::CONSENSUS_LEADER_DIR, "watchLeaderChange");
+        auto watchDir = "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
+        m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
+            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
     // init rpc config
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory");
     auto factory = initRpcFactory(m_nodeConfig);
-    RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory success");
-    auto rpc = factory->buildRpc(m_nodeConfig->gatewayServiceName(), m_leaderEntryPoint);
+
+    auto rpcServiceName = bcostars::getProxyDesc(bcos::protocol::RPC_SERVANT_NAME);
+    RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory success")
+                         << LOG_KV("rpcServiceName", rpcServiceName);
+    auto rpc =
+        factory->buildRpc(m_nodeConfig->gatewayServiceName(), rpcServiceName, m_leaderEntryPoint);
     m_rpc = rpc;
 }
 
@@ -125,7 +129,10 @@ void RpcInitializer::stop()
     }
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
-
+    if (m_leaderEntryPoint)
+    {
+        m_leaderEntryPoint->stop();
+    }
     if (m_rpc)
     {
         m_rpc->stop();

@@ -54,9 +54,9 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
             asyncNotifyBlockNumber(_groupID, _nodeName, _blockNumber, [](Error::Ptr _error) {
                 if (_error)
                 {
-                    BCOS_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber error")
-                                    << LOG_KV("code", _error->errorCode())
-                                    << LOG_KV("msg", _error->errorMessage());
+                    RPC_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber error")
+                                   << LOG_KV("code", _error->errorCode())
+                                   << LOG_KV("msg", _error->errorMessage());
                 }
             });
         });
@@ -74,7 +74,7 @@ void Rpc::start()
     // start websocket service
     m_wsService->start();
     m_amopClient->start();
-    BCOS_LOG(INFO) << LOG_DESC("[RPC][RPC][start]") << LOG_DESC("start rpc successfully");
+    RPC_LOG(INFO) << LOG_DESC("start rpc successfully");
 }
 
 void Rpc::stop()

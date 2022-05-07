@@ -17,13 +17,25 @@ public:
     void destroyApp() override {}
     void initialize() override
     {
-        m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
-        addConfig("config.ini");
-        initService(m_iniConfigPath);
-        GatewayServiceParam param;
-        param.gatewayInitializer = m_gatewayInitializer;
-        addServantWithParams<GatewayServiceServer, GatewayServiceParam>(
-            getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME), param);
+        // Note: since tars Application catch the exception and output the error message with
+        // e.what() which unable to explicitly display specific error messages, we actively catch
+        // and output exception information here
+        try
+        {
+            m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
+            addConfig("config.ini");
+            initService(m_iniConfigPath);
+            GatewayServiceParam param;
+            param.gatewayInitializer = m_gatewayInitializer;
+            addServantWithParams<GatewayServiceServer, GatewayServiceParam>(
+                getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME), param);
+        }
+        catch (std::exception const& e)
+        {
+            std::cout << "init GatewayService failed, error: " << boost::diagnostic_information(e)
+                      << std::endl;
+            throw e;
+        }
     }
 
 protected:
@@ -62,10 +74,6 @@ protected:
         // nodes.json
         addConfig("nodes.json");
         gatewayConfig->loadP2pConnectedNodes();
-
-        auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
-        nodeConfig->loadConfig(_configPath);
-
         // init rpc
         m_gatewayInitializer = std::make_shared<GatewayInitializer>(_configPath, gatewayConfig);
         m_gatewayInitializer->start();
