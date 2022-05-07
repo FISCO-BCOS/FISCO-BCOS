@@ -5,7 +5,7 @@
 module bcostars {
     interface ExecutorService
     {
-        Error nextBlockHeader(BlockHeader _blockHeader);
+        Error nextBlockHeader(long schedulerTermID, BlockHeader _blockHeader);
         Error executeTransaction(ExecutionMessage _input, out ExecutionMessage _output);
 
         Error dmcExecuteTransactions(string _contractAddress, vector<ExecutionMessage> _inputs, out vector<ExecutionMessage> _outputs);

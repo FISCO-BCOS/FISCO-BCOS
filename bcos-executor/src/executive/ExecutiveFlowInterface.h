@@ -50,21 +50,20 @@ protected:
     void asyncTo(S self, F f)
     {
         // f();
-        getPool()->enqueue([self = std::move(self), f = std::move(f)]() { f(); });
+        getPoolInstance()->enqueue([self = std::move(self), f = std::move(f)]() { f(); });
     }
 
 private:
-    std::shared_ptr<bcos::ThreadPool> getPool()
+    bcos::ThreadPool* getPoolInstance()
     {
-        static std::shared_ptr<bcos::ThreadPool> m_pool;
+        static bcos::ThreadPool* m_pool;
         if (!m_pool)
         {
             static bcos::RecursiveMutex x_pool;
             bcos::RecursiveGuard lock(x_pool);
             if (!m_pool)
             {
-                m_pool = std::make_shared<bcos::ThreadPool>(
-                    "ExecutiveFlow", std::thread::hardware_concurrency());
+                m_pool = new bcos::ThreadPool("ExecutiveFlow", std::thread::hardware_concurrency());
             }
         }
         return m_pool;

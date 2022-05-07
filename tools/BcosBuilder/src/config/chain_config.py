@@ -194,7 +194,7 @@ class MaxNodeConfig(NodeConfig):
             utilities.ServiceInfo.executor_service)
         executor_service_deploy_ip = utilities.get_item_value(
             self.config, "executor_deploy_ip", None, True, self.desc)
-        self.executor_config_file_list = ["config.ini"]
+        self.executor_config_file_list = ["config.ini", "config.genesis"]
         self.executor_service = NodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service, executor_service_name,
                                                   utilities.ServiceInfo.executor_service_obj, executor_service_deploy_ip, self.executor_config_file_list)
         self.service_list.append(self.executor_service)

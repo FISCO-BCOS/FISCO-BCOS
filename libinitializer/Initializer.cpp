@@ -39,11 +39,13 @@
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
+#include "bcos-scheduler/src/RemoteExecutorManager.h"
 #include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
+
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-scheduler/src/ExecutorManager.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
@@ -129,7 +131,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption(), m_nodeConfig->keyPageSize());
+        storage = StorageInitializer::build(
+            storagePath, m_protocolInitializer->dataEncryption(), m_nodeConfig->keyPageSize());
         schedulerStorage = storage;
         consensusStorage = StorageInitializer::build(
             consensusStoragePath, m_protocolInitializer->dataEncryption());
@@ -160,18 +163,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
     }
-    auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
+    auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
+        m_nodeConfig->executorServiceName());
 
     auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-    m_scheduler = SchedulerInitializer::build(executorManager, ledger, schedulerStorage,
+    auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
 
+    int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
+                               // to a leader during startup
+    m_scheduler =
+        std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
+
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+
 
     std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
@@ -192,12 +202,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("nodeArchType", _nodeArchType);
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
-        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize());
-        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
-        executorManager->addExecutor("default", parallelExecutor);
+
+        std::string executorName = "executor-local";
+        auto executorFactory = ExecutorInitializer::buildFactory(m_ledger,
+            m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+            m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
+        auto parallelExecutor =
+            std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
+        executorManager->addExecutor(executorName, parallelExecutor);
     }
+
     // build and init the pbft related modules
     if (_nodeArchType == NodeArchitectureType::AIR)
     {
@@ -250,9 +265,10 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // init handlers
     auto nodeName = m_nodeConfig->nodeName();
     auto groupID = m_nodeConfig->groupId();
-    auto schedulerImpl = std::dynamic_pointer_cast<scheduler::SchedulerImpl>(m_scheduler);
+    auto schedulerFactory =
+        dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
     // notify blockNumber
-    schedulerImpl->registerBlockNumberReceiver(
+    schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(INFO) << "Notify blocknumber: " << number;
             // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
@@ -260,7 +276,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
         });
     // notify transactions
     auto txpool = m_txpoolInitializer->txpool();
-    schedulerImpl->registerTransactionNotifier(
+    schedulerFactory->setTransactionNotifier(
         [txpool](bcos::protocol::BlockNumber _blockNumber,
             bcos::protocol::TransactionSubmitResultsPtr _result,
             std::function<void(bcos::Error::Ptr)> _callback) {
