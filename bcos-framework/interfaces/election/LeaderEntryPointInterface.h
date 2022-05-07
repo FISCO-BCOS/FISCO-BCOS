@@ -40,6 +40,7 @@ public:
     virtual void addMemberDeleteNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler) = 0;
     virtual void start() = 0;
+    virtual void stop() = 0;
 };
 
 class LeaderEntryPointFactory

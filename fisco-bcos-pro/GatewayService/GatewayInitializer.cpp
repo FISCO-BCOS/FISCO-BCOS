@@ -99,6 +99,10 @@ void GatewayInitializer::stop()
     }
     m_running = false;
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("Stop the GatewayService");
+    if (m_leaderEntryPoint)
+    {
+        m_leaderEntryPoint->stop();
+    }
     if (m_gateway)
     {
         m_gateway->stop();

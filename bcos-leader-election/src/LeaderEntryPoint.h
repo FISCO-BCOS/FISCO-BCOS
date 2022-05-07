@@ -35,7 +35,7 @@ public:
     ~LeaderEntryPoint() {}
 
     void start() override { m_config->start(); }
-
+    void stop() override { m_config->stop(); }
     bcos::protocol::MemberInterface::Ptr getLeaderByKey(std::string const& _leaderKey) override
     {
         return m_config->leader(_leaderKey);

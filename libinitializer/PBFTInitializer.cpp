@@ -22,6 +22,7 @@
 #include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-leader-election/src/LeaderElectionFactory.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -179,6 +180,10 @@ void PBFTInitializer::start()
 
 void PBFTInitializer::stop()
 {
+    if (m_leaderElection)
+    {
+        m_leaderElection->stop();
+    }
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();

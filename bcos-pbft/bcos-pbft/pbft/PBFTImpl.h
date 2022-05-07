@@ -130,6 +130,8 @@ public:
     }
     virtual void enableAsMaterNode(bool _isMasterNode);
 
+    virtual bool masterNode() const { return m_masterNode.load(); }
+
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;

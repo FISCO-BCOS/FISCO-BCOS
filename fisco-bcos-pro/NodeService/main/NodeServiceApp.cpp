@@ -46,6 +46,9 @@ void NodeServiceApp::destroyApp()
 
 void NodeServiceApp::initialize()
 {
+    // Note: since tars Application catch the exception and output the error message with
+    // e.what() which unable to explicitly display specific error messages, we actively catch
+    // and output exception information here
     try
     {
         BCOS_LOG(INFO) << LOG_DESC("initGlobalConfig");

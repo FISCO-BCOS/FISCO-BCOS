@@ -31,25 +31,61 @@ void ElectionConfig::start()
         return;
     }
     m_watcherTimer = std::make_shared<Timer>(5000);
-    m_watcherTimer->registerTimeoutHandler(boost::bind(&ElectionConfig::refreshWatcher, this));
+    auto self = std::weak_ptr<ElectionConfig>(shared_from_this());
+    m_watcherTimer->registerTimeoutHandler([self]() {
+        auto config = self.lock();
+        if (!config)
+        {
+            return;
+        }
+        config->refreshWatcher();
+    });
     m_watcherTimer->start();
 }
 
+void ElectionConfig::onElectionClusterRecover()
+{
+    if (m_electionClusterOk.load())
+    {
+        return;
+    }
+    m_electionClusterOk.store(true);
+    if (m_onElectionClusterRecover)
+    {
+        m_onElectionClusterRecover();
+    }
+}
+
+void ElectionConfig::onElectionClusterDown()
+{
+    if (!m_electionClusterOk.load())
+    {
+        return;
+    }
+    m_electionClusterOk.store(false);
+    if (m_onElectionClusterException)
+    {
+        m_onElectionClusterException();
+    }
+}
 
 void ElectionConfig::refreshWatcher()
 {
     if (m_etcdClient->head().get().is_ok())
     {
+        onElectionClusterRecover();
         m_watcherTimer->restart();
         return;
     }
     m_watcherTimer->stop();
     ELECTION_LOG(INFO) << LOG_DESC("The client disconnect, wait for reconnect success");
+    onElectionClusterDown();
     // wait until the client connects to etcd server
     while (!m_etcdClient->head().get().is_ok())
     {
         boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
     }
+    onElectionClusterRecover();
     ELECTION_LOG(INFO) << LOG_DESC("The client reconnect success, refreshWatcher");
     reCreateWatcher();
     m_watcherTimer->start();

@@ -129,7 +129,10 @@ void RpcInitializer::stop()
     }
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
-
+    if (m_leaderEntryPoint)
+    {
+        m_leaderEntryPoint->stop();
+    }
     if (m_rpc)
     {
         m_rpc->stop();

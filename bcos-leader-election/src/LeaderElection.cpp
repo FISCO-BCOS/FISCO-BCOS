@@ -25,6 +25,41 @@
 using namespace bcos;
 using namespace bcos::election;
 
+void LeaderElection::start()
+{
+    auto self = std::weak_ptr<LeaderElection>(shared_from_this());
+    m_campaignTimer->registerTimeoutHandler([self]() {
+        auto leaderElection = self.lock();
+        if (!leaderElection)
+        {
+            return;
+        }
+        leaderElection->campaignLeader();
+    });
+    if (m_config)
+    {
+        m_config->start();
+    }
+    auto leader = m_config->getLeader();
+    if (!leader)
+    {
+        return;
+    }
+    campaignLeader();
+}
+
+void LeaderElection::stop()
+{
+    if (m_campaignTimer)
+    {
+        m_campaignTimer->stop();
+    }
+    if (m_config)
+    {
+        m_config->stop();
+    }
+}
+
 std::pair<bool, int64_t> LeaderElection::grantLease()
 {
     auto response = m_etcdClient->leasegrant(m_config->leaseTTL()).get();
