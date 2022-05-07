@@ -1176,17 +1176,18 @@ BOOST_AUTO_TEST_CASE(performance)
 
     for (auto& it : requests)
     {
-        std::optional<ExecutionMessage::UniquePtr> output;
-        executor->executeTransaction(std::move(it),
-            [&output](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
+        std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
+        executor->executeTransaction(
+            std::move(it), [&outputPromise](bcos::Error::UniquePtr&& error,
+                               NativeExecutionMessage::UniquePtr&& result) {
                 if (error)
                 {
                     std::cout << "Error!" << boost::diagnostic_information(*error);
                 }
                 // BOOST_CHECK(!error);
-                output = std::move(result);
+                outputPromise.set_value(std::move(result));
             });
-        auto& result4 = *output;
+        ExecutionMessage::UniquePtr result4 = std::move(*outputPromise.get_future().get());
         if (result4->status() != 0)
         {
             std::cout << "Error: " << result->status() << std::endl;

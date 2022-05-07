@@ -71,6 +71,7 @@ enum ExecutorVersion : int32_t
 };
 
 class TransactionExecutive;
+class ExecutiveFlowInterface;
 class BlockContext;
 class PrecompiledContract;
 template <typename T, typename V>
@@ -101,6 +102,12 @@ public:
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -160,7 +167,7 @@ protected:
         int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
-        bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
+        bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback);
 
@@ -187,6 +194,15 @@ protected:
     void executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals,
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
+
+    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+
+
+    void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
+        std::function<void(
+            bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
+            callback);
 
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
@@ -235,16 +251,20 @@ protected:
     {
         std::shared_ptr<BlockContext> blockContext;
     };
-    tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine> m_calledContext;
+    std::shared_ptr<tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>
+        m_calledContext = std::make_shared<
+            tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>();
     std::shared_mutex m_stateStoragesMutex;
 
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        m_constantPrecompiled;
+        m_constantPrecompiled =
+            std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
+    mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
 };

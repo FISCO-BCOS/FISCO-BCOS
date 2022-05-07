@@ -25,6 +25,7 @@
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <memory>
+#include <sstream>
 #include <string_view>
 
 namespace bcos
@@ -41,14 +42,46 @@ public:
 
     enum Type : int8_t
     {
-        TXHASH = 0,       // Received an new transaction from scheduler
-        MESSAGE,          // Send/Receive an external call to/from another contract
-        FINISHED,         // Send a finish to another contract
-        KEY_LOCK,         // Send a wait key lock to scheduler, or release key lock
-        SEND_BACK,        // Send a dag refuse to scheduler
-        REVERT,           // Send/Receive a revert to/from previous external call
-        REVERT_KEY_LOCK,  // Current message revert by key lock
+        TXHASH = 0,  // Received an new transaction from scheduler
+        MESSAGE,     // Send/Receive an external call to/from another contract
+        FINISHED,    // Send a finish to another contract
+        KEY_LOCK,    // Send a wait key lock to scheduler, or release key lock
+        SEND_BACK,   // Send a dag refuse to scheduler
+        REVERT,      // Send/Receive a revert to/from previous external call
     };
+
+    static std::string getTypeName(Type type)
+    {
+        switch (type)
+        {
+        case TXHASH:
+            return "TXHASH";
+        case MESSAGE:
+            return "MESSAGE";
+        case FINISHED:
+            return "FINISHED";
+        case KEY_LOCK:
+            return "KEY_LOCK";
+        case SEND_BACK:
+            return "SEND_BACK";
+        case REVERT:
+            return "REVERT";
+        }
+        return "Unknown";
+    }
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "[" << (staticCall() ? "call" : "tx") << "|" << contextID() << "|" << seq() << "|"
+           << getTypeName(type()) << "|" << from() << "->" << to() << "|";
+        for (auto& lock : keyLocks())
+        {
+            ss << toHex(lock) << ".";
+        }
+        ss << "]";
+        return ss.str();
+    }
 
     // -----------------------------------------------
     // Request fields
