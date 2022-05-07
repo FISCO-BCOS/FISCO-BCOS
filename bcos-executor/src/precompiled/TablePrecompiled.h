@@ -32,7 +32,7 @@ class TablePrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<TablePrecompiled>;
     TablePrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~TablePrecompiled() = default;
+    ~TablePrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
@@ -71,7 +71,7 @@ private:
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
-    void buildKeyCondition(const std::shared_ptr<storage::Condition>& keyCondition,
+    void buildKeyCondition(std::optional<storage::Condition>& keyCondition,
         const std::vector<precompiled::ConditionTuple>& conditions,
         const precompiled::LimitTuple& limit) const;
 };
