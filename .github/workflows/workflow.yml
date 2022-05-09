@@ -112,14 +112,21 @@ jobs:
           toolchain: nightly-2021-06-17
           override: true
       - name: install Ubuntu dependencies
-        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache lcov
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
-        run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DCOVERAGE=ON -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: cd build && make -j3
-      - name: run integration test
-        run: cd tools && bash .ci/ci_check.sh
+        run: cd build && make -j3
+      - name: run test and make cov
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test && make cov
+      - uses: codecov/codecov-action@v2
+        with:
+          fail_ci_if_error: true
+      -name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
+
+
 
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
