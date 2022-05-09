@@ -35,6 +35,7 @@
 
 using namespace bcos::storage;
 using namespace pingcap::kv;
+using namespace bcos::protocol;
 using namespace std;
 
 #define STORAGE_TIKV_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-TiKV]"

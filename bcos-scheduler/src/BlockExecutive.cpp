@@ -353,7 +353,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 });
             };
 
-            storage::TransactionalStorageInterface::TwoPCParams params;
+            bcos::protocol::TwoPCParams params;
             params.number = number();
             params.primaryTableName = SYS_CURRENT_STATE;
             params.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
@@ -373,7 +373,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         << LOG_KV("startTimeStamp", startTimeStamp)
                         << LOG_KV("executors", m_scheduler->m_executorManager->size())
                         << LOG_KV("success", status->success) << LOG_KV("failed", status->failed);
-                    executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+                    bcos::protocol::TwoPCParams executorParams;
                     executorParams.number = number();
                     executorParams.primaryTableName = SYS_CURRENT_STATE;
                     executorParams.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
@@ -812,7 +812,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
         callback(nullptr);
     };
 
-    storage::TransactionalStorageInterface::TwoPCParams params;
+    bcos::protocol::TwoPCParams params;
     params.number = number();
     m_scheduler->m_storage->asyncCommit(params, [status, this](Error::Ptr&& error) {
         if (error)
@@ -827,7 +827,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
             ++status->success;
         }
 
-        executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+        bcos::protocol::TwoPCParams executorParams;
         executorParams.number = number();
         tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
             m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
@@ -873,7 +873,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
         callback(nullptr);
     };
 
-    storage::TransactionalStorageInterface::TwoPCParams params;
+    bcos::protocol::TwoPCParams params;
     params.number = number();
     m_scheduler->m_storage->asyncRollback(params, [status](Error::Ptr&& error) {
         if (error)
@@ -891,7 +891,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+        bcos::protocol::TwoPCParams executorParams;
         executorParams.number = number();
         it->rollback(executorParams, [status](bcos::Error::Ptr&& error) {
             if (error)

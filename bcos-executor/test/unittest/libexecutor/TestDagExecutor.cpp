@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     auto address = result3->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    bcos::protocol::TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -512,7 +512,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     auto address = result3->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    bcos::protocol::TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;

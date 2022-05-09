@@ -8,7 +8,7 @@ namespace bcos::initializer
 class ExecutorInitializer
 {
 public:
-    static bcos::executor::TransactionExecutor::Ptr build(txpool::TxPoolInterface::Ptr txpool,
+    static bcos::executor::ParallelTransactionExecutorInterface::Ptr build(txpool::TxPoolInterface::Ptr txpool,
         storage::MergeableStorageInterface::Ptr cache,
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,

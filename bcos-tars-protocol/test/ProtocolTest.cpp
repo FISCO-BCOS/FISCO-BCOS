@@ -1,5 +1,6 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
@@ -577,6 +578,118 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
     BOOST_CHECK(decodedProtocolInfo->minVersion() == protocolInfo.minVersion());
 }
 
+void checkExecutionMessage(bcostars::protocol::ExecutionMessageImpl::Ptr executionMsg,
+    bcostars::protocol::ExecutionMessageImpl::Ptr anotherExecutionMsg)
+{
+    BOOST_CHECK_EQUAL((int8_t)anotherExecutionMsg->type(), executionMsg->type());
+    BOOST_CHECK_EQUAL(
+        anotherExecutionMsg->transactionHash().hex(), executionMsg->transactionHash().hex());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->contextID(), executionMsg->contextID());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->seq(), executionMsg->seq());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->origin(), executionMsg->origin());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->from(), executionMsg->from());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->to(), executionMsg->to());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->abi(), executionMsg->abi());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->depth(), executionMsg->depth());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->create(), executionMsg->create());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->internalCreate(), executionMsg->internalCreate());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->internalCall(), executionMsg->internalCall());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->gasAvailable(), executionMsg->gasAvailable());
+    BOOST_CHECK_EQUAL(*(bcos::toHexString(anotherExecutionMsg->data().toBytes())),
+        *(bcos::toHexString(executionMsg->data().toBytes())));
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->staticCall(), executionMsg->staticCall());
+    BOOST_CHECK_EQUAL(
+        anotherExecutionMsg->createSalt().value(), executionMsg->createSalt().value());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->status(), executionMsg->status());
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->message(), executionMsg->message());
+
+    BOOST_CHECK_EQUAL(anotherExecutionMsg->keyLocks().size(), executionMsg->keyLocks().size());
+    auto keyLocks = executionMsg->keyLocks();
+    auto anotherKeyLocks = anotherExecutionMsg->keyLocks();
+    for (int i = 0; i < 10; i++)
+    {
+        BOOST_CHECK_EQUAL(keyLocks[i], anotherKeyLocks[i]);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testExecutionMessage)
+{
+    auto executionMsg = std::make_shared<bcostars::protocol::ExecutionMessageImpl>();
+    int8_t type = 2;
+    executionMsg->setType((bcos::protocol::ExecutionMessage::Type)type);
+    auto txsHash = cryptoSuite->hash("###abc");
+    executionMsg->setTransactionHash(txsHash);
+    int64_t contextID = 10000;
+    executionMsg->setContextID(contextID);
+    int64_t seq = 123432;
+    executionMsg->setSeq(seq);
+    std::string origin = "abcde";
+    executionMsg->setOrigin(origin);
+    std::string from = "##sdksdf";
+    executionMsg->setFrom(from);
+    std::string to = "### to";
+    executionMsg->setTo(to);
+    std::string abi = "abixx";
+    executionMsg->setABI(abi);
+    int32_t depth = 23;
+    executionMsg->setDepth(depth);
+    bool create = false;
+    executionMsg->setCreate(create);
+    bool internalCreate = true;
+    executionMsg->setInternalCreate(internalCreate);
+    bool internalCall = false;
+    executionMsg->setInternalCall(internalCall);
+    int64_t gasAvailable = 23423423;
+    executionMsg->setGasAvailable(gasAvailable);
+    std::string dataStr = "abdcsd";
+    bcos::bytes data(dataStr.begin(), dataStr.end());
+    executionMsg->setData(data);
+    bool staticCall = false;
+    executionMsg->setStaticCall(staticCall);
+    bcos::u256 salt(787667543453);
+    executionMsg->setCreateSalt(salt);
+    int status = -1000001;
+    executionMsg->setStatus(status);
+    std::string message = "abctest";
+    executionMsg->setMessage(message);
+
+    // check
+    BOOST_CHECK_EQUAL((int8_t)executionMsg->type(), type);
+    BOOST_CHECK_EQUAL(executionMsg->transactionHash().hex(), txsHash.hex());
+    BOOST_CHECK_EQUAL(executionMsg->contextID(), contextID);
+    BOOST_CHECK_EQUAL(executionMsg->seq(), seq);
+    BOOST_CHECK_EQUAL(executionMsg->origin(), origin);
+    BOOST_CHECK_EQUAL(executionMsg->from(), from);
+    BOOST_CHECK_EQUAL(executionMsg->to(), to);
+    BOOST_CHECK_EQUAL(executionMsg->abi(), abi);
+    BOOST_CHECK_EQUAL(executionMsg->depth(), depth);
+    BOOST_CHECK_EQUAL(executionMsg->create(), create);
+    BOOST_CHECK_EQUAL(executionMsg->internalCreate(), internalCreate);
+    BOOST_CHECK_EQUAL(executionMsg->internalCall(), internalCall);
+    BOOST_CHECK_EQUAL(executionMsg->gasAvailable(), gasAvailable);
+    BOOST_CHECK_EQUAL(
+        *(bcos::toHexString(executionMsg->data().toBytes())), *(bcos::toHexString(data)));
+    BOOST_CHECK_EQUAL(executionMsg->staticCall(), staticCall);
+    BOOST_CHECK_EQUAL(executionMsg->createSalt().value(), salt);
+    BOOST_CHECK_EQUAL(executionMsg->status(), status);
+    BOOST_CHECK_EQUAL(executionMsg->message(), message);
+
+    std::vector<std::string> keyLocks;
+    for (int i = 0; i < 10; i++)
+    {
+        keyLocks.emplace_back("keyLock" + std::to_string(i));
+    }
+    executionMsg->setKeyLocks(keyLocks);
+    BOOST_CHECK_EQUAL(executionMsg->keyLocks().size(), 10);
+    auto keyLocksData = executionMsg->keyLocks();
+    for (int i = 0; i < 10; i++)
+    {
+        BOOST_CHECK_EQUAL(keyLocksData[i], "keyLock" + std::to_string(i));
+    }
+    auto anotherExecutionMsg = std::make_shared<bcostars::protocol::ExecutionMessageImpl>(
+        [m_inner = executionMsg->inner()]() mutable { return &m_inner; });
+    checkExecutionMessage(anotherExecutionMsg, executionMsg);
+}
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test

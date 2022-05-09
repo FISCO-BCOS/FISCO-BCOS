@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-tars-protocol/tars/SchedulerService.h>
 namespace bcostars
 {
@@ -28,12 +29,15 @@ struct SchedulerServiceParam
 {
     bcos::scheduler::SchedulerInterface::Ptr scheduler;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
+    bcos::protocol::BlockFactory::Ptr blockFactory;
 };
 class SchedulerServiceServer : public SchedulerService
 {
 public:
     SchedulerServiceServer(SchedulerServiceParam const& _param)
-      : m_scheduler(_param.scheduler), m_cryptoSuite(_param.cryptoSuite)
+      : m_scheduler(_param.scheduler),
+        m_cryptoSuite(_param.cryptoSuite),
+        m_blockFactory(_param.blockFactory)
     {}
     ~SchedulerServiceServer() override {}
 
@@ -49,8 +53,15 @@ public:
     bcostars::Error getABI(
         const std::string& contract, std::string& code, tars::TarsCurrentPtr current) override;
 
+    bcostars::Error executeBlock(bcostars::Block const& _block, tars::Bool _verify,
+        bcostars::BlockHeader& _executedHeader, tars::Bool& _sysBlock,
+        tars::TarsCurrentPtr _current) override;
+    bcostars::Error commitBlock(bcostars::BlockHeader const& _header,
+        bcostars::LedgerConfig& _config, tars::TarsCurrentPtr _current) override;
+
 private:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
 };
 }  // namespace bcostars

@@ -57,6 +57,7 @@
 
 using namespace std;
 using namespace bcos;
+using namespace bcos::protocol;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::crypto;
@@ -300,7 +301,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto address = result3->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -493,7 +494,7 @@ BOOST_AUTO_TEST_CASE(deployError)
     BOOST_CHECK(!result3->newEVMContractAddress().empty());
     BOOST_CHECK_LT(result3->gasAvailable(), gas);
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -680,7 +681,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     auto address = result3->newEVMContractAddress();
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), selfAddress);
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;

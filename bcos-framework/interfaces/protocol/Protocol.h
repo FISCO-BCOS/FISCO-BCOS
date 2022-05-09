@@ -99,6 +99,27 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version cons
     }
     return _out;
 }
-
+inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
+{
+    switch (_nodeType)
+    {
+    case NodeType::None:
+        _out << "None";
+        break;
+    case NodeType::CONSENSUS_NODE:
+        _out << "CONSENSUS_NODE";
+        break;
+    case NodeType::OBSERVER_NODE:
+        _out << "OBSERVER_NODE";
+        break;
+    case NodeType::NODE_OUTSIDE_GROUP:
+        _out << "NODE_OUTSIDE_GROUP";
+        break;
+    default:
+        _out << "Unknown";
+        break;
+    }
+    return _out;
+}
 }  // namespace protocol
 }  // namespace bcos
