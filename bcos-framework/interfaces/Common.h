@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,23 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief define the basic type of the GroupManager
- * @file GroupTypeDef.h
+ * @file Common.h
  * @author: yujiechen
- * @date 2021-09-16
  */
 #pragma once
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/Log.h>
 #include <memory>
+#include <string>
 
-#define GROUP_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("GROUP")
-
-namespace bcos
-{
-namespace group
-{
-DERIVE_BCOS_EXCEPTION(InvalidGroupInfo);
-DERIVE_BCOS_EXCEPTION(InvalidChainNodeInfo);
-}  // namespace group
-}  // namespace bcos
+#define METRIC LOG_BADGE("METRIC")

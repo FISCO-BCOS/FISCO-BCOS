@@ -333,9 +333,9 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
                                   "Please set chain.block_limit to positive and less than " +
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadChainConfig") << LOG_KV("smCrypto", m_smCryptoType)
-                         << LOG_KV("chainId", m_chainId) << LOG_KV("groupId", m_groupId)
-                         << LOG_KV("blockLimit", m_blockLimit);
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
+                         << LOG_KV("smCrypto", m_smCryptoType) << LOG_KV("chainId", m_chainId)
+                         << LOG_KV("groupId", m_groupId) << LOG_KV("blockLimit", m_blockLimit);
 }
 
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -552,9 +552,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _pt)
     m_isWasm = _pt.get<bool>("executor.is_wasm", false);
     m_isAuthCheck = _pt.get<bool>("executor.is_auth_check", false);
     m_authAdminAddress = _pt.get<std::string>("executor.auth_admin_account", "");
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("isAuthCheck", m_isAuthCheck);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig")
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
+                         << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress);
 }
 

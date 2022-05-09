@@ -21,11 +21,11 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
-#include <bcos-utilities/Log.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

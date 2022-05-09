@@ -26,7 +26,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     }
     auto signature = block->blockHeaderConst()->signatureList();
     fetchGasLimit(block->blockHeaderConst()->number());
-    SCHEDULER_LOG(INFO) << "ExecuteBlock request"
+    SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock request"
                         << LOG_KV("block number", block->blockHeaderConst()->number())
                         << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
                         << LOG_KV("signatureSize", signature.size())

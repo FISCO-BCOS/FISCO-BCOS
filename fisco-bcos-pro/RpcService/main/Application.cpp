@@ -88,7 +88,8 @@ protected:
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
         m_logInitializer->setLogPath(getLogPath());
         m_logInitializer->initLog(pt);
-
+        // for stat the nodeVersion
+        bcos::initializer::showNodeVersionMetric();
         nodeConfig->loadServiceConfig(pt);
 
         m_rpcInitializer = std::make_shared<RpcInitializer>(_configDir, nodeConfig);

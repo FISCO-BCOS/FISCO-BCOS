@@ -23,8 +23,8 @@
 #include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
-#include <bcos-utilities/Log.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
