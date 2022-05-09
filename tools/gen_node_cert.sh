@@ -199,7 +199,7 @@ gen_node_cert_with_extensions_gm() {
 
     $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
     $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -config "$capath/gmcert.cnf" -key "$certpath/gm${type}.key" -out "$certpath/gm${type}.csr"
-    $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days ${days} -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+    $TASSL_CMD x509 -sm3 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days ${days} -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
 }
