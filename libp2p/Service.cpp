@@ -44,7 +44,6 @@ using namespace dev::network;
 using namespace dev::stat;
 
 static const uint32_t CHECK_INTERVEL = 10000;
-static const uint32_t MAX_NODES_LIMIT = 100;
 
 Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
@@ -1139,6 +1138,11 @@ void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
 bool Service::addPeers(
     std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
+    if (endpoints.size() > m_peersParamLimit)
+    {
+        response = "refused for too many param peers. peers_param_limit: " + std::to_string(m_peersParamLimit);
+        return false;
+    }
     auto nodes = staticNodes();
     auto siz = nodes.size();
     for (auto& endpoint : endpoints)
@@ -1151,11 +1155,11 @@ bool Service::addPeers(
         response = "no peers need to add";
         return true;
     }
-    if (nodes.size() > MAX_NODES_LIMIT)
+    if (nodes.size() > m_maxNodesLimit)
     {
         SERVICE_LOG(INFO) << LOG_DESC("refused for too many peers")
-                          << LOG_KV("LIMIT", MAX_NODES_LIMIT);
-        response = "refused for too many peers. LIMIT: " + std::to_string(MAX_NODES_LIMIT);
+                          << LOG_KV("LIMIT", m_maxNodesLimit);
+        response = "refused for too many peers. max_nodes_limit: " + std::to_string(m_maxNodesLimit);
         return false;
     }
     setStaticNodes(nodes);
@@ -1167,6 +1171,11 @@ bool Service::addPeers(
 bool Service::erasePeers(
     std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
+    if (endpoints.size() > m_peersParamLimit)
+    {
+        response = "refused for too many param peers. peers_param_limit: " + std::to_string(m_peersParamLimit);
+        return false;
+    }
     auto nodes = staticNodes();
     auto siz = nodes.size();
     for (auto& endpoint : endpoints)
