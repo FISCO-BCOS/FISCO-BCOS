@@ -33,7 +33,7 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -fno-var-tracking 
 add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("executor-coverage" "'/usr*' 'boost/**' 'deps/**'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("executor-coverage" "'/usr*' 'boost/**' 'deps/**'")
+#endif ()
