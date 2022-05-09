@@ -301,7 +301,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     config->setExecutedBlock(orgBlockHeader->number());
                 }
                 auto signature = orgBlockHeader->signatureList();
-                BLKSYNC_LOG(INFO) << LOG_BADGE("Download")
+                BLKSYNC_LOG(INFO) << METRIC << LOG_BADGE("Download")
                                   << LOG_DESC("BlockSync: applyBlock success")
                                   << LOG_KV("number", orgBlockHeader->number())
                                   << LOG_KV("hash", orgBlockHeader->hash().abridged())
@@ -471,7 +471,7 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
                                          << LOG_KV("txsSize", _block->transactionsSize());
                     return;
                 }
-                BLKSYNC_LOG(INFO) << LOG_DESC("commitBlock: store transactions success")
+                BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlock: store transactions success")
                                   << LOG_KV("number", blockHeader->number())
                                   << LOG_KV("hash", blockHeader->hash().abridged())
                                   << LOG_KV("txsSize", _block->transactionsSize())
@@ -525,7 +525,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             {
                 downloadingQueue->m_config->setExecutedBlock(blockHeader->number());
             }
-            BLKSYNC_LOG(INFO) << LOG_DESC("commitBlockState success")
+            BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlockState success")
                               << LOG_KV("number", blockHeader->number())
                               << LOG_KV("hash", blockHeader->hash().abridged())
                               << LOG_KV("exectedBlock", downloadingQueue->m_config->executedBlock())

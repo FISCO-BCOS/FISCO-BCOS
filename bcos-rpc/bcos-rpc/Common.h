@@ -18,7 +18,7 @@
  * @date 2021-07-02
  */
 #pragma once
-#include <bcos-utilities/Log.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <iostream>
 #include <memory>
 

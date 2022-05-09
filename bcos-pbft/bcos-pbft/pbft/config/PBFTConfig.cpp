@@ -36,7 +36,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("resetConfig")
+    PBFT_LOG(INFO) << METRIC << LOG_DESC("resetConfig")
                    << LOG_KV("committedIndex", _ledgerConfig->blockNumber())
                    << LOG_KV("propHash", _ledgerConfig->hash().abridged())
                    << LOG_KV("blockCountLimit", _ledgerConfig->blockTxCountLimit())
@@ -62,11 +62,12 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 
     if (_ledgerConfig->sealerId() == -1)
     {
-        PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << printCurrentState();
+        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report") << printCurrentState();
     }
     else
     {
-        PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("sealer", _ledgerConfig->sealerId())
+        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report")
+                       << LOG_KV("sealer", _ledgerConfig->sealerId())
                        << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState();
     }
     // notify the txpool validator to update the consensusNodeList and the observerNodeList

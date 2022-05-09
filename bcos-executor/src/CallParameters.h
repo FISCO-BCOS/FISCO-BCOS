@@ -59,8 +59,8 @@ struct CallParameters
      * certain precompiled contract
      */
     bool internalCall = false;
-	
-	std::string toString()
+
+    std::string toString()
     {
         std::stringstream ss;
         ss << "[" << contextID << "|" << seq << "|";

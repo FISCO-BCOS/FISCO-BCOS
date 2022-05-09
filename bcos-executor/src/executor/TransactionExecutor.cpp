@@ -417,10 +417,11 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
-            [this, contractAddress, indexes = std::move(indexes),
+            [this, startT, contractAddress, indexes = std::move(indexes),
                 fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
                 txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                auto fillTxsT = (utcTime() - startT);
                 if (error)
                 {
                     auto errorMessage = "asyncFillBlock failed";
@@ -430,7 +431,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                         {});
                     return;
                 }
-                auto startT = utcTime();
+                auto recordT = utcTime();
 #pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
@@ -438,8 +439,8 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }
-                auto prepareT = utcTime() - startT;
-                startT = utcTime();
+                auto prepareT = utcTime() - recordT;
+                recordT = utcTime();
 
                 auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress);
                 executiveFlow->submit(callParametersList);
@@ -449,9 +450,9 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                         callback(std::move(error), std::move(messages));
                     });
-                EXECUTOR_LOG(INFO)
-                    << LOG_DESC("dmcExecuteTransactionsInternal after fillblock")
-                    << LOG_KV("prepareT", prepareT) << LOG_KV("dagT", (utcTime() - startT));
+                EXECUTOR_LOG(INFO) << LOG_DESC("dmcExecuteTransactionsInternal after fillblock")
+                                   << LOG_KV("fillTxsT", fillTxsT) << LOG_KV("prepareT", prepareT)
+                                   << LOG_KV("dmcT", (utcTime() - recordT));
             });
     }
     else
@@ -466,7 +467,6 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
             });
     }
     EXECUTOR_LOG(INFO) << LOG_DESC("executeTransactions") << LOG_KV("prepareT", prepareT)
-                       << LOG_KV("fillBlockT", (utcTime() - startT))
                        << LOG_KV("total", (utcTime() - recoredT));
 }
 
@@ -557,9 +557,10 @@ void TransactionExecutor::dagExecuteTransactions(
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
-            [this, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
+            [this, startT, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
                 txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                auto fillTxsT = utcTime() - startT;
                 if (error)
                 {
                     auto errorMessage = "asyncFillBlock failed";
@@ -569,7 +570,7 @@ void TransactionExecutor::dagExecuteTransactions(
                         {});
                     return;
                 }
-                auto startT = utcTime();
+                auto recordT = utcTime();
 #pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
@@ -577,12 +578,12 @@ void TransactionExecutor::dagExecuteTransactions(
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }
-                auto prepareT = utcTime() - startT;
-                startT = utcTime();
+                auto prepareT = utcTime() - recordT;
+                recordT = utcTime();
                 dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
-                EXECUTOR_LOG(INFO)
-                    << LOG_DESC("dagExecuteTransactionsInternal after fillblock")
-                    << LOG_KV("prepareT", prepareT) << LOG_KV("dagT", (utcTime() - startT));
+                EXECUTOR_LOG(INFO) << LOG_DESC("dagExecuteTransactionsInternal after fillblock")
+                                   << LOG_KV("fillTxsT", fillTxsT) << LOG_KV("prepareT", prepareT)
+                                   << LOG_KV("dagT", (utcTime() - recordT));
             });
     }
     else
@@ -590,7 +591,6 @@ void TransactionExecutor::dagExecuteTransactions(
         dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
     }
     EXECUTOR_LOG(INFO) << LOG_DESC("dagExecuteTransactions") << LOG_KV("prepareT", prepareT)
-                       << LOG_KV("fillBlockT", (utcTime() - startT))
                        << LOG_KV("total", (utcTime() - recoredT));
 }
 

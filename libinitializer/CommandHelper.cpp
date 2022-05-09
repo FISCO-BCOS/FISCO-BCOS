@@ -18,6 +18,7 @@
  * @date 2021-06-10
  */
 #include "CommandHelper.h"
+#include "Common.h"
 #include <include/BuildInfo.h>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -30,6 +31,17 @@ void bcos::initializer::printVersion()
               << FISCO_BCOS_BUILD_TYPE << std::endl;
     std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
     std::cout << "Git Commit         : " << FISCO_BCOS_COMMIT_HASH << std::endl;
+}
+
+void bcos::initializer::showNodeVersionMetric()
+{
+    INITIALIZER_LOG(INFO) << METRIC
+                          << LOG_KV("binaryVersion", FISCO_BCOS_PROJECT_VERSION)
+                          << LOG_KV("buildTime", FISCO_BCOS_BUILD_TIME)
+                          << LOG_KV("buildType", FISCO_BCOS_BUILD_TYPE)
+                          << LOG_KV("platform", FISCO_BCOS_BUILD_PLATFORM)
+                          << LOG_KV("gitBranch", FISCO_BCOS_BUILD_BRANCH)
+                          << LOG_KV("commitHash", FISCO_BCOS_COMMIT_HASH);
 }
 
 void bcos::initializer::initCommandLine(int argc, char* argv[])

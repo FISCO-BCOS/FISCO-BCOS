@@ -183,7 +183,7 @@ void BlockExecutive::prepare()
 
     m_hasPrepared = true;
 
-    SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive")
+    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("prepareBlockExecutive")
                          << LOG_KV("block number", m_block->blockHeaderConst()->number())
                          << LOG_KV(
                                 "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())

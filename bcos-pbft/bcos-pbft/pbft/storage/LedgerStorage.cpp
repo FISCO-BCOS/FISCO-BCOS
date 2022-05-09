@@ -368,7 +368,7 @@ void LedgerStorage::commitStableCheckPoint(BlockHeader::Ptr _blockHeader, Block:
             auto commitPerTx =
                 (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
             PBFT_STORAGE_LOG(INFO)
-                << LOG_DESC("commitStableCheckPoint success")
+                << METRIC << LOG_DESC("commitStableCheckPoint success")
                 << LOG_KV("index", _blockHeader->number())
                 << LOG_KV("hash", _ledgerConfig->hash().abridged())
                 << LOG_KV("txs", _blockInfo->transactionsHashSize())
