@@ -115,15 +115,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
-        service->registerDisconnectHandler(
-            [weakptrGatewayNodeManager](NetworkException e, P2PSession::Ptr p2pSession) {
-                (void)e;
-                auto gatewayNodeManager = weakptrGatewayNodeManager.lock();
-                if (gatewayNodeManager && p2pSession)
-                {
-                    gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
-                }
-            });
+        service->registerDisconnectHandler([weakptrGatewayNodeManager](P2PSession::Ptr p2pSession) {
+            auto gatewayNodeManager = weakptrGatewayNodeManager.lock();
+            if (gatewayNodeManager && p2pSession)
+            {
+                gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
+            }
+        });
+
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
         return gateway;

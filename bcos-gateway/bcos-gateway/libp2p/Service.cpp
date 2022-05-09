@@ -31,6 +31,9 @@ Service::Service(std::shared_ptr<boostssl::ws::WsService> _wsService) : m_wsServ
     registerHandlerByMsgType(
         GatewayMessageType::Handshake, boost::bind(&Service::onReceiveProtocol, this,
                                            boost::placeholders::_1, boost::placeholders::_2));
+
+    m_wsService->registerDisconnectHandler(
+        boost::bind(&Service::onDisconnect, this, boost::placeholders::_1));
 }
 
 void Service::start()
@@ -253,12 +256,13 @@ void Service::onConnect(std::shared_ptr<WsSession> _session)
                       << LOG_KV("endpoint", session->endPoint());
 }
 
-void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
+void Service::onDisconnect(WsSession::Ptr _session)
 {
+    auto p2pSession = std::dynamic_pointer_cast<P2PSession>(_session);
     // handle all registered handlers
     for (const auto& handler : m_disconnectionHandlers)
     {
-        handler(e, p2pSession);
+        handler(p2pSession);
     }
 
     RecursiveGuard l(x_sessions);
@@ -270,10 +274,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
                            << LOG_KV("endpoint", p2pSession->endPoint());
 
         m_sessions.erase(it);
-        if (e.errorCode() == P2PExceptionType::DuplicateSession)
-            return;
-        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
-                             << LOG_KV("what", boost::diagnostic_information(e));
+
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
         {
@@ -350,7 +351,7 @@ void Service::onMessage(NetworkException e, boostssl::ws::WsSession::Ptr session
 
             if (p2pSession)
             {
-                onDisconnect(e, p2pSession);
+                onDisconnect(p2pSession);
             }
             return;
         }

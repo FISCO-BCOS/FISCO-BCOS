@@ -47,7 +47,7 @@ public:
     void setId(const P2pID& _nodeID) { m_p2pID = _nodeID; }
 
     virtual void onConnect(std::shared_ptr<boostssl::ws::WsSession> _session);
-    virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
+    virtual void onDisconnect(boostssl::ws::WsSession::Ptr p2pSession);
     virtual void onMessage(NetworkException e, boostssl::ws::WsSession::Ptr session,
         bcos::boostssl::MessageFace::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
@@ -106,7 +106,7 @@ public:
 
     void updateStaticNodes(std::string const& _endPoint, P2pID const& p2pID);
 
-    void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler)
+    void registerDisconnectHandler(std::function<void(P2PSession::Ptr)> _handler)
     {
         m_disconnectionHandlers.push_back(_handler);
     }
@@ -170,7 +170,7 @@ private:
         boostssl::MessageFace::Ptr _message, std::shared_ptr<P2PSession> _session);
 
 private:
-    std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
+    std::vector<std::function<void(P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
 

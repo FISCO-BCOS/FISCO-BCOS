@@ -31,7 +31,15 @@ public:
 
     virtual void start();
 
-    virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
+    virtual P2pID p2pID()
+    {
+        if (!m_p2pInfo)
+        {
+            return P2pID();
+        }
+        return m_p2pInfo->p2pID;
+    }
+
     // Note: the p2pInfo must be setted after session setted
     virtual void initP2PInfo()
     {
