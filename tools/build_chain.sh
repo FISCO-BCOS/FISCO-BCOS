@@ -56,6 +56,7 @@ x86_64_arch="true"
 download_timeout=240
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 use_ipv6=
+cert_conf_path=
 help() {
     cat << EOF
 Usage:
@@ -386,7 +387,7 @@ gen_chain_cert() {
     # openssl genrsa -out "$chaindir/ca.key" 2048
     openssl ecparam -out "$chaindir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$chaindir/secp256k1.param" -out "$chaindir/ca.key" 2> /dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=$name/O=fisco-bcos/OU=chain" -key "$chaindir/ca.key" -out "$chaindir/ca.crt"
+    openssl req -new -x509 -days "${days}" -subj "/CN=$name/O=fisco-bcos/OU=chain" -key "$chaindir/ca.key" -config ${cert_conf_path} -out "$chaindir/ca.crt"
     rm -f "$chaindir/secp256k1.param"
 }
 
@@ -405,7 +406,7 @@ gen_agency_cert() {
     # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config ${cert_conf_path} -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days "${days}" -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
@@ -423,7 +424,7 @@ gen_cert_secp256k1() {
     openssl ecparam -out "$certpath/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$certpath/secp256k1.param" -out "$certpath/${type}.key" 2> /dev/null
     openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -out "$certpath/${type}.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config ${cert_conf_path} -out "$certpath/${type}.csr" 2> /dev/null
     if [ -n "${no_agency}" ];then
         echo "not use $(basename $agpath) to sign $(basename $certpath) ${type}" >>"${logfile}"
         openssl x509 -req -days "${days}" -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/../ca.key" -CA "$agpath/../ca.crt" \
@@ -1660,7 +1661,7 @@ prepare_ca(){
 
     if [ -z "${CertConfig}" ] || [ ! -e "${CertConfig}" ];then
         # CertConfig="${output_dir}/cert.cnf"
-        generate_cert_conf "cert.cnf"
+        generate_cert_conf ${cert_conf_path}
     else
         cp "${CertConfig}" .
     fi
@@ -1678,7 +1679,7 @@ prepare_ca(){
         [ -f "$ca_path/root.crt" ] && cp "$ca_path/root.crt" "${output_dir}/cert/" && root_crt="${output_dir}/cert/root.crt"
     fi
     ca_key="${output_dir}/cert/ca.key"
-    mv cert.cnf "${output_dir}/cert/"
+    cp ${cert_conf_path} "${output_dir}/cert/"
     if [ "${use_ip_param}" == "false" ];then
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
@@ -1729,6 +1730,7 @@ main()
 
 [ -z $use_ip_param ] && LOG_WARN "Please set -l or -f option." && help
 output_dir="$(pwd)/${output_dir}"
+cert_conf_path=${output_dir}/cert.cnf
 dir_must_not_exists "${output_dir}"
 mkdir -p "${output_dir}"
 if [ "${use_ip_param}" == "true" ];then
