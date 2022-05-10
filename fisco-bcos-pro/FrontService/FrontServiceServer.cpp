@@ -65,7 +65,7 @@ bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleI
 
         // response directly
         bcos::bytesConstRef respData;
-        async_response_asyncSendMessageByNodeID(current, toTarsError(nullptr),
+        async_response_asyncSendMessageByNodeID(current, toTarsError<bcos::Error::Ptr>(nullptr),
             std::vector<char>(nodeID.begin(), nodeID.end()),
             std::vector<char>(respData.begin(), respData.end()), seq);
     }

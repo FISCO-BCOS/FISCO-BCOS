@@ -419,7 +419,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto summary =
         std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(8, 0, 0);
 
-    auto collector = [this, summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
+    auto collector = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
                          std::variant<std::tuple<bool, consensus::ConsensusNodeListPtr>,
                              std::tuple<int, std::string, bcos::protocol::BlockNumber>,
@@ -449,8 +449,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             ledgerConfig->setObserverNodeList(*list);
                         }
                     },
-                    [&ledgerConfig, this](
-                        std::tuple<int, std::string, protocol::BlockNumber> config) {
+                    [&ledgerConfig](std::tuple<int, std::string, protocol::BlockNumber> config) {
                         auto& [type, value, blockNumber] = config;
                         switch (type)
                         {
@@ -470,18 +469,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             try
                             {
                                 auto version = bcos::tool::toVersionNumber(value);
-                                auto currentVersion = g_BCOSConfig.version();
-                                if ((uint32_t)currentVersion == version)
-                                {
-                                    break;
-                                }
-                                g_BCOSConfig.setVersion((bcos::protocol::Version)version);
-                                if (m_versionNotification)
-                                {
-                                    m_versionNotification(version);
-                                }
-                                SCHEDULER_LOG(INFO) << LOG_DESC("reset versionNumber")
-                                                    << LOG_KV("version", version);
+                                ledgerConfig->setCompatibilityVersion(version);
                             }
                             catch (std::exception const& e)
                             {

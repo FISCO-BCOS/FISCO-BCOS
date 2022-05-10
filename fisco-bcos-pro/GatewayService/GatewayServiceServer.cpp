@@ -48,7 +48,8 @@ bcostars::Error GatewayServiceServer::asyncSendBroadbastMessageByTopic(
     current->setResponse(false);
     m_gatewayInitializer->gateway()->asyncSendBroadbastMessageByTopic(
         _topic, bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()));
-    async_response_asyncSendBroadbastMessageByTopic(current, toTarsError(nullptr));
+    async_response_asyncSendBroadbastMessageByTopic(
+        current, toTarsError<bcos::Error::Ptr>(nullptr));
     return bcostars::Error();
 }
 

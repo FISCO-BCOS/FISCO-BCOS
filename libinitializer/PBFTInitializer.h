@@ -21,6 +21,7 @@
 #pragma once
 #include "Common.h"
 #include "Common/TarsUtils.h"
+#include "bcos-framework/interfaces/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
@@ -84,6 +85,7 @@ public:
     bcos::group::GroupInfo::Ptr groupInfo() { return m_groupInfo; }
     bcos::group::ChainNodeInfo::Ptr nodeInfo() { return m_nodeInfo; }
     virtual void onGroupInfoChanged();
+    virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
 
 protected:
     virtual void initChainNodeInfo(bcos::initializer::NodeArchitectureType _nodeArchType,

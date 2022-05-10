@@ -184,14 +184,21 @@ void LedgerConfigFetcher::fetchNonceList(BlockNumber _startNumber, int64_t _offs
     m_nonceList = ret.second;
 }
 
-void LedgerConfigFetcher::fetchAndSetCompatibilityVersion()
+void LedgerConfigFetcher::fetchCompatibilityVersion()
 {
-    TOOL_LOG(INFO) << LOG_DESC("fetchAndSetCompatibilityVersion");
+    TOOL_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion");
     auto versionStr = fetchSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION);
+    if (versionStr.size() == 0)
+    {
+        m_ledgerConfig->setCompatibilityVersion((uint32_t)(bcos::protocol::DEFAULT_VERSION));
+        TOOL_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion: empty version, use " +
+                                   bcos::protocol::RC3_VERSION_STR + " as default version.");
+        return;
+    }
     auto version = toVersionNumber(versionStr);
-    g_BCOSConfig.setVersion((bcos::protocol::Version)version);
-    TOOL_LOG(INFO) << LOG_DESC("fetchAndSetCompatibilityVersion success")
-                   << LOG_KV("version", versionStr) << LOG_KV("versionNumber", version)
+    m_ledgerConfig->setCompatibilityVersion(version);
+    TOOL_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion success") << LOG_KV("version", versionStr)
+                   << LOG_KV("versionNumber", version)
                    << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
                    << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
 }
