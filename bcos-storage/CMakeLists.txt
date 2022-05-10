@@ -4,23 +4,25 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment ver
 include(Version)
 project(bcos-storage VERSION ${VERSION})
 
-set(SRC_LIST src/Common.cpp)
-list(APPEND SRC_LIST src/RocksDBStorage.cpp)
-
-if(TIKV)
-    include(ProjectTiKVClient)
-    list(APPEND SRC_LIST src/TiKVStorage.cpp)
-endif()
-
 hunter_add_package(zstd)
 find_package(zstd CONFIG REQUIRED)
 hunter_add_package(rocksdb)
 find_package(RocksDB CONFIG REQUIRED)
-
 find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
 
+set(SRC_LIST src/Common.cpp)
+list(APPEND SRC_LIST src/RocksDBStorage.cpp)
+
+set(LIB_LIST ${TABLE_TARGET} Boost::serialization zstd::libzstd_static RocksDB::rocksdb)
+
+if(TIKV)
+    include(ProjectTiKVClient)
+    list(APPEND SRC_LIST src/TiKVStorage.cpp)
+    list(APPEND LIB_LIST kv_client)
+endif()
+
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_link_libraries(${STORAGE_TARGET} PUBLIC ${TABLE_TARGET} Boost::serialization zstd::libzstd_static RocksDB::rocksdb kv_client)
+target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
 
 if (TESTS)
     enable_testing()

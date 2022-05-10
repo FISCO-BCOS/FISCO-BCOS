@@ -1,43 +1,40 @@
 #pragma once
 
 #include "Exceptions.h"
-#include <bcos-crypto/interfaces/crypto/Hasher.h>
+#include "interfaces/crypto/Concepts.h"
+#include <bcos-crypto/interfaces/crypto/hasher/Hasher.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <exception>
 #include <iterator>
 #include <ranges>
+#include <stdexcept>
 #include <type_traits>
 
 namespace bcos::tool
 {
-struct MerkleTrieException : public virtual boost::exception, public virtual std::exception
-{
-};
 
-template <class Range>
-concept HashRange = std::ranges::random_access_range<Range> &&
-    std::is_same_v<std::remove_const_t<std::ranges::range_value_t<Range>>, bcos::h256>;
+template <class Range, class HashType>
+concept InputRange =
+    std::ranges::random_access_range<Range> && bcos::crypto::TrivialObject<HashType> &&
+    std::is_same_v<std::remove_cvref_t<std::ranges::range_value_t<Range>>, HashType>;
 
-template <class Range>
-concept MutableHashRange =
-    std::ranges::random_access_range<Range> && std::ranges::output_range<Range, bcos::h256>;
+template <class Range, class HashType>
+concept OutputRange = std::ranges::random_access_range<Range> &&
+    std::ranges::output_range<Range, HashType> && bcos::crypto::TrivialObject<HashType>;
 
-template <bcos::crypto::Hasher Hasher>
+template <bcos::crypto::Hasher HasherType>
 class BinaryMerkleTrie
 {
 public:
     BinaryMerkleTrie(){};
 
-    std::vector<bcos::h256> getProof(bcos::h256 hash) { return {}; }
-
-    void calcHash(HashRange auto const& input)
+    template <class HashType>
+    void calculateAllHashes(InputRange<HashType> auto const& input)
     {
         auto const inputSize = std::size(input);
         if (inputSize <= 0)
-        {
-            BOOST_THROW_EXCEPTION(MerkleTrieException{});
-        }
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Input size too short!"});
 
         m_nodes.resize(inputSize + (inputSize - 1));
 
@@ -48,43 +45,47 @@ public:
 
         while (range.begin() != range.end())
         {
-            auto length = levelHashes(range, std::ranges::subrange(range.begin(), m_nodes.end()));
+            auto length =
+                calculateLevelHashes(range, std::ranges::subrange(range.begin(), m_nodes.end()));
             range = {range.end(), range.end() + length};
         }
     }
 
-    size_t levelHashes(HashRange auto input, MutableHashRange auto output)
+    template <class HashType>
+    size_t calculateLevelHashes(
+        InputRange<HashType> auto&& input, OutputRange<HashType> auto& output)
     {
         auto inputSize = std::size(input);
         auto outputSize = std::size(output);
         auto expectOutputSize = (inputSize + 1) / 2;
 
+        if (inputSize <= 0)
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Input size too short!"});
+
         if (outputSize < expectOutputSize)
-        {
-            BOOST_THROW_EXCEPTION(MerkleTrieException{});
-        }
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+
+        using FuncType = decltype([](){ return 0; });
+        FuncType f;
 
         ExceptionHolder holder;
-#pragma omp parallel
+#pragma omp parallel if (inputSize >= MIN_PARALLEL_SIZE)
         {
-            Hasher localHasher;
+            HasherType localHasher;
 #pragma omp for
             for (size_t i = 0; i < inputSize; i += 2)
             {
                 holder.run([&]() {
                     if (i + 1 < inputSize) [[likely]]
                     {
-                        auto& hash1 = input[i];
-                        auto& hash2 = input[i + 1];
-                        localHasher.update(std::span<byte const>{hash1.data(), hash1.size});
-                        localHasher.update(std::span<byte const>{hash2.data(), hash2.size});
-                        output[i / 2] = localHasher.final();
+                        localHasher.update(input[i]);
+                        localHasher.update(input[i + 1]);
+                        localHasher.final(output[i / 2]);
                     }
                     else
                     {
-                        auto& hash = input[i];
-                        localHasher.update(std::span<byte const>{hash.data(), hash.size});
-                        output[i / 2] = localHasher.final();
+                        localHasher.update(input[i]);
+                        localHasher.final(output[i / 2]);
                     }
                 });
             }
@@ -95,6 +96,8 @@ public:
     }
 
 private:
-    std::vector<bcos::h256> m_nodes;
+    std::vector<std::array<std::byte, 32>> m_nodes;
+
+    constexpr static size_t MIN_PARALLEL_SIZE = 32;
 };
 }  // namespace bcos::tool

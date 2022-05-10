@@ -1,4 +1,4 @@
-#include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-crypto/interfaces/crypto/hasher/OpenSSLHasher.h>
 #include <bcos-tool/BinaryMerkleTrie.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
@@ -18,7 +18,7 @@ BOOST_AUTO_TEST_CASE(testCalcHash)
     bcos::tool::BinaryMerkleTrie<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher> trie;
 
     size_t count = 100000;
-    std::vector<bcos::h256> hashes;
+    std::vector < std::array<std::byte, 32> hashes;
     hashes.reserve(count);
 
     for (size_t i = 0; i < count; ++i)
