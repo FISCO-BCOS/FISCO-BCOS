@@ -38,7 +38,6 @@ hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
-hunter_add_package(etcd-cpp-apiv3)
 
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
