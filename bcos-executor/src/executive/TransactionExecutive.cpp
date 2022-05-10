@@ -219,18 +219,32 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         return callPrecompiled(std::move(callParameters));
     }
-    /// FIXME: consider wasm call CRUD table address
     auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
     // check permission first
-    if (blockContext->isAuthCheck() && !blockContext->isWasm() && !checkAuth(callParameters, false))
+    if (blockContext->isAuthCheck())
     {
-        revert();
-        callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-        callParameters->type = CallParameters::REVERT;
-        callParameters->message = "Call permission denied";
-        EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
-                             << LOG_KV("origin", callParameters->origin);
-        return {nullptr, std::move(callParameters)};
+        if (!checkContractAvailable(callParameters))
+        {
+            revert();
+            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Contract is frozen";
+            callParameters->data.clear();
+            EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
+                                 << LOG_KV("origin", callParameters->origin);
+            return {nullptr, std::move(callParameters)};
+        }
+        if (!checkAuth(callParameters, false))
+        {
+            revert();
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Call permission denied";
+            callParameters->data.clear();
+            EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
+                                 << LOG_KV("origin", callParameters->origin);
+            return {nullptr, std::move(callParameters)};
+        }
     }
     auto hostContext = make_unique<HostContext>(
         std::move(callParameters), shared_from_this(), std::move(tableName));
@@ -785,6 +799,7 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
 {
     auto blockContext = m_blockContext.lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled") << LOG_KV("code", code);
     std::vector<std::string> codeParameters;
     boost::split(codeParameters, code, boost::is_any_of(","));
     if (codeParameters.size() < 3)
@@ -792,9 +807,10 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "CallDynamicPrecompiled error code field."));
     }
     callParameters->codeAddress = codeParameters[1];
-    /// FIXME: consider scalability
-    auto params = codeParameters[2];
-    auto newParams = codec.encode(params, callParameters->data);
+    // for scalability, erase [PRECOMPILED_PREFIX,codeAddress], left actual parameters
+    codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
+    // enc([call precompiled parameters],[user call parameters])
+    auto newParams = codec.encode(codeParameters, callParameters->data);
     callParameters->data = std::move(newParams);
     return std::get<1>(callPrecompiled(std::move(callParameters)));
 }
@@ -1053,13 +1069,14 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.substr(0, 5) == "/sys/" ||
-        getContractTableName(_sender, false).substr(0, 5) == "/sys/")
+    if (_tableName.substr(0, 5) == USER_SYS_PREFIX ||
+        getContractTableName(_sender, false).substr(0, 5) == USER_SYS_PREFIX)
     {
         return;
     }
     auto authTableName = std::string(_tableName).append(CONTRACT_SUFFIX);
     // if contract external create contract, then inheritance admin
+    // FIXME: check this available in multi executor
     std::string admin;
     if (_sender != _origin)
     {
@@ -1132,7 +1149,7 @@ bool TransactionExecutive::checkAuth(
                          codec->encodeWithSig("hasDeployAuth(string)", address) :
                          codec->encodeWithSig("hasDeployAuth(address)", Address(address));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
-            callParameters->senderAddress, authMgrAddress, true, false, callParameters->gas);
+            callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
         bool result = true;
         codec->decode(ref(response->data), result);
         return result;
@@ -1140,4 +1157,15 @@ bool TransactionExecutive::checkAuth(
     bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
     return contractAuthPrecompiled->checkMethodAuth(
         shared_from_this(), std::move(path), func, address);
+}
+
+bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
+{
+    auto blockContext = m_blockContext.lock();
+    auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
+        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+    auto path = callParameters->codeAddress;
+    EXECUTIVE_LOG(DEBUG) << "check contract status" << LOG_KV("codeAddress", path);
+
+    return contractAuthPrecompiled->checkContractAvailable(shared_from_this(), std::move(path));
 }

@@ -16,11 +16,11 @@ struct MerkleTrieException : public virtual boost::exception, public virtual std
 };
 
 template <class Range>
-concept InputHashRange = std::ranges::random_access_range<Range> &&
-    std::is_same_v<std::ranges::range_value_t<Range>, bcos::h256>;
+concept HashRange = std::ranges::random_access_range<Range> &&
+    std::is_same_v<std::remove_const_t<std::ranges::range_value_t<Range>>, bcos::h256>;
 
 template <class Range>
-concept OutputHashRange =
+concept MutableHashRange =
     std::ranges::random_access_range<Range> && std::ranges::output_range<Range, bcos::h256>;
 
 template <bcos::crypto::Hasher Hasher>
@@ -29,9 +29,11 @@ class BinaryMerkleTrie
 public:
     BinaryMerkleTrie(){};
 
-    void calcHash(InputHashRange auto const& input)
+    std::vector<bcos::h256> getProof(bcos::h256 hash) { return {}; }
+
+    void calcHash(HashRange auto const& input)
     {
-        auto inputSize = std::size(input);
+        auto const inputSize = std::size(input);
         if (inputSize <= 0)
         {
             BOOST_THROW_EXCEPTION(MerkleTrieException{});
@@ -39,22 +41,22 @@ public:
 
         m_nodes.resize(inputSize + (inputSize - 1));
 
-        std::copy_n(std::begin(input), std::size(input), std::begin(m_nodes));
+        std::copy_n(std::begin(input), inputSize, m_nodes.begin());
+        std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
-        auto range = std::make_pair(m_nodes.begin(), m_nodes.begin() + inputSize);
-        while (range.first != range.second)
+        auto range = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + inputSize};
+
+        while (range.begin() != range.end())
         {
-            auto length = parseRange(range, std::make_pair(range.second, m_nodes.end()));
-            range.first = range.second;
-            range.second += length;
+            auto length = levelHashes(range, std::ranges::subrange(range.begin(), m_nodes.end()));
+            range = {range.end(), range.end() + length};
         }
     }
 
-    size_t parseRange(InputHashRange auto const& input, OutputHashRange auto& output)
+    size_t levelHashes(HashRange auto input, MutableHashRange auto output)
     {
         auto inputSize = std::size(input);
         auto outputSize = std::size(output);
-
         auto expectOutputSize = (inputSize + 1) / 2;
 
         if (outputSize < expectOutputSize)
@@ -90,11 +92,6 @@ public:
         holder.rethrow();
 
         return expectOutputSize;
-    }
-
-    std::vector<bcos::h256> getProof(bcos::h256 hash)
-    {
-        return {};
     }
 
 private:

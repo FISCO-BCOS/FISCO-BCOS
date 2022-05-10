@@ -20,6 +20,7 @@
  */
 #include "SchedulerServiceServer.h"
 #include <bcos-tars-protocol/ErrorConverter.h>
+#include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 using namespace bcostars;
@@ -57,12 +58,45 @@ bcostars::Error SchedulerServiceServer::getCode(
     return bcostars::Error();
 }
 
-bcostars::Error SchedulerServiceServer::getABI(const std::string& contract, std::string& abi, tars::TarsCurrentPtr current)
+bcostars::Error SchedulerServiceServer::getABI(
+    const std::string& contract, std::string& abi, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_scheduler->getABI(contract, [current](bcos::Error::Ptr error, std::string abi) {
         async_response_getABI(current, toTarsError(error), abi);
     });
 
+    return bcostars::Error();
+}
+
+bcostars::Error SchedulerServiceServer::executeBlock(bcostars::Block const& _block,
+    tars::Bool _verify, bcostars::BlockHeader&, tars::Bool&, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    auto bcosBlock = std::make_shared<bcostars::protocol::BlockImpl>(
+        m_blockFactory->transactionFactory(), m_blockFactory->receiptFactory(), _block);
+    m_scheduler->executeBlock(bcosBlock, _verify,
+        [_current](
+            bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool _sysBlock) {
+            auto headerImpl =
+                std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(_header);
+            async_response_executeBlock(
+                _current, toTarsError(_error), headerImpl->inner(), _sysBlock);
+        });
+    return bcostars::Error();
+}
+
+
+bcostars::Error SchedulerServiceServer::commitBlock(
+    bcostars::BlockHeader const& _header, bcostars::LedgerConfig&, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    auto bcosHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        m_cryptoSuite, [m_header = _header]() mutable { return &m_header; });
+    m_scheduler->commitBlock(bcosHeader,
+        [_current](bcos::Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _bcosLedgerConfig) {
+            async_response_commitBlock(
+                _current, toTarsError(_error), toTarsLedgerConfig(_bcosLedgerConfig));
+        });
     return bcostars::Error();
 }

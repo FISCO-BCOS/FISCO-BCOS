@@ -216,17 +216,17 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 setRowCallback(std::make_unique<Error>(*error), 2);
                 return;
             }
-
+            auto totalTxsCount = total + totalCount;
             Entry totalEntry;
-            totalEntry.importFields({boost::lexical_cast<std::string>(total + totalCount)});
+            totalEntry.importFields({boost::lexical_cast<std::string>(totalTxsCount)});
             storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
                 std::move(totalEntry),
                 [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
-
+            auto failedTxs = failed + failedCount;
             if (failedCount != 0)
             {
                 Entry failedEntry;
-                failedEntry.importFields({boost::lexical_cast<std::string>(failed + failedCount)});
+                failedEntry.importFields({boost::lexical_cast<std::string>(failedTxs)});
                 storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
                     std::move(failedEntry),
                     [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
@@ -235,6 +235,10 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             {
                 setRowCallback({}, true);
             }
+            LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
+                             << LOG_KV("number", block->blockHeaderConst()->number())
+                             << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
+                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
 }
 
@@ -1099,7 +1103,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
             {
                 if (!entry.has_value())
                 {
-                    LEDGER_LOG(INFO) << "Get transaction failed: " << (*hashes)[i] << " not found";
+                    LEDGER_LOG(TRACE) << "Get transaction failed: " << (*hashes)[i] << " not found";
                 }
                 else
                 {

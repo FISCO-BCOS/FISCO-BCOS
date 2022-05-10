@@ -10,6 +10,12 @@ gateway_sm_ssl=false
 rpc_ca_cert_path="generated/rpc/chain0/ca"
 gateway_ca_cert_path="generated/gateway/chain0/ca"
 
+# the failover config
+# enable failover or not, default disable
+enable_failover=false
+# the address of etcd, can configure multiple comma-separated
+failover_cluster_url = "127.0.0.1:2379"
+
 [[chain.rpc]]
 name="agencyABcosRpcService"
 deploy_ip=["172.25.0.5"]

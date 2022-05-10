@@ -24,6 +24,7 @@
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"

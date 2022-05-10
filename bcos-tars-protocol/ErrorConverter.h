@@ -69,4 +69,26 @@ inline bcos::Error::Ptr toBcosError(tars::Int32 ret)
     return bcosError;
 }
 
+inline bcos::Error::UniquePtr toUniqueBcosError(const bcostars::Error& error)
+{
+    if (error.errorCode == 0)
+    {
+        return nullptr;
+    }
+
+    auto bcosError = std::make_unique<bcos::Error>(error.errorCode, error.errorMessage);
+    return bcosError;
+}
+
+inline bcos::Error::UniquePtr toUniqueBcosError(tars::Int32 ret)
+{
+    if (ret == 0)
+    {
+        return nullptr;
+    }
+
+    auto bcosError = std::make_unique<bcos::Error>(ret, "TARS error!");
+    return bcosError;
+}
+
 }  // namespace bcostars

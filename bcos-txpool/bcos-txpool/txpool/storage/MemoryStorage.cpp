@@ -407,12 +407,16 @@ void MemoryStorage::printPendingTxs()
 }
 void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
 {
+    auto startT = utcTime();
+    auto recordT = utcTime();
+    int64_t lockT = 0;
     m_blockNumberUpdatedTime = utcTime();
     size_t succCount = 0;
     NonceListPtr nonceList = std::make_shared<NonceList>();
     {
         // batch remove
         WriteGuard l(x_txpoolMutex);
+        lockT = utcTime() - startT;
         for (auto txResult : _txsResult)
         {
             auto tx = removeSubmittedTxWithoutLock(txResult);
@@ -433,14 +437,22 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
             m_blockNumber = _batchId;
         }
     }
+    auto removeT = utcTime() - startT;
+    startT = utcTime();
     notifyUnsealedTxsSize();
-    TXPOOL_LOG(INFO) << LOG_DESC("batchRemove txs success")
-                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
-                     << LOG_KV("batchId", _batchId);
     // update the ledger nonce
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    auto updateLedgerNonceT = utcTime() - startT;
+    startT = utcTime();
     // update the txpool nonce
     m_config->txPoolNonceChecker()->batchRemove(*nonceList);
+    auto updateTxPoolNonceT = utcTime() - startT;
+    TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
+                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
+                     << LOG_KV("batchId", _batchId) << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
+                     << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
+                     << LOG_KV("updateLedgerNonceT", updateLedgerNonceT);
 }
 
 TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
@@ -590,7 +602,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
     removeInvalidTxs();
-    TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs success")
+    TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
                      << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
@@ -651,6 +663,10 @@ void MemoryStorage::clear()
 {
     WriteGuard l(x_txpoolMutex);
     m_txsTable.clear();
+    m_invalidTxs.clear();
+    m_invalidNonces.clear();
+    m_missedTxs.clear();
+    notifyUnsealedTxsSize();
 }
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)

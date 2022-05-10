@@ -66,4 +66,5 @@ static const char* const SYS_NUMBER_2_TXS = "s_number_2_txs";
 static const char* const SYS_HASH_2_TX = "s_hash_2_tx";
 static const char* const SYS_HASH_2_RECEIPT = "s_hash_2_receipt";
 static const char* const DAG_TRANSFER = "/tables/dag_transfer";
+static const char* const SMALLBANK_TRANSFER = "/tables/smallbank_transfer";
 }  // namespace bcos::ledger

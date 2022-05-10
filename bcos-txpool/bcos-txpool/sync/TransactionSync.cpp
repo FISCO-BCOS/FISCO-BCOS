@@ -418,7 +418,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         }
     }
     _onVerifyFinished(error, true);
-    SYNC_LOG(DEBUG) << LOG_DESC("requestMissedTxs and verify success")
+    SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
                     << LOG_KV(
                            "hash", (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
                     << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1)

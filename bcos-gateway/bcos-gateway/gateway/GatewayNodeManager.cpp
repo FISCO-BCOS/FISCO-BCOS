@@ -85,8 +85,7 @@ bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto:
     return ret;
 }
 
-bool GatewayNodeManager::unregisterNode(
-    const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID)
+bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string const& _nodeID)
 {
     auto ret = m_localRouterTable->removeNode(_groupID, _nodeID);
     if (ret)
@@ -168,6 +167,17 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
     syncLatestNodeIDList();
 }
 
+bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+{
+    auto updated = m_localRouterTable->updateGroupNodeInfos(_groupInfo);
+    if (updated)
+    {
+        increaseSeq();
+        syncLatestNodeIDList();
+    }
+    return updated;
+}
+
 void GatewayNodeManager::onRequestNodeStatus(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
@@ -233,6 +243,8 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
                                << LOG_KV("nodeListSize", groupNodeInfo->nodeIDList().size())
                                << LOG_KV("seq", statusSeq());
     }
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeStatus")
+                           << LOG_KV("nodeListSize", nodeList.size());
     nodeStatus->setGroupNodeInfos(std::move(groupNodeInfos));
     return nodeStatus->encode();
 }

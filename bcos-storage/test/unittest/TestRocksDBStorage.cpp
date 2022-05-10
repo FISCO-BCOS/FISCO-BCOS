@@ -130,7 +130,7 @@ struct TestRocksDBStorageFixture
             testTable->setRow(key, std::move(entry));
         }
 
-        auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+        auto params1 = bcos::protocol::TwoPCParams();
         params1.number = 100;
         params1.primaryTableName = testTableName;
         params1.primaryTableKey = "key0";
@@ -143,7 +143,7 @@ struct TestRocksDBStorageFixture
         });
 
         // commit
-        storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+        storage->asyncCommit(bcos::protocol::TwoPCParams(),
             [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto commitEnd = std::chrono::system_clock::now();
         // check commit success
@@ -177,7 +177,7 @@ struct TestRocksDBStorageFixture
             params1.startTS = ts;
         });
         // commit
-        storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+        storage->asyncCommit(bcos::protocol::TwoPCParams(),
             [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto deleteEnd = std::chrono::system_clock::now();
         // check if the data is deleted
@@ -440,13 +440,13 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         table2Keys.push_back(key2);
     }
 
-    rocksDBStorage->asyncPrepare(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
-        *storage, [&](Error::Ptr error, uint64_t ts) {
+    rocksDBStorage->asyncPrepare(
+        bcos::protocol::TwoPCParams(), *storage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
     // TODO: asyncPrepare can't be query
-    rocksDBStorage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+    rocksDBStorage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
 
     rocksDBStorage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
@@ -629,7 +629,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
             [](Error::UniquePtr error) { BOOST_CHECK(!error); });
     }
 
-    storage::RocksDBStorage::TwoPCParams params;
+    bcos::protocol::TwoPCParams params;
     params.number = 1;
     rocksDBStorage->asyncPrepare(
         params, *initState, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
@@ -686,7 +686,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
             it();
         }
 
-        storage::RocksDBStorage::TwoPCParams params;
+        bcos::protocol::TwoPCParams params;
         params.number = i;
         rocksDBStorage->asyncPrepare(
             params, *state, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });

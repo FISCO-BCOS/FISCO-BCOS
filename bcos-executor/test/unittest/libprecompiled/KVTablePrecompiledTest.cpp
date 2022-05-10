@@ -396,23 +396,20 @@ BOOST_AUTO_TEST_CASE(setTest)
     {
         auto result1 = set(number++, address, "id1", "test1");
         auto result2 = get(number++, address, "id1");
-        EntryTuple entry1 = {"id1", {"test1"}};
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, entry1));
+        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, std::string("test1")));
     }
 
     // cover write and get
     {
         auto result3 = set(number++, address, "id1", "test2");
         auto result4 = get(number++, address, "id1");
-        EntryTuple entry2 = {"id1", {"test2"}};
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, entry2));
+        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, std::string("test2")));
     }
 
     // get not exist
     {
         auto result4 = get(number++, address, "noExist");
-        EntryTuple entry2 = {};
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, entry2));
+        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, std::string("")));
     }
 
     boost::log::core::get()->set_logging_enabled(false);
@@ -454,23 +451,20 @@ BOOST_AUTO_TEST_CASE(setWasmTest)
     {
         auto result1 = set(number++, address, "id1", "test1");
         auto result2 = get(number++, address, "id1");
-        EntryTuple entry1 = {"id1", {"test1"}};
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, entry1));
+        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, std::string("test1")));
     }
 
     // cover write and get
     {
         auto result3 = set(number++, address, "id1", "test2");
         auto result4 = get(number++, address, "id1");
-        EntryTuple entry2 = {"id1", {"test2"}};
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, entry2));
+        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, std::string("test2")));
     }
 
     // get not exist
     {
         auto result4 = get(number++, address, "noExist");
-        EntryTuple entry2 = {};
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, entry2));
+        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, std::string("")));
     }
 
     boost::log::core::get()->set_logging_enabled(false);

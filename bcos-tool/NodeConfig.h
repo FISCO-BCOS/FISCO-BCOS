@@ -23,8 +23,8 @@
 #include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
-#include <bcos-utilities/Log.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -38,6 +38,7 @@ class NodeConfig
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
+    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -45,11 +46,11 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() {}
 
-    virtual void loadConfig(std::string const& _configPath)
+    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true)
     {
         boost::property_tree::ptree iniConfig;
         boost::property_tree::read_ini(_configPath, iniConfig);
-        loadConfig(iniConfig);
+        loadConfig(iniConfig, _enforceMemberID);
     }
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
@@ -81,7 +82,7 @@ public:
         loadGenesisConfig(genesisConfig);
     }
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
@@ -179,6 +180,11 @@ public:
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
     std::string const& version() const { return m_version; }
 
+    std::string const& memberID() const { return m_memberID; }
+    unsigned leaseTTL() const { return m_leaseTTL; }
+    bool enableFailOver() const { return m_enableFailOver; }
+    std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -190,6 +196,8 @@ protected:
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadFailOverConfig(
+        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -227,6 +235,7 @@ private:
     // sealer configuration
     size_t m_minSealTime = 0;
     size_t m_checkPointTimeoutInterval;
+
     // for security
     std::string m_privateKeyPath;
 
@@ -287,6 +296,13 @@ private:
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
     uint32_t m_compatibilityVersion;
     std::string m_version;
+
+    // failover config
+    std::string m_memberID;
+    unsigned m_leaseTTL = 0;
+    bool m_enableFailOver = false;
+    // etcd/zookeeper/consual url
+    std::string m_failOverClusterUrl;
 };
 }  // namespace tool
 }  // namespace bcos

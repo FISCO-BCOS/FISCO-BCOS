@@ -183,7 +183,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                         }
                     }
                     TXPOOL_LOG(INFO)
-                        << LOG_DESC("asyncVerifyBlock finished")
+                        << METRIC << LOG_DESC("asyncVerifyBlock finished")
                         << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                         << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null")
                         << LOG_KV("code", verifyError ? verifyError->errorCode() : 0)

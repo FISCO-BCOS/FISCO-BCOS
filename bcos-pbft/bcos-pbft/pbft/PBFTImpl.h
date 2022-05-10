@@ -128,12 +128,16 @@ public:
             _onResponse(nullptr);
         }
     }
+    virtual void enableAsMaterNode(bool _isMasterNode);
+
+    virtual bool masterNode() const { return m_masterNode.load(); }
 
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
     bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
     std::atomic_bool m_running = {false};
+    std::atomic_bool m_masterNode = {false};
 };
 }  // namespace consensus
 }  // namespace bcos

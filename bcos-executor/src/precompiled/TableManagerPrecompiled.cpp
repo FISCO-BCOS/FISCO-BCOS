@@ -37,6 +37,7 @@ using namespace bcos::protocol;
 const char* const TABLE_METHOD_CREATE = "createTable(string,(string,string[]))";
 const char* const TABLE_METHOD_CREATE_KV = "createKVTable(string,string,string)";
 const char* const TABLE_METHOD_APPEND = "appendColumns(string,string[])";
+const char* const TABLE_METHOD_OPEN = "openTable(string)";
 
 TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
   : Precompiled(_hashImpl)
@@ -44,6 +45,7 @@ TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
     name2Selector[TABLE_METHOD_CREATE] = getFuncSelector(TABLE_METHOD_CREATE, _hashImpl);
     name2Selector[TABLE_METHOD_APPEND] = getFuncSelector(TABLE_METHOD_APPEND, _hashImpl);
     name2Selector[TABLE_METHOD_CREATE_KV] = getFuncSelector(TABLE_METHOD_CREATE_KV, _hashImpl);
+    name2Selector[TABLE_METHOD_OPEN] = getFuncSelector(TABLE_METHOD_OPEN, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
@@ -70,6 +72,12 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     {
         /// appendColumns(string,string[])
         appendColumns(_executive, data, callResult, gasPricer);
+    }
+    else if (!_executive->blockContext().lock()->isWasm() &&
+             func == name2Selector[TABLE_METHOD_OPEN])
+    {
+        /// only solidity: openTable(string) => address
+        openTable(_executive, data, callResult, gasPricer);
     }
     else
     {
@@ -99,7 +107,7 @@ void TableManagerPrecompiled::createTable(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
                            << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
                            << LOG_KV("valueField", valueField);
-    gasPricer->appendOperation(InterfaceOpcode::CreateTable, 1);
+    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
     auto table = _executive->storage().openTable(newTableName);
@@ -112,8 +120,11 @@ void TableManagerPrecompiled::createTable(
     std::string tableManagerAddress =
         blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
     std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
-    /// TODO: add codeString
-    std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
+
+    // here is a trick to set table key field info
+    valueField = keyField + "," + valueField;
+    std::string codeString =
+        getDynamicPrecompiledCodeString(tableAddress, newTableName + "," + valueField);
     auto input = codec->encode(newTableName, codeString);
     auto response = externalRequest(_executive, ref(input), _origin, tableManagerAddress,
         blockContext->isWasm() ? newTableName : "", false, true,
@@ -128,8 +139,6 @@ void TableManagerPrecompiled::createTable(
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
 
-    // here is a trick to set table key field info
-    valueField = keyField + "," + valueField;
     _executive->storage().createTable(getActualTableName(newTableName), valueField);
     callResult->setExecResult(codec->encode(int32_t(CODE_SUCCESS)));
 }
@@ -200,8 +209,9 @@ void TableManagerPrecompiled::appendColumns(
                            << LOG_KV("tableName", tableName)
                            << LOG_KV("newColumns", boost::join(newColumns, ","));
     // 1. get origin table info
-    auto table = _executive->storage().openTable(tableName);
-    if (!table)
+    auto table = _executive->storage().openTable(StorageInterface::SYS_TABLES);
+    auto existEntry = table->getRow(tableName);
+    if (!existEntry)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
                                << LOG_DESC("table not exists") << LOG_KV("tableName", tableName);
@@ -209,7 +219,8 @@ void TableManagerPrecompiled::appendColumns(
         return;
     }
     // here is a trick to avoid key field dup, s_table save user table (key,fields)
-    auto originFields = table->tableInfo()->fields();
+    std::vector<std::string> originFields;
+    boost::split(originFields, std::string(existEntry->get()), boost::is_any_of(","));
     std::set<std::string> checkDupFields(originFields.begin() + 1, originFields.end());
     // 2. check columns not duplicate
     bool insertSuccess = true;
@@ -240,4 +251,44 @@ void TableManagerPrecompiled::appendColumns(
     _executive->storage().setRow(StorageInterface::SYS_TABLES, tableName, std::move(newEntry));
     gasPricer->appendOperation(InterfaceOpcode::Set, 1);
     callResult->setExecResult(codec->encode(int32_t(CODE_SUCCESS)));
+}
+
+void TableManagerPrecompiled::openTable(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
+{
+    /// only solidity: openTable(string) => address
+    std::string tableName;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    codec->decode(data, tableName);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
+                           << LOG_KV("openTable", tableName);
+    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
+    // /tables + tableName
+    auto absolutePath = getTableName(tableName);
+    auto table = _executive->storage().openTable(absolutePath);
+
+    if (table)
+    {
+        // file exists, try to get type
+        auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
+        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        {
+            // if link
+            auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
+            auto contractAddress = std::string(addressEntry->get());
+            auto codecAddress = codec->encode(Address(std::move(contractAddress)));
+            callResult->setExecResult(std::move(codecAddress));
+            return;
+        }
+
+        callResult->setExecResult(codec->encode(Address()));
+        return;
+    }
+    PRECOMPILED_LOG(ERROR) << LOG_BADGE("TableManagerPrecompiled")
+                           << LOG_DESC("can't open table of file path")
+                           << LOG_KV("path", absolutePath);
+    callResult->setExecResult(codec->encode(Address()));
 }

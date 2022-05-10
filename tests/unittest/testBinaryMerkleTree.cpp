@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_CASE(testCalcHash)
     }
 
     std::vector<bcos::h256> result(count / 2);
-    trie.parseRange(hashes, result);
+    trie.levelHashes(hashes, result);
 }
 
 BOOST_AUTO_TEST_CASE(testCalc)

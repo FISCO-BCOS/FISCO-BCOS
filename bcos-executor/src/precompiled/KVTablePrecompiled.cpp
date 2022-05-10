@@ -55,9 +55,10 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    std::string tableName;
+    std::vector<std::string> dynamicParams;
     bytes param;
-    codec->decode(_param, tableName, param);
+    codec->decode(_param, dynamicParams, param);
+    auto tableName = dynamicParams.at(0);
     tableName = getActualTableName(tableName);
     auto originParam = ref(param);
     uint32_t func = getParamFunc(originParam);
@@ -102,7 +103,7 @@ void KVTablePrecompiled::get(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
 {
-    /// get(string) => (bool, Entry)
+    /// get(string) => (bool, string)
     std::string key;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
@@ -114,17 +115,14 @@ void KVTablePrecompiled::get(const std::string& tableName,
 
     auto entry = table->getRow(key);
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    EntryTuple entryTuple({});
     if (!entry)
     {
-        callResult->setExecResult(codec->encode(false, std::move(entryTuple)));
+        callResult->setExecResult(codec->encode(false, std::string("")));
         return;
     }
 
     gasPricer->updateMemUsed(entry->size());
-    entryTuple = {key, {std::string(entry->get())}};
-
-    callResult->setExecResult(codec->encode(true, std::move(entryTuple)));
+    callResult->setExecResult(codec->encode(true, std::string(entry->get())));
 }
 
 void KVTablePrecompiled::set(const std::string& tableName,

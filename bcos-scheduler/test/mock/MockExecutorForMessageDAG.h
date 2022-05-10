@@ -70,6 +70,24 @@ public:
         callback(nullptr, std::move(messages));
     }
 
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override
+    {
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
+        for (auto i = 0; i < inputs.size(); i++)
+        {
+            executeTransaction(std::move(inputs[i]),
+                [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {
+                    results[i] = std::move(result);
+                });
+        }
+        callback(nullptr, std::move(results));
+    };
+
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
@@ -81,18 +99,20 @@ public:
         callback(nullptr, h256(12345));
     }
 
-    void prepare(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         callback(nullptr);
     }
 
-    void commit(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         callback(nullptr);
     }
 
-    void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         callback(nullptr);
     }

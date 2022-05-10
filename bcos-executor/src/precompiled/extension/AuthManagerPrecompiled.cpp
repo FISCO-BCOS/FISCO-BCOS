@@ -41,7 +41,9 @@ const char* const AUTH_METHOD_SET_AUTH_TYPE_ADD = "setMethodAuthType(address,byt
 const char* const AUTH_METHOD_OPEN_AUTH_ADD = "openMethodAuth(address,bytes4,address)";
 const char* const AUTH_METHOD_CLOSE_AUTH_ADD = "closeMethodAuth(address,bytes4,address)";
 const char* const AUTH_METHOD_CHECK_AUTH_ADD = "checkMethodAuth(address,bytes4,address)";
+
 const char* const AUTH_METHOD_SET_CONTRACT = "setContractStatus(address,bool)";
+const char* const AUTH_METHOD_GET_CONTRACT = "contractAvailable(address)";
 
 /// deploy
 const char* const AUTH_METHOD_GET_DEPLOY_TYPE = "deployType()";
@@ -80,6 +82,7 @@ AuthManagerPrecompiled::AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl) : Pr
     name2Selector[AUTH_METHOD_CHECK_AUTH_ADD] =
         getFuncSelector(AUTH_METHOD_CHECK_AUTH_ADD, _hashImpl);
     name2Selector[AUTH_METHOD_SET_CONTRACT] = getFuncSelector(AUTH_METHOD_SET_CONTRACT, _hashImpl);
+    name2Selector[AUTH_METHOD_GET_CONTRACT] = getFuncSelector(AUTH_METHOD_GET_CONTRACT, _hashImpl);
 
     /// deploy
     name2Selector[AUTH_METHOD_GET_DEPLOY_TYPE] =
@@ -166,6 +169,10 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
     else if (func == name2Selector[AUTH_METHOD_SET_CONTRACT])
     {
         setContractStatus(_executive, data, callResult, _origin, _sender, gasPricer, _gasLeft);
+    }
+    else if (func == name2Selector[AUTH_METHOD_GET_CONTRACT])
+    {
+        contractAvailable(_executive, data, callResult, _origin, gasPricer, _gasLeft);
     }
     else
     {
@@ -404,6 +411,40 @@ void AuthManagerPrecompiled::setContractStatus(
         getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
         return;
     }
+    auto newParams = codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _params.toBytes());
+    std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+
+    auto response = externalRequest(_executive, ref(newParams), _origin, authMgrAddress, address,
+        false, false, _gasLeft - gasPricer->calTotalGas(), true);
+    gasPricer->updateMemUsed(response->data.size());
+    gasPricer->appendOperation(InterfaceOpcode::Set);
+
+    callResult->setExternalResult(std::move(response));
+}
+
+void AuthManagerPrecompiled::contractAvailable(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _params,
+    const std::shared_ptr<PrecompiledExecResult>& callResult, const std::string& _origin,
+    const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft)
+{
+    std::string address;
+    bytesConstRef data = getParamData(_params);
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    if (blockContext->isWasm())
+    {
+        codec->decode(data, address);
+    }
+    else
+    {
+        Address contractAddress;
+        codec->decode(data, contractAddress);
+        address = contractAddress.hex();
+    }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
+                           << LOG_KV("address", address);
+
     auto newParams = codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _params.toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 

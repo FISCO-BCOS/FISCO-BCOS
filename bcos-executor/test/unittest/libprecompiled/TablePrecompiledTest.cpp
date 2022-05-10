@@ -218,10 +218,10 @@ public:
         return result2;
     };
 
-    ExecutionMessage::UniquePtr readlink(
+    ExecutionMessage::UniquePtr openTable(
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("readlink(string)", _path);
+        bytes in = codec->encodeWithSig("openTable(string)", _path);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -232,7 +232,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
+        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -365,7 +365,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("select((uint8,string)[],(uint,uint))", keyCond, limit);
+        bytes in = codec->encodeWithSig("select((uint8,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -401,7 +401,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update(string,(uint,string)[])", key, _updateFields);
+        bytes in = codec->encodeWithSig("update(string,(uint32,string)[])", key, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -438,7 +438,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update((uint8,string)[],(uint,uint),(uint,string)[])",
+        bytes in = codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(uint32,string)[])",
             conditions, _limit, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -510,7 +510,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("remove((uint8,string)[],(uint,uint))", keyCond, limit);
+        bytes in = codec->encodeWithSig("remove((uint8,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -555,9 +555,21 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
 
+    // open table not exist
+    {
+        auto response1 = openTable(number++, "t_test2");
+        BOOST_CHECK(response1->data().toBytes() == codec->encode(Address()));
+
+        auto response2 = openTable(number++, tableTestAddress);
+        BOOST_CHECK(response2->data().toBytes() == codec->encode(Address()));
+    }
+
     // check create
     {
-        auto response1 = readlink(number++, "/tables/t_test");
+        auto r1 = openTable(number++, "t_test");
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(Address(tableTestAddress)));
+
+        auto response1 = openTable(number++, "/tables/t_test");
         Address address;
         codec->decode(response1->data(), address);
         BOOST_CHECK(address.hex() == tableTestAddress);
@@ -679,7 +691,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsTest)
 
     // check create
     {
-        auto response1 = readlink(number++, "/tables/t_test");
+        auto response1 = openTable(number++, "/tables/t_test");
         Address address;
         codec->decode(response1->data(), address);
         BOOST_CHECK(address.hex() == tableTestAddress);
@@ -796,13 +808,13 @@ BOOST_AUTO_TEST_CASE(insertTest)
 
     // insert too much value
     {
-        auto r1 = insert(number++, "id1", {"test1", "test2", "test3"}, callAddress);
+        auto r1 = insert(number++, "id2", {"test1", "test2", "test3"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // insert not enough value
     {
-        auto r1 = insert(number++, "id1", {"test1"}, callAddress);
+        auto r1 = insert(number++, "id3", {"test1"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
@@ -827,9 +839,30 @@ BOOST_AUTO_TEST_CASE(insertTest)
         {
             longValue += "0";
         }
-        auto r1 = insert(number++, "id1", {"test1", longValue}, callAddress);
+        auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
+    }
+
+    // insert after append
+    {
+        auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
+        auto r2 = desc(number++, callAddress);
+        TableInfoTuple tableInfo = {"id", {"item_name", "item_id", "v1", "v2"}};
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
+
+        // good
+        auto r3 = insert(number++, "id4", {"test1", "test2", "test3", "test4"}, callAddress);
+        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+
+        // insert too much value
+        auto r4 =
+            insert(number++, "id5", {"test1", "test2", "test3", "test4", "test5"}, callAddress);
+        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        // insert not enough value
+        auto r5= insert(number++, "id3", {"test1", "test2"}, callAddress);
+        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 

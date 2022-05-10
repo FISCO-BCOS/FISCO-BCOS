@@ -876,6 +876,88 @@ BOOST_AUTO_TEST_CASE(testABITuple)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec abi(hashImpl);
+
+    // static tuple(uint32,uint32)
+    {
+        auto staticTuple = std::make_tuple(uint32_t(0), uint32_t(10));
+        auto dynamicTuple = std::make_tuple(uint8_t(0), std::string("990"));
+        auto tupleV = std::vector<decltype(dynamicTuple)>({dynamicTuple});
+
+        auto encodedBytes = abi.abiIn("", tupleV, staticTuple);
+        auto s = toHexStringWithPrefix(encodedBytes);
+        BOOST_CHECK(
+            s ==
+            "0x000000000000000000000000000000000000000000000000000000000000006000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "000000000000000000000a0000000000000000000000000000000000000000000000000000000000000001"
+            "00000000000000000000000000000000000000000000000000000000000000200000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "00000000000000000040000000000000000000000000000000000000000000000000000000000000000339"
+            "39300000000000000000000000000000000000000000000000000000000000");
+
+        decltype(tupleV) resultV;
+        decltype(staticTuple) resultStatic;
+        abi.abiOut(ref(encodedBytes), resultV, resultStatic);
+        BOOST_CHECK(resultV.size() == 1);
+        BOOST_CHECK(std::get<0>(resultV.at(0)) == uint8_t(0));
+        BOOST_CHECK(std::get<1>(resultV.at(0)) == std::string("990"));
+        BOOST_CHECK(std::get<0>(resultStatic) == uint32_t(0));
+        BOOST_CHECK(std::get<1>(resultStatic) == uint32_t(10));
+    }
+
+    // static tuple(uint32,uint32,int8)
+    {
+        auto staticTuple = std::make_tuple(uint32_t(0), uint32_t(10), int8_t(-1));
+        auto dynamicTuple1 = std::make_tuple(uint8_t(0), std::string("990"));
+        auto dynamicTuple2 = std::make_tuple(uint8_t(1), std::string("991"));
+        auto tupleV = std::vector<decltype(dynamicTuple1)>({dynamicTuple1, dynamicTuple2});
+
+        auto encodedBytes = abi.abiIn("", tupleV, staticTuple, tupleV);
+        auto s = toHexStringWithPrefix(encodedBytes);
+        BOOST_CHECK(
+            s ==
+            "0x00000000000000000000000000000000000000000000000000000000000000a000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "000000000000000000000affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            "00000000000000000000000000000000000000000000000000000000000002000000000000000000000000"
+            "00000000000000000000000000000000000000000200000000000000000000000000000000000000000000"
+            "0000000000000000004000000000000000000000000000000000000000000000000000000000000000c000"
+            "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "00000000000000000000000000000000000000400000000000000000000000000000000000000000000000"
+            "00000000000000000339393000000000000000000000000000000000000000000000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000000000100000000000000000000000000"
+            "00000000000000000000000000000000000040000000000000000000000000000000000000000000000000"
+            "00000000000000033939310000000000000000000000000000000000000000000000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000000020000000000000000000000000000"
+            "00000000000000000000000000000000004000000000000000000000000000000000000000000000000000"
+            "000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000040000000000000000000000000000000"
+            "00000000000000000000000000000000033939300000000000000000000000000000000000000000000000"
+            "00000000000000000000000000000000000000000000000000000000000000000000000000010000000000"
+            "00000000000000000000000000000000000000000000000000004000000000000000000000000000000000"
+            "00000000000000000000000000000003393931000000000000000000000000000000000000000000000000"
+            "0000000000");
+
+        decltype(tupleV) resultV1, resultV2;
+        decltype(staticTuple) resultStatic;
+        abi.abiOut(ref(encodedBytes), resultV1, resultStatic, resultV2);
+        BOOST_CHECK(resultV1.size() == 2);
+        BOOST_CHECK(std::get<0>(resultV1.at(0)) == uint8_t(0));
+        BOOST_CHECK(std::get<1>(resultV1.at(0)) == std::string("990"));
+        BOOST_CHECK(std::get<0>(resultV1.at(1)) == uint8_t(1));
+        BOOST_CHECK(std::get<1>(resultV1.at(1)) == std::string("991"));
+
+        BOOST_CHECK(std::get<0>(resultStatic) == uint32_t(0));
+        BOOST_CHECK(std::get<1>(resultStatic) == uint32_t(10));
+        BOOST_CHECK(std::get<2>(resultStatic) == int8_t(-1));
+
+        BOOST_CHECK(resultV2.size() == 2);
+        BOOST_CHECK(std::get<0>(resultV2.at(0)) == uint8_t(0));
+        BOOST_CHECK(std::get<1>(resultV2.at(0)) == std::string("990"));
+        BOOST_CHECK(std::get<0>(resultV2.at(1)) == uint8_t(1));
+        BOOST_CHECK(std::get<1>(resultV2.at(1)) == std::string("991"));
+    }
+
     // tuple(vector(tuple(u256,string,string,u256)))
     {
         auto tuple1 = std::make_tuple(u256(1), std::string("id1"), std::string("test1"), u256(2));
@@ -959,6 +1041,7 @@ BOOST_AUTO_TEST_CASE(testABITuple)
         BOOST_CHECK(std::get<4>(test1)[0] == std::get<4>(test1Decode)[0]);
         BOOST_CHECK(std::get<4>(test1)[1] == std::get<4>(test1Decode)[1]);
     }
+
     // tuple(u256,bool,vector(tuple(string,s256,Address,bytes,vector)),vector(tuple(string,s256,Address,bytes,vector)))
     {
         auto tuple1 = std::make_tuple(std::string("123"), s256(-1),

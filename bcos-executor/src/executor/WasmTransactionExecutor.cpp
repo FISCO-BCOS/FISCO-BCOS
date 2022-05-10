@@ -37,6 +37,7 @@
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -101,6 +102,8 @@ void WasmTransactionExecutor::initPrecompiled()
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }

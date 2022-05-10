@@ -51,7 +51,7 @@
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::initializer;
-using namespace bcos::protocol;
+
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway)
 {
@@ -76,7 +76,6 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
     std::string const& _privateKeyPath, bool _airVersion)
 {
-    // loadConfig
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadConfig(_configFilePath);
     m_nodeConfig->loadGenesisConfig(_genesisFile);
@@ -104,141 +103,136 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion)
 {
-    try
+    // build the front service
+    m_frontServiceInitializer =
+        std::make_shared<FrontServiceInitializer>(m_nodeConfig, m_protocolInitializer, _gateway);
+
+    // build the storage
+    auto storagePath = m_nodeConfig->storagePath();
+    if (!_airVersion)
     {
-        // build the front service
-        m_frontServiceInitializer = std::make_shared<FrontServiceInitializer>(
-            m_nodeConfig, m_protocolInitializer, _gateway);
-
-        // build the storage
-        auto storagePath = m_nodeConfig->storagePath();
-        if (!_airVersion)
-        {
-            storagePath = ServerConfig::BasePath + ".." + c_fileSeparator +
-                          m_nodeConfig->groupId() + c_fileSeparator + m_nodeConfig->storagePath();
-        }
-        BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
-                       << LOG_KV("storageType", m_nodeConfig->storageType());
-        bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
-        bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
-        if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
-        {
-            storage = StorageInitializer::build(storagePath);
-            schedulerStorage = storage;
-        }
-        else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-        {
-            storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        }
-        else
-        {
-            throw std::runtime_error("storage type not support");
-        }
-
-        // build ledger
-        auto ledger =
-            LedgerInitializer::build(m_protocolInitializer->blockFactory(), storage, m_nodeConfig);
-        m_ledger = ledger;
-
-        auto executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
-        auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
-
-        auto transactionSubmitResultFactory =
-            std::make_shared<TransactionSubmitResultFactoryImpl>();
-
-        m_scheduler = SchedulerInitializer::build(executorManager, ledger, schedulerStorage,
-            executionMessageFactory, m_protocolInitializer->blockFactory(),
-            m_protocolInitializer->txResultFactory(),
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-            m_nodeConfig->isWasm());
-
-        // init the txpool
-        m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-            m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
-
-        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
-        if (m_nodeConfig->enableLRUCacheStorage())
-        {
-            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-            cache->setMaxCapacity(m_nodeConfig->cacheSize());
-            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
-                           << m_nodeConfig->cacheSize();
-        }
-        else
-        {
-            BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
-        }
-        // Note: ensure that there has at least one executor before pbft/sync execute block
-        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
-        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
-        executorManager->addExecutor("default", parallelExecutor);
-
-        // build and init the pbft related modules
-        auto consensusStoragePath =
-            m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
-        if (!_airVersion)
-        {
-            consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
-                                   m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
-        }
-        BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
-                       << LOG_KV("consensusStoragePath", consensusStoragePath);
-        auto consensusStorage = StorageInitializer::build(consensusStoragePath);
-        // build and init the pbft related modules
-        if (_nodeArchType == NodeArchitectureType::AIR)
-        {
-            m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
-                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-                consensusStorage, m_frontServiceInitializer->front());
-            // registerOnNodeTypeChanged
-            auto nodeID = m_protocolInitializer->keyPair()->publicKey();
-            auto frontService = m_frontServiceInitializer->front();
-            auto groupID = m_nodeConfig->groupId();
-            auto blockSync =
-                std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
-
-            auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
-            blockSync->config()->registerOnNodeTypeChanged(
-                [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](NodeType _type) {
-                    _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
-                    BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
-                                   << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
-                });
-        }
-        else
-        {
-            m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
-                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-                consensusStorage, m_frontServiceInitializer->front());
-        }
-
-        // init the txpool
-        m_txpoolInitializer->init(m_pbftInitializer->sealer());
-
-        // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
-        // txpool init finished
-        m_pbftInitializer->init();
-
-        // init the frontService
-        m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
-            m_txpoolInitializer->txpool());
-
-        // fetch and init the version
-        auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
-        ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
-        // set system version
-        auto localNodeInfo = m_pbftInitializer->groupInfo()->nodeInfo(m_nodeConfig->nodeName());
-        localNodeInfo->setSystemVersion((uint32_t)g_BCOSConfig.version());
-        initSysContract();
+        storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+                      c_fileSeparator + m_nodeConfig->storagePath();
     }
-    catch (std::exception const& e)
+    BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
+                   << LOG_KV("storageType", m_nodeConfig->storageType());
+    bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
+    if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
-        std::cout << "init bcos-node failed for " << boost::diagnostic_information(e);
-        exit(-1);
+        storage = StorageInitializer::build(storagePath);
+        schedulerStorage = storage;
     }
+    else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    {
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+    }
+    else
+    {
+        throw std::runtime_error("storage type not support");
+    }
+
+    // build ledger
+    auto ledger =
+        LedgerInitializer::build(m_protocolInitializer->blockFactory(), storage, m_nodeConfig);
+    m_ledger = ledger;
+
+    auto executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
+    auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
+
+    auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
+
+    m_scheduler = SchedulerInitializer::build(executorManager, ledger, schedulerStorage,
+        executionMessageFactory, m_protocolInitializer->blockFactory(),
+        m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
+        m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+
+    // init the txpool
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
+        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+
+    std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+    if (m_nodeConfig->enableLRUCacheStorage())
+    {
+        cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
+        cache->setMaxCapacity(m_nodeConfig->cacheSize());
+        BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: " << m_nodeConfig->cacheSize();
+    }
+    else
+    {
+        BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
+    }
+    // Note: ensure that there has at least one executor before pbft/sync execute block
+    auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
+        executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+    auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
+    executorManager->addExecutor("default", parallelExecutor);
+
+    // build and init the pbft related modules
+    auto consensusStoragePath =
+        m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
+    if (!_airVersion)
+    {
+        consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
+                               m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
+    }
+    BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
+                   << LOG_KV("consensusStoragePath", consensusStoragePath);
+    auto consensusStorage = StorageInitializer::build(consensusStoragePath);
+    // build and init the pbft related modules
+    if (_nodeArchType == NodeArchitectureType::AIR)
+    {
+        m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
+            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+            consensusStorage, m_frontServiceInitializer->front());
+        auto nodeID = m_protocolInitializer->keyPair()->publicKey();
+        auto frontService = m_frontServiceInitializer->front();
+        auto groupID = m_nodeConfig->groupId();
+        auto blockSync =
+            std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
+
+        auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
+        // registerNode when air node first start-up
+        _gateway->registerNode(
+            groupID, nodeID, blockSync->config()->nodeType(), frontService, nodeProtocolInfo);
+        BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
+                       << LOG_KV("node", nodeID->hex())
+                       << LOG_KV("type", blockSync->config()->nodeType());
+        // update the frontServiceInfo when nodeType changed
+        blockSync->config()->registerOnNodeTypeChanged(
+            [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](NodeType _type) {
+                _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
+                BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
+                               << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
+            });
+    }
+    else
+    {
+        m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
+            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+            consensusStorage, m_frontServiceInitializer->front());
+    }
+
+    // init the txpool
+    m_txpoolInitializer->init(m_pbftInitializer->sealer());
+
+    // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
+    // txpool init finished
+    m_pbftInitializer->init();
+
+    // init the frontService
+    m_frontServiceInitializer->init(
+        m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
+
+    // fetch and init the version
+    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
+    ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
+    // set system version
+    auto localNodeInfo = m_pbftInitializer->groupInfo()->nodeInfo(m_nodeConfig->nodeName());
+    localNodeInfo->setSystemVersion((uint32_t)g_BCOSConfig.version());
+    initSysContract();
 }
 
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)

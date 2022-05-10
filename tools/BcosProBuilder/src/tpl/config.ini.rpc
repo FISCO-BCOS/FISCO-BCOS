@@ -22,6 +22,12 @@
     ; the node certificate file
     node_cert=ssl.crt
 
+[failover]
+    ; enable failover or not, default disable
+    enable = false
+    ; the address of etcd, can configure multiple comma-separated
+    cluster_url= "127.0.0.1:2379"
+
 [log]
     enable=true
     log_path=./log

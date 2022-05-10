@@ -24,7 +24,7 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
-#include <bcos-rpc/jsonrpc/groupmgr/NodeService.h>
+#include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
@@ -53,7 +53,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create gateway
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
-    auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
+    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
     // create the node

@@ -50,9 +50,9 @@ public:
     virtual bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
-    virtual bool unregisterNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
+    virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID);
     // for multi-group support
-    virtual void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr) {}
+    virtual bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
     LocalRouterTable::Ptr localRouterTable() { return m_localRouterTable; }
     PeersRouterTable::Ptr peersRouterTable() { return m_peersRouterTable; }

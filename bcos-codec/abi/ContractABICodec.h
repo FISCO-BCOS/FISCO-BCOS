@@ -45,43 +45,43 @@ struct ABIElementType<std::string> : std::true_type
 };
 
 template <>
-struct ABIElementType<std::uint8_t> : std::true_type
+struct ABIElementType<std::uint8_t> : std::false_type
 {
 };
 
 template <>
-struct ABIElementType<std::uint32_t> : std::true_type
+struct ABIElementType<std::uint32_t> : std::false_type
 {
 };
 
 // uint256
 template <>
-struct ABIElementType<u256> : std::true_type
+struct ABIElementType<u256> : std::false_type
 {
 };
 
 // int256
 template <>
-struct ABIElementType<s256> : std::true_type
+struct ABIElementType<s256> : std::false_type
 {
 };
 
 // bool
 template <>
-struct ABIElementType<bool> : std::true_type
+struct ABIElementType<bool> : std::false_type
 {
 };
 
 // byte32
 template <>
-struct ABIElementType<string32> : std::true_type
+struct ABIElementType<string32> : std::false_type
 {
 };
 
 template <typename T1, typename T2>
 struct ABIElementType<std::pair<T1, T2>>
 {
-    static bool constexpr value = ABIElementType<T1>::value && ABIElementType<T2>::value;
+    static bool constexpr value = ABIElementType<T1>::value || ABIElementType<T2>::value;
 };
 
 template <typename T>
@@ -94,7 +94,7 @@ template <typename T, typename... U>
 struct ABIElementType<std::tuple<T, U...>>
 {
     static bool constexpr value =
-        ABIElementType<T>::value && ABIElementType<std::tuple<U...>>::value;
+        ABIElementType<T>::value || ABIElementType<std::tuple<U...>>::value;
 };
 
 template <typename T>
@@ -144,19 +144,31 @@ struct ABIDynamicArray<std::vector<T>> : std::true_type
 {
 };
 
-template <class T>
-struct ABIDynamicTuple : std::false_type
+template <typename>
+struct is_tuple : std::false_type
 {
 };
 
-template <class... T>
-struct ABIDynamicTuple<std::tuple<T...>> : std::true_type
+template <typename... T>
+struct is_tuple<std::tuple<T...>> : std::true_type
 {
 };
 
 template <class T>
-struct ABIDynamicTuple<std::tuple<T>> : std::true_type
+struct ABITuple : std::false_type
 {
+};
+
+template <typename T, typename... U>
+struct ABITuple<std::tuple<T, U...>>
+{
+    static bool constexpr value = ABIElementType<T>::value || ABITuple<std::tuple<U...>>::value;
+};
+
+template <typename T>
+struct ABITuple<std::tuple<T>>
+{
+    static bool constexpr value = ABIElementType<T>::value;
 };
 
 // Definition: The following types are called “dynamic”:
@@ -186,7 +198,7 @@ template <class T>
 struct ABIDynamicType<T,
     typename std::enable_if<ABIStringType<typename remove_dimension<T>::type>::value ||
                             ABIDynamicArray<typename remove_dimension<T>::type>::value ||
-                            ABIDynamicTuple<typename remove_dimension<T>::type>::value>::type>
+                            ABITuple<typename remove_dimension<T>::type>::value>::type>
   : std::true_type
 {
 };
@@ -209,6 +221,16 @@ struct Length<T,
     enum
     {
         value = std::tuple_size<T>::value * Length<typename std::tuple_element<0, T>::type>::value
+    };
+};
+
+// length of static tuple type
+template <class T>
+struct Length<T, typename std::enable_if<is_tuple<T>::value && !ABIDynamicType<T>::value>::type>
+{
+    enum
+    {
+        value = std::tuple_size<T>::value
     };
 };
 

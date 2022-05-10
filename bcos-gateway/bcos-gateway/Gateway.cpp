@@ -195,7 +195,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 // network error
                 if (e.errorCode() != P2PExceptionType::Success)
                 {
-                    GATEWAY_LOG(DEBUG)
+                    GATEWAY_LOG(ERROR)
                         << LOG_BADGE("Retry") << LOG_DESC("network callback")
                         << LOG_KV("p2pid", p2pID) << LOG_KV("errorCode", e.errorCode())
                         << LOG_KV("errorMessage", e.what());
@@ -379,9 +379,37 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
         });
 }
 
+bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+{
+    // check the serviceName
+    auto nodeList = _groupInfo->nodeInfos();
+    for (auto const& node : nodeList)
+    {
+        auto const& expectedGatewayService =
+            node.second->serviceName(bcos::protocol::ServiceType::GATEWAY);
+        if (expectedGatewayService != m_gatewayServiceName)
+        {
+            GATEWAY_LOG(INFO) << LOG_DESC(
+                                     "unfollowed groupInfo for inconsistent gateway service name")
+                              << LOG_KV("expected", expectedGatewayService)
+                              << LOG_KV("selfName", m_gatewayServiceName);
+            return false;
+        }
+    }
+    return true;
+}
+
 void Gateway::asyncNotifyGroupInfo(
     bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> _callback)
 {
+    if (!checkGroupInfo(_groupInfo))
+    {
+        if (_callback)
+        {
+            _callback(nullptr);
+        }
+        return;
+    }
     m_gatewayNodeManager->updateFrontServiceInfo(_groupInfo);
     if (_callback)
     {

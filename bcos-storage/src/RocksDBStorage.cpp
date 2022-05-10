@@ -34,6 +34,7 @@
 #include <optional>
 
 using namespace bcos::storage;
+using namespace bcos::protocol;
 using namespace rocksdb;
 using namespace std;
 
@@ -184,7 +185,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             {
                                 if (status.IsNotFound())
                                 {
-                                    STORAGE_LOG(WARNING)
+                                    STORAGE_LOG(TRACE)
                                         << "Multi get rows, not found key: " << keys[i];
                                 }
                                 else if (status.getState())

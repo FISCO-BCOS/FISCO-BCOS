@@ -62,24 +62,29 @@ public:
 
             void callback_asyncSendMessageByNodeID(const bcostars::Error& ret) override
             {
+                s_tarsTimeoutCount.store(0);
                 m_callback(toBcosError(ret));
             }
             void callback_asyncSendMessageByNodeID_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret));
             }
 
         private:
             bcos::gateway::ErrorRespFunc m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "asyncSendMessageByNodeID", m_prx,
+        auto shouldBlockCall = shouldStopCall();
+        auto ret = checkConnection(
+            c_moduleName, "asyncSendMessageByNodeID", m_prx,
             [_errorRespFunc](bcos::Error::Ptr _error) {
                 if (_errorRespFunc)
                 {
                     _errorRespFunc(_error);
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -109,6 +114,7 @@ public:
                 const bcostars::GatewayInfo& _localInfo,
                 const vector<bcostars::GatewayInfo>& _peers) override
             {
+                s_tarsTimeoutCount.store(0);
                 auto localGatewayInfo = fromTarsGatewayInfo(_localInfo);
                 auto peersGatewayInfos = std::make_shared<bcos::gateway::GatewayInfos>();
                 for (auto const& peerNodeInfo : _peers)
@@ -119,6 +125,7 @@ public:
             }
             void callback_asyncGetPeers_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret), nullptr, nullptr);
             }
 
@@ -127,14 +134,17 @@ public:
                 bcos::Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr)>
                 m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncGetPeers", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncGetPeers", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(_error, nullptr, nullptr);
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -150,8 +160,10 @@ public:
             auto nodeID = it->data();
             tarsNodeIDs.emplace_back(nodeID.begin(), nodeID.end());
         }
-        auto ret = checkConnection(c_moduleName, "asyncSendMessageByNodeIDs", m_prx, nullptr);
-        if (!ret)
+        auto shouldBlockCall = shouldStopCall();
+        auto ret = checkConnection(
+            c_moduleName, "asyncSendMessageByNodeIDs", m_prx, nullptr, shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -164,8 +176,10 @@ public:
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override
     {
-        auto ret = checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_prx, nullptr);
-        if (!ret)
+        auto shouldBlockCall = shouldStopCall();
+        auto ret = checkConnection(
+            c_moduleName, "asyncSendBroadcastMessage", m_prx, nullptr, shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -188,12 +202,14 @@ public:
             void callback_asyncGetGroupNodeInfo(
                 const bcostars::Error& ret, const GroupNodeInfo& groupNodeInfo) override
             {
+                s_tarsTimeoutCount.store(0);
                 auto bcosGroupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
                     [m_groupNodeInfo = groupNodeInfo]() mutable { return &m_groupNodeInfo; });
                 m_callback(toBcosError(ret), bcosGroupNodeInfo);
             }
             void callback_asyncGetGroupNodeInfo_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret), nullptr);
             }
 
@@ -201,14 +217,17 @@ public:
             bcos::gateway::GetGroupNodeInfoFunc m_callback;
             bcos::crypto::KeyFactory::Ptr m_keyFactory;
         };
-        auto ret = checkConnection(c_moduleName, "asyncGetGroupNodeInfo", m_prx,
+        auto shouldBlockCall = shouldStopCall();
+        auto ret = checkConnection(
+            c_moduleName, "asyncGetGroupNodeInfo", m_prx,
             [_onGetGroupNodeInfo](bcos::Error::Ptr _error) {
                 if (_onGetGroupNodeInfo)
                 {
                     _onGetGroupNodeInfo(_error, nullptr);
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -226,37 +245,48 @@ public:
 
             void callback_asyncNotifyGroupInfo(const bcostars::Error& ret) override
             {
+                s_tarsTimeoutCount.store(0);
                 m_callback(toBcosError(ret));
             }
             void callback_asyncNotifyGroupInfo_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret));
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyGroupInfo", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyGroupInfo", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+        auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
+        // try to call non-activate-endpoints when with zero connection
         if (activeEndPoints.size() == 0)
         {
-            BCOS_LOG(TRACE) << LOG_DESC("Gateway: asyncNotifyGroupInfo error for empty connection")
-                            << bcos::group::printGroupInfo(_groupInfo);
-            return;
+            // notify groupInfo to all gateway nodes
+            for (auto const& endPoint : nactiveEndPoints)
+            {
+                auto endPointStr = endPointToString(endPoint);
+                auto prx =
+                    Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+                prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+            }
         }
-        auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
         // notify groupInfo to all gateway nodes
         for (auto const& endPoint : activeEndPoints)
         {
@@ -279,26 +309,31 @@ public:
             void callback_asyncSendMessageByTopic(const bcostars::Error& ret, tars::Int32 _type,
                 const vector<tars::Char>& _responseData) override
             {
+                s_tarsTimeoutCount.store(0);
                 auto data =
                     std::make_shared<bcos::bytes>(_responseData.begin(), _responseData.end());
                 m_callback(toBcosError(ret), _type, data);
             }
             void callback_asyncSendMessageByTopic_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 return m_callback(toBcosError(ret), 0, nullptr);
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesPointer)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncSendMessageByTopic", m_prx, [_respFunc](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncSendMessageByTopic", m_prx,
+            [_respFunc](bcos::Error::Ptr _error) {
                 if (_respFunc)
                 {
                     _respFunc(std::move(_error), 0, nullptr);
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -310,9 +345,10 @@ public:
     void asyncSendBroadbastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
     {
-        auto ret =
-            checkConnection(c_moduleName, "asyncSendBroadbastMessageByTopic", m_prx, nullptr);
-        if (!ret)
+        auto shouldBlockCall = shouldStopCall();
+        auto ret = checkConnection(
+            c_moduleName, "asyncSendBroadbastMessageByTopic", m_prx, nullptr, shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -329,24 +365,29 @@ public:
             Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
             void callback_asyncSubscribeTopic(const bcostars::Error& ret) override
             {
+                s_tarsTimeoutCount.store(0);
                 m_callback(toBcosError(ret));
             }
             void callback_asyncSubscribeTopic_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 return m_callback(toBcosError(ret));
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncSubscribeTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncSubscribeTopic", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -362,24 +403,29 @@ public:
             Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
             void callback_asyncRemoveTopic(const bcostars::Error& ret) override
             {
+                s_tarsTimeoutCount.store(0);
                 m_callback(toBcosError(ret));
             }
             void callback_asyncRemoveTopic_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 return m_callback(toBcosError(ret));
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncRemoveTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncRemoveTopic", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -397,6 +443,8 @@ protected:
                boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
     }
 
+    static bool shouldStopCall() { return (s_tarsTimeoutCount >= c_maxTarsTimeoutCount); }
+
 private:
     bcostars::GatewayServicePrx m_prx;
     std::string m_gatewayServiceName;
@@ -406,5 +454,7 @@ private:
     // AMOP timeout 40s
     const int c_amopTimeout = 40000;
     const int c_networkTimeout = 40000;
+    static std::atomic<int64_t> s_tarsTimeoutCount;
+    static const int64_t c_maxTarsTimeoutCount;
 };
 }  // namespace bcostars

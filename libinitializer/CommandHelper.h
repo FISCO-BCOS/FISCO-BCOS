@@ -25,6 +25,7 @@ namespace bcos
 namespace initializer
 {
 void printVersion();
+void showNodeVersionMetric();
 void initCommandLine(int argc, char* argv[]);
 
 struct Params

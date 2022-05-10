@@ -50,13 +50,14 @@ int main(int argc, const char* argv[])
     {
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
+        bcos::initializer::showNodeVersionMetric();
         initializer->start();
     }
     catch (std::exception const& e)
     {
         bcos::initializer::printVersion();
         std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-        std::cerr << "start fisco-bcos failed, error:" << boost::diagnostic_information(e)
+        std::cout << "start fisco-bcos failed, error:" << boost::diagnostic_information(e)
                   << std::endl;
         return -1;
     }

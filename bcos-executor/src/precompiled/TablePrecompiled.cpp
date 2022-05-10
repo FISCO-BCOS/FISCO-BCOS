@@ -35,12 +35,13 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
 const char* const TABLE_METHOD_SELECT_KEY = "select(string)";
-const char* const TABLE_METHOD_SELECT_CON = "select((uint8,string)[],(uint,uint))";
+const char* const TABLE_METHOD_SELECT_CON = "select((uint8,string)[],(uint32,uint32))";
 const char* const TABLE_METHOD_INSERT = "insert((string,string[]))";
-const char* const TABLE_METHOD_UPDATE_KEY = "update(string,(uint,string)[])";
-const char* const TABLE_METHOD_UPDATE_CON = "update((uint8,string)[],(uint,uint),(uint,string)[])";
+const char* const TABLE_METHOD_UPDATE_KEY = "update(string,(uint32,string)[])";
+const char* const TABLE_METHOD_UPDATE_CON =
+    "update((uint8,string)[],(uint32,uint32),(uint32,string)[])";
 const char* const TABLE_METHOD_REMOVE_KEY = "remove(string)";
-const char* const TABLE_METHOD_REMOVE_CON = "remove((uint8,string)[],(uint,uint))";
+const char* const TABLE_METHOD_REMOVE_CON = "remove((uint8,string)[],(uint32,uint32))";
 const char* const TABLE_METHOD_DESC = "desc()";
 
 TablePrecompiled::TablePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
@@ -62,9 +63,10 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    std::string tableName;
+    std::vector<std::string> dynamicParams;
     bytes param;
-    codec->decode(_param, tableName, param);
+    codec->decode(_param, dynamicParams, param);
+    auto tableName = dynamicParams.at(0);
     tableName = getActualTableName(tableName);
     auto originParam = ref(param);
     uint32_t func = getParamFunc(originParam);
@@ -86,7 +88,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_SELECT_CON])
     {
-        /// select((uint8,string)[],(uint,uint))
+        /// select((uint8,string)[],(uint32,uint32))
         selectByCondition(tableName, _executive, data, callResult, gasPricer);
     }
     else if (func == name2Selector[TABLE_METHOD_INSERT])
@@ -101,7 +103,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_UPDATE_CON])
     {
-        /// update((uint8,string)[],(uint,uint),(uint,string)[])
+        /// update((uint8,string)[],(uint32,uint32),(uint,string)[])
         updateByCondition(tableName, _executive, data, callResult, gasPricer);
     }
     else if (func == name2Selector[TABLE_METHOD_REMOVE_KEY])
@@ -111,7 +113,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_REMOVE_CON])
     {
-        /// remove((uint8,string)[],(uint,uint))
+        /// remove((uint8,string)[],(uint32,uint32))
         removeByCondition(tableName, _executive, data, callResult, gasPricer);
     }
     else if (func == name2Selector[TABLE_METHOD_DESC])
@@ -128,7 +130,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     return callResult;
 }
 
-void TablePrecompiled::buildKeyCondition(const std::shared_ptr<storage::Condition>& keyCondition,
+void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyCondition,
     const std::vector<precompiled::ConditionTuple>& conditions, const LimitTuple& limit) const
 {
     auto& offset = std::get<0>(limit);
@@ -166,6 +168,7 @@ void TablePrecompiled::buildKeyCondition(const std::shared_ptr<storage::Conditio
     keyCondition->limit(offset, offset + count);
 }
 
+/// FIXME: sys table not support small contract structure
 void TablePrecompiled::desc(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
@@ -225,7 +228,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
 {
-    /// select((uint8,string)[],(uint,uint))
+    /// select((uint8,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limit;
     auto blockContext = _executive->blockContext().lock();
@@ -237,12 +240,12 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
                            << LOG_KV("limitOffset", std::get<0>(limit))
                            << LOG_KV("limitCount", std::get<1>(limit));
 
-    std::shared_ptr<storage::Condition> keyCondition = std::make_shared<storage::Condition>();
+    auto keyCondition = std::make_optional<storage::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limit));
 
     // merge keys from storage and eqKeys
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, *keyCondition);
+    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
     for (auto& key : tableKeyList)
     {
@@ -363,7 +366,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
 {
-    /// update((uint8,string)[],(uint,uint),(uint,string)[])
+    /// update((uint8,string)[],(uint32,uint32),(uint,string)[])
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
@@ -376,13 +379,13 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
                            << LOG_KV("limitOffset", std::get<0>(limitTuple))
                            << LOG_KV("limitCount", std::get<1>(limitTuple))
                            << LOG_KV("updateFieldsSize", updateFields.size());
-    std::shared_ptr<storage::Condition> keyCondition = std::make_shared<storage::Condition>();
+    auto keyCondition = std::make_optional<storage::Condition>();
 
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
 
     auto table = _executive->storage().openTable(tableName);
-    auto tableKeyList = table->getPrimaryKeys(*keyCondition);
+    auto tableKeyList = table->getPrimaryKeys(keyCondition);
 
     // here is a trick, s_table save table info as (key,values)
     auto fieldsSize = table->tableInfo()->fields().size() - 1;
@@ -448,7 +451,7 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
 {
-    /// remove((uint8,string)[],(uint,uint))
+    /// remove((uint8,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
     auto blockContext = _executive->blockContext().lock();
@@ -460,12 +463,12 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
                            << LOG_KV("limitOffset", std::get<0>(limitTuple))
                            << LOG_KV("limitCount", std::get<1>(limitTuple));
 
-    std::shared_ptr<storage::Condition> keyCondition = std::make_shared<storage::Condition>();
+    auto keyCondition = std::make_optional<storage::Condition>();
 
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
 
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, *keyCondition);
+    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
 
     for (auto& tableKey : tableKeyList)
     {

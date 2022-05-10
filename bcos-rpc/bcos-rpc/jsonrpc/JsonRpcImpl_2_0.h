@@ -20,7 +20,7 @@
  */
 
 #pragma once
-#include "groupmgr/GroupManager.h"
+#include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
@@ -256,20 +256,6 @@ public:
         getGroupNodeInfo(_req[0u].asString(), _req[1u].asString(), _respFunc);
     }
 
-
-#if 0
-    const std::unordered_map<std::string, std::function<void(Json::Value, RespFunc _respFunc)>>&
-    methodToFunc() const
-    {
-        return m_methodToFunc;
-    }
-
-    void registerMethod(
-        const std::string& _method, std::function<void(Json::Value, RespFunc _respFunc)> _callback)
-    {
-        m_methodToFunc[_method] = _callback;
-    }
-#endif
     void setNodeInfo(const NodeInfo& _nodeInfo) { m_nodeInfo = _nodeInfo; }
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }

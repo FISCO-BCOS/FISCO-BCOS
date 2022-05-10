@@ -40,6 +40,9 @@ public:
     bool checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& path, bytesRef func, const std::string& account);
 
+    bool checkContractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& _path);
+
 private:
     void getAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
@@ -53,14 +56,19 @@ private:
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
 
-    bool checkMethodAuth(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data);
+    void checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const PrecompiledGas::Ptr& gasPricer);
 
     void setMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         bool _isClose, const PrecompiledGas::Ptr& gasPricer);
 
     void setContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const PrecompiledGas::Ptr& gasPricer);
+
+    void contractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
 

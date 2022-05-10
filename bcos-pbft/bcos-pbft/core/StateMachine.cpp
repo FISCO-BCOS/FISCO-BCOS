@@ -102,7 +102,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
                 return;
             }
             auto execT = (double)(utcTime() - startT) / (double)(block->transactionsHashSize());
-            CONSENSUS_LOG(INFO) << LOG_DESC("asyncExecuteBlock success")
+            CONSENSUS_LOG(INFO) << METRIC << LOG_DESC("asyncExecuteBlock success")
                                 << LOG_KV("sysBlock", _sysBlock)
                                 << LOG_KV("number", _blockHeader->number())
                                 << LOG_KV("result", _blockHeader->hash().abridged())
@@ -110,7 +110,6 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
                                 << LOG_KV("txsRoot", _blockHeader->txsRoot().abridged())
                                 << LOG_KV("receiptsRoot", _blockHeader->receiptsRoot().abridged())
                                 << LOG_KV("stateRoot", _blockHeader->stateRoot().abridged())
-                                << LOG_KV("txs", block->transactionsHashSize())
                                 << LOG_KV("timeCost", (utcTime() - startT))
                                 << LOG_KV("execPerTx", execT);
             if (_blockHeader->number() != blockHeader->number())

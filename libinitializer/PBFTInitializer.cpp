@@ -19,13 +19,17 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
-#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
+#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-leader-election/src/LeaderElectionFactory.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
@@ -45,6 +49,8 @@ using namespace bcos::storage;
 using namespace bcos::scheduler;
 using namespace bcos::initializer;
 using namespace bcos::group;
+using namespace bcos::protocol;
+using namespace bcos::election;
 
 PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
     bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
@@ -61,6 +67,7 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     m_storage(_storage),
     m_frontService(_frontService)
 {
+    m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     createSealer();
     createPBFT();
     createSync();
@@ -146,6 +153,10 @@ void PBFTInitializer::initChainNodeInfo(
         m_nodeInfo->appendServiceInfo(FRONT, FRONT_SERVANT_NAME);
         m_nodeInfo->appendServiceInfo(TXPOOL, TXPOOL_SERVANT_NAME);
     }
+    // Note: must set the serviceInfo for rpc/gateway to pass the groupInfo check when sync latest
+    // groupInfo to rpc/gateway service
+    m_nodeInfo->appendServiceInfo(GATEWAY, m_nodeConfig->gatewayServiceName());
+    m_nodeInfo->appendServiceInfo(RPC, m_nodeConfig->rpcServiceName());
     // set protocolInfo
     auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     m_nodeInfo->setNodeProtocol(*nodeProtocolInfo);
@@ -161,10 +172,18 @@ void PBFTInitializer::start()
     m_sealer->start();
     m_blockSync->start();
     m_pbft->start();
+    if (m_leaderElection)
+    {
+        m_leaderElection->start();
+    }
 }
 
 void PBFTInitializer::stop()
 {
+    if (m_leaderElection)
+    {
+        m_leaderElection->stop();
+    }
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
@@ -175,6 +194,16 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
+    if (m_nodeConfig->enableFailOver())
+    {
+        initConsensusFailOver(m_protocolInitializer->keyPair()->publicKey());
+    }
+    else
+    {
+        m_blockSync->enableAsMaster(true);
+        m_pbft->enableAsMaterNode(true);
+    }
+    syncGroupNodeInfo();
 }
 
 void PBFTInitializer::registerHandlers()
@@ -378,7 +407,6 @@ void PBFTInitializer::syncGroupNodeInfo()
                 INITIALIZER_LOG(WARNING)
                     << LOG_DESC("asyncGetGroupNodeInfo failed")
                     << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                pbftInit->m_groupNodeInfoFetched.store(false);
                 return;
             }
             try
@@ -389,6 +417,10 @@ void PBFTInitializer::syncGroupNodeInfo()
                 }
                 NodeIDSet nodeIdSet;
                 auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+                if (nodeIDList.size() == 0)
+                {
+                    return;
+                }
                 for (auto const& nodeIDStr : nodeIDList)
                 {
                     auto nodeID =
@@ -396,8 +428,6 @@ void PBFTInitializer::syncGroupNodeInfo()
                             fromHex(nodeIDStr));
                     nodeIdSet.insert(nodeID);
                 }
-                // fetch the groupNodeInfo success
-                pbftInit->m_groupNodeInfoFetched.store(true);
                 // the blockSync module set the connected node list
                 pbftInit->m_blockSync->config()->setConnectedNodeList(std::move(nodeIdSet));
                 // the txpool module set the connected node list
@@ -412,4 +442,47 @@ void PBFTInitializer::syncGroupNodeInfo()
                                          << LOG_KV("error", boost::diagnostic_information(e));
             }
         });
+}
+
+void PBFTInitializer::onGroupInfoChanged()
+{
+    if (!m_leaderElection)
+    {
+        return;
+    }
+    // failover enabled, should sync the latest information to the etcd if the node is
+    // leader
+    INITIALIZER_LOG(INFO) << LOG_DESC("onGroupInfoChanged, update the memberConfig");
+    std::string modifiedConfig;
+    m_groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
+    auto memberInfo = m_memberFactory->createMember();
+    memberInfo->setMemberID(m_nodeConfig->memberID());
+    memberInfo->setMemberConfig(modifiedConfig);
+    m_leaderElection->updateSelfConfig(memberInfo);
+}
+
+void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
+{
+    m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+    auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
+    // leader key: /${chainID}/consensus/${nodeID}
+    std::string leaderKey =
+        "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR + _nodeID->hex();
+
+    std::string nodeConfig;
+    m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
+    m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
+        nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
+        m_nodeConfig->leaseTTL());
+    // register the handler
+    m_leaderElection->registerOnCampaignHandler(
+        [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
+            m_pbft->enableAsMaterNode(_success);
+            m_blockSync->enableAsMaster(_success);
+            m_txpool->clearAllTxs();
+            INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
+                                  << LOG_KV("leader", _leader ? _leader->memberID() : "None");
+        });
+    INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
+                          << LOG_KV("nodeConfig", nodeConfig);
 }

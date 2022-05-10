@@ -30,7 +30,7 @@ command="deploy"
 ca_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc3"
+default_version="v3.0.0-rc4"
 compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
@@ -714,7 +714,9 @@ EOF
 
 generate_common_ini() {
     local output=${1}
-
+    LOG_INFO "Begin generate uuid"
+    local uuid=$(uuidgen)
+    LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
 [chain]
@@ -753,6 +755,15 @@ generate_common_ini() {
     ;verify_worker_num=2
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
+[failover]
+    ; enable failover or not, default disable
+    enable = false
+    ; the uuid that uniquely identifies the node
+    member_id=${uuid}
+    ; failover time, in seconds, default is 3s
+    lease_ttl=3
+    ; the address of etcd, can configure multiple comma-separated
+    cluster_url=127.0.0.1:2379
 [log]
     enable=true
     log_path=./log
@@ -892,7 +903,9 @@ generate_genesis_config() {
     ${node_list}
 
 [version]
-    compatibility_version=3.0.0-rc3
+    ; compatible version, can be dynamically upgraded through setSystemConfig
+    ; the default is 3.0.0-rc4
+    compatibility_version=3.0.0-rc4
 [tx]
     ; transaction gas limit
     gas_limit=3000000000

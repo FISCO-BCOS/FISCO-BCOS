@@ -16,27 +16,40 @@ public:
 
     void initialize() override
     {
-        auto configDir = ServerConfig::BasePath;
-        m_iniConfigPath = configDir + "/config.ini";
-        addConfig("config.ini");
-
-        BCOS_LOG(INFO) << LOG_BADGE("[Rpc][Application]") << LOG_DESC("add config.ini")
-                       << LOG_KV("configDir", configDir);
-
-        initService(configDir);
-        RpcServiceParam param;
-        param.rpcInitializer = m_rpcInitializer;
-        addServantWithParams<RpcServiceServer, RpcServiceParam>(
-            getProxyDesc(bcos::protocol::RPC_SERVANT_NAME), param);
-        // init rpc
-        auto ret = getEndPointDescByAdapter(this, bcos::protocol::RPC_SERVANT_NAME);
-        if (!ret.first)
+        // Note: since tars Application catch the exception and output the error message with
+        // e.what() which unable to explicitly display specific error messages, we actively catch
+        // and output exception information here
+        try
         {
-            throw std::runtime_error("load endpoint information failed");
+            auto configDir = ServerConfig::BasePath;
+            m_iniConfigPath = configDir + "/config.ini";
+            addConfig("config.ini");
+
+            BCOS_LOG(INFO) << LOG_BADGE("[Rpc][Application]") << LOG_DESC("add config.ini")
+                           << LOG_KV("configDir", configDir);
+
+            initService(configDir);
+            RpcServiceParam param;
+            param.rpcInitializer = m_rpcInitializer;
+            addServantWithParams<RpcServiceServer, RpcServiceParam>(
+                getProxyDesc(bcos::protocol::RPC_SERVANT_NAME), param);
+            // init rpc
+            auto ret = getEndPointDescByAdapter(this, bcos::protocol::RPC_SERVANT_NAME);
+            if (!ret.first)
+            {
+                throw std::runtime_error("load endpoint information failed");
+            }
+            std::string clientID = ret.second;
+            BCOS_LOG(INFO) << LOG_DESC("begin init rpc") << LOG_KV("rpcID", ret.second);
+            param.rpcInitializer->setClientID(ret.second);
+            m_rpcInitializer->start();
         }
-        std::string clientID = ret.second;
-        BCOS_LOG(INFO) << LOG_DESC("begin init rpc") << LOG_KV("rpcID", ret.second);
-        param.rpcInitializer->setClientID(ret.second);
+        catch (std::exception const& e)
+        {
+            std::cout << "init RpcService failed, error: " << boost::diagnostic_information(e)
+                      << std::endl;
+            throw e;
+        }
     }
 
     void destroyApp() override
@@ -53,7 +66,7 @@ protected:
         // !!! Notice:
         auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
             std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        nodeConfig->loadConfig(m_iniConfigPath);
+        nodeConfig->loadConfig(m_iniConfigPath, false);
         if (nodeConfig->rpcSmSsl())
         {
             addConfig("sm_ca.crt");
@@ -75,11 +88,11 @@ protected:
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
         m_logInitializer->setLogPath(getLogPath());
         m_logInitializer->initLog(pt);
-
+        // for stat the nodeVersion
+        bcos::initializer::showNodeVersionMetric();
         nodeConfig->loadServiceConfig(pt);
 
         m_rpcInitializer = std::make_shared<RpcInitializer>(_configDir, nodeConfig);
-        m_rpcInitializer->start();
     }
 
 private:
@@ -102,10 +115,6 @@ int main(int argc, char* argv[])
     catch (std::exception& e)
     {
         cerr << "std::exception:" << e.what() << std::endl;
-    }
-    catch (...)
-    {
-        cerr << "unknown exception." << std::endl;
     }
     return -1;
 }

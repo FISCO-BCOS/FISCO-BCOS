@@ -59,5 +59,28 @@ struct CallParameters
      * certain precompiled contract
      */
     bool internalCall = false;
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "[" << contextID << "|" << seq << "|";
+        switch (type)
+        {
+        case MESSAGE:
+            ss << "MESSAGE";
+            break;
+        case KEY_LOCK:
+            ss << "KEY_LOCK";
+            break;
+        case FINISHED:
+            ss << "FINISHED";
+            break;
+        case REVERT:
+            ss << "REVERT";
+            break;
+        };
+        ss << "]";
+        return ss.str();
+    }
 };
 }  // namespace bcos::executor

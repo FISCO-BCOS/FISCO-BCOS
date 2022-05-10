@@ -106,6 +106,13 @@ void PBFTEngine::start()
     }
 }
 
+void PBFTEngine::restart()
+{
+    PBFT_LOG(INFO) << LOG_DESC("restart the consensus module");
+    m_config->enableAsMaterNode(true);
+    triggerTimeout(false);
+}
+
 void PBFTEngine::stop()
 {
     if (m_stopped.load())
@@ -243,6 +250,10 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     BlockNumber _proposalIndex, HashType const& _proposalHash)
 {
     if (_proposalData.size() == 0)
+    {
+        return;
+    }
+    if (!m_config->isConsensusNode())
     {
         return;
     }
@@ -456,11 +467,18 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
     }
 }
 
+void PBFTEngine::clearAllCache()
+{
+    RecursiveGuard l(m_mutex);
+    m_cacheProcessor->clearAllCache();
+}
+
 void PBFTEngine::executeWorker()
 {
     // the node is not the consensusNode
     if (!m_config->isConsensusNode())
     {
+        clearAllCache();
         waitSignal();
         return;
     }

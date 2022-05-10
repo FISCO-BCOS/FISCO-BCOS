@@ -11,7 +11,7 @@ namespace bcos::initializer
 class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
 {
 public:
-    ParallelExecutor(bcos::executor::TransactionExecutor::Ptr executor)
+    ParallelExecutor(bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
       : m_pool("exec", std::thread::hardware_concurrency()), m_executor(std::move(executor))
     {}
     ~ParallelExecutor() noexcept override {}
@@ -32,6 +32,19 @@ public:
         m_pool.enqueue([this, inputRaw = input.release(), callback = std::move(callback)] {
             m_executor->executeTransaction(
                 bcos::protocol::ExecutionMessage::UniquePtr(inputRaw), std::move(callback));
+        });
+    }
+
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override
+    {
+        m_pool.enqueue([this, contractAddress = std::move(contractAddress),
+                           inputs = std::move(inputs), callback = std::move(callback)] {
+            m_executor->dmcExecuteTransactions(
+                contractAddress, std::move(inputs), std::move(callback));
         });
     }
 
@@ -66,28 +79,33 @@ public:
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
-    void prepare(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue([this, params = TwoPCParams(params), callback = std::move(callback)] {
-            m_executor->prepare(params, std::move(callback));
-        });
+        m_pool.enqueue(
+            [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
+                m_executor->prepare(params, std::move(callback));
+            });
     }
 
     // Commit uncommitted data
-    void commit(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue([this, params = TwoPCParams(params), callback = std::move(callback)] {
-            m_executor->commit(params, std::move(callback));
-        });
+        m_pool.enqueue(
+            [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
+                m_executor->commit(params, std::move(callback));
+            });
     }
 
     // Rollback the changes
-    void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue([this, params = TwoPCParams(params), callback = std::move(callback)] {
-            m_executor->rollback(params, std::move(callback));
-        });
+        m_pool.enqueue(
+            [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
+                m_executor->rollback(params, std::move(callback));
+            });
     }
 
     /* ----- XA Transaction interface End ----- */
@@ -116,6 +134,6 @@ public:
 
 private:
     bcos::ThreadPool m_pool;
-    bcos::executor::TransactionExecutor::Ptr m_executor;
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
 };
 }  // namespace bcos::initializer

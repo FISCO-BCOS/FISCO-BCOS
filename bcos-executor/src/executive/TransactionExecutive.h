@@ -247,6 +247,7 @@ private:
     }
 
     bool checkAuth(const CallParameters::UniquePtr& callParameters, bool _isCreate);
+    bool checkContractAvailable(const CallParameters::UniquePtr& callParameters);
 
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);

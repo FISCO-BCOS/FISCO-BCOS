@@ -21,11 +21,11 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
-#include <bcos-utilities/Log.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -39,7 +39,8 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
   : m_wsService(_wsService),
     m_jsonRpcImpl(_jsonRpcImpl),
     m_eventSub(_eventSub),
-    m_amopClient(_amopClient)
+    m_amopClient(_amopClient),
+    m_groupManager(m_jsonRpcImpl->groupManager())
 {
     // init the local protocol
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::RpcService);
@@ -53,9 +54,9 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
             asyncNotifyBlockNumber(_groupID, _nodeName, _blockNumber, [](Error::Ptr _error) {
                 if (_error)
                 {
-                    BCOS_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber error")
-                                    << LOG_KV("code", _error->errorCode())
-                                    << LOG_KV("msg", _error->errorMessage());
+                    RPC_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber error")
+                                   << LOG_KV("code", _error->errorCode())
+                                   << LOG_KV("msg", _error->errorMessage());
                 }
             });
         });
@@ -73,7 +74,7 @@ void Rpc::start()
     // start websocket service
     m_wsService->start();
     m_amopClient->start();
-    BCOS_LOG(INFO) << LOG_DESC("[RPC][RPC][start]") << LOG_DESC("start rpc successfully");
+    RPC_LOG(INFO) << LOG_DESC("start rpc successfully");
 }
 
 void Rpc::stop()

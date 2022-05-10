@@ -99,7 +99,8 @@ public:
         m_leaderSwitchPeriod.store(_leaderSwitchPeriod);
         // notify the sealer module to reset sealing
         notifyResetSealing(sealStartIndex());
-        PBFT_LOG(INFO) << LOG_DESC(
+        PBFT_LOG(INFO) << METRIC
+                       << LOG_DESC(
                               "updateLeaderSwitchPeriod and re-notify the sealer to seal block")
                        << LOG_KV("leader_period", m_leaderSwitchPeriod)
                        << LOG_KV("committedIndex", committedProposal()->index());
