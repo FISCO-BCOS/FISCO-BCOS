@@ -25,25 +25,12 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
-    # set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "/usr/bin/time")
-    # set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "/usr/bin/time")
-    # Use ISO C++17 standard language.
     set(CMAKE_CXX_STANDARD 20)
-    # set(CMAKE_CXX_FLAGS "-std=c++17 -pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions")
     set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-    # Enables all the warnings about constructions that some users consider questionable,
-    # and that are easy to avoid.  Also enable some extra warning flags that are not
-    # enabled by -Wall.   Finally, treat at warnings-as-errors, which forces developers
-    # to fix warnings as they arise, so they don't accumulate "to be fixed later".
     add_compile_options(-Werror)
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
-    # add_compile_options(-Wno-unused-variable)
-    # add_compile_options(-Wno-unused-parameter)
-    # add_compile_options(-Wno-unused-function)
-    # add_compile_options(-Wno-missing-field-initializers)
-    # Disable warnings about unknown pragmas (which is enabled by -Wall).
     add_compile_options(-Wno-unknown-pragmas)
     add_compile_options(-fno-omit-frame-pointer)
     # for boost json spirit
@@ -92,7 +79,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
         # Check that we've got GCC 7.0 or newer.
-        set(GCC_MIN_VERSION "7.0")
+        set(GCC_MIN_VERSION "10.0")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
         if (NOT (GCC_VERSION VERSION_GREATER ${GCC_MIN_VERSION} OR GCC_VERSION VERSION_EQUAL ${GCC_MIN_VERSION}))
@@ -101,9 +88,6 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MARCH_TYPE}")
         set(CMAKE_C_FLAGS "-std=c99 ${CMAKE_C_FLAGS} ${MARCH_TYPE}")
 
-		# Strong stack protection was only added in GCC 4.9.
-		# Use it if we have the option to do so.
-		# See https://lwn.net/Articles/584225/
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
     # Additional Clang-specific compiler settings.
@@ -111,7 +95,6 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG          "-O -g")
         endif()
-        # set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
         add_compile_options(-fstack-protector)
         add_compile_options(-Winconsistent-missing-override)
         # Some Linux-specific Clang settings.  We don't want these for OS X.

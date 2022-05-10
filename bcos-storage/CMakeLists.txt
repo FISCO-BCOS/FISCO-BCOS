@@ -6,8 +6,11 @@ project(bcos-storage VERSION ${VERSION})
 
 set(SRC_LIST src/Common.cpp)
 list(APPEND SRC_LIST src/RocksDBStorage.cpp)
-include(ProjectTiKVClient)
-list(APPEND SRC_LIST src/TiKVStorage.cpp)
+
+if(TIKV)
+    include(ProjectTiKVClient)
+    list(APPEND SRC_LIST src/TiKVStorage.cpp)
+endif()
 
 hunter_add_package(zstd)
 find_package(zstd CONFIG REQUIRED)

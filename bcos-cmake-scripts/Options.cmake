@@ -81,6 +81,9 @@ macro(configure_project)
         add_definitions(-DFISCO_DEBUG)
     endif()
 
+    default_option(TIKV OFF)
+    default_option(ETCD OFF)
+
     # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
     if (NOT DEFINED VERSION_SUFFIX)
         set(VERSION_SUFFIX "")
@@ -104,6 +107,8 @@ macro(print_config NAME)
     message("-- IPO                Enable IPO optimization      ${IPO}")
     message("-- SANITIZE           Enable sanitize              ${SANITIZE}")
     message("-- DEBUG              Enable debug                 ${DEBUG}")
+    message("-- TIKV               Enable tikv                  ${TIKV}")
+    message("-- ETCD               Enable etcd                  ${ETCD}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()
