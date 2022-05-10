@@ -34,6 +34,7 @@ const char* const AUTH_METHOD_SET_AUTH_TYPE = "setMethodAuthType(string,bytes4,u
 const char* const AUTH_METHOD_OPEN_AUTH = "openMethodAuth(string,bytes4,string)";
 const char* const AUTH_METHOD_CLOSE_AUTH = "closeMethodAuth(string,bytes4,string)";
 const char* const AUTH_METHOD_CHECK_AUTH = "checkMethodAuth(string,bytes4,string)";
+const char* const AUTH_METHOD_GET_AUTH = "getMethodAuth(string,bytes4)";
 /// evm
 const char* const AUTH_METHOD_GET_ADMIN_ADD = "getAdmin(address)";
 const char* const AUTH_METHOD_SET_ADMIN_ADD = "resetAdmin(address,address)";
@@ -41,6 +42,7 @@ const char* const AUTH_METHOD_SET_AUTH_TYPE_ADD = "setMethodAuthType(address,byt
 const char* const AUTH_METHOD_OPEN_AUTH_ADD = "openMethodAuth(address,bytes4,address)";
 const char* const AUTH_METHOD_CLOSE_AUTH_ADD = "closeMethodAuth(address,bytes4,address)";
 const char* const AUTH_METHOD_CHECK_AUTH_ADD = "checkMethodAuth(address,bytes4,address)";
+const char* const AUTH_METHOD_GET_AUTH_ADD = "getMethodAuth(address,bytes4)";
 
 /// contract status
 const char* const AUTH_METHOD_SET_CONTRACT = "setContractStatus(address,bool)";
@@ -57,6 +59,7 @@ ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashIm
     name2Selector[AUTH_METHOD_OPEN_AUTH] = getFuncSelector(AUTH_METHOD_OPEN_AUTH, _hashImpl);
     name2Selector[AUTH_METHOD_CLOSE_AUTH] = getFuncSelector(AUTH_METHOD_CLOSE_AUTH, _hashImpl);
     name2Selector[AUTH_METHOD_CHECK_AUTH] = getFuncSelector(AUTH_METHOD_CHECK_AUTH, _hashImpl);
+    name2Selector[AUTH_METHOD_GET_AUTH] = getFuncSelector(AUTH_METHOD_GET_AUTH, _hashImpl);
 
     /// evm
     name2Selector[AUTH_METHOD_GET_ADMIN_ADD] =
@@ -71,6 +74,7 @@ ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashIm
         getFuncSelector(AUTH_METHOD_CLOSE_AUTH_ADD, _hashImpl);
     name2Selector[AUTH_METHOD_CHECK_AUTH_ADD] =
         getFuncSelector(AUTH_METHOD_CHECK_AUTH_ADD, _hashImpl);
+    name2Selector[AUTH_METHOD_GET_AUTH_ADD] = getFuncSelector(AUTH_METHOD_GET_AUTH_ADD, _hashImpl);
 
     name2Selector[AUTH_METHOD_SET_CONTRACT] = getFuncSelector(AUTH_METHOD_SET_CONTRACT, _hashImpl);
     name2Selector[AUTH_METHOD_GET_CONTRACT] = getFuncSelector(AUTH_METHOD_GET_CONTRACT, _hashImpl);
@@ -100,9 +104,8 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("sender is not from AuthManager")
                                << LOG_KV("sender", _sender);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
-        callResult->setGas(gasPricer->calTotalGas());
-        return callResult;
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+            CODE_NO_AUTHORIZED, "ContractAuthMgrPrecompiled: sender is not from AuthManager"));
     }
     if (func == name2Selector[AUTH_METHOD_GET_ADMIN] ||
         func == name2Selector[AUTH_METHOD_GET_ADMIN_ADD])
@@ -133,6 +136,11 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
              func == name2Selector[AUTH_METHOD_CHECK_AUTH_ADD])
     {
         checkMethodAuth(_executive, data, callResult, gasPricer);
+    }
+    else if (func == name2Selector[AUTH_METHOD_GET_AUTH] ||
+             func == name2Selector[AUTH_METHOD_GET_AUTH_ADD])
+    {
+        getMethodAuth(_executive, data, callResult, gasPricer);
     }
     else if (func == name2Selector[AUTH_METHOD_SET_CONTRACT])
     {
@@ -249,7 +257,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
         codec->decode(data, path, _func, _type);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
-    u256 type = _type[_type.size() - 1];
+    uint8_t type = _type[_type.size() - 1];
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
                            << LOG_KV("func", toHexStringWithPrefix(func)) << LOG_KV("type", type);
@@ -273,7 +281,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     }
 
     std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
-    std::map<bytes, u256> methAuthTypeMap;
+    std::map<bytes, uint8_t> methAuthTypeMap;
     if (!authTypeStr.empty())
     {
         auto&& out = asBytes(authTypeStr);
@@ -337,56 +345,118 @@ bool ContractAuthMgrPrecompiled::checkMethodAuth(
                                << LOG_KV("path", path);
         return true;
     }
-    auto getMethodType = getMethodAuthType(_executive, path, func);
-    if (getMethodType == (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST)
+    try
     {
-        // this method not set type
+        auto getMethodType = getMethodAuthType(_executive, path, func);
+        if (getMethodType == (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST)
+        {
+            // this method not set type
+            return true;
+        }
+        auto&& authMap = getMethodAuth(_executive, path, getMethodType);
+
+        if (authMap.empty())
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                                   << LOG_DESC("auth row not found, no method set acl")
+                                   << LOG_KV("path", path) << LOG_KV("authType", getMethodType);
+            // if entry still empty
+            //      if white list mode, return false
+            //      if black list mode， return true
+            return getMethodType == (int)AuthType::BLACK_LIST_MODE;
+        }
+        if (authMap.find(func.toBytes()) == authMap.end())
+        {
+            // func not set acl, pass through
+            return true;
+        }
+        if (authMap.at(func.toBytes()).find(account) == authMap.at(func.toBytes()).end())
+        {
+            // can't find account in user map
+            // if white list mode, return false
+            // if black list mode, return true
+            return getMethodType == (int)AuthType::BLACK_LIST_MODE;
+        }
+        if (getMethodType == (int)AuthType::BLACK_LIST_MODE)
+        {
+            return !authMap.at(func.toBytes()).at(account);
+        }
+        return authMap.at(func.toBytes()).at(account);
+    }
+    catch (...)
+    {
+        // getMethodAuth will throw PrecompiledError
         return true;
     }
-    std::string getTypeStr;
-    if (getMethodType == (int)AuthType::WHITE_LIST_MODE)
-        getTypeStr = METHOD_AUTH_WHITE;
-    else if (getMethodType == (int)AuthType::BLACK_LIST_MODE)
-        getTypeStr = METHOD_AUTH_BLACK;
+}
+
+void ContractAuthMgrPrecompiled::getMethodAuth(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
+{
+    /// evm:  getMethodAuth(address,bytes4) => (uint8,string[],string[])
+    /// wasm: getMethodAuth(string,bytes4) => (uint8,string[],string[])
+
+    std::string path;
+    string32 _func;
+    bytes funcBytes;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    if (!blockContext->isWasm())
+    {
+        Address contractAddress;
+        codec->decode(data, contractAddress, _func);
+        path = contractAddress.hex();
+    }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("error auth type") << LOG_KV("path", path)
-                               << LOG_KV("type", getMethodType);
-        return false;
+        codec->decode(data, path, _func);
     }
+    funcBytes = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
+    path = getAuthTableName(path);
+    auto getMethodType = getMethodAuthType(_executive, path, ref(funcBytes));
+    if (getMethodType == (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST)
+    {
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth ACL type not found"));
+    }
+    auto&& authMap = getMethodAuth(_executive, path, getMethodType);
+    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
 
-    auto entry = table->getRow(getTypeStr);
-    if (!entry || entry->getField(SYS_VALUE).empty())
+    if (authMap.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth row not found, no method set acl")
-                               << LOG_KV("path", path) << LOG_KV("authType", getTypeStr);
-        // if entry still empty
-        //      if white list mode, return false
-        //      if black list mode， return true
-        return getMethodType == (int)AuthType::BLACK_LIST_MODE;
+                               << LOG_KV("path", path);
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth ACL row not found"));
     }
-    MethodAuthMap authMap;
-    bytes&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
-    codec::scale::decode(authMap, gsl::make_span(out));
-    if (authMap.find(func.toBytes()) == authMap.end())
+    std::vector<std::string> accessList = {};
+    std::vector<std::string> blockList = {};
+    if (authMap.find(funcBytes) == authMap.end())
     {
-        // func not set acl, pass through
-        return true;
+        // func not set acl, return empty
+        callResult->setExecResult(
+            codec->encode(uint8_t(0), std::move(accessList), std::move(blockList)));
     }
-    if (authMap.at(func.toBytes()).find(account) == authMap.at(func.toBytes()).end())
+    else
     {
-        // can't find account in user map
-        // if white list mode, return false
-        // if black list mode, return true
-        return getMethodType == (int)AuthType::BLACK_LIST_MODE;
+        for (const auto& addressPair : authMap.at(funcBytes))
+        {
+            bool access = addressPair.second ? (getMethodType == (int)AuthType::WHITE_LIST_MODE) :
+                                               (getMethodType == (int)AuthType::BLACK_LIST_MODE);
+            if (access)
+            {
+                accessList.emplace_back(std::move(addressPair.first));
+            }
+            else
+            {
+                blockList.emplace_back(std::move(addressPair.first));
+            }
+        }
+        callResult->setExecResult(
+            codec->encode(uint8_t(getMethodType), std::move(accessList), std::move(blockList)));
     }
-    if (getMethodType == (int)AuthType::BLACK_LIST_MODE)
-    {
-        return !authMap.at(func.toBytes()).at(account);
-    }
-    return authMap.at(func.toBytes()).at(account);
+    gasPricer->updateMemUsed(authMap.size());
 }
 
 void ContractAuthMgrPrecompiled::setMethodAuth(
@@ -492,7 +562,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }
 
-s256 ContractAuthMgrPrecompiled::getMethodAuthType(
+int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _path,
     bytesConstRef _func)
 {
@@ -509,8 +579,8 @@ s256 ContractAuthMgrPrecompiled::getMethodAuthType(
         return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
     }
     std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
-    std::map<bytes, u256> authTypeMap;
-    s256 type = -1;
+    std::map<bytes, uint8_t> authTypeMap;
+    auto s =  _func.toString();
     try
     {
         auto&& out = asBytes(authTypeStr);
@@ -519,7 +589,7 @@ s256 ContractAuthMgrPrecompiled::getMethodAuthType(
         {
             return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
         }
-        type = u2s(authTypeMap.at(_func.toBytes()));
+        return authTypeMap.at(_func.toBytes());
     }
     catch (...)
     {
@@ -527,7 +597,37 @@ s256 ContractAuthMgrPrecompiled::getMethodAuthType(
                                << LOG_DESC("decode method type error");
         return (int)CODE_TABLE_AUTH_TYPE_DECODE_ERROR;
     }
-    return type;
+}
+
+MethodAuthMap ContractAuthMgrPrecompiled::getMethodAuth(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& path,
+    int32_t getMethodType) const
+{
+    auto lastStorage = _executive->lastStorage();
+    auto table =
+        (lastStorage) ? lastStorage->openTable(path) : _executive->storage().openTable(path);
+    if (!table)
+    {
+        // only precompiled contract in /sys/, or pre-built-in contract
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("auth table not found.") << LOG_KV("path", path);
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth table not found"));
+    }
+    std::string getTypeStr =
+        getMethodType == (int)AuthType::WHITE_LIST_MODE ? METHOD_AUTH_WHITE : METHOD_AUTH_BLACK;
+
+    auto entry = table->getRow(getTypeStr);
+    MethodAuthMap authMap = {};
+    if (!entry || entry->getField(SYS_VALUE).empty())
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("auth row not found, no method set acl")
+                               << LOG_KV("path", path) << LOG_KV("authType", getTypeStr);
+        return authMap;
+    }
+    bytes&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
+    codec::scale::decode(authMap, gsl::make_span(out));
+    return authMap;
 }
 
 std::string ContractAuthMgrPrecompiled::getContractAdmin(
