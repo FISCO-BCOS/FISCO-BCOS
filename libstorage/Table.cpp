@@ -140,6 +140,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     }
     else
     {
+        assert(!key.empty());
         m_data->m_fields.insert(std::make_pair(key, value));
         updatedCapacity = key.size() + value.size();
     }
