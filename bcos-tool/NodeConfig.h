@@ -124,6 +124,7 @@ public:
 
     std::string const& schedulerServiceName() const { return m_schedulerServiceName; }
     std::string const& executorServiceName() const { return m_executorServiceName; }
+    std::string const& txpoolServiceName() const { return m_txpoolServiceName; }
 
     std::string const& nodeName() const { return m_nodeName; }
 
@@ -263,6 +264,7 @@ private:
     // the serviceName of other modules
     std::string m_schedulerServiceName;
     std::string m_executorServiceName;
+    std::string m_txpoolServiceName;
     std::string m_nodeName;
 
     // config for rpc
