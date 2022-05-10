@@ -1151,8 +1151,8 @@ bool Service::addPeers(
     }
     if (nodes.size() == siz)
     {
-        SERVICE_LOG(INFO) << LOG_DESC("success, and all the inserted peers already exist");
-        response = "success, and all the inserted peers already exist";
+        SERVICE_LOG(INFO) << LOG_DESC("all the inserted peers already exist");
+        response = "all the inserted peers already exist";
         return true;
     }
     if (nodes.size() > m_maxNodesLimit)
@@ -1188,8 +1188,8 @@ bool Service::erasePeers(
     }
     if (nodes.size() == siz)
     {
-        SERVICE_LOG(INFO) << LOG_DESC("success, but none of the erased peers exist");
-        response = "success, but none of the erased peers exist";
+        SERVICE_LOG(INFO) << LOG_DESC("none of the erased peers exist");
+        response = "none of the erased peers exist";
         return true;
     }
     setStaticNodes(nodes);
