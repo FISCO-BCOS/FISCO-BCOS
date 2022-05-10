@@ -1044,7 +1044,7 @@ void TransactionExecutor::prepare(
         return;
     }
 
-    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams{
+    bcos::protocol::TwoPCParams storageParams{
         params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
 
     m_backendStorage->asyncPrepare(
@@ -1092,7 +1092,7 @@ void TransactionExecutor::commit(
         return;
     }
 
-    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams{
+    bcos::protocol::TwoPCParams storageParams{
         params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
     m_backendStorage->asyncCommit(storageParams,
         [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error) {
@@ -1144,7 +1144,7 @@ void TransactionExecutor::rollback(
         return;
     }
 
-    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams;
+    bcos::protocol::TwoPCParams storageParams;
     storageParams.number = params.number;
     m_backendStorage->asyncRollback(storageParams, [callback = std::move(callback)](auto&& error) {
         if (error)

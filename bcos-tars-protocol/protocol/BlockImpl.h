@@ -52,7 +52,12 @@ public:
         m_inner(std::make_shared<bcostars::Block>()),
         x_mutex(std::make_shared<std::mutex>())
     {}
-
+    BlockImpl(bcos::protocol::TransactionFactory::Ptr _transactionFactory,
+        bcos::protocol::TransactionReceiptFactory::Ptr _receiptFactory, bcostars::Block _block)
+      : BlockImpl(_transactionFactory, _receiptFactory)
+    {
+        *m_inner = std::move(_block);
+    }
     ~BlockImpl() override{};
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;

@@ -230,27 +230,24 @@ public:
         blockHeader->setNumber(blockNumber);
 
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
-            nextPromise.set_value();
-        });
+        executor->nextBlockHeader(
+            blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
         nextPromise.get_future().get();
     }
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
-        bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+       TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
         std::promise<void> preparePromise;
-        executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-            preparePromise.set_value();
-        });
+        executor->prepare(
+            commitParams, [&](bcos::Error::Ptr&& error) { preparePromise.set_value(); });
         preparePromise.get_future().get();
 
         std::promise<void> commitPromise;
-        executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-            commitPromise.set_value();
-        });
+        executor->commit(
+            commitParams, [&](bcos::Error::Ptr&& error) { commitPromise.set_value(); });
         commitPromise.get_future().get();
     }
 

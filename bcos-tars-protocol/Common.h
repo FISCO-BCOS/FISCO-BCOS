@@ -21,10 +21,12 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include "bcos-tars-protocol/tars/TwoPCParams.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
@@ -32,6 +34,7 @@
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
 #include <tarscpp/servant/Application.h>
@@ -356,5 +359,48 @@ bool checkConnection(std::string const& _module, std::string const& _func, T prx
         _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
     }
     return false;
+}
+
+inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)
+{
+    bcostars::LogEntry logEntry;
+    logEntry.address.assign(_logEntry.address().begin(), _logEntry.address().end());
+    for (auto& topicIt : _logEntry.topics())
+    {
+        logEntry.topic.push_back(std::vector<char>(topicIt.begin(), topicIt.end()));
+    }
+    logEntry.data.assign(_logEntry.data().begin(), _logEntry.data().end());
+    return logEntry;
+}
+
+inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEntry)
+{
+    std::vector<bcos::h256> topics;
+    for (auto& topicIt : _logEntry.topic)
+    {
+        topics.emplace_back((const bcos::byte*)topicIt.data(), topicIt.size());
+    }
+    return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
+        topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
+}
+
+inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
+{
+    bcos::protocol::TwoPCParams bcosTwoPCParams;
+    bcosTwoPCParams.number = _param.blockNumber;
+    bcosTwoPCParams.primaryTableName = _param.primaryTableName;
+    bcosTwoPCParams.primaryTableKey = _param.primaryTableKey;
+    bcosTwoPCParams.startTS = _param.startTS;
+    return bcosTwoPCParams;
+}
+
+inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _param)
+{
+    bcostars::TwoPCParams tarsTwoPCParams;
+    tarsTwoPCParams.blockNumber = _param.number;
+    tarsTwoPCParams.primaryTableName = _param.primaryTableName;
+    tarsTwoPCParams.primaryTableKey = _param.primaryTableKey;
+    tarsTwoPCParams.startTS = _param.startTS;
+    return tarsTwoPCParams;
 }
 }  // namespace bcostars

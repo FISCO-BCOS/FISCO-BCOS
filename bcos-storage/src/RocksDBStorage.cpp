@@ -34,6 +34,7 @@
 #include <optional>
 
 using namespace bcos::storage;
+using namespace bcos::protocol;
 using namespace rocksdb;
 using namespace std;
 

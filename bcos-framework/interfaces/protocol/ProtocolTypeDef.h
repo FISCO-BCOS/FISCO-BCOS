@@ -19,7 +19,6 @@
  * @date: 2021-04-9
  */
 #pragma once
-#include "Protocol.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 namespace bcos
 {
@@ -102,27 +101,12 @@ struct Session
     bcos::protocol::BlockNumber endNumber;    // )
 };
 
-inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
+struct TwoPCParams
 {
-    switch (_nodeType)
-    {
-    case NodeType::None:
-        _out << "None";
-        break;
-    case NodeType::CONSENSUS_NODE:
-        _out << "CONSENSUS_NODE";
-        break;
-    case NodeType::OBSERVER_NODE:
-        _out << "OBSERVER_NODE";
-        break;
-    case NodeType::NODE_OUTSIDE_GROUP:
-        _out << "NODE_OUTSIDE_GROUP";
-        break;
-    default:
-        _out << "Unknown";
-        break;
-    }
-    return _out;
-}
+    BlockNumber number = 0;
+    std::string primaryTableName;
+    std::string primaryTableKey;
+    uint64_t startTS = 0;
+};
 }  // namespace protocol
 }  // namespace bcos

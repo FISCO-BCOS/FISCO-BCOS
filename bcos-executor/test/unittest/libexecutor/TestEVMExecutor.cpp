@@ -55,6 +55,7 @@ using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::crypto;
+using namespace bcos::protocol;
 
 namespace bcos
 {
@@ -206,7 +207,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto address = result->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+    bcos::protocol::TwoPCParams commitParams{};
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -599,7 +600,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     });
 
     // commit the state
-    bcos::executor::ParallelTransactionExecutorInterface::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
@@ -626,8 +627,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
             callResultPromise.set_value(std::move(response));
         });
 
-    bcos::protocol::ExecutionMessage::UniquePtr callResult =
-        std::move(callResultPromise.get_future().get());
+    bcos::protocol::ExecutionMessage::UniquePtr callResult = callResultPromise.get_future().get();
 
 
     BOOST_CHECK_EQUAL(callResult->type(), protocol::ExecutionMessage::FINISHED);
@@ -637,7 +637,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK(callResult->data().toBytes() == expectResult);
 
     // commit the state, and call
-    // bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    // bcos::protocol::TwoPCParams commitParams;
     // commitParams.number = 1;
     // executor->prepare(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
     // executor->commit(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
@@ -662,8 +662,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
             callResult2Promise.set_value(std::move(response));
         });
 
-    bcos::protocol::ExecutionMessage::UniquePtr callResult2 =
-        std::move(callResult2Promise.get_future().get());
+    bcos::protocol::ExecutionMessage::UniquePtr callResult2 = callResult2Promise.get_future().get();
 
 
     BOOST_CHECK_EQUAL(callResult2->type(), protocol::ExecutionMessage::FINISHED);
@@ -1150,7 +1149,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK_EQUAL(result->from(), addressString);
         BOOST_CHECK(result->to() == sender);
 
-        bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+        TwoPCParams commitParams{};
         commitParams.number = 1;
 
         std::promise<void> preparePromise;
@@ -1329,7 +1328,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK_EQUAL(result->from(), addressString);
         BOOST_CHECK(result->to() == sender);
 
-        bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+        TwoPCParams commitParams{};
         commitParams.number = 2;
 
         std::promise<void> preparePromise;

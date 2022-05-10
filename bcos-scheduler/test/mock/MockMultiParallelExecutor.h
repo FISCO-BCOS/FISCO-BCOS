@@ -58,7 +58,8 @@ public:
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
-    void prepare(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         m_taskGroup.run([this, params = params, callback = std::move(callback)]() {
             MockParallelExecutor::prepare(params, std::move(callback));
@@ -66,7 +67,8 @@ public:
     }
 
     // Commit uncommitted data
-    void commit(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         m_taskGroup.run([this, params = params, callback = std::move(callback)]() {
             MockParallelExecutor::commit(params, std::move(callback));
@@ -74,8 +76,8 @@ public:
     }
 
     // Rollback the changes
-    void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override
+    void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
     {
         m_taskGroup.run([this, params = params, callback = std::move(callback)]() {
             MockParallelExecutor::rollback(params, std::move(callback));

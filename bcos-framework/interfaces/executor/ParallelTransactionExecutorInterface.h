@@ -40,16 +40,8 @@ namespace executor
 class ParallelTransactionExecutorInterface
 {
 public:
-    struct TwoPCParams
-    {
-        bcos::protocol::BlockNumber number = 0;
-        std::string primaryTableName;
-        std::string primaryTableKey;
-        uint64_t startTS = 0;
-    };
-
     using Ptr = std::shared_ptr<ParallelTransactionExecutorInterface>;
-
+    ParallelTransactionExecutorInterface() = default;
     virtual ~ParallelTransactionExecutorInterface() = default;
 
     virtual void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
@@ -83,16 +75,16 @@ public:
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
-    virtual void prepare(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) = 0;
+    virtual void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) = 0;
 
     // Commit uncommitted data
-    virtual void commit(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) = 0;
+    virtual void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) = 0;
 
     // Rollback the changes
-    virtual void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) = 0;
+    virtual void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) = 0;
 
     /* ----- XA Transaction interface End ----- */
 

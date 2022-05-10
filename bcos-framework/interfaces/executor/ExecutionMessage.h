@@ -175,7 +175,7 @@ public:
 
     virtual ~ExecutionMessageFactory() = default;
 
-    virtual ExecutionMessage::UniquePtr createExecutionMessage() = 0;
+    virtual bcos::protocol::ExecutionMessage::UniquePtr createExecutionMessage() = 0;
 };
 }  // namespace protocol
 }  // namespace bcos

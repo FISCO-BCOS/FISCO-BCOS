@@ -125,15 +125,16 @@ public:
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
-    void prepare(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override;
+    void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override;
 
     // Commit uncommitted data
-    void commit(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override;
+    void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override;
 
     // Rollback the changes
-    void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override;
+    void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override;
 
     /* ----- XA Transaction interface End ----- */
 
