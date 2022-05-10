@@ -1151,8 +1151,8 @@ bool Service::addPeers(
     }
     if (nodes.size() == siz)
     {
-        SERVICE_LOG(INFO) << LOG_DESC("no peers need to add");
-        response = "no peers need to add";
+        SERVICE_LOG(INFO) << LOG_DESC("success, and all the inserted peers already exist");
+        response = "success, and all the inserted peers already exist";
         return true;
     }
     if (nodes.size() > m_maxNodesLimit)
@@ -1164,7 +1164,7 @@ bool Service::addPeers(
     }
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
-    SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
+    SERVICE_LOG(DEBUG) << LOG_DESC("try to update the configfile now");
     return updatePeersToIni(nodes, response);
 }
 
@@ -1188,13 +1188,13 @@ bool Service::erasePeers(
     }
     if (nodes.size() == siz)
     {
-        SERVICE_LOG(INFO) << LOG_DESC("no peers can be erased");
-        response = "no peers can be erased";
+        SERVICE_LOG(INFO) << LOG_DESC("success, but none of the erased peers exist");
+        response = "success, but none of the erased peers exist";
         return true;
     }
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("erase peers to the running node successfully!");
-    SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
+    SERVICE_LOG(DEBUG) << LOG_DESC("try to update the configfile now");
     return updatePeersToIni(nodes, response);
 }
 
@@ -1224,8 +1224,8 @@ bool Service::updatePeersToIni(
     std::ifstream configFile(confDir);
     if (!configFile.is_open())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("fail to find config file") << LOG_KV("path", confDir);
-        response = "fail to find config file";
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to open config file") << LOG_KV("path", confDir);
+        response = "fail to open config file";
         return false;
     }
     else
@@ -1279,7 +1279,7 @@ bool Service::updatePeersToIni(
         tmpConfigFile.flush();
         tmpConfigFile << fileData;
         tmpConfigFile.close();
-        SERVICE_LOG(INFO) << LOG_DESC("try to output data to config file");
+        SERVICE_LOG(DEBUG) << LOG_DESC("try to output data to config file");
     }
     // make sure the output all right
     boost::filesystem::path tmpConfigPath(tmpConfDir);
