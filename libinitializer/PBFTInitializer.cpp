@@ -160,11 +160,13 @@ void PBFTInitializer::initChainNodeInfo(
     // set protocolInfo
     auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     m_nodeInfo->setNodeProtocol(*nodeProtocolInfo);
+    m_nodeInfo->setSystemVersion(m_pbft->compatibilityVersion());
     m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", m_nodeInfo->nodeType())
                           << LOG_KV("nodeCryptoType", m_nodeInfo->nodeCryptoType())
-                          << LOG_KV("nodeName", _nodeConfig->nodeName());
+                          << LOG_KV("nodeName", _nodeConfig->nodeName())
+                          << LOG_KV("systemVersion", m_nodeInfo->systemVersion());
 }
 
 void PBFTInitializer::start()
@@ -338,6 +340,29 @@ void PBFTInitializer::registerHandlers()
         }
         // clean up the expired txs for the consensus-timeout node
         return config->timeout();
+    });
+}
+
+void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
+{
+    // version notification
+    m_pbft->registerVersionInfoNotification([_rpc, this](uint32_t _version) {
+        // Note: the nodeInfo and the groupInfo are mutable
+        auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
+        // Note: notify groupInfo to all rpc nodes in pro/max mode
+        nodeInfo->setSystemVersion(_version);
+        _rpc->asyncNotifyGroupInfo(m_groupInfo, [_version](bcos::Error::Ptr&& _error) {
+            if (!_error)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("versionInfoNotification success") << LOG_KV("version", _version);
+                return;
+            }
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("versionInfoNotification error") << LOG_KV("version", _version)
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+        });
+        onGroupInfoChanged();
     });
 }
 

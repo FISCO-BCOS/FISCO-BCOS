@@ -225,13 +225,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
-
-    // fetch and init the version
-    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
-    ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
-    // set system version
-    auto localNodeInfo = m_pbftInitializer->groupInfo()->nodeInfo(m_nodeConfig->nodeName());
-    localNodeInfo->setSystemVersion((uint32_t)g_BCOSConfig.version());
     initSysContract();
 }
 
@@ -245,7 +238,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     schedulerImpl->registerBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             BCOS_LOG(INFO) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro-mode
+            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
     // notify transactions
@@ -257,25 +250,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             // only response to the requester
             txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
         });
-    // version notification
-    auto groupInfo = m_pbftInitializer->groupInfo();
-    // Note: the nodeInfo and the groupInfo are mutable
-    auto nodeInfo = groupInfo->nodeInfo(nodeName);
-    schedulerImpl->registerVersionInfoNotification([nodeInfo, groupInfo, _rpc](uint32_t _version) {
-        // Note: notify groupInfo to all rpc nodes in pro-mode
-        nodeInfo->setSystemVersion(_version);
-        _rpc->asyncNotifyGroupInfo(groupInfo, [_version](bcos::Error::Ptr&& _error) {
-            if (!_error)
-            {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("registerVersionInfoNotification success")
-                                         << LOG_KV("version", _version);
-                return;
-            }
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("registerVersionInfoNotification error") << LOG_KV("version", _version)
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-        });
-    });
+    m_pbftInitializer->initNotificationHandlers(_rpc);
 }
 
 void Initializer::initSysContract()

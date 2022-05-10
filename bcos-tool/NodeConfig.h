@@ -178,7 +178,7 @@ public:
     ssize_t cacheSize() const { return m_cacheSize; }
 
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
-    std::string const& version() const { return m_version; }
+    std::string const& compatibilityVersionStr() const { return m_compatibilityVersionStr; }
 
     std::string const& memberID() const { return m_memberID; }
     unsigned leaseTTL() const { return m_leaseTTL; }
@@ -295,7 +295,7 @@ private:
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
     uint32_t m_compatibilityVersion;
-    std::string m_version;
+    std::string m_compatibilityVersionStr;
 
     // failover config
     std::string m_memberID;

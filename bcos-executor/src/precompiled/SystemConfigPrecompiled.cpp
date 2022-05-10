@@ -23,6 +23,7 @@
 #include "Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -60,19 +61,17 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
     }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
-    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) -> bool {
+    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) {
         if (_v > (uint32_t)(g_BCOSConfig.maxSupportedVersion()) ||
             _v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
         {
-            PRECOMPILED_LOG(WARNING)
-                << LOG_DESC("SystemConfigPrecompiled: set " +
-                            std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
-                << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
-                << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
-                << LOG_KV("settedValue", _v);
-            return false;
+            std::stringstream errorMsg;
+            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
+                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
+                     << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
+            PRECOMPILED_LOG(WARNING) << errorMsg.str() << LOG_KV("settedValue", _v);
+            BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
         }
-        return true;
     }));
     m_valueConverter.insert(
         std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](std::string _value) -> uint64_t {
@@ -176,6 +175,19 @@ void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string
             configuredValue = boost::lexical_cast<int64_t>(value);
         }
     }
+    catch (bcos::tool::InvalidVersion const& e)
+    {
+        // Note: be careful when modify error message here
+        auto errorMsg =
+            "Invalid value for " + key +
+            ". The version must be in format of major_version.middle_version.minimum_version, and "
+            "the minimum version is optional. The major version must between " +
+            std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
+            std::to_string(bcos::protocol::MAX_MAJOR_VERSION);
+        PRECOMPILED_LOG(WARNING) << LOG_DESC("SystemConfigPrecompiled: invalid version")
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
+    }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
@@ -216,7 +228,7 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
         // Note: rc3 version, the compatibility_version maybe empty
         if (_key == SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
-            return {boost::lexical_cast<std::string>(g_BCOSConfig.version()), 0};
+            return {bcos::protocol::RC3_VERSION_STR, 0};
         }
         auto errorMsg =
             "getSysConfigByKey for " + _key + "failed, error:" + boost::diagnostic_information(e);
