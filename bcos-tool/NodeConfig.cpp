@@ -116,6 +116,8 @@ void NodeConfig::loadNodeServiceConfig(
         getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), false);
     m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
         getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), false);
+    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
+        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
