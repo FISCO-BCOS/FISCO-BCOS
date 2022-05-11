@@ -46,6 +46,9 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     m_config->storage()->registerFinalizeHandler(boost::bind(
         &PBFTEngine::finalizeConsensus, this, boost::placeholders::_1, boost::placeholders::_2));
 
+    m_config->storage()->registerOnStableCheckPointCommitFailed(
+        boost::bind(&PBFTEngine::onStableCheckPointCommitFailed, this, boost::placeholders::_1));
+
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
     m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
         this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
@@ -1428,4 +1431,15 @@ void PBFTEngine::onReceivePrecommitRequest(
     PBFT_LOG(INFO) << LOG_DESC("Receive precommitRequest and send response")
                    << LOG_KV("hash", pbftRequest->hash().abridged())
                    << LOG_KV("index", pbftRequest->index());
+}
+
+void PBFTEngine::onStableCheckPointCommitFailed(bcos::protocol::BlockHeader::Ptr _blockHeader)
+{
+    RecursiveGuard l(m_mutex);
+    m_config->timer()->restart();
+    m_cacheProcessor->resetUnCommittedCacheState(_blockHeader->number());
+    m_config->setExpectedCheckPoint(_blockHeader->number());
+    m_cacheProcessor->checkAndPreCommit();
+    m_cacheProcessor->checkAndCommit();
+    m_cacheProcessor->tryToApplyCommitQueue();
 }

@@ -187,6 +187,7 @@ private:
         m_signalled.wait_for(l, boost::chrono::milliseconds(5));
     }
     void clearAllCache();
+    void onStableCheckPointCommitFailed(bcos::protocol::BlockHeader::Ptr _blockHeader);
 
 protected:
     // PBFT configuration class

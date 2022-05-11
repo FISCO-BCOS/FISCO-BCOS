@@ -504,7 +504,6 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
         [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
             m_pbft->enableAsMaterNode(_success);
             m_blockSync->enableAsMaster(_success);
-            m_txpool->clearAllTxs();
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
         });
