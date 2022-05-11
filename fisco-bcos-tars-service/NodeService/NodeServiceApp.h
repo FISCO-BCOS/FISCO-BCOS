@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "bcos-tars-protocol/tars/RpcService.h"
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
@@ -38,6 +39,8 @@ public:
 
     void initialize() override;
     void destroyApp() override;
+
+    void setNodeArchType(bcos::protocol::NodeArchitectureType _type) { m_nodeArchType = _type; }
 
 protected:
     virtual void initConfig()
@@ -60,5 +63,6 @@ private:
     std::string m_genesisConfigPath;
     std::string m_privateKeyPath;
     std::shared_ptr<bcos::initializer::Initializer> m_nodeInitializer;
+    bcos::protocol::NodeArchitectureType m_nodeArchType;
 };
 }  // namespace bcostars
