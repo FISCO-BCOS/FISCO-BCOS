@@ -66,9 +66,9 @@ execRpcCommand()
 {
     local functionName="${1}"
     if [ "${all_groups}" == true ];then
-        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[],\"id\":83}' http://${ip}:${rpc_port} | jq"
+        rpc_command="curl --insecure -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[],\"id\":83}' http://${ip}:${rpc_port} | jq"
     else
-        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[${group_id}],\"id\":83}' http://${ip}:${rpc_port} | jq"
+        rpc_command="curl --insecure -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[${group_id}],\"id\":83}' http://${ip}:${rpc_port} | jq"
     fi
     execute_cmd "${rpc_command}"
 }

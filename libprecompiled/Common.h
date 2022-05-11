@@ -50,6 +50,18 @@ const std::string SYS_AC_ENABLENUM = "enable_num";
 
 enum PrecompiledError : int
 {
+    // GasChargerManagePrecompiled -53099 ~ -53000
+    CODE_GCM_UNDEFINED_FUNCTION = -53008,
+    CODE_GCM_CHARGER_NOT_EXISTS = -53007,
+    CODE_GCM_CHARGER_ALREADY_EXISTS = -53006,
+    CODE_GCM_REVOKE_PERMISSION_DENIED = -53005,
+    CODE_GCM_GRANT_PERMISSION_DENIED = -53004,
+    CODE_GCM_NOT_ENOUGH_REMAIN_GAS = -53003,
+    CODE_GCM_CHARGED_GAS_OVERFLOW = -53002,
+    CODE_GCM_INVALID_ZERO_GAS_VALUE = -53001,
+    CODE_GCM_PERMISSION_DENIED = -53000,
+
+
     // ChainGovernancePrecompiled -52099 ~ -52000
     CODE_CURRENT_VALUE_IS_EXPECTED_VALUE = -52012,
     CODE_ACCOUNT_FROZEN = -52011,
@@ -126,16 +138,6 @@ enum PrecompiledError : int
     CODE_SUCCESS = 0
 };
 
-enum ContractStatus
-{
-    Invalid = 0,
-    Available,
-    Frozen,
-    AddressNonExistent,
-    NotContractAddress,
-    Count
-};
-
 inline bool operator==(const u256& _value, PrecompiledError _precompiledError)
 {
     return _value == u256(static_cast<int>(_precompiledError));
@@ -182,19 +184,16 @@ bytesConstRef getParamData(bytesConstRef _param);
 dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, int64_t _blockNumber,
     std::string const& _type);
 
-std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> getSysConfigByKey(
     std::shared_ptr<dev::storage::Storage> _stateStorage, std::string const& _key,
     int64_t const& _num);
 
-std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> getSysConfigByKey(
     std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
     int64_t const& _num);
 
 std::shared_ptr<dev::storage::Table> openTable(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
-
-dev::precompiled::ContractStatus getContractStatus(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
@@ -216,6 +215,7 @@ const Address PERMISSION_ADDRESS = Address(0x1005);
 const Address PARALLEL_CONFIG_ADDRESS = Address(0x1006);
 const Address CONTRACT_LIFECYCLE_ADDRESS = Address(0x1007);
 const Address CHAINGOVERNANCE_ADDRESS = Address(0x1008);
+const Address GASCHARGEMANAGE_ADDRESS = Address(0x1009);
 const Address KVTABLE_FACTORY_ADDRESS = Address(0x1010);
 const Address WORKING_SEALER_MGR_ADDRESS = Address(0x1011);
 
@@ -254,6 +254,12 @@ const char* const SYSTEM_KEY_CONSENSUS_TIMEOUT = "consensus_timeout";
 const char* const INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "notify_rotate";
 
 const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
+
+// system configuration for charger-list
+const char* const SYSTEM_KEY_CHARGER_LIST = "charger_list";
+const char* const SYSTEM_KEY_CHARGE_MANAGE_SWITCH = "enable_charge_mgr";
+const char* const SYSTEM_KEY_CHARGE_MANAGE_SWITCH_ON = "on";
+const char* const SYSTEM_KEY_CHARGE_MANAGE_SWITCH_OFF = "off";
 
 const int TX_COUNT_LIMIT_MIN = 1;
 const int TX_GAS_LIMIT_MIN = 100000;

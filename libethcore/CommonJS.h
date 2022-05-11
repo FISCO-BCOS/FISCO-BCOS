@@ -49,7 +49,7 @@ inline Secret jsToSecret(std::string const& _s)
 /// Leniently convert string to Address (h160). Accepts integers, "0x" prefixing, non-exact length.
 inline Address jsToAddress(std::string const& _s)
 {
-    return eth::toAddress(_s);
+    return toAddress(_s);
 }
 
 namespace eth

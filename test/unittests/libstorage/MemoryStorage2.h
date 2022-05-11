@@ -24,7 +24,7 @@
 #pragma once
 
 #include "libstorage/Storage.h"
-#include <tbb/mutex.h>
+#include <mutex>
 
 namespace dev
 {
@@ -41,7 +41,7 @@ public:
         Condition::Ptr condition) override
     {
         auto tableKey = tableInfo->name + key;
-        tbb::mutex::scoped_lock lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         auto entries = std::make_shared<Entries>();
         auto it = key2Entries.find(tableKey);
@@ -83,14 +83,14 @@ public:
                 continue;
             }
             auto tableKey = tableName + entry->getField(key);
-            tbb::mutex::scoped_lock lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             key2Entries[tableKey][entry->getID()] = entry;
         }
     }
 
 private:
     std::map<std::string, std::map<uint64_t, Entry::Ptr>> key2Entries;
-    tbb::mutex m_mutex;
+    std::mutex m_mutex;
 };
 
 class MemoryStorageFactory : public StorageFactory

@@ -56,8 +56,6 @@ ConditionPrecompiled::ConditionPrecompiled()
     if (g_BCOSConfig.version() >= V2_7_0)
     {
         name2Selector[CONDITION_METHOD_EQ_STR_ADDR] = getFuncSelector(CONDITION_METHOD_EQ_STR_ADDR);
-        STORAGE_LOG(INFO) << LOG_BADGE("ConditionPrecompiled") << "add "
-                          << CONDITION_METHOD_EQ_STR_ADDR << " definition";
     }
 }
 

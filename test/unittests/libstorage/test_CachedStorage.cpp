@@ -31,6 +31,7 @@
 #include <boost/random/uniform_int.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 using namespace dev;
@@ -702,7 +703,7 @@ public:
 
     size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
-        tbb::mutex::scoped_lock lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         if (m_num != 0)
         {
@@ -746,7 +747,7 @@ public:
     h256 m_hash;
     int64_t m_num = 0;
     std::vector<TableData::Ptr> m_datas;
-    tbb::mutex m_mutex;
+    std::mutex m_mutex;
 };
 
 BOOST_AUTO_TEST_CASE(commitCheck)

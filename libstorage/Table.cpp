@@ -31,8 +31,6 @@
 #include "Table.h"
 #include "libconfig/GlobalConfigure.h"
 #include <libdevcore/Common.h>
-#include <tbb/pipeline.h>
-#include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev::storage;
@@ -142,6 +140,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     }
     else
     {
+        assert(!key.empty());
         m_data->m_fields.insert(std::make_pair(key, value));
         updatedCapacity = key.size() + value.size();
     }
@@ -350,7 +349,8 @@ void Entry::copyFrom(Entry::ConstPtr entry)
             }
             else
             {
-                tbb::this_tbb_thread::yield();
+                std::this_thread::yield();
+                continue;
             }
         }
         else

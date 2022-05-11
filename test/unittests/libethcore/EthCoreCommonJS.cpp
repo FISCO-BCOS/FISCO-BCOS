@@ -64,9 +64,9 @@ BOOST_AUTO_TEST_CASE(testJsToPublic)
     BOOST_CHECK(jsToAddress(addr) == toAddress(key_pair.pub()));
     // exception test
     std::string invalid_addr = "0x1234";
-    BOOST_CHECK_THROW(jsToAddress(invalid_addr), dev::eth::InvalidAddress);
+    BOOST_CHECK_THROW(jsToAddress(invalid_addr), InvalidAddress);
     invalid_addr = "adb234ef";
-    BOOST_CHECK_THROW(jsToAddress(invalid_addr), dev::eth::InvalidAddress);
+    BOOST_CHECK_THROW(jsToAddress(invalid_addr), InvalidAddress);
 }
 
 BOOST_AUTO_TEST_CASE(testToBlockNumber)

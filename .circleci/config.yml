@@ -126,9 +126,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           no_output_timeout: 40m
@@ -139,7 +139,7 @@ jobs:
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -163,12 +163,12 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - compile:
           options: "-DBUILD_STATIC=ON"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - save_cache:
-          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache

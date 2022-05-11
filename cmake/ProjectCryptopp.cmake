@@ -24,8 +24,12 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+set(prefix "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+set(CRYPTOPP_LIBRARY ${prefix}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}cryptopp${CMAKE_STATIC_LIBRARY_SUFFIX})
+set(CRYPTOPP_INCLUDE_DIR ${prefix}/include)
+
 ExternalProject_Add(cryptopp
-    PREFIX ${CMAKE_SOURCE_DIR}/deps
+    PREFIX ${prefix}
     # This points to unreleased version 5.6.5+ but contains very small
     # warning fix:
     # https://github.com/weidai11/cryptopp/commit/903b8feaa70199eb39a313b32a71268745ddb600
@@ -138,6 +142,7 @@ ExternalProject_Add(cryptopp
         zlib.cpp
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_INSTALL_LIBDIR=lib
         # Build static lib but suitable to be included in a shared lib.
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
         -DBUILD_SHARED=OFF
@@ -151,14 +156,14 @@ ExternalProject_Add(cryptopp
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
+    ${_overwrite_install_command}
+    BUILD_BYPRODUCTS "${CRYPTOPP_LIBRARY}"
 )
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)
 add_library(Cryptopp STATIC IMPORTED)
 
-set(CRYPTOPP_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}cryptopp${CMAKE_STATIC_LIBRARY_SUFFIX})
-set(CRYPTOPP_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${CRYPTOPP_INCLUDE_DIR})  # Must exist.
+
 set_property(TARGET Cryptopp PROPERTY IMPORTED_LOCATION ${CRYPTOPP_LIBRARY})
 set_property(TARGET Cryptopp PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CRYPTOPP_INCLUDE_DIR})
 add_dependencies(Cryptopp cryptopp)

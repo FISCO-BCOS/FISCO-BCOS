@@ -35,6 +35,7 @@
 #include <libprecompiled/Common.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
 #include <string>                // for string
+#include <vector>                // for vector
 
 namespace dev
 {
@@ -105,6 +106,9 @@ public:
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
     Json::Value getNodeIDList(int _groupID) override;
+    Json::Value queryPeers() override;
+    Json::Value addPeers(const Json::Value& _hostposts) override;
+    Json::Value erasePeers(const Json::Value& _hostPorts) override;
 
     // block part
     Json::Value getBlockByHash(
@@ -172,6 +176,11 @@ public:
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
+    virtual void setDisableDynamicGroup(bool _disableDynamicGroup)
+    {
+        m_disableDynamicGroup = _disableDynamicGroup;
+    }
+
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
     std::shared_ptr<dev::p2p::P2PInterface> service();
@@ -205,12 +214,14 @@ protected:
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    bool m_disableDynamicGroup;
 
     const std::set<std::string> c_supportedSystemConfigKeys = {
         dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, dev::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,
         dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
         dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT};
+        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT,
+        dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH};
 
 private:
     bool isValidNodeId(dev::bytes const& precompileData,
@@ -246,6 +257,8 @@ private:
     bool checkSealerID(const std::string& _sealer);
     bool checkTimestamp(const std::string& _timestamp);
     bool checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response);
+    bool checkParamsForPeers(const Json::Value& _params,
+        std::vector<dev::network::NodeIPEndpoint>& _endpoints, Json::Value& _response);
 
     void parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
         int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool onChain = true);

@@ -24,8 +24,7 @@ set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path 
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-
-project(FISCO-BCOS VERSION "2.8.0")
+project(FISCO-BCOS VERSION "2.9.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -57,11 +56,11 @@ include(ProjectLibzdb)
 include(ProjectTCMalloc)
 include(ProjectLibFF)
 include(ProjectPaillier)
-include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
 include(ProjectTASSL)
+include(ProjectGroupSig)
 
 if(USE_HSM_SDF)
   include(ProjectSDF)

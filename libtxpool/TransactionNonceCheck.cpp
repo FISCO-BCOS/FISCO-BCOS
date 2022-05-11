@@ -108,7 +108,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
     {
         try
         {
-            Timer timer;
+            auto startT = utcTime();
             m_blockNumber = m_blockChain->number();
             int64_t lastnumber = m_blockNumber;
             int64_t prestartblk = m_startblk;
@@ -168,7 +168,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             }  // for
             NONCECHECKER_LOG(DEBUG)
                 << LOG_DESC("updateCache") << LOG_KV("nonceCacheSize", m_cache.size())
-                << LOG_KV("costTime", timer.elapsed() * 1000);
+                << LOG_KV("costTime", (utcTime() - startT));
         }
         catch (...)
         {

@@ -92,6 +92,8 @@ public:
     virtual void removeDisconnectHandlerByProtocolID(PROTOCOL_ID const&) {}
     virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() = 0;
+
     virtual P2PSessionInfos sessionInfos() = 0;
     virtual P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const = 0;
 
@@ -126,6 +128,15 @@ public:
     virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
     virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
     {}
+
+    virtual bool addPeers(std::vector<dev::network::NodeIPEndpoint> const&, std::string&)
+    {
+        return false;
+    }
+    virtual bool erasePeers(std::vector<dev::network::NodeIPEndpoint> const&, std::string&)
+    {
+        return false;
+    }
 };
 
 }  // namespace p2p

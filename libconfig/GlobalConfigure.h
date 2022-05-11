@@ -41,6 +41,7 @@ enum VERSION : uint32_t
     V2_6_0 = 0x02060000,
     V2_7_0 = 0x02070000,
     V2_8_0 = 0x02080000,
+    V2_9_0 = 0x02090000,
 };
 
 enum ProtocolVersion : uint32_t
@@ -83,6 +84,8 @@ public:
     const std::string& confDir() { return m_confDir; }
     void setDataDir(std::string _dataDir) { m_dataDir = _dataDir; }
     const std::string& dataDir() { return m_dataDir; }
+    void setiniDir(std::string _iniDir) { m_iniDir = _iniDir; }
+    const std::string& iniDir() { return m_iniDir; }
 
     void setEnableStat(bool _enableStat) { m_enableStat = _enableStat; }
 
@@ -90,6 +93,12 @@ public:
 
     void setUseSMCrypto(bool _useSMCrypto) { m_useSMCrypto = _useSMCrypto; }
     bool SMCrypto() const { return m_useSMCrypto; }
+
+    bool enableRSACertForChannel() const { return m_enableRSACertForChannel; }
+    void setEnableRsaCertForChannel(bool _enableRSACertForChannel)
+    {
+        m_enableRSACertForChannel = _enableRSACertForChannel;
+    }
 
     struct DiskEncryption
     {
@@ -136,8 +145,14 @@ private:
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
     std::string m_confDir;
     std::string m_dataDir;
+    std::string m_iniDir;
     bool m_enableStat;
     bool m_useSMCrypto;
+
+    // the switch for using rsa certificate to channel protocol, defalt: true
+    // if you already have an old java-sdk environment(java-sdk < 2.9.0) with certificates
+    // you can turn off this switch for channel ssl connection
+    bool m_enableRSACertForChannel{true};
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

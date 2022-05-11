@@ -203,6 +203,11 @@ public:
     {
         return nullptr;
     }
+
+    std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
+    {
+        return std::map<dev::network::NodeIPEndpoint, NodeID>();
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)

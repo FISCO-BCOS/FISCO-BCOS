@@ -24,7 +24,11 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
 #include <boost/log/support/date_time.hpp>
+#include <boost/log/utility/exception_handler.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
+#include <exception>
+#include <stdexcept>
+
 
 using namespace dev::initializer;
 
@@ -117,10 +121,25 @@ boost::shared_ptr<dev::initializer::LogInitializer::sink_t> LogInitializer::init
     bool need_flush = pt.get<bool>("log.flush", true);
     sink->locked_backend()->auto_flush(need_flush);
 
+    struct LogExpHandler
+    {
+        void operator()(std::runtime_error const& e) const
+        {
+            std::cout << "std::runtime_error: " << e.what() << std::endl;
+            throw;
+        }
+        void operator()(std::logic_error const& e) const
+        {
+            std::cout << "std::logic_error: " << e.what() << std::endl;
+            throw;
+        }
+    };
 
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= _logLevel);
 
+    logging::core::get()->set_exception_handler(
+        logging::make_exception_handler<std::runtime_error, std::logic_error>(LogExpHandler()));
 
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);

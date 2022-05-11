@@ -23,6 +23,7 @@ bin_path=
 make_tar=
 binary_log="false"
 sm_crypto_channel="false"
+rsa_crypto_channel="true"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
@@ -48,7 +49,8 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.8.0"
+default_version="2.9.0"
+rsa_key_length=2048
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -70,6 +72,7 @@ Usage:
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
+    -R <Disable channel ssl use rsa cert>   Default yes
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -85,7 +88,7 @@ Usage:
     -E <Enable free_storage_evm>        Default off. If set -E, enable free_storage_evm
     -h Help
 e.g
-    $0 -l "127.0.0.1:4"
+    bash $0 -l "127.0.0.1:4"
 EOF
 
 exit 0
@@ -126,14 +129,14 @@ exit_with_clean()
     local content=${1}
     echo -e "\033[31m[ERROR] ${content}\033[0m"
     if [ -d "${output_dir}" ];then
-        rm -rf ${output_dir}
+       rm -rf ${output_dir}
     fi
     exit 1
 }
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFRSdEDZ6q" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -143,7 +146,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0" && LOG_WARN "jsonrpc_listen_ip linstens 0.0.0.0 is unsafe.";;
-    q) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/FISCO-BCOS/FISCO-BCOS/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    q) LOG_INFO "Show the history releases of FISCO-BCOS " && curl --insecure -sS https://gitee.com/api/v5/repos/FISCO-BCOS/FISCO-BCOS/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
     v) compatibility_version="${OPTARG//[vV]/}";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
@@ -193,6 +196,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
     T) log_level="debug";;
     F) auto_flush="false";;
     N) no_agency="true";;
+    R) rsa_crypto_channel="false";;
     S) enable_statistic="true";;
     E) enable_free_storage="true";;
     D) deploy_mode="true" && make_tar="true";;
@@ -230,6 +234,9 @@ LOG_INFO "Output Dir      : ${output_dir}"
 LOG_INFO "CA Path         : $ca_path"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi CA Path   : $gmca_path"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode      : $guomi_mode"
+[ "${sm_crypto_channel}" == "true" ] && LOG_INFO "SM channel      : $guomi_mode"
+[ "${sm_crypto_channel}" == "false" ] && [ "${rsa_crypto_channel}" == "true" ] && LOG_INFO "RSA channel     : $rsa_crypto_channel"
+
 echo "=============================================================="
 LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
 echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh -f"
@@ -242,11 +249,11 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
+
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-        echo "please install openssl!"
-        #echo "download openssl from https://www.openssl.org."
-        echo "use \"openssl version\" command to check."
-        exit 1
+        echo "Openssl 1.1.0 or 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
+       #echo "download openssl from https://www.openssl.org."
+      exit 1
     }
 
     if [ "$(uname -m)" != "x86_64" ];then
@@ -260,15 +267,15 @@ if [ -n "${guomi_mode}" ]; then
         local tassl_link_perfix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.0.2"
         LOG_INFO "Downloading tassl binary from ${tassl_link_perfix}..."
         if [[ -n "${macOS}" ]];then
-            curl -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
+            curl --insecure -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
             mv tassl_mac.tar.gz tassl.tar.gz
             export OPENSSL_CONF=/etc/ssl/
         else
             if [[ "$(uname -p)" == "aarch64" ]];then
-                curl -#LO "${tassl_link_perfix}/tassl-aarch64.tar.gz"
+                curl --insecure -#LO "${tassl_link_perfix}/tassl-aarch64.tar.gz"
                 mv tassl-aarch64.tar.gz tassl.tar.gz
             elif [[ "$(uname -p)" == "x86_64" ]];then
-                curl -#LO "${tassl_link_perfix}/tassl.tar.gz"
+                curl --insecure -#LO "${tassl_link_perfix}/tassl.tar.gz"
             else
                 LOG_WARN "Unsupported platform"
                 exit 1
@@ -296,6 +303,13 @@ file_must_exists() {
     fi
 }
 
+file_must_not_exists() {
+    if [ -f "$1" ]; then
+        LOG_WARN "$1 file exists, please check!"
+        exit 1
+    fi
+}
+
 dir_must_exists() {
     if [ ! -d "$1" ]; then
         exit_with_clean "$1 DIR does not exist, please check!"
@@ -307,6 +321,58 @@ dir_must_not_exists() {
         LOG_WARN "$1 DIR exists, please clean old DIR!"
         exit 1
     fi
+}
+
+gen_rsa_chain_cert() {
+    local name="${1}"
+    local chaindir="${2}"
+
+    mkdir -p "${chaindir}"
+
+    LOG_INFO "chaindir: ${chaindir}"
+
+    file_must_not_exists "${chaindir}"/ca.key
+    file_must_not_exists "${chaindir}"/ca.crt
+    # file_must_exists "${cert_conf}"
+
+    mkdir -p "$chaindir"
+    dir_must_exists "$chaindir"
+
+    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+
+    LOG_INFO "Generate rsa ca cert successfully!"
+}
+
+gen_rsa_node_cert() {
+    local capath="${1}"
+    local ndpath="${2}"
+    local type="${3}"
+
+    file_must_exists "$capath/ca.key"
+    file_must_exists "$capath/ca.crt"
+    # check_name node "$node"
+
+    file_must_not_exists "$ndpath"/"${type}".key
+    file_must_not_exists "$ndpath"/"${type}".crt
+
+    mkdir -p "${ndpath}"
+    dir_must_exists "${ndpath}"
+
+    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -out "$ndpath"/"${type}".csr
+    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+        -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req 2>/dev/null
+
+    openssl pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
+
+    rm -f "$ndpath"/"$type".csr
+    rm -f "$ndpath"/"$type".key
+
+    mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
+    cp "$capath/ca.crt" "$ndpath"
+
+    # LOG_INFO "Generate ${ndpath} node rsa cert successful!"
 }
 
 gen_chain_cert() {
@@ -341,7 +407,7 @@ gen_agency_cert() {
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config ${cert_conf_path} -out "$agencydir/agency.csr" 2> /dev/null
-    openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
+    openssl x509 -req -days "${days}" -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
@@ -448,7 +514,7 @@ gen_agency_cert_gm() {
 
     $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
     $TASSL_CMD req -new -subj "/CN=${name}/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
-    $TASSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
+    $TASSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days "${days}" -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
     # cat "$chain/gmca.crt" >> "$agencydir/gmagency.crt"
     cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
     rm -f "$agencydir/gmagency.csr"
@@ -541,6 +607,7 @@ generate_config_ini()
     channel_listen_port=$(( offset + port_array[1] ))
     jsonrpc_listen_ip=${listen_ip}
     jsonrpc_listen_port=$(( offset + port_array[2] ))
+    disable_dynamic_group=false
 [p2p]
     listen_ip=${default_listen_ip}
     listen_port=$(( offset + port_array[0] ))
@@ -580,6 +647,7 @@ generate_config_ini()
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_crypto}
     sm_crypto_channel=${sm_crypto_channel}
+    rsa_crypto_channel=${rsa_crypto_channel}
 
 [compatibility]
     ; supported_version should nerver be changed
@@ -694,6 +762,9 @@ function generate_group_ini()
     ; number of threads responsible for transaction notification,
     ; default is 2, not recommended for more than 8
     notify_worker_num=2
+    ; transaction expiration time, in seconds
+    ; default is 10 minute(600s)
+    txs_expiration_time=600
 [sync]
     ; max memory size used for block sync, must >= 32MB
     max_block_sync_memory_size=512
@@ -1122,7 +1193,7 @@ function check_node_work_properly() {
         groups=\$(ls \${nodedir}/conf/group*genesis | grep -o "group.*.genesis" | grep -o "group.*.genesis" | cut -d \. -f 2)
         for group in \${groups}; do
                 # get blocknumber
-                heightresult=\$(curl -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getBlockNumber\",\"params\":[\${group}],\"id\":67}")
+                heightresult=\$(curl --insecure -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getBlockNumber\",\"params\":[\${group}],\"id\":67}")
                 echo \$heightresult
                 height=\$(echo \$heightresult | awk -F'"' '{if(\$2=="id" && \$4=="jsonrpc" && \$8=="result") {print \$10}}')
                 [[ -z "\$height" ]] && {
@@ -1136,7 +1207,7 @@ function check_node_work_properly() {
                 heightvalue=\$(printf "%d\n" "\$height")
                 prev_heightvalue=\$(printf "%d\n" "\$prev_height")
 
-                viewresult=\$(curl -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getPbftView\",\"params\":[\$group],\"id\":68}")
+                viewresult=\$(curl --insecure -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getPbftView\",\"params\":[\$group],\"id\":68}")
                 echo \$viewresult
                 view=\$(echo \$viewresult | awk -F'"' '{if(\$2=="id" && \$4=="jsonrpc" && \$8=="result") {print \$10}}')
                 [[ -z "\$view" ]] && {
@@ -1235,7 +1306,7 @@ while getopts "v:V:f" option;do
     case \$option in
     v) solc_suffix="\${OPTARG//[vV]/}"
         if ! echo "\${supported_solc_versions[*]}" | grep -i "\${solc_suffix}" &>/dev/null; then
-            LOG_WARN "\${solc_suffix} is not supported. Please set one of \${supported_solc_versions[*]}"
+            LOG_ERROR "\${solc_suffix} is not supported. Please set one of \${supported_solc_versions[*]}"
             exit 1;
         fi
         package_name="console-\${solc_suffix}.tar.gz"
@@ -1246,19 +1317,19 @@ while getopts "v:V:f" option;do
     esac
 done
 
-default_version=2.8.0
+default_version=2.9.0
 download_version=${default_version}
 sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}
 cos_download_link=${cdn_link_header}/console/releases/v\${download_version}/\${package_name}
 echo "Downloading console \${version} from \${download_link}"
-if [ \$(curl -IL -o /dev/null -s -w %{http_code}  \${cos_download_link}) == 200 ];then
-    curl -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
+if [ \$(curl --insecure -IL -o /dev/null -s -w %{http_code}  \${cos_download_link}) == 200 ];then
+    curl --insecure -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
         echo -e "\033[32m Download speed is too low, try \${cos_download_link} \033[0m"
-        curl -#LO \${cos_download_link}
+        curl --insecure -#LO \${cos_download_link}
     }
 else
-    curl -#LO \${download_link}
+    curl --insecure -#LO \${download_link}
 fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
@@ -1308,13 +1379,13 @@ fi
 
 getNodeVersion()
 {
-    result="\$(curl -X POST --data '{"jsonrpc":"2.0","method":"getClientVersion","params":[],"id":1}' \${ip_port})"
+    result="\$(curl --insecure -X POST --data '{"jsonrpc":"2.0","method":"getClientVersion","params":[],"id":1}' \${ip_port})"
     version="\$(echo \${result} | cut -c250- | cut -d \" -f3)"
 }
 
 block_limit()
 {
-    result=\$(curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \${ip_port})
+    result=\$(curl --insecure -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \${ip_port})
     if [ \$(echo \${result} | grep -i failed | wc -l) -gt 0 ] || [ -z \${result} ];then
         echo "getBlockNumber error!"
         exit 1
@@ -1334,7 +1405,7 @@ send_a_tx()
         txBytes="f8eca003eb675ec791c2d19858c91d0046821c27d815e2e9c15\${random_id}0a8402faf08082\${limit}948c17cf316c1063ab6c89df875e96c9f0f5b2f74480b8644ed3885e0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a464953434f2042434f53000000000000000000000000000000000000000000000101801ba09edf7c0cb63645442aff11323916d51ec5440de979950747c0189f338afdcefda02f3473184513c6a3516e066ea98b7cfb55a79481c9db98e658dd016c37f03dcf"
     fi
     #echo \$txBytes
-    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \${ip_port}
+    curl --insecure -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \${ip_port}
 }
 
 send_many_tx()
@@ -1417,7 +1488,7 @@ while getopts "b:o:v:hml" option;do
     b) download_branch="\$OPTARG";;
     v) download_version="\${OPTARG//[vV]/}";;
     m) download_mini="true";;
-    l) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    l) LOG_INFO "Show the history releases of FISCO-BCOS " && curl --insecure -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
     h) help;;
     *) help;;
     esac
@@ -1426,9 +1497,9 @@ done
 
 download_artifact_linux(){
     local branch="\$1"
-    build_num=\$(curl https://circleci.com/api/v1.1/project/github/\${project}/tree/\${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g" | sort -u | tail -n1)
+    build_num=\$(curl --insecure https://circleci.com/api/v1.1/project/github/\${project}/tree/\${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g" | sort -u | tail -n1)
 
-    local response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+    local response="\$(curl --insecure https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
     if [ -z "\${download_mini}" ];then
         link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini)"
     else
@@ -1436,7 +1507,7 @@ download_artifact_linux(){
     fi
     if [ -z "\${link}" ];then
         build_num=\$(( build_num - 1 ))
-        response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+        response="\$(curl --insecure https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
         if [ -z "\${download_mini}" ];then
             link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini| tail -n 1)"
         else
@@ -1448,7 +1519,7 @@ download_artifact_linux(){
         exit 1
     fi
     LOG_INFO "Downloading binary from \${link} "
-    curl -#LO \${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
+    curl --insecure -#LO \${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
     result=\$?
     if [[ "\${result}" != "0" ]];then LOG_ERROR "Download failed, please try again" && exit 1;fi
 
@@ -1459,15 +1530,15 @@ download_artifact_macOS(){
     exit 1
     local branch="\$1"
     # TODO: https://developer.github.com/v3/actions/artifacts/#download-an-artifact
-    local workflow_artifacts_url="\$(curl https://api.github.com/repos/\${project}/actions/runs\?branch\=\${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
-    local archive_download_url="\$(curl \${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
+    local workflow_artifacts_url="\$(curl --insecure https://api.github.com/repos/\${project}/actions/runs\?branch\=\${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
+    local archive_download_url="\$(curl --insecure \${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
     if [ -z "\${archive_download_url}" ];then
         echo "GitHub action \${workflow_artifacts_url} can't find artifact."
         exit 1
     fi
     LOG_INFO "Downloading macOS binary from \${archive_download_url} "
     # FIXME: https://github.com/actions/upload-artifact/issues/51
-    curl -#LO "\${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
+    curl --insecure -#LO "\${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
 }
 
 download_branch_artifact(){
@@ -1490,13 +1561,13 @@ download_released_artifact(){
     local download_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/\${version}/\${package_name}"
     local cdn_download_link="\${cdn_link_header}/FISCO-BCOS/releases/\${version}/\${package_name}"
     LOG_INFO "Downloading binary of \${version}, from \${download_link}"
-    if [ \$(curl -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
-        curl -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
+    if [ \$(curl --insecure -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
+        curl --insecure -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
             echo "Download speed is too low, try \${cdn_download_link}"
-            curl -#LO "\${cdn_download_link}"
+            curl --insecure -#LO "\${cdn_download_link}"
         }
     else
-        curl -#LO \${download_link}
+        curl --insecure -#LO \${download_link}
     fi
     tar -zxf "\${package_name}" && rm "\${package_name}"
 }
@@ -1504,7 +1575,7 @@ download_released_artifact(){
 main() {
     [ -f "\${output_dir}/fisco-bcos" ] && mv "\${output_dir}/fisco-bcos" "\${output_dir}/fisco-bcos.bak"
     mkdir -p "\${output_dir}" && cd "\${output_dir}"
-    latest_version=\$(curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V | tail -n 1)
+    latest_version=\$(curl --insecure -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V | tail -n 1)
     if [ -n "\${download_version}" ];then
         download_released_artifact "v\${download_version}"
     elif [ -n "\${download_branch}" ];then
@@ -1549,13 +1620,13 @@ download_bin()
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
-    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
-        curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
+    if [ $(curl --insecure -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
+        curl --insecure -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
             LOG_INFO "Download speed is too low, try ${cdn_download_link}"
-            curl -#LO "${cdn_download_link}"
+            curl --insecure -#LO "${cdn_download_link}"
         }
     else
-        curl -#LO "${Download_Link}"
+        curl --insecure -#LO "${Download_Link}"
     fi
     if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
@@ -1578,6 +1649,12 @@ check_bin()
         exit_with_clean "${bin_version} is less than ${compatibility_version}. Please correct it and try again."
     fi
     echo "Binary check passed."
+    
+    if version_gt "2.9.0" "${compatibility_version}";then
+        echo " ${compatibility_version} less than 2.9.0, does not use rsa ssl"
+        rsa_crypto_channel="false"
+        LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel" 
+    fi
 }
 
 prepare_ca(){
@@ -1607,10 +1684,12 @@ prepare_ca(){
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
+                gen_rsa_chain_cert ${agency_name} "${output_dir}/cert/${agency_name}/channel" >>"${logfile}" 2>&1
             fi
         done
     else
         gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/agency" >"${logfile}" 2>&1
+        gen_rsa_chain_cert "agency" "${output_dir}/cert/agency/channel" >>"${logfile}" 2>&1
     fi
 
     if [[ -n "${guomi_mode}" ]];then
@@ -1666,7 +1745,7 @@ fi
 
 # if [ -z "${compatibility_version}" ];then
 #     set +e
-#     compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]*\.[0-9]*\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+#     compatibility_version=$(curl --insecure -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]*\.[0-9]*\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 #     set -e
 # fi
 
@@ -1711,13 +1790,19 @@ for line in ${ip_array[*]};do
         LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
+    local agency=${agency_array[${server_count}]}
+    echo "Processing IP=${ip} Total=${num} Agency=${agency} Groups=${group_array[server_count]}"
     [ -z "$(get_value "${ip//[\.:]/_}_count")" ] && set_value "${ip//[\.:]/_}_count" 0
     sdk_path="${output_dir}/${ip}/sdk"
-    local agency_gm_path="${output_dir}/gmcert/${agency_array[${server_count}]}-gm"
+    local agency_gm_path="${output_dir}/gmcert/${agency}-gm"
     if [ ! -d "${sdk_path}" ];then
-        gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
-        mv node.nodeid sdk.publickey
+        if [ "${rsa_crypto_channel}" == "false" ];then
+            gen_cert "${output_dir}/cert/${agency}" "${sdk_path}" "sdk"
+             mv node.nodeid sdk.publickey
+        else
+            gen_rsa_node_cert "${output_dir}/cert/${agency}/channel" "${sdk_path}" "sdk"
+        fi
+        
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"
@@ -1726,7 +1811,7 @@ for line in ${ip_array[*]};do
             cat "${agency_gm_path}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
             gen_node_cert_with_extensions_gm "${agency_gm_path}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
             cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
-            $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmsdk.publickey"
+            $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$sdk_path/gmsdk.publickey"
             mv "$sdk_path/gmsdk.publickey" "$sdk_path/gm"
         fi
     fi
@@ -1770,9 +1855,17 @@ for line in ${ip_array[*]};do
             nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
             #remove original cert files
             mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
+
         else
             nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
         fi
+
+        local agency="${agency_array[${server_count}]}"
+        local agency_rsa_ca="${output_dir}/cert/${agency}/channel"
+        local node_channel_ca="${node_dir}/${conf_path}/channel_cert"
+        gen_rsa_node_cert "${agency_rsa_ca}" "${node_channel_ca}" "node"
+        # LOG_INFO " generate node channel rsa ca, i: ${i} ,node_count: ${node_count} ,agency: ${agency}, conf dir: ${conf_path}, node dir: ${node_dir}"
+
         if [ -n "${copy_cert}" ];then cp -r "${sdk_path}" "${node_dir}/" ; fi
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })

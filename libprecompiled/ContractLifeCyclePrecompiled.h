@@ -19,6 +19,7 @@
  *  @date 20190106
  */
 #pragma once
+#include "AccountInfoUtility.h"
 #include "Common.h"
 namespace dev
 {

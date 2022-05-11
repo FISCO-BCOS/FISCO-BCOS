@@ -30,7 +30,7 @@ void TestOutputHelper::initTest(size_t _maxTests)
 {
     m_currentTestName = "n/a";
     m_currentTestFileName = string();
-    m_timer = Timer();
+    m_startTime = utcTime();
     m_currentTestCaseName = boost::unit_test::framework::current_test_case().p_name;
     std::cout << "===== Test Case : " + m_currentTestCaseName << "=====" << std::endl;
     m_maxTests = _maxTests;
@@ -41,8 +41,9 @@ void TestOutputHelper::initTest(size_t _maxTests)
 void TestOutputHelper::finishTest()
 {
     execTimeName res;
-    res.first = m_timer.elapsed();
+    res.first = (utcTime() - m_startTime);
     res.second = caseName();
+    m_startTime = utcTime();
     std::cout << "#### Run " << res.second << " time elapsed: " << res.first << std::endl;
     m_execTimeResults.push_back(res);
 }

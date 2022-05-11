@@ -38,26 +38,26 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v8-${{ runner.temp }}-
+            deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v9-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v9-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
           path: ccache
-          key: ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v3-${{ runner.temp }}-
+            ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v4-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl@1.1 ccache gmp cmake
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
+        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
       - name: configure
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
       - name: compile
@@ -151,23 +151,23 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v3-notest-${{ runner.temp }}-
-            deps-v3-${{ runner.temp }}-
+            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v4-notest-${{ runner.temp }}-
+            deps-v4-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
           path: ccache
-          key: ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v2-notest-${{ runner.temp }}-
+            ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v3-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
-        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
       - name: configure
         run: /usr/bin/cmake . -DBUILD_STATIC=ON
       - name: compile

@@ -21,7 +21,9 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
+#include "libdevcore/Log.h"
 #include "libnetwork/ASIOInterface.h"
+#include <json/value.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -35,6 +37,7 @@
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <csignal>
 #include <sstream>
 
@@ -61,7 +64,9 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
         "Don't send request to this node who doesn't belong to the group"},
     {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete"},
     {RPCExceptionType::OverQPSLimit, "Over QPS limit"},
-    {RPCExceptionType::PermissionDenied, "The SDK is not allowed to access this group"}};
+    {RPCExceptionType::PermissionDenied, "The SDK is not allowed to access this group"},
+    {RPCExceptionType::DynamicGroupDisabled,
+        "Dynamic group related interfaces are forbidden to access"}};
 
 Rpc::Rpc(
     LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
@@ -1472,6 +1477,11 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 
 Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID) << LOG_KV("params", _params);
 
@@ -1533,6 +1543,11 @@ Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 
 Json::Value Rpc::startGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
     checkNodeVersionForGroupMgr("startGroup");
@@ -1600,6 +1615,11 @@ Json::Value Rpc::startGroup(int _groupID)
 
 Json::Value Rpc::stopGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
     checkNodeVersionForGroupMgr("stopGroup");
@@ -1647,6 +1667,11 @@ Json::Value Rpc::stopGroup(int _groupID)
 
 Json::Value Rpc::removeGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
     checkNodeVersionForGroupMgr("generateGroup");
@@ -1694,6 +1719,11 @@ Json::Value Rpc::removeGroup(int _groupID)
 
 Json::Value Rpc::recoverGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID);
 
@@ -1996,6 +2026,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
     // transaction
     _response["root"] = toJS(_receipt->stateRoot());
     _response["gasUsed"] = toJS(_receipt->gasUsed());
+    _response["remainGas"] = toJS(_receipt->remainGas());
     _response["contractAddress"] = toJS(_receipt->contractAddress());
     _response["logsBloom"] = toJS(_receipt->bloom());
     _response["status"] = toJS(_receipt->status());
@@ -2179,6 +2210,166 @@ void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
     {
         return;
     }
+
+#if !defined(__APPLE__)
     Json::FastWriter fastWriter;
     _response = base64Encode(compress(fastWriter.write(_response)));
+#else
+    BOOST_THROW_EXCEPTION(JsonRpcException(-40099, "zip compress not support on mac os"));
+#endif
+}
+
+Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
+{
+    try
+    {
+        Json::Value response;
+        std::string resp;
+        RPC_LOG(INFO) << LOG_BADGE("addPeers") << LOG_KV("request", _hostPorts);
+        std::vector<dev::network::NodeIPEndpoint> endpoints;
+        // deal with the param
+        if (!checkParamsForPeers(_hostPorts, endpoints, response))
+        {
+            return response;
+        }
+        if (service()->addPeers(endpoints, resp))
+        {
+            response["code"] = LedgerManagementStatusCode::SUCCESS;
+            response["message"] = "add peers :" + resp;
+            return response;
+        }
+        else
+        {
+            response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+            response["message"] = resp;
+            return response;
+        }
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::queryPeers()
+{
+    RPC_LOG(TRACE) << LOG_BADGE("queryPeers");
+    try
+    {
+        Json::Value response = Json::arrayValue;
+        auto staticNodes = service()->staticNodes();
+        for (const auto& node : staticNodes)
+        {
+            response.append(Json::Value(node.first.toString()));
+        }
+
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
+{
+    try
+    {
+        Json::Value response;
+        std::string resp;
+        RPC_LOG(INFO) << LOG_BADGE("erasePeers") << LOG_KV("request", _hostPorts);
+
+        std::vector<dev::network::NodeIPEndpoint> endpoints;
+        // deal with the param
+        if (!checkParamsForPeers(_hostPorts, endpoints, response))
+        {
+            return response;
+        }
+        if (service()->erasePeers(endpoints, resp))
+        {
+            response["code"] = LedgerManagementStatusCode::SUCCESS;
+            response["message"] = "erase peers :" + resp;
+            return response;
+        }
+        else
+        {
+            response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+            response["message"] = resp;
+            return response;
+        }
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+bool Rpc::checkParamsForPeers(const Json::Value& _params,
+    std::vector<dev::network::NodeIPEndpoint>& _endpoints, Json::Value& _response)
+{
+    if (!_params.isArray())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid params field, not array format json";
+        return false;
+    }
+
+    if (_params.empty())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "failed for empty host list, expect at least one peer";
+        return false;
+    }
+
+    int pos = 1;
+    for (auto _peer : _params)
+    {
+        if (!_peer.isString())
+        {
+            _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+            _response["message"] = "invalid peer at position " + std::to_string(pos);
+            return false;
+        }
+
+        std::vector<std::string> s;
+        auto peer = _peer.asString();
+        boost::split(s, peer, boost::is_any_of("]"), boost::token_compress_on);
+        if (s.size() == 2)
+        {  // ipv6
+            boost::asio::ip::address ip_address = boost::asio::ip::make_address(s[0].data() + 1);
+            uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
+            _endpoints.push_back(NodeIPEndpoint{ip_address, port});
+        }
+        else if (s.size() == 1)
+        {  // ipv4 and ipv4 host
+            std::vector<std::string> ipv4Endpoint;
+            boost::split(ipv4Endpoint, peer, boost::is_any_of(":"), boost::token_compress_on);
+            uint16_t port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
+            _endpoints.push_back(NodeIPEndpoint{ipv4Endpoint[0], port});
+        }
+        else
+        {
+            // err param
+            _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+            _response["message"] = "invalid peer at position " + std::to_string(pos);
+            return false;
+        }
+        pos++;
+    }
+    return true;
 }

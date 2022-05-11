@@ -69,8 +69,8 @@ BOOST_AUTO_TEST_CASE(testBadBlock)
 
 BOOST_AUTO_TEST_CASE(testToAddress)
 {
-    BOOST_CHECK_NO_THROW(dev::eth::toAddress("0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3"));
-    BOOST_CHECK_THROW(dev::eth::toAddress("0x64fa644d"), InvalidAddress);
+    BOOST_CHECK_NO_THROW(toAddress("0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3"));
+    BOOST_CHECK_THROW(toAddress("0x64fa644d"), InvalidAddress);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
