@@ -19,7 +19,6 @@
  * @date: 2022-05-05
  */
 
-
 #pragma once
 #include "Common.h"
 #include "Executive.h"
