@@ -128,8 +128,8 @@ jobs:
           file: ./coverage.info
           name: bcos-crypto coverage
           fail_ci_if_error: true
-#      - name: run integration test
-#        run: cd tools && bash .ci/ci_check.sh
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
 
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
@@ -162,7 +162,7 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
       - name: configure
-        run: mkdir build && cd build && cmake .. -DTESTS=OFF -DCOVERAGE=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j2
       - name: run integration test
