@@ -3,6 +3,7 @@
 #include "Exceptions.h"
 #include "interfaces/crypto/Concepts.h"
 #include <bcos-crypto/interfaces/crypto/hasher/Hasher.h>
+#include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <exception>
@@ -36,7 +37,8 @@ public:
     {
         auto const inputSize = std::size(input);
         if (inputSize <= 0)
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Input size too short!"});
+            BOOST_THROW_EXCEPTION(std::invalid_argument{
+                (boost::format{"Input size too short: %ld"} % inputSize).str()});
 
         m_nodes.resize(inputSize + (inputSize - 1));
 
@@ -61,10 +63,14 @@ public:
         auto expectOutputSize = (inputSize + (stepSize - 1)) / stepSize;
 
         if (inputSize <= 0) [[unlikely]]
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Input size too short!"});
+            BOOST_THROW_EXCEPTION(std::invalid_argument{
+                (boost::format{"Input size too short: %ld"} % inputSize).str()});
 
         if (outputSize < expectOutputSize) [[unlikely]]
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument{(boost::format{"Output size too short: %ld, expect: %ld"} %
+                                       outputSize % expectOutputSize)
+                                          .str()});
 
         ExceptionHolder holder;
 #pragma omp parallel if (inputSize >= MIN_PARALLEL_SIZE)
