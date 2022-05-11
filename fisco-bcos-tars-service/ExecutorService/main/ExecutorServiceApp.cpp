@@ -20,7 +20,7 @@
  */
 #include "ExecutorServiceApp.h"
 #include "Common/TarsUtils.h"
-#include "fisco-bcos-pro/ExecutorService/ExecutorServiceServer.h"
+#include "ExecutorService/ExecutorServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/ExecutorInitializer.h"
 #include "libinitializer/ParallelExecutor.h"

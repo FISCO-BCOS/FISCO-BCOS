@@ -20,7 +20,7 @@
  */
 #include "SchedulerServiceApp.h"
 #include "Common/TarsUtils.h"
-#include "fisco-bcos-pro/SchedulerService/SchedulerServiceServer.h"
+#include "SchedulerService/SchedulerServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/SchedulerInitializer.h"
 #include "libinitializer/StorageInitializer.h"
