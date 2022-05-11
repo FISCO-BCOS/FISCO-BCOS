@@ -1599,6 +1599,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();
+    callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
@@ -1629,6 +1630,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();
+    callParameters->message = input.message();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();

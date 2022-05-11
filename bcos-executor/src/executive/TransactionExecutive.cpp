@@ -1075,14 +1075,11 @@ void TransactionExecutive::creatAuthTable(
         return;
     }
     auto authTableName = std::string(_tableName).append(CONTRACT_SUFFIX);
-    // if contract external create contract, then inheritance admin
-    // FIXME: check this available in multi executor
     std::string admin;
     if (_sender != _origin)
     {
-        auto senderAuthTable = getContractTableName(_sender, false).append(CONTRACT_SUFFIX);
-        auto entry = m_storageWrapper->getRow(std::move(senderAuthTable), ADMIN_FIELD);
-        admin = std::string(entry->getField(0));
+        // if contract external create contract, then inheritance admin, always be origin
+        admin = std::string(_origin);
     }
     else
     {
@@ -1167,5 +1164,5 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     auto path = callParameters->codeAddress;
     EXECUTIVE_LOG(DEBUG) << "check contract status" << LOG_KV("codeAddress", path);
 
-    return contractAuthPrecompiled->checkContractAvailable(shared_from_this(), std::move(path));
+    return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }

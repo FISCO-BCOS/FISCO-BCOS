@@ -580,7 +580,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     }
     std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
     std::map<bytes, uint8_t> authTypeMap;
-    auto s =  _func.toString();
+    auto s = _func.toString();
     try
     {
         auto&& out = asBytes(authTypeStr);
@@ -717,12 +717,17 @@ void ContractAuthMgrPrecompiled::contractAvailable(
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("contractAvailable") << LOG_KV("address", address);
-    auto result = checkContractAvailable(_executive, address);
+    auto result = getContractStatus(_executive, address);
+    // result !=0 && result != 1
+    if (result >> 1)
+    {
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot get contract status"));
+    }
     callResult->setExecResult(codec->encode(result));
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
 }
 
-bool ContractAuthMgrPrecompiled::checkContractAvailable(
+int32_t ContractAuthMgrPrecompiled::getContractStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _path)
 {
     auto path = getAuthTableName(_path);
@@ -735,8 +740,15 @@ bool ContractAuthMgrPrecompiled::checkContractAvailable(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found, auth pass through by default.")
                                << LOG_KV("path", path);
-        return true;
+        return (int)CODE_TABLE_NOT_EXIST;
     }
     auto entry = table->getRow("status");
+    if (!entry)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC(
+                                      "auth status row not found, auth pass through by default.");
+        return (int)CODE_TABLE_AUTH_ROW_NOT_EXIST;
+    }
     return entry->get() == CONTRACT_NORMAL;
 }

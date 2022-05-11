@@ -49,7 +49,7 @@ public:
     bool checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& path, bytesRef func, const std::string& account);
 
-    bool checkContractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    int32_t getContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path);
 
 private:
