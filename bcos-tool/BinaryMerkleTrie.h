@@ -17,19 +17,21 @@ namespace bcos::tool
 template <class Range, class HashType>
 concept InputRange =
     std::ranges::random_access_range<Range> && bcos::crypto::TrivialObject<HashType> &&
-    std::is_same_v<std::remove_cvref_t<std::ranges::range_value_t<Range>>, HashType>;
+    std::is_same_v<std::remove_cvref_t<std::remove_cvref_t<std::ranges::range_value_t<Range>>>,
+        HashType>;
 
 template <class Range, class HashType>
 concept OutputRange = std::ranges::random_access_range<Range> &&
     std::ranges::output_range<Range, HashType> && bcos::crypto::TrivialObject<HashType>;
 
-template <bcos::crypto::Hasher HasherType>
+template <bcos::crypto::Hasher HasherType, class HashType, size_t stepSize = 2>
 class BinaryMerkleTrie
 {
 public:
+    static_assert(stepSize >= 2, "Step size too short!");
+
     BinaryMerkleTrie(){};
 
-    template <class HashType>
     void calculateAllHashes(InputRange<HashType> auto const& input)
     {
         auto const inputSize = std::size(input);
@@ -45,48 +47,38 @@ public:
 
         while (range.begin() != range.end())
         {
-            auto length =
-                calculateLevelHashes(range, std::ranges::subrange(range.begin(), m_nodes.end()));
-            range = {range.end(), range.end() + length};
+            auto length = calculateLevelHashes<HashType>(
+                range, std::ranges::subrange(range.begin(), m_nodes.end()));
+            range = std::ranges::subrange{range.end(), range.end() + length};
         }
     }
 
-    template <class HashType>
     size_t calculateLevelHashes(
-        InputRange<HashType> auto&& input, OutputRange<HashType> auto& output)
+        InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output)
     {
         auto inputSize = std::size(input);
         auto outputSize = std::size(output);
-        auto expectOutputSize = (inputSize + 1) / 2;
+        auto expectOutputSize = (inputSize + (stepSize - 1)) / stepSize;
 
-        if (inputSize <= 0)
+        if (inputSize <= 0) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Input size too short!"});
 
-        if (outputSize < expectOutputSize)
+        if (outputSize < expectOutputSize) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
-
-        using FuncType = decltype([](){ return 0; });
-        FuncType f;
 
         ExceptionHolder holder;
 #pragma omp parallel if (inputSize >= MIN_PARALLEL_SIZE)
         {
-            HasherType localHasher;
+            HasherType hasher;
 #pragma omp for
-            for (size_t i = 0; i < inputSize; i += 2)
+            for (decltype(inputSize) i = 0; i < inputSize; i += stepSize)
             {
                 holder.run([&]() {
-                    if (i + 1 < inputSize) [[likely]]
+                    for (auto j = i; j < i + stepSize && j < inputSize; ++j)
                     {
-                        localHasher.update(input[i]);
-                        localHasher.update(input[i + 1]);
-                        localHasher.final(output[i / 2]);
+                        hasher.update(input[j]);
                     }
-                    else
-                    {
-                        localHasher.update(input[i]);
-                        localHasher.final(output[i / 2]);
-                    }
+                    hasher.final(output[i / stepSize]);
                 });
             }
         }
@@ -96,7 +88,7 @@ public:
     }
 
 private:
-    std::vector<std::array<std::byte, 32>> m_nodes;
+    std::vector<HashType> m_nodes;
 
     constexpr static size_t MIN_PARALLEL_SIZE = 32;
 };
