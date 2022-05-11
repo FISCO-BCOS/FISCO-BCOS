@@ -39,6 +39,13 @@ enum NodeType : uint32_t
     NODE_OUTSIDE_GROUP = 0x8,
 };
 
+enum NodeArchitectureType
+{
+    AIR = 0,
+    PRO = 1,
+    MAX = 2,
+};
+
 enum MessageType
 {
     HANDESHAKE = 0x100,         // 256

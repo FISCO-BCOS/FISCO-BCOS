@@ -35,8 +35,7 @@ void bcos::initializer::printVersion()
 
 void bcos::initializer::showNodeVersionMetric()
 {
-    INITIALIZER_LOG(INFO) << METRIC
-                          << LOG_KV("binaryVersion", FISCO_BCOS_PROJECT_VERSION)
+    INITIALIZER_LOG(INFO) << METRIC << LOG_KV("binaryVersion", FISCO_BCOS_PROJECT_VERSION)
                           << LOG_KV("buildTime", FISCO_BCOS_BUILD_TIME)
                           << LOG_KV("buildType", FISCO_BCOS_BUILD_TYPE)
                           << LOG_KV("platform", FISCO_BCOS_BUILD_PLATFORM)
