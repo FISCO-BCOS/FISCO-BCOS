@@ -78,8 +78,8 @@ jobs:
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh
 
-  build_with_gcc:
-    name: build_with_gcc
+  generate_coverage:
+    name: generate_coverage
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -128,6 +128,47 @@ jobs:
           file: ./coverage.info
           name: bcos-crypto coverage
           fail_ci_if_error: true
+
+  build_with_gcc:
+    name: build_with_gcc
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            deps/src
+            ccache
+          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v8-notest-${{ runner.temp }}-
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - name: install Ubuntu dependencies
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
+      - name: configure
+        # Note: must run test inner build directory, otherwise the gateway ut maybe failed
+        run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+      - name: compile
+        run: cd build && make -j3
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh
 
