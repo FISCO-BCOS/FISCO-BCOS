@@ -31,26 +31,40 @@
 using namespace std;
 using namespace bcos;
 using namespace crypto;
-using namespace security;
 
-std::shared_ptr<bytes> EncryptedFile::decryptContents(const std::shared_ptr<bytes>& contents, const std::string& dataKey)
+namespace bcos
+{
+
+namespace security
+{
+
+EncryptedFile::EncryptedFile(bool isSm)
+{
+    if (false == isSm)
+        m_symmetricEncrypt = std::make_shared<AESCrypto>();
+    else
+        m_symmetricEncrypt = std::make_shared<SM4Crypto>();
+}
+
+std::shared_ptr<bytes> EncryptedFile::decryptContents(
+    const std::shared_ptr<bytes>& contents, const std::string& dataKey)
 {
     bytes encFileBytes;
     std::shared_ptr<bytes> decFileBytes;
     try
     {
-        std::string encContextsStr((const char *)contents->data(), contents->size());
-        
+        std::string encContextsStr((const char*)contents->data(), contents->size());
+
         encFileBytes = fromHex(encContextsStr);
         BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
-        SymmetricEncryption::Ptr encrypt = std::make_shared<AESCrypto>();
         bytesPointer decFileBytesBase64Ptr =
-            encrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
+            m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
                 encFileBytes.size(), (const unsigned char*)dataKey.data(), dataKey.size());
 
-        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << asString(*decFileBytesBase64Ptr) << endl;
+        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: "
+                        << asString(*decFileBytesBase64Ptr) << endl;
         decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
     }
     catch (exception& e)
@@ -64,34 +78,6 @@ std::shared_ptr<bytes> EncryptedFile::decryptContents(const std::shared_ptr<byte
     return decFileBytes;
 }
 
-std::shared_ptr<bytes> EncryptedFile::decryptContentsSM(const std::shared_ptr<bytes>& contents, const std::string& dataKey)
-{
-    bytes encFileBytes;
-    std::shared_ptr<bytes> decFileBytes;
-    try
-    {
-        std::string encContextsStr((const char *)contents->data(), contents->size());
-        
-        encFileBytes = fromHex(encContextsStr);
-        BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
-                        << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
+}  // namespace security
 
-        SymmetricEncryption::Ptr encrypt = std::make_shared<SM4Crypto>();
-        bytesPointer decFileBytesBase64Ptr =
-            encrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
-                encFileBytes.size(), (const unsigned char*)dataKey.data(), dataKey.size());
-
-        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << asString(*decFileBytesBase64Ptr) << endl;
-        decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
-    }
-    catch (exception& e)
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
-                        << LOG_KV("what", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(EncryptedFileError());
-    }
-    // LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
-    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
-    return decFileBytes;
-}
-
+}  // namespace bcos
