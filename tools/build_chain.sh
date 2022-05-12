@@ -72,7 +72,6 @@ Usage:
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
-    -R <Disable channel ssl use rsa cert>   Default yes
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -83,6 +82,7 @@ Usage:
     -G <channel use sm crypto ssl>      Default false, only works for guomi mode
     -X <Certificate expiration time>    Default 36500 days
     -T <Enable debug log>               Default off. If set -T, enable debug log
+    -R <Channel use ecdsa crypto ssl>   Default false. If -R is set, use the ecdsa cert for channel ssl, Otherwise the rsa cert will be used
     -S <Enable statistics>              Default off. If set -S, enable statistics
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
     -E <Enable free_storage_evm>        Default off. If set -E, enable free_storage_evm
