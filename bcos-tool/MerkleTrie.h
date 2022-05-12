@@ -26,12 +26,12 @@ concept OutputRange = std::ranges::random_access_range<Range> &&
     std::ranges::output_range<Range, HashType> && bcos::crypto::TrivialObject<HashType>;
 
 template <bcos::crypto::Hasher HasherType, class HashType, size_t stepSize = 2>
-class BinaryMerkleTrie
+class MerkleTrie
 {
 public:
     static_assert(stepSize >= 2, "Step size too short!");
 
-    BinaryMerkleTrie(){};
+    MerkleTrie(){};
 
     void calculateAllHashes(InputRange<HashType> auto const& input)
     {

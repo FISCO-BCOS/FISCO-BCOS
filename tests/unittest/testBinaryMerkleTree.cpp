@@ -15,7 +15,7 @@ BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 
 BOOST_AUTO_TEST_CASE(testCalcHash)
 {
-    bcos::tool::BinaryMerkleTrie<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher,
+    bcos::tool::MerkleTrie<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher,
         std::array<std::byte, 32>>
         trie;
 
@@ -36,7 +36,7 @@ BOOST_AUTO_TEST_CASE(testCalcHash)
 
 BOOST_AUTO_TEST_CASE(testCalc)
 {
-    bcos::tool::BinaryMerkleTrie<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher,
+    bcos::tool::MerkleTrie<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher,
         std::array<std::byte, 32>>
         trie;
 
