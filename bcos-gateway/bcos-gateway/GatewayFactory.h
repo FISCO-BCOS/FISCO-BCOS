@@ -10,6 +10,7 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
+#include <libinitializer/ProtocolInitializer.h>
 #include <boost/asio/ssl.hpp>
 
 namespace bcos
@@ -20,8 +21,11 @@ class GatewayFactory
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
-    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName)
-      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName)
+    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
+        bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer = nullptr)
+      : m_chainID(_chainID),
+        m_rpcServiceName(_rpcServiceName),
+        m_protocolInitializer(_protocolInitializer)
     {
         initCert2PubHexHandler();
         initSSLContextPubHexHandler();
@@ -46,10 +50,12 @@ public:
 
     // build ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        const GatewayConfig::CertConfig& _certConfig, const GatewayConfig::StorageSecurityConfig& i_storageSecurityEnable);
+        const GatewayConfig::CertConfig& _certConfig,
+        const GatewayConfig::StorageSecurityConfig& i_storageSecurityEnable);
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        const GatewayConfig::SMCertConfig& _smCertConfig, const GatewayConfig::StorageSecurityConfig& i_storageSecurityEnable);
+        const GatewayConfig::SMCertConfig& _smCertConfig,
+        const GatewayConfig::StorageSecurityConfig& i_storageSecurityEnable);
 
     /**
      * @brief: construct Gateway
@@ -78,6 +84,8 @@ private:
 private:
     std::string m_chainID;
     std::string m_rpcServiceName;
+
+    bcos::initializer::ProtocolInitializer::Ptr m_protocolInitializer{nullptr};
 };
 }  // namespace gateway
 }  // namespace bcos

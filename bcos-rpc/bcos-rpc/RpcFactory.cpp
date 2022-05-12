@@ -29,6 +29,8 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-security/bcos-security/EncryptedFile.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
@@ -39,8 +41,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-security/bcos-security/EncryptedFile.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -53,8 +53,11 @@ using namespace bcos::protocol;
 using namespace bcos::security;
 
 RpcFactory::RpcFactory(std::string const& _chainID, GatewayInterface::Ptr _gatewayInterface,
-    KeyFactory::Ptr _keyFactory)
-  : m_chainID(_chainID), m_gateway(_gatewayInterface), m_keyFactory(_keyFactory)
+    KeyFactory::Ptr _keyFactory, bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer)
+  : m_chainID(_chainID),
+    m_gateway(_gatewayInterface),
+    m_keyFactory(_keyFactory),
+    m_protocolInitializer(_protocolInitializer)
 {}
 
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
@@ -85,7 +88,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
 
         std::shared_ptr<bytes> keyContent;
 
-        //caCert
+        // caCert
         if (false == _nodeConfig->caCert().empty())
         {
             try
@@ -105,7 +108,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
         }
 
-        //nodeCert
+        // nodeCert
         if (false == _nodeConfig->nodeCert().empty())
         {
             try
@@ -125,23 +128,23 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
         }
 
-        //nodeKey
+        // nodeKey
         if (false == _nodeConfig->nodeKey().empty())
         {
             try
             {
                 keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
-                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable())
+                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
+                    nullptr != m_protocolInitializer)
                 {
-                    keyContent =
-                        EncryptedFile::decryptContents(keyContent, _nodeConfig->storageSecurityDataKey());
+                    keyContent = m_protocolInitializer->encryptFile()->decryptContents(
+                        keyContent, _nodeConfig->storageSecurityDataKey());
                 }
             }
             catch (std::exception& e)
             {
-                BCOS_LOG(ERROR)
-                    << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeKey failed")
-                    << LOG_KV("file", _nodeConfig->nodeKey());
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeKey failed")
+                                << LOG_KV("file", _nodeConfig->nodeKey());
                 exit(1);
             }
         }
@@ -215,9 +218,10 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             try
             {
                 keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
-                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable())
+                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
+                    nullptr != m_protocolInitializer)
                 {
-                    keyContent = EncryptedFile::decryptContentsSM(
+                    keyContent = m_protocolInitializer->encryptFile()->decryptContents(
                         keyContent, _nodeConfig->storageSecurityDataKey());
                 }
             }
@@ -257,9 +261,10 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             try
             {
                 keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
-                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable())
+                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
+                    nullptr != m_protocolInitializer)
                 {
-                    keyContent = EncryptedFile::decryptContentsSM(
+                    keyContent = m_protocolInitializer->encryptFile()->decryptContents(
                         keyContent, _nodeConfig->storageSecurityDataKey());
                 }
             }

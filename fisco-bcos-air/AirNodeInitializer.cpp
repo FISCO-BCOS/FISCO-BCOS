@@ -52,13 +52,18 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeConfig->loadConfig(_configFilePath);
     nodeConfig->loadGenesisConfig(_genesisFile);
 
+    m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
+    m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
+
     // create gateway
-    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
+    GatewayFactory gatewayFactory(
+        nodeConfig->chainId(), "localRpc", m_nodeInitializer->protocolInitializer());
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
     m_gateway = gateway;
 
     // create the node
-    initAirNode(_configFilePath, _genesisFile, m_gateway);
+    m_nodeInitializer->init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath,
+        _genesisFile, m_gateway, true);
 
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
@@ -68,7 +73,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
 
     // create rpc
-    RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory);
+    RpcFactory rpcFactory(
+        nodeConfig->chainId(), m_gateway, keyFactory, m_nodeInitializer->protocolInitializer());
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     auto topicManager =

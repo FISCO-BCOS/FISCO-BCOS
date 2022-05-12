@@ -23,12 +23,11 @@
  */
 #pragma once
 
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-tool/NodeConfig.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>
-#include <bcos-security/bcos-security/StorageEncDecHelper.h>
-
-using namespace bcos::security;
 
 namespace rocksdb
 {
@@ -41,8 +40,9 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
-    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db, const EncHookFunction& encFunc = nullptr,
-        const DecHookFunction& decFunc = nullptr);
+    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
+        const bcos::tool::NodeConfig::Ptr nodeConfig,
+        const bcos::crypto::CryptoSuite::Ptr& cryptoSuite);
 
     ~RocksDBStorage() {}
 
@@ -75,7 +75,8 @@ private:
     tbb::spin_mutex m_writeBatchMutex;
     std::unique_ptr<rocksdb::DB> m_db;
 
-    EncHookFunction m_encryptHandler{ nullptr };
-    DecHookFunction m_decryptHandler{ nullptr };
+    // Security Storage
+    bcos::tool::NodeConfig::Ptr m_nodeConfig{nullptr};
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite{nullptr};
 };
 }  // namespace bcos::storage

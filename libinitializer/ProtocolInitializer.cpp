@@ -38,6 +38,7 @@ using namespace bcostars::protocol;
 using namespace bcos::initializer;
 using namespace bcos::crypto;
 using namespace bcos::tool;
+using namespace bcos::security;
 
 ProtocolInitializer::ProtocolInitializer()
   : m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>())
@@ -48,10 +49,12 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     if (_nodeConfig->smCryptoType())
     {
         createSMCryptoSuite();
+        m_encryptFile = std::make_shared<EncryptedFile>(true);
     }
     else
     {
         createCryptoSuite();
+        m_encryptFile = std::make_shared<EncryptedFile>(false);
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
 
