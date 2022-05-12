@@ -56,11 +56,11 @@ void Initializer::initAirNode(std::string const& _configFilePath, std::string co
     bcos::gateway::GatewayInterface::Ptr _gateway)
 {
     initConfig(_configFilePath, _genesisFile, "", true);
-    init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway,
-        true);
+    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true);
 }
-void Initializer::initMicroServiceNode(std::string const& _configFilePath,
-    std::string const& _genesisFile, std::string const& _privateKeyPath)
+void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
+    std::string const& _configFilePath, std::string const& _genesisFile,
+    std::string const& _privateKeyPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
@@ -69,8 +69,7 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
         m_nodeConfig->gatewayServiceName());
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
-    init(bcos::initializer::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay,
-        false);
+    init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false);
 }
 
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
@@ -99,7 +98,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
-void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
+void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion)
 {
@@ -114,8 +113,8 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
                       c_fileSeparator + m_nodeConfig->storagePath();
     }
-    BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
-                   << LOG_KV("storageType", m_nodeConfig->storageType());
+    INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
+                          << LOG_KV("storageType", m_nodeConfig->storageType());
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
@@ -157,18 +156,25 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
     {
         cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
         cache->setMaxCapacity(m_nodeConfig->cacheSize());
-        BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: " << m_nodeConfig->cacheSize();
+        INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                              << m_nodeConfig->cacheSize();
     }
     else
     {
-        BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
+        INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
     }
-    // Note: ensure that there has at least one executor before pbft/sync execute block
-    auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
-        executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
-    auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
-    executorManager->addExecutor("default", parallelExecutor);
+
+    if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
+                              << LOG_KV("nodeArchType", _nodeArchType);
+        // Note: ensure that there has at least one executor before pbft/sync execute block
+        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
+            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
+        executorManager->addExecutor("default", parallelExecutor);
+    }
 
     // build and init the pbft related modules
     auto consensusStoragePath =
@@ -178,8 +184,8 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
                                m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
     }
-    BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
-                   << LOG_KV("consensusStoragePath", consensusStoragePath);
+    INITIALIZER_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
+                          << LOG_KV("consensusStoragePath", consensusStoragePath);
     auto consensusStorage = StorageInitializer::build(consensusStoragePath);
     // build and init the pbft related modules
     if (_nodeArchType == NodeArchitectureType::AIR)
@@ -197,15 +203,15 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         // registerNode when air node first start-up
         _gateway->registerNode(
             groupID, nodeID, blockSync->config()->nodeType(), frontService, nodeProtocolInfo);
-        BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
-                       << LOG_KV("node", nodeID->hex())
-                       << LOG_KV("type", blockSync->config()->nodeType());
+        INITIALIZER_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
+                              << LOG_KV("node", nodeID->hex())
+                              << LOG_KV("type", blockSync->config()->nodeType());
         // update the frontServiceInfo when nodeType changed
         blockSync->config()->registerOnNodeTypeChanged(
             [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](NodeType _type) {
                 _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
-                BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
-                               << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
+                INITIALIZER_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
+                                      << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
             });
     }
     else
@@ -225,13 +231,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
-
-    // fetch and init the version
-    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
-    ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
-    // set system version
-    auto localNodeInfo = m_pbftInitializer->groupInfo()->nodeInfo(m_nodeConfig->nodeName());
-    localNodeInfo->setSystemVersion((uint32_t)g_BCOSConfig.version());
     initSysContract();
 }
 
@@ -244,8 +243,8 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // notify blockNumber
     schedulerImpl->registerBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            BCOS_LOG(INFO) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro-mode
+            INITIALIZER_LOG(INFO) << "Notify blocknumber: " << number;
+            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
     // notify transactions
@@ -257,25 +256,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             // only response to the requester
             txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
         });
-    // version notification
-    auto groupInfo = m_pbftInitializer->groupInfo();
-    // Note: the nodeInfo and the groupInfo are mutable
-    auto nodeInfo = groupInfo->nodeInfo(nodeName);
-    schedulerImpl->registerVersionInfoNotification([nodeInfo, groupInfo, _rpc](uint32_t _version) {
-        // Note: notify groupInfo to all rpc nodes in pro-mode
-        nodeInfo->setSystemVersion(_version);
-        _rpc->asyncNotifyGroupInfo(groupInfo, [_version](bcos::Error::Ptr&& _error) {
-            if (!_error)
-            {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("registerVersionInfoNotification success")
-                                         << LOG_KV("version", _version);
-                return;
-            }
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("registerVersionInfoNotification error") << LOG_KV("version", _version)
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-        });
-    });
+    m_pbftInitializer->initNotificationHandlers(_rpc);
 }
 
 void Initializer::initSysContract()

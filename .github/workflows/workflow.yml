@@ -66,15 +66,15 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh
 
@@ -374,14 +374,14 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh

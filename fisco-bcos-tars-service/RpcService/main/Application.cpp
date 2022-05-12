@@ -88,9 +88,9 @@ protected:
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
         m_logInitializer->setLogPath(getLogPath());
         m_logInitializer->initLog(pt);
+        nodeConfig->loadServiceConfig(pt);
         // for stat the nodeVersion
         bcos::initializer::showNodeVersionMetric();
-        nodeConfig->loadServiceConfig(pt);
 
         m_rpcInitializer = std::make_shared<RpcInitializer>(_configDir, nodeConfig);
     }
@@ -114,7 +114,7 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "std::exception:" << e.what() << std::endl;
+        cerr << "RpcService std::exception:" << e.what() << std::endl;
     }
     return -1;
 }

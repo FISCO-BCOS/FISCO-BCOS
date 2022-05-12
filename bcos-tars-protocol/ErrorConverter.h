@@ -34,7 +34,8 @@ inline Error toTarsError(const bcos::Error& error)
     return tarsError;
 }
 
-inline Error toTarsError(const bcos::Error::Ptr& error)
+template <typename T>
+inline Error toTarsError(const T& error)
 {
     Error tarsError;
 

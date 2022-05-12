@@ -38,7 +38,7 @@ public:
         m_gatewayInitializer->gateway()->asyncSendBroadcastMessage(_type, groupID, bcosNodeID,
             bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
 
-        async_response_asyncSendBroadcastMessage(current, toTarsError(nullptr));
+        async_response_asyncSendBroadcastMessage(current, toTarsError<bcos::Error::Ptr>(nullptr));
         return bcostars::Error();
     }
 
@@ -103,7 +103,7 @@ public:
         m_gatewayInitializer->gateway()->asyncSendMessageByNodeIDs(groupID, bcosSrcNodeID, nodeIDs,
             bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
 
-        async_response_asyncSendMessageByNodeIDs(current, toTarsError(nullptr));
+        async_response_asyncSendMessageByNodeIDs(current, toTarsError<bcos::Error::Ptr>(nullptr));
         return bcostars::Error();
     }
 

@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2021 FISCO BCOS.
+ *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,16 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief main for the fisco-bcos
+ * @brief main for the BCOSMaxNodeService
  * @file main.cpp
  * @author: yujiechen
- * @date 2021-07-26
- * @brief main for the fisco-bcos
- * @file main.cpp
- * @author: ancelmo
- * @date 2021-10-14
+ * @date 2022-05-11
  */
-#include "NodeServiceApp.h"
+#include "../NodeServiceApp.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-utilities/Common.h>
 #include <chrono>
@@ -37,6 +33,7 @@ int main(int argc, char* argv[])
     {
         bcos::initializer::initCommandLine(argc, argv);
         NodeServiceApp app;
+        app.setNodeArchType(bcos::protocol::NodeArchitectureType::MAX);
         printVersion();
         std::cout << "[" << getCurrentDateTime() << "] ";
         std::cout << "The fisco-bcos is running..." << std::endl;
@@ -48,11 +45,11 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "std::exception:" << e.what() << std::endl;
+        cerr << "NodeService std::exception:" << e.what() << std::endl;
     }
     catch (...)
     {
-        cerr << "unknown exception." << std::endl;
+        cerr << "NodeService unknown exception." << std::endl;
     }
     return -1;
 }

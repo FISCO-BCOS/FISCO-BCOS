@@ -116,6 +116,8 @@ void NodeConfig::loadNodeServiceConfig(
         getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), false);
     m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
         getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), false);
+    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
+        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
@@ -439,12 +441,10 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_version = _genesisConfig.get<std::string>(
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
     // must call here to check the compatibility_version
-    m_compatibilityVersion = toVersionNumber(m_version);
-    g_BCOSConfig.setVersion((bcos::protocol::Version)m_compatibilityVersion);
-
+    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (!consensusNodeList || consensusNodeList->empty())
@@ -519,7 +519,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    if (m_compatibilityVersion > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
     {
         std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
     }
@@ -533,7 +533,7 @@ void NodeConfig::generateGenesisData()
     std::string versionData = "";
     if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
     {
-        versionData = m_version + "-";
+        versionData = m_compatibilityVersionStr + "-";
     }
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
