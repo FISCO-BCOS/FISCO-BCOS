@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
 #include <memory>
 
 namespace bcos
@@ -29,15 +30,24 @@ namespace bcos
 
 namespace security
 {
+
 class EncryptedFile
 {
 public:
-    static std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes> &contents, const std::string& dataKey);
-    
-    static std::shared_ptr<bytes> decryptContentsSM(const std::shared_ptr<bytes> &contents, const std::string& dataKey);
-};
+    using Ptr = std::shared_ptr<EncryptedFile>;
 
+public:
+    EncryptedFile(bool isSm);
+    ~EncryptedFile() = default;
+
+public:
+    std::shared_ptr<bytes> decryptContents(
+        const std::shared_ptr<bytes>& contents, const std::string& dataKey);
+
+private:
+    bcos::crypto::SymmetricEncryption::Ptr m_symmetricEncrypt{nullptr};
+};
 
 }  // namespace security
 
-}
+}  // namespace bcos
