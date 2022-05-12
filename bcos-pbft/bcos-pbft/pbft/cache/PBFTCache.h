@@ -119,6 +119,14 @@ public:
     }
     void init();
 
+    void resetState()
+    {
+        m_stableCommitted.store(false);
+        m_submitted.store(false);
+        m_precommitted.store(false);
+        m_checkpointProposal = nullptr;
+    }
+
 protected:
     bool checkPrePrepareProposalStatus();
     using CollectionCacheType =
