@@ -276,7 +276,11 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
             {
                 CHANNEL_LOG(ERROR) << LOG_DESC("connectionHandler empty");
             }
-            session->setRemotePublicKey(dev::h512(*_sdkPublicKey));
+
+            if (!_sdkPublicKey->empty())
+            {
+                session->setRemotePublicKey(dev::h512(*_sdkPublicKey));
+            }
 
             CHANNEL_LOG(DEBUG) << LOG_DESC("Channel Server SSL handshake success")
                                << LOG_KV("pubKey", *_sdkPublicKey);
