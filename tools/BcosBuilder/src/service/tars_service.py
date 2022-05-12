@@ -164,7 +164,7 @@ class TarsService:
                 utilities.log_error(
                     "load the configuration failed, error: %s" % str(reason))
                 return False
-        request_data = {"level": TarsService.get_level(server_name), "application": self.app_name,
+        request_data = {"level": TarsService.get_level(server_name), "application": self.app_name, "node_name": self.deploy_ip,
                         "server_name": server_name, "filename": config_file_name, "config": content}
         response = requests.post(
             self.add_config_url, params=self.token_param, json=request_data)

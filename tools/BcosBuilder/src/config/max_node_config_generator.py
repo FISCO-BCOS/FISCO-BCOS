@@ -10,8 +10,8 @@ class MaxNodeConfigGenerator:
         self.chain_config = chain_config
         self.config_generator = CommonConfigGenerator(chain_config)
         self.root_dir = "./generated"
-        self.genesis_tmp_config_file = 'config.genesis.tmp'
-        self.ini_tmp_config_file = "config.ini.tmp"
+        self.genesis_tmp_config_file = 'config.genesis'
+        self.ini_tmp_config_file = "config.ini"
 
     def generate_all_config(self):
         """
@@ -32,7 +32,7 @@ class MaxNodeConfigGenerator:
         utilities.print_badage("generate ini config for BcosExecutorService")
         return True
 
-    def get_config_file_path_list(max_node_service_config, max_node_config):
+    def get_config_file_path_list(self, max_node_service_config, max_node_config):
         """
         get config file path for given config files
         """
@@ -40,7 +40,7 @@ class MaxNodeConfigGenerator:
                             max_node_config.group_id, max_node_service_config.service_name)
         config_file_path_list = []
         for config in max_node_service_config.config_file_list:
-            config_file_path_list.append(os.path.join(config))
+            config_file_path_list.append(os.path.join(path, config))
         return config_file_path_list
 
     def __generate_all_executor_config(self):

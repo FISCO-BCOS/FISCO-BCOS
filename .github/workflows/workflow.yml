@@ -75,6 +75,14 @@ jobs:
         with:
           name: BcosNodeService-MacOS.zip
           path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosMaxNodeService-MacOS.zip
+          path: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosExecutorService-MacOS.zip
+          path: build/fisco-bcos-tars-service/BcosExecutorService.tgz
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh
 
@@ -332,5 +340,13 @@ jobs:
         with:
           name: BcosNodeService.zip
           path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosMaxNodeService.zip
+          path: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosExecutorService.zip
+          path: build/fisco-bcos-tars-service/BcosExecutorService.tgz
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh

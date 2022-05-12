@@ -8,8 +8,6 @@ import sys
 from common.utilities import ServiceInfo
 import toml
 import os
-from common.utilities import CommandInfo
-from common.utilities import ServiceInfo
 from config.chain_config import ChainConfig
 from controller.binary_controller import BinaryController
 from command.service_command_impl import ServiceCommandImpl
@@ -153,7 +151,8 @@ def chain_operations(args, node_type):
     command = args.op
     if op_type == ServiceInfo.rpc_service_type or op_type == ServiceInfo.gateway_service_type:
         if command in CommandInfo.service_command_impl.keys():
-            command_impl = ServiceCommandImpl(chain_config, args.type)
+            command_impl = ServiceCommandImpl(
+                chain_config, args.type, node_type)
             impl_str = CommandInfo.service_command_impl[command]
             cmd_func_attr = getattr(command_impl, impl_str)
             cmd_func_attr()
@@ -205,7 +204,7 @@ def add_vxlan_operation(args):
     utilities.print_split_info()
 
 
-def download_binary_operation(args):
+def download_binary_operation(args, node_type):
     if is_download_binary_command(args) is False:
         return
     utilities.print_split_info()
@@ -220,6 +219,7 @@ def download_binary_operation(args):
     use_cdn = True
     if args.type == "git":
         use_cdn = False
-    binary_controller = BinaryController(version, binary_path, use_cdn)
+    binary_controller = BinaryController(
+        version, binary_path, use_cdn, node_type)
     binary_controller.download_all_binary()
     utilities.print_split_info()

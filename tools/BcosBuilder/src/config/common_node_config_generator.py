@@ -73,6 +73,8 @@ class CommonConfigGenerator:
         executor_ini_config[service_section]["node_name"] = node_name
         executor_ini_config[service_section]["scheduler"] = self.config.chain_id + \
             "." + node_config.scheduler_service_name
+        executor_ini_config[service_section]["txpool"] = self.config.chain_id + \
+            "." + node_config.txpool_service_name
         # executor config
         self.__update_executor_info(executor_ini_config)
         self.__update_storage_info(executor_ini_config, node_config, "max")
@@ -87,7 +89,7 @@ class CommonConfigGenerator:
         ini_config.read(self.node_tpl_config)
         self.__update_chain_info(ini_config)
         self.__update_service_info(ini_config, node_config, node_name)
-        self.__update_failover_info(ini_config)
+        self.__update_failover_info(ini_config, node_config, node_type)
         self.__update_executor_info(ini_config)
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
@@ -114,13 +116,17 @@ class CommonConfigGenerator:
         ini_config[service_section]["gateway"] = self.config.chain_id + \
             "." + node_config.gateway_service_name
 
-    def __update_failover_info(self, ini_config):
+    def __update_failover_info(self, ini_config, node_config, node_type):
         # generate the member_id for failover
         failover_section = "failover"
-        ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
-            self.config.enable_failover)
         ini_config[failover_section]["member_id"] = str(uuid.uuid1())
-        ini_config[failover_section]["cluster_url"] = self.config.failover_cluster_url
+        if node_type == "max":
+            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
+                True)
+            ini_config[failover_section]["cluster_url"] = node_config.pd_addrs
+        else:
+            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
+                False)
 
     def __update_executor_info(self, ini_config):
         executor_section = "executor"
@@ -140,8 +146,7 @@ class CommonConfigGenerator:
         storage_section = "storage"
         if ini_config.has_option(storage_section, "data_path"):
             ini_config.remove_option(storage_section, "data_path")
-        if ini_config.has_option(storage_section, "type"):
-            ini_config.remove_option(storage_section, "type")
+        ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
 
     def generate_pem_file(self, outputdir):

@@ -6,12 +6,6 @@ tars_pkg_dir = "binary/"
 [chain]
 chain_id="chain0"
 
-# the failover config
-# enable failover or not, default disable
-enable_failover=false
-# the address of etcd, can configure multiple comma-separated
-failover_cluster_url = "127.0.0.1:2379"
-
 [[group.deploy_info]]
 node_name = "node2"
 deploy_ip = "172.25.0.5"

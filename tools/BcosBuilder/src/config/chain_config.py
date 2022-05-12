@@ -38,6 +38,8 @@ class ServiceInfoConfig:
             self.config, "thread_count", 4, False)
         self.expanded_ip = utilities.get_item_value(
             self.config, "expanded_ip", "", False)
+        self.failover_cluster_url = utilities.get_item_value(
+            self.config, "pd_addrs", "127.0.0.1:2379", False)
 
 
 class RpcServiceInfo(ServiceInfoConfig):
@@ -164,7 +166,7 @@ class MaxNodeConfig:
         max_node_deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True)
         self.node_config_file_list = [
-            "config.ini.tmp", "config.genesis.tmp", "node.pem"]
+            "config.ini", "config.genesis", "node.pem"]
         self.max_node_service = MaxNodeServiceConfig(self.chain_id, utilities.ServiceInfo.max_node_service, max_node_service_name,
                                                      utilities.ServiceInfo.max_node_service_obj, max_node_deploy_ip, self.node_config_file_list)
         self.service_list.append(self.max_node_service)
@@ -173,11 +175,12 @@ class MaxNodeConfig:
             utilities.ServiceInfo.executor_service)
         executor_service_deploy_ip = utilities.get_item_value(
             self.config, "executor_deploy_ip", None, True)
-        self.executor_config_file_list = ["config.ini.tmp"]
+        self.executor_config_file_list = ["config.ini"]
         self.executor_service = MaxNodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service, executor_service_name,
                                                      utilities.ServiceInfo.executor_service_obj, executor_service_deploy_ip, self.executor_config_file_list)
         # load scheduler service(for executor)
         self.scheduler_service_name = max_node_service_name
+        self.txpool_service_name = max_node_service_name
         self.service_list.append(self.executor_service)
 
     def __get_service_name(self, service_base_name):
@@ -246,10 +249,6 @@ class ChainConfig:
             self.config, "chain", "rpc_sm_ssl", False, False)
         self.gateway_sm_ssl = utilities.get_value(
             self.config, "chain", "gateway_sm_ssl", False, False)
-        self.enable_failover = utilities.get_value(
-            self.config, "chain", "enable_failover", False, False)
-        self.failover_cluster_url = utilities.get_value(
-            self.config, "chain", "failover_cluster_url", "127.0.0.1:2379", False)
 
     def __parse_service_config(self, section_name, chain_id, constructor):
         service_list = utilities.get_value(

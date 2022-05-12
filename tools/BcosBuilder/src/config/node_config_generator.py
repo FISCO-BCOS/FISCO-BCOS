@@ -44,7 +44,7 @@ class NodeConfigGenerator:
         return os.path.join(self.root_dir, self.config.chain_id, self.config.group_config.group_id, node_config.deploy_ip, service_name, file_name)
 
     def __generate_node_ini_config(self, node_config):
-        for node_name in node_config.node_service_config_info.keys():
+        for node_name in node_config.nodes_service_name_list.keys():
             ini_config = self.config_generator.generate_node_config(
                 node_config, node_name, "pro")
             service_list = node_config.nodes_service_name_list[node_name]
@@ -118,7 +118,7 @@ class NodeConfigGenerator:
         # load group_id and crypto_type from the config
         # reload the config
         utilities.log_info("* reload node config")
-        for node_name in node_config.node_service_config_info.keys():
+        for node_name in node_config.nodes_service_name_list.keys():
             updated_ini_config = self.__reload_node_config_for_expanded_node(
                 node_config, ini_config_content, node_name)
             # Note: obtain updated service_list after reload node_config

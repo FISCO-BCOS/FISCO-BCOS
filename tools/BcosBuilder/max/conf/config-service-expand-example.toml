@@ -10,12 +10,6 @@ gateway_sm_ssl=false
 rpc_ca_cert_path="generated/rpc/chain0/ca"
 gateway_ca_cert_path="generated/gateway/chain0/ca"
 
-# the failover config
-# enable failover or not, default disable
-enable_failover=false
-# the address of etcd, can configure multiple comma-separated
-failover_cluster_url = "127.0.0.1:2379"
-
 [[chain.rpc]]
 name="agencyABcosRpcService"
 deploy_ip=["172.25.0.5"]
@@ -24,6 +18,8 @@ listen_ip="0.0.0.0"
 listen_port=10200
 thread_count=4
 gateway_service_name = "agencyABcosGatewayService"
+# the tikv storage pd-addresses
+pd_addrs="172.25.0.3:2379"
 
 [[chain.gateway]]
 name="agencyABcosGatewayService"
@@ -33,3 +29,5 @@ listen_ip="0.0.0.0"
 listen_port=40300
 peers=["172.25.0.3:30300", "172.25.0.3:30301", "172.25.0.5:40300"]
 rpc_service_name = "agencyABcosRpcService"
+# the tikv storage pd-addresses
+pd_addrs="172.25.0.3:2379"

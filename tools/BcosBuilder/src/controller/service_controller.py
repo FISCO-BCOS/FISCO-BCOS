@@ -12,10 +12,11 @@ class ServiceController:
     common controller for rpc/gateway
     """
 
-    def __init__(self, config, service_type):
+    def __init__(self, config, service_type, node_type):
         self.config = config
         self.service_type = service_type
         self.service_dict = self.config.rpc_config
+        self.node_type = node_type
         if self.service_type == ServiceInfo.gateway_service_type:
             self.service_dict = self.config.gateway_config
 
@@ -82,7 +83,7 @@ class ServiceController:
             utilities.log_info(
                 "* generate service config for %s : %s" % (ip, service_config.name))
             config_generator = ServiceConfigGenerator(
-                self.config, self.service_type, service_config, ip)
+                self.config, self.service_type, service_config, ip, self.node_type)
             ret = config_generator.generate_all_config()
             if ret is False:
                 return ret
@@ -134,7 +135,7 @@ class ServiceController:
 
     def deploy_service_to_given_ip(self, service_config, deploy_ip):
         config_generator = ServiceConfigGenerator(
-            self.config, self.service_type, service_config, deploy_ip)
+            self.config, self.service_type, service_config, deploy_ip, self.node_type)
         tars_service = TarsService(self.config.tars_config.tars_url,
                                    self.config.tars_config.tars_token, self.config.chain_id, deploy_ip)
         # create application
@@ -157,7 +158,7 @@ class ServiceController:
 
     def expand_service_to_given_ip(self, service_config, node_name, expand_node_ip):
         config_generator = ServiceConfigGenerator(
-            self.config, self.service_type, service_config, expand_node_ip)
+            self.config, self.service_type, service_config, expand_node_ip, self.node_type)
         tars_service = TarsService(self.config.tars_config.tars_url,
                                    self.config.tars_config.tars_token, self.config.chain_id, expand_node_ip)
         # expand the service
@@ -193,7 +194,7 @@ class ServiceController:
 
     def upgrade_service_to_given_ip(self, service_config, deploy_ip):
         config_generator = ServiceConfigGenerator(
-            self.config, self.service_type, service_config, deploy_ip)
+            self.config, self.service_type, service_config, deploy_ip, self.node_type)
         tars_service = TarsService(self.config.tars_config.tars_url,
                                    self.config.tars_config.tars_token, self.config.chain_id, deploy_ip)
         return self.upgrade_service_by_config_info(tars_service, service_config, self.get_org_service_name(), config_generator)

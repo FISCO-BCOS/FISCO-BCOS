@@ -113,19 +113,33 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
                       c_fileSeparator + m_nodeConfig->storagePath();
     }
+    // build and init the pbft related modules
+    auto consensusStoragePath =
+        m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
+    if (!_airVersion)
+    {
+        consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
+                               m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
+    }
     INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
-                          << LOG_KV("storageType", m_nodeConfig->storageType());
+                          << LOG_KV("storageType", m_nodeConfig->storageType())
+                          << LOG_KV("consensusStoragePath", consensusStoragePath);
+    ;
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr consensusStorage =
+        StorageInitializer::build(consensusStoragePath);
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         storage = StorageInitializer::build(storagePath);
         schedulerStorage = storage;
+        consensusStorage = StorageInitializer::build(consensusStoragePath);
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
         schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
     }
     else
     {
@@ -175,18 +189,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
         executorManager->addExecutor("default", parallelExecutor);
     }
-
-    // build and init the pbft related modules
-    auto consensusStoragePath =
-        m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
-    if (!_airVersion)
-    {
-        consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
-                               m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
-    }
-    INITIALIZER_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
-                          << LOG_KV("consensusStoragePath", consensusStoragePath);
-    auto consensusStorage = StorageInitializer::build(consensusStoragePath);
     // build and init the pbft related modules
     if (_nodeArchType == NodeArchitectureType::AIR)
     {

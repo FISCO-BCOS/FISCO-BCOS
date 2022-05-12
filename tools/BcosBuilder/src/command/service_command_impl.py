@@ -5,10 +5,11 @@ from common import utilities
 
 
 class ServiceCommandImpl:
-    def __init__(self, config, service_type):
+    def __init__(self, config, service_type, node_type):
         self.config = config
         self.service_type = service_type
-        self.service_controller = ServiceController(config, service_type)
+        self.service_controller = ServiceController(
+            config, service_type, node_type)
 
     def gen_service_config(self):
         utilities.print_split_info()

@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 from config.max_node_config_generator import MaxNodeConfigGenerator
+from common import utilities
+from service.tars_service import TarsService
 
 
 class MaxNodeController:
@@ -19,7 +21,7 @@ class MaxNodeController:
         """
         deploy max node for all group
         """
-        for node in self.max_node_list:
+        for node in self.config.group_config.max_node_list:
             if self.__deploy_all_service(node) is False:
                 return False
         return True
@@ -29,8 +31,9 @@ class MaxNodeController:
         for max_node in self.config.group_config.max_node_list:
             utilities.log_info("upgrade service for node %s" %
                                max_node.node_name)
-            ret = self.__upgrade_all_service(max_node)
-        return
+            if self.__upgrade_all_service(max_node) is False:
+                return False
+        return True
 
     def stop_group(self):
         for max_node in self.config.group_config.max_node_list:
@@ -47,7 +50,7 @@ class MaxNodeController:
     def generate_and_deploy_group_services(self):
         if self.generate_all_config() is False:
             return False
-        if self.deploy_group_services is False:
+        if self.deploy_group_services() is False:
             return False
         return True
 
@@ -60,9 +63,15 @@ class MaxNodeController:
         return True
 
     def generate_all_expand_config(self):
+        """
+        build_chain TODO: generate_all_expand_config
+        """
         return True
 
     def expand_and_deploy_all_nodes(self):
+        """
+        build_chain TODO: expand_and_deploy_all_nodes
+        """
         return True
 
     def __start_all(self, max_node):

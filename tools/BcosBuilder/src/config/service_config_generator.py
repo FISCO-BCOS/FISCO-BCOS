@@ -10,7 +10,7 @@ import uuid
 
 
 class ServiceConfigGenerator:
-    def __init__(self, config, service_type, service_config, deploy_ip):
+    def __init__(self, config, service_type, service_config, deploy_ip, node_type):
         self.config = config
         self.ini_file = "config.ini"
         self.ini_tmp_file = "config.ini.tmp"
@@ -20,6 +20,7 @@ class ServiceConfigGenerator:
         self.service_config = service_config
         self.deploy_ip = deploy_ip
         self.__init(service_type)
+        self.node_type = node_type
 
     def __init(self, service_type):
         self.config_file_list = []
@@ -120,9 +121,13 @@ class ServiceConfigGenerator:
 
         # generate failover config
         failover_section = "failover"
-        ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
-            self.config.enable_failover)
-        ini_config[failover_section]["cluster_url"] = self.config.failover_cluster_url
+        if self.node_type == "max":
+            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
+                True)
+        else:
+            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
+                False)
+        ini_config[failover_section]["cluster_url"] = self.service_config.failover_cluster_url
 
         # generate uuid according to chain_id and gateway_service_name
         uuid_name = ini_config["service"]['gateway']
