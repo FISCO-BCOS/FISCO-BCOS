@@ -115,7 +115,7 @@ jobs:
         run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
-        run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DCOVERAGE=ON -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DCOVERAGE=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j3
       - name: make test
@@ -123,10 +123,10 @@ jobs:
       - name: generate coverage
         run: make coverage
       - name: upload code coverage to codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v1
         with:
           file: ./coverage.info
-          name: bcos-crypto coverage
+          name: bcos rc4 coverage
           fail_ci_if_error: true
 
   build_with_gcc:
