@@ -19,9 +19,9 @@ class ServiceConfigGenerator:
         self.service_type = service_type
         self.service_config = service_config
         self.deploy_ip = deploy_ip
-        self.init(service_type)
+        self.__init(service_type)
 
-    def init(self, service_type):
+    def __init(self, service_type):
         self.config_file_list = []
         self.config_path_list = []
         if service_type == ServiceInfo.rpc_service_type:

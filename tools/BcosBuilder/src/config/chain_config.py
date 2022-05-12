@@ -77,59 +77,36 @@ class NodeConfig:
             self.config, "rpc_service_name", None, False)
         self.gateway_service_name = utilities.get_item_value(
             self.config, "gateway_service_name", None, False)
-        self.microservice_node = utilities.get_item_value(
-            self.config, "microservice_node", False, False)
         self.obj_name_list = []
         self.node_name = utilities.get_item_value(
             self.config, "node_name", "node" + str(index), False)
         self.expanded_service = utilities.get_item_value(
             self.config, "expanded_service", "", False)
         self.service_list = {}
-        if self.microservice_node is False:
-            self.service_list[ServiceInfo.single_node_service] = self.deploy_ip
-            self.obj_name_list = ServiceInfo.single_node_obj_name_list
-        else:
-            service_list = utilities.get_item_value(
-                self.config, "service_list", None, False)
-            if service_list is not None:
-                self.service_list = ast.literal_eval(service_list)
-                for service in ServiceInfo.micro_node_service:
-                    if service not in self.service_list:
-                        self.service_list[service] = self.deploy_ip
-            if service_list is None:
-                for service in ServiceInfo.micro_node_service:
-                    self.service_list[service] = self.deploy_ip
+        self.service_list[ServiceInfo.single_node_service] = self.deploy_ip
+        # the obj_name_list
+        self.obj_name_list = ServiceInfo.single_node_obj_name_list
+        # node_name to node_service_name
+        self.nodes_service_name_list = {}
         self.generate_service_name_list()
-        self.generate_service_config_info()
-
-    def get_node_name(self, index):
-        return self.node_name + str(index)
-
-    def get_service_name(self, index, service):
-        return self.group_id + self.get_node_name(index) + service
-
-    def get_single_node_service_name(self, index):
-        services = {}
-        for service in self.service_list.keys():
-            services[self.get_service_name(index, service)] = service
-        return services
 
     def generate_service_name_list(self):
-        self.nodes_service_name_list = {}
         for i in range(0, self.node_count):
-            node_service_info = self.get_single_node_service_name(i)
-            self.nodes_service_name_list[self.get_node_name(
+            node_service_info = self.__get_single_node_service_name(i)
+            self.nodes_service_name_list[self.__get_node_name(
                 i)] = node_service_info
 
-    def generate_service_config_info(self):
-        self.node_service_config_info = {}
-        for i in range(0, self.node_count):
-            node_service_config_item = {}
-            node_name = self.get_node_name(i)
-            for config_key in ServiceInfo.micro_node_service_config_keys.keys():
-                node_service_config_item[config_key] = node_name + \
-                    ServiceInfo.micro_node_service_config_keys[config_key]
-            self.node_service_config_info[node_name] = node_service_config_item
+    def __get_node_name(self, index):
+        return self.node_name + str(index)
+
+    def __get_service_name(self, index, service):
+        return self.group_id + self.__get_node_name(index) + service
+
+    def __get_single_node_service_name(self, index):
+        services = {}
+        for service in self.service_list.keys():
+            services[self.__get_service_name(index, service)] = service
+        return services
 
 
 class GenesisConfig:
@@ -146,6 +123,65 @@ class GenesisConfig:
             self.config, section, "gas_limit", "3000000000", False)
         self.compatibility_version = utilities.get_value(
             self.config, section, "compatibility_version", "3.0.0-rc4", False)
+
+
+class MaxNodeServiceConfig:
+    def __init__(self, app_name, base_service_name, service_name, service_obj_list, deploy_ip_list, config_file_list):
+        self.app_name = app_name
+        self.service_name = service_name
+        self.service_obj_list = service_obj_list
+        self.deploy_ip_list = deploy_ip_list
+        self.base_service_name = base_service_name
+        self.config_file_list = config_file_list
+
+
+class MaxNodeConfig:
+    def __init__(self, chain_id, group_id, config):
+        self.group_id = group_id
+        self.chain_id = chain_id
+        self.config = config
+        # the node name
+        self.node_name = utilities.get_item_value(
+            self.config, "node_name", "BcosMaxNode0", False)
+        # load the rpc service name
+        self.rpc_service_name = utilities.get_item_value(
+            self.config, "rpc_service_name", None, True)
+        utilities.check_service_name(
+            "rpc_service_name", self.rpc_service_name)
+        # load the gateway service name
+        self.gateway_service_name = utilities.get_item_value(
+            self.config, "gateway_service_name", None, True)
+        utilities.check_service_name(
+            "gateway_service_name", self.gateway_service_name)
+        # load the pd_addrs
+        self.pd_addrs = utilities.get_item_value(
+            self.config, "pd_addrs", None, True)
+
+        self.service_list = []
+        # the max_node service config
+        max_node_service_name = self.__get_service_name(
+            utilities.ServiceInfo.max_node_service)
+        max_node_deploy_ip = utilities.get_item_value(
+            self.config, "deploy_ip", None, True)
+        self.node_config_file_list = [
+            "config.ini.tmp", "config.genesis.tmp", "node.pem"]
+        self.max_node_service = MaxNodeServiceConfig(self.chain_id, utilities.ServiceInfo.max_node_service, max_node_service_name,
+                                                     utilities.ServiceInfo.max_node_service_obj, max_node_deploy_ip, self.node_config_file_list)
+        self.service_list.append(self.max_node_service)
+        # the executor service config
+        executor_service_name = self.__get_service_name(
+            utilities.ServiceInfo.executor_service)
+        executor_service_deploy_ip = utilities.get_item_value(
+            self.config, "executor_deploy_ip", None, True)
+        self.executor_config_file_list = ["config.ini.tmp"]
+        self.executor_service = MaxNodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service, executor_service_name,
+                                                     utilities.ServiceInfo.executor_service_obj, executor_service_deploy_ip, self.executor_config_file_list)
+        # load scheduler service(for executor)
+        self.scheduler_service_name = max_node_service_name
+        self.service_list.append(self.executor_service)
+
+    def __get_service_name(self, service_base_name):
+        return (self.group_id + self.node_name + service_base_name)
 
 
 class GroupConfig:
@@ -166,10 +202,12 @@ class GroupConfig:
         self.init_auth_address = utilities.get_value(
             self.config, self.section, "init_auth_address", "", self.auth_check)
         self.genesis_config = GenesisConfig(self.config)
-        self.parse_node_config()
-
-    def parse_node_config(self):
         self.node_list = []
+        self.__parse_node_config()
+        self.max_node_list = []
+        self.__parse_max_node_config()
+
+    def __parse_node_config(self):
         node_config_list = utilities.get_value(
             self.config, self.section, "deploy_info", [], False)
         i = 0
@@ -177,6 +215,13 @@ class GroupConfig:
             self.node_list.append(NodeConfig(
                 item, self.group_id, self.chain_id, i))
             i = i + 1
+
+    def __parse_max_node_config(self):
+        max_node_list = utilities.get_item_value(
+            self.config, "node", [], False)
+        for item in max_node_list:
+            self.max_node_list.append(MaxNodeConfig(
+                self.chain_id, self.group_id, item))
 
 
 class ChainConfig:
@@ -191,9 +236,9 @@ class ChainConfig:
         self.gateway_ca_cert_path = utilities.get_value(
             self.config, "chain", "gateway_ca_cert_path", "", False)
         self.tars_config = TarsConfig(config)
-        self.rpc_config = self.parse_service_config(
+        self.rpc_config = self.__parse_service_config(
             "rpc", self.chain_id, "RpcServiceInfo")
-        self.gateway_config = self.parse_service_config(
+        self.gateway_config = self.__parse_service_config(
             "gateway", self.chain_id, "GatewayServiceInfo")
         self.group_config = GroupConfig(
             config, self.chain_id)
@@ -206,7 +251,7 @@ class ChainConfig:
         self.failover_cluster_url = utilities.get_value(
             self.config, "chain", "failover_cluster_url", "127.0.0.1:2379", False)
 
-    def parse_service_config(self, section_name, chain_id, constructor):
+    def __parse_service_config(self, section_name, chain_id, constructor):
         service_list = utilities.get_value(
             self.config, "chain", section_name, [], False)
         result = {}
