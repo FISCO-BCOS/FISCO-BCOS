@@ -62,8 +62,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_gateway = gateway;
 
     // create the node
-    m_nodeInitializer->init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath,
-        _genesisFile, m_gateway, true);
+    m_nodeInitializer->init(
+        bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, m_gateway, true);
 
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();

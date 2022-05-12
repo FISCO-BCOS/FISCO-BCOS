@@ -28,7 +28,6 @@
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <bcos-storage/src/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
-#include <bcos-security/bcos-security/StorageEncDecHelper.h>
 
 namespace bcos::initializer
 {

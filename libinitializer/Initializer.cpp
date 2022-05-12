@@ -164,23 +164,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // if the storage security is enable
         if (true == m_nodeConfig->storageSecurityEnable())
         {
-            const std::string& dataKeyString = m_nodeConfig->storageSecurityDataKey();
-
-            bytes dataKey(dataKeyString.size(), 0);
-            memcpy(dataKey.data(), dataKeyString.data(), dataKeyString.size());
-
-            if (false == m_nodeConfig->p2pSmSsl())
-            {
-                storage = StorageInitializer::build(storagePath,
-                    bcos::security::StorageEncDecHelper::getEncryptHandler(dataKey),
-                    bcos::security::StorageEncDecHelper::getDecryptHandler(dataKey));
-            }
-            else
-            {
-                storage = StorageInitializer::build(storagePath,
-                    bcos::security::StorageEncDecHelper::getEncryptHandlerSM(dataKey),
-                    bcos::security::StorageEncDecHelper::getDecryptHandlerSM(dataKey));
-            }
+            storage = StorageInitializer::build(
+                storagePath, m_nodeConfig, m_protocolInitializer->cryptoSuite());
+            schedulerStorage = storage;
+        }
+        else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+        {
+            storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
         }
         else
             storage = StorageInitializer::build(storagePath);
