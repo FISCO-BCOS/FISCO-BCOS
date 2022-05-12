@@ -387,10 +387,10 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         KeyCenter keyClient;
         keyClient.setIpPort(m_storageSecurityKeyManagerIp, m_storageSecurityKeyManagerPort);
         m_storageSecurityDataKey = asString(keyClient.getDataKey(cipherDataKey, m_smCryptoType));
-        
+
         NodeConfig_LOG(INFO) << LOG_BADGE("initKeyManager")
-                              << LOG_KV("url.IP", m_storageSecurityKeyManagerIp)
-                              << LOG_KV("url.port", std::to_string(m_storageSecurityKeyManagerPort));
+                             << LOG_KV("url.IP", m_storageSecurityKeyManagerIp)
+                             << LOG_KV("url.port", std::to_string(m_storageSecurityKeyManagerPort));
     }
 }
 

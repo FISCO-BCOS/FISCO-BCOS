@@ -34,6 +34,7 @@
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-tool/NodeConfig.h>
+#include <libinitializer/ProtocolInitializer.h>
 
 namespace bcos
 {
@@ -53,7 +54,8 @@ class RpcFactory : public std::enable_shared_from_this<RpcFactory>
 public:
     using Ptr = std::shared_ptr<RpcFactory>;
     RpcFactory(std::string const& _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        bcos::crypto::KeyFactory::Ptr _keyFactory);
+        bcos::crypto::KeyFactory::Ptr _keyFactory,
+        bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer = nullptr);
     virtual ~RpcFactory() {}
 
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
@@ -98,6 +100,7 @@ private:
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
+    bcos::initializer::ProtocolInitializer::Ptr m_protocolInitializer;
 };
 }  // namespace rpc
 }  // namespace bcos

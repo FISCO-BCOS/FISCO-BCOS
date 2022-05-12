@@ -3,6 +3,7 @@
  *  @date 2021-05-17
  */
 
+#include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -14,11 +15,10 @@
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-security/bcos-security/EncryptedFile.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
-#include <bcos-security/bcos-security/EncryptedFile.h>
-#include <bcos-boostssl/context/Common.h>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -120,7 +120,8 @@ void GatewayFactory::initSSLContextPubHexHandler()
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::CertConfig& _certConfig, const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
+    const GatewayConfig::CertConfig& _certConfig,
+    const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
 {
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
@@ -138,13 +139,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         {
             keyContent = readContents(boost::filesystem::path(_certConfig.nodeKey));
 
-            if (nullptr != keyContent && true == _storageSecurityConfig.enable)
-                keyContent = EncryptedFile::decryptContents(keyContent, _storageSecurityConfig.dataKey);
+            if (nullptr != keyContent && true == _storageSecurityConfig.enable &&
+                nullptr != m_protocolInitializer)
+                keyContent = m_protocolInitializer->encryptFile()->decryptContents(
+                    keyContent, _storageSecurityConfig.dataKey);
         }
         catch (std::exception& e)
         {
-            GATEWAY_FACTORY_LOG(ERROR) << LOG_BADGE("SecureInitializer")
-                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", _certConfig.nodeKey);
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                << LOG_KV("file", _certConfig.nodeKey);
             ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
                          << LOG_KV("file", _certConfig.nodeKey) << std::endl;
             exit(1);
@@ -199,7 +203,8 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::SMCertConfig& _smCertConfig, const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
+    const GatewayConfig::SMCertConfig& _smCertConfig,
+    const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
 {
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
@@ -212,13 +217,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         try
         {
             keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
+
             if (nullptr != keyContent && true == _storageSecurityConfig.enable)
-                keyContent = EncryptedFile::decryptContentsSM(keyContent, _storageSecurityConfig.dataKey);
+                keyContent = m_protocolInitializer->encryptFile()->decryptContents(
+                    keyContent, _storageSecurityConfig.dataKey);
         }
         catch (std::exception& e)
         {
-            GATEWAY_FACTORY_LOG(ERROR) << LOG_BADGE("SecureInitializer")
-                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", _smCertConfig.nodeKey);
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                << LOG_KV("file", _smCertConfig.nodeKey);
             ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
                          << LOG_KV("file", _smCertConfig.nodeKey) << std::endl;
             exit(1);
@@ -233,13 +241,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         try
         {
             enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
-            if (nullptr != enNodeKeyContent && true == _storageSecurityConfig.enable)
-                enNodeKeyContent = EncryptedFile::decryptContentsSM(enNodeKeyContent, _storageSecurityConfig.dataKey);
+            if (nullptr != enNodeKeyContent && true == _storageSecurityConfig.enable &&
+                nullptr != m_protocolInitializer)
+                enNodeKeyContent = m_protocolInitializer->encryptFile()->decryptContents(
+                    enNodeKeyContent, _storageSecurityConfig.dataKey);
         }
         catch (std::exception& e)
         {
-            GATEWAY_FACTORY_LOG(ERROR) << LOG_BADGE("SecureInitializer")
-                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", _smCertConfig.enNodeKey);
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                << LOG_KV("file", _smCertConfig.enNodeKey);
             ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
                          << LOG_KV("file", _smCertConfig.enNodeKey) << std::endl;
             exit(1);
@@ -249,10 +260,10 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     SSL_CTX_use_enc_certificate_file(
         sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM);
 
-    std::string enNodeKeyStr((const char *)enNodeKeyContent->data(), enNodeKeyContent->size());
+    std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
 
-    if (SSL_CTX_use_enc_PrivateKey(
-            sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
+    if (SSL_CTX_use_enc_PrivateKey(sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <=
+        0)
     {
         GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey_file error");
         BOOST_THROW_EXCEPTION(
@@ -328,9 +339,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
 
         std::shared_ptr<ba::ssl::context> sslContext =
-            (_config->smSSL() ? buildSSLContext(_config->smCertConfig(), _config->storageSecurityConfig()) :
-                                buildSSLContext(_config->certConfig(), _config->storageSecurityConfig()));
-        
+            (_config->smSSL() ?
+                    buildSSLContext(_config->smCertConfig(), _config->storageSecurityConfig()) :
+                    buildSSLContext(_config->certConfig(), _config->storageSecurityConfig()));
+
         // init ASIOInterface
         auto asioInterface = std::make_shared<ASIOInterface>();
         asioInterface->setIOService(std::make_shared<ba::io_service>());
