@@ -363,7 +363,7 @@ void LedgerStorage::commitStableCheckPoint(BlockHeader::Ptr _blockHeader, Block:
                                         << LOG_KV("errorInfo", _error->errorMessage())
                                         << LOG_KV("proposalIndex", _blockHeader->number())
                                         << LOG_KV("timecost", utcTime() - startT);
-                ledgerStorage->m_onStableCheckPointCommitFailed(_blockHeader);
+                ledgerStorage->m_onStableCheckPointCommitFailed(_blockHeader->number());
                 return;
             }
             auto commitPerTx =

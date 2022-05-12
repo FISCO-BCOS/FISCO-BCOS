@@ -65,7 +65,7 @@ listen_port=20201
 thread_count=4
 gateway_service_name = "agencyBBcosGatewayService"
 # the tikv storage pd-addresses
-pd_addrs="172.25.0.3:2379"
+pd_addrs="172.25.0.5:2379"
 
 [[chain.gateway]]
 name="agencyABcosGatewayService"
@@ -85,4 +85,4 @@ listen_port=30301
 peers=["172.25.0.3:30300", "172.25.0.3:30301"]
 rpc_service_name = "agencyBBcosRpcService"
 # the tikv storage pd-addresses
-pd_addrs="172.25.0.3:2379"
+pd_addrs="172.25.0.5:2379"

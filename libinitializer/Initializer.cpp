@@ -127,8 +127,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     ;
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
-    bcos::storage::TransactionalStorageInterface::Ptr consensusStorage =
-        StorageInitializer::build(consensusStoragePath);
+    bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         storage = StorageInitializer::build(storagePath);
