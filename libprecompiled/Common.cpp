@@ -290,7 +290,7 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysConfigB
     auto values = _stateStorage->select(_num, tableInfo, _key, condition);
     if (!values || values->size() != 1)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("[#getSystemConfigByKey]Select error")
                                << LOG_KV("key", _key);
         // FIXME: throw exception here, or fatal error
         return result;
@@ -331,7 +331,7 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysConfigB
     auto values = _sysConfigTable->select(_key, _sysConfigTable->newCondition());
     if (!values || values->size() != 1)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("[#getSystemConfigByKey]Select error")
                                << LOG_KV("key", _key);
         // FIXME: throw exception here, or fatal error
         return result;
