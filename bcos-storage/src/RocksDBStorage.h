@@ -25,12 +25,9 @@
 
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-security/bcos-security/StorageEncDecHelper.h>
 #include <bcos-tool/NodeConfig.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>
-
-using namespace bcos::security;
 
 namespace rocksdb
 {
