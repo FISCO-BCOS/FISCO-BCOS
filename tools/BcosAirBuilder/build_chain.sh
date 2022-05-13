@@ -30,7 +30,7 @@ command="deploy"
 ca_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc3"
+default_version="v3.0.0-rc4"
 compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
@@ -887,7 +887,7 @@ generate_genesis_config() {
     ${node_list}
 
 [version]
-    compatibility_version=3.0.0-rc3
+    compatibility_version=3.0.0-rc4
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
