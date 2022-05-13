@@ -13,10 +13,9 @@ struct TestBinaryMerkleTrieFixture
 
 BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 
-BOOST_AUTO_TEST_CASE(testCalc)
+BOOST_AUTO_TEST_CASE(import)
 {
     using HashType = std::array<std::byte, 32>;
-    bcos::tool::Merkle<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher, HashType> trie;
 
     auto count = 100 * 10000;
     std::vector<HashType> hashes(count);
@@ -32,6 +31,7 @@ BOOST_AUTO_TEST_CASE(testCalc)
         }
     }
 
+    bcos::tool::Merkle<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher, HashType> trie;
     trie.import(hashes);
 }
 
