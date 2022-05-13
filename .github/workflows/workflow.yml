@@ -58,7 +58,7 @@ jobs:
         run: cd build && make -j3
       - name: make test
         run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
-      - name: generate coverage
+      - name: generate cov
         run: cd build && make coverage
       - name: upload code coverage to codecov
         uses: codecov/codecov-action@v1
