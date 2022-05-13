@@ -52,7 +52,8 @@ compatibility_version=""
 default_version="2.9.0"
 rsa_key_length=2048
 macOS=""
-x86_64_arch="true"
+x86_64_arch="false"
+arm64_arch="false"
 download_timeout=240
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 use_ipv6=
@@ -256,8 +257,12 @@ check_env() {
       exit 1
     }
 
-    if [ "$(uname -m)" != "x86_64" ];then
-        x86_64_arch="false"
+    if [ "$(uname -m)" == "x86_64" ];then
+        x86_64_arch="true"
+    elif [ "$(uname -m)" == "arm64" ];then
+        arm64_arch="true"
+    elif [ "$(uname -m)" == "aarch64" ];then
+        arm64_arch="true"
     fi
 }
 
@@ -1610,11 +1615,19 @@ parse_ip_config()
 
 download_bin()
 {
-    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ];then exit_with_clean "We only offer x86_64/arm64 precompiled fisco-bcos binary, your OS architecture is not x86_64/arm64. Please compile from source."; fi
     bin_path=${output_dir}/${bcos_bin_name}
-    package_name="fisco-bcos.tar.gz"
+    
     if [ -n "${macOS}" ];then
         package_name="fisco-bcos-macOS.tar.gz"
+        if [ "${arm64_arch}" == "true" ];then
+            package_name="fisco-bcos-macOS-aarch64.tar.gz"
+        fi
+    else 
+        package_name="fisco-bcos.tar.gz"
+        if [ "${arm64_arch}" == "true" ];then
+            package_name="fisco-bcos-aarch64.tar.gz"
+        fi
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
