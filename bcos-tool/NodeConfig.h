@@ -189,9 +189,6 @@ public:
     bool storageSecurityEnable() const { return m_storageSecurityEnable; }
     const std::string& storageSecurityDataKey() const { return m_storageSecurityDataKey; }
 
-    bool storageSecurityEnable() const { return m_storageSecurityEnable; }
-    const std::string& storageSecurityDataKey() const { return m_storageSecurityDataKey; }
-
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
