@@ -27,6 +27,15 @@
 
 namespace bcos::precompiled
 {
+/// func => (address, access)
+using MethodAuthMap = std::map<bytes, std::map<std::string, bool>>;
+
+enum AuthType : int
+{
+    WHITE_LIST_MODE = 1,
+    BLACK_LIST_MODE = 2
+};
+
 class ContractAuthMgrPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
@@ -40,7 +49,7 @@ public:
     bool checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& path, bytesRef func, const std::string& account);
 
-    bool checkContractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    int32_t getContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path);
 
 private:
@@ -60,6 +69,10 @@ private:
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
 
+    void getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const PrecompiledGas::Ptr& gasPricer);
+
     void setMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         bool _isClose, const PrecompiledGas::Ptr& gasPricer);
@@ -72,15 +85,18 @@ private:
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
 
-    s256 getMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    int32_t getMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path, bytesConstRef _func);
+
+    MethodAuthMap getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& path, int32_t authType) const;
 
     std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path);
 
     inline std::string getAuthTableName(const std::string& _name)
     {
-        return "/apps/" + _name + executor::CONTRACT_SUFFIX;
+        return executor::USER_APPS_PREFIX + _name + executor::CONTRACT_SUFFIX;
     }
 };
 }  // namespace bcos::precompiled

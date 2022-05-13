@@ -26,13 +26,6 @@
 
 namespace bcos::precompiled
 {
-using MethodAuthMap = std::map<bytes, std::map<std::string, bool>>;
-
-enum AuthType : int
-{
-    WHITE_LIST_MODE = 1,
-    BLACK_LIST_MODE = 2
-};
 
 class AuthManagerPrecompiled : public bcos::precompiled::Precompiled
 {
@@ -61,6 +54,10 @@ private:
         const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
 
     void checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t _gasLeft);
+
+    void getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t _gasLeft);
 
