@@ -28,9 +28,17 @@ name = "agencyA"
         group_id = "group0"
 
         [[agency.group.node]]
-        node_name = "node1"
-        deploy_ip = "172.25.0.5"
+        # expand the existed-max-node
+        node_name = "node0"
+        # the tikv storage pd-addresses
+        pd_addrs="172.25.0.3:2379"
+        deploy_ip = ["172.25.0.5"]
+        executor_deploy_ip=["172.25.0.3"]
         
         [[agency.group.node]]
-        node_name = "node2"
-        deploy_ip = "172.25.0.5"
+        # expand a new max node
+        node_name = "node1"
+        # the tikv storage pd-addresses
+        pd_addrs="172.25.0.5:2379"
+        deploy_ip = ["172.25.0.5"]
+        executor_deploy_ip=["172.25.0.5"]

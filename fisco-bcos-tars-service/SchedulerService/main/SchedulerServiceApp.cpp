@@ -110,7 +110,7 @@ void SchedulerServiceApp::initConfig()
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadConfig(m_iniConfigPath);
     m_nodeConfig->loadServiceConfig(pt);
-    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt);
+    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
     m_protocolInitializer->init(m_nodeConfig);

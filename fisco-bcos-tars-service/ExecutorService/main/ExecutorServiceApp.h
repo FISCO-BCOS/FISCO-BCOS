@@ -25,9 +25,10 @@
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/Timer.h>
 #include <tarscpp/servant/Application.h>
 
-#define EXECUTOR_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_DESC("ExecutorServiceApp")
+#define EXECUTOR_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("ExecutorServiceApp")
 
 namespace bcostars
 {
@@ -41,6 +42,7 @@ public:
 
 protected:
     virtual void createAndInitExecutor();
+    virtual void registerExecutor();
 
 private:
     std::string m_iniConfigPath;
@@ -52,5 +54,8 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
+    std::string m_executorName;
+    std::shared_ptr<bcos::Timer> m_timer;
+    bool m_registerExecutorSuccess = false;
 };
 }  // namespace bcostars

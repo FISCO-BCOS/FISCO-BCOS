@@ -1,16 +1,12 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 from controller.node_controller import NodeController
-from controller.max_node_controller import MaxNodeController
 from common import utilities
 
 
 class NodeCommandImpl:
     def __init__(self, config, node_type):
-        if node_type == "max":
-            self.node_controller = MaxNodeController(config)
-        else:
-            self.node_controller = NodeController(config)
+        self.node_controller = NodeController(config, node_type)
 
     def gen_node_config(self):
         function = "generate_all_config"

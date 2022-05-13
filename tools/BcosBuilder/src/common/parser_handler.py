@@ -142,7 +142,6 @@ def chain_operations(args, node_type):
         utilities.log_error("The config file '%s' not found!" % args.config)
         sys.exit(-1)
     toml_config = toml.load(args.config)
-    chain_config = ChainConfig(toml_config)
     op_type = args.type
     if op_type not in ServiceInfo.supported_service_type:
         utilities.log_error("the service type must be " +
@@ -151,6 +150,7 @@ def chain_operations(args, node_type):
     command = args.op
     if op_type == ServiceInfo.rpc_service_type or op_type == ServiceInfo.gateway_service_type:
         if command in CommandInfo.service_command_impl.keys():
+            chain_config = ChainConfig(toml_config, node_type, False)
             command_impl = ServiceCommandImpl(
                 chain_config, args.type, node_type)
             impl_str = CommandInfo.service_command_impl[command]
@@ -159,6 +159,7 @@ def chain_operations(args, node_type):
             return
     if op_type == ServiceInfo.node_service_type:
         if command in CommandInfo.node_command_to_impl.keys():
+            chain_config = ChainConfig(toml_config, node_type, True)
             command_impl = NodeCommandImpl(chain_config, node_type)
             impl_str = CommandInfo.node_command_to_impl[command]
             cmd_func_attr = getattr(command_impl, impl_str)

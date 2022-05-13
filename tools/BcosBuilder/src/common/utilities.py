@@ -20,9 +20,9 @@ class ServiceInfo:
                         "sm_ssl.crt", "sm_enssl.key", "sm_enssl.crt"]
 
     rpc_service = "BcosRpcService"
-    rpc_service_obj = "RpcServiceObj"
+    rpc_service_obj = ["RpcServiceObj"]
     gateway_service = "BcosGatewayService"
-    gateway_service_obj = "GatewayServiceObj"
+    gateway_service_obj = ["GatewayServiceObj"]
 
     single_node_service = "BcosNodeService"
     single_node_obj_name_list = [
@@ -97,11 +97,11 @@ def log_debug(error_msg):
     logging.debug("%s" % error_msg)
 
 
-def get_item_value(config, key, default_value, must_exist):
+def get_item_value(config, key, default_value, must_exist, desc):
     if key in config:
         return config[key]
     if must_exist:
-        raise Exception("the value for deploy_info.%s must be set" % key)
+        raise Exception("the value for %s.%s must be set" % (desc, key))
     return default_value
 
 
@@ -109,7 +109,7 @@ def get_value(config, section, key, default_value, must_exist):
     if section in config and key in config[section]:
         return config[section][key]
     if must_exist:
-        raise Exception("the value for deploy_info.%s must be set" % key)
+        raise Exception("the value for %s must be set" % key)
     return default_value
 
 

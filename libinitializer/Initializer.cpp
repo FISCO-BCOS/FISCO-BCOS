@@ -39,6 +39,7 @@
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
+#include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
@@ -90,7 +91,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_protocolInitializer->loadKeyPair(privateKeyPath);
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
-    m_nodeConfig->loadNodeServiceConfig(m_protocolInitializer->keyPair()->publicKey()->hex(), pt);
+    m_nodeConfig->loadNodeServiceConfig(
+        m_protocolInitializer->keyPair()->publicKey()->hex(), pt, false);
     if (!_airVersion)
     {
         // load the service config
@@ -108,23 +110,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build the storage
     auto storagePath = m_nodeConfig->storagePath();
-    if (!_airVersion)
-    {
-        storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
-                      c_fileSeparator + m_nodeConfig->storagePath();
-    }
     // build and init the pbft related modules
     auto consensusStoragePath =
         m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
     if (!_airVersion)
     {
+        storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+                      c_fileSeparator + m_nodeConfig->storagePath();
         consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
-                               m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
+                               m_nodeConfig->groupId() + c_fileSeparator + c_consensusStorageDBName;
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
                           << LOG_KV("storageType", m_nodeConfig->storageType())
                           << LOG_KV("consensusStoragePath", consensusStoragePath);
-    ;
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
@@ -150,7 +148,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         LedgerInitializer::build(m_protocolInitializer->blockFactory(), storage, m_nodeConfig);
     m_ledger = ledger;
 
-    auto executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
+    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+    {
+        executionMessageFactory =
+            std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
+    }
+    else
+    {
+        executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
+    }
     auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
 
     auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();

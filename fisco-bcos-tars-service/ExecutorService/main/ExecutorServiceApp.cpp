@@ -39,7 +39,10 @@ void ExecutorServiceApp::initialize()
 {
     try
     {
+        m_timer = std::make_shared<bcos::Timer>(3000, "registerExecutor");
         createAndInitExecutor();
+        m_timer->registerTimeoutHandler(boost::bind(&ExecutorServiceApp::registerExecutor, this));
+        m_timer->start();
     }
     catch (std::exception const& e)
     {
@@ -69,7 +72,7 @@ void ExecutorServiceApp::createAndInitExecutor()
     m_nodeConfig =
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadConfig(m_iniConfigPath);
-    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt);
+    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
     m_protocolInitializer->init(m_nodeConfig);
@@ -119,31 +122,41 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
 
-    EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("addServant for executor");
     ExecutorServiceParam param;
     param.executor = m_executor;
     param.cryptoSuite = m_protocolInitializer->cryptoSuite();
     addServantWithParams<ExecutorServiceServer, ExecutorServiceParam>(
         getProxyDesc(EXECUTOR_SERVANT_NAME), param);
-    // TODO: register to the scheduler
-
     auto ret = getEndPointDescByAdapter(this, EXECUTOR_SERVANT_NAME);
     if (!ret.first)
     {
         throw std::runtime_error("load endpoint information failed");
     }
-    auto executorName = ret.second;
-    m_scheduler->registerExecutor(executorName, nullptr, [executorName](bcos::Error::Ptr&& _error) {
-        // TODO: exit when error
+    m_executorName = ret.second;
+    registerExecutor();
+    EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor success");
+}
+
+void ExecutorServiceApp::registerExecutor()
+{
+    if (m_registerExecutorSuccess)
+    {
+        m_timer->stop();
+        return;
+    }
+    m_timer->restart();
+    EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("registerExecutor")
+                               << LOG_KV("executorName", m_executorName);
+    m_scheduler->registerExecutor(m_executorName, nullptr, [this](bcos::Error::Ptr&& _error) {
         if (_error)
         {
             EXECUTOR_SERVICE_LOG(ERROR)
-                << LOG_DESC("registerExecutor error") << LOG_KV("name", executorName)
+                << LOG_DESC("registerExecutor error") << LOG_KV("name", m_executorName)
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
             return;
         }
+        m_registerExecutorSuccess = true;
         EXECUTOR_SERVICE_LOG(INFO)
-            << LOG_DESC("registerExecutor success") << LOG_KV("name", executorName);
+            << LOG_DESC("registerExecutor success") << LOG_KV("name", m_executorName);
     });
-    EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("addServant for executor success");
 }
