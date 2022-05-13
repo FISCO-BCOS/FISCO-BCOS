@@ -1388,7 +1388,7 @@ void ChannelRPCServer::removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId
 
 bool ChannelRPCServer::checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey)
 {
-    if (-1 == _groupId || !_sdkPublicKey)
+    if (-1 == _groupId || !((bool)_sdkPublicKey))
     {
         return true;
     }
