@@ -13,7 +13,7 @@ commands:
           command: |
             apt-get update
             ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-            apt-get install -y cmake g++ git curl build-essential autoconf texinfo cmake flex bison libzstd-dev zlib1g-dev libpython3-dev python-dev << parameters.packages >>
+            apt-get install -y cmake g++ git curl libgmp-dev build-essential autoconf texinfo cmake flex bison libzstd-dev zlib1g-dev libpython3-dev python-dev << parameters.packages >>
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
             curl https://sh.rustup.rs -sSf | bash -s -- -y
             source $HOME/.cargo/env
@@ -100,7 +100,7 @@ jobs:
           name: Setup dependencies
           command: |
             yum install -y epel-release centos-release-scl
-            yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel && source /opt/rh/devtoolset-7/enable
+            yum install -y git make gcc gcc-c++ libgmp-dev glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel && source /opt/rh/devtoolset-7/enable
             yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm          
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
             curl https://sh.rustup.rs -sSf | bash -s -- -y
