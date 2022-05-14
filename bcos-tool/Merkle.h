@@ -4,12 +4,12 @@
 #include "interfaces/crypto/Concepts.h"
 #include <bcos-crypto/interfaces/crypto/hasher/Hasher.h>
 #include <bits/ranges_algo.h>
-#include <pstl/glue_execution_defs.h>
 #include <boost/format.hpp>
+#include <boost/serialization/serialization.hpp>
+#include <boost/serialization/split_member.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <exception>
-#include <execution>
 #include <iterator>
 #include <ranges>
 #include <stdexcept>
@@ -44,25 +44,101 @@ public:
     Merkle& operator=(Merkle&&) = default;
     ~Merkle() = default;
 
-    static bool verify(Proof<HashType> auto&& proof, HashType&& root) { return false; }
+    struct Proof
+    {
+        std::vector<HashType> hashes;
+        std::vector<size_t> levels;
 
-    void proof(HashType hash) const
+        BOOST_SERIALIZATION_SPLIT_MEMBER()
+
+        template <typename Archive>
+        void load(Archive& ar, [[maybe_unused]] const unsigned int version)
+        {
+            size_t inWidth = 0;
+            ar& inWidth;
+
+            checkWidth(inWidth);
+
+            ar& hashes;
+            ar& levels;
+        }
+
+        template <typename Archive>
+        void save(Archive& ar, [[maybe_unused]] const unsigned int version) const
+        {
+            ar& width;
+            ar& hashes;
+            ar& levels;
+        }
+    };
+
+    static bool verifyProof(const Proof& proof, HashType hash, const HashType& root)
+    {
+        if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
+
+        auto range = std::ranges::subrange{proof.hashes.begin(), proof.hashes.begin()};
+        HasherType hasher;
+        for (auto length : proof.levels)
+        {
+            range = {std::end(range), std::end(range) + length};
+            if (std::end(range) >= proof.hashes.end() || std::size(range) > width) [[unlikely]]
+                BOOST_THROW_EXCEPTION(std::invalid_argument{"Proof level length out of range!"});
+
+            if (std::ranges::find(range, hash) == std::end(range)) [[unlikely]]
+                return false;
+
+            for (auto& rangeHash : range)
+            {
+                hasher.update(rangeHash);
+            }
+            hash = hasher.final();
+        }
+
+        if (hash != root) [[unlikely]]
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    Proof generateProof(const HashType& hash) const
     {
         if (empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
-        for (auto depth : std::ranges::iota_view{0, m_levels.size()})
+        // Query the first level hashes(ordered)
+        auto range = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+        auto it = std::ranges::lower_bound(range, hash);
+        if (it == range.end() || *it != hash) [[unlikely]]
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
+
+        auto index = it - std::begin(range);
+        auto start = range.begin() + ((index / width) * width);
+        auto end = std::min(start + width, range.end());
+
+        Proof proof;
+        proof.hashes.reserve(m_levels.size() * width);
+        proof.levels.reserve(m_levels.size());
+
+        proof.hashes.insert(proof.hashes.end(), start, end);
+        proof.levels.push_back(end - start);
+
+        // Query next level hashes
+        for (auto depth : std::ranges::iota_view{decltype(m_levels.size())(1), m_levels.size()})
         {
-            auto length = m_levels[depth];
-            auto range = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + 1};
+            index = index / width;
+            range = std::ranges::subrange{range.end(), range.end() + m_levels[depth]};
+            auto start = range.begin() + index;
+            auto end = std::min(start + width, range.end());
+
+            assert(range.end() <= m_nodes.end());
+            proof.hashes.insert(proof.hashes.end(), start, end);
+            proof.levels.push_back(end - start);
         }
 
-        // Ensure the hash exists
-        auto it = std::ranges::lower_bound(range, hash);
-        if (it == range.end() || *it != hash)
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"No found hash in merkle!"});
-        }
+        return proof;
     }
 
     HashType root() const
@@ -70,33 +146,30 @@ public:
         if (empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
-        assert(!m_nodes.empty());
         return *m_nodes.rbegin();
     }
 
-    void import(InputRange<HashType> auto&& input, bool parallel = false)
+    void import(InputRange<HashType> auto&& input)
     {
-        auto inputSize = std::size(input);
-        if (inputSize <= 0)
-            BOOST_THROW_EXCEPTION(std::invalid_argument{
-                (boost::format{"Input size too short: %ld"} % inputSize).str()});
+        if (std::empty(input)) [[unlikely]]
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
 
-        m_count = inputSize;
+        auto inputSize = std::size(input);
         m_nodes.resize(getNodeSize(inputSize));
 
         std::copy_n(std::begin(input), inputSize, m_nodes.begin());
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
-        auto range = std::ranges::subrange{m_nodes.begin(), m_nodes.begin()};
-
-        while (inputSize > 0)
+        auto inputRange = std::ranges::subrange{m_nodes.begin(), m_nodes.begin()};
+        while (inputSize > 1)  // Ignore only root
         {
-            range = {range.end(), range.end() + inputSize};
-            assert(range.end() <= m_nodes.end());
+            inputRange = {inputRange.end(), inputRange.end() + inputSize};
 
+            assert(inputRange.end() <= m_nodes.end());
             m_levels.push_back(inputSize);
+
             inputSize = calculateLevelHashes(
-                range, std::ranges::subrange{range.begin(), m_nodes.end()}, parallel);
+                inputRange, std::ranges::subrange{inputRange.end(), m_nodes.end()});
         }
     }
 
@@ -104,25 +177,29 @@ public:
     {
         m_nodes.clear();
         m_levels.clear();
-        m_count = 0;
     }
 
-    auto empty() const { return !m_count; }
+    auto empty() const { return m_nodes.empty() || m_levels.empty(); }
+
+    BOOST_SERIALIZATION_SPLIT_MEMBER()
 
     template <typename Archive>
-    void serialize(Archive& ar, [[maybe_unused]] const unsigned int version)
+    void load(Archive& ar, [[maybe_unused]] const unsigned int version)
     {
+        decltype(width) inWidth;
+        ar& inWidth;
+        checkDepth<HasherType, HashType, width>(inWidth);
+
         ar& m_nodes;
         ar& m_levels;
-        ar& m_count;
     }
 
     template <typename Archive>
-    void serialize(Archive& ar, [[maybe_unused]] const unsigned int version) const
+    void save(Archive& ar, [[maybe_unused]] const unsigned int version) const
     {
+        ar& width;
         ar& m_nodes;
         ar& m_levels;
-        ar& m_count;
     }
 
 private:
@@ -143,8 +220,8 @@ private:
         return inputSize == 1 ? 0 : (inputSize + (width - 1)) / width;
     }
 
-    size_t calculateLevelHashes(InputRange<HashType> auto&& input,
-        OutputRange<HashType> auto&& output, [[maybe_unused]] bool parallel) const
+    size_t calculateLevelHashes(
+        InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
     {
         auto inputSize = std::size(input);
         auto outputSize = std::size(output);
@@ -153,33 +230,37 @@ private:
         assert(inputSize > 0);
         assert(outputSize >= expectOutputSize);
 
-        ExceptionHolder holder;
-#pragma omp parallel if ((inputSize >= MIN_PARALLEL_SIZE) && parallel)
+        HasherType hasher;
+        for (decltype(inputSize) i = 0; i < inputSize; i += width)
         {
-            HasherType hasher;
-#pragma omp for
-            for (decltype(inputSize) i = 0; i < inputSize; i += width)
+            for (auto j = i; j < i + width && j < inputSize; ++j)
             {
-                holder.run([&]() {
-                    for (auto j = i; j < i + width && j < inputSize; ++j)
-                    {
-                        hasher.update(input[j]);
-                    }
-                    auto outputOffset = i / width;
-                    assert(outputOffset < outputSize);
-
-                    hasher.final(output[outputOffset]);
-                });
+                hasher.update(input[j]);
             }
+            auto outputOffset = i / width;
+            if (outputOffset >= outputSize)
+            {
+                std::cout << "offset: " << outputOffset << " size: " << outputSize << std::endl;
+            }
+            assert(outputOffset < outputSize);
+
+            hasher.final(output[outputOffset]);
         }
-        holder.rethrow();
 
         return expectOutputSize;
     }
 
+    static void checkWidth(size_t inWidth)
+    {
+        if (inWidth != width)
+            BOOST_THROW_EXCEPTION(std::runtime_error{
+                (boost::format("Proof width mismatch merkle width! Expect: %lu, got: %lu") % width %
+                    inWidth)
+                    .str()});
+    }
+
     std::vector<HashType> m_nodes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
-    size_t m_count = 0;
 
     constexpr static size_t MIN_PARALLEL_SIZE = 32;
 };
