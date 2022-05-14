@@ -52,10 +52,12 @@ compatibility_version=""
 default_version="2.9.0"
 rsa_key_length=2048
 macOS=""
-x86_64_arch="true"
+x86_64_arch="false"
+arm64_arch="false"
 download_timeout=240
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 use_ipv6=
+cert_conf_path=
 help() {
     cat << EOF
 Usage:
@@ -71,7 +73,6 @@ Usage:
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
-    -R <Disable channel ssl use rsa cert>   Default yes
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -82,6 +83,7 @@ Usage:
     -G <channel use sm crypto ssl>      Default false, only works for guomi mode
     -X <Certificate expiration time>    Default 36500 days
     -T <Enable debug log>               Default off. If set -T, enable debug log
+    -R <Channel use ecdsa crypto ssl>   Default false. If -R is set, use the ecdsa cert for channel ssl, Otherwise the rsa cert will be used
     -S <Enable statistics>              Default off. If set -S, enable statistics
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
     -E <Enable free_storage_evm>        Default off. If set -E, enable free_storage_evm
@@ -255,8 +257,12 @@ check_env() {
       exit 1
     }
 
-    if [ "$(uname -m)" != "x86_64" ];then
-        x86_64_arch="false"
+    if [ "$(uname -m)" == "x86_64" ];then
+        x86_64_arch="true"
+    elif [ "$(uname -m)" == "arm64" ];then
+        arm64_arch="true"
+    elif [ "$(uname -m)" == "aarch64" ];then
+        arm64_arch="true"
     fi
 }
 
@@ -386,7 +392,7 @@ gen_chain_cert() {
     # openssl genrsa -out "$chaindir/ca.key" 2048
     openssl ecparam -out "$chaindir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$chaindir/secp256k1.param" -out "$chaindir/ca.key" 2> /dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=$name/O=fisco-bcos/OU=chain" -key "$chaindir/ca.key" -out "$chaindir/ca.crt"
+    openssl req -new -x509 -days "${days}" -subj "/CN=$name/O=fisco-bcos/OU=chain" -key "$chaindir/ca.key" -config ${cert_conf_path} -out "$chaindir/ca.crt"
     rm -f "$chaindir/secp256k1.param"
 }
 
@@ -405,7 +411,7 @@ gen_agency_cert() {
     # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config ${cert_conf_path} -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days "${days}" -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
@@ -423,7 +429,7 @@ gen_cert_secp256k1() {
     openssl ecparam -out "$certpath/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$certpath/secp256k1.param" -out "$certpath/${type}.key" 2> /dev/null
     openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -out "$certpath/${type}.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config ${cert_conf_path} -out "$certpath/${type}.csr" 2> /dev/null
     if [ -n "${no_agency}" ];then
         echo "not use $(basename $agpath) to sign $(basename $certpath) ${type}" >>"${logfile}"
         openssl x509 -req -days "${days}" -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/../ca.key" -CA "$agpath/../ca.crt" \
@@ -1609,11 +1615,19 @@ parse_ip_config()
 
 download_bin()
 {
-    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ];then exit_with_clean "We only offer x86_64/arm64 precompiled fisco-bcos binary, your OS architecture is not x86_64/arm64. Please compile from source."; fi
     bin_path=${output_dir}/${bcos_bin_name}
-    package_name="fisco-bcos.tar.gz"
+    
     if [ -n "${macOS}" ];then
         package_name="fisco-bcos-macOS.tar.gz"
+        if [ "${arm64_arch}" == "true" ];then
+            package_name="fisco-bcos-macOS-aarch64.tar.gz"
+        fi
+    else 
+        package_name="fisco-bcos.tar.gz"
+        if [ "${arm64_arch}" == "true" ];then
+            package_name="fisco-bcos-aarch64.tar.gz"
+        fi
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
@@ -1660,7 +1674,7 @@ prepare_ca(){
 
     if [ -z "${CertConfig}" ] || [ ! -e "${CertConfig}" ];then
         # CertConfig="${output_dir}/cert.cnf"
-        generate_cert_conf "cert.cnf"
+        generate_cert_conf ${cert_conf_path}
     else
         cp "${CertConfig}" .
     fi
@@ -1678,7 +1692,7 @@ prepare_ca(){
         [ -f "$ca_path/root.crt" ] && cp "$ca_path/root.crt" "${output_dir}/cert/" && root_crt="${output_dir}/cert/root.crt"
     fi
     ca_key="${output_dir}/cert/ca.key"
-    mv cert.cnf "${output_dir}/cert/"
+    cp ${cert_conf_path} "${output_dir}/cert/"
     if [ "${use_ip_param}" == "false" ];then
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
@@ -1729,6 +1743,7 @@ main()
 
 [ -z $use_ip_param ] && LOG_WARN "Please set -l or -f option." && help
 output_dir="$(pwd)/${output_dir}"
+cert_conf_path=${output_dir}/cert.cnf
 dir_must_not_exists "${output_dir}"
 mkdir -p "${output_dir}"
 if [ "${use_ip_param}" == "true" ];then

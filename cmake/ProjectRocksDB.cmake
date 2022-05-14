@@ -16,8 +16,7 @@ ExternalProject_Add(rocksdb
         https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/rocksdb-v6.29.3.tar.gz
     URL_HASH SHA256=724e4cba2db6668ff6a21ecabcce0782cd0c8e386796e7e9a14a8260e0600abd
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
-    # PATCH_COMMAND ${SED_CMMAND} "s#-march=native#${MARCH_TYPE} ${COMPILER_FLAGS} #g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt COMMAND ${SED_CMMAND} "s#-Werror##g" CMakeLists.txt
-    PATCH_COMMAND ""
+    PATCH_COMMAND ${SED_CMMAND} "s#-march=native#${MARCH_TYPE} ${COMPILER_FLAGS} #g" CMakeLists.txt COMMAND ${SED_CMMAND} "s#-Werror##g" CMakeLists.txt
     BUILD_IN_SOURCE 1
     CMAKE_COMMAND ${CMAKE_COMMAND}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
