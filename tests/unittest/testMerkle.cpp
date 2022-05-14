@@ -1,16 +1,31 @@
 #include <bcos-crypto/interfaces/crypto/hasher/OpenSSLHasher.h>
 #include <bcos-tool/Merkle.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <iterator>
+#include <ostream>
 #include <stdexcept>
+
+using HashType = std::array<std::byte, 32>;
+
+namespace std
+{
+std::ostream& operator<<(std::ostream& stream, const HashType& hash)
+{
+    std::string hex;
+    boost::algorithm::hex_lower(
+        (char*)hash.data(), (char*)hash.data() + hash.size(), std::back_inserter(hex));
+    std::string_view view{hex.data(), 8};
+    stream << view;
+    return stream;
+}
+}  // namespace std
 
 namespace bcos::test
 {
-
-using HashType = std::array<std::byte, 32>;
 struct TestBinaryMerkleTrieFixture
 {
 };
@@ -38,6 +53,8 @@ BOOST_AUTO_TEST_CASE(merkle)
         trie.import(std::vector<HashType>{}), boost::wrapexcept<std::invalid_argument>);
 
     BOOST_CHECK_NO_THROW(trie.import(std::as_const(hashes)));
+    std::cout << trie;
+    std::cout << "Root: " << trie.root() << std::endl;
 
     HashType emptyHash;
     BOOST_CHECK_THROW(trie.generateProof(emptyHash), boost::wrapexcept<std::invalid_argument>);
@@ -45,6 +62,8 @@ BOOST_AUTO_TEST_CASE(merkle)
     for (auto& hash : hashes)
     {
         auto proof = trie.generateProof(hash);
+        std::cout << proof << std::endl;
+
         BOOST_CHECK(trie.verifyProof(proof, hash, trie.root()));
 
         BOOST_CHECK(!trie.verifyProof(proof, emptyHash, trie.root()));

@@ -70,6 +70,24 @@ public:
             ar& hashes;
             ar& levels;
         }
+
+        friend std::ostream& operator<<(std::ostream& stream, const Proof& proof)
+        {
+            auto range = std::ranges::subrange(proof.hashes.begin(), proof.hashes.begin());
+            size_t level = 0;
+            for (auto length : proof.levels)
+            {
+                range = {std::end(range), std::end(range) + length};
+                stream << "Level " << level;
+                for (auto& hash : range)
+                {
+                    stream << " " << hash;
+                }
+                stream << std::endl;
+                ++level;
+            }
+            return stream;
+        }
     };
 
     static bool verifyProof(const Proof& proof, HashType hash, const HashType& root)
@@ -128,9 +146,11 @@ public:
         // Query next level hashes
         for (auto depth : std::ranges::iota_view{decltype(m_levels.size())(1), m_levels.size()})
         {
+            auto length = m_levels[depth];
             index = index / width;
-            range = std::ranges::subrange{range.end(), range.end() + m_levels[depth]};
-            auto start = range.begin() + index;
+            range = std::ranges::subrange{range.end(), range.end() + length};
+
+            auto start = length <= width ? range.begin() : range.begin() + index;
             auto end = std::min(start + width, range.end());
 
             assert(range.end() <= m_nodes.end());
@@ -202,6 +222,24 @@ public:
         ar& m_levels;
     }
 
+    friend std::ostream& operator<<(std::ostream& stream, const Merkle& merkle)
+    {
+        auto range = std::ranges::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
+        size_t level = 0;
+        for (auto length : merkle.m_levels)
+        {
+            range = {std::end(range), std::end(range) + length};
+            stream << "Level " << level;
+            for (auto& hash : range)
+            {
+                stream << " " << hash;
+            }
+            stream << std::endl;
+            ++level;
+        }
+        return stream;
+    }
+
 private:
     auto getNodeSize(std::integral auto inputSize) const
     {
@@ -238,10 +276,6 @@ private:
                 hasher.update(input[j]);
             }
             auto outputOffset = i / width;
-            if (outputOffset >= outputSize)
-            {
-                std::cout << "offset: " << outputOffset << " size: " << outputSize << std::endl;
-            }
             assert(outputOffset < outputSize);
 
             hasher.final(output[outputOffset]);
