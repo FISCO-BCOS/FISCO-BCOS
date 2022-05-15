@@ -132,8 +132,7 @@ public:
         if (it == range.end() || *it != hash) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
-        auto index = it - std::begin(range);
-        index = indexAlign(index);  // Align
+        auto index = indexAlign(it - std::begin(range));  // Align
         auto start = range.begin() + index;
         auto end = std::min(start + width, range.end());
 
@@ -148,8 +147,7 @@ public:
         for (auto depth : std::ranges::iota_view{decltype(m_levels.size())(1), m_levels.size()})
         {
             auto length = m_levels[depth];
-            index = (index / width);
-            index = indexAlign(index);
+            index = indexAlign(index / width);
             range = std::ranges::subrange{range.end(), range.end() + length};
 
             auto start = range.begin() + index;
@@ -183,15 +181,15 @@ public:
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
         auto inputRange = std::ranges::subrange{m_nodes.begin(), m_nodes.begin()};
+        m_levels.push_back(inputSize);
         while (inputSize > 1)  // Ignore only root
         {
             inputRange = {inputRange.end(), inputRange.end() + inputSize};
-
             assert(inputRange.end() <= m_nodes.end());
-            m_levels.push_back(inputSize);
 
             inputSize = calculateLevelHashes(
                 inputRange, std::ranges::subrange{inputRange.end(), m_nodes.end()});
+            m_levels.push_back(inputSize);
         }
     }
 
