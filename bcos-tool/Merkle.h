@@ -100,7 +100,7 @@ public:
         for (auto length : proof.levels)
         {
             range = {std::end(range), std::end(range) + length};
-            if (std::end(range) >= proof.hashes.end() || std::size(range) > width) [[unlikely]]
+            if (std::end(range) > proof.hashes.end() || std::size(range) > width) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Proof level length out of range!"});
 
             if (std::ranges::find(range, hash) == std::end(range)) [[unlikely]]
@@ -133,7 +133,8 @@ public:
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
         auto index = it - std::begin(range);
-        auto start = range.begin() + ((index / width) * width);
+        index = indexAlign(index);  // Align
+        auto start = range.begin() + index;
         auto end = std::min(start + width, range.end());
 
         Proof proof;
@@ -147,10 +148,11 @@ public:
         for (auto depth : std::ranges::iota_view{decltype(m_levels.size())(1), m_levels.size()})
         {
             auto length = m_levels[depth];
-            index = index / width;
+            index = (index / width);
+            index = indexAlign(index);
             range = std::ranges::subrange{range.end(), range.end() + length};
 
-            auto start = length <= width ? range.begin() : range.begin() + index;
+            auto start = range.begin() + index;
             auto end = std::min(start + width, range.end());
 
             assert(range.end() <= m_nodes.end());
@@ -192,6 +194,8 @@ public:
                 inputRange, std::ranges::subrange{inputRange.end(), m_nodes.end()});
         }
     }
+
+    auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
 
     void clear()
     {
