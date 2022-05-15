@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-import ast
 import sys
 import os
 

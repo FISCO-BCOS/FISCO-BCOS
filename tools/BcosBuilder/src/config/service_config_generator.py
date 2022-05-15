@@ -3,7 +3,6 @@
 import configparser
 from common import utilities
 from common.utilities import ServiceInfo
-from common.utilities import ConfigInfo
 import json
 import os
 import uuid
@@ -90,7 +89,7 @@ class ServiceConfigGenerator:
         utilities.log_info(
             "* generate cert for the %s service %s success" % (section, service_config.name))
         utilities.print_badage(
-            "* generate config for the %s service sucess%s" % (section, service_config.name))
+            "* generate config for the %s service success%s" % (section, service_config.name))
         return True
 
     def __generate_and_store_ini_config(self, service_config, section):

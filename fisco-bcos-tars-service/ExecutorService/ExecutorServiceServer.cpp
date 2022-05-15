@@ -59,9 +59,8 @@ bcostars::Error ExecutorServiceServer::dmcExecuteTransactions(std::string const&
     std::vector<bcostars::ExecutionMessage>&, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
-    // Note: since ParallelExecutor will copy gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>
-    // into the threadPool, here must use shared_ptr to maintain the life-time of executionMessages
-    auto executionMessages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
+    auto executionMessages =
+        std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
     for (auto const& input : _inputs)
     {
         auto msg = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
