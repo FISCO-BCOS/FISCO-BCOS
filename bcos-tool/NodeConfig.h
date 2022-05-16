@@ -57,7 +57,7 @@ public:
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadNodeServiceConfig(
-        std::string const& _nodeID, boost::property_tree::ptree const& _pt);
+        std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
 
     virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
     {

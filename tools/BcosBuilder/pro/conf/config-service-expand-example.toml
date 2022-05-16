@@ -1,0 +1,31 @@
+[tars]
+tars_url = "http://127.0.0.1:3000"
+tars_token = ""
+tars_pkg_dir = "binary/"
+
+[chain]
+chain_id="chain0"
+rpc_sm_ssl=false
+gateway_sm_ssl=false
+# the ca path of the expanded rpc service
+# must ensure that the path configuration is correct, otherwise the ssl verification will fail
+rpc_ca_cert_path="generated/rpc/chain0/ca"
+# the ca path of the expanded gateway service
+# must ensure that the path configuration is correct, otherwise the ssl verification will fail
+gateway_ca_cert_path="generated/gateway/chain0/ca"
+
+
+[[agency]]
+name = "agencyA"
+
+    [agency.rpc]
+    deploy_ip=["172.25.0.5"]
+    listen_ip="0.0.0.0"
+    listen_port=10200
+    thread_count=4
+
+    [agency.gateway]
+    deploy_ip=["172.25.0.5"]
+    listen_ip="0.0.0.0"
+    listen_port=40300
+    peers=["172.25.0.3:30300", "172.25.0.3:30301", "172.25.0.5:40300"]

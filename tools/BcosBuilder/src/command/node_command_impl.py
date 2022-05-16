@@ -5,8 +5,8 @@ from common import utilities
 
 
 class NodeCommandImpl:
-    def __init__(self, config):
-        self.node_controller = NodeController(config)
+    def __init__(self, config, node_type):
+        self.node_controller = NodeController(config, node_type)
 
     def gen_node_config(self):
         function = "generate_all_config"

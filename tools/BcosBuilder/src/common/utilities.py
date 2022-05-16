@@ -20,29 +20,30 @@ class ServiceInfo:
                         "sm_ssl.crt", "sm_enssl.key", "sm_enssl.crt"]
 
     rpc_service = "BcosRpcService"
-    rpc_service_obj = "RpcServiceObj"
+    rpc_service_obj = ["RpcServiceObj"]
     gateway_service = "BcosGatewayService"
-    gateway_service_obj = "GatewayServiceObj"
+    gateway_service_obj = ["GatewayServiceObj"]
 
     single_node_service = "BcosNodeService"
     single_node_obj_name_list = [
         "LedgerServiceObj", "SchedulerServiceObj", "TxPoolServiceObj", "PBFTServiceObj", "FrontServiceObj"]
-    micro_node_service = ["BcosTxPoolService",
-                          "BcosFrontService", "BcosSchedulerService", "BcosPBFTService", "BcosExecutorService"]
-    micro_node_service_config_keys = {"txpool": "BcosTxPoolService", "front": "BcosFrontService",
-                                      "scheduler": "BcosSchedulerService", "consensus": "BcosPBFTService", "executor": "BcosExecutorService"}
+
+    max_node_service = "BcosMaxNodeService"
+    max_node_service_obj = single_node_obj_name_list
+    executor_service = "BcosExecutorService"
+    executor_service_obj = ["ExecutorServiceObj"]
 
     supported_vm_types = ["evm", "wasm"]
     supported_consensus_list = ["pbft"]
     tars_pkg_postfix = ".tgz"
     default_listen_ip = "0.0.0.0"
-    cert_generationscript_path = "src/scripts/generate_cert.sh"
+    cert_generationscript_path = "../src/scripts/generate_cert.sh"
     supported_service_type = [node_service_type,
                               rpc_service_type, gateway_service_type]
 
 
 class ConfigInfo:
-    tpl_abs_path = "src/tpl/"
+    tpl_abs_path = "../src/tpl/"
     pwd_path = os.getcwd()
     rpc_config_tpl_path = os.path.join(
         pwd_path, tpl_abs_path, "config.ini.rpc")
@@ -52,6 +53,8 @@ class ConfigInfo:
         pwd_path, tpl_abs_path, "config.genesis")
     node_config_tpl_path = os.path.join(
         pwd_path, tpl_abs_path, "config.ini.node")
+    executor_config_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "config.ini.executor")
 
 
 class CommandInfo:
@@ -94,11 +97,11 @@ def log_debug(error_msg):
     logging.debug("%s" % error_msg)
 
 
-def get_item_value(config, key, default_value, must_exist):
+def get_item_value(config, key, default_value, must_exist, desc):
     if key in config:
         return config[key]
     if must_exist:
-        raise Exception("the value for deploy_info.%s must be set" % key)
+        raise Exception("the value for %s.%s must be set" % (desc, key))
     return default_value
 
 
@@ -106,7 +109,7 @@ def get_value(config, section, key, default_value, must_exist):
     if section in config and key in config[section]:
         return config[section][key]
     if must_exist:
-        raise Exception("the value for deploy_info.%s must be set" % key)
+        raise Exception("the value for %s must be set" % key)
     return default_value
 
 

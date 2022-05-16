@@ -14,6 +14,13 @@ using namespace bcos::scheduler;
 void ExecutorManager::addExecutor(
     std::string name, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
 {
+    {
+        std::shared_lock l(m_mutex);
+        if (m_name2Executors.count(name))
+        {
+            return;
+        }
+    }
     auto executorInfo = std::make_shared<ExecutorInfo>();
     executorInfo->name = std::move(name);
     executorInfo->executor = std::move(executor);
@@ -24,7 +31,7 @@ void ExecutorManager::addExecutor(
 
     if (!exists)
     {
-        BOOST_THROW_EXCEPTION(bcos::Exception("Executor already exists"));
+        return;
     }
 
     m_executorPriorityQueue.emplace(std::move(executorInfo));

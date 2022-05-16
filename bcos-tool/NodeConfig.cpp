@@ -99,7 +99,7 @@ void NodeConfig::loadServiceConfig(boost::property_tree::ptree const& _pt)
 }
 
 void NodeConfig::loadNodeServiceConfig(
-    std::string const& _nodeID, boost::property_tree::ptree const& _pt)
+    std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require)
 {
     auto nodeName = _pt.get<std::string>("service.node_name", "");
     if (nodeName.size() == 0)
@@ -113,11 +113,11 @@ void NodeConfig::loadNodeServiceConfig(
     }
     m_nodeName = nodeName;
     m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
-        getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), false);
+        getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), _require);
     m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
-        getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), false);
+        getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), _require);
     m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
-        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), false);
+        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), _require);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)

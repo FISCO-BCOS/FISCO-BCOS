@@ -8,12 +8,19 @@ import os
 
 
 class BinaryController:
-    def __init__(self, version, binary_path, use_cdn):
+    def __init__(self, version, binary_path, use_cdn, node_type):
         self.version = version
         self.binary_path = binary_path
         self.binary_postfix = "-linux-x86_64.tgz"
-        self.binary_list = ["BcosRpcService",
-                            "BcosGatewayService", "BcosNodeService"]
+        if node_type == "pro":
+            self.binary_list = ["BcosRpcService",
+                                "BcosGatewayService", "BcosNodeService"]
+        elif node_type == "max":
+            self.binary_list = ["BcosRpcService", "BcosGatewayService",
+                                "BcosMaxNodeService", "BcosExecutorService"]
+        else:
+            utilities.log_error("Unsupported node_type %s" % node_type)
+            sys.exit(-1)
         self.use_cdn = use_cdn
         self.last_percent = 0
         self.download_prefix = "https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/"

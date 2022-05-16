@@ -150,7 +150,7 @@ class TarsService:
             level = 1
         return level
 
-    def add_server_config_file(self, config_file_name, server_name, config_file_path, empty_server_config):
+    def add_server_config_file(self, deploy_ip, config_file_name, server_name, config_file_path, empty_server_config):
         content = "\n"
         if os.path.exists(config_file_path) is False:
             utilities.log_error("add service config error:\n the config file %s doesn't exist, service: %s" % (
@@ -164,7 +164,7 @@ class TarsService:
                 utilities.log_error(
                     "load the configuration failed, error: %s" % str(reason))
                 return False
-        request_data = {"level": TarsService.get_level(server_name), "application": self.app_name,
+        request_data = {"level": TarsService.get_level(server_name), "application": self.app_name, "node_name": deploy_ip,
                         "server_name": server_name, "filename": config_file_name, "config": content}
         response = requests.post(
             self.add_config_url, params=self.token_param, json=request_data)
@@ -174,22 +174,22 @@ class TarsService:
             return False
         return True
 
-    def add_non_empty_server_config_file(self, config_file_name, server_name, config_file_path):
+    def add_non_empty_server_config_file(self, deploy_ip, config_file_name, server_name, config_file_path):
         "add server the config file"
         utilities.log_debug("add config file for application %s, config file path: %s, service_name: %s" % (
             self.app_name, config_file_path, server_name))
         ret = self.add_server_config_file(
-            config_file_name, server_name, config_file_path, False)
+            deploy_ip, config_file_name, server_name, config_file_path, False)
         if ret is False:
             ret = self.update_service_config(
                 config_file_name, server_name, "", config_file_path)
         return ret
 
-    def add_node_config_list(self, config_list, service_name, config_file_list):
+    def add_node_config_list(self, deploy_ip, config_list, service_name, config_file_list):
         i = 0
         for config_file_path in config_file_list:
             config = config_list[i]
-            if self.add_non_empty_server_config_file(config, service_name, config_file_path) is False:
+            if self.add_non_empty_server_config_file(deploy_ip, config, service_name, config_file_path) is False:
                 utilities.log_error("add_node_config_list failed, config files info: %s" %
                                     config_list)
                 return False
@@ -204,7 +204,7 @@ class TarsService:
             utilities.log_debug("add config file for application %s, config file path: %s, service_name: %s" %
                                 (self.app_name, config_file_path, server_name))
             self.add_server_config_file(
-                config_file_name, server_name, config_file_path, empty_server_config)
+                node_name, config_file_name, server_name, config_file_path, empty_server_config)
         return self.update_service_config(config_file_name, server_name, node_name, config_file_path)
 
     def update_service_config(self, config_file_name, server_name, node_name, config_file_path):
