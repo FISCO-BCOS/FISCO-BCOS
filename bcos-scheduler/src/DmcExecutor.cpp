@@ -261,6 +261,9 @@ void DmcExecutor::handleCreateMessage(ExecutiveState::Ptr executiveState)
 
     if (message->type() == protocol::ExecutionMessage::SEND_BACK)
     {
+        // must clear callstack
+        executiveState->callStack = std::stack<int64_t, std::list<int64_t>>();
+
         if (message->transactionHash() != h256(0))
         {
             message->setType(protocol::ExecutionMessage::TXHASH);

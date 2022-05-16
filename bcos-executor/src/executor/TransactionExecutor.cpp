@@ -1383,7 +1383,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
         asyncExecuteExecutiveFlow(executiveFlow,
             [callback = std::move(callback)](bcos::Error::UniquePtr&& error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
-                if (error)
+                if (!error)
                 {
                     callback(std::move(error), nullptr);
                 }
