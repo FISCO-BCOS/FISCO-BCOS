@@ -6,9 +6,12 @@ else()
     set(SED_CMMAND sed -i)
 endif()
 
-hunter_add_package(Protobuf)
-hunter_add_package(gRPC)
-hunter_add_package(PocoCpp)
+if(HUNTER_GRPC)
+  hunter_add_package(gRPC)
+endif()
+if(HUNTER_POCOCPP)
+  hunter_add_package(PocoCpp)
+endif()
 
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
