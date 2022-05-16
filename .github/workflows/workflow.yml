@@ -166,7 +166,7 @@ jobs:
           # compile things in the container
           run: |
             apt-get update -q -y
-            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison gcc-10
+            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison gcc-10 g++-10
             /usr/sbin/update-ccache-symlinks
             echo 'export PATH="/usr/lib/ccache:$PATH"' | tee -a ~/.bashrc
             curl https://sh.rustup.rs -sSf | bash -s -- -y
