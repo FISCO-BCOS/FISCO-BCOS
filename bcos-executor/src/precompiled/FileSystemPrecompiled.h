@@ -30,23 +30,21 @@ public:
     FileSystemPrecompiled(crypto::Hash::Ptr _hashImpl);
     virtual ~FileSystemPrecompiled() = default;
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
     void listDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+
     void makeDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult,
-        const std::string& _origin, const PrecompiledGas::Ptr& gasPricer, int64_t gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult,
-        const std::string& _origin, int64_t gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void readLink(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void touch(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);

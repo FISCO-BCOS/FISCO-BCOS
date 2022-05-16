@@ -22,7 +22,7 @@
 #pragma once
 #include "../executive/TransactionExecutive.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "../precompiled/PrecompiledGas.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Common.h>
@@ -147,8 +147,8 @@ public:
     }
     virtual ~Precompiled() = default;
     virtual std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) = 0;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) = 0;
 
     virtual bool isParallelPrecompiled() { return false; }
     virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
