@@ -678,7 +678,7 @@ private:
             STORAGE_REPORT_SET(
                 std::get<0>(entryIt->first), key, entryIt->second, "IMPORT EXISTS FAILED");
 
-            STORAGE_LOG(WARNING) << "Fail import existsing entry, " << table << " | " << toHex(key);
+            STORAGE_LOG(DEBUG) << "Fail import existsing entry, " << table << " | " << toHex(key);
         }
 
         return it->entry;

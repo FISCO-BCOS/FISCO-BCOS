@@ -38,5 +38,5 @@ add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} C
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("coverage" "'/usr*' 'boost/**'")
+    config_coverage("storage-coverage" "'/usr*' 'boost/**'")
 endif ()

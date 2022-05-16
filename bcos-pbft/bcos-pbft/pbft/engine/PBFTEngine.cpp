@@ -46,6 +46,9 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     m_config->storage()->registerFinalizeHandler(boost::bind(
         &PBFTEngine::finalizeConsensus, this, boost::placeholders::_1, boost::placeholders::_2));
 
+    m_config->storage()->registerOnStableCheckPointCommitFailed(
+        boost::bind(&PBFTEngine::onStableCheckPointCommitFailed, this, boost::placeholders::_1));
+
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
     m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
         this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
@@ -99,6 +102,18 @@ void PBFTEngine::start()
     ConsensusEngine::start();
     // when the node setup, start the timer for view recovery
     m_config->timer()->start();
+    // trigger fast viewchange to reachNewView
+    if (!m_config->startRecovered())
+    {
+        triggerTimeout(false);
+    }
+}
+
+void PBFTEngine::restart()
+{
+    PBFT_LOG(INFO) << LOG_DESC("restart the consensus module");
+    m_config->enableAsMaterNode(true);
+    triggerTimeout(false);
 }
 
 void PBFTEngine::stop()
@@ -238,6 +253,10 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     BlockNumber _proposalIndex, HashType const& _proposalHash)
 {
     if (_proposalData.size() == 0)
+    {
+        return;
+    }
+    if (!m_config->isConsensusNode())
     {
         return;
     }
@@ -451,11 +470,18 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
     }
 }
 
+void PBFTEngine::clearAllCache()
+{
+    RecursiveGuard l(m_mutex);
+    m_cacheProcessor->clearAllCache();
+}
+
 void PBFTEngine::executeWorker()
 {
     // the node is not the consensusNode
     if (!m_config->isConsensusNode())
     {
+        clearAllCache();
         waitSignal();
         return;
     }
@@ -576,7 +602,6 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     }
     if (_pbftReq->index() < m_config->lowWaterMark() ||
         _pbftReq->index() < m_config->expectedCheckPoint() ||
-        _pbftReq->index() >= m_config->highWaterMark() ||
         _pbftReq->index() <= m_config->syncingHighestNumber() ||
         m_cacheProcessor->proposalCommitted(_pbftReq->index()))
     {
@@ -1021,7 +1046,6 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
                        << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
         return false;
     }
-
     // check the view
     if ((_viewChangeMsg->view() < m_config->view()) ||
         (_viewChangeMsg->view() + 1 < m_config->toView()))
@@ -1035,7 +1059,6 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
                                << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
                 sendViewChange(_fromNode);
             }
-
             PBFT_LOG(INFO) << LOG_DESC("sendRecoverResponse to the node whose view falling behind")
                            << LOG_KV("dst", _fromNode->shortHex())
                            << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
@@ -1095,9 +1118,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     // not expired
     auto leaderIndex =
         m_config->leaderIndexInNewViewPeriod(_viewChangeMsg->index() + 1, _viewChangeMsg->index());
-    if (m_config->timeout() && (_viewChangeMsg->generatedFrom() == leaderIndex ||
-                                   (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
-                                       m_config->maxFaultyQuorum())))
+    if (_viewChangeMsg->generatedFrom() == leaderIndex ||
+        (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
+            m_config->maxFaultyQuorum()))
     {
         auto view = m_cacheProcessor->tryToTriggerFastViewChange();
         if (view > 0)
@@ -1408,4 +1431,15 @@ void PBFTEngine::onReceivePrecommitRequest(
     PBFT_LOG(INFO) << LOG_DESC("Receive precommitRequest and send response")
                    << LOG_KV("hash", pbftRequest->hash().abridged())
                    << LOG_KV("index", pbftRequest->index());
+}
+
+void PBFTEngine::onStableCheckPointCommitFailed(bcos::protocol::BlockHeader::Ptr _blockHeader)
+{
+    RecursiveGuard l(m_mutex);
+    m_config->timer()->restart();
+    m_cacheProcessor->resetUnCommittedCacheState(_blockHeader->number());
+    m_config->setExpectedCheckPoint(_blockHeader->number());
+    m_cacheProcessor->checkAndPreCommit();
+    m_cacheProcessor->checkAndCommit();
+    m_cacheProcessor->tryToApplyCommitQueue();
 }

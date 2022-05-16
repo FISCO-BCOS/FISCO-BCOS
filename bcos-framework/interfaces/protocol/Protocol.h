@@ -39,6 +39,13 @@ enum NodeType : uint32_t
     NODE_OUTSIDE_GROUP = 0x8,
 };
 
+enum NodeArchitectureType
+{
+    AIR = 0,
+    PRO = 1,
+    MAX = 2,
+};
+
 enum MessageType
 {
     HANDESHAKE = 0x100,         // 256
@@ -80,6 +87,7 @@ enum class Version : uint32_t
 };
 const std::string RC3_VERSION_STR = "3.0.0-rc3";
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
+const Version DEFAULT_VERSION = bcos::protocol::Version::RC3_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
@@ -99,6 +107,27 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version cons
     }
     return _out;
 }
-
+inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
+{
+    switch (_nodeType)
+    {
+    case NodeType::None:
+        _out << "None";
+        break;
+    case NodeType::CONSENSUS_NODE:
+        _out << "CONSENSUS_NODE";
+        break;
+    case NodeType::OBSERVER_NODE:
+        _out << "OBSERVER_NODE";
+        break;
+    case NodeType::NODE_OUTSIDE_GROUP:
+        _out << "NODE_OUTSIDE_GROUP";
+        break;
+    default:
+        _out << "Unknown";
+        break;
+    }
+    return _out;
+}
 }  // namespace protocol
 }  // namespace bcos

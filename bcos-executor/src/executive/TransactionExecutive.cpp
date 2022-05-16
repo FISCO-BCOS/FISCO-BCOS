@@ -21,7 +21,8 @@
 
 #include "TransactionExecutive.h"
 #include "../precompiled/FileSystemPrecompiled.h"
-#include "../precompiled/extension/ContractAuthPrecompiled.h"
+#include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/EVMHostInterface.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
@@ -168,7 +169,7 @@ void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
     auto output = std::move(m_exchangeMessage);
     if (output->type == CallParameters::REVERT)
     {
-        // Dead lock, revert
+        // Deadlock, revert
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
             ExecuteError::DEAD_LOCK, "Dead lock detected, revert transaction: " +
                                          boost::lexical_cast<std::string>(output->type)));
@@ -214,21 +215,36 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
 
-    if (isPrecompiled(callParameters->codeAddress))
+    if (isPrecompiled(callParameters->codeAddress) || callParameters->internalCall)
     {
         return callPrecompiled(std::move(callParameters));
     }
     auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
     // check permission first
-    if (blockContext->isAuthCheck() && !blockContext->isWasm() && !checkAuth(callParameters, false))
+    if (blockContext->isAuthCheck())
     {
-        revert();
-        callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-        callParameters->type = CallParameters::REVERT;
-        callParameters->message = "Call permission denied";
-        EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
-                             << LOG_KV("origin", callParameters->origin);
-        return {nullptr, std::move(callParameters)};
+        if (!checkContractAvailable(callParameters))
+        {
+            revert();
+            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Contract is frozen";
+            callParameters->data.clear();
+            EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
+                                 << LOG_KV("origin", callParameters->origin);
+            return {nullptr, std::move(callParameters)};
+        }
+        if (!checkAuth(callParameters, false))
+        {
+            revert();
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Call permission denied";
+            callParameters->data.clear();
+            EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
+                                 << LOG_KV("origin", callParameters->origin);
+            return {nullptr, std::move(callParameters)};
+        }
     }
     auto hostContext = make_unique<HostContext>(
         std::move(callParameters), shared_from_this(), std::move(tableName));
@@ -241,10 +257,26 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
     callParameters->type = CallParameters::FINISHED;
     try
     {
-        auto precompiledResult =
-            execPrecompiled(callParameters->codeAddress, ref(callParameters->data),
-                callParameters->origin, callParameters->senderAddress, callParameters->gas);
-        auto gas = precompiledResult->m_gas;
+        std::shared_ptr<PrecompiledExecResult> precompiledExecResult;
+        if (callParameters->internalCall)
+        {
+            std::string contract;
+            bytes data;
+            auto blockContext = m_blockContext.lock();
+            auto codec =
+                std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+            codec->decode(ref(callParameters->data), contract, data);
+            precompiledExecResult = execPrecompiled(contract, ref(data), callParameters->origin,
+                callParameters->senderAddress, callParameters->gas);
+        }
+        else
+        {
+            precompiledExecResult =
+                execPrecompiled(callParameters->codeAddress, ref(callParameters->data),
+                    callParameters->origin, callParameters->senderAddress, callParameters->gas);
+        }
+
+        auto gas = precompiledExecResult->m_gas;
         if (callParameters->gas < gas)
         {
             callParameters->type = CallParameters::REVERT;
@@ -253,7 +285,7 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
         }
         callParameters->gas -= gas;
         callParameters->status = (int32_t)TransactionStatus::None;
-        callParameters->data.swap(precompiledResult->m_execResult);
+        callParameters->data = std::move(precompiledExecResult->m_execResult);
     }
     catch (protocol::PrecompiledError const& e)
     {
@@ -302,7 +334,12 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     extraData->abi = std::move(callParameters->abi);
 
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("deploy") << LOG_KV("tableName", tableName)
-                         << LOG_KV("abi len", extraData->abi.size());
+                         << LOG_KV("abi len", extraData->abi.size())
+                         << LOG_KV("internalCreate", callParameters->internalCreate);
+    if (callParameters->internalCreate)
+    {
+        return {nullptr, internalCreate(std::move(callParameters))};
+    }
 
     // check permission first
     if (blockContext->isAuthCheck())
@@ -313,6 +350,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Create permission denied";
+            callParameters->create = false;
             EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("newAddress", newAddress)
                                  << LOG_KV("origin", callParameters->origin);
             return {nullptr, std::move(callParameters)};
@@ -322,15 +360,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     if (blockContext->isWasm())
     {
         // Liquid
-        auto code = bytes();
-        auto params = bytes();
-
-        auto data = ref(callParameters->data);
-        auto input = std::make_pair(code, params);
+        std::tuple<bytes, bytes> input;
         auto codec = std::make_shared<CodecWrapper>(blockContext->hashHandler(), true);
-        codec->decode(data, input);
+        codec->decode(ref(callParameters->data), input);
+        auto& [code, params] = input;
 
-        std::tie(code, params) = input;
         if (!hasWasmPreamble(code))
         {
             revert();
@@ -392,6 +426,81 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     auto hostContext =
         std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);
     return {std::move(hostContext), std::move(extraData)};
+}
+
+CallParameters::UniquePtr TransactionExecutive::internalCreate(
+    CallParameters::UniquePtr callParameters)
+{
+    auto blockContext = m_blockContext.lock();
+    if (!blockContext)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
+    }
+    auto newAddress = string(callParameters->codeAddress);
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress);
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    std::string tableName;
+    std::string codeString;
+    codec->decode(ref(callParameters->data), tableName, codeString);
+
+    if (blockContext->isWasm())
+    {
+        /// BFS create contract table and write metadata in parent table
+        if (!buildBfsPath(newAddress, callParameters->origin, newAddress, FS_TYPE_CONTRACT,
+                callParameters->gas))
+        {
+            revert();
+            auto buildCallResults = move(callParameters);
+            buildCallResults->type = CallParameters::REVERT;
+            buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            buildCallResults->message = "Error occurs in build BFS dir";
+            EXECUTIVE_LOG(ERROR) << buildCallResults->message << LOG_KV("newAddress", newAddress);
+            return buildCallResults;
+        }
+        /// set code field
+        Entry entry = {};
+        entry.importFields({codeString});
+        m_storageWrapper->setRow(newAddress, ACCOUNT_CODE, std::move(entry));
+    }
+    else
+    {
+        /// BFS create link table and write metadata in parent table
+        if (!buildBfsPath(
+                tableName, callParameters->origin, newAddress, FS_TYPE_LINK, callParameters->gas))
+        {
+            revert();
+            auto buildCallResults = move(callParameters);
+            buildCallResults->type = CallParameters::REVERT;
+            buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            buildCallResults->message = "Error occurs in build BFS dir";
+            EXECUTIVE_LOG(ERROR) << buildCallResults->message << LOG_KV("newAddress", newAddress);
+            return buildCallResults;
+        }
+
+        /// create code index contract
+        auto codeAddress = getContractTableName(newAddress, false);
+        m_storageWrapper->createTable(codeAddress, STORAGE_VALUE);
+
+        /// set code field
+        Entry entry = {};
+        entry.importFields({codeString});
+        m_storageWrapper->setRow(codeAddress, ACCOUNT_CODE, std::move(entry));
+
+        /// set link data
+        Entry addressEntry = {};
+        addressEntry.importFields({newAddress});
+        m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
+        Entry typeEntry = {};
+        typeEntry.importFields({FS_TYPE_LINK});
+        m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
+    }
+    callParameters->type = CallParameters::FINISHED;
+    callParameters->status = (int32_t)TransactionStatus::None;
+    callParameters->internalCreate = false;
+    callParameters->create = false;
+    callParameters->data.clear();
+    return callParameters;
 }
 
 CallParameters::UniquePtr TransactionExecutive::go(
@@ -537,8 +646,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 // BFS create contract table and write metadata in parent table
                 auto tableName = getContractTableName(hostContext.myAddress(), true);
-                if (!buildBfsPath(tableName, callResults->origin,
-                        std::string(hostContext.myAddress()), callResults->gas))
+                if (!buildBfsPath(tableName, callResults->origin, hostContext.myAddress(),
+                        FS_TYPE_CONTRACT, callResults->gas))
                 {
                     revert();
                     auto buildCallResults = move(callResults);
@@ -585,8 +694,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
         }
         else
         {
-            auto code = hostContext.code();
-            if (code.empty())
+            auto codeEntry = hostContext.code();
+            if (!codeEntry.has_value())
             {
                 revert();
                 auto callResult = hostContext.takeCallParameters();
@@ -598,6 +707,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     << LOG_KV("sender", callResult->senderAddress);
                 return callResult;
             }
+            auto code = codeEntry->get();
+            if (hasPrecompiledPrefix(code))
+            {
+                return callDynamicPrecompiled(hostContext.takeCallParameters(), std::string(code));
+            }
 
             auto vmKind = VMKind::evmone;
             if (hasWasmPreamble(code))
@@ -608,7 +722,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             auto mode = toRevision(hostContext.vmSchedule());
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
-            auto ret = vm.exec(hostContext, mode, &evmcMessage, code.data(), code.size());
+            auto ret = vm.exec(hostContext, mode, &evmcMessage,
+                reinterpret_cast<const byte*>(code.data()), code.size());
 
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
@@ -624,7 +739,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
     }
-    // Note: won't call the catch branch
     catch (bcos::Error& e)
     {
         auto callResults = hostContext.takeCallParameters();
@@ -678,6 +792,27 @@ CallParameters::UniquePtr TransactionExecutive::go(
         // Another solution would be to reject this transaction, but that also
         // has drawbacks. Essentially, the amount of ram has to be increased here.
     }
+}
+
+CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
+    CallParameters::UniquePtr callParameters, const std::string& code)
+{
+    auto blockContext = m_blockContext.lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled") << LOG_KV("code", code);
+    std::vector<std::string> codeParameters;
+    boost::split(codeParameters, code, boost::is_any_of(","));
+    if (codeParameters.size() < 3)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "CallDynamicPrecompiled error code field."));
+    }
+    callParameters->codeAddress = codeParameters[1];
+    // for scalability, erase [PRECOMPILED_PREFIX,codeAddress], left actual parameters
+    codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
+    // enc([call precompiled parameters],[user call parameters])
+    auto newParams = codec.encode(codeParameters, callParameters->data);
+    callParameters->data = std::move(newParams);
+    return std::get<1>(callPrecompiled(std::move(callParameters)));
 }
 
 void TransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)
@@ -739,24 +874,6 @@ std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::str
         return constantPrecompiled->second;
     }
     return {};
-}
-
-bool TransactionExecutive::isBuiltInPrecompiled(const std::string& _a) const
-{
-    std::stringstream prefix;
-    prefix << std::setfill('0') << std::setw(36);
-    if (_a.find(prefix.str()) != 0)
-        return false;
-    return m_builtInPrecompiled->find(_a) != m_builtInPrecompiled->end();
-}
-
-bool TransactionExecutive::isEthereumPrecompiled(const string& _a) const
-{
-    std::stringstream prefix;
-    prefix << std::setfill('0') << std::setw(39) << "0";
-    if (!m_evmPrecompiled || _a.find(prefix.str()) != 0)
-        return false;
-    return m_evmPrecompiled->find(_a) != m_evmPrecompiled->end();
 }
 
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
@@ -952,19 +1069,17 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.substr(0, 5) == "/sys/" ||
-        getContractTableName(_sender, false).substr(0, 5) == "/sys/")
+    if (_tableName.substr(0, 5) == USER_SYS_PREFIX ||
+        getContractTableName(_sender, false).substr(0, 5) == USER_SYS_PREFIX)
     {
         return;
     }
     auto authTableName = std::string(_tableName).append(CONTRACT_SUFFIX);
-    // if contract external create contract, then inheritance admin
     std::string admin;
     if (_sender != _origin)
     {
-        auto senderAuthTable = getContractTableName(_sender, false).append(CONTRACT_SUFFIX);
-        auto entry = m_storageWrapper->getRow(std::move(senderAuthTable), ADMIN_FIELD);
-        admin = std::string(entry->getField(0));
+        // if contract external create contract, then inheritance admin, always be origin
+        admin = std::string(_origin);
     }
     else
     {
@@ -981,6 +1096,10 @@ void TransactionExecutive::creatAuthTable(
         adminEntry.importFields({admin});
         m_storageWrapper->setRow(authTableName, ADMIN_FIELD, std::move(adminEntry));
 
+        Entry statusEntry(table->tableInfo());
+        statusEntry.importFields({CONTRACT_NORMAL});
+        m_storageWrapper->setRow(authTableName, STATUS_FIELD, std::move(statusEntry));
+
         Entry emptyType;
         emptyType.importFields({""});
         m_storageWrapper->setRow(authTableName, METHOD_AUTH_TYPE, std::move(emptyType));
@@ -995,12 +1114,12 @@ void TransactionExecutive::creatAuthTable(
     }
 }
 
-bool TransactionExecutive::buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
-    const std::string& _sender, int64_t gasLeft)
+bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
+    std::string_view _sender, std::string_view _type, int64_t gasLeft)
 {
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
-    auto response = externalTouchNewFile(
-        shared_from_this(), _origin, _sender, _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
+    auto response =
+        externalTouchNewFile(shared_from_this(), _origin, _sender, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
 }
 
@@ -1010,18 +1129,40 @@ bool TransactionExecutive::checkAuth(
     if (callParameters->staticCall)
         return true;
     auto blockContext = m_blockContext.lock();
-    auto authAddress = m_blockContext.lock()->isWasm() ? precompiled::CONTRACT_AUTH_NAME :
-                                                         precompiled::CONTRACT_AUTH_ADDRESS;
-    auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthPrecompiled>(
-        m_constantPrecompiled->at(authAddress));
-    Address address(callParameters->origin);
-    auto path = string(callParameters->codeAddress);
+    auto authMgrAddress =
+        blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
+    auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
+        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+    std::string address = callParameters->origin;
+    auto path = callParameters->codeAddress;
     EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
-                         << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address.hex());
+                         << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
     if (_isCreate)
     {
-        return contractAuthPrecompiled->checkDeployAuth(shared_from_this(), address);
+        /// external call authMgrAddress to check deploy auth
+        auto codec =
+            std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+        auto input = blockContext->isWasm() ?
+                         codec->encodeWithSig("hasDeployAuth(string)", address) :
+                         codec->encodeWithSig("hasDeployAuth(address)", Address(address));
+        auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
+            callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
+        bool result = true;
+        codec->decode(ref(response->data), result);
+        return result;
     }
     bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-    return contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
+    return contractAuthPrecompiled->checkMethodAuth(
+        shared_from_this(), std::move(path), func, address);
+}
+
+bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
+{
+    auto blockContext = m_blockContext.lock();
+    auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
+        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+    auto path = callParameters->codeAddress;
+    EXECUTIVE_LOG(DEBUG) << "check contract status" << LOG_KV("codeAddress", path);
+
+    return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }

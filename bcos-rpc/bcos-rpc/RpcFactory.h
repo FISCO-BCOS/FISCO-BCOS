@@ -22,11 +22,12 @@
 #pragma once
 #include "bcos-rpc/amop/AMOPClient.h"
 #include "bcos-rpc/amop/AirAMOPClient.h"
-#include "bcos-rpc/jsonrpc/groupmgr/AirGroupManager.h"
-#include "bcos-rpc/jsonrpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/groupmgr/AirGroupManager.h"
+#include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
@@ -59,7 +60,8 @@ public:
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
-    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName);
+    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName, std::string const& _rpcServiceName,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     Rpc::Ptr buildLocalRpc(bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
     /**
@@ -75,7 +77,8 @@ public:
 
 protected:
     // for groupManager builder
-    GroupManager::Ptr buildGroupManager();
+    GroupManager::Ptr buildGroupManager(std::string const& _rpcServiceName,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     AirGroupManager::Ptr buildAirGroupManager(
         bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 

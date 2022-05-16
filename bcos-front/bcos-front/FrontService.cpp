@@ -40,10 +40,8 @@ FrontService::FrontService()
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
-                    << LOG_KV(
-                           "minVersion", (bcos::protocol::Version)(m_localProtocol->minVersion()))
-                    << LOG_KV(
-                           "maxVersion", (bcos::protocol::Version)(m_localProtocol->maxVersion()));
+                    << LOG_KV("minVersion", m_localProtocol->minVersion())
+                    << LOG_KV("maxVersion", m_localProtocol->maxVersion());
 }
 
 FrontService::~FrontService()
@@ -417,14 +415,10 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
             FRONT_LOG(ERROR) << LOG_DESC("protocolNegotiate failed")
                              << LOG_KV("nodeID", nodeIDList.at(i))
                              << LOG_KV("groupID", _groupNodeInfo->groupID())
-                             << LOG_KV("minVersion",
-                                    (bcos::protocol::Version)(mutableProtocol->minVersion()))
-                             << LOG_KV("maxVersion",
-                                    (bcos::protocol::Version)(mutableProtocol->maxVersion()))
-                             << LOG_KV("supportedMinVersion",
-                                    (bcos::protocol::Version)(m_localProtocol->minVersion()))
-                             << LOG_KV("supportedMaxVersion",
-                                    (bcos::protocol::Version)(m_localProtocol->maxVersion()));
+                             << LOG_KV("minVersion", mutableProtocol->minVersion())
+                             << LOG_KV("maxVersion", mutableProtocol->maxVersion())
+                             << LOG_KV("supportedMinVersion", m_localProtocol->minVersion())
+                             << LOG_KV("supportedMaxVersion", m_localProtocol->maxVersion());
             mutableProtocol->setVersion(ProtocolVersion::INVALID);
             i++;
             continue;
@@ -432,14 +426,14 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
         // set the negotiated version
         auto version = std::min(m_localProtocol->maxVersion(), mutableProtocol->maxVersion());
         mutableProtocol->setVersion((ProtocolVersion)version);
-        FRONT_LOG(ERROR)
-            << LOG_DESC("protocolNegotiate success") << LOG_KV("nodeID", nodeIDList.at(i))
-            << LOG_KV("groupID", _groupNodeInfo->groupID())
-            << LOG_KV("minVersion", (bcos::protocol::Version)mutableProtocol->minVersion())
-            << LOG_KV("maxVersion", (bcos::protocol::Version)mutableProtocol->maxVersion())
-            << LOG_KV("supportedMinVersion", (bcos::protocol::Version)m_localProtocol->minVersion())
-            << LOG_KV("supportedMaxVersion", (bcos::protocol::Version)m_localProtocol->maxVersion())
-            << LOG_KV("version", version);
+        FRONT_LOG(INFO) << LOG_DESC("protocolNegotiate success")
+                        << LOG_KV("nodeID", nodeIDList.at(i))
+                        << LOG_KV("groupID", _groupNodeInfo->groupID())
+                        << LOG_KV("minVersion", mutableProtocol->minVersion())
+                        << LOG_KV("maxVersion", mutableProtocol->maxVersion())
+                        << LOG_KV("supportedMinVersion", m_localProtocol->minVersion())
+                        << LOG_KV("supportedMaxVersion", m_localProtocol->maxVersion())
+                        << LOG_KV("version", version);
         i++;
     }
 }

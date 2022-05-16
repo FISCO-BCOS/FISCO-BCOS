@@ -28,6 +28,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
+#include <thread>
 
 #define MAX_BLOCK_LIMIT 5000
 
@@ -42,7 +43,7 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt)
+void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
     loadChainConfig(_pt);
     loadCertConfig(_pt);
@@ -50,10 +51,11 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt)
     loadGatewayConfig(_pt);
     loadTxPoolConfig(_pt);
 
+    loadFailOverConfig(_pt, _enforceMemberID);
     loadSecurityConfig(_pt);
     loadSealerConfig(_pt);
-    loadConsensusConfig(_pt);
     loadStorageConfig(_pt);
+    loadConsensusConfig(_pt);
     loadExecutorConfig(_pt);
 }
 
@@ -112,20 +114,13 @@ void NodeConfig::loadNodeServiceConfig(
     m_nodeName = nodeName;
     m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
         getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), false);
-    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
-        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), false);
-    m_consensusServiceName = getServiceName(_pt, "service.consensus", CONSENSUS_SERVANT_NAME,
-        getDefaultServiceName(nodeName, CONSENSUS_SERVICE_NAME), false);
-    m_frontServiceName = getServiceName(_pt, "service.front", FRONT_SERVANT_NAME,
-        getDefaultServiceName(nodeName, FRONT_SERVICE_NAME), false);
     m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
         getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), false);
+    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
+        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
-                         << LOG_KV("txpoolServiceName", m_txpoolServiceName)
-                         << LOG_KV("consensusServiceName", m_consensusServiceName)
-                         << LOG_KV("frontServiceName", m_frontServiceName)
                          << LOG_KV("executorServiceName", m_executorServiceName);
 }
 void NodeConfig::checkService(std::string const& _serviceType, std::string const& _serviceName)
@@ -294,16 +289,33 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.notify_worker_num to positive !"));
     }
-
-    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num", "2");
+    m_verifierWorkerNum = checkAndGetValue(
+        _pt, "txpool.verify_worker_num", std::to_string(std::thread::hardware_concurrency()));
     if (m_verifierWorkerNum <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.verify_worker_num to positive !"));
     }
+    // the txs expiration time, in second
+    auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC(
+                   "loadTxPoolConfig: the configured txs_expiration_time is smaller than default "
+                   "consensus time, reset to the consensus time")
+            << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+            << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+        m_txsExpirationTime = DEFAULT_MIN_CONSENSUS_TIME_MS;
+    }
+    else
+    {
+        m_txsExpirationTime = txsExpirationTime * 1000;
+    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
-                         << LOG_KV("verifierWorkers", m_verifierWorkerNum);
+                         << LOG_KV("verifierWorkers", m_verifierWorkerNum)
+                         << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
 void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
@@ -323,9 +335,9 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
                                   "Please set chain.block_limit to positive and less than " +
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadChainConfig") << LOG_KV("smCrypto", m_smCryptoType)
-                         << LOG_KV("chainId", m_chainId) << LOG_KV("groupId", m_groupId)
-                         << LOG_KV("blockLimit", m_blockLimit);
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
+                         << LOG_KV("smCrypto", m_smCryptoType) << LOG_KV("chainId", m_chainId)
+                         << LOG_KV("groupId", m_groupId) << LOG_KV("blockLimit", m_blockLimit);
 }
 
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -359,14 +371,47 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
+// Note: In components that do not require failover, do not need to set member_id
+void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
+{
+    // only enable leaderElection when using tikv
+    m_enableFailOver = _pt.get("failover.enable", false);
+    if (!m_enableFailOver)
+    {
+        return;
+    }
+    m_failOverClusterUrl = _pt.get<std::string>("failover.cluster_url", "127.0.0.1:2379");
+    m_memberID = _pt.get("failover.member_id", "");
+    if (m_memberID.size() == 0 && _enforceMemberID)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please set failover.member_id must be non-empty "));
+    }
+    m_leaseTTL =
+        checkAndGetValue(_pt, "failover.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
+    if (m_leaseTTL < DEFAULT_MIN_LEASE_TTL_SECONDS)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Please set failover.lease_ttl to no less than " +
+                                  std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
+    }
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadFailOverConfig")
+                         << LOG_KV("failOverClusterUrl", m_failOverClusterUrl)
+                         << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
+                         << LOG_KV("leaseTTL", m_leaseTTL)
+                         << LOG_KV("enableFailOver", m_enableFailOver);
+}
+
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 {
-    m_checkPointTimeoutInterval = checkAndGetValue(_pt, "consensus.checkpoint_timeout", "3000");
-    if (m_checkPointTimeoutInterval < 3000)
+    m_checkPointTimeoutInterval = checkAndGetValue(
+        _pt, "consensus.checkpoint_timeout", std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS));
+    if (m_checkPointTimeoutInterval < DEFAULT_MIN_CONSENSUS_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.checkpoint_timeout to no less than " +
-                                  std::to_string(3000) + "ms!"));
+                                  std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS) + "ms!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
                          << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval);
@@ -396,12 +441,10 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_version = _genesisConfig.get<std::string>(
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
     // must call here to check the compatibility_version
-    m_compatibilityVersion = toVersionNumber(m_version);
-    g_BCOSConfig.setVersion((bcos::protocol::Version)m_compatibilityVersion);
-
+    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (!consensusNodeList || consensusNodeList->empty())
@@ -476,7 +519,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    if (m_compatibilityVersion > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
     {
         std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
     }
@@ -490,7 +533,7 @@ void NodeConfig::generateGenesisData()
     std::string versionData = "";
     if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
     {
-        versionData = m_version + "-";
+        versionData = m_compatibilityVersionStr + "-";
     }
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
@@ -509,9 +552,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _pt)
     m_isWasm = _pt.get<bool>("executor.is_wasm", false);
     m_isAuthCheck = _pt.get<bool>("executor.is_auth_check", false);
     m_authAdminAddress = _pt.get<std::string>("executor.auth_admin_account", "");
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("isAuthCheck", m_isAuthCheck);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig")
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
+                         << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress);
 }
 

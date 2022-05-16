@@ -9,8 +9,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 include(Options)
 include(HunterGate)
 HunterGate(
-        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/2b5b25ecffaba74393740bf0b8758c4e8d9297cf.tar.gz"
-        SHA1 "5d8365a327be260cf24d2b125a71ee7069aca28f"
+        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/162ff7cde3d843e43afdab8fe3214275c35ef168.tar.gz"
+        SHA1 "0ba8099fe89beb0d44986c750fe0d44040725d99"
         FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
@@ -38,6 +38,7 @@ hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
+hunter_add_package(etcd-cpp-apiv3)
 
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
@@ -73,9 +74,10 @@ add_subdirectory(bcos-pbft)
 add_subdirectory(bcos-txpool)
 add_subdirectory(bcos-sync)
 add_subdirectory(bcos-front)
+add_subdirectory(bcos-leader-election)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
-add_subdirectory(fisco-bcos-pro)
+add_subdirectory(fisco-bcos-tars-service)
 
 if (TESTS)
     enable_testing()

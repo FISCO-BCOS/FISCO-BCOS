@@ -14,6 +14,7 @@
 #include <bcos-gateway/gateway/ProGatewayNodeManager.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 
@@ -31,8 +32,9 @@ using namespace bcos::boostssl::context;
  * @param _configPath: config.ini path
  * @return void
  */
-std::shared_ptr<Gateway> GatewayFactory::buildGateway(
-    const std::string& _configPath, bool _airVersion)
+std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _configPath,
+    bool _airVersion, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+    std::string const& _gatewayServiceName)
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
@@ -47,7 +49,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(
         config->initConfig(_configPath, true);
     }
     config->loadP2pConnectedNodes();
-    return buildGateway(config, _airVersion);
+    return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
 /**
@@ -55,7 +57,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(
  * @param _config: config parameter object
  * @return void
  */
-std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion)
+// Note: _gatewayServiceName is used to check the validation of groupInfo when localRouter update
+// groupInfo
+std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
+    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+    std::string const& _gatewayServiceName)
 {
     try
     {
@@ -90,7 +96,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")
                                   << LOG_KV("myself pub id", pubHex)
-                                  << LOG_KV("rpcService", m_rpcServiceName);
+                                  << LOG_KV("rpcService", m_rpcServiceName)
+                                  << LOG_KV("gatewayServiceName", _gatewayServiceName);
 
         service->setId(pubHex);
         service->setMessageFactory(messageFactory);
@@ -112,7 +119,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop);
+        auto gateway = std::make_shared<Gateway>(
+            m_chainID, service, gatewayNodeManager, amop, _gatewayServiceName);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler([weakptrGatewayNodeManager](P2PSession::Ptr p2pSession) {
@@ -125,6 +133,12 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
+        if (!_entryPoint)
+        {
+            return gateway;
+        }
+        initFailOver(gateway, _entryPoint);
+
         return gateway;
     }
     catch (const std::exception& e)
@@ -133,6 +147,52 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                    << LOG_KV("error", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
+}
+
+void GatewayFactory::initFailOver(
+    std::shared_ptr<Gateway> _gateWay, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+{
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    _entryPoint->addMemberChangeNotificationHandler(
+        [_gateWay, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            GATEWAY_FACTORY_LOG(INFO)
+                << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _leaderKey)
+                << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
+                << LOG_KV("groupID", groupInfo->groupID());
+            _gateWay->asyncNotifyGroupInfo(groupInfo, [](Error::Ptr&& _error) {
+                if (_error)
+                {
+                    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification error")
+                                              << LOG_KV("code", _error->errorCode())
+                                              << LOG_KV("msg", _error->errorMessage());
+                    return;
+                }
+                GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification success");
+            });
+        });
+
+    _entryPoint->addMemberDeleteNotificationHandler(
+        [_gateWay, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            GATEWAY_FACTORY_LOG(INFO)
+                << LOG_DESC("The leader entryPoint has been deleted") << LOG_KV("key", _leaderKey)
+                << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
+                << LOG_KV("groupID", groupInfo->groupID());
+            auto nodeInfos = groupInfo->nodeInfos();
+            for (auto const& node : nodeInfos)
+            {
+                _gateWay->unregisterNode(groupInfo->groupID(), node.second->nodeID());
+                GATEWAY_FACTORY_LOG(INFO)
+                    << LOG_DESC("unregisterNode") << LOG_KV("group", groupInfo->groupID())
+                    << LOG_KV("node", node.second->nodeID());
+            }
+        });
+    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initFailOver for gateway success");
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(

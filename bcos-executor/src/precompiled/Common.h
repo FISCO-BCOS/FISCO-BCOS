@@ -20,11 +20,11 @@
 
 #pragma once
 
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
 #include <bcos-framework/interfaces/storage/Common.h>
 #include <bcos-framework/interfaces/storage/Entry.h>
-#include <bcos-utilities/Log.h>
 #include <memory>
 #include <string>
 
@@ -34,9 +34,16 @@ namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[PRECOMPILED]"
 
-// <k,v,entry>
-using Entries = std::vector<storage::Entry>;
-using EntriesPtr = std::shared_ptr<Entries>;
+using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
+using ConditionTuple = std::tuple<uint8_t, std::string>;
+using LimitTuple = std::tuple<uint32_t, uint32_t>;
+using UpdateFieldTuple = std::tuple<uint32_t, std::string>;
+using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
+using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
+
+/// Precompiled reserved code field
+static constexpr const char* const PRECOMPILED_CODE_FIELD = "[PRECOMPILED]";
+static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
 
 /// SYS_CONFIG table fields
 static constexpr size_t SYS_VALUE = 0;
@@ -50,13 +57,14 @@ static const size_t FS_PATH_MAX_LENGTH = 56;
 static const size_t FS_PATH_MAX_LEVEL = 6;
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
-const int SYS_TABLE_KEY_FIELD_MAX_LENGTH = 1024;
-const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
-const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
+const int SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH = 1024;
+// field
 const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
-const int USER_TABLE_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
+// value
+const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
+const int USER_TABLE_MAX_LIMIT_COUNT = 500;
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
@@ -101,9 +109,9 @@ enum PrecompiledErrorCode : int
     CODE_INVALID_CIPHERS = -51600,
 
     // CRUDPrecompiled -51599 ~ -51500
+    CODE_REMOVE_KEY_NOT_EXIST = -51508,
     CODE_UPDATE_KEY_NOT_EXIST = -51507,
     CODE_INSERT_KEY_EXIST = -51506,
-    CODE_KEY_NOT_EXIST_IN_COND = -51505,
     CODE_KEY_NOT_EXIST_IN_ENTRY = -51504,
     CODE_INVALID_UPDATE_TABLE_KEY = -51503,
     CODE_CONDITION_OPERATION_UNDEFINED = -51502,

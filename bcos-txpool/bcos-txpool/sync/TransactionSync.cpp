@@ -30,7 +30,7 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
 using namespace bcos::consensus;
-static unsigned const c_maxSendTransactions = 1000;
+static unsigned const c_maxSendTransactions = 10000;
 
 void TransactionSync::start()
 {
@@ -418,7 +418,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         }
     }
     _onVerifyFinished(error, true);
-    SYNC_LOG(DEBUG) << LOG_DESC("requestMissedTxs and verify success")
+    SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
                     << LOG_KV(
                            "hash", (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
                     << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1)
@@ -447,7 +447,10 @@ void TransactionSync::maintainDownloadingTransactions()
         auto txsBuffer = (*localBuffer)[i];
         auto transactions =
             m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
-        importDownloadedTxs(txsBuffer->from(), transactions);
+        // async here to accelerate the txs process
+        m_worker->enqueue([this, txsBuffer, transactions]() {
+            importDownloadedTxs(txsBuffer->from(), transactions);
+        });
     }
 }
 

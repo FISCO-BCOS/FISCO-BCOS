@@ -58,13 +58,15 @@ public:
     void asyncSetRow(std::string_view table, std::string_view key, Entry entry,
         std::function<void(Error::UniquePtr)> callback) override;
 
-    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
+    void asyncPrepare(const bcos::protocol::TwoPCParams& params,
+        const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) override;
 
-    void asyncCommit(const TwoPCParams& params, std::function<void(Error::Ptr)> callback) override;
+    void asyncCommit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr)> callback) override;
 
-    void asyncRollback(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) override;
+    void asyncRollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr)> callback) override;
 
 private:
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;

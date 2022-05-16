@@ -65,6 +65,10 @@ enum ExecuteError : int32_t
     TABLE_NOT_FOUND,
 };
 
+static const char* const USER_TABLE_PREFIX = "/tables/";
+static const char* const USER_APPS_PREFIX = "/apps/";
+static const char* const USER_SYS_PREFIX = "/sys/";
+
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
 static const char* const ACCOUNT_CODE = "code";
@@ -77,9 +81,14 @@ static const char* const ACCOUNT_FROZEN = "frozen";
 /// auth
 static const char* const CONTRACT_SUFFIX = "_accessAuth";
 static const char* const ADMIN_FIELD = "admin";
+static const char* const STATUS_FIELD = "status";
 static const char* const METHOD_AUTH_TYPE = "method_auth_type";
 static const char* const METHOD_AUTH_WHITE = "method_auth_white";
 static const char* const METHOD_AUTH_BLACK = "method_auth_black";
+
+/// contract status
+static const char* const CONTRACT_FROZEN = "frozen";
+static const char* const CONTRACT_NORMAL = "normal";
 
 /// FileSystem table keys
 static const char* const FS_KEY_NAME = "name";
@@ -309,9 +318,10 @@ protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
 }  // namespace executor
 
+bool hasWasmPreamble(const std::string_view& _input);
 bool hasWasmPreamble(const bytesConstRef& _input);
 bool hasWasmPreamble(const bytes& _input);
-
+bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address
  * @param _addr : the string address

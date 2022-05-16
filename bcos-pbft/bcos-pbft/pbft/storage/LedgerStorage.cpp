@@ -351,6 +351,11 @@ void LedgerStorage::commitStableCheckPoint(BlockHeader::Ptr _blockHeader, Block:
                                                LedgerConfig::Ptr _ledgerConfig) {
         try
         {
+            auto ledgerStorage = self.lock();
+            if (!ledgerStorage)
+            {
+                return;
+            }
             if (_error != nullptr)
             {
                 PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")
@@ -358,17 +363,13 @@ void LedgerStorage::commitStableCheckPoint(BlockHeader::Ptr _blockHeader, Block:
                                         << LOG_KV("errorInfo", _error->errorMessage())
                                         << LOG_KV("proposalIndex", _blockHeader->number())
                                         << LOG_KV("timecost", utcTime() - startT);
-                return;
-            }
-            auto ledgerStorage = self.lock();
-            if (!ledgerStorage)
-            {
+                ledgerStorage->m_onStableCheckPointCommitFailed(_blockHeader);
                 return;
             }
             auto commitPerTx =
                 (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
             PBFT_STORAGE_LOG(INFO)
-                << LOG_DESC("commitStableCheckPoint success")
+                << METRIC << LOG_DESC("commitStableCheckPoint success")
                 << LOG_KV("index", _blockHeader->number())
                 << LOG_KV("hash", _ledgerConfig->hash().abridged())
                 << LOG_KV("txs", _blockInfo->transactionsHashSize())

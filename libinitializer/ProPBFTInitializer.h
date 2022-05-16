@@ -34,7 +34,7 @@ class ProPBFTInitializer : public PBFTInitializer
 {
 public:
     using Ptr = std::shared_ptr<ProPBFTInitializer>;
-    ProPBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
+    ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
         bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
@@ -43,15 +43,17 @@ public:
 
     virtual ~ProPBFTInitializer() { stop(); }
 
-    virtual void init();
+    void init() override;
 
-    virtual void start();
-    virtual void stop();
+    void start() override;
+    void stop() override;
 
 protected:
     // the task triggered by the timer periodically
     virtual void scheduledTask();
     virtual void reportNodeInfo();
+
+    void onGroupInfoChanged() override;
 
 private:
     std::shared_ptr<bcos::Timer> m_timer;

@@ -43,7 +43,7 @@ class StorageInterface
 {
 public:
     static constexpr const char SYS_TABLES[] = "s_tables";
-    static constexpr const char SYS_TABLE_VALUE_FIELDS[] = "value_fields,key_field";
+    static constexpr const char SYS_TABLE_VALUE_FIELDS[] = "key_field,value_fields";
 
     static TableInfo::ConstPtr getSysTableInfo(std::string_view tableName);
 
@@ -108,22 +108,15 @@ public:
 
     virtual ~TransactionalStorageInterface() = default;
 
-    struct TwoPCParams
-    {
-        bcos::protocol::BlockNumber number = 0;
-        std::string primaryTableName;
-        std::string primaryTableKey;
-        uint64_t startTS = 0;
-    };
-
-    virtual void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
+    virtual void asyncPrepare(const bcos::protocol::TwoPCParams& params,
+        const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
     virtual void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
+        const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
 
     virtual void asyncRollback(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
+        const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
 };
 
 }  // namespace storage

@@ -50,7 +50,37 @@ struct CallParameters
 
     int32_t status = 0;  // by response
     Type type;
-    bool staticCall = false;  // common field
-    bool create = false;      // by request, is create
+    bool staticCall = false;      // common field
+    bool create = false;          // by request, is creation
+    bool internalCreate = false;  // by internal precompiled request, is creation
+    /**
+     * Internal precompiled contract request, this option is used to
+     * modify contract table, which address scheduled by 'to', by a
+     * certain precompiled contract
+     */
+    bool internalCall = false;
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "[" << contextID << "|" << seq << "|";
+        switch (type)
+        {
+        case MESSAGE:
+            ss << "MESSAGE";
+            break;
+        case KEY_LOCK:
+            ss << "KEY_LOCK";
+            break;
+        case FINISHED:
+            ss << "FINISHED";
+            break;
+        case REVERT:
+            ss << "REVERT";
+            break;
+        };
+        ss << "]";
+        return ss.str();
+    }
 };
 }  // namespace bcos::executor

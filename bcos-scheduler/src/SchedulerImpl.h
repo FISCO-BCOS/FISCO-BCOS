@@ -114,12 +114,6 @@ public:
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 
-    virtual void registerVersionInfoNotification(
-        std::function<void(uint32_t _version)> _versionNotification)
-    {
-        m_versionNotification = _versionNotification;
-    }
-
 private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
@@ -149,6 +143,6 @@ private:
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(Error::Ptr)>)>
         m_txNotifier;
-    std::function<void(uint32_t _version)> m_versionNotification;
+    uint64_t m_lastExecuteFinishTime = 0;
 };
 }  // namespace bcos::scheduler

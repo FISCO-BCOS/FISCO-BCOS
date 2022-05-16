@@ -106,7 +106,7 @@ struct TestTiKVStorageFixture
             testTable->setRow(key, std::move(entry));
         }
 
-        auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+        auto params1 = bcos::protocol::TwoPCParams();
         params1.number = 100;
         params1.primaryTableName = testTableName;
         params1.primaryTableKey = "key0";
@@ -119,7 +119,7 @@ struct TestTiKVStorageFixture
         });
 
         // commit
-        storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+        storage->asyncCommit(bcos::protocol::TwoPCParams(),
             [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto commitEnd = std::chrono::system_clock::now();
         // check commit success
@@ -155,7 +155,7 @@ struct TestTiKVStorageFixture
             params1.startTS = ts;
         });
         // commit
-        storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+        storage->asyncCommit(bcos::protocol::TwoPCParams(),
             [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto deleteEnd = std::chrono::system_clock::now();
         // check if the data is deleted
@@ -419,12 +419,12 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         table2Keys.push_back(key2);
     }
 
-    storage->asyncPrepare(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
-        *stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(
+        bcos::protocol::TwoPCParams(), *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
         });
-    storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+    storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
 
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
@@ -533,7 +533,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
-    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryTableName = testTableName;
     params1.primaryTableKey = "key0";
@@ -558,7 +558,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
         });
     });
     // only storage call asyncCommit
-    storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+    storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
@@ -667,7 +667,7 @@ BOOST_AUTO_TEST_CASE(singleStorageRollback)
         entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
     }
-    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryTableName = table1Name;
     params1.primaryTableKey = "key0";
@@ -732,7 +732,7 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
-    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryTableName = testTableName;
     params1.primaryTableKey = "key0";
@@ -826,7 +826,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
-    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryTableName = testTableName;
     params1.primaryTableKey = "key0";
@@ -885,7 +885,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
         });
     });
     // only storage call asyncCommit
-    storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+    storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
@@ -1039,7 +1039,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
-    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryTableName = testTableName;
     params1.primaryTableKey = "key0";
@@ -1083,7 +1083,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
         });
     });
     // only storage call asyncCommit
-    storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+    storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),

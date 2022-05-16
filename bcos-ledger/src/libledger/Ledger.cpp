@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -216,17 +217,17 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 setRowCallback(std::make_unique<Error>(*error), 2);
                 return;
             }
-
+            auto totalTxsCount = total + totalCount;
             Entry totalEntry;
-            totalEntry.importFields({boost::lexical_cast<std::string>(total + totalCount)});
+            totalEntry.importFields({boost::lexical_cast<std::string>(totalTxsCount)});
             storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
                 std::move(totalEntry),
                 [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
-
+            auto failedTxs = failed + failedCount;
             if (failedCount != 0)
             {
                 Entry failedEntry;
-                failedEntry.importFields({boost::lexical_cast<std::string>(failed + failedCount)});
+                failedEntry.importFields({boost::lexical_cast<std::string>(failedTxs)});
                 storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
                     std::move(failedEntry),
                     [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
@@ -235,6 +236,10 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             {
                 setRowCallback({}, true);
             }
+            LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
+                             << LOG_KV("number", block->blockHeaderConst()->number())
+                             << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
+                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
 }
 
@@ -983,8 +988,6 @@ Error::Ptr Ledger::checkEntryValid(Error::UniquePtr&& error,
     {
         std::stringstream ss;
         ss << "Entry: " << key << " does not exists!";
-        LEDGER_LOG(ERROR) << ss.str();
-
         return BCOS_ERROR_PTR(LedgerError::GetStorageError, ss.str());
     }
 
@@ -1101,7 +1104,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
             {
                 if (!entry.has_value())
                 {
-                    LEDGER_LOG(INFO) << "Get transaction failed: " << (*hashes)[i] << " not found";
+                    LEDGER_LOG(TRACE) << "Get transaction failed: " << (*hashes)[i] << " not found";
                 }
                 else
                 {
@@ -1417,14 +1420,14 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+    if (versionNumber > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
     {
         LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                         << LOG_KV("version", g_BCOSConfig.version());
+                         << LOG_KV("versionNumber", versionNumber);
         // write compatibility version
         Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(_compatibilityVersion), 0});
+        compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
         sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
     }
 
@@ -1572,12 +1575,11 @@ void Ledger::buildDir(const std::string& _absoluteDir)
         std::vector<std::string> sysContracts({
             getSysBaseName(precompiled::SYS_CONFIG_NAME),
             getSysBaseName(precompiled::CONSENSUS_NAME),
-            getSysBaseName(precompiled::CONTRACT_AUTH_NAME),
-            getSysBaseName(precompiled::PARALLEL_CONFIG_NAME),
+            getSysBaseName(precompiled::AUTH_MANAGER_NAME),
             getSysBaseName(precompiled::KV_TABLE_NAME),
             getSysBaseName(precompiled::CRYPTO_NAME),
             getSysBaseName(precompiled::BFS_NAME),
-            getSysBaseName(precompiled::TABLE_NAME)
+            getSysBaseName(precompiled::TABLE_MANAGER_NAME)
         });
         // clang-format on
         for (const auto& contract : sysContracts)

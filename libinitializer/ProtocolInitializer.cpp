@@ -101,7 +101,7 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
     auto privateKey = m_keyFactory->createKey(*privateKeyData);
     m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
 
-    INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair success")
+    INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair success")
                           << LOG_KV("privateKeyPath", _privateKeyPath)
-                          << LOG_KV("publicKey", m_keyPair->publicKey()->shortHex());
+                          << LOG_KV("publicKey", m_keyPair->publicKey()->hex());
 }

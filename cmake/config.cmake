@@ -45,9 +45,6 @@ hunter_config(evmone VERSION 8.2.0-53ff1c54
 	SHA1 e6c1a8f1acd908c770426bb5015d45b3f9138179
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
-
-hunter_config(tarscpp VERSION 3.0.3-3b65a48a)
-
 hunter_config(
     Boost VERSION "1.76.0-local"
     URL
@@ -98,7 +95,12 @@ hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
     SHA1 e56121278bf07587d58d154b4615f96575957d6f
 )
 
-hunter_config(tarscpp VERSION 3.0.3-local
-    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5b8982f95f9c056e664b186aecd50f376b604d04.tar.gz
-	SHA1 b1e879c9b9f0f6d7ee31753ad6bf238d8b9c137f
+hunter_config(tarscpp VERSION 3.0.4-local
+    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5ef1e21daaf1e143e81be5c7560c879f76edf447.tar.gz
+	SHA1 000a070a99d82740f2f238f2defbc2ee7ff3bf76
+)
+
+hunter_config(etcd-cpp-apiv3 VERSION 0.2.5-local
+    URL "https://${URL_BASE}/FISCO-BCOS/etcd-cpp-apiv3/archive/0224827009c4b936f95788a3089911005a0515d5.tar.gz"
+    SHA1 e63a710751bd3c495e465c487f2a6a015521b360
 )

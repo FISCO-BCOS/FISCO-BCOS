@@ -19,13 +19,17 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
-#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
+#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-leader-election/src/LeaderElectionFactory.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
@@ -45,8 +49,10 @@ using namespace bcos::storage;
 using namespace bcos::scheduler;
 using namespace bcos::initializer;
 using namespace bcos::group;
+using namespace bcos::protocol;
+using namespace bcos::election;
 
-PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
+PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
@@ -61,10 +67,12 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     m_storage(_storage),
     m_frontService(_frontService)
 {
+    m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     createSealer();
     createPBFT();
     createSync();
     registerHandlers();
+    initChainNodeInfo(m_nodeArchType, m_nodeConfig);
 }
 
 std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
@@ -115,7 +123,7 @@ std::string PBFTInitializer::generateIniConfig(bcos::tool::NodeConfig::Ptr _node
 }
 
 void PBFTInitializer::initChainNodeInfo(
-    bcos::initializer::NodeArchitectureType _nodeArchType, bcos::tool::NodeConfig::Ptr _nodeConfig)
+    bcos::protocol::NodeArchitectureType _nodeArchType, bcos::tool::NodeConfig::Ptr _nodeConfig)
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
@@ -125,42 +133,40 @@ void PBFTInitializer::initChainNodeInfo(
         nodeType = bcos::group::NodeCryptoType::SM_NODE;
     }
     bool microServiceMode = true;
-    if (_nodeArchType == bcos::initializer::NodeArchitectureType::AIR)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::AIR)
     {
         microServiceMode = false;
     }
-    auto chainNodeInfo = std::make_shared<ChainNodeInfo>(_nodeConfig->nodeName(), nodeType);
-    chainNodeInfo->setNodeID(m_protocolInitializer->keyPair()->publicKey()->hex());
 
-    chainNodeInfo->setIniConfig(generateIniConfig(_nodeConfig));
-    chainNodeInfo->setMicroService(microServiceMode);
-    chainNodeInfo->setNodeType(m_blockSync->config()->nodeType());
-    chainNodeInfo->setNodeCryptoType(
+    m_nodeInfo = std::make_shared<ChainNodeInfo>(_nodeConfig->nodeName(), nodeType);
+    m_nodeInfo->setNodeID(m_protocolInitializer->keyPair()->publicKey()->hex());
+
+    m_nodeInfo->setIniConfig(generateIniConfig(_nodeConfig));
+    m_nodeInfo->setMicroService(microServiceMode);
+    m_nodeInfo->setNodeType(m_blockSync->config()->nodeType());
+    m_nodeInfo->setNodeCryptoType(
         (_nodeConfig->smCryptoType() ? NodeCryptoType::SM_NODE : NON_SM_NODE));
-
-    bool useConfigServiceName = false;
-    if (_nodeArchType == bcos::initializer::NodeArchitectureType::MAX)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::AIR)
     {
-        useConfigServiceName = true;
+        m_nodeInfo->appendServiceInfo(SCHEDULER, SCHEDULER_SERVANT_NAME);
+        m_nodeInfo->appendServiceInfo(LEDGER, LEDGER_SERVANT_NAME);
+        m_nodeInfo->appendServiceInfo(FRONT, FRONT_SERVANT_NAME);
+        m_nodeInfo->appendServiceInfo(TXPOOL, TXPOOL_SERVANT_NAME);
     }
-    auto localNodeServiceName = ServerConfig::Application + "." + ServerConfig::ServerName;
-    chainNodeInfo->appendServiceInfo(SCHEDULER,
-        useConfigServiceName ? m_nodeConfig->schedulerServiceName() : localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(LEDGER,
-        useConfigServiceName ? bcostars::getProxyDesc(LEDGER_SERVANT_NAME) : localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(
-        FRONT, useConfigServiceName ? m_nodeConfig->frontServiceName() : localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(CONSENSUS, localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(
-        TXPOOL, useConfigServiceName ? m_nodeConfig->txpoolServiceName() : localNodeServiceName);
+    // Note: must set the serviceInfo for rpc/gateway to pass the groupInfo check when sync latest
+    // groupInfo to rpc/gateway service
+    m_nodeInfo->appendServiceInfo(GATEWAY, m_nodeConfig->gatewayServiceName());
+    m_nodeInfo->appendServiceInfo(RPC, m_nodeConfig->rpcServiceName());
     // set protocolInfo
     auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
-    chainNodeInfo->setNodeProtocol(*nodeProtocolInfo);
-    m_groupInfo->appendNodeInfo(chainNodeInfo);
+    m_nodeInfo->setNodeProtocol(*nodeProtocolInfo);
+    m_nodeInfo->setSystemVersion(m_pbft->compatibilityVersion());
+    m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
-                          << LOG_KV("nodeType", chainNodeInfo->nodeType())
-                          << LOG_KV("nodeCryptoType", chainNodeInfo->nodeCryptoType())
-                          << LOG_KV("nodeName", _nodeConfig->nodeName());
+                          << LOG_KV("nodeType", m_nodeInfo->nodeType())
+                          << LOG_KV("nodeCryptoType", m_nodeInfo->nodeCryptoType())
+                          << LOG_KV("nodeName", _nodeConfig->nodeName())
+                          << LOG_KV("systemVersion", m_nodeInfo->systemVersion());
 }
 
 void PBFTInitializer::start()
@@ -168,10 +174,18 @@ void PBFTInitializer::start()
     m_sealer->start();
     m_blockSync->start();
     m_pbft->start();
+    if (m_leaderElection)
+    {
+        m_leaderElection->start();
+    }
 }
 
 void PBFTInitializer::stop()
 {
+    if (m_leaderElection)
+    {
+        m_leaderElection->stop();
+    }
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
@@ -182,7 +196,16 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
-    initChainNodeInfo(m_nodeArchType, m_nodeConfig);
+    if (m_nodeConfig->enableFailOver())
+    {
+        initConsensusFailOver(m_protocolInitializer->keyPair()->publicKey());
+    }
+    else
+    {
+        m_blockSync->enableAsMaster(true);
+        m_pbft->enableAsMaterNode(true);
+    }
+    syncGroupNodeInfo();
 }
 
 void PBFTInitializer::registerHandlers()
@@ -308,6 +331,39 @@ void PBFTInitializer::registerHandlers()
                                          << LOG_KV("error", boost::diagnostic_information(e));
             }
         });
+    m_txpool->registerTxsCleanUpSwitch([this]() -> bool {
+        auto config = m_pbft->pbftEngine()->pbftConfig();
+        // should clean up expired txs periodically for non-consensus node
+        if (!config->isConsensusNode())
+        {
+            return true;
+        }
+        // clean up the expired txs for the consensus-timeout node
+        return config->timeout();
+    });
+}
+
+void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
+{
+    // version notification
+    m_pbft->registerVersionInfoNotification([_rpc, this](uint32_t _version) {
+        // Note: the nodeInfo and the groupInfo are mutable
+        auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
+        // Note: notify groupInfo to all rpc nodes in pro/max mode
+        nodeInfo->setSystemVersion(_version);
+        _rpc->asyncNotifyGroupInfo(m_groupInfo, [_version](bcos::Error::Ptr&& _error) {
+            if (!_error)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("versionInfoNotification success") << LOG_KV("version", _version);
+                return;
+            }
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("versionInfoNotification error") << LOG_KV("version", _version)
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+        });
+        onGroupInfoChanged();
+    });
 }
 
 void PBFTInitializer::createSealer()
@@ -376,7 +432,6 @@ void PBFTInitializer::syncGroupNodeInfo()
                 INITIALIZER_LOG(WARNING)
                     << LOG_DESC("asyncGetGroupNodeInfo failed")
                     << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                pbftInit->m_groupNodeInfoFetched.store(false);
                 return;
             }
             try
@@ -387,6 +442,10 @@ void PBFTInitializer::syncGroupNodeInfo()
                 }
                 NodeIDSet nodeIdSet;
                 auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+                if (nodeIDList.size() == 0)
+                {
+                    return;
+                }
                 for (auto const& nodeIDStr : nodeIDList)
                 {
                     auto nodeID =
@@ -394,8 +453,6 @@ void PBFTInitializer::syncGroupNodeInfo()
                             fromHex(nodeIDStr));
                     nodeIdSet.insert(nodeID);
                 }
-                // fetch the groupNodeInfo success
-                pbftInit->m_groupNodeInfoFetched.store(true);
                 // the blockSync module set the connected node list
                 pbftInit->m_blockSync->config()->setConnectedNodeList(std::move(nodeIdSet));
                 // the txpool module set the connected node list
@@ -410,4 +467,46 @@ void PBFTInitializer::syncGroupNodeInfo()
                                          << LOG_KV("error", boost::diagnostic_information(e));
             }
         });
+}
+
+void PBFTInitializer::onGroupInfoChanged()
+{
+    if (!m_leaderElection)
+    {
+        return;
+    }
+    // failover enabled, should sync the latest information to the etcd if the node is
+    // leader
+    INITIALIZER_LOG(INFO) << LOG_DESC("onGroupInfoChanged, update the memberConfig");
+    std::string modifiedConfig;
+    m_groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
+    auto memberInfo = m_memberFactory->createMember();
+    memberInfo->setMemberID(m_nodeConfig->memberID());
+    memberInfo->setMemberConfig(modifiedConfig);
+    m_leaderElection->updateSelfConfig(memberInfo);
+}
+
+void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
+{
+    m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+    auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
+    // leader key: /${chainID}/consensus/${nodeID}
+    std::string leaderKey =
+        "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR + _nodeID->hex();
+
+    std::string nodeConfig;
+    m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
+    m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
+        nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
+        m_nodeConfig->leaseTTL());
+    // register the handler
+    m_leaderElection->registerOnCampaignHandler(
+        [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
+            m_pbft->enableAsMaterNode(_success);
+            m_blockSync->enableAsMaster(_success);
+            INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
+                                  << LOG_KV("leader", _leader ? _leader->memberID() : "None");
+        });
+    INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
+                          << LOG_KV("nodeConfig", nodeConfig);
 }

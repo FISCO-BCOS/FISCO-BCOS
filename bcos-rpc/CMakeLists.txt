@@ -34,11 +34,11 @@ add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
 target_compile_options(${RPC_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl::bcos-boostssl OpenSSL::SSL OpenSSL::Crypto ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_lib_static ${CRYPTO_TARGET})
 
-if (TESTS)
-    enable_testing()
-    set(CTEST_OUTPUT_ON_FAILURE TRUE)
-    add_subdirectory(test)
-endif()
+#if (TESTS)
+#    enable_testing()
+#    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+#    add_subdirectory(test)
+#endif()
 
 # for code coverage
 if (COVERAGE)

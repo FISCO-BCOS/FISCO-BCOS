@@ -28,13 +28,28 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum) : m_config(_config)
+MemoryStorage::MemoryStorage(
+    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, int64_t _txsExpirationTime)
+  : m_config(_config), m_txsExpirationTime(_txsExpirationTime)
 {
     m_notifier = std::make_shared<ThreadPool>("txNotifier", _notifyWorkerNum);
     m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
     m_blockNumberUpdatedTime = utcTime();
+    // Trigger a transaction cleanup operation every 3s
+    m_cleanUpTimer = std::make_shared<Timer>(3000);
+    m_cleanUpTimer->registerTimeoutHandler(
+        boost::bind(&MemoryStorage::cleanUpExpiredTransactions, this));
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
-                     << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum);
+                     << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
+                     << LOG_KV("txsExpriationTime", m_txsExpirationTime);
+}
+
+void MemoryStorage::start()
+{
+    if (m_cleanUpTimer)
+    {
+        m_cleanUpTimer->start();
+    }
 }
 
 void MemoryStorage::stop()
@@ -47,6 +62,10 @@ void MemoryStorage::stop()
     {
         m_worker->stop();
     }
+    if (m_cleanUpTimer)
+    {
+        m_cleanUpTimer->stop();
+    }
 }
 
 TransactionStatus MemoryStorage::submitTransaction(
@@ -55,6 +74,7 @@ TransactionStatus MemoryStorage::submitTransaction(
     try
     {
         auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
+        tx->setImportTime(utcTime());
         auto result = submitTransaction(tx, _txSubmitCallback);
         if (result != TransactionStatus::None)
         {
@@ -168,7 +188,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     result = m_config->txValidator()->verify(_tx);
     if (result == TransactionStatus::None)
     {
-        _tx->setImportTime(utcTime());
         if (_txSubmitCallback)
         {
             _tx->setSubmitCallback(_txSubmitCallback);
@@ -388,12 +407,16 @@ void MemoryStorage::printPendingTxs()
 }
 void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
 {
+    auto startT = utcTime();
+    auto recordT = utcTime();
+    int64_t lockT = 0;
     m_blockNumberUpdatedTime = utcTime();
     size_t succCount = 0;
     NonceListPtr nonceList = std::make_shared<NonceList>();
     {
         // batch remove
         WriteGuard l(x_txpoolMutex);
+        lockT = utcTime() - startT;
         for (auto txResult : _txsResult)
         {
             auto tx = removeSubmittedTxWithoutLock(txResult);
@@ -414,14 +437,22 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
             m_blockNumber = _batchId;
         }
     }
+    auto removeT = utcTime() - startT;
+    startT = utcTime();
     notifyUnsealedTxsSize();
-    TXPOOL_LOG(INFO) << LOG_DESC("batchRemove txs success")
-                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
-                     << LOG_KV("batchId", _batchId);
     // update the ledger nonce
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    auto updateLedgerNonceT = utcTime() - startT;
+    startT = utcTime();
     // update the txpool nonce
     m_config->txPoolNonceChecker()->batchRemove(*nonceList);
+    auto updateTxPoolNonceT = utcTime() - startT;
+    TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
+                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
+                     << LOG_KV("batchId", _batchId) << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
+                     << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
+                     << LOG_KV("updateLedgerNonceT", updateLedgerNonceT);
 }
 
 TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
@@ -472,10 +503,19 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
+    TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
+                     << LOG_KV("limit", _txsLimit);
     auto blockFactory = m_config->blockFactory();
+    auto recordT = utcTime();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
-    for (auto it : m_txsTable)
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
+    int64_t currentTime = (int64_t)utcTime();
+    size_t traverseCount = 0;
+    for (auto const& it : m_txsTable)
     {
+        traverseCount++;
         auto tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
@@ -486,6 +526,13 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         auto txHash = tx->hash();
         if (m_invalidTxs.count(txHash))
         {
+            continue;
+        }
+        if (currentTime > (tx->importTime() + m_txsExpirationTime))
+        {
+            // add to m_invalidTxs to be deleted
+            m_invalidTxs.insert(txHash);
+            m_invalidTxs.insert(tx->nonce());
             continue;
         }
         /// check nonce again when obtain transactions
@@ -552,8 +599,16 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             break;
         }
     }
+    auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
     removeInvalidTxs();
+    TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
+                     << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
+                     << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
+                     << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT)
+                     << LOG_KV("traverseCount", traverseCount);
 }
 
 void MemoryStorage::removeInvalidTxs()
@@ -608,6 +663,10 @@ void MemoryStorage::clear()
 {
     WriteGuard l(x_txpoolMutex);
     m_txsTable.clear();
+    m_invalidTxs.clear();
+    m_invalidNonces.clear();
+    m_missedTxs.clear();
+    notifyUnsealedTxsSize();
 }
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
@@ -783,7 +842,13 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     {
         return missedTxs;
     }
+    auto batchId = (_block && _block->blockHeader()) ? _block->blockHeader()->number() : -1;
+    auto batchHash = (_block && _block->blockHeader()) ? _block->blockHeader()->hash() :
+                                                         bcos::crypto::HashType();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
     for (size_t i = 0; i < txsSize; i++)
     {
         auto txHash = _block->transactionHash(i);
@@ -792,8 +857,12 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
             missedTxs->emplace_back(txHash);
         }
     }
+    TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
+                     << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
+                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
     return missedTxs;
 }
+
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
     ReadGuard l(x_txpoolMutex);
@@ -821,4 +890,45 @@ HashListPtr MemoryStorage::getAllTxsHash()
         txsHash->emplace_back(it.first);
     }
     return txsHash;
+}
+
+void MemoryStorage::cleanUpExpiredTransactions()
+{
+    m_cleanUpTimer->restart();
+
+    // Note: In order to minimize the impact of cleanUp on performance,
+    // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears
+    // expired txs in the process of sealing txs
+    if (m_txsCleanUpSwitch && !m_txsCleanUpSwitch())
+    {
+        return;
+    }
+    ReadGuard l(x_txpoolMutex);
+    if (m_txsTable.size() == 0)
+    {
+        return;
+    }
+    size_t traversedTxsNum = 0;
+    size_t erasedTxs = 0;
+    int64_t currentTime = utcTime();
+    for (auto it = m_txsTable.begin();
+         traversedTxsNum <= c_maxTraverseTxsNum && it != m_txsTable.end(); it++)
+    {
+        auto tx = it->second;
+        if (m_invalidTxs.count(tx->hash()))
+        {
+            continue;
+        }
+        // the txs expired or not
+        if (currentTime > (tx->importTime() + m_txsExpirationTime))
+        {
+            m_invalidTxs.insert(tx->hash());
+            m_invalidNonces.insert(tx->nonce());
+            erasedTxs++;
+        }
+        traversedTxsNum++;
+    }
+    TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
+                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs);
+    removeInvalidTxs();
 }

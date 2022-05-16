@@ -35,7 +35,7 @@ public:
     virtual ~GroupInfoCodec() {}
 
     virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
+    virtual void serialize(std::string& _encodedData, GroupInfo::Ptr _groupInfo) = 0;
 };
 }  // namespace group
 }  // namespace bcos

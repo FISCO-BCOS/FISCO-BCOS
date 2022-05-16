@@ -195,8 +195,8 @@ void FileSystemPrecompiled::listDir(
 
     if (table)
     {
-        auto parentDirAndBaseName = getParentDirAndBaseName(absolutePath);
-        auto baseName = parentDirAndBaseName.second;
+        std::string baseName;
+        std::tie(std::ignore, baseName) = getParentDirAndBaseName(absolutePath);
         // file exists, try to get type
         auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
         if (typeEntry)
@@ -223,7 +223,7 @@ void FileSystemPrecompiled::listDir(
                 auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
                 std::vector<std::string> ext;
                 ext.emplace_back(addressEntry->getField(0));
-                ext.emplace_back(abiEntry->getField(0));
+                ext.emplace_back(abiEntry.has_value() ? abiEntry->getField(0) : "");
                 BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
                 files.emplace_back(std::move(link));
             }
@@ -362,15 +362,6 @@ void FileSystemPrecompiled::readLink(
         callResult->setExecResult(emptyResult);
         return;
     }
-    std::string name, version;
-    std::tie(name, version) = getLinkNameAndVersion(absolutePath);
-    if (name.empty() || version.empty())
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("invalid link")
-                               << LOG_KV("path", absolutePath);
-        callResult->setExecResult(emptyResult);
-        return;
-    }
     auto table = _executive->storage().openTable(absolutePath);
 
     if (table)
@@ -475,4 +466,105 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
     _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
     getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+}
+
+bool FileSystemPrecompiled::recursiveBuildDir(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const std::string& _absoluteDir)
+{
+    if (_absoluteDir.empty())
+    {
+        return false;
+    }
+    // transfer /usr/local/bin => ["usr", "local", "bin"]
+    std::vector<std::string> dirList;
+    std::string absoluteDir = _absoluteDir;
+    if (absoluteDir[0] == '/')
+    {
+        absoluteDir = absoluteDir.substr(1);
+    }
+    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    {
+        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+    }
+    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
+    std::string root = "/";
+
+    for (auto dir : dirList)
+    {
+        auto table = _executive->storage().openTable(root);
+        if (!table)
+        {
+            EXECUTIVE_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
+                                 << LOG_DESC("can not open path table")
+                                 << LOG_KV("tableName", root);
+            return false;
+        }
+        auto newTableName = ((root == "/") ? root : (root + "/")) + dir;
+        auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
+        if (typeEntry)
+        {
+            // can get type, then this type is directory
+            // try open root + dir
+            auto nextDirTable = _executive->storage().openTable(newTableName);
+            if (nextDirTable.has_value())
+            {
+                // root + dir table exist, try to get type entry
+                auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
+                if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
+                {
+                    // if success and dir is directory, continue
+                    root = newTableName;
+                    continue;
+                }
+                else
+                {
+                    // can not get type, it means this dir is not a directory
+                    EXECUTIVE_LOG(ERROR)
+                        << LOG_BADGE("recursiveBuildDir")
+                        << LOG_DESC("file had already existed, and not directory type")
+                        << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+                    return false;
+                }
+            }
+
+            // root + dir not exist, create root + dir and build bfs info in root table
+            auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
+            auto&& out = asBytes(std::string(subEntry->getField(0)));
+            // codec to map
+            std::map<std::string, std::string> bfsInfo;
+            codec::scale::decode(bfsInfo, gsl::make_span(out));
+
+            /// create table and build bfs info
+            bfsInfo.insert(std::make_pair(dir, FS_TYPE_DIR));
+            _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
+            storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+            std::map<std::string, std::string> newSubMap;
+            tEntry.importFields({FS_TYPE_DIR});
+            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+            aclTypeEntry.importFields({"0"});
+            aclWEntry.importFields({""});
+            aclBEntry.importFields({""});
+            extraEntry.importFields({""});
+            _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_WHITE, std::move(aclWEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_BLACK, std::move(aclBEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
+
+            // set metadata in parent dir
+            subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+            _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
+            root = newTableName;
+        }
+        else
+        {
+            EXECUTIVE_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
+                                 << LOG_DESC("file had already existed, and not directory type")
+                                 << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+            return false;
+        }
+    }
+    return true;
 }

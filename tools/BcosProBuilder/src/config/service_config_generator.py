@@ -102,7 +102,8 @@ class ServiceConfigGenerator:
             utilities.log_error(
                 "config file %s already exists, please delete after confirming carefully" % generated_file_path)
             return False
-        ini_config = configparser.ConfigParser()
+        ini_config = configparser.ConfigParser(
+            comment_prefixes='/', allow_no_value=True)
         ini_config.read(self.tpl_config_path)
         ini_config[self.section]['listen_ip'] = self.service_config.listen_ip
         ini_config[self.section]['listen_port'] = str(
@@ -116,6 +117,13 @@ class ServiceConfigGenerator:
         ini_config["service"]['rpc'] = self.config.chain_id + \
             "." + self.service_config.rpc_service_name
         ini_config["chain"]['chain_id'] = self.config.chain_id
+
+        # generate failover config
+        failover_section = "failover"
+        ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
+            self.config.enable_failover)
+        ini_config[failover_section]["cluster_url"] = self.config.failover_cluster_url
+
         # generate uuid according to chain_id and gateway_service_name
         uuid_name = ini_config["service"]['gateway']
         # TODO: Differentiate between different agency

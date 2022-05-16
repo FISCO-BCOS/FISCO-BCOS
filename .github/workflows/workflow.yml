@@ -46,10 +46,10 @@ jobs:
             hunter-clang-v8-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install ccache libomp
+        run: brew install ccache libomp openjdk
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
+        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev default-jdk
       - name: configure
         if: runner.os == 'macOS'
         run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
@@ -58,7 +58,7 @@ jobs:
       - name: run test
         run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - name: tar fisco-bcos for MacOS
-        run: cd build && mv fisco-bcos-air/ bin/ && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cd build && cp -r fisco-bcos-air/ bin/ && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-MacOS.zip
@@ -66,15 +66,18 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
+
   build_with_gcc:
     name: build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -115,6 +118,9 @@ jobs:
         run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j3
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
+
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -149,6 +155,8 @@ jobs:
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j2
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
 
   build_with_arm_linux:
     name: build_with_arm_linux
@@ -215,7 +223,7 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel java java-devel wget
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
@@ -270,7 +278,7 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
@@ -307,7 +315,7 @@ jobs:
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
       - name: tar fisco-bcos for CentOS
-        run: cd build && mv fisco-bcos-air bin && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cd build && cp -r fisco-bcos-air bin && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-linux.zip
@@ -315,12 +323,14 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh

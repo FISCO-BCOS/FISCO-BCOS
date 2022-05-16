@@ -55,6 +55,7 @@ using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::crypto;
+using namespace bcos::protocol;
 
 namespace bcos
 {
@@ -64,6 +65,7 @@ struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()
     {
+        // boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -91,7 +93,7 @@ struct TransactionExecutorFixture
                 ->data(),
             64);
 
-        codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
+        codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
     }
 
     TransactionExecutor::Ptr executor;
@@ -102,7 +104,7 @@ struct TransactionExecutorFixture
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000;
-    std::unique_ptr<bcos::precompiled::CodecWrapper> codec;
+    std::unique_ptr<bcos::CodecWrapper> codec;
 
     string helloBin =
         "60806040526040805190810160405280600181526020017f3100000000000000000000000000000000000000"
@@ -205,7 +207,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto address = result->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+    bcos::protocol::TwoPCParams commitParams{};
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -598,7 +600,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     });
 
     // commit the state
-    bcos::executor::ParallelTransactionExecutorInterface::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
@@ -618,12 +620,15 @@ BOOST_AUTO_TEST_CASE(externalCall)
     callParam->setGasAvailable(gas);
     callParam->setCreate(false);
 
-    bcos::protocol::ExecutionMessage::UniquePtr callResult;
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResultPromise;
     executor->call(std::move(callParam),
         [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
             BOOST_CHECK(!error);
-            callResult = std::move(response);
+            callResultPromise.set_value(std::move(response));
         });
+
+    bcos::protocol::ExecutionMessage::UniquePtr callResult = callResultPromise.get_future().get();
+
 
     BOOST_CHECK_EQUAL(callResult->type(), protocol::ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(callResult->status(), 0);
@@ -632,7 +637,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK(callResult->data().toBytes() == expectResult);
 
     // commit the state, and call
-    // bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    // bcos::protocol::TwoPCParams commitParams;
     // commitParams.number = 1;
     // executor->prepare(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
     // executor->commit(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
@@ -650,12 +655,15 @@ BOOST_AUTO_TEST_CASE(externalCall)
     callParam2->setGasAvailable(gas);
     callParam2->setCreate(false);
 
-    bcos::protocol::ExecutionMessage::UniquePtr callResult2;
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResult2Promise;
     executor->call(std::move(callParam2),
         [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
             BOOST_CHECK(!error);
-            callResult2 = std::move(response);
+            callResult2Promise.set_value(std::move(response));
         });
+
+    bcos::protocol::ExecutionMessage::UniquePtr callResult2 = callResult2Promise.get_future().get();
+
 
     BOOST_CHECK_EQUAL(callResult2->type(), protocol::ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(callResult2->status(), 0);
@@ -862,18 +870,19 @@ BOOST_AUTO_TEST_CASE(performance)
 
         for (auto& it : requests)
         {
-            std::optional<ExecutionMessage::UniquePtr> output;
+            std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
+
             executor->executeTransaction(
-                std::move(it), [&output](bcos::Error::UniquePtr&& error,
+                std::move(it), [&outputPromise](bcos::Error::UniquePtr&& error,
                                    NativeExecutionMessage::UniquePtr&& result) {
                     if (error)
                     {
                         std::cout << "Error!" << boost::diagnostic_information(*error);
                     }
                     // BOOST_CHECK(!error);
-                    output = std::move(result);
+                    outputPromise.set_value(std::move(result));
                 });
-            auto& transResult = *output;
+            ExecutionMessage::UniquePtr transResult = std::move(*outputPromise.get_future().get());
             if (transResult->status() != 0)
             {
                 std::cout << "Error: " << transResult->status() << std::endl;
@@ -902,18 +911,21 @@ BOOST_AUTO_TEST_CASE(performance)
             params->setData(codec->encodeWithSig("balanceOf(string)", account));
             params->setType(NativeExecutionMessage::MESSAGE);
 
-            std::optional<ExecutionMessage::UniquePtr> output;
+            std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
             executor->executeTransaction(
-                std::move(params), [&output](bcos::Error::UniquePtr&& error,
+                std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                        NativeExecutionMessage::UniquePtr&& result) {
                     if (error)
                     {
                         std::cout << "Error!" << boost::diagnostic_information(*error);
                     }
                     // BOOST_CHECK(!error);
-                    output = std::move(result);
+                    outputPromise.set_value(std::move(result));
                 });
-            auto& balanceResult = *output;
+
+
+            ExecutionMessage::UniquePtr balanceResult =
+                std::move(*outputPromise.get_future().get());
 
             bcos::u256 value(0);
             codec->decode(balanceResult->data(), value);
@@ -1137,7 +1149,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK_EQUAL(result->from(), addressString);
         BOOST_CHECK(result->to() == sender);
 
-        bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+        TwoPCParams commitParams{};
         commitParams.number = 1;
 
         std::promise<void> preparePromise;
@@ -1316,7 +1328,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK_EQUAL(result->from(), addressString);
         BOOST_CHECK(result->to() == sender);
 
-        bcos::executor::TransactionExecutor::TwoPCParams commitParams{};
+        TwoPCParams commitParams{};
         commitParams.number = 2;
 
         std::promise<void> preparePromise;

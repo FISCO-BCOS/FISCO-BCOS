@@ -45,6 +45,12 @@ public:
     bool create() const override { return m_create; }
     void setCreate(bool create) override { m_create = create; }
 
+    bool internalCreate() const override { return m_internalCreate; }
+    void setInternalCreate(bool internalCreate) override { m_internalCreate = internalCreate; }
+
+    bool internalCall() const override { return m_internalCall; }
+    void setInternalCall(bool internalCall) override { m_internalCall = internalCall; }
+
     int64_t gasAvailable() const override { return m_gasAvailable; }
     void setGasAvailable(int64_t gasAvailable) override { m_gasAvailable = gasAvailable; }
 
@@ -123,6 +129,8 @@ public:
     Type m_type = TXHASH;
     bool m_create = false;
     bool m_staticCall = false;
+    bool m_internalCreate = false;
+    bool m_internalCall = false;
 };
 
 class NativeExecutionMessageFactory : public protocol::ExecutionMessageFactory

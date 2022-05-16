@@ -39,6 +39,7 @@ void TxPool::start()
         return;
     }
     m_transactionSync->start();
+    m_txpoolStorage->start();
     m_running = true;
     TXPOOL_LOG(INFO) << LOG_DESC("Start the txpool.");
 }
@@ -182,7 +183,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                         }
                     }
                     TXPOOL_LOG(INFO)
-                        << LOG_DESC("asyncVerifyBlock finished")
+                        << METRIC << LOG_DESC("asyncVerifyBlock finished")
                         << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                         << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null")
                         << LOG_KV("code", verifyError ? verifyError->errorCode() : 0)
@@ -311,7 +312,15 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
 void TxPool::asyncFillBlock(
     HashListPtr _txsHash, std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
-    fillBlock(_txsHash, _onBlockFilled, true);
+    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    m_filler->enqueue([self, _txsHash, _onBlockFilled]() {
+        auto txpool = self.lock();
+        if (!txpool)
+        {
+            return;
+        }
+        txpool->fillBlock(_txsHash, _onBlockFilled, true);
+    });
 }
 
 void TxPool::fillBlock(HashListPtr _txsHash,

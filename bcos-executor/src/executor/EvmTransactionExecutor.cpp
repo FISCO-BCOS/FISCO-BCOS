@@ -33,13 +33,16 @@
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
-#include "../precompiled/KVTableFactoryPrecompiled.h"
+#include "../precompiled/KVTablePrecompiled.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
-#include "../precompiled/TableFactoryPrecompiled.h"
+#include "../precompiled/TableManagerPrecompiled.h"
+#include "../precompiled/TablePrecompiled.h"
 #include "../precompiled/Utilities.h"
-#include "../precompiled/extension/ContractAuthPrecompiled.h"
+#include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "bcos-codec/abi/ContractABIType.h"
@@ -125,26 +128,35 @@ void EvmTransactionExecutor::initPrecompiled()
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
-    // FIXME: not support crud now
-    // auto tableFactoryPrecompiled =
-    // std::make_shared<precompiled::TableFactoryPrecompiled>(m_hashImpl);
-    auto kvTableFactoryPrecompiled =
-        std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
+    auto tableManagerPrecompiled =
+        std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
+    auto kvTablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl);
+    auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
 
     // in EVM
     m_constantPrecompiled->insert({SYS_CONFIG_ADDRESS, sysConfig});
     m_constantPrecompiled->insert({CONSENSUS_ADDRESS, consensusPrecompiled});
-    // FIXME: not support crud now
-    // m_constantPrecompiled.insert({TABLE_ADDRESS, tableFactoryPrecompiled});
-    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert({TABLE_MANAGER_ADDRESS, tableManagerPrecompiled});
+    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTablePrecompiled});
+    m_constantPrecompiled->insert({TABLE_ADDRESS, tablePrecompiled});
     m_constantPrecompiled->insert(
         {DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled->insert({CONTRACT_AUTH_ADDRESS,
-        std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
+    /// auth precompiled
+    if (m_isAuthCheck)
+    {
+        m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+    }
+
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+
     set<string> builtIn = {CRYPTO_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }

@@ -36,7 +36,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("resetConfig")
+    PBFT_LOG(INFO) << METRIC << LOG_DESC("resetConfig")
                    << LOG_KV("committedIndex", _ledgerConfig->blockNumber())
                    << LOG_KV("propHash", _ledgerConfig->hash().abridged())
                    << LOG_KV("blockCountLimit", _ledgerConfig->blockTxCountLimit())
@@ -53,6 +53,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // set ConsensusNodeList
     auto& consensusList = _ledgerConfig->mutableConsensusNodeList();
     setConsensusNodeList(consensusList);
+    auto observerList = _ledgerConfig->mutableObserverList();
+    setObserverNodeList(*observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
     // reset the timer
@@ -60,15 +62,36 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 
     if (_ledgerConfig->sealerId() == -1)
     {
-        PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << printCurrentState();
+        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report") << printCurrentState();
     }
     else
     {
-        PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("sealer", _ledgerConfig->sealerId())
+        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report")
+                       << LOG_KV("sealer", _ledgerConfig->sealerId())
                        << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState();
     }
-    // notify the txpool validator to update the consensusNodeList.
-    m_validator->updateValidatorConfig(consensusList, _ledgerConfig->observerNodeList());
+    if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
+    {
+        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
+                       << LOG_KV("version", (bcos::protocol::Version)m_compatibilityVersion)
+                       << LOG_KV("updatedVersion",
+                              (bcos::protocol::Version)(_ledgerConfig->compatibilityVersion()));
+        m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
+        if (m_versionNotification && m_asMasterNode)
+        {
+            m_versionNotification(m_compatibilityVersion);
+        }
+    }
+    // notify the txpool validator to update the consensusNodeList and the observerNodeList
+    if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
+    {
+        m_validator->updateValidatorConfig(consensusList, *observerList);
+        PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
+                       << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
+                       << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
+                       << LOG_KV("consensusNodeSize", consensusList.size())
+                       << LOG_KV("observerNodeSize", observerList->size());
+    }
 
     // notify the latest block number to the sealer
     if (m_stateNotifier)

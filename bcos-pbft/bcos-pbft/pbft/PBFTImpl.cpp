@@ -119,6 +119,7 @@ void PBFTImpl::init()
     m_ledgerFetcher->fetchObserverNodeList();
     m_ledgerFetcher->fetchBlockTxCountLimit();
     m_ledgerFetcher->fetchConsensusLeaderPeriod();
+    m_ledgerFetcher->fetchCompatibilityVersion();
     auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
@@ -126,7 +127,10 @@ void PBFTImpl::init()
                    << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
                    << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
     config->resetConfig(ledgerConfig);
-
+    if (!m_masterNode)
+    {
+        return;
+    }
     PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
     auto stateProposals = config->storage()->loadState(ledgerConfig->blockNumber());
     if (stateProposals && stateProposals->size() > 0)
@@ -180,4 +184,18 @@ void PBFTImpl::asyncGetConsensusStatus(
     Json::FastWriter fastWriter;
     std::string statusStr = fastWriter.write(consensusStatus);
     _onGetConsensusStatus(nullptr, statusStr);
+}
+
+void PBFTImpl::enableAsMaterNode(bool _isMasterNode)
+{
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: ") << _isMasterNode;
+    m_masterNode.store(_isMasterNode);
+    m_pbftEngine->pbftConfig()->enableAsMaterNode(_isMasterNode);
+    if (!_isMasterNode)
+    {
+        return;
+    }
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: init and start the consensus module");
+    init();
+    m_pbftEngine->restart();
 }

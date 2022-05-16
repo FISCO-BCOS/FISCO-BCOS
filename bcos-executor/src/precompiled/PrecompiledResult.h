@@ -34,6 +34,15 @@ struct PrecompiledExecResult
     bytes& mutableExecResult() { return m_execResult; }
     void setExecResult(bytes const& _execResult) { m_execResult = _execResult; }
     void setGas(int64_t _gas) { m_gas = _gas; }
+    inline void setExternalResult(executor::CallParameters::UniquePtr _callParameter)
+    {
+        m_execResult = std::move(_callParameter->data);
+        if (_callParameter->status != (int32_t)protocol::TransactionStatus::None)
+        {
+            BOOST_THROW_EXCEPTION(
+                protocol::PrecompiledError("External call revert: " + _callParameter->message));
+        }
+    }
     bytes m_execResult;
     int64_t m_gas;
 };

@@ -33,11 +33,10 @@ using namespace bcos::crypto;
 
 static tbb::concurrent_unordered_map<std::string, uint32_t> s_name2SelectCache;
 
-void bcos::precompiled::checkNameValidate(std::string_view tableName,
-    std::vector<std::string>& keyFieldList, std::vector<std::string>& valueFieldList)
+void bcos::precompiled::checkNameValidate(std::string_view tableName, std::string_view _keyField,
+    std::vector<std::string>& valueFieldList)
 {
     std::set<std::string> valueFieldSet;
-    std::set<std::string> keyFieldSet;
     std::vector<char> allowChar = {'$', '_', '@'};
     std::vector<char> tableAllowChar = {'_', '/'};
     std::string allowCharString = "{$, _, @}";
@@ -99,17 +98,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
 
     checkTableNameValidate(tableName);
 
-    for (auto& keyField : keyFieldList)
-    {
-        auto ret = keyFieldSet.insert(keyField);
-        if (!ret.second)
-        {
-            PRECOMPILED_LOG(ERROR) << LOG_DESC("duplicated key") << LOG_KV("key name", keyField)
-                                   << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(PrecompiledError("duplicated key: " + keyField));
-        }
-        checkFieldNameValidate(tableName, keyField);
-    }
+    checkFieldNameValidate(tableName, _keyField);
 
     for (auto& valueField : valueFieldList)
     {
@@ -138,13 +127,18 @@ void bcos::precompiled::checkLengthValidate(
     }
 }
 
-void bcos::precompiled::checkCreateTableParam(
-    const std::string& _tableName, std::string& _keyField, std::string& _valueField)
+void bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName,
+    std::string& _keyField, const std::variant<std::string, std::vector<std::string>>& _valueField)
 {
-    std::vector<std::string> keyNameList;
-    boost::split(keyNameList, _keyField, boost::is_any_of(","));
     std::vector<std::string> fieldNameList;
-    boost::split(fieldNameList, _valueField, boost::is_any_of(","));
+    if (_valueField.index() == 1)
+    {
+        fieldNameList.assign(std::get<1>(_valueField).begin(), std::get<1>(_valueField).end());
+    }
+    else
+    {
+        boost::split(fieldNameList, std::get<0>(_valueField), boost::is_any_of(","));
+    }
 
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
     {  // mysql TableName and fieldName length limit is 64
@@ -152,16 +146,13 @@ void bcos::precompiled::checkCreateTableParam(
             protocol::PrecompiledError("table field name length overflow " +
                                        std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
     }
-    for (auto& str : keyNameList)
-    {
-        boost::trim(str);
-        if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
-        {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
-                "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
-                std::string("table key name length overflow ") +
-                std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
-        }
+    boost::trim(_keyField);
+    if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
+    {  // mysql TableName and fieldName length limit is 64
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+            std::string("table key name length overflow ") +
+            std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
     }
 
     for (auto& str : fieldNameList)
@@ -176,21 +167,14 @@ void bcos::precompiled::checkCreateTableParam(
         }
     }
 
-    checkNameValidate(_tableName, keyNameList, fieldNameList);
+    checkNameValidate(_tableName, _keyField, fieldNameList);
 
-    _keyField = boost::join(keyNameList, ",");
-    _valueField = boost::join(fieldNameList, ",");
-    if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_MAX_LENGTH)
-    {
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError(std::string("total table key name length overflow ") +
-                                       std::to_string(SYS_TABLE_KEY_FIELD_MAX_LENGTH)));
-    }
-    if (_valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
+    auto valueField = boost::join(fieldNameList, ",");
+    if (valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH)
     {
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError(std::string("total table field name length overflow ") +
-                                       std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
+                                       std::to_string(SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH)));
     }
 
     auto tableName = precompiled::getTableName(_tableName);
@@ -224,11 +208,6 @@ uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 
     return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) | ((func & 0x00FF0000) >> 8) |
            ((func & 0xFF000000) >> 24);
-}
-
-bytesConstRef bcos::precompiled::getParamData(bytesConstRef _param)
-{
-    return _param.getCroppedData(4);
 }
 
 uint32_t bcos::precompiled::getFuncSelectorByFunctionName(
@@ -273,16 +252,6 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::Available;
     }
-}
-
-uint64_t precompiled::getEntriesCapacity(precompiled::EntriesPtr _entries)
-{
-    int64_t totalCapacity = 0;
-    for (auto& entry : *_entries)
-    {
-        totalCapacity += entry.size();
-    }
-    return totalCapacity;
 }
 
 bool precompiled::checkPathValid(std::string const& _path)
@@ -365,144 +334,11 @@ std::pair<std::string, std::string> precompiled::getParentDirAndBaseName(
     return {parentDir, baseName};
 }
 
-std::pair<std::string, std::string> precompiled::getLinkNameAndVersion(
-    const std::string& _absolutePath)
-{
-    // transfer /usr/local/bin => ["usr", "local", "bin"]
-    if (_absolutePath == "/")
-        return {"", ""};
-    std::vector<std::string> dirList;
-    std::string absoluteDir = _absolutePath;
-    if (absoluteDir[0] == '/')
-    {
-        absoluteDir = absoluteDir.substr(1);
-    }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
-    {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
-    }
-    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
-    if (dirList.size() != 3)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("getLinkNameAndVersion")
-                               << LOG_DESC("link path level not equal 3")
-                               << LOG_KV("absolutePath", _absolutePath);
-        return {};
-    }
-    std::string name = dirList.at(1);
-    std::string version = dirList.at(2);
-    return {name, version};
-}
-
-bool precompiled::recursiveBuildDir(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const std::string& _absoluteDir)
-{
-    if (_absoluteDir.empty())
-    {
-        return false;
-    }
-    // transfer /usr/local/bin => ["usr", "local", "bin"]
-    std::vector<std::string> dirList;
-    std::string absoluteDir = _absoluteDir;
-    if (absoluteDir[0] == '/')
-    {
-        absoluteDir = absoluteDir.substr(1);
-    }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
-    {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
-    }
-    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
-    std::string root = "/";
-
-    for (auto dir : dirList)
-    {
-        auto table = _executive->storage().openTable(root);
-        if (!table)
-        {
-            EXECUTIVE_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                                 << LOG_DESC("can not open path table")
-                                 << LOG_KV("tableName", root);
-            return false;
-        }
-        auto newTableName = ((root == "/") ? root : (root + "/")) + dir;
-        auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
-        if (typeEntry)
-        {
-            // can get type, then this type is directory
-            // try open root + dir
-            auto nextDirTable = _executive->storage().openTable(newTableName);
-            if (nextDirTable.has_value())
-            {
-                // root + dir table exist, try to get type entry
-                auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
-                if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
-                {
-                    // if success and dir is directory, continue
-                    root = newTableName;
-                    continue;
-                }
-                else
-                {
-                    // can not get type, it means this dir is not a directory
-                    EXECUTIVE_LOG(ERROR)
-                        << LOG_BADGE("recursiveBuildDir")
-                        << LOG_DESC("file had already existed, and not directory type")
-                        << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
-                    return false;
-                }
-            }
-
-            // root + dir not exist, create root + dir and build bfs info in root table
-            auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
-            auto&& out = asBytes(std::string(subEntry->getField(0)));
-            // codec to map
-            std::map<std::string, std::string> bfsInfo;
-            codec::scale::decode(bfsInfo, gsl::make_span(out));
-
-            /// create table and build bfs info
-            bfsInfo.insert(std::make_pair(dir, FS_TYPE_DIR));
-            _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
-            storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-            std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
-            _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
-            _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
-            _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));
-            _executive->storage().setRow(newTableName, FS_ACL_WHITE, std::move(aclWEntry));
-            _executive->storage().setRow(newTableName, FS_ACL_BLACK, std::move(aclBEntry));
-            _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
-
-            // set metadata in parent dir
-            subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-            _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
-            root = newTableName;
-        }
-        else
-        {
-            EXECUTIVE_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                                 << LOG_DESC("file had already existed, and not directory type")
-                                 << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
-            return false;
-        }
-    }
-    return true;
-}
-
 executor::CallParameters::UniquePtr precompiled::externalRequest(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _param,
-    const std::string& _origin, const std::string& _sender, const std::string& _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft)
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
+    std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
+    bool _isCreate, int64_t gasLeft, bool _isInternalCall)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     auto request = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
 
     request->senderAddress = _sender;
@@ -513,21 +349,23 @@ executor::CallParameters::UniquePtr precompiled::externalRequest(
     request->data = _param.toBytes();
     request->create = _isCreate;
     request->staticCall = !_isCreate && _isStatic;
+    request->internalCreate = _isCreate;
+    request->internalCall = _isInternalCall;
     request->gas = gasLeft;
     return _executive->externalCall(std::move(request));
 }
 
 s256 precompiled::externalTouchNewFile(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _origin,
-    const std::string& _sender, const std::string& _filePath, const std::string& _fileType,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string_view _origin,
+    std::string_view _sender, std::string_view _filePath, std::string_view _fileType,
     int64_t gasLeft)
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
-    auto codecResult =
-        codec->encodeWithSig(precompiled::FILE_SYSTEM_METHOD_TOUCH, _filePath, _fileType);
+    auto codecResult = codec->encodeWithSig(
+        precompiled::FILE_SYSTEM_METHOD_TOUCH, std::string(_filePath), std::string(_fileType));
     auto response = externalRequest(
         _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
     s256 result;

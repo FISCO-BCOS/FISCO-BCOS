@@ -20,6 +20,7 @@
 
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -27,7 +28,6 @@
 #include <bcos-rpc/event/EventSubRequest.h>
 #include <bcos-rpc/event/EventSubResponse.h>
 #include <bcos-rpc/event/EventSubTask.h>
-#include <bcos-utilities/Log.h>
 #include <chrono>
 #include <cstddef>
 #include <memory>

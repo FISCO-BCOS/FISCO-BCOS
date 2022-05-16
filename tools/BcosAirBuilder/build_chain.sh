@@ -517,7 +517,7 @@ for dir in \${dirs[*]}
 do
     if [[ -f "\${dirpath}/\${dir}/config.ini" && -f "\${dirpath}/\${dir}/start.sh" ]];then
         echo "try to start \${dir}"
-        bash \${dirpath}/\${dir}/start.sh
+        bash \${dirpath}/\${dir}/start.sh &
     fi
 done
 wait
@@ -714,7 +714,9 @@ EOF
 
 generate_common_ini() {
     local output=${1}
-
+    LOG_INFO "Begin generate uuid"
+    local uuid=$(uuidgen)
+    LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
 [chain]
@@ -745,9 +747,23 @@ generate_common_ini() {
     pd_addrs=
 
 [txpool]
+    ; size of the txpool, default is 15000
     limit=15000
+    ; txs notification threads num, default is 2
     notify_worker_num=2
-    verify_worker_num=2
+    ; txs verification threads num, default is the number of CPU cores
+    ;verify_worker_num=2
+    ; txs expiration time, in seconds, default is 10 minutes
+    txs_expiration_time = 600
+[failover]
+    ; enable failover or not, default disable
+    enable = false
+    ; the uuid that uniquely identifies the node
+    member_id=${uuid}
+    ; failover time, in seconds, default is 3s
+    lease_ttl=3
+    ; the address of etcd, can configure multiple comma-separated
+    cluster_url=127.0.0.1:2379
 [log]
     enable=true
     log_path=./log
@@ -887,6 +903,8 @@ generate_genesis_config() {
     ${node_list}
 
 [version]
+    ; compatible version, can be dynamically upgraded through setSystemConfig
+    ; the default is 3.0.0-rc4
     compatibility_version=3.0.0-rc4
 [tx]
     ; transaction gas limit

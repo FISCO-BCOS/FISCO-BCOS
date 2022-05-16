@@ -1,11 +1,20 @@
 
 #include "Transaction.tars"
+#include "Block.tars"
 #include "TransactionReceipt.tars"
 #include "CommonProtocol.tars"
+#include "LedgerConfig.tars"
+
 module bcostars {
-    interface SchedulerService{
+    interface SchedulerService
+    {
+        Error executeBlock(Block _block, bool _verify, out BlockHeader _executedHeader, out bool _sysBlock);
+        Error commitBlock(BlockHeader _header, out LedgerConfig _ledgerConfig);
+
         Error call(Transaction _tx, out TransactionReceipt _receipt);
-        Error getCode(string contract, out vector<byte> code);
-        Error getABI(string contract, out string abi);
+        Error getCode(string _contract, out vector<byte> _codeData);
+        Error getABI(string _contract, out string _abi);
+
+        Error registerExecutor(string _name);
     };
 };

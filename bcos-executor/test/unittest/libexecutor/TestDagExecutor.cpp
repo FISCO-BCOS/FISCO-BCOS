@@ -72,7 +72,7 @@ struct DagExecutorFixture
 {
     DagExecutorFixture()
     {
-        //        boost::log::core::get()->set_logging_enabled(false);
+        // boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
     bytes transferBin(transfer_wasm, transfer_wasm + transfer_wasm_len);
     transferBin = codec->encode(transferBin);
@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     auto address = result3->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    bcos::protocol::TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -420,7 +420,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
     bytes helloWorldBin(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
     helloWorldBin = codec->encode(helloWorldBin);
@@ -512,7 +512,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     auto address = result3->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    bcos::protocol::TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -642,7 +642,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
     std::string bin =
         "608060405234801561001057600080fd5b506105db806100206000396000f30060806040526004361061006257"
@@ -846,18 +846,19 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
                 params->setData(codec->encodeWithSig("balanceOf(string)", account));
                 params->setType(NativeExecutionMessage::MESSAGE);
 
-                std::optional<ExecutionMessage::UniquePtr> output;
+                std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
                 executor->executeTransaction(
-                    std::move(params), [&output](bcos::Error::UniquePtr&& error,
+                    std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                            NativeExecutionMessage::UniquePtr&& result) {
                         if (error)
                         {
                             std::cout << "Error!" << boost::diagnostic_information(*error);
                         }
                         // BOOST_CHECK(!error);
-                        output = std::move(result);
+                        outputPromise.set_value(std::move(result));
                     });
-                auto& balanceResult = *output;
+                ExecutionMessage::UniquePtr balanceResult =
+                    std::move(*outputPromise.get_future().get());
 
                 bcos::u256 value(0);
                 codec->decode(balanceResult->data(), value);
@@ -880,7 +881,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
     std::string bin =
         "608060405234801561001057600080fd5b50610519806100206000396000f30060806040526004361061006157"
@@ -1075,18 +1076,19 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
                 params->setData(codec->encodeWithSig("balanceOf(string)", account));
                 params->setType(NativeExecutionMessage::MESSAGE);
 
-                std::optional<ExecutionMessage::UniquePtr> output;
+                std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
                 executor->executeTransaction(
-                    std::move(params), [&output](bcos::Error::UniquePtr&& error,
+                    std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                            NativeExecutionMessage::UniquePtr&& result) {
                         if (error)
                         {
                             std::cout << "Error!" << boost::diagnostic_information(*error);
                         }
                         // BOOST_CHECK(!error);
-                        output = std::move(result);
+                        outputPromise.set_value(std::move(result));
                     });
-                auto& balanceResult = *output;
+                ExecutionMessage::UniquePtr balanceResult =
+                    std::move(*outputPromise.get_future().get());
 
                 bcos::u256 value(0);
                 codec->decode(balanceResult->data(), value);

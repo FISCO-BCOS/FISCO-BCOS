@@ -57,6 +57,7 @@
 
 using namespace std;
 using namespace bcos;
+using namespace bcos::protocol;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::crypto;
@@ -69,7 +70,7 @@ struct WasmExecutorFixture
 {
     WasmExecutorFixture()
     {
-        //                boost::log::core::get()->set_logging_enabled(false);
+        // boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -95,7 +96,7 @@ struct WasmExecutorFixture
                 ->data(),
             64);
 
-        codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
+        codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
         helloWorldBin.assign(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
         helloWorldBin = codec->encode(helloWorldBin);
@@ -204,7 +205,7 @@ struct WasmExecutorFixture
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000000;
-    std::unique_ptr<bcos::precompiled::CodecWrapper> codec;
+    std::unique_ptr<bcos::CodecWrapper> codec;
 
     bytes helloWorldBin;
     std::string helloWorldAbi;
@@ -300,7 +301,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto address = result3->newEVMContractAddress();
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -493,7 +494,7 @@ BOOST_AUTO_TEST_CASE(deployError)
     BOOST_CHECK(!result3->newEVMContractAddress().empty());
     BOOST_CHECK_LT(result3->gasAvailable(), gas);
 
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -680,7 +681,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     auto address = result3->newEVMContractAddress();
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), selfAddress);
-    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    TwoPCParams commitParams;
     commitParams.number = 1;
 
     std::promise<void> preparePromise;
@@ -1176,17 +1177,18 @@ BOOST_AUTO_TEST_CASE(performance)
 
     for (auto& it : requests)
     {
-        std::optional<ExecutionMessage::UniquePtr> output;
-        executor->executeTransaction(std::move(it),
-            [&output](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
+        std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
+        executor->executeTransaction(
+            std::move(it), [&outputPromise](bcos::Error::UniquePtr&& error,
+                               NativeExecutionMessage::UniquePtr&& result) {
                 if (error)
                 {
                     std::cout << "Error!" << boost::diagnostic_information(*error);
                 }
                 // BOOST_CHECK(!error);
-                output = std::move(result);
+                outputPromise.set_value(std::move(result));
             });
-        auto& result4 = *output;
+        ExecutionMessage::UniquePtr result4 = std::move(*outputPromise.get_future().get());
         if (result4->status() != 0)
         {
             std::cout << "Error: " << result->status() << std::endl;

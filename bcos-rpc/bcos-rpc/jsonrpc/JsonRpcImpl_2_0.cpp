@@ -20,6 +20,7 @@
  */
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
@@ -28,7 +29,6 @@
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-utilities/Base64.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Log.h>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>

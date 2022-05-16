@@ -19,15 +19,21 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
         callback)
 {
+    uint64_t waitT = 0;
+    if (m_lastExecuteFinishTime > 0)
+    {
+        waitT = utcTime() - m_lastExecuteFinishTime;
+    }
     auto signature = block->blockHeaderConst()->signatureList();
     fetchGasLimit(block->blockHeaderConst()->number());
-    SCHEDULER_LOG(INFO) << "ExecuteBlock request"
+    SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock request"
                         << LOG_KV("block number", block->blockHeaderConst()->number())
                         << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
                         << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize())
-                        << LOG_KV("version", (bcos::protocol::Version)(block->version()));
+                        << LOG_KV("version", (bcos::protocol::Version)(block->version()))
+                        << LOG_KV("waitT", waitT);
     auto executeLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
     if (!executeLock->owns_lock())
@@ -132,7 +138,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                             << LOG_KV("signatureSize", signature.size());
 
         m_lastExecutedBlockNumber.store(header->number());
-
+        m_lastExecuteFinishTime = utcTime();
         executeLock->unlock();
         callback(std::move(error), std::move(header), _sysBlock);
     });
@@ -413,7 +419,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto summary =
         std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(8, 0, 0);
 
-    auto collector = [this, summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
+    auto collector = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
                          std::variant<std::tuple<bool, consensus::ConsensusNodeListPtr>,
                              std::tuple<int, std::string, bcos::protocol::BlockNumber>,
@@ -443,8 +449,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             ledgerConfig->setObserverNodeList(*list);
                         }
                     },
-                    [&ledgerConfig, this](
-                        std::tuple<int, std::string, protocol::BlockNumber> config) {
+                    [&ledgerConfig](std::tuple<int, std::string, protocol::BlockNumber> config) {
                         auto& [type, value, blockNumber] = config;
                         switch (type)
                         {
@@ -464,18 +469,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             try
                             {
                                 auto version = bcos::tool::toVersionNumber(value);
-                                auto currentVersion = g_BCOSConfig.version();
-                                if ((uint32_t)currentVersion == version)
-                                {
-                                    break;
-                                }
-                                g_BCOSConfig.setVersion((bcos::protocol::Version)version);
-                                if (m_versionNotification)
-                                {
-                                    m_versionNotification(version);
-                                }
-                                SCHEDULER_LOG(INFO) << LOG_DESC("reset versionNumber")
-                                                    << LOG_KV("version", version);
+                                ledgerConfig->setCompatibilityVersion(version);
                             }
                             catch (std::exception const& e)
                             {

@@ -374,17 +374,9 @@ std::string_view HostContext::myAddress() const
     return m_executive->contractAddress();
 }
 
-bytesConstRef HostContext::code()
+std::optional<storage::Entry> HostContext::code()
 {
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-    if (entry)
-    {
-        auto code = entry->getField(0);
-
-        return bytesConstRef((bcos::byte*)code.data(), code.size());
-    }
-
-    return bytesConstRef();
+    return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
 }
 
 h256 HostContext::codeHash()

@@ -50,6 +50,8 @@ private:
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);
+    bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
 };
 }  // namespace bcos::precompiled

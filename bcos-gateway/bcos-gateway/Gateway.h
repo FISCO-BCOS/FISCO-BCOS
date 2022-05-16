@@ -38,8 +38,10 @@ class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gat
 public:
     using Ptr = std::shared_ptr<Gateway>;
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
-        GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop)
-      : m_chainID(_chainID),
+        GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
+        std::string _gatewayServiceName = "localGateway")
+      : m_gatewayServiceName(_gatewayServiceName),
+        m_chainID(_chainID),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop)
@@ -164,6 +166,11 @@ public:
             _groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
     }
 
+    virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID)
+    {
+        return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
+    }
+
 protected:
     // for UT
     Gateway() {}
@@ -180,7 +187,10 @@ protected:
     virtual void onReceiveBroadcastMessage(
         std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
 
+    bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
+
 private:
+    std::string m_gatewayServiceName;
     std::string m_chainID;
     // p2p service interface
     P2PInterface::Ptr m_p2pInterface;

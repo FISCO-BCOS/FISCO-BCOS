@@ -24,7 +24,7 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
-#include <bcos-rpc/jsonrpc/groupmgr/NodeService.h>
+#include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
@@ -53,7 +53,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create gateway
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
-    auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
+    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
     // create the node
@@ -76,27 +76,19 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
 void AirNodeInitializer::start()
 {
-    try
+    if (m_nodeInitializer)
     {
-        if (m_nodeInitializer)
-        {
-            m_nodeInitializer->start();
-        }
-
-        if (m_gateway)
-        {
-            m_gateway->start();
-        }
-
-        if (m_rpc)
-        {
-            m_rpc->start();
-        }
+        m_nodeInitializer->start();
     }
-    catch (std::exception const& e)
+
+    if (m_gateway)
     {
-        std::cout << "start bcos-node failed for " << boost::diagnostic_information(e);
-        exit(-1);
+        m_gateway->start();
+    }
+
+    if (m_rpc)
+    {
+        m_rpc->start();
     }
 }
 

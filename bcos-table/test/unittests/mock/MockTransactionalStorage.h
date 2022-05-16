@@ -7,6 +7,7 @@
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
+using namespace bcos::protocol;
 namespace bcos::test
 {
 class MockTransactionalStorage : public bcos::storage::TransactionalStorageInterface

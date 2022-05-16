@@ -23,7 +23,7 @@
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSubTask.h>
-#include <bcos-rpc/jsonrpc/groupmgr/GroupManager.h>
+#include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-utilities/Worker.h>
 #include <atomic>
 #include <functional>

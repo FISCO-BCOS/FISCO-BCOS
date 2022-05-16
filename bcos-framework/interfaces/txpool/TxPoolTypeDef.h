@@ -19,7 +19,7 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-framework/interfaces/Common.h>
 
 #define TXPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL")
 
