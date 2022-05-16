@@ -313,6 +313,11 @@ u256 HostContext::store(const u256& _n)
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
     {
+        // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+        // {  // FIXME: this log is only for debug, comment it when release
+        //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
+        //                         << LOG_KV("value", toHex(entry->get()));
+        // }
         return fromBigEndian<u256>(entry->getField(0));
     }
 
@@ -327,9 +332,13 @@ void HostContext::setStore(u256 const& _n, u256 const& _v)
     auto value = toEvmC(_v);
     bytes valueBytes(value.bytes, value.bytes + sizeof(value.bytes));
 
+    // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+    // {  // FIXME: this log is only for debug, comment it when release
+    //     EXECUTOR_LOG(TRACE) << LOG_DESC("setStore") << LOG_KV("key", toHex(keyView))
+    //                         << LOG_KV("value", toHex(valueBytes));
+    // }
     Entry entry;
     entry.importFields({std::move(valueBytes)});
-
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
 }
 

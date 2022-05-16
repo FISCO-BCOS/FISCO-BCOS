@@ -250,14 +250,23 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                 {  // if page, encode and return
                     auto& page = std::get<0>(it.second.data);
                     Entry entry;
-                    entry.setObject(page);
-                    entry.setStatus(it.second.entry.status());
+                    if (page.count() == 0)
+                    {
+                        entry.setStatus(Entry::Status::DELETED);
+                    }
+                    else
+                    {
+                        entry.setObject(page);
+                        entry.setStatus(it.second.entry.status());
+                    }
                     if (c_fileLogLevel >= DEBUG)
                     {
                         KeyPage_LOG(DEBUG)
                             << LOG_DESC("get Page") << LOG_KV("table", it.first.first)
                             << LOG_KV("key", toHex(it.first.second))
-                            << LOG_KV("count", page.count()) << LOG_KV("size", entry.size());
+                            << LOG_KV("count", page.count())
+                            << LOG_KV("status", (int)entry.status())
+                            << LOG_KV("size", entry.size());
                     }
                     callback(it.second.table, it.second.key, std::move(entry));
                 }

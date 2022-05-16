@@ -174,7 +174,7 @@ public:
 
     bool dirty() const
     {
-        return m_status == MODIFIED || m_status == DELETED;
+        return (m_status == MODIFIED || m_status == DELETED);
         // return m_dirty;
     }
     // void setDirty(bool dirty)

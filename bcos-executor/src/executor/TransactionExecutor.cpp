@@ -1689,6 +1689,7 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
         auto keyPageStorage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(storage);
         if(keyPageStorage)
         {
+            EXECUTOR_LOG(DEBUG) << "set preKeyPage return page";
             keyPageStorage->setReturnPage(true);
         }
         return std::make_shared<bcos::storage::KeyPageStorage>(storage, false);
