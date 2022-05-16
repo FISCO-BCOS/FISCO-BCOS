@@ -23,7 +23,9 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/election/FailOverTypeDef.h>
+#ifdef ETCD
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
+#endif
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
@@ -134,10 +136,14 @@ void RpcInitializer::stop()
     }
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
+
+#ifdef ETCD
     if (m_leaderEntryPoint)
     {
         m_leaderEntryPoint->stop();
     }
+#endif
+
     if (m_rpc)
     {
         m_rpc->stop();
