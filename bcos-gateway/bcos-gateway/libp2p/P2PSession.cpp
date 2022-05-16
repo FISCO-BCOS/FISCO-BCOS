@@ -24,11 +24,3 @@ P2PSession::~P2PSession()
 {
     P2PSESSION_LOG(INFO) << "[P2PSession::~P2PSession] this=" << this;
 }
-
-void P2PSession::start()
-{
-    if (!m_run)
-    {
-        m_run = true;
-    }
-}

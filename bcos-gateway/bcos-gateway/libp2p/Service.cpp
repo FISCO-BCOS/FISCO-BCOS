@@ -36,6 +36,37 @@ Service::Service(std::shared_ptr<boostssl::ws::WsService> _wsService) : m_wsServ
         boost::bind(&Service::onDisconnect, this, boost::placeholders::_1));
 }
 
+void Service::reportConnectedNodes()
+{
+    WsSessions sessions;
+    {
+        RecursiveGuard l(x_sessions);
+        for (const auto& session : m_sessions)
+        {
+            if (session.second && session.second->isConnected())
+            {
+                sessions.push_back(session.second);
+            }
+        }
+    }
+
+    SERVICE_LOG(INFO) << LOG_BADGE("##### p2pservice reportConnectedNodes")
+                      << LOG_DESC("connected nodes") << LOG_KV("count", sessions.size());
+
+    // auto ioc = std::make_shared<boost::asio::io_context>(16);
+    m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
+        boost::asio::make_strand(*m_wsService->ioc()), boost::posix_time::milliseconds(10000));
+    auto self = std::weak_ptr<Service>(shared_from_this());
+    m_heartbeat->async_wait([self](const boost::system::error_code&) {
+        auto p2pservice = self.lock();
+        if (!p2pservice)
+        {
+            return;
+        }
+        p2pservice->reportConnectedNodes();
+    });
+}
+
 void Service::start()
 {
     if (!m_run)
@@ -51,6 +82,9 @@ void Service::start()
             }
         });
         m_wsService->start();
+
+        // todo: to be removed;
+        reportConnectedNodes();
     }
 }
 
@@ -149,6 +183,11 @@ void Service::updateUnconnectedEndpointToWservice()
     RecursiveGuard l(x_nodes);
     for (auto const& it : m_staticNodes)
     {
+        SERVICE_LOG(INFO) << "####### updateUnconnectedEndpointToWservice m_staticNodes"
+                          << LOG_KV("nodeIPpoint host", it.first.address())
+                          << LOG_KV("nodeIPpoint port", it.first.port())
+                          << LOG_KV("p2pid", it.second);
+
         // p2pID is a empty string means that NodeIPEndpoint is unconnecnted, so update those
         // unconnecnted NodeIPEndpoints to wsService and wsService can reconnect them.
         if (it.second == "")
@@ -157,10 +196,14 @@ void Service::updateUnconnectedEndpointToWservice()
         }
     }
 
-    if (!reconnectedPeers->empty())
+    for (auto& peer : *reconnectedPeers)
     {
-        m_wsService->setReconnectedPeers(reconnectedPeers);
+        SERVICE_LOG(INFO) << "####### updateUnconnectedEndpointToWservice peer"
+                          << LOG_KV("peer host", peer.address())
+                          << LOG_KV("peer port", peer.port());
     }
+
+    m_wsService->setReconnectedPeers(reconnectedPeers);
 }
 
 void Service::obtainHostAndPortFromString(
@@ -225,15 +268,28 @@ void Service::onConnect(std::shared_ptr<WsSession> _session)
     auto it = m_sessions.find(nodeid);
     if (it != m_sessions.end() && it->second->isConnected())
     {
+        SERVICE_LOG(INFO) << LOG_DESC("##### onConnect sessionID")
+                          << LOG_KV("sessionID", it->second);
         SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", nodeid);
+
+        SERVICE_LOG(INFO) << LOG_DESC("##### updateStaticNodes 000");
         updateStaticNodes(session->endPoint(), nodeid);
+        SERVICE_LOG(INFO) << LOG_DESC("##### updateStaticNodes 111");
+
+        SERVICE_LOG(INFO) << LOG_DESC("##### drop 000000");
         session->drop(DuplicatePeer);
+        SERVICE_LOG(INFO) << LOG_DESC("##### drop 11111");
         return;
     }
 
     if (nodeid == id())
     {
-        SERVICE_LOG(TRACE) << "Disconnect self";
+        // todo: modify from info to trace
+        SERVICE_LOG(INFO) << "Disconnect self";
+
+        SERVICE_LOG(INFO) << "##### Disconnect self" << LOG_KV("nodeid", nodeid)
+                          << LOG_KV("myself nodeid", id());
+
         updateStaticNodes(session->endPoint(), id());
         session->drop(DuplicatePeer);
         return;
@@ -241,7 +297,6 @@ void Service::onConnect(std::shared_ptr<WsSession> _session)
 
     session->initP2PInfo();
     session->setService(std::weak_ptr<Service>(shared_from_this()));
-    session->start();
     asyncSendProtocol(_session);
     updateStaticNodes(session->endPoint(), nodeid);
     if (it != m_sessions.end())
@@ -318,76 +373,6 @@ void Service::sendRespMessageBySession(bytesConstRef _payload,
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
                        << LOG_KV("p2pid", _p2pSession->nodeId())
                        << LOG_KV("payload size", _payload.size());
-}
-
-void Service::onMessage(NetworkException e, boostssl::ws::WsSession::Ptr session,
-    bcos::boostssl::MessageFace::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr)
-{
-    auto p2pSession = p2pSessionWeakPtr.lock();
-    if (!p2pSession)
-    {
-        return;
-    }
-
-    try
-    {
-        P2pID p2pID = id();
-        NodeIPEndpoint nodeIPEndpoint(boost::asio::ip::address(), 0);
-        if (session && p2pSession)
-        {
-            p2pID = p2pSession->p2pID();
-            std::string host;
-            uint16_t port;
-            obtainHostAndPortFromString(session->endPoint(), host, port);
-            NodeIPEndpoint nodeIPEndpoint(host, port);
-        }
-
-        if (e.errorCode())
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
-                                 << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
-                                 << LOG_KV("errorCode", e.errorCode())
-                                 << LOG_KV("errorMessage", e.what());
-
-            if (p2pSession)
-            {
-                onDisconnect(p2pSession);
-            }
-            return;
-        }
-
-        /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
-        auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-        SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message") << LOG_KV("p2pid", p2pID)
-                           << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", p2pMessage->seq())
-                           << LOG_KV("version", p2pMessage->version())
-                           << LOG_KV("packetType", p2pMessage->packetType());
-
-        auto packetType = p2pMessage->packetType();
-        auto handler = getMessageHandlerByMsgType(packetType);
-        if (handler)
-        {
-            // TODO: use threadpool here
-            handler(p2pMessage, p2pSession);
-            return;
-        }
-        switch (packetType)
-        {
-        case GatewayMessageType::Heartbeat:
-            break;
-        default:
-        {
-            SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type")
-                               << LOG_KV("packetType", packetType)
-                               << LOG_KV("packetSeq", message->seq());
-        }
-        break;
-        };
-    }
-    catch (std::exception& e)
-    {
-        SERVICE_LOG(ERROR) << "onMessage error" << LOG_KV("what", boost::diagnostic_information(e));
-    }
 }
 
 bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(

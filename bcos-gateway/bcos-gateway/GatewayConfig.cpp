@@ -238,7 +238,7 @@ void GatewayConfig::loadP2pConnectedNodes()
     {
         nodesPtr->insert(node);
     }
-    m_wsConfig->setConnectedPeers(nodesPtr);
+    m_wsConfig->setConnectPeers(nodesPtr);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")
                              << LOG_KV("nodePath", m_nodePath)

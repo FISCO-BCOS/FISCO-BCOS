@@ -48,8 +48,6 @@ public:
 
     virtual void onConnect(std::shared_ptr<boostssl::ws::WsSession> _session);
     virtual void onDisconnect(boostssl::ws::WsSession::Ptr p2pSession);
-    virtual void onMessage(NetworkException e, boostssl::ws::WsSession::Ptr session,
-        bcos::boostssl::MessageFace::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     std::shared_ptr<bcos::boostssl::MessageFace> sendMessageByNodeID(
         P2pID p2pID, std::shared_ptr<bcos::boostssl::MessageFace> message) override;
@@ -162,6 +160,9 @@ public:
 
     bool connected(std::string const& _nodeID) override;
 
+    // todo: for debug, to be removed
+    void reportConnectedNodes();
+
 private:
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
@@ -186,16 +187,15 @@ private:
 
     P2pID m_p2pID;
 
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
-
     bool m_run = false;
-
-    std::map<int32_t, MessageHandler> m_msgHandlers;
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
     bcos::protocol::ProtocolInfoCodec::ConstPtr m_codec;
     P2pInfo m_p2pInfo;
+
+    // todo: add for test, to be removed
+    std::shared_ptr<boost::asio::deadline_timer> m_heartbeat;
 };
 
 }  // namespace gateway

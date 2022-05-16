@@ -29,8 +29,6 @@ public:
     }
     virtual ~P2PSession();
 
-    virtual void start();
-
     virtual P2pID p2pID()
     {
         if (!m_p2pInfo)
@@ -72,7 +70,6 @@ private:
     /// gateway p2p info
     std::shared_ptr<P2pInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
-    bool m_run = false;
 
     bcos::protocol::ProtocolInfo::ConstPtr m_protocolInfo = nullptr;
     mutable bcos::SharedMutex x_protocolInfo;
@@ -90,6 +87,7 @@ public:
     virtual boostssl::ws::WsSession::Ptr createSession(std::string _moduleName) override
     {
         auto session = std::make_shared<P2PSession>(_moduleName);
+        session->setNeedCheckRspPacket(true);
         return session;
     }
 };

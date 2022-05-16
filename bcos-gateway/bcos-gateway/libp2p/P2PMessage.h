@@ -137,7 +137,6 @@ public:
 
 public:
     ssize_t decodeHeader(bytesConstRef _buffer);
-    void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool hasOptions() const
     {
         return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
@@ -146,7 +145,6 @@ public:
 
     bool encode(bytes& _buffer) override;
     int64_t decode(bytesConstRef _buffer) override;
-    bool isRespPacket() const { return (m_ext & MessageExtFieldFlag::Response) != 0; }
 
 protected:
     uint32_t m_length = 0;

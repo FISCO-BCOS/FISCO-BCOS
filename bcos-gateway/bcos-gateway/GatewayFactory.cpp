@@ -86,7 +86,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         // init Service
         auto service = std::make_shared<Service>(wsService);
-        service->setStaticNodes(*(_config->wsConfig()->connectedPeers()).get());
+        service->setStaticNodes(*(_config->wsConfig()->connectPeers()).get());
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")
                                   << LOG_KV("myself pub id", pubHex)
