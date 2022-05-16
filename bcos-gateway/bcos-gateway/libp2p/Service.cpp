@@ -340,6 +340,8 @@ void Service::onDisconnect(WsSession::Ptr _session)
             }
         }
     }
+
+    updateUnconnectedEndpointToWservice();
 }
 
 void Service::sendMessageBySession(
