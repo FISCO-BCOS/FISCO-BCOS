@@ -410,7 +410,8 @@ private:
         {
             std::shared_lock lock(mutex);
             auto it = entries.find(key);
-            if (it != entries.end() && it->second.status() == Entry::NORMAL)
+            if (it != entries.end() && it->second.status() != Entry::Status::DELETED &&
+                it->second.status() != Entry::EMPTY)
             {
                 return std::make_optional(it->second);
             }
@@ -432,10 +433,10 @@ private:
             if (it != entries.end())
             {  // delete exist entry
                 m_size -= it->second.size();
-                if (entry.status() != Entry::DELETED)
+                if (entry.status() != Entry::Status::DELETED)
                 {
                     m_size += entry.size();
-                    if (it->second.status() == Entry::DELETED)
+                    if (it->second.status() == Entry::Status::DELETED)
                     {
                         ++m_count;
                     }
@@ -443,7 +444,8 @@ private:
                 else
                 {
                     entry.set(std::string());
-                    if (it->second.status() != Entry::DELETED)
+                    entry.setStatus(Entry::Status::DELETED);
+                    if (it->second.status() != Entry::Status::DELETED)
                     {
                         --m_count;
                     }
@@ -455,7 +457,7 @@ private:
             }
             else
             {
-                if (entry.status() != Entry::DELETED)
+                if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_count;
                     m_size += entry.size();
@@ -513,7 +515,7 @@ private:
                 {
                     --next;
                     page.m_size += iter->second.size();
-                    if (iter->second.status() != Entry::DELETED)
+                    if (iter->second.status() != Entry::Status::DELETED)
                     {
                         --m_count;
                         ++page.m_count;
@@ -535,7 +537,7 @@ private:
                 m_size -= last->second.size();
                 KeyPage_LOG(DEBUG) << "split large value" << LOG_KV("key", toHex(last->first))
                                    << LOG_KV("size", last->second.size());
-                if (last->second.status() != Entry::DELETED)
+                if (last->second.status() != Entry::Status::DELETED)
                 {
                     --m_count;
                     ++page.m_count;
@@ -555,7 +557,7 @@ private:
                 {
                     m_size += iter->second.size();
                     p.m_size -= iter->second.size();
-                    if (iter->second.status() != Entry::DELETED)
+                    if (iter->second.status() != Entry::Status::DELETED)
                     {
                         ++m_count;
                         --p.m_count;
@@ -651,7 +653,7 @@ private:
             ar&(uint32_t)m_count;
             for (auto& i : entries)
             {
-                if (i.second.status() == Entry::DELETED)
+                if (i.second.status() == Entry::Status::DELETED)
                 {
                     continue;
                 }
@@ -685,7 +687,8 @@ private:
                 }
                 Entry e;
                 e.set(std::move(value));
-                e.setDirty(false);
+                // e.setDirty(false);
+                e.setStatus(Entry::Status::NORMAL);
                 entries.emplace(std::move(key), std::move(e));
             }
         }
@@ -837,6 +840,7 @@ private:
                 d.data = std::move(page);
             }
             d.entry = std::move(entry.value());
+            d.entry.setStatus(Entry::Status::NORMAL);
         }
         else
         {
@@ -853,9 +857,9 @@ private:
             {
                 d.data = KeyPageStorage::Page();
             }
-            d.entry.setStatus(Entry::Status::NONE);
+            d.entry.setStatus(Entry::Status::EMPTY);
         }
-        d.entry.setDirty(false);
+        // d.entry.setDirty(false);
         // insert into cache
         {
             auto [bucket, writeLock] = getMutBucket(d.table, d.key);
@@ -927,7 +931,8 @@ private:
             {
                 Entry entry;
                 entry.setObject(meta);
-                entry.setDirty(data.value()->entry.dirty());
+                // entry.setDirty(data.value()->entry.dirty());
+                entry.setStatus(data.value()->entry.status());
                 return std::make_pair(nullptr, std::move(entry));
             }
             return std::make_pair(nullptr, std::nullopt);
@@ -942,7 +947,7 @@ private:
             }
             if (pageData.has_value())
             {
-                if (pageData.value()->entry.status() == Entry::Status::NONE)
+                if (pageData.value()->entry.status() == Entry::Status::EMPTY)
                 {
                     return std::make_pair(nullptr, std::nullopt);
                 }
@@ -963,7 +968,8 @@ private:
                     {
                         Entry entry;
                         entry.setObject(page);
-                        entry.setDirty(pageData.value()->entry.dirty());
+                        // entry.setDirty(pageData.value()->entry.dirty());
+                        entry.setStatus(pageData.value()->entry.status());
                         return std::make_pair(nullptr, std::move(entry));
                     }
                     return std::make_pair(nullptr, std::nullopt);
@@ -1002,8 +1008,8 @@ private:
         d.key = std::string(keyView);
         d.type = Data::Type::Page;
         d.data = std::move(page);
-        d.entry.setDirty(true);
-        // d.entry.setStatus(Entry::Status::MODIFIED);
+        // d.entry.setDirty(true);
+        d.entry.setStatus(Entry::Status::MODIFIED);
         auto [bucket, lock] = getMutBucket(tableView, keyView);
         boost::ignore_unused(lock);
         bucket->container.emplace(std::make_pair(std::make_pair(d.table, d.key), std::move(d)));
@@ -1044,12 +1050,12 @@ private:
             auto pageInfoChanged = std::move(std::get<1>(ret));
             if (pageInfoChanged)
             {
-                if (pageData->entry.status() == Entry::Status::NONE)
+                if (pageData->entry.status() == Entry::Status::EMPTY)
                 {  // new page insert, if entries is empty means page delete entry which not exist
                     meta.insertPageInfoNoLock(PageInfo{page->startKey(), page->endKey(),
                         (uint16_t)page->count(), (uint16_t)page->size()});
-                    pageData->entry.setStatus(Entry::Status::NORMAL);
-                    // pageData.value()->entry.setStatus(Entry::Status::MODIFIED);
+                    // pageData->entry.setStatus(Entry::Status::NORMAL);
+                    pageData->entry.setStatus(Entry::Status::MODIFIED);
                 }
                 else
                 {
@@ -1064,7 +1070,8 @@ private:
                             pageData =
                                 updatePageStartKey(table, oldStartKey.value(), page->startKey());
                             page = &std::get<0>(pageData->data);
-                            pageData->entry.setStatus(Entry::Status::NORMAL);
+                            // pageData->entry.setStatus(Entry::Status::NORMAL);
+                            pageData->entry.setStatus(Entry::Status::MODIFIED);
                         }
                         else
                         {  // if page is empty because delete, not update startKey and mark as
@@ -1075,9 +1082,9 @@ private:
                 }
             }
             // page is modified, the meta maybe modified, mark meta as dirty
-            data.value()->entry.setDirty(true);
-            data.value()->entry.setStatus(Entry::Status::NORMAL);
-            // data.value()->entry.setStatus(Entry::Status::MODIFIED);
+            // data.value()->entry.setDirty(true);
+            // data.value()->entry.setStatus(Entry::Status::NORMAL);
+            data.value()->entry.setStatus(Entry::Status::MODIFIED);
         }
         if (page->size() > m_pageSize && page->count() > 1)
         {  // split page
@@ -1137,9 +1144,10 @@ private:
                         updatePageStartKey(table, oldStartKey.value(), nextPage.startKey());
                     }
                     // old page also need write to disk to clean data, so not remove old page
-                    nextPageData.value()->entry.setDirty(true);
-                    pageData->entry.setDirty(true);
-                    // pageData.value()->entry.setStatus(Entry::Status::MODIFIED);
+                    // nextPageData.value()->entry.setDirty(true);
+                    // pageData->entry.setDirty(true);
+                    nextPageData.value()->entry.setStatus(Entry::Status::MODIFIED);
+                    pageData->entry.setStatus(Entry::Status::MODIFIED);
                 }
             }
         }
@@ -1158,7 +1166,8 @@ private:
             return entry;
         }
 
-        entry.setDirty(false);
+        // entry.setDirty(false);
+        entry.setStatus(Entry::NORMAL);
         KeyPage_LOG(DEBUG) << "import entry, " << table << " | " << key;
         auto [bucket, lock] = getMutBucket(table, key);
         boost::ignore_unused(lock);

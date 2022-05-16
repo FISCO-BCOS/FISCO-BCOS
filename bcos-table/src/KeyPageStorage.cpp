@@ -230,7 +230,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
             {
                 if (it.second.type == Data::Type::TableMeta)
                 {  // if metadata
-                    if (it.second.entry.status() == Entry::Status::NONE)
+                    if (it.second.entry.status() == Entry::Status::EMPTY)
                     {  // empty table meta
                         continue;
                     }

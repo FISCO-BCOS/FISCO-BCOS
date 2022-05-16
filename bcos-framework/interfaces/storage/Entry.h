@@ -25,8 +25,8 @@ public:
     {
         NORMAL = 0,
         DELETED = 1,
-        NONE = 2,
-        // MODIFIED = 3,  // dirty() can use status
+        EMPTY = 2,
+        MODIFIED = 3,  // dirty() can use status
     };
 
     constexpr static int32_t SMALL_SIZE = 32;
@@ -129,7 +129,8 @@ public:
             }
 
             std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
-            m_dirty = true;
+            m_status = MODIFIED;
+            // m_dirty = true;
         }
         else
         {
@@ -159,8 +160,8 @@ public:
         {
             m_value = std::make_shared<Input>(std::move(value));
         }
-
-        m_dirty = true;
+        m_status = MODIFIED;
+        // m_dirty = true;
     }
 
     Status status() const { return m_status; }
@@ -168,11 +169,26 @@ public:
     void setStatus(Status status)
     {
         m_status = status;
-        m_dirty = true;
+        // m_dirty = true;
     }
 
-    bool dirty() const { return m_dirty; }
-    void setDirty(bool dirty) { m_dirty = dirty; }
+    bool dirty() const
+    {
+        return m_status == MODIFIED || m_status == DELETED;
+        // return m_dirty;
+    }
+    // void setDirty(bool dirty)
+    // {
+    //     if(dirty)
+    //     {
+    //         m_status = MODIFIED;
+    //     }
+    //     else
+    //     {
+    //         m_status = NORMAL;
+    //     }
+    //     // m_dirty = dirty;
+    // }
 
     int32_t size() const { return m_size; }
 
@@ -252,8 +268,8 @@ private:
 
     ValueType m_value = "";            // should serialization
     int32_t m_size = 0;                // no need to serialization
-    Status m_status = Status::NORMAL;  // should serialization
-    bool m_dirty = false;              // no need to serialization
+    Status m_status = Status::EMPTY;  // should serialization
+    // bool m_dirty = false;              // no need to serialization
 };
 }  // namespace bcos::storage
 

@@ -459,7 +459,6 @@ BOOST_AUTO_TEST_CASE(hash)
     BOOST_CHECK_NO_THROW(table->setRow("name", *entry));
     entry = table->getRow("name");
     BOOST_TEST(entry);
-    auto tableFactory0 = make_shared<StateStorage>(tableFactory);
 
     entry = std::make_optional(table->newEntry());
     // entry->setField("key", "id");

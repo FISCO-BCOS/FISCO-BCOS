@@ -126,7 +126,7 @@ public:
             std::vector<std::string> resultKeys;
             for (auto& localIt : localKeys)
             {
-                if (localIt.second == Entry::NORMAL)
+                if (localIt.second == Entry::NORMAL || localIt.second == Entry::MODIFIED)
                 {
                     resultKeys.push_back(std::string(localIt.first));
                 }
@@ -171,7 +171,7 @@ public:
 
                 for (auto& localIt : localKeys)
                 {
-                    if (localIt.second == Entry::NORMAL)
+                    if (localIt.second == Entry::NORMAL || localIt.second == Entry::MODIFIED)
                     {
                         remoteKeys.push_back(std::string(localIt.first));
                     }
@@ -279,7 +279,7 @@ public:
                     if (it != bucket->container.end())
                     {
                         auto& entry = it->entry;
-                        if (entry.status() == Entry::NORMAL)
+                        if (entry.status() == Entry::NORMAL || entry.status() == Entry::MODIFIED)
                         {
                             results[i].emplace(entry);
 
@@ -455,7 +455,7 @@ public:
                     auto hash = hashImpl->hash(it.table);
                     hash ^= hashImpl->hash(it.key);
 
-                    if (entry.status() != Entry::DELETED)
+                    if (entry.status() == Entry::MODIFIED)
                     {
                         auto value = entry.getField(0);
                         bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
@@ -468,7 +468,7 @@ public:
                         }
                         hash ^= entryHash;
                     }
-                    else
+                    else if (entry.status() == Entry::DELETED)
                     {
                         auto entryHash = bcos::crypto::HashType(0x1);
                         if (c_fileLogLevel >= TRACE)
@@ -478,6 +478,12 @@ public:
                                 << toHex(toHex(it.key)) << LOG_KV("hash", entryHash.abridged());
                         }
                         hash ^= entryHash;
+                    }
+                    else
+                    {
+                        STORAGE_LOG(DEBUG) << "Calc hash, clean entry: " << it.table << " | "
+                                           << toHex(toHex(it.key)) << " | " << (int)entry.status();
+                        continue;
                     }
                     bucketHash ^= hash;
                 }
@@ -574,7 +580,8 @@ private:
             return entry;
         }
 
-        entry.setDirty(false);
+        // entry.setDirty(false);
+        entry.setStatus(Entry::NORMAL);
 
         auto updateCapacity = entry.size();
 

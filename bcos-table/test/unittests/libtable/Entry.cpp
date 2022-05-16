@@ -91,7 +91,8 @@ BOOST_AUTO_TEST_CASE(copyFrom)
     BOOST_TEST(entry2->getField(0) == "value3");
     *entry2 = *entry2;
     BOOST_TEST(entry2->dirty() == true);
-    entry2->setDirty(false);
+    // entry2->setDirty(false);
+    entry2->setStatus(Entry::Status::MODIFIED);
     BOOST_TEST(entry2->dirty() == false);
     // test setField lValue and rValue
     entry2->setField(0, string("value2"));
