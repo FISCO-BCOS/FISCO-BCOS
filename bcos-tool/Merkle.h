@@ -97,20 +97,23 @@ public:
 
         auto range = std::ranges::subrange{proof.hashes.begin(), proof.hashes.begin()};
         HasherType hasher;
-        for (auto length : proof.levels)
+        for (auto it = proof.levels.begin(); it != proof.levels.end(); ++it)
         {
-            range = {std::end(range), std::end(range) + length};
+            range = {std::end(range), std::end(range) + *it};
             if (std::end(range) > proof.hashes.end() || std::size(range) > width) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Proof level length out of range!"});
 
             if (std::ranges::find(range, hash) == std::end(range)) [[unlikely]]
                 return false;
-
-            for (auto& rangeHash : range)
+                
+            if (it + 1 != proof.levels.end())
             {
-                hasher.update(rangeHash);
+                for (auto& rangeHash : range)
+                {
+                    hasher.update(rangeHash);
+                }
+                hash = hasher.final();
             }
-            hash = hasher.final();
         }
 
         if (hash != root) [[unlikely]]
@@ -127,14 +130,14 @@ public:
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
         // Query the first level hashes(ordered)
-        auto range = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
-        auto it = std::ranges::lower_bound(range, hash);
-        if (it == range.end() || *it != hash) [[unlikely]]
+        auto levelRange = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+        auto it = std::ranges::lower_bound(levelRange, hash);
+        if (it == levelRange.end() || *it != hash) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
-        auto index = indexAlign(it - std::begin(range));  // Align
-        auto start = range.begin() + index;
-        auto end = std::min(start + width, range.end());
+        auto index = indexAlign(it - std::begin(levelRange));  // Align
+        auto start = levelRange.begin() + index;
+        auto end = std::min(start + width, levelRange.end());
 
         Proof proof;
         proof.hashes.reserve(m_levels.size() * width);
@@ -148,12 +151,12 @@ public:
         {
             auto length = m_levels[depth];
             index = indexAlign(index / width);
-            range = std::ranges::subrange{range.end(), range.end() + length};
+            levelRange = std::ranges::subrange{levelRange.end(), levelRange.end() + length};
 
-            auto start = range.begin() + index;
-            auto end = std::min(start + width, range.end());
+            start = levelRange.begin() + index;
+            end = std::min(start + width, levelRange.end());
 
-            assert(range.end() <= m_nodes.end());
+            assert(levelRange.end() <= m_nodes.end());
             proof.hashes.insert(proof.hashes.end(), start, end);
             proof.levels.push_back(end - start);
         }

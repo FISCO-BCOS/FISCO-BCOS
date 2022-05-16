@@ -35,7 +35,7 @@ BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 template <size_t width>
 void testFixedWidthMerkle()
 {
-    for (auto count : std::ranges::iota_view{32, 33})
+    for (auto count : std::ranges::iota_view{0, 128})
     {
         std::vector<HashType> hashes(count);
 
@@ -62,7 +62,7 @@ void testFixedWidthMerkle()
         else
         {
             BOOST_CHECK_NO_THROW(trie.import(std::as_const(hashes)));
-            std::cout << trie;
+            // std::cout << trie;
 
             HashType emptyHash;
             BOOST_CHECK_THROW(
@@ -71,7 +71,7 @@ void testFixedWidthMerkle()
             for (auto& hash : hashes)
             {
                 auto proof = trie.generateProof(hash);
-                std::cout << proof;
+                // std::cout << proof;
 
                 BOOST_CHECK(trie.verifyProof(proof, hash, trie.root()));
 
@@ -88,12 +88,12 @@ void testFixedWidthMerkle()
 BOOST_AUTO_TEST_CASE(merkle)
 {
     testFixedWidthMerkle<2>();
-    // testFixedWidthMerkle<3>();
-    // testFixedWidthMerkle<4>();
-    // testFixedWidthMerkle<5>();
-    // testFixedWidthMerkle<6>();
-    // testFixedWidthMerkle<7>();
-    // testFixedWidthMerkle<16>();
+    testFixedWidthMerkle<3>();
+    testFixedWidthMerkle<4>();
+    testFixedWidthMerkle<5>();
+    testFixedWidthMerkle<6>();
+    testFixedWidthMerkle<7>();
+    testFixedWidthMerkle<16>();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
