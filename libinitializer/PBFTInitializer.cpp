@@ -22,7 +22,11 @@
 #include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+
+#ifdef ETCD
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
+#endif
+
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -464,16 +468,23 @@ void PBFTInitializer::onGroupInfoChanged()
 void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 {
     m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+
+#ifdef ETCD
     auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
+#endif
     // leader key: /${chainID}/consensus/${nodeID}
     std::string leaderKey =
         "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR + _nodeID->hex();
 
     std::string nodeConfig;
     m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
+
+#ifdef ETCD
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
         m_nodeConfig->leaseTTL());
+
+
     // register the handler
     m_leaderElection->registerOnCampaignHandler(
         [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
@@ -485,4 +496,5 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
         });
     INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
                           << LOG_KV("nodeConfig", nodeConfig);
+#endif
 }

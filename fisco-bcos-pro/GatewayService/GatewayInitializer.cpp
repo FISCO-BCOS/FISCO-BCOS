@@ -47,6 +47,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
+#ifdef ETCD
     if (nodeConfig->enableFailOver())
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
@@ -57,6 +58,7 @@ void GatewayInitializer::init(std::string const& _configPath)
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
             nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
+#endif
 
     bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);

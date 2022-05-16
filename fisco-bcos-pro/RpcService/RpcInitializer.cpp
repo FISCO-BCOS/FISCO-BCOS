@@ -50,6 +50,7 @@ void RpcInitializer::init(std::string const& _configDir)
         m_nodeConfig->setEnSmNodeCert(_configDir + "/" + "sm_enssl.crt");
         m_nodeConfig->setEnSmNodeKey(_configDir + "/" + "sm_enssl.key");
     }
+#ifdef ETCD
     if (m_nodeConfig->enableFailOver())
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("enable failover");
@@ -60,6 +61,7 @@ void RpcInitializer::init(std::string const& _configDir)
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
             m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
+#endif
     // init rpc config
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory");
     auto factory = initRpcFactory(m_nodeConfig);
@@ -110,11 +112,14 @@ void RpcInitializer::start()
         return;
     }
     m_running = true;
+
+#ifdef ETCD
     if (m_leaderEntryPoint)
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
         m_leaderEntryPoint->start();
     }
+#endif
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc");
     m_rpc->start();
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc success");

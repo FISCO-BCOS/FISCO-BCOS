@@ -53,10 +53,14 @@ public:
     }
 
     static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::vector<std::string>& _pdAddrs)
+        [[maybe_unused]] const std::vector<std::string>& _pdAddrs)
     {
+#ifdef TIKV
         auto cluster = storage::newTiKVCluster(_pdAddrs);
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
+#else
+        return {};
+#endif
     }
 };
 }  // namespace bcos::initializer
