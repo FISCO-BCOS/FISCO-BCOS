@@ -77,7 +77,7 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters);
 
     std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& _origin, const std::string& _to, int64_t _gasLeft);
+        const std::string& _address, PrecompiledExecResult::Ptr const& _callParameters);
 
     u256 getDeployAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 

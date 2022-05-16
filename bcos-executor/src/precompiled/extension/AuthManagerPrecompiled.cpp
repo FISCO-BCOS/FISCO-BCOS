@@ -216,8 +216,7 @@ void AuthManagerPrecompiled::getAdmin(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin")
                            << LOG_KV("path", path);
 
-    std::string adminStr = getContractAdmin(_executive, _callParameters->m_origin, path,
-        _callParameters->m_gas - gasPricer->calTotalGas());
+    std::string adminStr = getContractAdmin(_executive, path, _callParameters);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
                            << LOG_KV("admin", adminStr);
     gasPricer->updateMemUsed(1);
@@ -292,8 +291,7 @@ void AuthManagerPrecompiled::setMethodAuthType(
     {
         codec->decode(data, path, _func, _type);
     }
-    auto admin =
-        getContractAdmin(_executive, _callParameters->m_origin, path, _callParameters->m_gas);
+    auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
@@ -407,8 +405,7 @@ void AuthManagerPrecompiled::setMethodAuth(
     {
         codec->decode(data, path, _func, account);
     }
-    auto admin =
-        getContractAdmin(_executive, _callParameters->m_origin, path, _callParameters->m_gas);
+    auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
@@ -455,8 +452,7 @@ void AuthManagerPrecompiled::setContractStatus(
                            << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
 
     /// check sender is contract admin
-    auto admin =
-        getContractAdmin(_executive, _callParameters->m_origin, address, _callParameters->m_gas);
+    auto admin = getContractAdmin(_executive, address, _callParameters);
     if (_callParameters->m_sender != admin)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
@@ -516,8 +512,8 @@ void AuthManagerPrecompiled::contractAvailable(
 }
 
 std::string AuthManagerPrecompiled::getContractAdmin(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _origin,
-    const std::string& _to, int64_t _gasLeft)
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _to,
+    PrecompiledExecResult::Ptr const& _callParameters)
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec =
@@ -529,9 +525,16 @@ std::string AuthManagerPrecompiled::getContractAdmin(
                          codec->encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
                          codec->encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
     auto data = codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), selector);
-    auto response = externalRequest(
-        _executive, ref(data), _origin, authMgrAddress, _to, false, false, _gasLeft, true);
+    auto response = externalRequest(_executive, ref(data), _callParameters->m_origin,
+        authMgrAddress, _to, _callParameters->m_staticCall, false, _callParameters->m_gas, true);
 
+    if (response->status != (int32_t)protocol::TransactionStatus::None)
+    {
+        PRECOMPILED_LOG(ERROR) << "Can't get contract admin, check the contract existence."
+                               << LOG_KV("address", _to);
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("Please check the existence of contract."));
+    }
     std::string admin = "";
 
     codec->decode(ref(response->data), admin);
