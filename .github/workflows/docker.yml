@@ -5,7 +5,7 @@ on:
     tags:
       - 'v2.*.*'
   release:
-    types: [published, created]
+    types: [published, created, edited]
 
 env:
   DOCKER_REPOSITORY: fiscobcos
