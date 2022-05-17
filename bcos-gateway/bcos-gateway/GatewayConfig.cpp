@@ -160,10 +160,12 @@ void GatewayConfig::initWsConfig(const boost::property_tree::ptree& _pt)
     auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
     if (m_wsConfig->smSSL())
     {
+        contextConfig->setSslType("sm_ssl");
         contextConfig->initSMCertConfig(_pt);
     }
     else
     {
+        contextConfig->setSslType("ssl");
         contextConfig->initCertConfig(_pt);
     }
 

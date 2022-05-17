@@ -50,8 +50,7 @@ void Service::reportConnectedNodes()
         }
     }
 
-    SERVICE_LOG(INFO) << LOG_BADGE("##### p2pservice reportConnectedNodes")
-                      << LOG_DESC("connected nodes") << LOG_KV("count", sessions.size());
+    SERVICE_LOG(INFO) << LOG_DESC("connected nodes") << LOG_KV("count", sessions.size());
 
     // auto ioc = std::make_shared<boost::asio::io_context>(16);
     m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
@@ -183,24 +182,12 @@ void Service::updateUnconnectedEndpointToWservice()
     RecursiveGuard l(x_nodes);
     for (auto const& it : m_staticNodes)
     {
-        SERVICE_LOG(INFO) << "####### updateUnconnectedEndpointToWservice m_staticNodes"
-                          << LOG_KV("nodeIPpoint host", it.first.address())
-                          << LOG_KV("nodeIPpoint port", it.first.port())
-                          << LOG_KV("p2pid", it.second);
-
         // p2pID is a empty string means that NodeIPEndpoint is unconnecnted, so update those
         // unconnecnted NodeIPEndpoints to wsService and wsService can reconnect them.
         if (it.second == "")
         {
             reconnectedPeers->insert(it.first);
         }
-    }
-
-    for (auto& peer : *reconnectedPeers)
-    {
-        SERVICE_LOG(INFO) << "####### updateUnconnectedEndpointToWservice peer"
-                          << LOG_KV("peer host", peer.address())
-                          << LOG_KV("peer port", peer.port());
     }
 
     m_wsService->setReconnectedPeers(reconnectedPeers);
@@ -268,28 +255,14 @@ void Service::onConnect(std::shared_ptr<WsSession> _session)
     auto it = m_sessions.find(nodeid);
     if (it != m_sessions.end() && it->second->isConnected())
     {
-        SERVICE_LOG(INFO) << LOG_DESC("##### onConnect sessionID")
-                          << LOG_KV("sessionID", it->second);
-        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", nodeid);
-
-        SERVICE_LOG(INFO) << LOG_DESC("##### updateStaticNodes 000");
         updateStaticNodes(session->endPoint(), nodeid);
-        SERVICE_LOG(INFO) << LOG_DESC("##### updateStaticNodes 111");
-
-        SERVICE_LOG(INFO) << LOG_DESC("##### drop 000000");
         session->drop(DuplicatePeer);
-        SERVICE_LOG(INFO) << LOG_DESC("##### drop 11111");
         return;
     }
 
     if (nodeid == id())
     {
-        // todo: modify from info to trace
-        SERVICE_LOG(INFO) << "Disconnect self";
-
-        SERVICE_LOG(INFO) << "##### Disconnect self" << LOG_KV("nodeid", nodeid)
-                          << LOG_KV("myself nodeid", id());
-
+        SERVICE_LOG(TRACE) << "Disconnect self";
         updateStaticNodes(session->endPoint(), id());
         session->drop(DuplicatePeer);
         return;

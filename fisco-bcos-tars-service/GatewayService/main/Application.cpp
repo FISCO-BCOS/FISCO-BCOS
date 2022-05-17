@@ -66,6 +66,7 @@ protected:
             addConfig("sm_enssl.crt");
             addConfig("sm_ssl.key");
             addConfig("sm_enssl.key");
+            contextConfig->setSslType("sm_ssl");
             contextConfig->initSMCertConfig(pt);
         }
         else
@@ -73,6 +74,7 @@ protected:
             addConfig("ca.crt");
             addConfig("ssl.key");
             addConfig("ssl.crt");
+            contextConfig->setSslType("ssl");
             contextConfig->initCertConfig(pt);
         }
         gatewayConfig->wsConfig()->setContextConfig(contextConfig);
