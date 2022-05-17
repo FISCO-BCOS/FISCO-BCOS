@@ -160,12 +160,10 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
                 {
                     stateStorage = createStateStorage(m_backendStorage);
                 }
-                lastStateStorage =
-                    m_lastStateStorage ?
-                        m_lastStateStorage :
-                        (m_cachedStorage ?
-                                createStateStorage(m_cachedStorage) :
-                                createStateStorage(m_backendStorage));
+                lastStateStorage = m_lastStateStorage ?
+                                       m_lastStateStorage :
+                                       (m_cachedStorage ? createStateStorage(m_cachedStorage) :
+                                                          createStateStorage(m_backendStorage));
             }
             else
             {
@@ -1530,7 +1528,17 @@ void TransactionExecutor::removeCommittedState()
 
     if (m_cachedStorage)
     {
-        EXECUTOR_LOG(INFO) << "Merge state number: " << number << " to cachedStorage start";
+        auto keyPageStorage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(storage);
+        if (keyPageStorage)
+        {
+            EXECUTOR_LOG(INFO) << LOG_DESC("merge keyPage to cachedStorage")
+                                << LOG_KV("number", number);
+            keyPageStorage->setReadOnly(true);
+        }
+        else
+        {
+            EXECUTOR_LOG(INFO) << "Merge state number: " << number << " to cachedStorage";
+        }
         m_cachedStorage->merge(true, *storage);
         EXECUTOR_LOG(INFO) << "Merge state number: " << number << " to cachedStorage end";
 
@@ -1686,13 +1694,7 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_useKeyPage)
     {
-        auto keyPageStorage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(storage);
-        if(keyPageStorage)
-        {
-            EXECUTOR_LOG(DEBUG) << "set preKeyPage return page";
-            keyPageStorage->setReturnPage(true);
-        }
-        return std::make_shared<bcos::storage::KeyPageStorage>(storage, false);
+        return std::make_shared<bcos::storage::KeyPageStorage>(storage);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }

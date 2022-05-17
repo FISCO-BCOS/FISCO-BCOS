@@ -53,8 +53,8 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     }
     std::vector<std::string> ret;
     auto& meta = std::get<1>(data.value()->data);
-    auto [pageInfo, lock] = meta.getAllPageInfo();
-    boost::ignore_unused(lock);
+    auto readLock = meta.rLock();
+    auto pageInfo = meta.getAllPageInfoNoLock();
     auto [offset, total] = _condition->getLimit();
     ret.reserve(total);
     size_t validCount = 0;
@@ -82,9 +82,10 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
             }
         }
     }
+    readLock.unlock();
     _callback(nullptr, std::move(ret));
 }
-
+// TODO: add interface and cow to avoid page copy
 void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view keyView,
     std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback)
 {
@@ -230,45 +231,57 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
             {
                 if (it.second.type == Data::Type::TableMeta)
                 {  // if metadata
+
                     if (it.second.entry.status() == Entry::Status::EMPTY)
                     {  // empty table meta
                         continue;
                     }
-                    auto& meta = std::get<1>(it.second.data);
-                    Entry entry;
-                    entry.setObject(meta);
-                    callback(it.second.table, it.second.key, std::move(entry));
-                    if (c_fileLogLevel >= DEBUG)
-                    {  // debug log to statistic the table pages
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("get TableMeta") << LOG_KV("table", it.first.first)
-                            << LOG_KV("key", toHex(it.first.second)) << LOG_KV("size", entry.size())
-                            << LOG_KV("meta", meta);
+                    else if (it.second.entry.status() == Entry::Status::NORMAL)
+                    {  // if normal return entry without serialization
+                        callback(it.second.table, it.second.key, it.second.entry);
+                    }
+                    else
+                    {
+                        auto& meta = std::get<1>(it.second.data);
+                        auto readLock = meta.rLock();
+                        Entry entry;
+                        entry.setObject(meta);
+                        readLock.unlock();
+                        if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                        {  // debug log to statistic the table pages
+                            KeyPage_LOG(TRACE)
+                                << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
+                                << LOG_KV("key", toHex(it.first.second))
+                                << LOG_KV("size", entry.size()) << LOG_KV("meta", meta);
+                        }
+                        callback(it.second.table, it.second.key, std::move(entry));
                     }
                 }
                 else if (it.second.type == Data::Type::Page)
                 {  // if page, encode and return
                     auto& page = std::get<0>(it.second.data);
                     Entry entry;
-                    if (page.count() == 0)
+                    if (page.validCount() == 0)
                     {
                         entry.setStatus(Entry::Status::DELETED);
+                        callback(it.second.table, it.second.key, std::move(entry));
+                    }
+                    else if (it.second.entry.status() == Entry::Status::NORMAL)
+                    {
+                        callback(it.second.table, it.second.key, it.second.entry);
                     }
                     else
                     {
                         entry.setObject(page);
                         entry.setStatus(it.second.entry.status());
-                    }
-                    if (c_fileLogLevel >= DEBUG)
-                    {
                         KeyPage_LOG(DEBUG)
-                            << LOG_DESC("get Page") << LOG_KV("table", it.first.first)
+                            << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
                             << LOG_KV("key", toHex(it.first.second))
-                            << LOG_KV("count", page.count())
+                            << LOG_KV("count", page.validCount())
                             << LOG_KV("status", (int)entry.status())
                             << LOG_KV("size", entry.size());
+                        callback(it.second.table, it.second.key, std::move(entry));
                     }
-                    callback(it.second.table, it.second.key, std::move(entry));
                 }
                 else
                 {
@@ -358,7 +371,6 @@ void KeyPageStorage::rollback(const Recoder& recoder)
             }
             else
             {  // nullopt means the key is not exist in m_cache
-
                 if (it != bucket->container.end())
                 {
                     if (c_fileLogLevel >= bcos::LogLevel::TRACE)
@@ -380,6 +392,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
         }
         else
         {  // page entry
+            // FIXME: revert need modify tablemeta
             auto [error, data] = getData(change.table, "");
             if (error)
             {
