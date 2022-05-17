@@ -25,13 +25,13 @@
 #include "../mock/MockTxPool.h"
 #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
-#include "precompiled/Utilities.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>

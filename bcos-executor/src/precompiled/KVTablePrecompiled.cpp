@@ -19,9 +19,9 @@
  */
 
 #include "KVTablePrecompiled.h"
-#include "Common.h"
-#include "PrecompiledResult.h"
-#include "Utilities.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
 #include <boost/algorithm/string.hpp>
@@ -49,15 +49,15 @@ KVTablePrecompiled::KVTablePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompile
 }
 
 std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&, int64_t)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     std::vector<std::string> dynamicParams;
     bytes param;
-    codec->decode(_param, dynamicParams, param);
+    codec->decode(_callParameters->input(), dynamicParams, param);
     auto tableName = dynamicParams.at(0);
     tableName = getActualTableName(tableName);
     auto originParam = ref(param);
@@ -66,7 +66,7 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
 
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
-    gasPricer->setMemUsed(_param.size());
+    gasPricer->setMemUsed(_callParameters->input().size());
 
     auto table = _executive->storage().openTable(tableName);
     if (!table.has_value())

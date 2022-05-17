@@ -29,10 +29,30 @@ struct PrecompiledExecResult
 {
     using Ptr = std::shared_ptr<PrecompiledExecResult>;
     PrecompiledExecResult() = default;
-    ~PrecompiledExecResult() {}
+    PrecompiledExecResult(const executor::CallParameters::UniquePtr& _callParameters)
+      : m_sender(_callParameters->senderAddress),
+        m_to(_callParameters->receiveAddress),
+        m_origin(_callParameters->origin),
+        m_input(ref(_callParameters->data)),
+        m_gas(_callParameters->gas),
+        m_staticCall(_callParameters->staticCall),
+        m_create(_callParameters->create)
+    {}
+    ~PrecompiledExecResult() = default;
+    PrecompiledExecResult(const PrecompiledExecResult&) = delete;
+    PrecompiledExecResult& operator=(const PrecompiledExecResult&) = delete;
+
+    PrecompiledExecResult(PrecompiledExecResult&&) = delete;
+    PrecompiledExecResult(const PrecompiledExecResult&&) = delete;
+
+    /** for input **/
+    bytesConstRef const& input() const { return m_input; }
+    bytesConstRef params() const { return m_input.getCroppedData(4);}
+
+    /** for output **/
     bytes const& execResult() const { return m_execResult; }
     bytes& mutableExecResult() { return m_execResult; }
-    void setExecResult(bytes const& _execResult) { m_execResult = _execResult; }
+    void setExecResult(bytes const& _execResult) { m_execResult = std::move(_execResult); }
     void setGas(int64_t _gas) { m_gas = _gas; }
     inline void setExternalResult(executor::CallParameters::UniquePtr _callParameter)
     {
@@ -43,8 +63,16 @@ struct PrecompiledExecResult
                 protocol::PrecompiledError("External call revert: " + _callParameter->message));
         }
     }
-    bytes m_execResult;
-    int64_t m_gas;
+
+    std::string m_sender;  // common field, readable format
+    std::string m_to;      // common field, readable format
+    std::string m_origin;  // common field, readable format
+
+    bytesConstRef m_input;  // common field, transaction data, binary format
+    bcos::bytes m_execResult;
+    int64_t m_gas = 0;
+    bool m_staticCall = false;  // common field
+    bool m_create = false;      // by request, is creation
 };
 }  // namespace precompiled
 }  // namespace bcos

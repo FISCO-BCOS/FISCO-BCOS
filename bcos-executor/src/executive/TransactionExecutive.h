@@ -23,9 +23,9 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
-#include "../precompiled/PrecompiledResult.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
@@ -170,8 +170,8 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             _constantPrecompiled);
 
-    std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
-        bytesConstRef param, const std::string& origin, const std::string& sender, int64_t gasLeft);
+    std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
+        precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {

@@ -19,7 +19,7 @@
  */
 
 #include "PrecompiledGas.h"
-#include "Common.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
 using namespace bcos;
 using namespace bcos::precompiled;
 
