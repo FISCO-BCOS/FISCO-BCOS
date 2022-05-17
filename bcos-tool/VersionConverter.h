@@ -46,7 +46,7 @@ inline uint32_t toVersionNumber(const std::string& _version)
     if (versionFields.size() < 2)
     {
         BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
-                                  "The version must be in version of major_version.middle_version, "
+                                  "The version must be in format of major_version.middle_version, "
                                   "and the minimum version is optional, current version is " +
                                   _version));
     }

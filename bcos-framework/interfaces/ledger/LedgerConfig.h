@@ -21,6 +21,7 @@
 #pragma once
 #include "../../interfaces/consensus/ConsensusNodeInterface.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
+
 namespace bcos
 {
 namespace ledger
@@ -95,6 +96,9 @@ public:
     void setTxsSize(int64_t _txsSize) { m_txsSize = _txsSize; }
     int64_t txsSize() const { return m_txsSize; }
 
+    void setCompatibilityVersion(uint32_t _version) { m_compatibilityVersion = _version; }
+    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
+
 protected:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
@@ -103,6 +107,9 @@ protected:
     uint64_t m_blockTxCountLimit;
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
+    // the compatibilityVersion
+    // the system version, can only be upgraded manually
+    uint32_t m_compatibilityVersion;
     // no need to store, in memory data
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;

@@ -19,7 +19,6 @@
  */
 #include "Sealer.h"
 #include "Common.h"
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
@@ -137,7 +136,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setConsensusWeights(std::move(weightList));
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
     // set the version
-    _block->blockHeader()->setVersion((uint32_t)(g_BCOSConfig.version()));
+    _block->blockHeader()->setVersion(m_sealerConfig->consensus()->compatibilityVersion());
 
     auto encodedData = std::make_shared<bytes>();
     _block->encode(*encodedData);

@@ -14,5 +14,7 @@ module bcostars {
         Error call(Transaction _tx, out TransactionReceipt _receipt);
         Error getCode(string _contract, out vector<byte> _codeData);
         Error getABI(string _contract, out string _abi);
+
+        Error registerExecutor(string _name);
     };
 };

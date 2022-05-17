@@ -59,6 +59,12 @@ public:
     {
         m_finalizeHandler = _finalizeHandler;
     }
+    void registerOnStableCheckPointCommitFailed(
+        std::function<void(bcos::protocol::BlockNumber)> _onStableCheckPointCommitFailed) override
+    {
+        m_onStableCheckPointCommitFailed = _onStableCheckPointCommitFailed;
+    }
+
     void asyncGetCommittedProposals(bcos::protocol::BlockNumber _start, size_t _offset,
         std::function<void(PBFTProposalListPtr)> _onSuccess) override;
 
@@ -102,7 +108,7 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> m_finalizeHandler;
-
+    std::function<void(bcos::protocol::BlockNumber)> m_onStableCheckPointCommitFailed;
     std::shared_ptr<ThreadPool> m_commitBlockWorker;
 };
 }  // namespace consensus

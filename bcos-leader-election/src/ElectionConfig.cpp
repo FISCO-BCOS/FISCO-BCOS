@@ -78,7 +78,7 @@ void ElectionConfig::refreshWatcher()
         return;
     }
     m_watcherTimer->stop();
-    ELECTION_LOG(INFO) << LOG_DESC("The client disconnect, wait for reconnect success");
+    ELECTION_LOG(WARNING) << LOG_DESC("The client disconnect, wait for reconnect success");
     onElectionClusterDown();
     // wait until the client connects to etcd server
     while (!m_etcdClient->head().get().is_ok())
@@ -86,7 +86,7 @@ void ElectionConfig::refreshWatcher()
         boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
     }
     onElectionClusterRecover();
-    ELECTION_LOG(INFO) << LOG_DESC("The client reconnect success, refreshWatcher");
+    ELECTION_LOG(WARNING) << LOG_DESC("The client reconnect success, refreshWatcher");
     reCreateWatcher();
     m_watcherTimer->start();
 }

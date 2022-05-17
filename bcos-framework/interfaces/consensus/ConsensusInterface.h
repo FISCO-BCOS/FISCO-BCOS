@@ -21,11 +21,13 @@
 #pragma once
 #include "../../interfaces/ledger/LedgerConfig.h"
 #include "../../interfaces/protocol/Block.h"
+#include "../../interfaces/protocol/Protocol.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
 #include "ConsensusTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Error.h>
+
 
 namespace bcos
 {
@@ -71,6 +73,10 @@ public:
     // Note: if separate sealer with the PBFT module, should implement with notify
     virtual ConsensusNodeList consensusNodeList() const { return ConsensusNodeList(); }
     virtual uint64_t nodeIndex() const { return 0; }
+    virtual uint32_t compatibilityVersion() const
+    {
+        return (uint32_t)(bcos::protocol::DEFAULT_VERSION);
+    }
 
     virtual void asyncGetConsensusStatus(
         std::function<void(Error::Ptr, std::string)> _onGetConsensusStatus) = 0;

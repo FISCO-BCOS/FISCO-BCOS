@@ -119,6 +119,7 @@ void PBFTImpl::init()
     m_ledgerFetcher->fetchObserverNodeList();
     m_ledgerFetcher->fetchBlockTxCountLimit();
     m_ledgerFetcher->fetchConsensusLeaderPeriod();
+    m_ledgerFetcher->fetchCompatibilityVersion();
     auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())

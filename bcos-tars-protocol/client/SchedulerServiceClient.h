@@ -61,10 +61,7 @@ public:
 
 
     void registerExecutor(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr,
-        std::function<void(bcos::Error::Ptr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method registerExecutor");
-    }
+        std::function<void(bcos::Error::Ptr&&)>) override;
 
     void unregisterExecutor(const std::string&, std::function<void(bcos::Error::Ptr&&)>) override
     {

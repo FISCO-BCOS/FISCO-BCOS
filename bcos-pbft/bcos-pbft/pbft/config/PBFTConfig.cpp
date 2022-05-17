@@ -70,6 +70,18 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
                        << LOG_KV("sealer", _ledgerConfig->sealerId())
                        << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState();
     }
+    if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
+    {
+        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
+                       << LOG_KV("version", (bcos::protocol::Version)m_compatibilityVersion)
+                       << LOG_KV("updatedVersion",
+                              (bcos::protocol::Version)(_ledgerConfig->compatibilityVersion()));
+        m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
+        if (m_versionNotification && m_asMasterNode)
+        {
+            m_versionNotification(m_compatibilityVersion);
+        }
+    }
     // notify the txpool validator to update the consensusNodeList and the observerNodeList
     if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
     {

@@ -21,7 +21,7 @@
 #pragma once
 
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
 
 namespace bcos
 {
@@ -37,8 +37,8 @@ public:
     virtual ~CpuHeavyPrecompiled(){};
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
     // is this precompiled need parallel processing, default false.
     virtual bool isParallelPrecompiled() override { return true; }
@@ -50,7 +50,7 @@ public:
         return std::vector<std::string>();
     };
 
-    static std::string getAddress(unsigned int id)
+    static inline std::string getAddress(unsigned int id)
     {
         u160 address = u160(CPU_HEAVY_START_ADDRESS);
         address += id;
@@ -65,12 +65,13 @@ public:
     {
         for (int id = 0; id < CPU_HEAVY_CONTRACT_NUM; id++)
         {
-            std::string address = getAddress(id);
-            BCOS_LOG(INFO) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled "
-                           << LOG_KV("address", address);
+            std::string&& address = getAddress(id);
             registeredMap->insert({std::move(address),
                 std::make_shared<precompiled::CpuHeavyPrecompiled>(_hashImpl)});
         }
+        BCOS_LOG(TRACE) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled complete"
+                        << LOG_KV("addressFrom", getAddress(0))
+                        << LOG_KV("addressTo", getAddress(CPU_HEAVY_CONTRACT_NUM - 1));
     }
 };
 }  // namespace precompiled

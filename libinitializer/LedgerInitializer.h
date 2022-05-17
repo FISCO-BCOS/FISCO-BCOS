@@ -37,7 +37,7 @@ public:
         auto ledger = std::make_shared<bcos::ledger::Ledger>(_blockFactory, _storage);
         // build genesis block
         ledger->buildGenesisBlock(_nodeConfig->ledgerConfig(), _nodeConfig->txGasLimit(),
-            _nodeConfig->genesisData(), _nodeConfig->version());
+            _nodeConfig->genesisData(), _nodeConfig->compatibilityVersionStr());
         return ledger;
     }
 };

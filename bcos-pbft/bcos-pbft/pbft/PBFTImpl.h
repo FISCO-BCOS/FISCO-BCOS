@@ -132,6 +132,17 @@ public:
 
     virtual bool masterNode() const { return m_masterNode.load(); }
 
+    virtual void registerVersionInfoNotification(
+        std::function<void(uint32_t _version)> _versionNotification)
+    {
+        m_pbftEngine->pbftConfig()->registerVersionInfoNotification(_versionNotification);
+    }
+
+    uint32_t compatibilityVersion() const override
+    {
+        return m_pbftEngine->pbftConfig()->compatibilityVersion();
+    }
+
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;

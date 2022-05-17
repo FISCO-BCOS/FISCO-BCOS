@@ -117,15 +117,23 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosMaxNodeService-MacOS.zip
+          path: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosExecutorService-MacOS.zip
+          path: build/fisco-bcos-tars-service/BcosExecutorService.tgz
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh
 
@@ -374,14 +382,22 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosMaxNodeService.zip
+          path: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosExecutorService.zip
+          path: build/fisco-bcos-tars-service/BcosExecutorService.tgz
       - name: run integration test
         run: cd tools && bash .ci/ci_check.sh

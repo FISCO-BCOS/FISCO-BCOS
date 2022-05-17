@@ -20,12 +20,12 @@
  */
 
 #include "BlockContext.h"
-#include "../precompiled/Common.h"
-#include "../precompiled/Utilities.h"
 #include "../vm/Precompiled.h"
 #include "ExecutiveStackFlow.h"
 #include "TransactionExecutive.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/interfaces/protocol/Exceptions.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"

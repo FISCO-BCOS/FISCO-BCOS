@@ -71,24 +71,6 @@ public:
     {
         return c_supportedProtocols;
     }
-
-    Version version() const
-    {
-        ReadGuard l(x_version);
-        return m_version;
-    }
-
-    void setVersion(Version _version)
-    {
-        UpgradableGuard l(x_version);
-        if (m_version == _version)
-        {
-            return;
-        }
-        UpgradeGuard ul(l);
-        m_version = _version;
-    }
-
     // Note: must set the protocolInfo codec when init
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
@@ -98,8 +80,6 @@ public:
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
-    // the system version, can only be upgraded manually
-    Version m_version = Version::RC3_VERSION;
     // the minimum supported version
     Version m_minSupportedVersion = Version::MIN_VERSION;
     Version m_maxSupportedVersion = Version::MAX_VERSION;

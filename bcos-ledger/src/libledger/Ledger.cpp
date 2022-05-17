@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -1419,14 +1420,14 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+    if (versionNumber > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
     {
         LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                         << LOG_KV("version", g_BCOSConfig.version());
+                         << LOG_KV("versionNumber", versionNumber);
         // write compatibility version
         Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(_compatibilityVersion), 0});
+        compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
         sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
     }
 
