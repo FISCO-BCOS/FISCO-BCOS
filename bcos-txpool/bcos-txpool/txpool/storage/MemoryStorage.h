@@ -40,9 +40,6 @@ public:
 
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
         bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) override;
-    bcos::protocol::TransactionStatus submitTransaction(bcos::protocol::Transaction::Ptr _tx,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr, bool _enforceImport = false,
-        bool _checkPoolLimit = true) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -65,7 +62,11 @@ public:
         ReadGuard l(x_txpoolMutex);
         return m_txsTable.count(_txHash);
     }
-    size_t size() const override;
+    size_t size() const override
+    {
+        ReadGuard l(x_txpoolMutex);
+        return m_txsTable.size();
+    }
     void clear() override;
 
     bcos::crypto::HashListPtr filterUnknownTxs(
@@ -88,12 +89,17 @@ public:
 
     bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) override;
 
+    bool batchVerifyAndSubmitTransaction(
+        bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) override;
+    void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
+
 protected:
+    bcos::protocol::TransactionStatus insertWithoutLock(bcos::protocol::Transaction::ConstPtr _tx);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback,
-        bool _checkPoolLimit);
+        bool _checkPoolLimit, bool _lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(bcos::protocol::Transaction::ConstPtr _tx);
 
