@@ -48,6 +48,9 @@ public:
         // options.OptimizeLevelStyleCompaction();
         // create the DB if it's not already present
         options.create_if_missing = true;
+        options.enable_blob_files = enableBlobDB;
+        // options.min_blob_size = 1024;
+
 
         // open DB
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
