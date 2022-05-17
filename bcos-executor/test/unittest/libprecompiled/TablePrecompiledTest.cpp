@@ -438,8 +438,9 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(uint32,string)[])",
-            conditions, _limit, _updateFields);
+        bytes in =
+            codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(uint32,string)[])",
+                conditions, _limit, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -618,6 +619,16 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatTable(number++, "t_test", "id", {errorStr2}, callAddress, 0, true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // check trim create table params
+    {
+        auto r1 = creatTable(number++, "t_test123", " id ", {" item_name ", " item_id "},
+            "420f853b49838bd3e9466c85a4cc3428c960dde3");
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        auto r2 = desc(number++, "420f853b49838bd3e9466c85a4cc3428c960dde3");
+        TableInfoTuple t = {"id", {"item_name", "item_id"}};
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(t));
     }
 }
 
@@ -861,7 +872,7 @@ BOOST_AUTO_TEST_CASE(insertTest)
         BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // insert not enough value
-        auto r5= insert(number++, "id3", {"test1", "test2"}, callAddress);
+        auto r5 = insert(number++, "id3", {"test1", "test2"}, callAddress);
         BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }

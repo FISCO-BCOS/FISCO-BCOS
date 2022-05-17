@@ -34,10 +34,11 @@ using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
-const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
-const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
-const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
-const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
+constexpr const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
+constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
+constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
+constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
+constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 
 FileSystemPrecompiled::FileSystemPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -161,7 +162,17 @@ void FileSystemPrecompiled::makeDir(
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(_callParameters->params(), absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("mkdir", absolutePath);
-    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
+    auto table = _executive->storage().openTable(absolutePath);
+    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
+    if (table)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
+                               << LOG_DESC("file name exists, please check")
+                               << LOG_KV("absolutePath", absolutePath);
+        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
+        return;
+    }
+
     auto bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
@@ -322,9 +333,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_FILE_BUILD_DIR_FAILED, *codec);
         return;
     }
-    // linkTable must exist
-    linkTable = _executive->storage().openTable(linkTableName);
-    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
+    linkTable = _executive->storage().createTable(linkTableName,STORAGE_VALUE);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // set link info to link table
     auto typeEntry = linkTable->newEntry();
@@ -423,16 +432,6 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
         _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_PATH)));
         return;
     }
-    auto table = _executive->storage().openTable(absolutePath);
-    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
-    if (table)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
-                               << LOG_DESC("file name exists, please check")
-                               << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
-        return;
-    }
 
     std::string parentDir, baseName;
     if (type == FS_TYPE_DIR)
@@ -458,7 +457,6 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
         return;
     }
-    _executive->storage().createTable(absolutePath, SYS_VALUE_FIELDS);
 
     // set meta data in parent table
     std::map<std::string, std::string> bfsInfo;

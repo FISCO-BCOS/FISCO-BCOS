@@ -96,10 +96,8 @@ void TableManagerPrecompiled::createTable(
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(_callParameters->params(), tableName, tableInfoTuple);
-    // TODO: check trim
     auto& [keyField, valueFields] = tableInfoTuple;
-    precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-    auto valueField = boost::join(valueFields, ",");
+    auto valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
                            << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
                            << LOG_KV("valueField", valueField);
