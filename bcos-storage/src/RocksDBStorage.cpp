@@ -100,7 +100,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
-        if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty())
+        if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty() && nullptr != m_cryptoSuite)
         {
             const std::string& dataKey = m_nodeConfig->storageSecurityDataKey();
 
@@ -136,8 +136,11 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto end2 = utcTime();
 
         std::optional<Entry> entry((Entry()));
+
         entry->set(std::move(value));
+
         _callback(nullptr, entry);
+
 
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
@@ -201,7 +204,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
 
                                 // Storage Security
                                 if (true == m_nodeConfig->storageSecurityEnable() &&
-                                    false == v.empty())
+                                    false == v.empty() && nullptr != m_cryptoSuite)
                                 {
                                     const std::string& dataKey =
                                         m_nodeConfig->storageSecurityDataKey();
@@ -285,7 +288,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
             std::string value(_entry.get().data(), _entry.get().size());
 
             // Storage security
-            if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty())
+            if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty() && nullptr != m_cryptoSuite)
             {
                 const std::string& dataKey = m_nodeConfig->storageSecurityDataKey();
 
@@ -358,7 +361,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                     std::string value(entry.get().data(), entry.get().size());
 
                     // Storage security
-                    if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty())
+                    if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty() && nullptr != m_cryptoSuite)
                     {
                         const std::string& dataKey = m_nodeConfig->storageSecurityDataKey();
 
