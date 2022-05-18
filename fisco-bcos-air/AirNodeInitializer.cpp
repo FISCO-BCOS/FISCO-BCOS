@@ -58,11 +58,11 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // create gateway
     GatewayFactory gatewayFactory(
         nodeConfig->chainId(), "localRpc", m_nodeInitializer->protocolInitializer());
-    auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
+    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
     // create the node
-    m_nodeInitializer->init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath,
+    m_nodeInitializer->init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath,
         _genesisFile, m_gateway, true);
 
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();

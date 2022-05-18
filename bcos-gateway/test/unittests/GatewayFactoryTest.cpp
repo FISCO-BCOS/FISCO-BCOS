@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(test_buildSSLContext)
         std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
         auto config = std::make_shared<GatewayConfig>();
         config->initConfig(configIni);
-        auto context = factory->buildSSLContext(config->smCertConfig());
+        auto context = factory->buildSSLContext(config->smCertConfig(), config->storageSecurityConfig());
         BOOST_CHECK(context);
     }
 
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(test_buildSSLContext)
         std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
         auto config = std::make_shared<GatewayConfig>();
         config->initConfig(configIni);
-        auto context = factory->buildSSLContext(config->certConfig());
+        auto context = factory->buildSSLContext(config->certConfig(), config->storageSecurityConfig());
         BOOST_CHECK(context);
     }
 }

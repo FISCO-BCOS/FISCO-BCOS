@@ -12,6 +12,13 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include <bcos-crypto/encrypt/AESCrypto.h>
+#include <bcos-crypto/encrypt/SM4Crypto.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -42,7 +49,11 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         "path,p", po::value<string>()->default_value(""), "[RocksDB path]")("name,n",
         po::value<string>()->default_value(""), "[RocksDB name]")("table,t", po::value<string>(),
         "table name ")("key,k", po::value<string>()->default_value(""), "table key")(
-        "iterate,i", po::value<bool>()->default_value(false), "traverse table");
+        "iterate,i", po::value<bool>()->default_value(false), "traverse table")("config,c",
+        boost::program_options::value<std::string>()->default_value("./config.ini"),
+        "config file path, eg. config.ini")("genesis,g",
+        boost::program_options::value<std::string>()->default_value("./config.genesis"),
+        "genesis config file path, eg. genesis.ini");
     po::variables_map vm;
     try
     {
@@ -88,7 +99,58 @@ int main(int argc, const char* argv[])
     options.create_if_missing = false;
     rocksdb::Status s = rocksdb::DB::Open(options, storagePath, &db);
 
-    auto adapter = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+    std::string configPath("./config.ini");
+    if (params.count("config"))
+    {
+        configPath = params["config"].as<std::string>();
+    }
+    if (params.count("c"))
+    {
+        configPath = params["c"].as<std::string>();
+    }
+    std::string genesisFilePath("./config.genesis");
+    if (params.count("genesis"))
+    {
+        genesisFilePath = params["genesis"].as<std::string>();
+    }
+    if (params.count("g"))
+    {
+        genesisFilePath = params["g"].as<std::string>();
+    }
+    if (!boost::filesystem::exists(configPath))
+    {
+        std::cout << "config \'" << configPath << "\' not found!";
+        exit(0);
+    }
+    if (!boost::filesystem::exists(genesisFilePath))
+    {
+        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
+        exit(0);
+    }
+
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
+    nodeConfig->loadConfig(configPath);
+    nodeConfig->loadGenesisConfig(genesisFilePath);
+
+    std::shared_ptr<CryptoSuite> cryptoSuite;
+    if (true == nodeConfig->smCryptoType())
+    {
+        auto hashImpl = std::make_shared<SM3>();
+        auto signatureImpl = std::make_shared<FastSM2Crypto>();
+        auto encryptImpl = std::make_shared<SM4Crypto>();
+        cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+    }
+    else
+    {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+        auto encryptImpl = std::make_shared<AESCrypto>();
+        cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+    }
+
+    auto adapter =
+        std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nodeConfig, cryptoSuite);
 
     if (iterate)
     {
