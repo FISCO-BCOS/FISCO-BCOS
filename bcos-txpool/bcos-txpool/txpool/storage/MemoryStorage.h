@@ -153,6 +153,10 @@ private:
     // Maximum number of transactions traversed by m_cleanUpTimer,
     // The limit set here is to minimize the impact of the cleanup operation on txpool performance
     uint64_t c_maxTraverseTxsNum = 10000;
+
+    // for tps stat
+    std::atomic<int64_t> m_tpsStatstartTime = {0};
+    std::atomic<int64_t> m_onChainTxsCount = {0};
 };
 }  // namespace txpool
 }  // namespace bcos

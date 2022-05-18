@@ -63,8 +63,7 @@ void PBFTCache::onCheckPointTimeout()
     }
     if (m_committedIndexNotifier && m_config->timer()->running() == false)
     {
-        // m_committedIndexNotifier(m_config->committedProposal()->index());
-        m_committedIndexNotifier(m_config->expectedCheckPoint() - 1);
+        m_committedIndexNotifier(m_config->committedProposal()->index());
     }
     PBFT_LOG(WARNING) << LOG_DESC("onCheckPointTimeout: resend the checkpoint message package")
                       << LOG_KV("index", m_checkpointProposal->index())

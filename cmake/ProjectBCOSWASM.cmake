@@ -37,7 +37,7 @@ ExternalProject_Add(bcos_wasm_project
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1
-        LOG_BUILD 1
+        LOG_BUILD 0
         LOG_INSTALL 1
         BUILD_BYPRODUCTS <SOURCE_DIR>/target/release/libbcos_wasm.a <SOURCE_DIR>/FBWASM.h
 )

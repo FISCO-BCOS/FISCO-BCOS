@@ -175,6 +175,11 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit, bool _lock)
 {
+    // start stat the tps when receive first new tx from the sdk
+    if (m_tpsStatstartTime.load() == 0 && m_txsTable.size() == 0)
+    {
+        m_tpsStatstartTime = utcTime();
+    }
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
     if (_checkPoolLimit && m_txsTable.size() >= m_config->poolLimit())
@@ -450,6 +455,17 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         {
             m_blockNumber = _batchId;
         }
+        m_onChainTxsCount += _txsResult.size();
+        // stop stat the tps when there has no pending txs
+        if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
+        {
+            auto totalTime = (utcTime() - m_tpsStatstartTime);
+            auto tps = (m_onChainTxsCount * 1000) / totalTime;
+            TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
+                             << LOG_KV("totalTime", totalTime);
+            m_tpsStatstartTime.store(0);
+            m_onChainTxsCount.store(0);
+        }
     }
     auto removeT = utcTime() - startT;
     startT = utcTime();
@@ -542,6 +558,11 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             continue;
         }
+        // the transaction has already been sealed for newer proposal
+        if (_avoidDuplicate && tx->sealed())
+        {
+            continue;
+        }
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
             // add to m_invalidTxs to be deleted
@@ -565,18 +586,13 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             continue;
         }
         // blockLimit expired
-        if (result == TransactionStatus::BlockLimitCheckFail && !tx->sealed())
+        if (result == TransactionStatus::BlockLimitCheckFail)
         {
             m_invalidTxs.insert(txHash);
             m_invalidNonces.insert(tx->nonce());
             continue;
         }
         if (_avoidTxs && _avoidTxs->count(txHash))
-        {
-            continue;
-        }
-        // the transaction has already been sealed for newer proposal
-        if (_avoidDuplicate && tx->sealed())
         {
             continue;
         }
@@ -725,7 +741,11 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
 void MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
+    auto recordT = utcTime();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
     ssize_t successCount = 0;
     for (auto txHash : _txsHashList)
     {
@@ -770,7 +790,9 @@ void MemoryStorage::batchMarkTxs(
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
                       << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
-                      << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount);
+                      << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount)
+                      << LOG_KV("timecost", utcTime() - recordT) << LOG_KV("lockT", lockT)
+                      << LOG_KV("markT", (utcTime() - startT));
     notifyUnsealedTxsSize();
 }
 
@@ -927,6 +949,10 @@ void MemoryStorage::cleanUpExpiredTransactions()
         {
             continue;
         }
+        if (tx->sealed() && tx->batchId() >= m_blockNumber)
+        {
+            continue;
+        }
         // the txs expired or not
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
@@ -953,6 +979,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         {
             continue;
         }
+        // not checkLimit when receive txs from p2p
         auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
