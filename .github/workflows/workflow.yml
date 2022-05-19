@@ -39,11 +39,11 @@ jobs:
             /Users/runner/.hunter/
             deps/src
             ccache
-          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v8-notest-${{ runner.temp }}-
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -214,8 +214,6 @@ jobs:
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j2
-      - name: run integration test
-        run: cd tools && bash .ci/ci_check.sh
 
   build_with_arm_linux:
     name: build_with_arm_linux
@@ -235,12 +233,13 @@ jobs:
             /home/runner/.hunter
             /Users/runner/.hunter/
             /home/runner/work/FISCO-BCOS/deps/src
+            deps/src
             ccache
-          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v8-notest-${{ runner.temp }}-
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -302,13 +301,14 @@ jobs:
           path: |
             /home/runner/.hunter
             /github/home/.hunter
+            /__w/.hunter
             deps/src
             ccache
-          key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-centos-v7-notest-${{ runner.temp }}-
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
@@ -357,6 +357,10 @@ jobs:
           path: |
             /home/runner/.hunter
             /github/home/.hunter
+            /Users/runner/.hunter/
+            /home/runner/work/FISCO-BCOS/deps/src
+            /__w/.hunter
+            ccache
             deps/src
             ccache
           key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
