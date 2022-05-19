@@ -1400,7 +1400,7 @@ deploy_nodes()
     else
         help
     fi
-    check the binary 
+    #check the binary 
     if [ -z "${docker_mode}" ];then
         download_bin
         if [[ ! -f "$binary_path" ]]; then
