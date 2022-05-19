@@ -99,9 +99,14 @@ public:
 
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
+    {
+        RecursiveGuard l(x_nodes);
+        return m_staticNodes;
+    }
     virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes)
     {
+        RecursiveGuard l(x_nodes);
         m_staticNodes = staticNodes;
     }
 
@@ -198,6 +203,19 @@ public:
         m_channelNetworkStatHandler = _channelNetworkStatHandler;
     }
 
+    bool addPeers(
+        std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
+    bool erasePeers(
+        std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
+    void setPeersParamLimit(uint32_t const& peersParamLimit) 
+    {
+        m_peersParamLimit = peersParamLimit;
+    }
+    void setMaxNodesLimit(uint32_t const& maxNodesLimit)
+    {
+        m_maxNodesLimit = maxNodesLimit;
+    }
+
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
 
@@ -219,6 +237,8 @@ private:
     void updateIncomingTraffic(P2PMessage::Ptr _msg);
     void updateOutgoingTraffic(P2PMessage::Ptr _msg);
     void acquirePermits(P2PMessage::Ptr _msg);
+    bool updatePeersToIni(
+        std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes, std::string& response);
 
 private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
@@ -276,6 +296,11 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t,
         std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
         m_localAMOPCallbacks;
+
+    // for config file Operation
+    mutable RecursiveMutex x_fileOperation;
+    std::atomic<uint32_t> m_peersParamLimit = {10};
+    std::atomic<uint32_t> m_maxNodesLimit = {100};
 };
 
 }  // namespace p2p

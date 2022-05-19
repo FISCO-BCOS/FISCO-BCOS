@@ -127,6 +127,10 @@ public:
     bool checkAuthority(Address const& _origin, Address const& _contract) const override;
 
     State& getState();
+    dev::executive::StateType getStateType() override
+    {
+        return dev::executive::StateType::MptState;
+    }
 
 private:
     State m_state;

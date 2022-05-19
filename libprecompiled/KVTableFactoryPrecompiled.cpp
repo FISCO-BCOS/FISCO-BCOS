@@ -143,9 +143,23 @@ PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr
         tableName = precompiled::getTableName(tableName);
         if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S)
         {  // mysql TableName and fieldName length limit is 64
-           // 2.2.0 user tableName length limit is 50-2=48
-            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("tableName length overflow ") +
-                                                       std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+
+            if (g_BCOSConfig.version() >= V2_9_0)
+            {
+                // 2.2.0 user tableName length limit is 50-2=48
+                // 2.2.0 + user tableName length limit is 50
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledException(std::string("tableName length overflow ") +
+                                         std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
+            }
+            else
+            {
+                // 2.2.0 user tableName length limit is 50-2=48
+                // 2.2.0 + user tableName length limit is 50
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledException(std::string("tableName length overflow ") +
+                                         std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+            }
         }
 
         int result = 0;

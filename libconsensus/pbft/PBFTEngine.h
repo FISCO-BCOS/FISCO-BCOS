@@ -80,6 +80,17 @@ public:
         m_blockSync->registerConsensusVerifyHandler(
             boost::bind(&PBFTEngine::checkBlock, this, boost::placeholders::_1));
 
+        // register consensusNode checker
+        auto txpool = std::dynamic_pointer_cast<dev::txpool::TxPool>(m_txPool);
+        txpool->registerTxsClearUpSwitch([this]() -> bool {
+            if (!locatedInChosedConsensensusNodes())
+            {
+                return true;
+            }
+            // consensus timeout
+            return m_leaderFailed.load();
+        });
+
         m_threadPool =
             std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
         m_broacastTargetsFilter =
@@ -176,7 +187,7 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block::Ptr _block);
+    bool generatePrepare(RecursiveMutex& _blockMutex, dev::eth::Block::Ptr _block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -261,7 +272,6 @@ public:
 protected:
     virtual void registerDisconnectHandler();
     virtual void resetConsensusTimeout();
-    virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
@@ -710,7 +720,7 @@ protected:
     std::shared_ptr<PBFTReqCache> m_reqCache;
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;
-    mutable Mutex m_mutex;
+    mutable RecursiveMutex m_mutex;
 
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
@@ -754,7 +764,6 @@ protected:
     // Make object destructive overhead asynchronous
     dev::ThreadPool::Ptr m_destructorThread;
     bool m_enablePrepareWithTxsHash = false;
-    std::atomic_bool m_generatePrepare = {false};
 };
 }  // namespace consensus
 }  // namespace dev

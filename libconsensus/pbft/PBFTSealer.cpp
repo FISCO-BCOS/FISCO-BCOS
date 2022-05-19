@@ -62,7 +62,15 @@ void PBFTSealer::handleBlock()
                          << LOG_KV("tx", m_sealing.block->getTransactionSize())
                          << LOG_KV("nodeIdx", m_pbftEngine->nodeIdx())
                          << LOG_KV("hash", m_sealing.block->header().hash().abridged());
-    m_pbftEngine->generatePrepare(m_sealing.block);
+    auto self = std::weak_ptr<PBFTSealer>(shared_from_this());
+    m_worker->enqueue([self]() {
+        auto sealer = self.lock();
+        if (!sealer)
+        {
+            return;
+        }
+        sealer->m_pbftEngine->generatePrepare(sealer->x_sealing, sealer->m_sealing.block);
+    });
     if (m_pbftEngine->shouldReset(*(m_sealing.block)))
     {
         resetSealingBlock();

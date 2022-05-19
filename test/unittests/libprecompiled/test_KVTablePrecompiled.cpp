@@ -69,6 +69,7 @@ struct TablePrecompiledFixture2
         info->fields.emplace_back(ID_FIELD);
         info->fields.emplace_back("name");
         info->fields.emplace_back(STATUS);
+        info->key = "key";
         okAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2");
         info->authorizedAddress.emplace_back(okAddress);
 

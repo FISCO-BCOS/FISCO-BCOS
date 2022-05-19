@@ -26,6 +26,7 @@
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
+#include <libprecompiled/GasChargeManagePrecompiled.h>
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
@@ -33,6 +34,7 @@
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
+#include <libprecompiled/extension/CryptoPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
@@ -105,6 +107,11 @@ void ExecutiveContextFactory::initExecutiveContext(
     {
         context->setAddress2Precompiled(CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>());
     }
+    if (g_BCOSConfig.version() >= V2_9_0)
+    {
+        context->setAddress2Precompiled(
+            GASCHARGEMANAGE_ADDRESS, std::make_shared<GasChargeManagePrecompiled>());
+    }
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)
@@ -125,7 +132,7 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
     {
         std::string key = "tx_gas_limit";
         BlockInfo blockInfo = context->blockInfo();
-        auto configRet = getSysteConfigByKey(m_stateStorage, key, blockInfo.number);
+        auto configRet = getSysConfigByKey(m_stateStorage, key, blockInfo.number);
         auto ret = configRet->first;
         if (ret != "")
         {

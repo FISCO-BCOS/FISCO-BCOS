@@ -51,8 +51,6 @@ void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
     {
         m_prepareCache->clear();
     }
-    // remove all the future prepare
-    m_futurePrepareCache.clear();
 }
 
 /**

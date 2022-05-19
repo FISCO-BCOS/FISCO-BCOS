@@ -52,7 +52,6 @@ public:
     }
 
     ~CryptoPrecompiledFixture() {}
-
     CryptoPrecompiled::Ptr cryptoPrecompiled;
     ExecutiveContext::Ptr precompiledContext;
 };
@@ -79,7 +78,6 @@ public:
             crypto::initCrypto();
         }
     }
-
     bool smCrypto;
 };
 

@@ -49,7 +49,7 @@ public:
         dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-        bool _staticCall, bool _freeStorage=false);
+        bool _staticCall, bool _freeStorage = false);
     virtual ~EVMHostContext() = default;
 
     EVMHostContext(EVMHostContext const&) = delete;

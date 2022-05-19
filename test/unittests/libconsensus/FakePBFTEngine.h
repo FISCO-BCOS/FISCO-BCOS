@@ -136,6 +136,7 @@ public:
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
     void updateMaxBlockTransactions() override {}
+    virtual void updateGasChargeManageSwitch() override {}
     bool checkBlock(dev::eth::Block const& block)
     {
         auto orgNumber = m_blockChain->number();

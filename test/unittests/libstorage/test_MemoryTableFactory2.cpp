@@ -24,6 +24,7 @@
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
@@ -128,10 +129,10 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
     Table::Ptr table =
         memoryDBFactory->createTable(tableName, keyField, valueField, false, Address(), true);
 
-    auto threadID = tbb::this_tbb_thread::get_id();
+    auto threadID = std::this_thread::get_id();
 
     tbb::parallel_for(tbb::blocked_range<size_t>(0, 10), [&](const tbb::blocked_range<size_t>& _r) {
-        if (tbb::this_tbb_thread::get_id() == threadID)
+        if (std::this_thread::get_id() == threadID)
         {
             return;
         }
@@ -153,7 +154,8 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
         BOOST_TEST(entries->size() == size0 + 1);
         BOOST_TEST(entries->get(0)->getField("value") == initBalance);
 
-        tbb::this_tbb_thread::sleep(tbb::tick_count::interval_t((double)i / 100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(long((double)i / 100) * 100000));
+
         auto size1 = entries->size();
         auto savepoint1 = memoryDBFactory->savepoint();
         BOOST_TEST(savepoint1 == savepoint0 + 1);
@@ -200,7 +202,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
     });
 
     tbb::parallel_for(tbb::blocked_range<size_t>(0, 10), [&](const tbb::blocked_range<size_t>& _r) {
-        if (tbb::this_tbb_thread::get_id() == threadID)
+        if (std::this_thread::get_id() == threadID)
         {
             return;
         }

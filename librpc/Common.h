@@ -34,6 +34,9 @@ namespace rpc
 enum RPCExceptionType : int
 {
     Success = 0,
+    // for external support
+    DynamicGroupDisabled = -100001,
+    // reserve for the released features
     PermissionDenied = -40012,
     OverQPSLimit = -40011,
     IncompleteInitialization = -40010,
@@ -49,8 +52,12 @@ enum RPCExceptionType : int
 };
 extern std::map<int, std::string> RPCMsg;
 }  // namespace rpc
+
+#if !defined(__APPLE__)
 std::string compress(const std::string& _data);
 std::string decompress(const std::string& _data);
+#endif
+
 std::string base64Encode(const std::string& _data);
 std::string base64Decode(const std::string& _data);
 }  // namespace dev

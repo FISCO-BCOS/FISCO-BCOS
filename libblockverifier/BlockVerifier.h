@@ -54,7 +54,8 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel)
+    BlockVerifier(bool _enableParallel = false)
+      : m_enableParallel(_enableParallel), m_orgEnableParallel(_enableParallel)
     {
         if (_enableParallel)
         {
@@ -64,7 +65,8 @@ public:
 
     virtual ~BlockVerifier() {}
 
-    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr executeBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override;
     ExecutiveContext::Ptr serialExecuteBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr parallelExecuteBlock(
@@ -72,7 +74,7 @@ public:
 
 
     dev::eth::TransactionReceipt::Ptr executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t);
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t) override;
 
     dev::eth::TransactionReceipt::Ptr execute(dev::eth::Transaction::Ptr _t,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext,
@@ -93,16 +95,44 @@ public:
         std::shared_ptr<executive::StateFace> _s, dev::executive::EnvInfo const& _envInfo);
     void setEvmFlags(VMFlagType const& _evmFlags) { m_evmFlags = _evmFlags; }
 
+    void setEnableGasCharge(bool _enableGasCharge) override
+    {
+        m_enableGasCharge = _enableGasCharge;
+        // when enableGasCharge, disable parallel
+        if (true == _enableGasCharge)
+        {
+            m_enableParallel = false;
+        }
+        else
+        {
+            m_enableParallel = m_orgEnableParallel;
+        }
+        BLOCKVERIFIER_LOG(INFO) << LOG_DESC("setEnableGasCharge")
+                                << LOG_KV("enableGasCharge", m_enableGasCharge)
+                                << LOG_KV("enableParallel", m_enableParallel);
+    }
+
+    void setGasFreeAccounts(std::set<Address> const& _gasFreeAccounts) override
+    {
+        WriteGuard l(x_gasFreeAccounts);
+        m_gasFreeAccounts = _gasFreeAccounts;
+    }
+
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
-    bool m_enableParallel;
+    std::atomic_bool m_enableParallel = {false};
+    bool m_orgEnableParallel;
     unsigned int m_threadNum = -1;
 
     std::mutex m_executingMutex;
     std::atomic<int64_t> m_executingNumber = {0};
 
     VMFlagType m_evmFlags = 0;
+    std::atomic_bool m_enableGasCharge = {false};
+
+    mutable SharedMutex x_gasFreeAccounts;
+    std::set<Address> m_gasFreeAccounts = std::set<Address>();
 };
 
 }  // namespace blockverifier

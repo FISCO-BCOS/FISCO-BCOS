@@ -840,7 +840,7 @@ void RotatingPBFTEngine::onReceiveRawPrepareResponse(
                            << LOG_KV("consNumber", m_consensusBlockNumber)
                            << LOG_KV("curView", m_view) << LOG_KV("idx", m_idx);
 
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     handlePrepareMsg(prepareReq, pbftMsgPacket->endpoint);
 }
 

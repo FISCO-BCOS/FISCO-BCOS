@@ -80,11 +80,10 @@ BOOST_AUTO_TEST_CASE(testUtcTime)
 /// test Timer
 BOOST_AUTO_TEST_CASE(testTimer)
 {
-    Timer timer;
+    auto startT = utcTimeUs();
     usleep(10);
-    double elapsed = timer.elapsed();
-    BOOST_CHECK(elapsed >= 0.00001);
-    timer.restart();
+    auto elapsed = utcTimeUs() - startT;
+    BOOST_CHECK(elapsed >= 10);
 }
 
 class FakeCheckInvariants : public HasInvariants
