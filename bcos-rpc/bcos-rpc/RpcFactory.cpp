@@ -31,7 +31,7 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
-#include <bcos-security/bcos-security/EncryptedFile.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -105,7 +105,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open caCert failed")
                                 << LOG_KV("file", _nodeConfig->caCert());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->caCert()));
             }
         }
 
@@ -125,7 +127,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeCert failed")
                                 << LOG_KV("file", _nodeConfig->nodeCert());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeCert()));
             }
         }
 
@@ -138,15 +142,17 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
                     nullptr != m_protocolInitializer)
                 {
-                    keyContent = m_protocolInitializer->encryptFile()->decryptContents(
-                        keyContent, _nodeConfig->storageSecurityDataKey());
+                    keyContent =
+                        m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
                 }
             }
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeKey failed")
                                 << LOG_KV("file", _nodeConfig->nodeKey());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
             }
         }
         certConfig.nodeKey.resize(keyContent->size());
@@ -188,7 +194,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smCaCert failed")
                                 << LOG_KV("file", _nodeConfig->caCert());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->caCert()));
             }
         }
 
@@ -208,7 +216,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeCert failed")
                                 << LOG_KV("file", _nodeConfig->nodeCert());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeCert()));
             }
         }
 
@@ -221,15 +231,17 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
                     nullptr != m_protocolInitializer)
                 {
-                    keyContent = m_protocolInitializer->encryptFile()->decryptContents(
-                        keyContent, _nodeConfig->storageSecurityDataKey());
+                    keyContent =
+                        m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
                 }
             }
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeKey failed")
                                 << LOG_KV("file", _nodeConfig->nodeKey());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
             }
         }
         certConfig.nodeKey.resize(keyContent->size());
@@ -251,7 +263,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeCert failed")
                                 << LOG_KV("file", _nodeConfig->nodeCert());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeCert()));
             }
         }
 
@@ -264,15 +278,17 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
                     nullptr != m_protocolInitializer)
                 {
-                    keyContent = m_protocolInitializer->encryptFile()->decryptContents(
-                        keyContent, _nodeConfig->storageSecurityDataKey());
+                    keyContent =
+                        m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
                 }
             }
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeKey failed")
                                 << LOG_KV("file", _nodeConfig->nodeKey());
-                exit(1);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
             }
         }
         certConfig.enNodeKey.resize(keyContent->size());

@@ -41,20 +41,13 @@ public:
         std::string enNodeKey;
     };
 
-    struct ChainConfig
-    {
-        bool smCryptoType;
-        std::string groupId;
-        std::string chainId;
-        size_t blockLimit;
-    };
-
     struct StorageSecurityConfig
     {
-        //storage security configuration
+        // node crypto type
+        bool smCryptoType;
+        // storage security configuration
         bool enable;
-        std::string keyManagerIp;
-        unsigned short keyManagerPort;
+        std::string keyCenterUrl;
         std::string dataKey;
     };
 
@@ -80,9 +73,7 @@ public:
     void parseConnectedJson(const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file
     void initP2PConfig(const boost::property_tree::ptree& _pt, bool _uuidRequired);
-    //loads chain confiuration items from the configuration file
-    void initChainConfig(const boost::property_tree::ptree& _pt);
-    //loads storage security configuration items from the configuration file
+    // loads storage security configuration items from the configuration file
     void initStorageSecurityConfig(const boost::property_tree::ptree& _pt);
     // loads ca configuration items from the configuration file
     void initCertConfig(const boost::property_tree::ptree& _pt);
@@ -107,8 +98,8 @@ public:
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
     // Note: make sure the consensus param checker is consistent with the precompiled param checker
-    int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
-        std::string const& _key, std::string const& _defaultValue);
+    int64_t checkAndGetValue(boost::property_tree::ptree const& _pt, std::string const& _key,
+        std::string const& _defaultValue);
 
 private:
     std::string m_uuid;
@@ -125,7 +116,6 @@ private:
     // cert config for ssl connection
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
-    ChainConfig m_chainConfig;
     StorageSecurityConfig m_storageSecurityConfig;
 
     std::string m_certPath;

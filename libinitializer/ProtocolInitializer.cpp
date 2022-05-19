@@ -49,14 +49,15 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     if (_nodeConfig->smCryptoType())
     {
         createSMCryptoSuite();
-        m_encryptFile = std::make_shared<EncryptedFile>(true);
     }
     else
     {
         createCryptoSuite();
-        m_encryptFile = std::make_shared<EncryptedFile>(false);
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
+
+    m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
+    m_dataEncryption->init();
 
     // create the block factory
     // TODO: pb/tars option

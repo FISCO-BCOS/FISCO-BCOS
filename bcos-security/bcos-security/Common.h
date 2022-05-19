@@ -2,6 +2,8 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 
+// bcos-security is used to storage security
+
 namespace bcos
 {
 

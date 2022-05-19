@@ -187,7 +187,9 @@ public:
     std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
     bool storageSecurityEnable() const { return m_storageSecurityEnable; }
-    const std::string& storageSecurityDataKey() const { return m_storageSecurityDataKey; }
+    std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
+    unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
+    std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
@@ -248,9 +250,9 @@ private:
 
     // storage security configuration
     bool m_storageSecurityEnable;
-    std::string m_storageSecurityKeyManagerIp;
-    unsigned short m_storageSecurityKeyManagerPort;
-    std::string m_storageSecurityDataKey;
+    std::string m_storageSecurityKeyCenterIp;
+    unsigned short m_storageSecurityKeyCenterPort;
+    std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
     std::string m_consensusType;

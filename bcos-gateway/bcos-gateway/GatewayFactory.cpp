@@ -15,7 +15,7 @@
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/Service.h>
-#include <bcos-security/bcos-security/EncryptedFile.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
@@ -141,17 +141,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 
             if (nullptr != keyContent && true == _storageSecurityConfig.enable &&
                 nullptr != m_protocolInitializer)
-                keyContent = m_protocolInitializer->encryptFile()->decryptContents(
-                    keyContent, _storageSecurityConfig.dataKey);
+                keyContent = m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
         }
         catch (std::exception& e)
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
                 << LOG_KV("file", _certConfig.nodeKey);
-            ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
-                         << LOG_KV("file", _certConfig.nodeKey) << std::endl;
-            exit(1);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + _certConfig.nodeKey));
         }
     }
     if (!keyContent || keyContent->empty())
@@ -219,17 +218,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
             keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
 
             if (nullptr != keyContent && true == _storageSecurityConfig.enable)
-                keyContent = m_protocolInitializer->encryptFile()->decryptContents(
-                    keyContent, _storageSecurityConfig.dataKey);
+                keyContent = m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
         }
         catch (std::exception& e)
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
                 << LOG_KV("file", _smCertConfig.nodeKey);
-            ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
-                         << LOG_KV("file", _smCertConfig.nodeKey) << std::endl;
-            exit(1);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + _smCertConfig.nodeKey));
         }
     }
     boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
@@ -243,17 +241,17 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
             enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
             if (nullptr != enNodeKeyContent && true == _storageSecurityConfig.enable &&
                 nullptr != m_protocolInitializer)
-                enNodeKeyContent = m_protocolInitializer->encryptFile()->decryptContents(
-                    enNodeKeyContent, _storageSecurityConfig.dataKey);
+                enNodeKeyContent =
+                    m_protocolInitializer->dataEncryption()->decryptContents(enNodeKeyContent);
         }
         catch (std::exception& e)
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
                 << LOG_KV("file", _smCertConfig.enNodeKey);
-            ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
-                         << LOG_KV("file", _smCertConfig.enNodeKey) << std::endl;
-            exit(1);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + _smCertConfig.enNodeKey));
         }
     }
 

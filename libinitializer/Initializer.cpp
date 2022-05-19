@@ -128,9 +128,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
-        storage = StorageInitializer::build(storagePath, m_nodeConfig, m_protocolInitializer->cryptoSuite());
-        schedulerStorage = storage;
-        consensusStorage = StorageInitializer::build(consensusStoragePath, m_nodeConfig, m_protocolInitializer->cryptoSuite());
+        if (true == m_nodeConfig->storageSecurityEnable())
+        {
+            storage =
+                StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption());
+            schedulerStorage = storage;
+            consensusStorage = StorageInitializer::build(
+                consensusStoragePath, m_protocolInitializer->dataEncryption());
+        }
+        else
+        {
+            storage = StorageInitializer::build(storagePath, nullptr);
+            schedulerStorage = storage;
+            consensusStorage = StorageInitializer::build(consensusStoragePath, nullptr);
+        }
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
@@ -207,7 +218,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto groupID = m_nodeConfig->groupId();
         auto blockSync =
             std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
-        
+
         auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
         // registerNode when air node first start-up
         _gateway->registerNode(

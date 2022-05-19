@@ -12,13 +12,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
-#include <bcos-crypto/encrypt/AESCrypto.h>
-#include <bcos-crypto/encrypt/SM4Crypto.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -133,24 +127,12 @@ int main(int argc, const char* argv[])
     nodeConfig->loadConfig(configPath);
     nodeConfig->loadGenesisConfig(genesisFilePath);
 
-    std::shared_ptr<CryptoSuite> cryptoSuite;
-    if (true == nodeConfig->smCryptoType())
-    {
-        auto hashImpl = std::make_shared<SM3>();
-        auto signatureImpl = std::make_shared<FastSM2Crypto>();
-        auto encryptImpl = std::make_shared<SM4Crypto>();
-        cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
-    }
-    else
-    {
-        auto hashImpl = std::make_shared<Keccak256>();
-        auto signatureImpl = std::make_shared<Secp256k1Crypto>();
-        auto encryptImpl = std::make_shared<AESCrypto>();
-        cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
-    }
+    bcos::security::DataEncryption::Ptr dataEncryption =
+        std::make_shared<DataEncryption>(nodeConfig);
+    dataEncryption->init();
 
     auto adapter =
-        std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nodeConfig, cryptoSuite);
+        std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
 
     if (iterate)
     {
