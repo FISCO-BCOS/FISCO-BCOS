@@ -12,6 +12,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
@@ -123,12 +124,12 @@ int main(int argc, const char* argv[])
     }
 
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
+    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
     nodeConfig->loadConfig(configPath);
     nodeConfig->loadGenesisConfig(genesisFilePath);
 
     bcos::security::DataEncryption::Ptr dataEncryption =
-        std::make_shared<DataEncryption>(nodeConfig);
+        std::make_shared<bcos::security::DataEncryption>(nodeConfig);
     dataEncryption->init();
 
     auto adapter =
