@@ -465,6 +465,7 @@ Usage:
     -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
+    -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and prot
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -h Help
 
@@ -474,14 +475,14 @@ deploy nodes e.g
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -s
 expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos 
-    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:p:d:v:m:M:wDshAa:" option; do
+    while getopts "l:C:c:o:e:p:d:v:i:M:wDshmAa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -505,8 +506,12 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
-        m) mtail_ip_param="${OPTARG}"
-           monitor_mode="true" ;;
+        m) 
+           monitor_mode="true" 
+           ;;
+        i) 
+           mtail_ip_param="${OPTARG}"
+           ;;   
         M) prometheus_dir="${OPTARG}" ;;   
         D) docker_mode="true"
            if [ -n "${macOS}" ];then
@@ -1395,7 +1400,7 @@ deploy_nodes()
     else
         help
     fi
-    check the binary todo ##
+    check the binary 
     if [ -z "${docker_mode}" ];then
         download_bin
         if [[ ! -f "$binary_path" ]]; then
@@ -1429,10 +1434,13 @@ deploy_nodes()
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
 
         nodes_dir="${output_dir}/${ip}"
-        # start_all.sh and stop_all.sh //todo #
+        # start_all.sh and stop_all.sh 
         generate_all_node_scripts "${nodes_dir}"
         if [ -z "${docker_mode}" ];then
             cp "${binary_path}" "${nodes_dir}"
+        fi
+        if [ "${monitor_mode}" ];then 
+            cp $mtail_binary_path "${nodes_dir}"   
         fi
         ca_cert_dir="${nodes_dir}"/ca
         mkdir -p ${ca_cert_dir}
@@ -1464,7 +1472,6 @@ deploy_nodes()
     if [ "${monitor_mode}" ];then 
         monitor_dir="${output_dir}/monitor"
         generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}"
-        cp $mtail_binary_path "${nodes_dir}"    //todo #
     fi
 
     local i=0
@@ -1525,7 +1532,6 @@ main() {
         deploy_nodes
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
-        LOG_INFO "${mtail_ip_param}"
         expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
