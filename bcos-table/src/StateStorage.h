@@ -25,6 +25,7 @@
 #pragma once
 
 #include "bcos-table/src/StateStorageInterface.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -42,11 +43,13 @@ class BaseStorage : public virtual storage::StateStorageInterface,
                     public virtual storage::MergeableStorageInterface
 {
 private:
-#define STORAGE_REPORT_GET(table, key, entry, desc) \
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }                                               \
-    // log("GET", (table), (key), (entry), (desc))
+#define STORAGE_REPORT_GET(table, key, entry, desc)                              \
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)                                 \
+    {                                                                            \
+        STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)          \
+                           << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc); \
+    }
+
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
@@ -452,40 +455,9 @@ public:
                 auto& entry = it.entry;
                 if (entry.dirty())
                 {
-                    auto hash = hashImpl->hash(it.table);
-                    hash ^= hashImpl->hash(it.key);
-
-                    if (entry.status() == Entry::MODIFIED)
-                    {
-                        auto value = entry.getField(0);
-                        bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                        auto entryHash = hashImpl->hash(ref);
-                        if (c_fileLogLevel >= TRACE)
-                        {
-                            STORAGE_LOG(TRACE)
-                                << "Calc hash, dirty entry: " << it.table << " | " << toHex(it.key)
-                                << " | " << toHex(value) << LOG_KV("hash", entryHash.abridged());
-                        }
-                        hash ^= entryHash;
-                    }
-                    else if (entry.status() == Entry::DELETED)
-                    {
-                        auto entryHash = bcos::crypto::HashType(0x1);
-                        if (c_fileLogLevel >= TRACE)
-                        {
-                            STORAGE_LOG(TRACE)
-                                << "Calc hash, deleted entry: " << it.table << " | "
-                                << toHex(toHex(it.key)) << LOG_KV("hash", entryHash.abridged());
-                        }
-                        hash ^= entryHash;
-                    }
-                    else
-                    {
-                        STORAGE_LOG(DEBUG) << "Calc hash, clean entry: " << it.table << " | "
-                                           << toHex(toHex(it.key)) << " | " << (int)entry.status();
-                        continue;
-                    }
-                    bucketHash ^= hash;
+                    auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                     entry.hash(it.table, it.key, hashImpl);
+                    bucketHash ^= entryHash;
                 }
             }
 #pragma omp critical

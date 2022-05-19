@@ -214,8 +214,8 @@ public:
     crypto::HashType hash(
         std::string_view table, std::string_view key, const bcos::crypto::Hash::Ptr& hashImpl) const
     {
-        bcos::crypto::HashType entryHash;
-        if (m_status != Entry::DELETED)
+        bcos::crypto::HashType entryHash(0);
+        if (m_status == Entry::MODIFIED)
         {
             auto value = get();
             bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
@@ -227,14 +227,19 @@ public:
                     << toHex(value) << LOG_KV("hash", entryHash.abridged());
             }
         }
-        else
+        else if (m_status == Entry::DELETED)
         {
             entryHash = bcos::crypto::HashType(0x1);
             if (c_fileLogLevel >= TRACE)
             {
                 STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
-                                   << toHex(toHex(key)) << LOG_KV("hash", entryHash.abridged());
+                                   << toHex(key) << LOG_KV("hash", entryHash.abridged());
             }
+        }
+        else
+        {
+            STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
+                               << toHex(key) << " | " << (int)m_status;
         }
         return entryHash;
     }
@@ -266,8 +271,8 @@ private:
         return view;
     }
 
-    ValueType m_value = "";            // should serialization
-    int32_t m_size = 0;                // no need to serialization
+    ValueType m_value = "";           // should serialization
+    int32_t m_size = 0;               // no need to serialization
     Status m_status = Status::EMPTY;  // should serialization
     // bool m_dirty = false;              // no need to serialization
 };

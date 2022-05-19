@@ -197,7 +197,8 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
         else
         {  // insert
             Data d{std::string(tableView), std::string(keyView), std::move(entry)};
-            bucket->container.emplace(std::make_pair(std::make_pair(d.table, d.key), std::move(d)));
+            auto tableKey = std::make_pair(std::string(tableView), std::string(keyView));
+            bucket->container.emplace(std::make_pair(std::move(tableKey), std::move(d)));
         }
 
         if (m_recoder.local())
@@ -238,7 +239,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     }
                     else if (it.second.entry.status() == Entry::Status::NORMAL)
                     {  // if normal return entry without serialization
-                        callback(it.second.table, it.second.key, it.second.entry);
+                        callback(it.first.first, it.first.second, it.second.entry);
                     }
                     else
                     {
@@ -254,7 +255,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                                 << LOG_KV("key", toHex(it.first.second))
                                 << LOG_KV("size", entry.size()) << LOG_KV("meta", meta);
                         }
-                        callback(it.second.table, it.second.key, std::move(entry));
+                        callback(it.first.first, it.first.second, std::move(entry));
                     }
                 }
                 else if (it.second.type == Data::Type::Page)
@@ -264,11 +265,11 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     if (page.validCount() == 0)
                     {
                         entry.setStatus(Entry::Status::DELETED);
-                        callback(it.second.table, it.second.key, std::move(entry));
+                        callback(it.first.first, it.first.second, std::move(entry));
                     }
                     else if (it.second.entry.status() == Entry::Status::NORMAL)
                     {
-                        callback(it.second.table, it.second.key, it.second.entry);
+                        callback(it.first.first, it.first.second, it.second.entry);
                     }
                     else
                     {
@@ -280,13 +281,13 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             << LOG_KV("count", page.validCount())
                             << LOG_KV("status", (int)entry.status())
                             << LOG_KV("size", entry.size());
-                        callback(it.second.table, it.second.key, std::move(entry));
+                        callback(it.first.first, it.first.second, std::move(entry));
                     }
                 }
                 else
                 {
                     auto& entry = it.second.entry;
-                    callback(it.second.table, it.second.key, entry);
+                    callback(it.first.first, it.first.second, entry);
                 }
             }
         }
@@ -365,8 +366,8 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                             << " | " << toHex(change.entry->get());
                     }
                     Data d{change.table, change.key, std::move(*(change.entry))};
-                    bucket->container.emplace(
-                        std::make_pair(std::make_pair(d.table, d.key), std::move(d)));
+                    auto tableKey = std::make_pair(change.table, change.key);
+                    bucket->container.emplace(std::make_pair(std::move(tableKey), std::move(d)));
                 }
             }
             else
@@ -392,7 +393,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
         }
         else
         {  // page entry
-            // FIXME: revert need modify tablemeta
+
             auto [error, data] = getData(change.table, "");
             if (error)
             {
@@ -410,6 +411,13 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 }
                 auto& page = std::get<0>(data.value()->data);
                 page.rollback(change);
+                // revert also need update pageInfo
+                auto oldStartKey = meta.updatePageInfoNoLock(pageKey.value(), page.startKey(),
+                    page.endKey(), page.validCount(), page.size());
+                if (oldStartKey)
+                {
+                    changePageKey(change.table, oldStartKey.value(), page.startKey());
+                }
             }
             else
             {
