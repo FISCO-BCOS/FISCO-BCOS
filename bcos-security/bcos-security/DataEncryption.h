@@ -23,6 +23,7 @@
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
+#include <bcos-tool/NodeConfig.h>
 #include <memory>
 
 namespace bcos
@@ -31,20 +32,29 @@ namespace bcos
 namespace security
 {
 
-class EncryptedFile
+class DataEncryption
 {
 public:
-    using Ptr = std::shared_ptr<EncryptedFile>;
+    using Ptr = std::shared_ptr<DataEncryption>;
 
 public:
-    EncryptedFile(bool isSm);
-    ~EncryptedFile() = default;
+    DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig) : m_nodeConfig(nodeConfig) {}
+    ~DataEncryption() = default;
 
 public:
-    std::shared_ptr<bytes> decryptContents(
-        const std::shared_ptr<bytes>& contents, const std::string& dataKey);
+    void init();
+
+    // use to decrypt node.key
+    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents);
+
+    // use to encrypt/decrypt in rocksdb
+    std::string encrypt(const std::string& data);
+    std::string decrypt(const std::string& data);
 
 private:
+    bcos::tool::NodeConfig::Ptr m_nodeConfig{nullptr};
+
+    std::string m_dataKey;
     bcos::crypto::SymmetricEncryption::Ptr m_symmetricEncrypt{nullptr};
 };
 

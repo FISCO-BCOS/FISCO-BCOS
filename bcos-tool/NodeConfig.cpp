@@ -23,7 +23,6 @@
 #include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-framework/interfaces/protocol/ServiceDesc.h"
-#include "bcos-security/bcos-security/KeyCenter.h"
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -34,7 +33,6 @@
 #define MAX_BLOCK_LIMIT 5000
 
 using namespace bcos;
-using namespace security;
 using namespace bcos::crypto;
 using namespace bcos::tool;
 using namespace bcos::consensus;
@@ -364,33 +362,37 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
-    m_storageSecurityKeyManagerIp = _pt.get<std::string>("storage_security.key_manager_ip", "");
-    m_storageSecurityKeyManagerPort =
-        _pt.get<unsigned short>("storage_security.key_manager_port", 20000);
-
-    if (false == isValidPort(m_storageSecurityKeyManagerPort))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidPort() << errinfo_comment(
-                "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
-    }
-
     if (true == m_storageSecurityEnable)
     {
-        std::string cipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
-        if (true == cipherDataKey.empty())
+        std::string storageSecurityKeyCenterUrl =
+            _pt.get<std::string>("storage_security.key_center_url", "");
+
+        std::vector<std::string> values;
+        boost::split(
+            values, storageSecurityKeyCenterUrl, boost::is_any_of(":"), boost::token_compress_on);
+        if (2 != values.size())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "initGlobalConfig storage_security failed! Invalid key_center_url!"));
+        }
+
+        m_storageSecurityKeyCenterIp = values[0];
+        m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
+        if (false == isValidPort(m_storageSecurityKeyCenterPort))
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidPort() << errinfo_comment(
+                    "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
+        }
+
+        m_storageSecurityCipherDataKey =
+            _pt.get<std::string>("storage_security.cipher_data_key", "");
+        if (true == m_storageSecurityCipherDataKey.empty())
         {
             BOOST_THROW_EXCEPTION(
                 MissingField() << errinfo_comment("Please provide cipher_data_key!"));
         }
-
-        KeyCenter keyClient;
-        keyClient.setIpPort(m_storageSecurityKeyManagerIp, m_storageSecurityKeyManagerPort);
-        m_storageSecurityDataKey = asString(keyClient.getDataKey(cipherDataKey, m_smCryptoType));
-
-        NodeConfig_LOG(INFO) << LOG_BADGE("initKeyManager")
-                             << LOG_KV("url.IP", m_storageSecurityKeyManagerIp)
-                             << LOG_KV("url.port", std::to_string(m_storageSecurityKeyManagerPort));
     }
 }
 

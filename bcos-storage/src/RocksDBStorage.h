@@ -23,9 +23,8 @@
  */
 #pragma once
 
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>
 
@@ -41,8 +40,7 @@ class RocksDBStorage : public TransactionalStorageInterface
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
     explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
-        const bcos::tool::NodeConfig::Ptr nodeConfig,
-        const bcos::crypto::CryptoSuite::Ptr& cryptoSuite);
+        const bcos::security::DataEncryption::Ptr dataEncryption);
 
     ~RocksDBStorage() {}
 
@@ -78,7 +76,6 @@ private:
     std::unique_ptr<rocksdb::DB> m_db;
 
     // Security Storage
-    bcos::tool::NodeConfig::Ptr m_nodeConfig{nullptr};
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite{nullptr};
+    bcos::security::DataEncryption::Ptr m_dataEncryption{nullptr};
 };
 }  // namespace bcos::storage

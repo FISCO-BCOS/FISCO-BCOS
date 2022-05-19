@@ -40,9 +40,9 @@ using namespace std;
 
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
-RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
-    const bcos::tool::NodeConfig::Ptr nodeConfig, const bcos::crypto::CryptoSuite::Ptr& cryptoSuite)
-  : m_db(std::move(db)), m_nodeConfig(nodeConfig), m_cryptoSuite(cryptoSuite)
+RocksDBStorage::RocksDBStorage(
+    std::unique_ptr<rocksdb::DB>&& db, const bcos::security::DataEncryption::Ptr dataEncryption)
+  : m_db(std::move(db)), m_dataEncryption(dataEncryption)
 {
     m_writeBatch = std::make_shared<WriteBatch>();
 }
@@ -100,19 +100,8 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
-        if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty() && nullptr != m_cryptoSuite)
-        {
-            const std::string& dataKey = m_nodeConfig->storageSecurityDataKey();
-
-            bcos::crypto::SymmetricEncryption::Ptr symmetricEncrypt =
-                m_cryptoSuite->symmetricEncryptionHandler();
-            bytesPointer decData = symmetricEncrypt->symmetricDecrypt(
-                reinterpret_cast<const unsigned char*>(value.data()), value.size(),
-                reinterpret_cast<const unsigned char*>(dataKey.data()), dataKey.size());
-
-            value.resize(decData->size());
-            memcpy(value.data(), decData->data(), decData->size());
-        }
+        if (false == value.empty() && nullptr != m_dataEncryption)
+            value = m_dataEncryption->decrypt(value);
 
         if (!status.ok())
         {
@@ -203,22 +192,8 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                                 std::string v(value.data(), value.size());
 
                                 // Storage Security
-                                if (true == m_nodeConfig->storageSecurityEnable() &&
-                                    false == v.empty() && nullptr != m_cryptoSuite)
-                                {
-                                    const std::string& dataKey =
-                                        m_nodeConfig->storageSecurityDataKey();
-
-                                    bcos::crypto::SymmetricEncryption::Ptr symmetricEncrypt =
-                                        m_cryptoSuite->symmetricEncryptionHandler();
-                                    bytesPointer decData = symmetricEncrypt->symmetricDecrypt(
-                                        reinterpret_cast<const unsigned char*>(v.data()), v.size(),
-                                        reinterpret_cast<const unsigned char*>(dataKey.data()),
-                                        dataKey.size());
-
-                                    v.resize(decData->size());
-                                    memcpy(v.data(), decData->data(), decData->size());
-                                }
+                                if (false == v.empty() && nullptr != m_dataEncryption)
+                                    v = m_dataEncryption->decrypt(v);
 
                                 entries[i]->set(v);
                             }
@@ -287,21 +262,9 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
 
             std::string value(_entry.get().data(), _entry.get().size());
 
-            // Storage security
-            if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty() && nullptr != m_cryptoSuite)
-            {
-                const std::string& dataKey = m_nodeConfig->storageSecurityDataKey();
-
-                bcos::crypto::SymmetricEncryption::Ptr symmerticEncrypt =
-                    m_cryptoSuite->symmetricEncryptionHandler();
-
-                bytesPointer encData = symmerticEncrypt->symmetricEncrypt(
-                    reinterpret_cast<const unsigned char*>(value.data()), value.size(),
-                    reinterpret_cast<const unsigned char*>(dataKey.data()), dataKey.size());
-
-                value.resize(encData->size());
-                memcpy(value.data(), encData->data(), encData->size());
-            }
+            // Storage Security
+            if (false == value.empty() && nullptr != m_dataEncryption)
+                value = m_dataEncryption->encrypt(value);
 
             status = m_db->Put(options, dbKey, value);
         }
@@ -361,19 +324,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                     std::string value(entry.get().data(), entry.get().size());
 
                     // Storage security
-                    if (true == m_nodeConfig->storageSecurityEnable() && false == value.empty() && nullptr != m_cryptoSuite)
-                    {
-                        const std::string& dataKey = m_nodeConfig->storageSecurityDataKey();
-
-                        bcos::crypto::SymmetricEncryption::Ptr symmerticEncrypt =
-                            m_cryptoSuite->symmetricEncryptionHandler();
-                        bytesPointer encData = symmerticEncrypt->symmetricEncrypt(
-                            reinterpret_cast<const unsigned char*>(value.data()), value.size(),
-                            reinterpret_cast<const unsigned char*>(dataKey.data()), dataKey.size());
-
-                        value.resize(encData->size());
-                        memcpy(value.data(), encData->data(), encData->size());
-                    }
+                    if (false == value.empty() && nullptr != m_dataEncryption)
+                        value = m_dataEncryption->encrypt(value);
 
                     auto status = m_writeBatch->Put(dbKey, value);
                 }

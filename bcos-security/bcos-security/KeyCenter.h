@@ -40,9 +40,9 @@ namespace bcos
 
 namespace security
 {
-#define KC_LOG(_OBV)        \
+#define KC_LOG(_OBV)             \
     BCOS_LOG(_OBV) << "[g:null]" \
-              << "[p:null][KeyManager]"
+                   << "[p:null][KeyManager]"
 
 class KeyCenterHttpClientInterface
 {
@@ -106,4 +106,4 @@ private:
 
 }  // namespace security
 
-}
+}  // namespace bcos

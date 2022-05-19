@@ -62,7 +62,7 @@ struct TestRocksDBStorageFixture
         BOOST_CHECK_EQUAL(s.ok(), true);
 
         rocksDBStorage =
-            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr, nullptr);
+            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
         rocksDBStorage->asyncOpenTable(testTableName, [&](auto&& error, auto&& table) {
             BOOST_CHECK(!error);
 

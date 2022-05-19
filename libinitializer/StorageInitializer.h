@@ -25,7 +25,7 @@
 #pragma once
 #include "boost/filesystem.hpp"
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-security/bcos-security/StorageEncDecHelper.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <bcos-storage/src/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
@@ -35,9 +35,8 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::tool::NodeConfig::Ptr _nodeConfig,
-        const bcos::crypto::CryptoSuite::Ptr& _cryptoSuite)
+    static bcos::storage::TransactionalStorageInterface::Ptr build(
+        const std::string& _storagePath, const bcos::security::DataEncryption::Ptr _dataEncryption)
     {
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
@@ -53,7 +52,7 @@ public:
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
 
         return std::make_shared<bcos::storage::RocksDBStorage>(
-            std::unique_ptr<rocksdb::DB>(db), _nodeConfig, _cryptoSuite);
+            std::unique_ptr<rocksdb::DB>(db), _dataEncryption);
     }
 
     static bcos::storage::TransactionalStorageInterface::Ptr build(
