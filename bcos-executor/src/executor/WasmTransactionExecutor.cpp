@@ -37,9 +37,9 @@
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
-#include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/GroupSigPrecompiled.h"
 #include "../precompiled/extension/RingSigPrecompiled.h"
+#include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -106,8 +106,6 @@ void WasmTransactionExecutor::initPrecompiled()
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    m_constantPrecompiled->insert(
-        {CONTRACT_AUTH_NAME, std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
