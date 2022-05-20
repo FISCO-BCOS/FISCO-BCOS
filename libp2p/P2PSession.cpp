@@ -77,7 +77,6 @@ void P2PSession::heartBeat()
             std::string s = boost::lexical_cast<std::string>(service->topicSeq());
             buffer->assign(s.begin(), s.end());
             message->setBuffer(buffer);
-            std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
             m_session->asyncSendMessage(message);
         }
 
