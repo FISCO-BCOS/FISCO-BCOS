@@ -2,7 +2,7 @@ include(ExternalProject)
 include(GNUInstallDirs)
 
 ExternalProject_Add(GroupSigLib
-    PREFIX ${CMAKE_SOURCE_DIR}/deps
+    PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
     DOWNLOAD_NAME group_sig_lib-b8b9164.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/FISCO-BCOS/group-signature-lib/archive/b8b916400d31491b46db9f9cb5ee78e9ba76514a.tar.gz
@@ -46,9 +46,9 @@ set_property(TARGET PbcSig PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${DEPS_INCLUDE
 add_dependencies(PbcSig GroupSigLib)
 
 add_library(GroupSig STATIC IMPORTED)
-set(GROUPSIG_LIBRARY ${CMAKE_SOURCE_DIR}/deps/lib/libgroup_sig${LIB_SUFFIX})
-set(GROUPSIG_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/deps/include)
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/lib)  # Must exist.
+set(GROUPSIG_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/libgroup_sig${LIB_SUFFIX})
+set(GROUPSIG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/include)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib)  # Must exist.
 file(MAKE_DIRECTORY ${GROUPSIG_INCLUDE_DIR})  # Must exist.
 set_property(TARGET GroupSig PROPERTY IMPORTED_LOCATION ${GROUPSIG_LIBRARY})
 set_property(TARGET GroupSig PROPERTY INTERFACE_LINK_LIBRARIES PbcSig Pbc Gmp)
