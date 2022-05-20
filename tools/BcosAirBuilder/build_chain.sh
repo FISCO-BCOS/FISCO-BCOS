@@ -684,7 +684,7 @@ if [ -z \${node_pid} ];then
     exit 0
 fi
 
-#启动监控程序
+#Stop monitor here
 dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
 for dir in \${dirs[*]}
 do
