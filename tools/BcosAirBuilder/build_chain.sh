@@ -366,7 +366,7 @@ download_monitor_bin()
     mtail_binary_path="bin/${mtail_binary_name}"
     package_name="${mtail_binary_name}_${compatibility_mtail_version}_Linux_x86_64.tar.gz"
     if [ -n "${macOS}" ];then
-        exit_with_clean "mtail binary is support macOS"
+        package_name="${mtail_binary_name}_${compatibility_mtail_version}_Darwin_x86_64.tar.gz"
     fi
     
     local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
@@ -456,6 +456,7 @@ Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -o <output dir>                     [Optional] output directory, default ./nodes
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
+    -t <mtail exec>                     [Required] mtail binary exec
     -p <Start Port>                     Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
@@ -482,7 +483,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:p:d:v:i:M:wDshmAa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:v:i:M:wDshmAa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -495,6 +496,10 @@ parse_params() {
             binary_path="$OPTARG"
             file_must_exists "${binary_path}"
             ;;
+        t)
+            mtail_binary_path="$OPTARG"
+            file_must_exists "${mtail_binary_path}"
+            ;;    
         C) command="${OPTARG}"
             ;;
         d) ca_dir="${OPTARG}"
@@ -1317,13 +1322,19 @@ expand_node()
         LOG_FATAL "expand node failed for ${node_dir} already exists!"
     fi
 
-    if [ "${monitor_mode}" ]; then
+    if "${monitor_mode}" ; then
+       LOG_INFO "start generate monitor scripts"
        ip=`echo $mtail_ip_param | awk '{split($0,a,":");print a[1]}'`
+       if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
+            LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
+        fi
        num=`echo $mtail_ip_param | awk '{split($0,a,":");print a[2]}'`
        local port=$((mtail_listen_port + num))
        connected_mtail_nodes="${ip}:${port}"
        generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${num}"
-       sed -i  "s/]/,\'${connected_mtail_nodes}\']/g" ${prometheus_dir}
+       if [ -n "${prometheus_dir}" ];then
+           sed -i  "s/]/,\'${connected_mtail_nodes}\']/g" ${prometheus_dir}
+       fi
        LOG_INFO "generate monitor scripts success"
     fi
 
@@ -1407,7 +1418,7 @@ deploy_nodes()
             LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
-    if [ "${monitor_mode}" ];then
+    if "${monitor_mode}" ;then
         download_monitor_bin 
         if [[ ! -f "$mtail_binary_path" ]]; then
             LOG_FATAL "mtail binary exec ${mtail_binary_path} not exist, Must copy binary file ${mtail_binary_name} to ${mtail_binary_path}"
@@ -1439,7 +1450,7 @@ deploy_nodes()
         if [ -z "${docker_mode}" ];then
             cp "${binary_path}" "${nodes_dir}"
         fi
-        if [ "${monitor_mode}" ];then 
+        if "${monitor_mode}" ;then 
             cp $mtail_binary_path "${nodes_dir}"   
         fi
         ca_cert_dir="${nodes_dir}"/ca
@@ -1454,7 +1465,7 @@ deploy_nodes()
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
             generate_node_scripts "${node_dir}" "${docker_mode}"
-            if [ "${monitor_mode}" ];then 
+            if "${monitor_mode}" ;then 
                 local port=$((mtail_listen_port + node_count))
                 connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
                 generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
@@ -1469,7 +1480,7 @@ deploy_nodes()
         done
     done
 
-    if [ "${monitor_mode}" ];then 
+    if "${monitor_mode}" ;then 
         monitor_dir="${output_dir}/monitor"
         generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}"
     fi
