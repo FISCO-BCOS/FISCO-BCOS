@@ -728,7 +728,7 @@ generate_mtail_scripts() {
 hidden text host
 host = "${ip}"
 
-#节点
+#node
 hidden text node
 node = "${node}" 
 
