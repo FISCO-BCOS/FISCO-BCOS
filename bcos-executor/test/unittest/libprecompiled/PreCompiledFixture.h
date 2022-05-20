@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
@@ -27,7 +28,6 @@
 #include "executor/TransactionExecutorFactory.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
-#include "precompiled/Utilities.h"
 #include "precompiled/extension/UserPrecompiled.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>

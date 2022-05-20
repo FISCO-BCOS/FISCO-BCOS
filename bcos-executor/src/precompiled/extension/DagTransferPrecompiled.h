@@ -20,7 +20,7 @@
 
 #pragma once
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
 #include <bcos-framework/interfaces/storage/Table.h>
 
 namespace bcos
@@ -35,8 +35,8 @@ public:
     virtual ~DagTransferPrecompiled(){};
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 public:
     // is this precompiled need parallel processing, default false.

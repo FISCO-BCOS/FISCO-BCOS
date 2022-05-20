@@ -59,14 +59,15 @@ bcostars::Error ExecutorServiceServer::dmcExecuteTransactions(std::string const&
     std::vector<bcostars::ExecutionMessage>&, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
-    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> executionMessages;
+    auto executionMessages =
+        std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
     for (auto const& input : _inputs)
     {
         auto msg = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
             [m_message = input]() mutable { return &m_message; });
-        executionMessages.emplace_back(std::move(msg));
+        executionMessages->emplace_back(std::move(msg));
     }
-    m_executor->dmcExecuteTransactions(_contractAddress, executionMessages,
+    m_executor->dmcExecuteTransactions(_contractAddress, *executionMessages,
         [_current](bcos::Error::UniquePtr _error,
             std::vector<bcos::protocol::ExecutionMessage::UniquePtr> _outputs) {
             std::vector<bcostars::ExecutionMessage> tarsOutputs;

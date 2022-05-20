@@ -179,6 +179,8 @@ protected:
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
 
+    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
+
 private:
     // utility functions
     void waitSignal()
@@ -187,7 +189,6 @@ private:
         m_signalled.wait_for(l, boost::chrono::milliseconds(5));
     }
     void clearAllCache();
-    void onStableCheckPointCommitFailed(bcos::protocol::BlockHeader::Ptr _blockHeader);
 
 protected:
     // PBFT configuration class

@@ -475,10 +475,16 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
 void AMOPImpl::onAMOPMessage(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
 {
-    m_threadPool->enqueue([this, _e, _session, _message]() {
+    auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
+    m_threadPool->enqueue([self, _e, _session, _message]() {
+        auto amop = self.lock();
+        if (!amop)
+        {
+            return;
+        }
         try
         {
-            dispatcherAMOPMessage(_e, _session, _message);
+            amop->dispatcherAMOPMessage(_e, _session, _message);
         }
         catch (std::exception const& e)
         {

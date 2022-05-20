@@ -19,8 +19,8 @@
  */
 
 #include "ConsensusPrecompiled.h"
-#include "PrecompiledResult.h"
-#include "Utilities.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
@@ -50,12 +50,12 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
 }
 
 std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string& _sender, int64_t)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     // parse function name
-    uint32_t func = getParamFunc(_param);
-    bytesConstRef data = getParamData(_param);
+    uint32_t func = getParamFunc(_callParameters->input());
+    bytesConstRef data = _callParameters->params();
 
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
@@ -65,10 +65,11 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
-    if (blockContext->isAuthCheck() && !checkSenderFromAuth(_sender))
+    if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("sender is not from sys") << LOG_KV("sender", _sender);
+                               << LOG_DESC("sender is not from sys")
+                               << LOG_KV("sender", _callParameters->m_sender);
         getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         callResult->setGas(gasPricer->calTotalGas());
         return callResult;

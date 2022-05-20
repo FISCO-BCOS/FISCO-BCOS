@@ -548,9 +548,6 @@ bool TransactionSync::importDownloadedTxs(
                                 << LOG_KV("propHash", proposalHeader->hash().abridged());
                 return false;
             }
-            SYNC_LOG(TRACE) << LOG_BADGE("importDownloadedTxs")
-                            << LOG_DESC("Import transaction into txpool failed")
-                            << LOG_KV("errorCode", result) << LOG_KV("tx", tx->hash().abridged());
             continue;
         }
         successImportTxs++;
