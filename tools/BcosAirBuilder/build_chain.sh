@@ -722,7 +722,7 @@ generate_mtail_scripts() {
     local port="${3}"
     local node="${4}"
     local ps_cmd="\$(ps aux|grep \${mtail}|grep -v grep|awk '{print \$2}')"
-    local start_cmd="nohup \${mtail} -logtostderr -progs \${mtailScript} -logs \${logDir} -port ${port} >>nohup.out 2>&1 &"
+    local start_cmd="nohup \${mtail} -logtostderr -progs \${mtailScript} -logs '../log/*.log' -port ${port} >>nohup.out 2>&1 &"
     local stop_cmd="kill \${node_pid}"
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
@@ -789,7 +789,6 @@ EOF
     cat <<EOF >> "${output}/mtail/start_mtail_monitor.sh"
 mtail=\${SHELL_FOLDER}/../../mtail
 mtailScript=\${SHELL_FOLDER}/node.mtail
-logDir=\'\${SHELL_FOLDER}/../log/*.log\'
 export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
@@ -931,8 +930,20 @@ EOF
 
     mkdir -p $(dirname $output/grafana/grafana.ini)
     cat <<EOF >> "${output}/grafana/grafana.ini"
+[server]
 # The http port  to use
 http_port = 3001
+
+[security]
+# disable creation of admin user on first start of grafana
+;disable_initial_admin_creation = false
+;
+;# default admin user, created on startup
+admin_user = admin
+;
+;# default admin password, can be changed before first start of grafana,  or in profile settings
+admin_password = admin
+
 EOF
 
     generate_script_template "$output/start_monitor.sh"
