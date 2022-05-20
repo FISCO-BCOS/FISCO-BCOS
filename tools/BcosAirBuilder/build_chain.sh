@@ -732,7 +732,7 @@ host = "${ip}"
 hidden text node
 node = "${node}" 
 
-#链id
+#chain id
 hidden text chain
 chain = "chain0"
 
