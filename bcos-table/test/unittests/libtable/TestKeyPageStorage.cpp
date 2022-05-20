@@ -38,6 +38,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 using namespace std;
 using namespace bcos;
@@ -2259,6 +2260,152 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
         }
         index += keyCount;
         BCOS_LOG(DEBUG) << LOG_DESC("<<<<<<<<<<<<<<<<<<<<<<\n\n\n\n\n\n\n\n\n");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(pageMergeBig)
+{
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableCount = 5;
+    auto rowCount = 20000;
+    srand(time(NULL));
+    std::vector<std::unordered_map<int, bool>> keys;
+    keys.resize(tableCount);
+#if defined(__APPLE__)
+#pragma omp parallel for
+#endif
+    for (int j = 0; j < tableCount; ++j)
+    {
+        auto tableName = "table_" + boost::lexical_cast<std::string>(j);
+        BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+        auto table = tableStorage->openTable(tableName);
+        BOOST_REQUIRE(table);
+
+        for (int k = 0; k < rowCount; ++k)
+        {
+            keys[j][k] = true;
+            auto entry = std::make_optional(table->newEntry());
+            auto key =
+                boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+            entry->setField(0, boost::lexical_cast<std::string>(k));
+            BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+        }
+    }
+
+#if defined(__APPLE__)
+#pragma omp parallel for
+#endif
+    for (int j = 0; j < tableCount; ++j)
+    {
+        auto tableName = "table_" + boost::lexical_cast<std::string>(j);
+        auto table = tableStorage->openTable(tableName);
+        BOOST_REQUIRE(table);
+        for (int k = rowCount - 1; k >= 0; --k)
+        {
+            if (k % 5 < 4)
+            {
+                keys[j][k] = false;
+                auto entry = std::make_optional(table->newDeletedEntry());
+                auto key =
+                    boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+                // BCOS_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("tableName", tableName)
+                //                 << LOG_KV("key", key);
+                BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+            }
+        }
+
+        for (int k = rowCount - 1; k >= 0; --k)
+        {
+            if (rand() % 2 == 0)
+            {
+                keys[j][k] = true;
+                auto entry = std::make_optional(table->newEntry());
+                auto key =
+                    boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+                entry->setField(0, boost::lexical_cast<std::string>(k));
+                BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+            }
+        }
+
+        for (int k = 0; k < rowCount; ++k)
+        {
+            if (rand() % 3 == 0)
+            {
+                keys[j][k] = true;
+                auto entry = std::make_optional(table->newEntry());
+                auto key =
+                    boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+                entry->setField(0, boost::lexical_cast<std::string>(k));
+                BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+            }
+        }
+
+        for (int k = rowCount - 1; k >= 0; --k)
+        {
+            if (k % 5 < 4)
+            {
+                keys[j][k] = false;
+                auto entry = std::make_optional(table->newDeletedEntry());
+                auto key =
+                    boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+                // BCOS_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("tableName", tableName)
+                //                 << LOG_KV("key", key);
+                BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+            }
+        }
+
+        for (int k = 0; k < rowCount; ++k)
+        {
+            if (rand() % 3 == 0)
+            {
+                keys[j][k] = true;
+                auto entry = std::make_optional(table->newEntry());
+                auto key =
+                    boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+                entry->setField(0, boost::lexical_cast<std::string>(k));
+                BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+            }
+        }
+        for (int k = 0; k < rowCount; ++k)
+        {
+            if (rand() % 3 == 0)
+            {
+                keys[j][k] = false;
+                auto entry = std::make_optional(table->newDeletedEntry());
+                auto key =
+                    boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+                // BCOS_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("tableName", tableName)
+                //                 << LOG_KV("key", key);
+                BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+            }
+        }
+    }
+
+    for (int j = 0; j < tableCount; ++j)
+    {
+        auto tableName = "table_" + boost::lexical_cast<std::string>(j);
+        auto table = tableStorage->openTable(tableName);
+        BOOST_REQUIRE(table);
+
+        for (int k = 0; k < rowCount; ++k)
+        {
+            auto key =
+                boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
+            auto entry = table->getRow(key);
+            // BCOS_LOG(TRACE) << LOG_DESC("getRow") << LOG_KV("tableName", tableName)
+            //                 << LOG_KV("key", key);
+            if (keys[j][k])
+            {
+                BOOST_REQUIRE(entry.has_value());
+                BOOST_REQUIRE(entry->get() == boost::lexical_cast<std::string>(k));
+            }
+        }
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

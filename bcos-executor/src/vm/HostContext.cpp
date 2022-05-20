@@ -320,6 +320,11 @@ u256 HostContext::store(const u256& _n)
         // }
         return fromBigEndian<u256>(entry->getField(0));
     }
+    // else
+    // {// FIXME: this log is only for debug, comment it when release
+    //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
+    //                         << LOG_KV("value", "not found");
+    // }
 
     return u256();
 }

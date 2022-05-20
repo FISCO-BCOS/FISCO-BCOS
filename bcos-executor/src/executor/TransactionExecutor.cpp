@@ -500,7 +500,8 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     }
 
     auto hash = last.storage->hash(m_hashImpl);
-    EXECUTOR_LOG(INFO) << "GetTableHashes success" << LOG_KV("hash", hash.hex());
+    EXECUTOR_LOG(INFO) << "GetTableHashes success" << LOG_KV("number", number)
+                       << LOG_KV("hash", hash.hex());
 
     callback(nullptr, std::move(hash));
 }
@@ -1532,7 +1533,7 @@ void TransactionExecutor::removeCommittedState()
         if (keyPageStorage)
         {
             EXECUTOR_LOG(INFO) << LOG_DESC("merge keyPage to cachedStorage")
-                                << LOG_KV("number", number);
+                               << LOG_KV("number", number);
             keyPageStorage->setReadOnly(true);
         }
         else

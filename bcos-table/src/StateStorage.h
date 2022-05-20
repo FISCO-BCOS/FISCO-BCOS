@@ -43,12 +43,12 @@ class BaseStorage : public virtual storage::StateStorageInterface,
                     public virtual storage::MergeableStorageInterface
 {
 private:
-#define STORAGE_REPORT_GET(table, key, entry, desc)                              \
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)                                 \
-    {                                                                            \
-        STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)          \
-                           << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc); \
+#define STORAGE_REPORT_GET(table, key, entry, desc) \
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
+    {                                               \
     }
+    // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
+    //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
 
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
@@ -442,13 +442,13 @@ public:
 
     crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
     {
-        bcos::crypto::HashType totalHash;
+        bcos::crypto::HashType totalHash(0);
 
 #pragma omp parallel for
         for (size_t i = 0; i < m_buckets.size(); ++i)
         {
             auto& bucket = m_buckets[i];
-            bcos::crypto::HashType bucketHash;
+            bcos::crypto::HashType bucketHash(0);
 
             for (auto& it : bucket.container)
             {
