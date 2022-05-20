@@ -465,7 +465,7 @@ Usage:
     -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
-    -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and prot
+    -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -h Help
 
