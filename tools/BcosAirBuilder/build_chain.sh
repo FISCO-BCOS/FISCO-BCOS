@@ -738,7 +738,7 @@ chain = "chain0"
 
 
 
-#账本id
+#group id
 hidden text group
 group = "group0"
 
