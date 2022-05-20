@@ -637,7 +637,7 @@ cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 
-#启动监控程序
+#start monitor
 dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
 for dir in \${dirs[*]}
 do
