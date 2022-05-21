@@ -1067,7 +1067,7 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
-    enable_key_page=false
+    key_page_size=0
     ; type can be RocksDB/TiKV
     type=RocksDB
     pd_addrs=

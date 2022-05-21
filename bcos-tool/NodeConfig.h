@@ -103,7 +103,7 @@ public:
 
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageType() const { return m_storageType; }
-    bool const& enableKeyPage() const { return m_enableKeyPage; }
+    size_t keyPageSize() const { return m_keyPageSize; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
@@ -264,7 +264,7 @@ private:
     // storage configuration
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
-    bool m_enableKeyPage = false;
+    size_t m_keyPageSize = 1024;
     std::vector<std::string> m_pd_addrs;
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";

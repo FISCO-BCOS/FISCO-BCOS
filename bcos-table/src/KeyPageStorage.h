@@ -81,16 +81,17 @@ constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
 
 const char* const TABLE_META_KEY = "";
+const size_t MIN_PAGE_SIZE = 512;
 class KeyPageStorage : public virtual storage::StateStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
-    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 8 * 1024)
+    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024)
       : storage::StateStorageInterface(_prev),
-        m_pageSize(_pageSize),
-        m_splitSize(_pageSize / 2),
-        m_mergeSize(_pageSize / 4),
+        m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
+        m_splitSize(m_pageSize / 2),
+        m_mergeSize(m_pageSize / 4),
         m_buckets(std::thread::hardware_concurrency())
     {}
 
@@ -193,6 +194,10 @@ public:
             {
                 return it->startKey;
             }
+            if (pages.rbegin()->startKey.empty())
+            {  // page is empty because of rollback
+                return std::nullopt;
+            }
             return pages.rbegin()->startKey;
         }
 
@@ -252,37 +257,36 @@ public:
             if (it != pages.end())
             {
                 auto node = pages.extract(it);
-                if (c_fileLogLevel >= TRACE)
+                // if (c_fileLogLevel >= TRACE)
+                // { // FIXME: this log is only for debug, comment it when release
+                //     KeyPage_LOG(TRACE)
+                //         << LOG_DESC("updatePageInfo") << LOG_KV("oldEndKey", toHex(oldEndKey))
+                //         << LOG_KV("valid", node.value().count) << LOG_KV("newValid", count)
+                //         << LOG_KV("size", node.value().size) << LOG_KV("newSize", size);
+                // }
+                // count == 0, means the page is empty, the rage is empty
+                if (node.value().startKey != startKey)
                 {
-                    KeyPage_LOG(TRACE)
-                        << LOG_DESC("updatePageInfo") << LOG_KV("oldEndKey", toHex(oldEndKey))
-                        << LOG_KV("startKey", toHex(node.value().startKey))
-                        << LOG_KV("newStartKey", toHex(startKey))
-                        << LOG_KV("endKey", toHex(node.value().endKey))
-                        << LOG_KV("newEndKey", toHex(endKey)) << LOG_KV("valid", node.value().count)
-                        << LOG_KV("newValid", count) << LOG_KV("size", node.value().size)
-                        << LOG_KV("newSize", size);
+                    // if (c_fileLogLevel >= TRACE)
+                    // { // FIXME: this log is only for debug, comment it when release
+                    //     KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
+                    //                        << LOG_KV("startKey", toHex(node.value().startKey))
+                    //                        << LOG_KV("newStartKey", toHex(startKey))
+                    //                        << LOG_KV("endKey", toHex(node.value().endKey));
+                    // }
+                    oldStartKey = node.value().startKey;
+                    node.value().startKey = startKey;
                 }
-                // assert(count > 0);
-                // if (count > 0)
-                {  // count == 0, means the page is empty, the rage is empty
-                    if (node.value().startKey != startKey)
-                    {
-                        oldStartKey = node.value().startKey;
-                        node.value().startKey = startKey;
-                    }
-                    if (node.value().endKey != endKey)
-                    {
-                        node.value().endKey = endKey;
-                    }
-                }
-                if (count == 0)
+                if (node.value().endKey != endKey)
                 {
-                    KeyPage_LOG(ERROR)
-                        << LOG_DESC("updatePageInfo empty") << LOG_KV("startKey", toHex(startKey))
-                        << LOG_KV("oldStartKey", toHex(oldEndKey))
-                        << LOG_KV("endKey", toHex(endKey)) << LOG_KV("valid", count)
-                        << LOG_KV("size", size);
+                    // if (c_fileLogLevel >= TRACE)
+                    // {  // FIXME: this log is only for debug, comment it when release
+                    //     KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
+                    //                        << LOG_KV("endKey", toHex(node.value().endKey))
+                    //                        << LOG_KV("newEndKey", toHex(endKey))
+                    //                        << LOG_KV("startKey", toHex(node.value().startKey));
+                    // }
+                    node.value().endKey = endKey;
                 }
                 node.value().count = count;
                 node.value().size = size;
@@ -306,7 +310,7 @@ public:
                 pages.erase(it);
             }
         }
-        size_t size()
+        size_t size() const
         {
             std::shared_lock lock(mutex);
             return pages.size();
@@ -422,9 +426,11 @@ public:
                 // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
-                //         << LOG_DESC("getEntry") << LOG_KV("pageKey", toHex(entries.begin()->first))
+                //         << LOG_DESC("getEntry") << LOG_KV("pageKey",
+                //         toHex(entries.begin()->first))
                 //         << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size())
-                //         << LOG_KV("key", toHex(key)) << LOG_KV("status", (int)it->second.status());
+                //         << LOG_KV("key", toHex(key)) << LOG_KV("status",
+                //         (int)it->second.status());
                 // }
                 if (it->second.status() != Entry::Status::DELETED &&
                     it->second.status() != Entry::EMPTY)
@@ -439,7 +445,8 @@ public:
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry not found")
                 //         << LOG_KV(
-                //                "pageKey", entries.empty() ? "empty" : toHex(entries.begin()->first))
+                //                "pageKey", entries.empty() ? "empty" :
+                //                toHex(entries.begin()->first))
                 //         << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size())
                 //         << LOG_KV("key", toHex(key));
                 // }
@@ -483,17 +490,19 @@ public:
                 }
                 ret = std::move(it->second);
                 it->second = std::move(entry);
-                if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                {  // FIXME: this log is only for debug, comment it when release
-                    KeyPage_LOG(TRACE)
-                        << LOG_DESC("setEntry update")
-                        << LOG_KV("pageKey", toHex(entries.begin()->first))
-                        << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size())
-                        << LOG_KV("key", toHex(key)) << LOG_KV("status", (int)it->second.status());
-                }
+                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                // {  // FIXME: this log is only for debug, comment it when release
+                //     KeyPage_LOG(TRACE)
+                //         << LOG_DESC("setEntry update")
+                //         << LOG_KV("pageKey", toHex(entries.begin()->first))
+                //         << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size())
+                //         << LOG_KV("key", toHex(key)) << LOG_KV("status",
+                //         (int)it->second.status());
+                // }
             }
             else
             {
+                m_size += key.size();
                 if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_validCount;
@@ -504,21 +513,22 @@ public:
                     key > entries.rbegin()->first)
                 {
                     pageInfoChanged = true;
-                    if (key < entries.begin()->first)
+                    if (!entries.empty() && key < entries.begin()->first)
                     {
                         m_invalidStartKeys.insert(entries.begin()->first);
                     }
                 }
                 entries[std::string(key)] = std::move(entry);
-                if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                {  // FIXME: this log is only for debug, comment it when release
-                    KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
-                                       << LOG_KV("startKey", toHex(entries.begin()->first))
-                                       << LOG_KV("key", toHex(key)) << LOG_KV("valid", m_validCount)
-                                       << LOG_KV("count", entries.size())
-                                       << LOG_KV("pageInfoChanged", pageInfoChanged)
-                                       << LOG_KV("status", (int)entry.status());
-                }
+                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                // {  // FIXME: this log is only for debug, comment it when release
+                //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
+                //                        << LOG_KV("startKey", toHex(entries.begin()->first))
+                //                        << LOG_KV("key", toHex(key)) << LOG_KV("valid",
+                //                        m_validCount)
+                //                        << LOG_KV("count", entries.size())
+                //                        << LOG_KV("pageInfoChanged", pageInfoChanged)
+                //                        << LOG_KV("status", (int)entry.status());
+                // }
             }
             return std::make_tuple(ret, pageInfoChanged);
         }
@@ -569,7 +579,9 @@ public:
             while (iter != entries.end())
             {
                 m_size -= iter->second.size();
+                m_size -= iter->first.size();
                 page.m_size += iter->second.size();
+                page.m_size += iter->first.size();
                 if (iter->second.status() != Entry::Status::DELETED)
                 {
                     --m_validCount;
@@ -583,13 +595,13 @@ public:
                 auto ret = page.entries.insert(entries.extract(iter));
                 assert(ret.inserted);
                 iter = entries.begin();
-                // m_invalidStartKeys
-                if (m_size - iter->second.size() < threshold)
+                if (m_size - iter->second.size() < threshold || entries.size() == 1)
                 {
                     break;
                 }
             }
-            if (!m_invalidStartKeys.empty() && entries.begin()->first == *m_invalidStartKeys.begin())
+            if (!m_invalidStartKeys.empty() &&
+                entries.begin()->first == *m_invalidStartKeys.begin())
             {  // if new pageKey has been pageKey, remove it from m_invalidStartKeys
                 m_invalidStartKeys.erase(m_invalidStartKeys.begin());
             }
@@ -605,7 +617,9 @@ public:
                 for (auto iter = p.entries.begin(); iter != p.entries.end();)
                 {
                     m_size += iter->second.size();
+                    m_size += iter->first.size();
                     p.m_size -= iter->second.size();
+                    p.m_size -= iter->first.size();
                     if (iter->second.status() != Entry::Status::DELETED)
                     {
                         ++m_validCount;
@@ -643,20 +657,21 @@ public:
             const std::string& table, const bcos::crypto::Hash::Ptr& hashImpl) const
         {
             bcos::crypto::HashType pageHash(0);
-            std::shared_lock lock(mutex);
             auto hash = hashImpl->hash(table);
+            // std::shared_lock lock(mutex);
             for (auto iter = entries.cbegin(); iter != entries.cend(); ++iter)
             {
                 if (iter->second.dirty())
                 {
                     auto entryHash = hash ^ hashImpl->hash(iter->first) ^
                                      iter->second.hash(table, iter->first, hashImpl);
-                    if (c_fileLogLevel >= TRACE)
-                    {
-                        STORAGE_LOG(TRACE)
-                            << "Storage hash: " << LOG_KV("table", table)
-                            << LOG_KV("key", toHex(iter->first)) << LOG_KV("hash", entryHash.hex());
-                    }
+                    // if (c_fileLogLevel >= TRACE)
+                    // {
+                    //     STORAGE_LOG(TRACE)
+                    //         << "Storage hash: " << LOG_KV("table", table)
+                    //         << LOG_KV("key", toHex(iter->first)) << LOG_KV("hash",
+                    //         entryHash.hex());
+                    // }
                     pageHash ^= entryHash;
                 }
             }
@@ -717,12 +732,14 @@ public:
                             << "Revert insert: " << change.table << " | " << toHex(change.key);
                     }
                     m_size -= it->second.size();
+                    m_size -= it->first.size();
                     if (it->second.status() != Entry::Status::DELETED)
                     {
                         --m_validCount;
                     }
                     entries.erase(it);
-                    if (!m_invalidStartKeys.empty() && entries.begin()->first == *m_invalidStartKeys.begin())
+                    if (!m_invalidStartKeys.empty() && !entries.empty() &&
+                        entries.begin()->first == *m_invalidStartKeys.begin())
                     {  // if new pageKey has been pageKey, remove it from m_invalidStartKeys
                         m_invalidStartKeys.erase(m_invalidStartKeys.begin());
                     }
@@ -766,10 +783,7 @@ public:
                 ar& i.first;
                 auto value = i.second.get();
                 ar&(uint32_t)value.size();
-                for (size_t i = 0; i < value.size(); ++i)
-                {
-                    ar&(uint8_t)value[i];
-                }
+                ar.save_binary(value.data(), value.size());
             }
             assert(count == m_validCount);
         }
@@ -787,11 +801,9 @@ public:
                 uint32_t len = 0;
                 ar& len;
                 m_size += len;
+                m_size += key.size();
                 std::vector<uint8_t> value(len, 0);
-                for (size_t j = 0; j < len; ++j)
-                {
-                    ar& value[j];
-                }
+                ar.load_binary(value.data(), value.size());
                 Entry e;
                 e.set(std::move(value));
                 // e.setDirty(false);
@@ -901,8 +913,12 @@ public:
                                << LOG_KV("error", error->errorMessage());
             return std::nullopt;
         }
-        KeyPage_LOG(TRACE) << LOG_DESC("get data from storage") << LOG_KV("table", table)
-                           << LOG_KV("key", toHex(key)) << LOG_KV("found", entry ? true : false);
+        if (c_fileLogLevel >= TRACE)
+        {
+            KeyPage_LOG(TRACE) << LOG_DESC("get data from storage") << LOG_KV("table", table)
+                               << LOG_KV("key", toHex(key))
+                               << LOG_KV("found", entry ? true : false);
+        }
         if (entry)
         {
             entry->setStatus(Entry::Status::NORMAL);
@@ -922,6 +938,7 @@ private:
     {
         auto hash = std::hash<std::string_view>{}(table);
         std::ignore = key;
+        // the table must in one bucket
         // boost::hash_combine(hash, std::hash<std::string_view>{}(key));
         return hash % m_buckets.size();
     }
@@ -936,6 +953,10 @@ private:
                            << LOG_KV("newStartKey", toHex(newStartKey));
         n.key().second = newStartKey;
         n.mapped().key = newStartKey;
+        if (newStartKey.empty())
+        {
+            return nullptr;
+        }
         auto it = bucket->container.find(std::make_pair(table, newStartKey));
         if (it != bucket->container.end())
         {  // erase old page to update data

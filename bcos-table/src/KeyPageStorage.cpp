@@ -246,12 +246,18 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         entry.setObject(meta);
                         readLock.unlock();
                         if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                        {  // debug log to statistic the table pages
+                        {  // FIXME: this log is only for debug, comment it when release
                             KeyPage_LOG(TRACE)
                                 << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
                                 << LOG_KV("key", toHex(it.first.second))
-                                << LOG_KV("size", entry.size()) << LOG_KV("meta", meta);
+                                << LOG_KV("size", entry.size());
                         }
+                        KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta")
+                                           << LOG_KV("metaSize", sizeof(PageInfo) * meta.size())
+                                           << LOG_KV("size", entry.size())
+                                           << LOG_KV("count", meta.size())
+                                           << LOG_KV("payloadRate", sizeof(PageInfo) * meta.size() /
+                                                                        (double)entry.size());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
                 }
@@ -279,7 +285,8 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             << LOG_KV("validCount", page.validCount())
                             << LOG_KV("count", page.count())
                             << LOG_KV("status", (int)it.second.entry.status())
-                            << LOG_KV("pageSize", page.size()) << LOG_KV("size", entry.size());
+                            << LOG_KV("pageSize", page.size()) << LOG_KV("size", entry.size())
+                            << LOG_KV("payloadRate", page.size() / (double)entry.size());
                         assert(it.first.second == page.startKey());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
@@ -311,35 +318,67 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
 crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const
 {
     bcos::crypto::HashType totalHash(0);
-
-#pragma omp parallel for
+    std::vector<const Data*> allData;
     for (size_t i = 0; i < m_buckets.size(); ++i)
     {
         auto& bucket = m_buckets[i];
-        bcos::crypto::HashType bucketHash(0);
-
         for (auto& it : bucket.container)
         {
-            auto& entry = it.second.entry;
-            if (entry.dirty() && it.second.type != Data::Type::TableMeta)
+            allData.push_back(&it.second);
+        }
+    }
+#pragma omp parallel for
+    for (size_t i = 0; i < allData.size(); ++i)
+    {
+        auto data = allData[i];
+        auto& entry = data->entry;
+        if (entry.dirty() && data->type != Data::Type::TableMeta)
+        {
+            if (data->type == Data::Type::Page)
             {
-                if (it.second.type == Data::Type::Page)
-                {
-                    auto& page = std::get<0>(it.second.data);
-                    bucketHash ^= page.hash(it.second.table, hashImpl);
-                }
-                else
-                {  // sys table
-                    auto hash = hashImpl->hash(it.second.table);
-                    hash ^= hashImpl->hash(it.second.key);
-                    hash ^= entry.hash(it.second.table, it.second.key, hashImpl);
-                    bucketHash ^= hash;
-                }
+                auto& page = std::get<0>(data->data);
+                auto pageHash = page.hash(data->table, hashImpl);
+#pragma omp critical
+                totalHash ^= pageHash;
+            }
+            else
+            {  // sys table
+                auto hash = hashImpl->hash(data->table);
+                hash ^= hashImpl->hash(data->key);
+                hash ^= entry.hash(data->table, data->key, hashImpl);
+#pragma omp critical
+                totalHash ^= hash;
             }
         }
-#pragma omp critical
-        totalHash ^= bucketHash;
     }
+    // #pragma omp parallel for
+    //     for (size_t i = 0; i < m_buckets.size(); ++i)
+    //     {
+    //         auto& bucket = m_buckets[i];
+    //         bcos::crypto::HashType bucketHash(0);
+
+    //         for (auto& it : bucket.container)
+    //         {
+    //             auto& entry = it.second.entry;
+    //             if (entry.dirty() && it.second.type != Data::Type::TableMeta)
+    //             {
+    //                 if (it.second.type == Data::Type::Page)
+    //                 {
+    //                     auto& page = std::get<0>(it.second.data);
+    //                     bucketHash ^= page.hash(it.second.table, hashImpl);
+    //                 }
+    //                 else
+    //                 {  // sys table
+    //                     auto hash = hashImpl->hash(it.second.table);
+    //                     hash ^= hashImpl->hash(it.second.key);
+    //                     hash ^= entry.hash(it.second.table, it.second.key, hashImpl);
+    //                     bucketHash ^= hash;
+    //                 }
+    //             }
+    //         }
+    // #pragma omp critical
+    //         totalHash ^= bucketHash;
+    //     }
     return totalHash;
 }
 
@@ -419,13 +458,17 @@ void KeyPageStorage::rollback(const Recoder& recoder)
             auto pageKey = meta.getPageKeyNoLock(change.key);
             if (pageKey)
             {
-                auto [error, data] = getData(change.table, pageKey.value(), true);
-                if (error || !data)
+                auto [error, pageData] = getData(change.table, pageKey.value(), true);
+                if (error || !pageData)
                 {
                     BOOST_THROW_EXCEPTION(*error);
                 }
-                auto& page = std::get<0>(data.value()->data);
+                auto& page = std::get<0>(pageData.value()->data);
                 page.rollback(change);
+                if (page.count() == 0)
+                {  // page is empty because of rollback, means it it first created
+                    pageData.value()->entry.setStatus(Entry::Status::EMPTY);
+                }
                 // revert also need update pageInfo
                 auto oldStartKey = meta.updatePageInfoNoLock(pageKey.value(), page.startKey(),
                     page.endKey(), page.validCount(), page.size());
@@ -530,7 +573,6 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
                 break;
             }
         }
-
         if (mustExist)
         {
             KeyPage_LOG(FATAL) << LOG_DESC("data should exist") << LOG_KV("table", tableView)
@@ -719,6 +761,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     {  // split page, TODO: if dag trigger split, it maybe split to different page?
         KeyPage_LOG(DEBUG) << LOG_DESC("trigger split page") << LOG_KV("table", table)
                            << LOG_KV("pageKey", toHex(pageKey)) << LOG_KV("size", page->size())
+                           << LOG_KV("m_pageSize", m_pageSize)
                            << LOG_KV("validCount", page->validCount())
                            << LOG_KV("count", page->count());
         auto newPage = page->split(m_splitSize);

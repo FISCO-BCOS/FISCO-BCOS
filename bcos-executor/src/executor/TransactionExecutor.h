@@ -93,7 +93,7 @@ public:
         storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool useKeyPage);
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize);
 
     ~TransactionExecutor() override = default;
 
@@ -271,7 +271,7 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
-    bool m_useKeyPage = false;
+    size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
 };
 

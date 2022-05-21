@@ -121,7 +121,7 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool useKeyPage = false)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize = 0)
   : m_txpool(std::move(txpool)),
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
@@ -129,7 +129,7 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
     m_isWasm(false),
-    m_useKeyPage(useKeyPage)
+    m_keyPageSize(keyPageSize)
 {
     assert(m_backendStorage);
 
@@ -225,7 +225,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         }
 
         // Create a temp storage
-        auto storage = std::make_shared<storage::StateStorage>(std::move(prev));
+        auto storage = createStateStorage(std::move(prev));
 
         // Create a temp block context
         // TODO: pass blockHash, version here
@@ -1693,9 +1693,9 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
     bcos::storage::StorageInterface::Ptr storage)
 {
-    if (m_useKeyPage)
+    if (m_keyPageSize > 0)
     {
-        return std::make_shared<bcos::storage::KeyPageStorage>(storage);
+        return std::make_shared<bcos::storage::KeyPageStorage>(storage, m_keyPageSize);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }

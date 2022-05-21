@@ -35,17 +35,17 @@ public:
         storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, bool useKeyPage)
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize)
     {
         if (isWasm)
         {
             return std::make_shared<WasmTransactionExecutor>(txpool, cachedStorage, backendStorage,
-                executionMessageFactory, hashImpl, isAuthCheck, useKeyPage);
+                executionMessageFactory, hashImpl, isAuthCheck, keyPageSize);
         }
         else
         {
             return std::make_shared<EvmTransactionExecutor>(txpool, cachedStorage, backendStorage,
-                executionMessageFactory, hashImpl, isAuthCheck, useKeyPage);
+                executionMessageFactory, hashImpl, isAuthCheck, keyPageSize);
         }
     }
 };

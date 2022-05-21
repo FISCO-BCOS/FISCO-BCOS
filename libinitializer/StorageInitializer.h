@@ -36,7 +36,7 @@ class StorageInitializer
 {
 public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::string& _storagePath, const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, bool enableBlobDB = false)
+        const std::string& _storagePath, const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
     {
         // FIXME: use blobDB of RocksDB
         boost::filesystem::create_directories(_storagePath);
@@ -48,7 +48,7 @@ public:
         // options.OptimizeLevelStyleCompaction();
         // create the DB if it's not already present
         options.create_if_missing = true;
-        options.enable_blob_files = enableBlobDB;
+        options.enable_blob_files = keyPageSize > 1 ? true : false;
         // options.min_blob_size = 1024;
 
 
