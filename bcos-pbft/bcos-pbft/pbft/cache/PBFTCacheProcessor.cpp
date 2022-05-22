@@ -1207,4 +1207,6 @@ void PBFTCacheProcessor::resetUnCommittedCacheState(bcos::protocol::BlockNumber 
             it.second->resetState();
         }
     }
+    m_committedProposalList.clear();
+    m_executingProposals.clear();
 }

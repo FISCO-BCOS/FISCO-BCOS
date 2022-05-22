@@ -24,6 +24,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     {
         waitT = utcTime() - m_lastExecuteFinishTime;
     }
+    if (waitT > 3000)
+    {
+        waitT = 0;
+        m_lastExecuteFinishTime = 0;
+    }
     auto signature = block->blockHeaderConst()->signatureList();
     fetchGasLimit(block->blockHeaderConst()->number());
     SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock request"

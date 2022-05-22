@@ -300,15 +300,6 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
         m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
-    if (m_config->timeout())
-    {
-        PBFT_LOG(INFO) << LOG_DESC("onRecvProposal failed for timout now")
-                       << LOG_KV("index", _proposalIndex)
-                       << LOG_KV("hash", _proposalHash.abridged()) << m_config->printCurrentState();
-        m_config->notifyResetSealing();
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
-        return;
-    }
     PBFT_LOG(INFO) << LOG_DESC("asyncSubmitProposal") << LOG_KV("index", _proposalIndex)
                    << LOG_KV("hash", _proposalHash.abridged()) << m_config->printCurrentState();
     // generate the pre-prepare packet
