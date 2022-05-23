@@ -338,20 +338,3 @@ void GatewayConfig::checkFileExist(const std::string& _path)
                                                   _path));
     }
 }
-
-// Note: make sure the consensus param checker is consistent with the precompiled param checker
-int64_t GatewayConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
-    std::string const& _key, std::string const& _defaultValue)
-{
-    auto value = _pt.get<std::string>(_key, _defaultValue);
-    try
-    {
-        return boost::lexical_cast<int64_t>(value);
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                  "Invalid value " + value + " for configuration " + _key +
-                                  ", please set the value with a valid number"));
-    }
-}

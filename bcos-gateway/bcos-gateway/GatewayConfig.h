@@ -83,10 +83,6 @@ public:
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
-    // Note: make sure the consensus param checker is consistent with the precompiled param checker
-    int64_t checkAndGetValue(boost::property_tree::ptree const& _pt, std::string const& _key,
-        std::string const& _defaultValue);
-
 private:
     std::string m_uuid;
     // if SM SSL connection or not
