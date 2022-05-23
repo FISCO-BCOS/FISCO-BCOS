@@ -1360,11 +1360,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                         if (error)
                         {
+                            EXECUTOR_LOG(ERROR)
+                                << "Execute error: " << LOG_KV("msg", error->errorMessage())
+                                << LOG_KV("code", error->errorCode());
                             callback(std::move(error), nullptr);
                         }
                         else
                         {
-                            EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0]->message();
                             callback(std::move(error), std::move(messages[0]));
                         }
                     });
@@ -1385,11 +1387,12 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                 if (error)
                 {
+                    EXECUTOR_LOG(ERROR) << "Execute error: " << LOG_KV("msg", error->errorMessage())
+                                        << LOG_KV("code", error->errorCode());
                     callback(std::move(error), nullptr);
                 }
                 else
                 {
-                    EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0]->message();
                     callback(std::move(error), std::move(messages[0]));
                 }
             });

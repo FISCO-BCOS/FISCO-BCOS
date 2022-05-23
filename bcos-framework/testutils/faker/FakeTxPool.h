@@ -45,7 +45,10 @@ public:
 
     // useless for PBFT, maybe needed by RPC
     void asyncSubmit(bytesPointer, TxSubmitCallback) override {}
-    void asyncResetTxPool(std::function<void(Error::Ptr)>) override {}
+    void asyncResetTxPool(std::function<void(Error::Ptr)> _callback) override 
+    {
+        _callback(nullptr);
+    }
     // useless for PBFT, needed by dispatcher to fetch block transactions
     void asyncFillBlock(HashListPtr, std::function<void(Error::Ptr, TransactionsPtr)>) override {}
 

@@ -526,39 +526,22 @@ bool TransactionSync::importDownloadedTxs(
     startT = utcTime();
     // import the transactions into txpool
     auto txpool = m_config->txpoolStorage();
-    size_t successImportTxs = 0;
-    for (size_t i = 0; i < txsSize; i++)
+    if (enforceImport)
     {
-        auto tx = (*_txs)[i];
-        if (tx->invalid())
+        if (!txpool->batchVerifyAndSubmitTransaction(proposalHeader, _txs))
         {
-            continue;
+            return false;
         }
-        // Note: when the transaction is used to reach a consensus, the transaction must be imported
-        // into the txpool even if the txpool is full
-        auto result = txpool->submitTransaction(
-            std::const_pointer_cast<Transaction>(tx), nullptr, enforceImport, false);
-        if (result != TransactionStatus::None)
-        {
-            if (enforceImport)
-            {
-                SYNC_LOG(DEBUG) << LOG_BADGE("importDownloadedTxs: verify proposal failed")
-                                << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("result", result)
-                                << LOG_KV("propIndex", proposalHeader->number())
-                                << LOG_KV("propHash", proposalHeader->hash().abridged());
-                return false;
-            }
-            SYNC_LOG(TRACE) << LOG_BADGE("importDownloadedTxs")
-                            << LOG_DESC("Import transaction into txpool failed")
-                            << LOG_KV("errorCode", result) << LOG_KV("tx", tx->hash().abridged());
-            continue;
-        }
-        successImportTxs++;
+    }
+    else
+    {
+        txpool->batchImportTxs(_txs);
     }
     SYNC_LOG(DEBUG) << LOG_DESC("importDownloadedTxs success")
-                    << LOG_KV("nodeId", m_config->nodeID()->shortHex())
-                    << LOG_KV("successImportTxs", successImportTxs) << LOG_KV("totalTxs", txsSize)
-                    << LOG_KV("verifyT", verifyT) << LOG_KV("submitT", (utcTime() - startT))
+                    << LOG_KV("hash", proposalHeader ? proposalHeader->hash().abridged() : "none")
+                    << LOG_KV("number", proposalHeader ? proposalHeader->number() : -1)
+                    << LOG_KV("totalTxs", txsSize) << LOG_KV("verifyT", verifyT)
+                    << LOG_KV("submitT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
     return true;
 }
