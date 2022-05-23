@@ -160,13 +160,13 @@ void PBFTInitializer::initChainNodeInfo(
     // set protocolInfo
     auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     m_nodeInfo->setNodeProtocol(*nodeProtocolInfo);
-    m_nodeInfo->setSystemVersion(m_pbft->compatibilityVersion());
+    m_nodeInfo->setCompatibilityVersion(m_pbft->compatibilityVersion());
     m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", m_nodeInfo->nodeType())
                           << LOG_KV("nodeCryptoType", m_nodeInfo->nodeCryptoType())
                           << LOG_KV("nodeName", _nodeConfig->nodeName())
-                          << LOG_KV("systemVersion", m_nodeInfo->systemVersion());
+                          << LOG_KV("compatibilityVersion", m_nodeInfo->compatibilityVersion());
 }
 
 void PBFTInitializer::start()
@@ -350,7 +350,7 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
         // Note: the nodeInfo and the groupInfo are mutable
         auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
         // Note: notify groupInfo to all rpc nodes in pro/max mode
-        nodeInfo->setSystemVersion(_version);
+        nodeInfo->setCompatibilityVersion(_version);
         _rpc->asyncNotifyGroupInfo(m_groupInfo, [_version](bcos::Error::Ptr&& _error) {
             if (!_error)
             {

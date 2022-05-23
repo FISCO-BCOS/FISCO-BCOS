@@ -133,8 +133,7 @@ void AMOPClient::onRecvAMOPRequest(
                 {
                     return;
                 }
-                auto responseMsg =
-                    dynamic_pointer_cast<WsMessage>(amopClient->m_wsMessageFactory->buildMessage());
+                auto responseMsg = amopClient->m_wsMessageFactory->buildMessage();
                 auto orgSeq = seq;
                 if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
                 {
@@ -151,7 +150,8 @@ void AMOPClient::onRecvAMOPRequest(
                     {
                         errorMsg = "Access to gateway timed out, please check gateway alive";
                     }
-                    responseMsg->setStatus(errorCode);
+                    std::dynamic_pointer_cast<bcos::boostssl::ws::WsMessage>(responseMsg)
+                        ->setStatus(errorCode);
                     // constructor the response
                     responseMsg->setPayload(
                         std::make_shared<bytes>(errorMsg.begin(), errorMsg.end()));
@@ -167,8 +167,7 @@ void AMOPClient::onRecvAMOPRequest(
                 }
                 // Note: the decode function will recover m_seq of wsMessage, so it should be
                 // better not set orgSeq into the responseMsg before decode
-                auto size = responseMsg->decode(
-                    bytesConstRef(_responseData->data(), _responseData->size()));
+                auto size = responseMsg->decode(ref(*_responseData));
                 AMOP_CLIENT_LOG(DEBUG)
                     << LOG_BADGE("onRecvAMOPRequest")
                     << LOG_DESC("AMOP async send message: receive message response for sdk")
@@ -206,14 +205,12 @@ bool AMOPClient::trySendAMOPRequestToLocalNode(std::shared_ptr<WsSession> _sessi
                     return;
                 }
                 auto responseMsg = amopClient->m_wsMessageFactory->buildMessage();
-                auto size = responseMsg->decode(
-                    bytesConstRef(_responseData->data(), _responseData->size()));
-                auto seq = responseMsg->seq();
+                auto size = responseMsg->decode(ref(*_responseData));
                 _session->asyncSendMessage(responseMsg);
                 AMOP_CLIENT_LOG(DEBUG)
                     << LOG_BADGE("trySendAMOPRequestToLocalNode")
                     << LOG_DESC("AMOP async send message: receive message response for sdk")
-                    << LOG_KV("size", size) << LOG_KV("seq", seq)
+                    << LOG_KV("size", size) << LOG_KV("seq", responseMsg->seq())
                     << LOG_KV("type", responseMsg->packetType());
             }
             catch (std::exception const& e)
@@ -294,7 +291,6 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
     {
         auto responseMessage =
             std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
-        responseMessage->setSeq(m_wsMessageFactory->newSeq());
         responseMessage->setStatus(bcos::protocol::CommonError::NotFoundClientByTopicDispatchMsg);
         responseMessage->setPacketType(AMOPClientMessageType::AMOP_RESPONSE);
         auto buffer = std::make_shared<bcos::bytes>();
@@ -322,7 +318,6 @@ void AMOPClient::asyncNotifyAMOPBroadcastMessage(std::string const& _topic, byte
     AMOP_CLIENT_LOG(DEBUG) << LOG_DESC("asyncNotifyAMOPBroadcastMessage")
                            << LOG_KV("topic", _topic);
     auto requestMsg = std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
-    requestMsg->setSeq(m_wsMessageFactory->newSeq());
     requestMsg->setPacketType(AMOPClientMessageType::AMOP_BROADCAST);
     requestMsg->setPayload(std::make_shared<bytes>(_data.begin(), _data.end()));
     broadcastAMOPMessage(_topic, requestMsg);
@@ -506,9 +501,9 @@ bool AMOPClient::onGatewayInactivated(
         return false;
     }
     auto seq = _msg->seq();
-    auto responseMsg = std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
+    auto responseMsg = m_wsMessageFactory->buildMessage();
     // set error status
-    responseMsg->setStatus(-1);
+    std::dynamic_pointer_cast<bcos::boostssl::ws::WsMessage>(responseMsg)->setStatus(-1);
     std::string errorMsg = "error for the gateway is in-activated";
     // set errorMesg
     responseMsg->setPayload(std::make_shared<bytes>(errorMsg.begin(), errorMsg.end()));

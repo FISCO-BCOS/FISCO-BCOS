@@ -19,8 +19,8 @@
  */
 
 #include "SystemConfigPrecompiled.h"
-#include "PrecompiledResult.h"
-#include "Utilities.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
@@ -80,12 +80,11 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
 }
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string& _sender, int64_t)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     // parse function name
-    uint32_t func = getParamFunc(_param);
-    bytesConstRef data = getParamData(_param);
+    uint32_t func = getParamFunc(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
 
     auto codec =
@@ -95,17 +94,17 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
-        if (blockContext->isAuthCheck() && !checkSenderFromAuth(_sender))
+        if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
-                << LOG_KV("sender", _sender);
+                << LOG_KV("sender", _callParameters->m_sender);
             getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
         }
         else
         {
             std::string configKey, configValue;
-            codec->decode(data, configKey, configValue);
+            codec->decode(_callParameters->params(), configKey, configValue);
             // Uniform lowercase configKey
             boost::to_lower(configKey);
             PRECOMPILED_LOG(DEBUG)
@@ -132,7 +131,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     {
         // getValueByKey(string)
         std::string configKey;
-        codec->decode(data, configKey);
+        codec->decode(_callParameters->params(), configKey);
         // Uniform lowercase configKey
         boost::to_lower(configKey);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")

@@ -20,10 +20,10 @@
 
 #include "SmallBankPrecompiled.h"
 #include "../../executive/BlockContext.h"
-#include "../PrecompiledResult.h"
 #include "../TableManagerPrecompiled.h"
-#include "../Utilities.h"
 #include "DagTransferPrecompiled.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/storage/Common.h>
 
@@ -88,14 +88,14 @@ std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _par
 }
 
 std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string& _origin, const std::string&, int64_t)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHexString(_param));
+                           << LOG_KV("param", toHexString(_callParameters->input()));
     // parse function name
-    uint32_t func = getParamFunc(_param);
-    bytesConstRef data = getParamData(_param);
+    uint32_t func = getParamFunc(_callParameters->input());
+    bytesConstRef data = _callParameters->params();
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
@@ -121,11 +121,13 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT])
     {  // updateBalance(string,uint256)
-        updateBalanceCall(_executive, data, _origin, callResult->mutableExecResult());
+        updateBalanceCall(
+            _executive, data, _callParameters->m_origin, callResult->mutableExecResult());
     }
     else if (func == name2Selector[SMALL_BANK_METHOD_TRS_STR2_UINT])
     {  // sendPayment(string,string,uint256)
-        sendPaymentCall(_executive, data, _origin, callResult->mutableExecResult());
+        sendPaymentCall(
+            _executive, data, _callParameters->m_origin, callResult->mutableExecResult());
     }
     else
     {

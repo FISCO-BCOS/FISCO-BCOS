@@ -36,7 +36,7 @@ class AMOPClient : public std::enable_shared_from_this<AMOPClient>
 public:
     using Ptr = std::shared_ptr<AMOPClient>;
     AMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> _wsMessageFactory,
+        std::shared_ptr<bcos::boostssl::MessageFaceFactory> _wsMessageFactory,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
         bcos::gateway::GatewayInterface::Ptr _gateway, std::string const& _gatewayServiceName)
       : m_wsService(_wsService),
@@ -178,7 +178,7 @@ protected:
 
 protected:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_wsMessageFactory;
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> m_wsMessageFactory;
     std::shared_ptr<bcos::protocol::AMOPRequestFactory> m_requestFactory;
 
     bcos::gateway::GatewayInterface::Ptr m_gateway;

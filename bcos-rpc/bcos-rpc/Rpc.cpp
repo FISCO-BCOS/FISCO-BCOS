@@ -119,10 +119,9 @@ void Rpc::asyncNotifyBlockNumber(std::string const& _groupID, std::string const&
             response["nodeName"] = _nodeName;
             response["blockNumber"] = _blockNumber;
             auto resp = response.toStyledString();
-            auto wsMessageFactory =
-                std::dynamic_pointer_cast<WsMessageFactory>(m_wsService->messageFactory());
-            auto message = wsMessageFactory->buildMessage(bcos::protocol::MessageType::BLOCK_NOTIFY,
-                std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
+            auto message = m_wsService->messageFactory()->buildMessage();
+            message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+            message->setPayload(std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
             s->asyncSendMessage(message);
         }
     }
@@ -160,10 +159,9 @@ void Rpc::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
         Json::Value groupInfoJson;
         groupInfoToJson(groupInfoJson, _groupInfo);
         auto response = groupInfoJson.toStyledString();
-        auto wsMessageFactory = std::dynamic_pointer_cast<boostssl::ws::WsMessageFactory>(
-            m_wsService->messageFactory());
-        auto message = wsMessageFactory->buildMessage(bcos::protocol::MessageType::GROUP_NOTIFY,
-            std::make_shared<bcos::bytes>(response.begin(), response.end()));
+        auto message = m_wsService->messageFactory()->buildMessage();
+        message->setPacketType(bcos::protocol::MessageType::GROUP_NOTIFY);
+        message->setPayload(std::make_shared<bcos::bytes>(response.begin(), response.end()));
         session->asyncSendMessage(message);
     }
 }

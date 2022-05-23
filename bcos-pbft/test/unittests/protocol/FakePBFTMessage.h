@@ -391,6 +391,15 @@ inline void testPBFTMessage(PacketType _packetType, CryptoSuite::Ptr _cryptoSuit
     checkFakedBasePBFTMessage(decodedMsg, orgTimestamp, version, view, generatedFrom, proposalHash);
     // verify the signature
     BOOST_CHECK(decodedMsg->verifySignature(_cryptoSuite, keyPair->publicKey()) == true);
+    // case: another node fake the decodedMsg with error view
+    KeyPairInterface::Ptr keyPair2 = _cryptoSuite->signatureImpl()->generateKeyPair();
+    auto pbftCodec2 = std::make_shared<PBFTCodec>(keyPair2, _cryptoSuite, pbftMessageFactory);
+    decodedMsg->setView(view + 1);
+    encodedData = pbftCodec2->encode(decodedMsg, 1);
+    auto decodedMsg2 =
+        std::dynamic_pointer_cast<PBFTMessage>(pbftCodec2->decode(ref(*encodedData)));
+    BOOST_CHECK(decodedMsg2->verifySignature(_cryptoSuite, keyPair->publicKey()) == false);
+
     // the signatureHash has been updated
     auto fakedHash = _cryptoSuite->hashImpl()->hash("fakedHash");
     decodedMsg->setSignatureDataHash(fakedHash);
@@ -433,6 +442,15 @@ inline void testPBFTViewChangeMessage(CryptoSuite::Ptr _cryptoSuite)
         proposalHash, index, data, committedIndex, committedHash, proposalSize, _cryptoSuite);
     // verify the signature
     BOOST_CHECK(decodedMsg->verifySignature(_cryptoSuite, keyPair->publicKey()) == true);
+    // case: another node fake the decodedMsg with error view
+    KeyPairInterface::Ptr keyPair2 = _cryptoSuite->signatureImpl()->generateKeyPair();
+    auto pbftCodec2 = std::make_shared<PBFTCodec>(keyPair2, _cryptoSuite, pbftMessageFactory);
+    decodedMsg->setView(view - 100);
+    encodedData = pbftCodec2->encode(decodedMsg, 1);
+    auto decodedMsg2 =
+        std::dynamic_pointer_cast<PBFTViewChangeMsg>(pbftCodec2->decode(ref(*encodedData)));
+    BOOST_CHECK(decodedMsg2->verifySignature(_cryptoSuite, keyPair->publicKey()) == false);
+
     // the signatureHash has been updated
     auto fakedHash = _cryptoSuite->hashImpl()->hash("fakedHash");
     decodedMsg->setSignatureDataHash(fakedHash);

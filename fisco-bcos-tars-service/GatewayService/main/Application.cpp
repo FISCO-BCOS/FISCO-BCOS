@@ -51,14 +51,20 @@ protected:
 
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
+
+        // init wsConfig
         auto wsConfig = std::make_shared<bcos::boostssl::ws::WsConfig>();
+        // Mixed = server + client
+        wsConfig->setModel(boostssl::ws::WsModel::Mixed);
+        wsConfig->setModuleName("GATEWAY");
+        wsConfig->setThreadPoolSize(gatewayConfig->threadPoolSize());
         gatewayConfig->setWsConfig(wsConfig);
 
         gatewayConfig->initP2PConfig(pt, true);
-        gatewayConfig->setCertPath(ServerConfig::BasePath);
         gatewayConfig->setNodePath(ServerConfig::BasePath);
 
         auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
+        contextConfig->setCertPath(ServerConfig::BasePath);
         if (gatewayConfig->wsConfig()->smSSL())
         {
             addConfig("sm_ca.crt");

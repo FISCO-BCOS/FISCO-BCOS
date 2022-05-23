@@ -154,7 +154,6 @@ void GatewayConfig::initWsConfig(const boost::property_tree::ptree& _pt)
     m_wsConfig->setModel(boostssl::ws::WsModel::Mixed);
     m_wsConfig->setModuleName("GATEWAY");
     m_wsConfig->setThreadPoolSize(m_threadPoolSize);
-    m_wsConfig->setDisableSsl(false);
 
     // init contextConfig
     auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();

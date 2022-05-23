@@ -215,11 +215,11 @@ evmc_result HostContext::callBuiltInPrecompiled(
     {
         try
         {
-            auto precompiledResponse = m_executive->execPrecompiled(_request->receiveAddress,
-                ref(_request->data), _request->origin, _request->senderAddress, _request->gas);
-            callResults->gas = precompiledResponse->m_gas;
+            auto precompiledCallParams = std::make_shared<precompiled::PrecompiledExecResult>(_request);
+            precompiledCallParams = m_executive->execPrecompiled(precompiledCallParams);
+            callResults->gas = precompiledCallParams->m_gas;
             resultCode = (int32_t)TransactionStatus::None;
-            resultData.swap(precompiledResponse->m_execResult);
+            resultData = std::move(precompiledCallParams->m_execResult);
         }
         catch (protocol::PrecompiledError& e)
         {

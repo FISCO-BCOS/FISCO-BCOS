@@ -39,6 +39,10 @@ namespace ws
 {
 class WsSession;
 }  // namespace ws
+namespace boostssl
+{
+class MessageFace;
+}
 
 namespace event
 {
@@ -73,8 +77,7 @@ public:
      * @return bool: if _session is inactive, false will be return
      */
     bool sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _session,
-        std::shared_ptr<bcos::boostssl::MessageFace> _msg, const std::string& _id,
-        int32_t _status);
+        std::shared_ptr<bcos::boostssl::MessageFace> _msg, const std::string& _id, int32_t _status);
 
     /**
      * @brief: send event log list to client

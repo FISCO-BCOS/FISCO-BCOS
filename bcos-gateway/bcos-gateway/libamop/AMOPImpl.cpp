@@ -475,10 +475,16 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
 
 void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
 {
-    m_threadPool->enqueue([this, _p2pSession, _message]() {
+    auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
+    m_threadPool->enqueue([self, _p2pSession, _message]() {
+        auto amop = self.lock();
+        if (!amop)
+        {
+            return;
+        }
         try
         {
-            dispatcherAMOPMessage(_message, _p2pSession);
+            amop->dispatcherAMOPMessage(_message, _p2pSession);
         }
         catch (std::exception const& e)
         {

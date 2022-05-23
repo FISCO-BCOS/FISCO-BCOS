@@ -30,11 +30,9 @@ public:
      */
     void initConfig(std::string const& _configPath, bool _uuidRequired = false);
 
-    void setCertPath(std::string const& _certPath) { m_certPath = _certPath; }
     void setNodePath(std::string const& _nodePath) { m_nodePath = _nodePath; }
     void setNodeFileName(const std::string& _nodeFileName) { m_nodeFileName = _nodeFileName; }
 
-    std::string const& certPath() const { return m_certPath; }
     std::string const& nodePath() const { return m_nodePath; }
     std::string const& nodeFileName() const { return m_nodeFileName; }
 
@@ -74,7 +72,6 @@ private:
     // threadPool size
     uint32_t m_threadPoolSize{16};
 
-    std::string m_certPath;
     std::string m_nodePath;
     std::string m_nodeFileName;
 };

@@ -18,7 +18,6 @@
  * @date 2021-09-07
  */
 
-#include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
@@ -79,7 +78,7 @@ void EventSub::stop()
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
 }
 
-void EventSub::onRecvSubscribeEvent(std::shared_ptr<boostssl::MessageFace> _msg,
+void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg->seq();
@@ -129,7 +128,7 @@ void EventSub::onRecvSubscribeEvent(std::shared_ptr<boostssl::MessageFace> _msg,
     return;
 }
 
-void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<boostssl::MessageFace> _msg,
+void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg->seq();
@@ -203,9 +202,7 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     // task completed
     if (_complete)
     {
-        auto msg =
-            std::dynamic_pointer_cast<boostssl::ws::WsMessage>(m_messageFactory->buildMessage());
-        msg->setSeq(m_messageFactory->newSeq());
+        auto msg = m_messageFactory->buildMessage();
         msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
         sendResponse(_session, msg, _id, EP_STATUS_CODE::PUSH_COMPLETED);
         return true;
@@ -230,7 +227,6 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     auto data = std::make_shared<bcos::bytes>(strEventInfo.begin(), strEventInfo.end());
 
     auto msg = m_messageFactory->buildMessage();
-    msg->setSeq(m_messageFactory->newSeq());
     msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
     msg->setPayload(data);
     _session->asyncSendMessage(msg);

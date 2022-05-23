@@ -1,0 +1,63 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+from common import utilities
+from config.node_config_generator import NodeConfigGenerator
+import os
+
+
+class MaxNodeConfigGenerator(NodeConfigGenerator):
+    def __init__(self, chain_config, node_type):
+        NodeConfigGenerator.__init__(self, chain_config, node_type)
+        self.chain_config = chain_config
+        self.root_dir = "./generated"
+        self.ini_tmp_config_file = "config.ini"
+
+    def generate_all_config(self, enforce_genesis_exists):
+        """
+        generate all config for max-node
+        """
+        for group_config in self.chain_config.group_list.values():
+            utilities.print_badage(
+                "generate genesis config for group %s" % group_config.group_id)
+            if self.generate_all_genesis_config(group_config, enforce_genesis_exists) is False:
+                return False
+            utilities.print_badage(
+                "generate genesis config for %s success" % group_config.group_id)
+            utilities.print_badage(
+                "generate ini config for BcosMaxNodeService of group %s" % group_config.group_id)
+            if self.generate_all_ini_config(group_config) is False:
+                return False
+            utilities.print_badage(
+                "generate ini config for BcosMaxNodeService of group %s success" % group_config.group_id)
+            utilities.print_badage(
+                "generate ini config for BcosExecutorService of group %s" % group_config.group_id)
+            if self.__generate_all_executor_config(group_config) is False:
+                return False
+            utilities.print_badage(
+                "generate ini config for BcosExecutorService of group %s success" % group_config.group_id)
+        return True
+
+    def __generate_all_executor_config(self, group_config):
+        """
+        generate the config for all executor service
+        """
+        for max_node_config in group_config.node_list:
+            if self.__generate_executor_config(max_node_config, group_config) is False:
+                return False
+        return True
+
+    def __generate_executor_config(self, max_node_config, group_config):
+        executor_config_content = self.generate_executor_config(
+            group_config, max_node_config, max_node_config.executor_service.service_name)
+        executor_dir = self.__get_and_generate_executor_base_path(
+            max_node_config)
+        executor_config_path = os.path.join(
+            executor_dir, self.ini_tmp_config_file)
+        return self.store_config(executor_config_content, "executor ini", executor_config_path, max_node_config.node_service.service_name)
+
+    def __get_and_generate_executor_base_path(self, node_config):
+        path = os.path.join(self.root_dir, node_config.agency_config.chain_id,
+                            node_config.group_id, node_config.executor_service.service_name)
+        if os.path.exists(path) is False:
+            utilities.mkdir(path)
+        return path

@@ -257,7 +257,7 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
     callParameters->type = CallParameters::FINISHED;
     try
     {
-        std::shared_ptr<PrecompiledExecResult> precompiledExecResult;
+        auto precompiledCallParams = std::make_shared<PrecompiledExecResult>(callParameters);
         if (callParameters->internalCall)
         {
             std::string contract;
@@ -266,26 +266,26 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
             auto codec =
                 std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
             codec->decode(ref(callParameters->data), contract, data);
-            precompiledExecResult = execPrecompiled(contract, ref(data), callParameters->origin,
-                callParameters->senderAddress, callParameters->gas);
+            precompiledCallParams->m_to = contract;
+            precompiledCallParams->m_input = ref(data);
+            precompiledCallParams = execPrecompiled(precompiledCallParams);
+            callParameters->internalCall = false;
         }
         else
         {
-            precompiledExecResult =
-                execPrecompiled(callParameters->codeAddress, ref(callParameters->data),
-                    callParameters->origin, callParameters->senderAddress, callParameters->gas);
+            precompiledCallParams = execPrecompiled(precompiledCallParams);
         }
 
-        auto gas = precompiledExecResult->m_gas;
-        if (callParameters->gas < gas)
+        auto gas = precompiledCallParams->m_gas;
+        if (gas < 0)
         {
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
             return {nullptr, std::move(callParameters)};
         }
-        callParameters->gas -= gas;
+        callParameters->gas = gas;
         callParameters->status = (int32_t)TransactionStatus::None;
-        callParameters->data = std::move(precompiledExecResult->m_execResult);
+        callParameters->data = std::move(precompiledCallParams->m_execResult);
     }
     catch (protocol::PrecompiledError const& e)
     {
@@ -807,6 +807,7 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "CallDynamicPrecompiled error code field."));
     }
     callParameters->codeAddress = codeParameters[1];
+    callParameters->receiveAddress = codeParameters[1];
     // for scalability, erase [PRECOMPILED_PREFIX,codeAddress], left actual parameters
     codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
     // enc([call precompiled parameters],[user call parameters])
@@ -821,34 +822,33 @@ void TransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> funct
 }
 
 std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPrecompiled(
-    const std::string& address, bytesConstRef param, const std::string& origin,
-    const std::string& sender, int64_t gasLeft)
+    precompiled::PrecompiledExecResult::Ptr const& _precompiledParams)
 {
     try
     {
-        auto p = getPrecompiled(address);
+        auto p = getPrecompiled(_precompiledParams->m_to);
 
         if (p)
         {
-            auto execResult = p->call(shared_from_this(), param, origin, sender, gasLeft);
+            auto execResult = p->call(shared_from_this(), _precompiledParams);
             return execResult;
         }
         else
         {
             EXECUTIVE_LOG(DEBUG) << LOG_DESC("[call]Can't find address")
-                                 << LOG_KV("address", address);
+                                 << LOG_KV("address", _precompiledParams->m_to);
             return nullptr;
         }
     }
     catch (PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(ERROR) << "PrecompiledError" << LOG_KV("address", address)
+        EXECUTIVE_LOG(ERROR) << "PrecompiledError" << LOG_KV("address", _precompiledParams->m_to)
                              << LOG_KV("error", e.what());
         BOOST_THROW_EXCEPTION(e);
     }
     catch (Exception const& e)
     {
-        EXECUTIVE_LOG(ERROR) << "Exception" << LOG_KV("address", address)
+        EXECUTIVE_LOG(ERROR) << "Exception" << LOG_KV("address", _precompiledParams->m_to)
                              << LOG_KV("error", e.what());
         BOOST_THROW_EXCEPTION(e);
     }

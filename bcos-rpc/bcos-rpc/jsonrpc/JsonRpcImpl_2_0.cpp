@@ -63,7 +63,6 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     // Note: Clean up request data to prevent taking up too much memory
     bytes emptyBuffer;
     _msg->payload()->swap(emptyBuffer);
-
     onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
         if (_session && _session->isConnected())
         {

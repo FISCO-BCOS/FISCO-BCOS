@@ -321,8 +321,6 @@ void Service::sendMessageBySession(
     int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession)
 {
     auto p2pMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    auto seq = messageFactory()->newSeq();
-    p2pMessage->setSeq(seq);
     p2pMessage->setPacketType(_packetType);
     p2pMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
 
@@ -536,7 +534,6 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
 
     message->setPacketType(_type);
-    message->setSeq(messageFactory()->newSeq());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
     return message;
 }
@@ -603,12 +600,10 @@ void Service::asyncSendProtocol(WsSession::Ptr _session)
     m_codec->encode(m_localProtocol, *payload);
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::Handshake);
-    auto seq = messageFactory()->newSeq();
-    message->setSeq(seq);
     message->setPayload(payload);
 
     SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
-                      << LOG_KV("seq", seq);
+                      << LOG_KV("seq", message->seq());
     _session->asyncSendMessage(message, Options(), nullptr);
 }
 
