@@ -40,7 +40,7 @@ class RocksDBStorage : public TransactionalStorageInterface
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
     explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
-        const bcos::security::DataEncryption::Ptr dataEncryption);
+        const bcos::security::DataEncryptInterface::Ptr dataEncryption);
 
     ~RocksDBStorage() {}
 
@@ -76,6 +76,6 @@ private:
     std::unique_ptr<rocksdb::DB> m_db;
 
     // Security Storage
-    bcos::security::DataEncryption::Ptr m_dataEncryption{nullptr};
+    bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
 };
 }  // namespace bcos::storage

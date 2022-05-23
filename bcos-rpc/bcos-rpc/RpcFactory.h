@@ -29,12 +29,12 @@
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
 #include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-tool/NodeConfig.h>
-#include <libinitializer/ProtocolInitializer.h>
 
 namespace bcos
 {
@@ -55,7 +55,7 @@ public:
     using Ptr = std::shared_ptr<RpcFactory>;
     RpcFactory(std::string const& _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         bcos::crypto::KeyFactory::Ptr _keyFactory,
-        bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer = nullptr);
+        bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr);
     virtual ~RpcFactory() {}
 
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
@@ -100,7 +100,7 @@ private:
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
-    bcos::initializer::ProtocolInitializer::Ptr m_protocolInitializer;
+    bcos::security::DataEncryptInterface::Ptr m_dataEncrypt;
 };
 }  // namespace rpc
 }  // namespace bcos

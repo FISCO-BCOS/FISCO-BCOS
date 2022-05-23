@@ -41,17 +41,6 @@ public:
         std::string enNodeKey;
     };
 
-    struct StorageSecurityConfig
-    {
-        // node crypto type
-        bool smCryptoType;
-        // storage security configuration
-        bool enable;
-        std::string keyCenterUrl;
-        std::string dataKey;
-    };
-
-
     /**
      * @brief: loads configuration items from the config.ini
      * @param _configPath: config.ini path
@@ -73,8 +62,6 @@ public:
     void parseConnectedJson(const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file
     void initP2PConfig(const boost::property_tree::ptree& _pt, bool _uuidRequired);
-    // loads storage security configuration items from the configuration file
-    void initStorageSecurityConfig(const boost::property_tree::ptree& _pt);
     // loads ca configuration items from the configuration file
     void initCertConfig(const boost::property_tree::ptree& _pt);
     // loads sm ca configuration items from the configuration file
@@ -91,7 +78,6 @@ public:
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
-    StorageSecurityConfig storageSecurityConfig() const { return m_storageSecurityConfig; }
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
     std::string const& uuid() const { return m_uuid; }
@@ -116,7 +102,6 @@ private:
     // cert config for ssl connection
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
-    StorageSecurityConfig m_storageSecurityConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

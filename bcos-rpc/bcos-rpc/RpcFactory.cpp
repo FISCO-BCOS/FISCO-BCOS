@@ -55,11 +55,11 @@ using namespace bcos::protocol;
 using namespace bcos::security;
 
 RpcFactory::RpcFactory(std::string const& _chainID, GatewayInterface::Ptr _gatewayInterface,
-    KeyFactory::Ptr _keyFactory, bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer)
+    KeyFactory::Ptr _keyFactory, bcos::security::DataEncryptInterface::Ptr _dataEncrypt)
   : m_chainID(_chainID),
     m_gateway(_gatewayInterface),
     m_keyFactory(_keyFactory),
-    m_protocolInitializer(_protocolInitializer)
+    m_dataEncrypt(_dataEncrypt)
 {}
 
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
@@ -138,13 +138,10 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
-                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
-                    nullptr != m_protocolInitializer)
-                {
-                    keyContent =
-                        m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
-                }
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->nodeKey());
             }
             catch (std::exception& e)
             {
@@ -227,13 +224,10 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
-                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
-                    nullptr != m_protocolInitializer)
-                {
-                    keyContent =
-                        m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
-                }
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->smNodeKey());
             }
             catch (std::exception& e)
             {
@@ -274,13 +268,10 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
-                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable() &&
-                    nullptr != m_protocolInitializer)
-                {
-                    keyContent =
-                        m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
-                }
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->enSmNodeKey());
             }
             catch (std::exception& e)
             {

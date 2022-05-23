@@ -15,15 +15,17 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 /**
- * @brief : Encrypt file
- * @author: jimmyshi, websterchen
+ * @brief : Data Encryption
+ * @author: chuwen
  * @date: 2018-12-06
  */
 
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/FileUtility.h>
 #include <memory>
 
 namespace bcos
@@ -32,7 +34,7 @@ namespace bcos
 namespace security
 {
 
-class DataEncryption
+class DataEncryption : public DataEncryptInterface
 {
 public:
     using Ptr = std::shared_ptr<DataEncryption>;
@@ -42,14 +44,16 @@ public:
     ~DataEncryption() = default;
 
 public:
-    void init();
+    void init() override;
+
+    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
 
     // use to decrypt node.key
-    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents);
+    std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
 
     // use to encrypt/decrypt in rocksdb
-    std::string encrypt(const std::string& data);
-    std::string decrypt(const std::string& data);
+    std::string encrypt(const std::string& data) override;
+    std::string decrypt(const std::string& data) override;
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig{nullptr};

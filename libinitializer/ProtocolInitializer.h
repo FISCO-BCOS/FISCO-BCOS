@@ -23,7 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos
@@ -49,7 +49,7 @@ public:
 
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
-    bcos::security::DataEncryption::Ptr dataEncryption() const { return m_dataEncryption; }
+    bcos::security::DataEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
 
 private:
     void createCryptoSuite();
@@ -62,7 +62,7 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
-    bcos::security::DataEncryption::Ptr m_dataEncryption;
+    bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
 };
 }  // namespace initializer
 }  // namespace bcos

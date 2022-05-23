@@ -129,7 +129,6 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
-        initStorageSecurityConfig(pt);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -204,55 +203,6 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName);
-}
-
-/// loads storage security configuration items from the configuration file
-void GatewayConfig::initStorageSecurityConfig(const boost::property_tree::ptree& _pt)
-{
-    bool enable = _pt.get<bool>("storage_security.enable", false);
-    if (true == enable)
-    {
-        bool smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
-        m_storageSecurityConfig.smCryptoType = smCryptoType;
-
-        std::string keyCenterUrl = _pt.get<std::string>("storage_security.key_center_url", "");
-
-        std::vector<std::string> values;
-        boost::split(values, keyCenterUrl, boost::is_any_of(":"), boost::token_compress_on);
-        if (2 != values.size())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidParameter() << errinfo_comment(
-                    "initGlobalConfig storage_security failed! Invalid key_center_url!"));
-        }
-
-        std::string keyCenterIp = values[0];
-        unsigned short keyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
-        if (false == isValidPort(keyCenterPort))
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidParameter() << errinfo_comment(
-                    "initGlobalConfig storage_security failed! Invalid port in key_center_url!"));
-        }
-
-        std::string cipherDataKey = _pt.get<string>("storage_security.cipher_data_key", "");
-        if (true == cipherDataKey.empty())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidParameter() << errinfo_comment("Please provide cipher_data_key!"));
-        }
-
-        KeyCenter keyClient;
-        keyClient.setIpPort(keyCenterIp, keyCenterPort);
-        std::string dataKey =
-            asString(keyClient.getDataKey(cipherDataKey, m_storageSecurityConfig.smCryptoType));
-
-        GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initKeyManager") << LOG_KV("url", keyCenterUrl);
-
-        m_storageSecurityConfig.enable = enable;
-        m_storageSecurityConfig.keyCenterUrl = keyCenterUrl;
-        m_storageSecurityConfig.dataKey = dataKey;
-    }
 }
 
 // load p2p connected peers

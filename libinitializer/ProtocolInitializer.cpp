@@ -27,6 +27,7 @@
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -56,8 +57,11 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
 
-    m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
-    m_dataEncryption->init();
+    if (true == _nodeConfig->storageSecurityEnable())
+    {
+        m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
+        m_dataEncryption->init();
+    }
 
     // create the block factory
     // TODO: pb/tars option

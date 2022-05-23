@@ -120,8 +120,7 @@ void GatewayFactory::initSSLContextPubHexHandler()
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::CertConfig& _certConfig,
-    const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
+    const GatewayConfig::CertConfig& _certConfig)
 {
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
@@ -137,11 +136,10 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     {
         try
         {
-            keyContent = readContents(boost::filesystem::path(_certConfig.nodeKey));
-
-            if (nullptr != keyContent && true == _storageSecurityConfig.enable &&
-                nullptr != m_protocolInitializer)
-                keyContent = m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
+            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                keyContent = readContents(boost::filesystem::path(_certConfig.nodeKey));
+            else
+                keyContent = m_dataEncrypt->decryptFile(_certConfig.nodeKey);
         }
         catch (std::exception& e)
         {
@@ -202,8 +200,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::SMCertConfig& _smCertConfig,
-    const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
+    const GatewayConfig::SMCertConfig& _smCertConfig)
 {
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
@@ -215,10 +212,10 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     {
         try
         {
-            keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
-
-            if (nullptr != keyContent && true == _storageSecurityConfig.enable)
-                keyContent = m_protocolInitializer->dataEncryption()->decryptContents(keyContent);
+            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
+            else
+                keyContent = m_dataEncrypt->decryptFile(_smCertConfig.nodeKey);
         }
         catch (std::exception& e)
         {
@@ -238,11 +235,10 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     {
         try
         {
-            enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
-            if (nullptr != enNodeKeyContent && true == _storageSecurityConfig.enable &&
-                nullptr != m_protocolInitializer)
-                enNodeKeyContent =
-                    m_protocolInitializer->dataEncryption()->decryptContents(enNodeKeyContent);
+            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
+            else
+                enNodeKeyContent = m_dataEncrypt->decryptFile(_smCertConfig.enNodeKey);
         }
         catch (std::exception& e)
         {
@@ -337,9 +333,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
 
         std::shared_ptr<ba::ssl::context> sslContext =
-            (_config->smSSL() ?
-                    buildSSLContext(_config->smCertConfig(), _config->storageSecurityConfig()) :
-                    buildSSLContext(_config->certConfig(), _config->storageSecurityConfig()));
+            (_config->smSSL() ? buildSSLContext(_config->smCertConfig()) :
+                                buildSSLContext(_config->certConfig()));
 
         // init ASIOInterface
         auto asioInterface = std::make_shared<ASIOInterface>();

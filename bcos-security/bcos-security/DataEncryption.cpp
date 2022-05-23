@@ -64,15 +64,46 @@ void DataEncryption::init()
         m_symmetricEncrypt = std::make_shared<SM4Crypto>();
 }
 
-std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<bytes>& contents)
+std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<bytes>& content)
 {
-    bytes encFileBytes;
     std::shared_ptr<bytes> decFileBytes;
     try
     {
-        std::string encContextsStr((const char*)contents->data(), contents->size());
+        std::string encContextsStr((const char*)content->data(), content->size());
 
-        encFileBytes = fromHex(encContextsStr);
+        bytes encFileBytes = fromHex(encContextsStr);
+        BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
+                        << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
+
+        bytesPointer decFileBytesBase64Ptr =
+            m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
+                encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
+
+        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: "
+                        << asString(*decFileBytesBase64Ptr) << endl;
+        decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
+    }
+    catch (exception& e)
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
+                        << LOG_KV("what", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(EncryptedFileError());
+    }
+    // LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
+    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
+    return decFileBytes;
+}
+
+std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
+{
+    std::shared_ptr<bytes> decFileBytes;
+    try
+    {
+        std::shared_ptr<bytes> keyContent = readContents(boost::filesystem::path(filename));
+
+        std::string encContextsStr((const char*)keyContent->data(), keyContent->size());
+
+        bytes encFileBytes = fromHex(encContextsStr);
         BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
