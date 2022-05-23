@@ -319,10 +319,16 @@ void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stab
                    << LOG_KV("proofSize", signatureList->size())
                    << LOG_KV("blockProofSize", blockSignatureList.size());
     // Note: enqueue here to increase the performance since commitBlock is a sync implementation
-    m_commitBlockWorker->enqueue([this, blockHeader, _stableProposal]() {
+    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    m_commitBlockWorker->enqueue([self, blockHeader, _stableProposal]() {
+        auto storage = self.lock();
+        if (!storage)
+        {
+            return;
+        }
         // get the transactions list
-        auto txsInfo = m_blockFactory->createBlock(_stableProposal->extraData());
-        this->commitStableCheckPoint(blockHeader, txsInfo);
+        auto txsInfo = storage->m_blockFactory->createBlock(_stableProposal->extraData());
+        storage->commitStableCheckPoint(blockHeader, txsInfo);
     });
 }
 void LedgerStorage::onStableCheckPointCommitted(

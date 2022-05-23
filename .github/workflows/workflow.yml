@@ -37,20 +37,22 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
-          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v8-notest-${{ runner.temp }}-
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2021-06-17
           override: true
       - name: install Ubuntu dependencies
-        run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache openssl libssl-dev wget
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
         run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
@@ -88,6 +90,8 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
           key: hunter-clang-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -100,7 +104,7 @@ jobs:
         run: brew install ccache libomp openjdk
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev default-jdk
+        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev default-jdk openssl libssl-dev wget
       - name: configure
         if: runner.os == 'macOS'
         run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
@@ -158,6 +162,8 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
           key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -171,7 +177,7 @@ jobs:
           toolchain: nightly-2021-06-17
           override: true
       - name: install Ubuntu dependencies
-        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache  openssl libssl-dev wget
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
         run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
@@ -201,6 +207,8 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
           key: hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -209,7 +217,7 @@ jobs:
             hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-ubuntu-v8-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
+        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev wget
       - name: configure
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
@@ -234,13 +242,16 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             /home/runner/work/FISCO-BCOS/deps/src
+            deps/src
             ccache
-          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v8-notest-${{ runner.temp }}-
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -263,7 +274,7 @@ jobs:
           # compile things in the container
           run: |
             apt-get update -q -y
-            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison
+            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison wget
             /usr/sbin/update-ccache-symlinks
             echo 'export PATH="/usr/lib/ccache:$PATH"' | tee -a ~/.bashrc
             curl https://sh.rustup.rs -sSf | bash -s -- -y
@@ -302,13 +313,17 @@ jobs:
           path: |
             /home/runner/.hunter
             /github/home/.hunter
+            /__w/.hunter
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
+            /__w/.fisco
             deps/src
             ccache
-          key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-centos-v7-notest-${{ runner.temp }}-
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
@@ -357,6 +372,14 @@ jobs:
           path: |
             /home/runner/.hunter
             /github/home/.hunter
+            /Users/runner/.hunter/
+            /home/runner/.fisco
+            /github/home/.fisco
+            /Users/runner/.fisco/
+            /home/runner/work/FISCO-BCOS/deps/src
+            /__w/.hunter
+            /__w/.fisco
+            ccache
             deps/src
             ccache
           key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}

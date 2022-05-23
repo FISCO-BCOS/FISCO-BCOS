@@ -169,10 +169,13 @@ void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
                               "proposal execute failed and re-push the proposal "
                               "into the cache")
                        << printPBFTProposal(_proposal);
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
         m_cacheProcessor->updateCommitQueue(_proposal);
+        return;
     }
     m_config->setExpectedCheckPoint(m_config->committedProposal()->index() + 1);
     m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
@@ -294,15 +297,6 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << LOG_KV("hash", _proposalHash.abridged())
                           << m_config->printCurrentState();
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
-        return;
-    }
-    if (m_config->timeout())
-    {
-        PBFT_LOG(INFO) << LOG_DESC("onRecvProposal failed for timout now")
-                       << LOG_KV("index", _proposalIndex)
-                       << LOG_KV("hash", _proposalHash.abridged()) << m_config->printCurrentState();
-        m_config->notifyResetSealing();
         m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
