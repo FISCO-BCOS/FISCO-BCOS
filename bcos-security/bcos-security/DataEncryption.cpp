@@ -42,18 +42,21 @@ namespace security
 
 void DataEncryption::init()
 {
-    std::string keyCenterIp = m_nodeConfig->storageSecurityKeyCenterIp();
-    unsigned short keyCenterPort = m_nodeConfig->storageSecurityKeyCenterPort();
-    std::string cipherDataKey = m_nodeConfig->storageSecurityCipherDataKey();
-
     bool smCryptoType = m_nodeConfig->smCryptoType();
 
-    KeyCenter keyClient;
-    keyClient.setIpPort(keyCenterIp, keyCenterPort);
-    m_dataKey = asString(keyClient.getDataKey(cipherDataKey, smCryptoType));
+    if (true == m_nodeConfig->storageSecurityEnable())
+    {
+        std::string keyCenterIp = m_nodeConfig->storageSecurityKeyCenterIp();
+        unsigned short keyCenterPort = m_nodeConfig->storageSecurityKeyCenterPort();
+        std::string cipherDataKey = m_nodeConfig->storageSecurityCipherDataKey();
 
-    BCOS_LOG(INFO) << LOG_BADGE("DataEncryption::init") << LOG_KV("key_center_ip:", keyCenterIp)
-                   << LOG_KV("key_center_port:", keyCenterPort);
+        KeyCenter keyClient;
+        keyClient.setIpPort(keyCenterIp, keyCenterPort);
+        m_dataKey = asString(keyClient.getDataKey(cipherDataKey, smCryptoType));
+
+        BCOS_LOG(INFO) << LOG_BADGE("DataEncryption::init") << LOG_KV("key_center_ip:", keyCenterIp)
+                       << LOG_KV("key_center_port:", keyCenterPort);
+    }
 
     if (false == smCryptoType)
         m_symmetricEncrypt = std::make_shared<AESCrypto>();
