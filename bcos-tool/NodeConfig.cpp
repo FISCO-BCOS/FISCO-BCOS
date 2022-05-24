@@ -56,12 +56,13 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadSealerConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
-    loadExecutorConfig(_pt);
 }
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     loadLedgerConfig(_genesisConfig);
+    loadExecutorConfig(_genesisConfig);
+    generateGenesisData();
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -99,7 +100,7 @@ void NodeConfig::loadServiceConfig(boost::property_tree::ptree const& _pt)
 }
 
 void NodeConfig::loadNodeServiceConfig(
-    std::string const& _nodeID, boost::property_tree::ptree const& _pt)
+    std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require)
 {
     auto nodeName = _pt.get<std::string>("service.node_name", "");
     if (nodeName.size() == 0)
@@ -113,9 +114,11 @@ void NodeConfig::loadNodeServiceConfig(
     }
     m_nodeName = nodeName;
     m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
-        getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), false);
+        getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), _require);
     m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
-        getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), false);
+        getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), _require);
+    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
+        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), _require);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
@@ -439,12 +442,10 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_version = _genesisConfig.get<std::string>(
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
     // must call here to check the compatibility_version
-    m_compatibilityVersion = toVersionNumber(m_version);
-    g_BCOSConfig.setVersion((bcos::protocol::Version)m_compatibilityVersion);
-
+    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (!consensusNodeList || consensusNodeList->empty())
@@ -469,7 +470,6 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                          << LOG_KV("minSealTime", m_minSealTime)
                          << LOG_KV("compatibilityVersion",
                                 (bcos::protocol::Version)m_compatibilityVersion);
-    generateGenesisData();
 }
 
 ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
@@ -519,7 +519,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    if (m_compatibilityVersion > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
     {
         std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
     }
@@ -531,13 +531,17 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
 void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
+    std::string executorConfig = "";
     if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
     {
-        versionData = m_version + "-";
+        versionData = m_compatibilityVersionStr + "-";
+        std::stringstream ss;
+        ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
+        executorConfig = ss.str();
     }
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
-      << m_txGasLimit << "-" << versionData;
+      << m_txGasLimit << "-" << versionData << executorConfig;
     for (auto node : m_ledgerConfig->consensusNodeList())
     {
         s << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
@@ -547,11 +551,11 @@ void NodeConfig::generateGenesisData()
                          << LOG_KV("genesisData", m_genesisData);
 }
 
-void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _pt)
+void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisConfig)
 {
-    m_isWasm = _pt.get<bool>("executor.is_wasm", false);
-    m_isAuthCheck = _pt.get<bool>("executor.is_auth_check", false);
-    m_authAdminAddress = _pt.get<std::string>("executor.auth_admin_account", "");
+    m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
+    m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+    m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress);

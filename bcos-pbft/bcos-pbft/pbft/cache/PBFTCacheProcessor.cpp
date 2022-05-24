@@ -1172,3 +1172,41 @@ void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
             _pbftCache->setPrecommitCache(_precommit);
         });
 }
+
+PBFTMessageList PBFTCacheProcessor::preCommitCachesWithoutData()
+{
+    PBFTMessageList precommitCacheList;
+    auto waitSealUntil = m_config->waitSealUntil();
+    auto committedIndex = m_config->committedProposal()->index();
+    for (auto it = m_caches.begin(); it != m_caches.end();)
+    {
+        auto precommitCache = it->second->preCommitWithoutData();
+        if (precommitCache != nullptr)
+        {
+            // should not handle the proposal future than the system proposal
+            if (waitSealUntil > committedIndex && precommitCache->index() > waitSealUntil)
+            {
+                it = m_caches.erase(it);
+                continue;
+            }
+            precommitCacheList.push_back(precommitCache);
+        }
+        it++;
+    }
+    return precommitCacheList;
+}
+
+void PBFTCacheProcessor::resetUnCommittedCacheState(bcos::protocol::BlockNumber _number)
+{
+    PBFT_LOG(INFO) << LOG_DESC("resetUnCommittedCacheState") << LOG_KV("number", _number)
+                   << m_config->printCurrentState();
+    for (auto const& it : m_caches)
+    {
+        if (it.second->index() >= _number)
+        {
+            it.second->resetState();
+        }
+    }
+    m_committedProposalList.clear();
+    m_executingProposals.clear();
+}

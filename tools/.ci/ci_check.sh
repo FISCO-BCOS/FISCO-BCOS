@@ -26,7 +26,7 @@ exit_node()
     for node in ${node_list}
     do
         LOG_ERROR "exit_node ============= print error|warn info for ${node} ============="
-        cat nodes/127.0.0.1/${node}/log/* |grep -iE 'error|warn'
+        cat nodes/127.0.0.1/${node}/log/* |grep -iE 'error|warn|cons|connectedSize|heart'
         LOG_ERROR "exit_node ============= print error|warn info for ${node} finish ============="
         LOG_ERROR "exit_node ########### print nohup info for ${node} ###########"
         cat nodes/127.0.0.1/${node}/nohup.out

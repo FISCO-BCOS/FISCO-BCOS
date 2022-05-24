@@ -36,8 +36,10 @@ public:
 
     ~AirGroupManager() override {}
     virtual void init() { initNodeInfo(m_groupInfo->groupID(), "localNode", m_nodeService); }
+
     NodeService::Ptr getNodeService(std::string const& _groupID, std::string const&) const override
     {
+        ReadGuard l(x_groupInfo);
         if (_groupID.size() > 0 && _groupID != m_groupInfo->groupID())
         {
             return nullptr;
@@ -47,11 +49,13 @@ public:
 
     std::set<std::string> groupList() override
     {
+        ReadGuard l(x_groupInfo);
         return std::set<std::string>{m_groupInfo->groupID()};
     }
 
     bcos::group::GroupInfo::Ptr getGroupInfo(std::string const& _groupID) override
     {
+        ReadGuard l(x_groupInfo);
         if (m_groupInfo->groupID() == _groupID)
         {
             return m_groupInfo;
@@ -62,6 +66,7 @@ public:
     bcos::group::ChainNodeInfo::Ptr getNodeInfo(
         std::string const& _groupID, std::string const& _nodeName) override
     {
+        ReadGuard l(x_groupInfo);
         if (m_groupInfo->groupID() != _groupID)
         {
             return nullptr;
@@ -76,9 +81,24 @@ public:
         return groupList;
     }
 
+    bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo) override
+    {
+        {
+            WriteGuard l(x_groupInfo);
+            m_groupInfo = _groupInfo;
+        }
+        ReadGuard l(x_groupInfo);
+        if (m_groupInfoNotifier)
+        {
+            m_groupInfoNotifier(_groupInfo);
+        }
+        return true;
+    }
+
 private:
     NodeService::Ptr m_nodeService;
     bcos::group::GroupInfo::Ptr m_groupInfo;
+    mutable SharedMutex x_groupInfo;
 };
 }  // namespace rpc
 }  // namespace bcos

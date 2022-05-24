@@ -129,12 +129,13 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
     TransactionSubmitResultsPtr _txsResult, std::function<void(Error::Ptr)> _onNotifyFinished)
 {
-    m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
-    if (!_onNotifyFinished)
+    if (_onNotifyFinished)
     {
-        return;
+        _onNotifyFinished(nullptr);
     }
-    _onNotifyFinished(nullptr);
+    m_txsResultNotifier->enqueue([this, _blockNumber, _txsResult]() {
+        m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
+    });
 }
 
 void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _block,

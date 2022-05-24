@@ -24,9 +24,8 @@ BOOST_AUTO_TEST_CASE(addExecutor)
         executorManager->addExecutor("2", std::make_shared<MockParallelExecutor>("2")));
     BOOST_CHECK_NO_THROW(
         executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
-    BOOST_CHECK_THROW(
-        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")),
-        bcos::Exception);
+    BOOST_CHECK_NO_THROW(
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
 }
 
 BOOST_AUTO_TEST_CASE(dispatch)
@@ -167,9 +166,8 @@ BOOST_AUTO_TEST_CASE(remove)
         executorManager->addExecutor("2", std::make_shared<MockParallelExecutor>("2")));
     BOOST_CHECK_NO_THROW(
         executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
-    BOOST_CHECK_THROW(
-        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")),
-        bcos::Exception);
+    BOOST_CHECK_NO_THROW(
+        executorManager->addExecutor("3", std::make_shared<MockParallelExecutor>("3")));
 
     BOOST_CHECK_NO_THROW(executorManager->removeExecutor("2"));
     BOOST_CHECK_THROW(executorManager->removeExecutor("10"), bcos::Exception);

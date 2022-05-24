@@ -256,7 +256,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         BOOST_CHECK(_error == nullptr);
         finish = true;
     });
-    while (!finish)
+    auto startT = utcTime();
+    while ((!finish || (_txpoolStorage->size() != originTxsSize - sealedTxs->size())) &&
+           (utcTime() - startT <= 10 * 1000))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }

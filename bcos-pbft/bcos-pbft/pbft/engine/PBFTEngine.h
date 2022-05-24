@@ -179,6 +179,8 @@ protected:
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
 
+    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
+
 private:
     // utility functions
     void waitSignal()

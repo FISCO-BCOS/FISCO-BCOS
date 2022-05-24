@@ -41,8 +41,8 @@ jobs:
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
         run: make -j2 && make tar
-      - name: tar BcosProBuilder
-        run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
+      - name: tar BcosBuilder
+        run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
         run:  mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
@@ -57,7 +57,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosNodeService.tgz
+          file: fisco-bcos-tars-service/BcosNodeService.tgz
           asset_name: BcosNodeService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -65,7 +65,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosRpcService.tgz
+          file: fisco-bcos-tars-service/BcosRpcService.tgz
           asset_name: BcosRpcService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -73,8 +73,24 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosGatewayService.tgz
+          file: fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh
@@ -85,12 +101,12 @@ jobs:
           asset_name: build_chain.sh
           tag: ${{ github.ref }}
           overwrite: true
-      - name: Upload BcosProBuilder
+      - name: Upload BcosBuilder
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosProBuilder.tgz
-          asset_name: BcosProBuilder.tgz
+          file: BcosBuilder.tgz
+          asset_name: BcosBuilder.tgz
           tag: ${{ github.ref }}
           overwrite: true
       
@@ -141,8 +157,6 @@ jobs:
           cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF -DHUNTER_CONFIGURATION_TYPES=Release
           make -j4
           make tar
-      - name: tar BcosProBuilder
-        run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for CentOS
         run:  mkdir bin && mv fisco-bcos-air/fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
       - name: Upload fisco-bcos binaries to release
@@ -157,7 +171,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosNodeService.tgz
+          file: fisco-bcos-tars-service/BcosNodeService.tgz
           asset_name: BcosNodeService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -165,7 +179,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosRpcService.tgz
+          file: fisco-bcos-tars-service/BcosRpcService.tgz
           asset_name: BcosRpcService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -173,8 +187,24 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosGatewayService.tgz
+          file: fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh
@@ -183,13 +213,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: tools/BcosAirBuilder/build_chain.sh
           asset_name: build_chain.sh
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosProBuilder
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosProBuilder.tgz
-          asset_name: BcosProBuilder.tgz
           tag: ${{ github.ref }}
           overwrite: true

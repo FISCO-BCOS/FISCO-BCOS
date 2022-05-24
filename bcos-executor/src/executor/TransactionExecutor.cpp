@@ -31,20 +31,20 @@
 #include "../executive/ExecutiveFactory.h"
 #include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
-#include "../precompiled/Common.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
-#include "../precompiled/PrecompiledResult.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TablePrecompiled.h"
-#include "../precompiled/Utilities.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "ExecuteOutputs.h"
 #include "bcos-codec/abi/ContractABIType.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
@@ -1360,11 +1360,14 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                         if (error)
                         {
+                            EXECUTOR_LOG(ERROR)
+                                << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
+                                << LOG_KV("code", error->errorCode());
                             callback(std::move(error), nullptr);
                         }
                         else
                         {
-                            EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0]->message();
+                            EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                             callback(std::move(error), std::move(messages[0]));
                         }
                     });
@@ -1385,11 +1388,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                 if (error)
                 {
+                    EXECUTOR_LOG(ERROR) << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
+                                        << LOG_KV("code", error->errorCode());
                     callback(std::move(error), nullptr);
                 }
                 else
                 {
-                    EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0]->message();
+                    EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                     callback(std::move(error), std::move(messages[0]));
                 }
             });
@@ -1599,6 +1604,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();
+    callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
@@ -1629,6 +1635,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();
+    callParameters->message = input.message();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
@@ -1664,7 +1671,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
         catch (std::exception& e)
         {
-            EXECUTOR_LOG(ERROR) << "Execute error: " << boost::diagnostic_information(e);
+            EXECUTOR_LOG(ERROR) << "executeTransactionsWithCriticals error: " << boost::diagnostic_information(e);
         }
     });
 

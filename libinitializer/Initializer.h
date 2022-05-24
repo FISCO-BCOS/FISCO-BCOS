@@ -61,13 +61,14 @@ public:
 
     void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway);
-    void initMicroServiceNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    void initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
+        std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath);
 
     virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
 
 protected:
-    virtual void init(bcos::initializer::NodeArchitectureType _nodeArchType,
+    virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion);
 

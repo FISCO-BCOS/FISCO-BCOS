@@ -81,7 +81,7 @@ add_subdirectory(bcos-front)
 add_subdirectory(bcos-leader-election)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
-add_subdirectory(fisco-bcos-pro)
+add_subdirectory(fisco-bcos-tars-service)
 
 if (TESTS)
     enable_testing()

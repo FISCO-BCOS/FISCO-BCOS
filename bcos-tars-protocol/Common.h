@@ -136,7 +136,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
         (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
     nodeInfo->setNodeProtocol(std::move(*bcosProtocolInfo));
     // recover system version(data version)
-    nodeInfo->setSystemVersion(_tarsNodeInfo.systemVersion);
+    nodeInfo->setCompatibilityVersion(_tarsNodeInfo.compatibilityVersion);
     return nodeInfo;
 }
 
@@ -179,8 +179,8 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
     tarsNodeInfo.protocolInfo.moduleID = protocol->protocolModuleID();
     tarsNodeInfo.protocolInfo.minVersion = protocol->minVersion();
     tarsNodeInfo.protocolInfo.maxVersion = protocol->maxVersion();
-    // write the systemVersion
-    tarsNodeInfo.systemVersion = _nodeInfo->systemVersion();
+    // write the compatibilityVersion
+    tarsNodeInfo.compatibilityVersion = _nodeInfo->compatibilityVersion();
     return tarsNodeInfo;
 }
 
@@ -243,6 +243,8 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     ledgerConfig->setBlockTxCountLimit(_ledgerConfig.blockTxCountLimit);
     ledgerConfig->setLeaderSwitchPeriod(_ledgerConfig.leaderSwitchPeriod);
     ledgerConfig->setSealerId(_ledgerConfig.sealerId);
+    ledgerConfig->setGasLimit(std::make_tuple(_ledgerConfig.gasLimit, _ledgerConfig.blockNumber));
+    ledgerConfig->setCompatibilityVersion(_ledgerConfig.compatibilityVersion);
     return ledgerConfig;
 }
 
@@ -269,6 +271,8 @@ inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr
     ledgerConfig.blockTxCountLimit = _ledgerConfig->blockTxCountLimit();
     ledgerConfig.leaderSwitchPeriod = _ledgerConfig->leaderSwitchPeriod();
     ledgerConfig.sealerId = _ledgerConfig->sealerId();
+    ledgerConfig.gasLimit = std::get<0>(_ledgerConfig->gasLimit());
+    ledgerConfig.compatibilityVersion = _ledgerConfig->compatibilityVersion();
 
     // set consensusNodeList
     ledgerConfig.consensusNodeList = toTarsConsensusNodeList(_ledgerConfig->consensusNodeList());

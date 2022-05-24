@@ -544,7 +544,7 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
         chainNode->appendServiceInfo(bcos::protocol::ServiceType::SCHEDULER, "SCHEDULER");
         chainNode->setIniConfig(iniConfig);
         chainNode->setNodeID(nodeID);
-        chainNode->setSystemVersion(10);
+        chainNode->setCompatibilityVersion(10);
         chainNode->setNodeType(bcos::protocol::NodeType::CONSENSUS_NODE);
         chainNode->setMicroService(true);
         chainNode->setNodeProtocol(protocolInfo);
@@ -568,7 +568,7 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
     BOOST_CHECK(firstNodeInfo->iniConfig() == iniConfig);
     BOOST_CHECK(firstNodeInfo->nodeID() == nodeID);
     BOOST_CHECK(firstNodeInfo->microService() == true);
-    BOOST_CHECK(firstNodeInfo->systemVersion() == 10);
+    BOOST_CHECK(firstNodeInfo->compatibilityVersion() == 10);
     BOOST_CHECK(firstNodeInfo->nodeType() == bcos::protocol::NodeType::CONSENSUS_NODE);
     BOOST_CHECK(firstNodeInfo->serviceName(bcos::protocol::ServiceType::SCHEDULER) == "SCHEDULER");
 

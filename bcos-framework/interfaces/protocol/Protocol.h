@@ -41,6 +41,13 @@ enum NodeType : uint32_t
     NODE_OUTSIDE_GROUP = 0x8,
 };
 
+enum NodeArchitectureType
+{
+    AIR = 0,
+    PRO = 1,
+    MAX = 2,
+};
+
 enum MessageType
 {
     HANDESHAKE = 0x100,         // 256
@@ -82,6 +89,7 @@ enum class Version : uint32_t
 };
 const std::string RC3_VERSION_STR = "3.0.0-rc3";
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
+const Version DEFAULT_VERSION = bcos::protocol::Version::RC3_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
