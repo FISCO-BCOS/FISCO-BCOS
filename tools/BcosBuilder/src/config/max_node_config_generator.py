@@ -11,6 +11,7 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
         self.chain_config = chain_config
         self.root_dir = "./generated"
         self.ini_tmp_config_file = "config.ini"
+        self.genesis_tmp_config_file = 'config.genesis'
 
     def generate_all_config(self, enforce_genesis_exists):
         """
@@ -47,13 +48,22 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
         return True
 
     def __generate_executor_config(self, max_node_config, group_config):
+        executor_genesis_content = self.generate_genesis_config(group_config, True)
         executor_config_content = self.generate_executor_config(
             group_config, max_node_config, max_node_config.executor_service.service_name)
+
         executor_dir = self.__get_and_generate_executor_base_path(
             max_node_config)
         executor_config_path = os.path.join(
             executor_dir, self.ini_tmp_config_file)
-        return self.store_config(executor_config_content, "executor ini", executor_config_path, max_node_config.node_service.service_name)
+        executor_genesis_path = os.path.join(
+            executor_dir, self.genesis_tmp_config_file)
+
+        ini_store = self.store_config(executor_config_content, "executor ini",
+                                      executor_config_path, max_node_config.node_service.service_name)
+        genesis_store = self.store_config(executor_genesis_content, "executor genesis",
+                                          executor_genesis_path, max_node_config.node_service.service_name)
+        return ini_store and genesis_store
 
     def __get_and_generate_executor_base_path(self, node_config):
         path = os.path.join(self.root_dir, node_config.agency_config.chain_id,

@@ -734,12 +734,6 @@ generate_common_ini() {
     ; min block generation time(ms)
     min_seal_time=500
 
-[executor]
-    ; use the wasm virtual machine or not
-    is_wasm=${wasm_mode}
-    is_auth_check=${auth_mode}
-    auth_admin_account=${auth_admin_account}
-
 [storage]
     data_path=data
     enable_cache=true
@@ -909,6 +903,11 @@ generate_genesis_config() {
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
+[executor]
+    ; use the wasm virtual machine or not
+    is_wasm=${wasm_mode}
+    is_auth_check=${auth_mode}
+    auth_admin_account=${auth_admin_account}
 EOF
 }
 

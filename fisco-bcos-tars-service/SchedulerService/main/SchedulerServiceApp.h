@@ -49,6 +49,7 @@ protected:
 
 private:
     std::string m_iniConfigPath;
+    std::string m_genesisConfigPath;
     bcos::BoostLogInitializer::Ptr m_logInitializer;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     bcos::initializer::ProtocolInitializer::Ptr m_protocolInitializer;
