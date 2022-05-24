@@ -1361,12 +1361,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                         if (error)
                         {
                             EXECUTOR_LOG(ERROR)
-                                << "Execute error: " << LOG_KV("msg", error->errorMessage())
+                                << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
                                 << LOG_KV("code", error->errorCode());
                             callback(std::move(error), nullptr);
                         }
                         else
                         {
+                            EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                             callback(std::move(error), std::move(messages[0]));
                         }
                     });
@@ -1387,12 +1388,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                 if (error)
                 {
-                    EXECUTOR_LOG(ERROR) << "Execute error: " << LOG_KV("msg", error->errorMessage())
+                    EXECUTOR_LOG(ERROR) << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
                                         << LOG_KV("code", error->errorCode());
                     callback(std::move(error), nullptr);
                 }
                 else
                 {
+                    EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                     callback(std::move(error), std::move(messages[0]));
                 }
             });
@@ -1669,7 +1671,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
         catch (std::exception& e)
         {
-            EXECUTOR_LOG(ERROR) << "Execute error: " << boost::diagnostic_information(e);
+            EXECUTOR_LOG(ERROR) << "executeTransactionsWithCriticals error: " << boost::diagnostic_information(e);
         }
     });
 
