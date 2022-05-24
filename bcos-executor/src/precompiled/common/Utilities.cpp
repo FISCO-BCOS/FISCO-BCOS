@@ -127,7 +127,7 @@ void bcos::precompiled::checkLengthValidate(
     }
 }
 
-void bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName,
+std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName,
     std::string& _keyField, const std::variant<std::string, std::vector<std::string>>& _valueField)
 {
     std::vector<std::string> fieldNameList;
@@ -186,6 +186,7 @@ void bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName
             std::string(" tableName length overflow ") +
             std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
     }
+    return valueField;
 }
 
 uint32_t bcos::precompiled::getFuncSelector(
@@ -365,7 +366,7 @@ s256 precompiled::externalTouchNewFile(
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
     auto codecResult = codec->encodeWithSig(
-        precompiled::FILE_SYSTEM_METHOD_TOUCH, std::string(_filePath), std::string(_fileType));
+        "touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response = externalRequest(
         _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
     s256 result;

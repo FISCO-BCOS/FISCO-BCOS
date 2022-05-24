@@ -36,6 +36,12 @@ class GenesisConfig:
             self.config, section, "gas_limit", "3000000000", False)
         self.compatibility_version = utilities.get_value(
             self.config, section, "compatibility_version", "3.0.0-rc4", False)
+        self.vm_type = utilities.get_item_value(
+            self.config, "vm_type", "evm", False)
+        self.auth_check = utilities.get_item_value(
+            self.config, "auth_check", False, False)
+        self.init_auth_address = utilities.get_item_value(
+            self.config, "init_auth_address", "", self.auth_check)
 
 
 class AgencyConfig:
@@ -193,14 +199,14 @@ class GroupConfig:
             "generated/", self.chain_id, self.group_id, "config.genesis")
         self.genesis_config_path = utilities.get_item_value(
             self.config, "genesis_config_path", default_genesis_config_path, False, self.desc)
-        self.vm_type = utilities.get_item_value(
-            self.config, "vm_type", "evm", False, self.desc)
+        # self.vm_type = utilities.get_item_value(
+        #     self.config, "vm_type", "evm", False, self.desc)
         self.sm_crypto = utilities.get_item_value(
             self.config, "sm_crypto", False, False, self.desc)
-        self.auth_check = utilities.get_item_value(
-            self.config, "auth_check", False, False, self.desc)
-        self.init_auth_address = utilities.get_item_value(
-            self.config, "init_auth_address", "", self.auth_check, self.desc)
+        # self.auth_check = utilities.get_item_value(
+        #     self.config, "auth_check", False, False, self.desc)
+        # self.init_auth_address = utilities.get_item_value(
+        #     self.config, "init_auth_address", "", self.auth_check, self.desc)
         self.genesis_config = GenesisConfig(self.config)
         self.node_list = []
 

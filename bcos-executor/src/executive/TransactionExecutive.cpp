@@ -357,6 +357,29 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         }
     }
 
+    // Create table
+    try
+    {
+        m_storageWrapper->createTable(tableName, STORAGE_VALUE);
+        EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
+                            << LOG_KV("sender", callParameters->senderAddress);
+        if (blockContext->isAuthCheck())
+        {
+            // Create auth table
+            creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress);
+        }
+    }
+    catch (exception const& e)
+    {
+        revert();
+        callParameters->status = (int32_t)TransactionStatus::ContractAddressAlreadyUsed;
+        callParameters->type = CallParameters::REVERT;
+        callParameters->message = e.what();
+        EXECUTIVE_LOG(ERROR) << LOG_DESC("createTable failed") << callParameters->message
+                             << LOG_KV("tableName", tableName);
+        return {nullptr, std::move(callParameters)};
+    }
+
     if (blockContext->isWasm())
     {
         // Liquid
@@ -397,32 +420,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
         extraData->data = std::move(params);
     }
-    else
-    {
-        // Solidity
-        // Create the table
-        try
-        {
-            m_storageWrapper->createTable(tableName, STORAGE_VALUE);
-            EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
-                                << LOG_KV("sender", callParameters->senderAddress);
-            if (blockContext->isAuthCheck())
-            {
-                // Create auth table
-                creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress);
-            }
-        }
-        catch (exception const& e)
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::ContractAddressAlreadyUsed;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = e.what();
-            EXECUTIVE_LOG(ERROR) << LOG_DESC("createTable failed") << callParameters->message
-                                 << LOG_KV("tableName", tableName);
-            return {nullptr, std::move(callParameters)};
-        }
-    }
+
     auto hostContext =
         std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);
     return {std::move(hostContext), std::move(extraData)};
@@ -458,6 +456,8 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             EXECUTIVE_LOG(ERROR) << buildCallResults->message << LOG_KV("newAddress", newAddress);
             return buildCallResults;
         }
+        /// create contract table
+        m_storageWrapper->createTable(newAddress, STORAGE_VALUE);
         /// set code field
         Entry entry = {};
         entry.importFields({codeString});
@@ -477,6 +477,9 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             EXECUTIVE_LOG(ERROR) << buildCallResults->message << LOG_KV("newAddress", newAddress);
             return buildCallResults;
         }
+
+        /// create link table
+        m_storageWrapper->createTable(tableName, STORAGE_VALUE);
 
         /// create code index contract
         auto codeAddress = getContractTableName(newAddress, false);
@@ -1117,6 +1120,8 @@ void TransactionExecutive::creatAuthTable(
 bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
     std::string_view _sender, std::string_view _type, int64_t gasLeft)
 {
+    /// this method only write bfs metadata, not create final table
+    /// you should create locally, after external call successfully
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
     auto response =
         externalTouchNewFile(shared_from_this(), _origin, _sender, _absoluteDir, _type, gasLeft);
