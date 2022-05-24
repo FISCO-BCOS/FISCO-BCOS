@@ -128,20 +128,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
-        if (true == m_nodeConfig->storageSecurityEnable())
-        {
-            storage =
-                StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption());
-            schedulerStorage = storage;
-            consensusStorage = StorageInitializer::build(
-                consensusStoragePath, m_protocolInitializer->dataEncryption());
-        }
-        else
-        {
-            storage = StorageInitializer::build(storagePath, nullptr);
-            schedulerStorage = storage;
-            consensusStorage = StorageInitializer::build(consensusStoragePath, nullptr);
-        }
+        // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
+        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption());
+        schedulerStorage = storage;
+        consensusStorage = StorageInitializer::build(
+            consensusStoragePath, m_protocolInitializer->dataEncryption());
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {

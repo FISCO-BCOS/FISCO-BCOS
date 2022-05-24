@@ -40,8 +40,8 @@ using namespace std;
 
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
-RocksDBStorage::RocksDBStorage(
-    std::unique_ptr<rocksdb::DB>&& db, const bcos::security::DataEncryptInterface::Ptr dataEncryption)
+RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
+    const bcos::security::DataEncryptInterface::Ptr dataEncryption)
   : m_db(std::move(db)), m_dataEncryption(dataEncryption)
 {
     m_writeBatch = std::make_shared<WriteBatch>();
@@ -195,7 +195,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                                 if (false == v.empty() && nullptr != m_dataEncryption)
                                     v = m_dataEncryption->decrypt(v);
 
-                                entries[i]->set(v);
+                                entries[i]->set(std::move(v));
                             }
                             else
                             {
@@ -266,7 +266,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
             if (false == value.empty() && nullptr != m_dataEncryption)
                 value = m_dataEncryption->encrypt(value);
 
-            status = m_db->Put(options, dbKey, value);
+            status = m_db->Put(options, dbKey, std::move(value));
         }
 
         if (!status.ok())
@@ -327,7 +327,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                     if (false == value.empty() && nullptr != m_dataEncryption)
                         value = m_dataEncryption->encrypt(value);
 
-                    auto status = m_writeBatch->Put(dbKey, value);
+                    auto status = m_writeBatch->Put(dbKey, std::move(value));
                 }
                 return true;
             });

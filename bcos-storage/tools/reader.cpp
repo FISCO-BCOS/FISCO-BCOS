@@ -103,6 +103,7 @@ int main(int argc, const char* argv[])
     {
         configPath = params["c"].as<std::string>();
     }
+
     std::string genesisFilePath("./config.genesis");
     if (params.count("genesis"))
     {
@@ -112,21 +113,18 @@ int main(int argc, const char* argv[])
     {
         genesisFilePath = params["g"].as<std::string>();
     }
+
     if (!boost::filesystem::exists(configPath))
     {
         std::cout << "config \'" << configPath << "\' not found!";
-        exit(0);
-    }
-    if (!boost::filesystem::exists(genesisFilePath))
-    {
-        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
         exit(0);
     }
 
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
     nodeConfig->loadConfig(configPath);
-    nodeConfig->loadGenesisConfig(genesisFilePath);
+    if (true == boost::filesystem::exists(genesisFilePath))
+        nodeConfig->loadGenesisConfig(genesisFilePath);
 
     bcos::security::DataEncryption::Ptr dataEncryption =
         std::make_shared<bcos::security::DataEncryption>(nodeConfig);

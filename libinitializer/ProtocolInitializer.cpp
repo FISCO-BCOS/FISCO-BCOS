@@ -61,6 +61,9 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     {
         m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
         m_dataEncryption->init();
+
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "storage_security.enable = true, init data encryption success");
     }
 
     // create the block factory
