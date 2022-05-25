@@ -382,7 +382,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         if (false == isValidPort(m_storageSecurityKeyCenterPort))
         {
             BOOST_THROW_EXCEPTION(
-                InvalidPort() << errinfo_comment(
+                InvalidConfig() << errinfo_comment(
                     "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
         }
 
@@ -391,7 +391,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         if (true == m_storageSecurityCipherDataKey.empty())
         {
             BOOST_THROW_EXCEPTION(
-                MissingField() << errinfo_comment("Please provide cipher_data_key!"));
+                InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
         }
     }
 }

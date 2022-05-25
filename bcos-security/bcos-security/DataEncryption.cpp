@@ -89,8 +89,7 @@ std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<byt
                         << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
-    // LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
-    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
+
     return decFileBytes;
 }
 
@@ -121,8 +120,7 @@ std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
                         << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
-    // LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
-    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
+
     return decFileBytes;
 }
 

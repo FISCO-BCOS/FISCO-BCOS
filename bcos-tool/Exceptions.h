@@ -27,7 +27,5 @@ namespace tool
 DERIVE_BCOS_EXCEPTION(LedgerConfigFetcherException);
 DERIVE_BCOS_EXCEPTION(InvalidConfig);
 DERIVE_BCOS_EXCEPTION(InvalidVersion);
-DERIVE_BCOS_EXCEPTION(InvalidPort);
-DERIVE_BCOS_EXCEPTION(MissingField);
 }  // namespace tool
 }  // namespace bcos

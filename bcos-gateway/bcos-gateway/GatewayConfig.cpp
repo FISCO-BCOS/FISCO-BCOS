@@ -14,8 +14,6 @@ using namespace bcos;
 using namespace security;
 using namespace gateway;
 
-#define MAX_BLOCK_LIMIT 5000
-
 bool GatewayConfig::isValidPort(int port)
 {
     if (port <= 1024 || port > 65535)

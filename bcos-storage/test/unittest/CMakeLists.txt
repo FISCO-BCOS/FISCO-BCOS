@@ -30,9 +30,9 @@ endif()
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 
-find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
+find_package(Boost CONFIG QUIET REQUIRED unit_test_framework log)
 
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} ${SECURITY_TARGET})
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework Boost::log ${STORAGE_TARGET} ${SECURITY_TARGET})
 add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
