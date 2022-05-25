@@ -60,7 +60,7 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     size_t validCount = 0;
     for (auto& info : pageInfo)
     {
-        auto [error, data] = getData(tableView, info.startKey, true);
+        auto [error, data] = getData(tableView, info.getStartKey(), true);
         boost::ignore_unused(error);
         assert(!error);
         auto& page = std::get<0>(data.value()->data);

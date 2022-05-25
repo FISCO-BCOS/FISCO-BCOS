@@ -164,6 +164,13 @@ public:
         // m_dirty = true;
     }
 
+    template <typename T>
+    void setPointer(std::shared_ptr<T>&& value)
+    {
+        m_size = value->size();
+        m_value = value;
+    }
+
     Status status() const { return m_status; }
 
     void setStatus(Status status)
@@ -238,8 +245,8 @@ public:
         }
         else
         {
-            STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
-                               << toHex(key) << " | " << (int)m_status;
+            STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | " << toHex(key)
+                               << " | " << (int)m_status;
         }
         return entryHash;
     }
@@ -271,11 +278,12 @@ private:
         return view;
     }
 
-    ValueType m_value = "";           // should serialization
+    ValueType m_value;           // should serialization
     int32_t m_size = 0;               // no need to serialization
     Status m_status = Status::EMPTY;  // should serialization
     // bool m_dirty = false;              // no need to serialization
 };
+
 }  // namespace bcos::storage
 
 namespace boost::serialization

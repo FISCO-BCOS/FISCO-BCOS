@@ -127,27 +127,94 @@ public:
 
     void rollback(const Recoder& recoder) override;
 
-    struct PageInfo
-    {
-        // startKey is not involved in comparison
-        std::string startKey;
-        std::string endKey;
-        uint16_t count = 0;
-        uint16_t size = 0;
-        bool operator<(const PageInfo& rhs) const { return endKey < rhs.endKey; }
+    class PageInfo
+    {  // all methods is not thread safe
+    public:
+        bool operator<(const PageInfo& rhs) const { return m_data->endKey < rhs.m_data->endKey; }
+        PageInfo() {}
+        PageInfo(std::string _startKey, std::string _endKey, uint16_t _count, uint16_t _size)
+          : m_data(
+                std::make_shared<PageData>(std::move(_startKey), std::move(_endKey), _count, _size))
+        {}
+        PageInfo(PageInfo&&) = default;
+        PageInfo& operator=(PageInfo&&) = default;
+        PageInfo(const PageInfo& p) = default;
+        PageInfo& operator=(const PageInfo& p) = default;
+
+        void setStartKey(std::string key)
+        {
+            prepareMyData();
+            m_data->startKey = std::move(key);
+        }
+        std::string getStartKey() const { return m_data->startKey; }
+        void setEndKey(std::string key)
+        {
+            prepareMyData();
+            m_data->endKey = std::move(key);
+        }
+        std::string getEndKey() const { return m_data->endKey; }
+        void setCount(uint16_t _count)
+        {
+            prepareMyData();
+            m_data->count = _count;
+        }
+        uint16_t getCount() const { return m_data->count; }
+        void setSize(uint16_t _size)
+        {
+            prepareMyData();
+            m_data->size = _size;
+        }
+        uint16_t getSize() const { return m_data->size; }
 
     private:
+        void prepareMyData()
+        {
+            if (m_data.use_count() != 1)
+            {
+                m_data = std::make_shared<PageData>(
+                    m_data->startKey, m_data->endKey, m_data->count, m_data->size);
+            }
+        }
+        struct PageData
+        {
+            PageData() {}
+            PageData(std::string _startKey, std::string _endKey, uint16_t _count, uint16_t _size)
+              : startKey(std::move(_startKey)),
+                endKey(std::move(_endKey)),
+                count(_count),
+                size(_size)
+            {}
+            // startKey is not involved in comparison
+            std::string startKey;
+            std::string endKey;
+            uint16_t count = 0;
+            uint16_t size = 0;
+        };
+        std::shared_ptr<PageData> m_data = nullptr;
         friend class boost::serialization::access;
+
         template <class Archive>
-        void serialize(Archive& ar, const unsigned int version)
+        void save(Archive& ar, const unsigned int version) const
         {
             std::ignore = version;
-            ar& startKey;
-            ar& endKey;
-            ar& count;
-            ar& size;
+            ar & m_data->startKey;
+            ar & m_data->endKey;
+            ar & m_data->count;
+            ar & m_data->size;
         }
+        template <class Archive>
+        void load(Archive& ar, const unsigned int version)
+        {
+            std::ignore = version;
+            m_data = std::make_shared<PageData>();
+            ar & m_data->startKey;
+            ar & m_data->endKey;
+            ar & m_data->count;
+            ar & m_data->size;
+        }
+        BOOST_SERIALIZATION_SPLIT_MEMBER()
     };
+
     struct TableMeta
     {
         TableMeta() {}
@@ -181,7 +248,7 @@ public:
 
         auto lower_bound(std::string_view key)
         {
-            return pages.lower_bound(PageInfo{"", std::string(key)});
+            return pages.lower_bound(PageInfo("", std::string(key), 0, 0));
         }
         std::optional<std::string> getPageKeyNoLock(std::string_view key)
         {
@@ -192,13 +259,13 @@ public:
             auto it = lower_bound(key);
             if (it != pages.end())
             {
-                return it->startKey;
+                return it->getStartKey();
             }
-            if (pages.rbegin()->startKey.empty())
+            if (pages.rbegin()->getStartKey().empty())
             {  // page is empty because of rollback
                 return std::nullopt;
             }
-            return pages.rbegin()->startKey;
+            return pages.rbegin()->getStartKey();
         }
 
         std::optional<std::string> getNextPageKeyNoLock(std::string_view key)
@@ -207,10 +274,10 @@ public:
             {
                 return std::nullopt;
             }
-            auto it = pages.upper_bound(PageInfo{"", std::string(key)});
+            auto it = pages.upper_bound(PageInfo("", std::string(key), 0, 0));
             if (it != pages.end())
             {
-                return it->startKey;
+                return it->getStartKey();
             }
             return std::nullopt;
         }
@@ -223,21 +290,22 @@ public:
         }
         void insertPageInfoNoLock(PageInfo&& pageInfo)
         {
-            assert(!pageInfo.startKey.empty());
-            assert(!pageInfo.endKey.empty());
-            if (pageInfo.startKey.empty() || pageInfo.endKey.empty())
+            assert(!pageInfo.getStartKey().empty());
+            assert(!pageInfo.getEndKey().empty());
+            if (pageInfo.getStartKey().empty() || pageInfo.getEndKey().empty())
             {
                 KeyPage_LOG(FATAL) << LOG_DESC("insert empty pageInfo");
                 return;
             }
-            auto it = lower_bound(pageInfo.endKey);
+            auto it = lower_bound(pageInfo.getEndKey());
             auto newIt = pages.insert(it, std::move(pageInfo));
             if (c_fileLogLevel >= TRACE)
             {
                 KeyPage_LOG(TRACE)
-                    << LOG_DESC("insert new pageInfo") << LOG_KV("startKey", toHex(newIt->startKey))
-                    << LOG_KV("endKey", toHex(newIt->endKey)) << LOG_KV("valid", newIt->count)
-                    << LOG_KV("size", newIt->size);
+                    << LOG_DESC("insert new pageInfo")
+                    << LOG_KV("startKey", toHex(newIt->getStartKey()))
+                    << LOG_KV("endKey", toHex(newIt->getEndKey()))
+                    << LOG_KV("valid", newIt->getCount()) << LOG_KV("size", newIt->getSize());
             }
         }
         std::pair<std::optional<std::string>, std::unique_lock<std::shared_mutex>> updatePageInfo(
@@ -265,31 +333,33 @@ public:
                 //         << LOG_KV("size", node.value().size) << LOG_KV("newSize", size);
                 // }
                 // count == 0, means the page is empty, the rage is empty
-                if (node.value().startKey != startKey)
+                if (node.value().getStartKey() != startKey)
                 {
                     // if (c_fileLogLevel >= TRACE)
                     // { // FIXME: this log is only for debug, comment it when release
                     //     KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
-                    //                        << LOG_KV("startKey", toHex(node.value().startKey))
+                    //                        << LOG_KV("startKey",
+                    //                        toHex(node.value().getStartKey()))
                     //                        << LOG_KV("newStartKey", toHex(startKey))
-                    //                        << LOG_KV("endKey", toHex(node.value().endKey));
+                    //                        << LOG_KV("endKey", toHex(node.value().getEndKey()));
                     // }
-                    oldStartKey = node.value().startKey;
-                    node.value().startKey = startKey;
+                    oldStartKey = node.value().getStartKey();
+                    node.value().setStartKey(startKey);
                 }
-                if (node.value().endKey != endKey)
+                if (node.value().getEndKey() != endKey)
                 {
                     // if (c_fileLogLevel >= TRACE)
                     // {  // FIXME: this log is only for debug, comment it when release
                     //     KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
                     //                        << LOG_KV("endKey", toHex(node.value().endKey))
                     //                        << LOG_KV("newEndKey", toHex(endKey))
-                    //                        << LOG_KV("startKey", toHex(node.value().startKey));
+                    //                        << LOG_KV("startKey",
+                    //                        toHex(node.value().getStartKey()));
                     // }
-                    node.value().endKey = endKey;
+                    node.value().setEndKey(endKey);
                 }
-                node.value().count = count;
-                node.value().size = size;
+                node.value().setCount(count);
+                node.value().setSize(size);
                 pages.insert(std::move(node));
             }
             else
@@ -305,7 +375,7 @@ public:
         void deletePageInfoNoLock(std::string_view endkey)
         {  // remove current page info and update next page start key
             decltype(pages)::iterator it = lower_bound(endkey);
-            if (it != pages.end() && it->endKey == endkey)
+            if (it != pages.end() && it->getEndKey() == endkey)
             {
                 pages.erase(it);
             }
@@ -327,9 +397,9 @@ public:
             for (auto& pageInfo : meta.pages)
             {
                 os << "{"
-                   << "startKey=" << toHex(pageInfo.startKey)
-                   << ",endKey=" << toHex(pageInfo.endKey) << ",count=" << pageInfo.count
-                   << ",size=" << pageInfo.size << "}";
+                   << "startKey=" << toHex(pageInfo.getStartKey())
+                   << ",endKey=" << toHex(pageInfo.getEndKey()) << ",count=" << pageInfo.getCount()
+                   << ",size=" << pageInfo.getSize() << "}";
             }
             os << "]";
             return os;
@@ -356,11 +426,12 @@ public:
             std::ignore = version;
             uint32_t size = 0;
             ar& size;
+            auto iter = pages.begin();
             for (size_t i = 0; i < size; ++i)
             {
                 PageInfo info;
                 ar& info;
-                pages.insert(std::move(info));
+                iter = pages.emplace_hint(iter, std::move(info));
             }
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
@@ -794,6 +865,7 @@ public:
             uint32_t count = 0;
             ar& count;
             m_validCount = count;
+            auto iter = entries.begin();
             for (size_t i = 0; i < m_validCount; ++i)
             {
                 std::string key;
@@ -802,13 +874,12 @@ public:
                 ar& len;
                 m_size += len;
                 m_size += key.size();
-                std::vector<uint8_t> value(len, 0);
-                ar.load_binary(value.data(), value.size());
+                auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
+                ar.load_binary(value->data(), value->size());
                 Entry e;
-                e.set(std::move(value));
-                // e.setDirty(false);
+                e.setPointer(std::move(value));
                 e.setStatus(Entry::Status::NORMAL);
-                entries.emplace(std::move(key), std::move(e));
+                iter = entries.emplace_hint(iter, std::move(key), std::move(e));
             }
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
@@ -988,11 +1059,7 @@ private:
         KeyPageStorage::TableMeta& meta, Page&& page)
     {
         // prepare page info
-        PageInfo info;
-        info.startKey = page.startKey();
-        info.endKey = page.endKey();
-        info.count = page.validCount();
-        info.size = page.size();
+        PageInfo info(page.startKey(), page.endKey(), page.validCount(), page.size());
 
         // insert page
         Data d;
