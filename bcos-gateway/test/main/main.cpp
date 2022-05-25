@@ -72,7 +72,7 @@ int main(int argc, const char** argv)
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
             frontService->asyncGetGroupNodeInfo(
-                [frontService](
+                [frontService, keyFactory](
                     Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
                     (void)_error;
                     if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())

@@ -41,7 +41,6 @@ public:
         std::string enNodeKey;
     };
 
-
     /**
      * @brief: loads configuration items from the config.ini
      * @param _configPath: config.ini path

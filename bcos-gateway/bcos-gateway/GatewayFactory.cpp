@@ -3,6 +3,7 @@
  *  @date 2021-05-17
  */
 
+#include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -14,15 +15,18 @@
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 
 using namespace bcos::rpc;
 using namespace bcos;
+using namespace security;
 using namespace gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
+using namespace bcos::boostssl;
 
 // register the function fetch pub hex from the cert
 void GatewayFactory::initCert2PubHexHandler()
@@ -127,8 +131,26 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
    */
-    auto keyContent =
-        readContentsToString(boost::filesystem::path(_certConfig.nodeKey));  // node.key content
+    std::shared_ptr<bytes> keyContent;
+    if (!_certConfig.nodeKey.empty())
+    {
+        try
+        {
+            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                keyContent = readContents(boost::filesystem::path(_certConfig.nodeKey));
+            else
+                keyContent = m_dataEncrypt->decryptFile(_certConfig.nodeKey);
+        }
+        catch (std::exception& e)
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                << LOG_KV("file", _certConfig.nodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + _certConfig.nodeKey));
+        }
+    }
     if (!keyContent || keyContent->empty())
     {
         GATEWAY_FACTORY_LOG(ERROR)
@@ -185,16 +207,57 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
-    auto keyContent =
-        readContentsToString(boost::filesystem::path(_smCertConfig.nodeKey));  // node.key content
-
+    std::shared_ptr<bytes> keyContent;
+    if (!_smCertConfig.nodeKey.empty())
+    {
+        try
+        {
+            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
+            else
+                keyContent = m_dataEncrypt->decryptFile(_smCertConfig.nodeKey);
+        }
+        catch (std::exception& e)
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                << LOG_KV("file", _smCertConfig.nodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + _smCertConfig.nodeKey));
+        }
+    }
     boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
+    std::shared_ptr<bytes> enNodeKeyContent;
+    if (!_smCertConfig.enNodeKey.empty())
+    {
+        try
+        {
+            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
+            else
+                enNodeKeyContent = m_dataEncrypt->decryptFile(_smCertConfig.enNodeKey);
+        }
+        catch (std::exception& e)
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                << LOG_KV("file", _smCertConfig.enNodeKey);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of key: " + _smCertConfig.enNodeKey));
+        }
+    }
+
     SSL_CTX_use_enc_certificate_file(
         sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM);
-    if (SSL_CTX_use_enc_PrivateKey_file(
-            sslContext->native_handle(), _smCertConfig.enNodeKey.c_str(), SSL_FILETYPE_PEM) <= 0)
+
+    std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
+
+    if (SSL_CTX_use_enc_PrivateKey(sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <=
+        0)
     {
         GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey_file error");
         BOOST_THROW_EXCEPTION(

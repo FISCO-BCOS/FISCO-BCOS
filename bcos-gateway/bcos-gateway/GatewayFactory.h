@@ -11,6 +11,7 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <boost/asio/ssl.hpp>
 
 namespace bcos
@@ -21,8 +22,11 @@ class GatewayFactory
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
-    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName)
-      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName)
+    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
+        bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
+      : m_chainID(_chainID),
+        m_rpcServiceName(_rpcServiceName),
+        m_dataEncrypt(_dataEncrypt)
     {
         initCert2PubHexHandler();
         initSSLContextPubHexHandler();
@@ -54,7 +58,7 @@ public:
 
     /**
      * @brief: construct Gateway
-     * @param _configPath: config.ini path
+     * @param _configPath: config.ini paths
      * @return void
      */
     Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion,
@@ -86,6 +90,8 @@ private:
 private:
     std::string m_chainID;
     std::string m_rpcServiceName;
+
+    bcos::security::DataEncryptInterface::Ptr m_dataEncrypt{nullptr};
 };
 }  // namespace gateway
 }  // namespace bcos

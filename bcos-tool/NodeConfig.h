@@ -186,6 +186,11 @@ public:
     bool enableFailOver() const { return m_enableFailOver; }
     std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
+    bool storageSecurityEnable() const { return m_storageSecurityEnable; }
+    std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
+    unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
+    std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -194,6 +199,7 @@ protected:
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
@@ -218,6 +224,8 @@ private:
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
+    bool isValidPort(int port);
+
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
@@ -239,6 +247,12 @@ private:
 
     // for security
     std::string m_privateKeyPath;
+
+    // storage security configuration
+    bool m_storageSecurityEnable;
+    std::string m_storageSecurityKeyCenterIp;
+    unsigned short m_storageSecurityKeyCenterPort;
+    std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
     std::string m_consensusType;

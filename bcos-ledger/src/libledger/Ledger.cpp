@@ -175,7 +175,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // hash 2 receipts
-
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
@@ -201,7 +200,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                     [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
             }
         });
-
 
     LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
@@ -1366,6 +1364,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
                      << LOG_KV("compatibilityVersion", _compatibilityVersion)
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
                      << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
+
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
