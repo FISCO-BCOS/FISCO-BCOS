@@ -57,12 +57,13 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadSealerConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
-    loadExecutorConfig(_pt);
 }
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     loadLedgerConfig(_genesisConfig);
+    loadExecutorConfig(_genesisConfig);
+    generateGenesisData();
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -507,7 +508,6 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                          << LOG_KV("minSealTime", m_minSealTime)
                          << LOG_KV("compatibilityVersion",
                                 (bcos::protocol::Version)m_compatibilityVersion);
-    generateGenesisData();
 }
 
 ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
@@ -569,13 +569,17 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
 void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
+    std::string executorConfig = "";
     if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
     {
         versionData = m_compatibilityVersionStr + "-";
+        std::stringstream ss;
+        ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
+        executorConfig = ss.str();
     }
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
-      << m_txGasLimit << "-" << versionData;
+      << m_txGasLimit << "-" << versionData << executorConfig;
     for (auto node : m_ledgerConfig->consensusNodeList())
     {
         s << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
@@ -585,11 +589,11 @@ void NodeConfig::generateGenesisData()
                          << LOG_KV("genesisData", m_genesisData);
 }
 
-void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _pt)
+void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisConfig)
 {
-    m_isWasm = _pt.get<bool>("executor.is_wasm", false);
-    m_isAuthCheck = _pt.get<bool>("executor.is_auth_check", false);
-    m_authAdminAddress = _pt.get<std::string>("executor.auth_admin_account", "");
+    m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
+    m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+    m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress);

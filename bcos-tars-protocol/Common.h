@@ -136,7 +136,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
         (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
     nodeInfo->setNodeProtocol(std::move(*bcosProtocolInfo));
     // recover system version(data version)
-    nodeInfo->setSystemVersion(_tarsNodeInfo.systemVersion);
+    nodeInfo->setCompatibilityVersion(_tarsNodeInfo.compatibilityVersion);
     return nodeInfo;
 }
 
@@ -179,8 +179,8 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
     tarsNodeInfo.protocolInfo.moduleID = protocol->protocolModuleID();
     tarsNodeInfo.protocolInfo.minVersion = protocol->minVersion();
     tarsNodeInfo.protocolInfo.maxVersion = protocol->maxVersion();
-    // write the systemVersion
-    tarsNodeInfo.systemVersion = _nodeInfo->systemVersion();
+    // write the compatibilityVersion
+    tarsNodeInfo.compatibilityVersion = _nodeInfo->compatibilityVersion();
     return tarsNodeInfo;
 }
 

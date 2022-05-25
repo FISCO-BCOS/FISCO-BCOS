@@ -62,56 +62,57 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
     if (funcSelector == name2Selector[CRYPTO_METHOD_SM3_STR])
     {
         bytes inputData;
-        codec->decode(paramData, inputData);
+        codec.decode(paramData, inputData);
 
         auto sm3Hash = crypto::sm3Hash(ref(inputData));
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: sm3")
                                << LOG_KV("input", toHexString(inputData))
                                << LOG_KV("result", toHexString(sm3Hash));
-        callResult->setExecResult(codec->encode(codec::toString32(sm3Hash)));
+        callResult->setExecResult(codec.encode(codec::toString32(sm3Hash)));
     }
     else if (funcSelector == name2Selector[CRYPTO_METHOD_KECCAK256_STR])
     {
         bytes inputData;
-        codec->decode(paramData, inputData);
+        codec.decode(paramData, inputData);
         auto keccak256Hash = crypto::keccak256Hash(ref(inputData));
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: keccak256")
                                << LOG_KV("input", toHexString(inputData))
                                << LOG_KV("result", toHexString(keccak256Hash));
-        callResult->setExecResult(codec->encode(codec::toString32(keccak256Hash)));
+        callResult->setExecResult(codec.encode(codec::toString32(keccak256Hash)));
     }
     else if (funcSelector == name2Selector[CRYPTO_METHOD_SM2_VERIFY_STR])
     {
-        sm2Verify(paramData, callResult, codec);
+        sm2Verify(_executive, paramData, callResult);
     }
     else
     {
         // no defined function
         PRECOMPILED_LOG(ERROR) << LOG_DESC("CryptoPrecompiled: undefined method")
                                << LOG_KV("funcSelector", std::to_string(funcSelector));
-        callResult->setExecResult(codec->encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
+        callResult->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
     }
     gasPricer->updateMemUsed(callResult->m_execResult.size());
     callResult->setGas(gasPricer->calTotalGas());
     return callResult;
 }
 
-void CryptoPrecompiled::sm2Verify(
-    bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult, CodecWrapper::Ptr _codec)
+void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult)
 {
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     try
     {
         bytes message;
         bytes sm2Sign;
-        _codec->decode(_paramData, message, sm2Sign);
+        codec.decode(_paramData, message, sm2Sign);
         auto msgHash = HashType(message.data(), message.size());
         Address account;
         bool verifySuccess = true;
@@ -120,7 +121,7 @@ void CryptoPrecompiled::sm2Verify(
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_DESC("CryptoPrecompiled: sm2Verify failed for recover public key failed");
-            _callResult->setExecResult(_codec->encode(false, account));
+            _callResult->setExecResult(codec.encode(false, account));
             return;
         }
 
@@ -130,13 +131,13 @@ void CryptoPrecompiled::sm2Verify(
                                << LOG_KV("verifySuccess", verifySuccess)
                                << LOG_KV("publicKey", publicKey->hex())
                                << LOG_KV("account", account);
-        _callResult->setExecResult(_codec->encode(verifySuccess, account));
+        _callResult->setExecResult(codec.encode(verifySuccess, account));
     }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(WARNING) << LOG_DESC("CryptoPrecompiled: sm2Verify exception")
                                  << LOG_KV("e", boost::diagnostic_information(e));
         Address emptyAccount;
-        _callResult->setExecResult(_codec->encode(false, emptyAccount));
+        _callResult->setExecResult(codec.encode(false, emptyAccount));
     }
 }

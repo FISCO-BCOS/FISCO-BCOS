@@ -118,9 +118,6 @@ public:
 
     void decodeScale(codec::scale::ScaleDecoderStream&) const { return; }
 
-    VMType getVMType() const { return m_type; }
-    void setVMType(bool _isWasm) { m_type = _isWasm ? VMType::WASM : VMType::EVM; }
-
 private:
     VMType m_type = VMType::UNDEFINED;
     crypto::Hash::Ptr m_hash;

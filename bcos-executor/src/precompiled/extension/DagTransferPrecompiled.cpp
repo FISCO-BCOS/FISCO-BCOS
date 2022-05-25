@@ -72,13 +72,13 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
     bytesConstRef data = getParamData(_param);
 
     std::vector<std::string> results;
-    auto codec = std::make_shared<CodecWrapper>(m_hashImpl, _isWasm);
+    auto codec = CodecWrapper(m_hashImpl, _isWasm);
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
         std::string user;
         u256 amount;
-        codec->decode(data, user, amount);
+        codec.decode(data, user, amount);
         // if params is invalid , parallel process can be done
         if (!user.empty())
         {
@@ -89,7 +89,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
     {  // userSave(string,uint256)
         std::string user;
         u256 amount;
-        codec->decode(data, user, amount);
+        codec.decode(data, user, amount);
         // if params is invalid , parallel process can be done
         if (!user.empty())
         {
@@ -100,7 +100,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
     {  // userDraw(string,uint256)
         std::string user;
         u256 amount;
-        codec->decode(data, user, amount);
+        codec.decode(data, user, amount);
         // if params is invalid , parallel process can be done
         if (!user.empty())
         {
@@ -112,7 +112,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
         // userTransfer(string,string,uint256)
         std::string fromUser, toUser;
         u256 amount;
-        codec->decode(data, fromUser, toUser, amount);
+        codec.decode(data, fromUser, toUser, amount);
         // if params is invalid , parallel process can be done
         if (!fromUser.empty() && !toUser.empty())
         {
@@ -180,9 +180,8 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
     std::string user;
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_data, user, amount);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_data, user, amount);
 
     int ret;
     std::string strErrorMsg;
@@ -220,7 +219,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret));
+    _out = codec.encode(u256(ret));
 }
 
 void DagTransferPrecompiled::userSaveCall(
@@ -231,9 +230,8 @@ void DagTransferPrecompiled::userSaveCall(
     std::string user;
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_data, user, amount);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_data, user, amount);
 
     int ret;
     u256 balance;
@@ -297,7 +295,7 @@ void DagTransferPrecompiled::userSaveCall(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret));
+    _out = codec.encode(u256(ret));
 }
 
 void DagTransferPrecompiled::userDrawCall(
@@ -307,9 +305,8 @@ void DagTransferPrecompiled::userDrawCall(
     std::string user;
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_data, user, amount);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_data, user, amount);
 
     u256 balance;
     int ret;
@@ -364,7 +361,7 @@ void DagTransferPrecompiled::userDrawCall(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret));
+    _out = codec.encode(u256(ret));
 }
 
 void DagTransferPrecompiled::userBalanceCall(
@@ -372,9 +369,8 @@ void DagTransferPrecompiled::userBalanceCall(
 {
     std::string user;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_data, user);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_data, user);
 
     u256 balance;
     int ret;
@@ -414,7 +410,7 @@ void DagTransferPrecompiled::userBalanceCall(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret), balance);
+    _out = codec.encode(u256(ret), balance);
 }
 
 void DagTransferPrecompiled::userTransferCall(
@@ -422,11 +418,10 @@ void DagTransferPrecompiled::userTransferCall(
     std::string const&, bytes& _out)
 {
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     std::string fromUser, toUser;
     u256 amount;
-    codec->decode(_data, fromUser, toUser, amount);
+    codec.decode(_data, fromUser, toUser, amount);
 
     u256 fromUserBalance, newFromUserBalance;
     u256 toUserBalance, newToUserBalance;
@@ -520,5 +515,5 @@ void DagTransferPrecompiled::userTransferCall(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret));
+    _out = codec.encode(u256(ret));
 }

@@ -31,6 +31,7 @@ struct PrecompiledExecResult
     PrecompiledExecResult() = default;
     PrecompiledExecResult(const executor::CallParameters::UniquePtr& _callParameters)
       : m_sender(_callParameters->senderAddress),
+        m_codeAddress(_callParameters->codeAddress),
         m_to(_callParameters->receiveAddress),
         m_origin(_callParameters->origin),
         m_input(ref(_callParameters->data)),
@@ -65,6 +66,7 @@ struct PrecompiledExecResult
     }
 
     std::string m_sender;  // common field, readable format
+    std::string m_codeAddress; // different to 'to', this field set to precompiled origin address
     std::string m_to;      // common field, readable format
     std::string m_origin;  // common field, readable format
 

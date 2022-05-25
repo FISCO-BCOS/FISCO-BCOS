@@ -87,8 +87,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
 
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
@@ -99,12 +98,12 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
                 << LOG_KV("sender", _callParameters->m_sender);
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         }
         else
         {
             std::string configKey, configValue;
-            codec->decode(_callParameters->params(), configKey, configValue);
+            codec.decode(_callParameters->params(), configKey, configValue);
             // Uniform lowercase configKey
             boost::to_lower(configKey);
             PRECOMPILED_LOG(DEBUG)
@@ -124,14 +123,14 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue)
                                   << LOG_KV("enableNum", blockContext->number() + 1);
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, codec);
         }
     }
     else if (func == name2Selector[SYSCONFIG_METHOD_GET_STR])
     {
         // getValueByKey(string)
         std::string configKey;
-        codec->decode(_callParameters->params(), configKey);
+        codec.decode(_callParameters->params(), configKey);
         // Uniform lowercase configKey
         boost::to_lower(configKey);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
@@ -139,12 +138,13 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 
         auto valueNumberPair = getSysConfigByKey(_executive, configKey);
         callResult->setExecResult(
-            codec->encode(valueNumberPair.first, u256(valueNumberPair.second)));
+            codec.encode(valueNumberPair.first, u256(valueNumberPair.second)));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(callResult->m_execResult.size());
     callResult->setGas(gasPricer->calTotalGas());
