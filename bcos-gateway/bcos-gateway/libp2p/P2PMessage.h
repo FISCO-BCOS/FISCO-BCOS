@@ -97,7 +97,6 @@ protected:
 class P2PMessage : public Message
 {
 public:
-    const static uint32_t VERSION_0 = 0;
     using Ptr = std::shared_ptr<P2PMessage>;
 
     /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
@@ -165,8 +164,8 @@ protected:
     virtual bool encodeHeader(bytes& _buffer);
 
 protected:
-    uint32_t m_length = VERSION_0;
-    uint16_t m_version = 0;
+    uint32_t m_length;
+    uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
     uint16_t m_packetType = 0;
     uint32_t m_seq = 0;
     uint16_t m_ext = 0;

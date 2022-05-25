@@ -152,6 +152,9 @@ public:
     }
 
 protected:
+    virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
+        Options = Options(), SessionCallbackFunc = SessionCallbackFunc());
+
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
     void asyncSendProtocol(P2PSession::Ptr _session);

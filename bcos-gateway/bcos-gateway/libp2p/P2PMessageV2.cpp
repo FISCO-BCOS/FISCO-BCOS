@@ -26,7 +26,11 @@ using namespace bcos::gateway;
 
 bool P2PMessageV2::encodeHeader(bytes& _buffer)
 {
-    P2PMessage::encodeHeader(_buffer);
+    auto ret = P2PMessage::encodeHeader(_buffer);
+    if (m_version <= (uint16_t)(bcos::protocol::ProtocolVersion::V0))
+    {
+        return ret;
+    }
     if (m_srcP2PNodeID.size() > P2PMessageOptions::MAX_NODEID_LENGTH)
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("srcP2PNodeID length valid")
@@ -56,7 +60,7 @@ bool P2PMessageV2::encodeHeader(bytes& _buffer)
 ssize_t P2PMessageV2::decodeHeader(bytesConstRef _buffer)
 {
     auto offset = P2PMessage::decodeHeader(_buffer);
-    if (m_version <= P2PMessage::VERSION_0)
+    if (m_version <= bcos::protocol::ProtocolVersion::V0)
     {
         return offset;
     }

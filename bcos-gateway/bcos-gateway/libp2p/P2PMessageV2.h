@@ -28,9 +28,8 @@ namespace gateway
 class P2PMessageV2 : public P2PMessage
 {
 public:
-    const static uint32_t VERSION_1 = 1;
     using Ptr = std::shared_ptr<P2PMessageV2>;
-    P2PMessageV2() : P2PMessage() { m_version = VERSION_1; }
+    P2PMessageV2() : P2PMessage() {}
     ~P2PMessageV2() override {}
 
 protected:

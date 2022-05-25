@@ -197,6 +197,7 @@ void Service::onConnect(
     p2pSession->setSession(session);
     p2pSession->setP2PInfo(p2pInfo);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
+    p2pSession->setProtocolInfo(m_localProtocol);
 
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
@@ -253,6 +254,14 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     heartBeat();
 }
 
+void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
+    Options _options, SessionCallbackFunc _callback)
+{
+    auto protocolVersion = _p2pSession->protocolInfo()->version();
+    _msg->setVersion(protocolVersion);
+    _p2pSession->session()->asyncSendMessage(_msg, _options, _callback);
+}
+
 void Service::sendRespMessageBySession(
     bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
 {
@@ -262,8 +271,7 @@ void Service::sendRespMessageBySession(
     respMessage->setRespPacket();
     respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
 
-    _p2pSession->session()->asyncSendMessage(respMessage);
-
+    sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
                        << LOG_KV("p2pid", _p2pSession->p2pID())
                        << LOG_KV("payload size", _payload.size());
@@ -415,7 +423,8 @@ void Service::asyncSendMessageByNodeID(
             auto session = it->second;
             if (callback)
             {
-                session->session()->asyncSendMessage(message, options,
+                // for compatibility_version consideration
+                sendMessageToSession(session, message, options,
                     [session, callback](NetworkException e, Message::Ptr message) {
                         P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
                         if (callback)
@@ -426,7 +435,7 @@ void Service::asyncSendMessageByNodeID(
             }
             else
             {
-                session->session()->asyncSendMessage(message, options, nullptr);
+                sendMessageToSession(session, message, options, nullptr);
             }
         }
         else
@@ -586,7 +595,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
 
     SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
                       << LOG_KV("seq", seq);
-    _session->session()->asyncSendMessage(message, Options(), nullptr);
+    sendMessageToSession(_session, message, Options(), nullptr);
 }
 
 // receive the protocolInfo

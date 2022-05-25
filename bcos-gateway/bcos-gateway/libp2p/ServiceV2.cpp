@@ -335,6 +335,12 @@ bool ServiceV2::isReachable(P2pID const& _nodeID) const
 void ServiceV2::sendRespMessageBySession(
     bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
 {
+    auto version = _p2pSession->protocolInfo()->version();
+    if (version <= bcos::protocol::ProtocolVersion::V0)
+    {
+        Service::sendRespMessageBySession(_payload, _p2pMessage, _p2pSession);
+        return;
+    }
     auto respMessage = std::dynamic_pointer_cast<P2PMessageV2>(messageFactory()->buildMessage());
     auto requestMsg = std::dynamic_pointer_cast<P2PMessageV2>(_p2pMessage);
     respMessage->setDstP2PNodeID(requestMsg->srcP2PNodeID());
