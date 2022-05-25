@@ -264,8 +264,8 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
             bytes data;
             auto blockContext = m_blockContext.lock();
             auto codec =
-                std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-            codec->decode(ref(callParameters->data), contract, data);
+                CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+            codec.decode(ref(callParameters->data), contract, data);
             precompiledCallParams->m_to = contract;
             precompiledCallParams->m_input = ref(data);
             precompiledCallParams = execPrecompiled(precompiledCallParams);
@@ -384,8 +384,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         // Liquid
         std::tuple<bytes, bytes> input;
-        auto codec = std::make_shared<CodecWrapper>(blockContext->hashHandler(), true);
-        codec->decode(ref(callParameters->data), input);
+        auto codec = CodecWrapper(blockContext->hashHandler(), true);
+        codec.decode(ref(callParameters->data), input);
         auto& [code, params] = input;
 
         if (!hasWasmPreamble(code))
@@ -437,10 +437,10 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     auto newAddress = string(callParameters->codeAddress);
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress);
     auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+        CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     std::string tableName;
     std::string codeString;
-    codec->decode(ref(callParameters->data), tableName, codeString);
+    codec.decode(ref(callParameters->data), tableName, codeString);
 
     if (blockContext->isWasm())
     {
@@ -482,13 +482,13 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         m_storageWrapper->createTable(tableName, STORAGE_VALUE);
 
         /// create code index contract
-        auto codeAddress = getContractTableName(newAddress, false);
-        m_storageWrapper->createTable(codeAddress, STORAGE_VALUE);
+        auto codeTable = getContractTableName(newAddress, false);
+        m_storageWrapper->createTable(codeTable, STORAGE_VALUE);
 
         /// set code field
         Entry entry = {};
         entry.importFields({codeString});
-        m_storageWrapper->setRow(codeAddress, ACCOUNT_CODE, std::move(entry));
+        m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
 
         /// set link data
         Entry addressEntry = {};
@@ -809,7 +809,7 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "CallDynamicPrecompiled error code field."));
     }
-    callParameters->codeAddress = codeParameters[1];
+    callParameters->codeAddress = callParameters->receiveAddress;
     callParameters->receiveAddress = codeParameters[1];
     // for scalability, erase [PRECOMPILED_PREFIX,codeAddress], left actual parameters
     codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
@@ -840,7 +840,7 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
         {
             EXECUTIVE_LOG(DEBUG) << LOG_DESC("[call]Can't find address")
                                  << LOG_KV("address", _precompiledParams->m_to);
-            return nullptr;
+            BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));
         }
     }
     catch (PrecompiledError const& e)
@@ -1146,14 +1146,14 @@ bool TransactionExecutive::checkAuth(
     {
         /// external call authMgrAddress to check deploy auth
         auto codec =
-            std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+            CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
         auto input = blockContext->isWasm() ?
-                         codec->encodeWithSig("hasDeployAuth(string)", address) :
-                         codec->encodeWithSig("hasDeployAuth(address)", Address(address));
+                         codec.encodeWithSig("hasDeployAuth(string)", address) :
+                         codec.encodeWithSig("hasDeployAuth(address)", Address(address));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
             callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
         bool result = true;
-        codec->decode(ref(response->data), result);
+        codec.decode(ref(response->data), result);
         return result;
     }
     bytesRef func = ref(callParameters->data).getCroppedData(0, 4);

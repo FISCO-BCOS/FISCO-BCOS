@@ -55,14 +55,14 @@ std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _par
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
     std::vector<std::string> results;
-    auto codec = std::make_shared<CodecWrapper>(m_hashImpl, _isWasm);
+    auto codec = CodecWrapper(m_hashImpl, _isWasm);
 
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT])
     {  // updateBalance(string,uint256)
         std::string user;
         u256 amount;
-        codec->decode(data, user, amount);
+        codec.decode(data, user, amount);
         // if params is invalid , parallel process can be done
         if (!user.empty())
         {
@@ -75,7 +75,7 @@ std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _par
         // sendPayment(string,string,uint256)
         std::string fromUser, toUser;
         u256 amount;
-        codec->decode(data, fromUser, toUser, amount);
+        codec.decode(data, fromUser, toUser, amount);
         // if params is invalid , parallel process can be done
         if (!fromUser.empty() && !toUser.empty())
         {
@@ -149,9 +149,8 @@ void SmallBankPrecompiled::updateBalanceCall(
     std::string user;
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_data, user, amount);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_data, user, amount);
 
     int ret;
     std::string strErrorMsg;
@@ -193,7 +192,7 @@ void SmallBankPrecompiled::updateBalanceCall(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret));
+    _out = codec.encode(u256(ret));
 }
 
 void SmallBankPrecompiled::sendPaymentCall(
@@ -201,11 +200,10 @@ void SmallBankPrecompiled::sendPaymentCall(
     std::string const&, bytes& _out)
 {
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     std::string fromUser, toUser;
     u256 amount;
-    codec->decode(_data, fromUser, toUser, amount);
+    codec.decode(_data, fromUser, toUser, amount);
 
     u256 fromUserBalance, newFromUserBalance;
     u256 toUserBalance, newToUserBalance;
@@ -305,5 +303,5 @@ void SmallBankPrecompiled::sendPaymentCall(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
-    _out = codec->encode(u256(ret));
+    _out = codec.encode(u256(ret));
 }

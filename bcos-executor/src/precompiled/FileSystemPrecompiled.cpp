@@ -89,6 +89,7 @@ std::shared_ptr<PrecompiledExecResult> FileSystemPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("call undefined function!");
+        BOOST_THROW_EXCEPTION(PrecompiledError("FileSystemPrecompiled call undefined function!"));
     }
 
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
@@ -158,9 +159,8 @@ void FileSystemPrecompiled::makeDir(
     // mkdir(string)
     std::string absolutePath;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_callParameters->params(), absolutePath);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("mkdir", absolutePath);
     auto table = _executive->storage().openTable(absolutePath);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
@@ -169,7 +169,7 @@ void FileSystemPrecompiled::makeDir(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("file name exists, please check")
                                << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_ALREADY_EXIST)));
         return;
     }
 
@@ -177,7 +177,7 @@ void FileSystemPrecompiled::makeDir(
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
         absolutePath, FS_TYPE_DIR, _callParameters->m_gas - gasPricer->calTotalGas());
-    _callParameters->setExecResult(codec->encode(response));
+    _callParameters->setExecResult(codec.encode(response));
 }
 
 void FileSystemPrecompiled::listDir(
@@ -187,16 +187,15 @@ void FileSystemPrecompiled::listDir(
     // list(string)
     std::string absolutePath;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_callParameters->params(), absolutePath);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("ls", absolutePath);
     std::vector<BfsTuple> files;
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("invalid path")
                                << LOG_KV("path", absolutePath);
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_PATH), files));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH), files));
         return;
     }
     auto table = _executive->storage().openTable(absolutePath);
@@ -245,14 +244,14 @@ void FileSystemPrecompiled::listDir(
             files.emplace_back(std::move(file));
         }
 
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_SUCCESS), files));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS), files));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("can't open table of file path")
                                << LOG_KV("path", absolutePath);
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_NOT_EXIST), files));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_NOT_EXIST), files));
     }
 }
 
@@ -261,9 +260,8 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
 {
     std::string contractName, contractVersion, contractAddress, contractAbi;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(
         _callParameters->params(), contractName, contractVersion, contractAddress, contractAbi);
     if (!blockContext->isWasm())
     {
@@ -286,7 +284,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
                                << LOG_KV("contractVersion", contractVersion)
                                << LOG_KV("contractAddress", contractAddress);
         getErrorCodeOut(_callParameters->mutableExecResult(),
-            validCode < 0 ? validCode : CODE_FILE_INVALID_PATH, *codec);
+            validCode < 0 ? validCode : CODE_FILE_INVALID_PATH, codec);
         return;
     }
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
@@ -309,14 +307,14 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
                 << LOG_KV("contractName", contractName)
                 << LOG_KV("contractVersion", contractVersion)
                 << LOG_KV("contractAddress", contractAddress);
-            _callParameters->setExecResult(codec->encode((s256)((int)CODE_SUCCESS)));
+            _callParameters->setExecResult(codec.encode((s256)((int)CODE_SUCCESS)));
             return;
         }
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("File already exists.")
                                << LOG_KV("contractName", contractName)
                                << LOG_KV("version", contractVersion);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_FILE_ALREADY_EXIST, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_FILE_ALREADY_EXIST, codec);
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
@@ -330,10 +328,10 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
                                << LOG_DESC("build link path error ")
                                << LOG_KV("contractName", contractName)
                                << LOG_KV("contractVersion", contractVersion);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_FILE_BUILD_DIR_FAILED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_FILE_BUILD_DIR_FAILED, codec);
         return;
     }
-    linkTable = _executive->storage().createTable(linkTableName,STORAGE_VALUE);
+    linkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // set link info to link table
     auto typeEntry = linkTable->newEntry();
@@ -348,7 +346,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     _executive->storage().setRow(linkTableName, FS_KEY_NAME, std::move(nameEntry));
     _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
     _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 void FileSystemPrecompiled::readLink(
@@ -358,13 +356,12 @@ void FileSystemPrecompiled::readLink(
     // readlink(string)
     std::string absolutePath;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_callParameters->params(), absolutePath);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled")
                            << LOG_KV("readlink", absolutePath);
     bytes emptyResult =
-        blockContext->isWasm() ? codec->encode(std::string("")) : codec->encode(Address());
+        blockContext->isWasm() ? codec.encode(std::string("")) : codec.encode(Address());
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("invalid link")
@@ -384,8 +381,8 @@ void FileSystemPrecompiled::readLink(
             // if link
             auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
             auto contractAddress = std::string(addressEntry->getField(0));
-            auto codecAddress = blockContext->isWasm() ? codec->encode(contractAddress) :
-                                                         codec->encode(Address(contractAddress));
+            auto codecAddress = blockContext->isWasm() ? codec.encode(contractAddress) :
+                                                         codec.encode(Address(contractAddress));
             _callParameters->setExecResult(codecAddress);
             return;
         }
@@ -405,15 +402,14 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
     // touch(string absolute, string type)
     std::string absolutePath, type;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_callParameters->params(), absolutePath, type);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), absolutePath, type);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("touch new file")
                            << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("file exists");
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_PATH)));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
         return;
     }
     if (BfsTypeSet.find(type) == BfsTypeSet.end())
@@ -421,7 +417,7 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("touch file in error type")
                                << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_TYPE)));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_TYPE)));
         return;
     }
     if (absolutePath.find(USER_APPS_PREFIX) != 0 && absolutePath.find(USER_TABLE_PREFIX) != 0)
@@ -429,7 +425,7 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("touch file in system dir")
                                << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
-        _callParameters->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_PATH)));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
         return;
     }
 
@@ -454,7 +450,7 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
     }
     if (type == FS_TYPE_DIR)
     {
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
         return;
     }
 
@@ -467,7 +463,7 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
     subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
     _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 bool FileSystemPrecompiled::recursiveBuildDir(
