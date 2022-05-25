@@ -281,7 +281,6 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         entry.setStatus(it.second.entry.status());
                         KeyPage_LOG(DEBUG)
                             << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
-                            << LOG_KV("key", toHex(it.first.second))
                             << LOG_KV("validCount", page.validCount())
                             << LOG_KV("count", page.count())
                             << LOG_KV("status", (int)it.second.entry.status())
@@ -599,9 +598,8 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
     {  // insert into cache
         auto [bucket, writeLock] = getMutBucket(d.table, d.key);
         boost::ignore_unused(writeLock);
-        auto& data = bucket->container.emplace(std::make_pair(keyPair, std::move(d))).first->second;
-
-        return std::make_tuple(nullptr, std::make_optional(&data));
+        auto data = &bucket->container.emplace(std::make_pair(keyPair, std::move(d))).first->second;
+        return std::make_tuple(nullptr, std::make_optional(data));
     }
 }
 
@@ -759,11 +757,14 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     }
     if (page->size() > m_pageSize && page->validCount() > 1)
     {  // split page, TODO: if dag trigger split, it maybe split to different page?
-        KeyPage_LOG(DEBUG) << LOG_DESC("trigger split page") << LOG_KV("table", table)
-                           << LOG_KV("pageKey", toHex(pageKey)) << LOG_KV("size", page->size())
-                           << LOG_KV("m_pageSize", m_pageSize)
-                           << LOG_KV("validCount", page->validCount())
-                           << LOG_KV("count", page->count());
+        if (c_fileLogLevel >= TRACE)
+        {
+            KeyPage_LOG(TRACE) << LOG_DESC("trigger split page") << LOG_KV("table", table)
+                               << LOG_KV("pageKey", toHex(pageKey)) << LOG_KV("size", page->size())
+                               << LOG_KV("m_pageSize", m_pageSize)
+                               << LOG_KV("validCount", page->validCount())
+                               << LOG_KV("count", page->count());
+        }
         auto newPage = page->split(m_splitSize);
         // update old meta pageInfo
         auto oldStartKey =
@@ -775,10 +776,8 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         }
 
         KeyPage_LOG(DEBUG) << LOG_DESC("split page finished") << LOG_KV("table", table)
-                           << LOG_KV("pageStart", toHex(page->startKey()))
-                           << LOG_KV("pageEnd", toHex(page->endKey()))
-                           << LOG_KV("newPageStart", toHex(newPage.startKey()))
-                           << LOG_KV("newPageEnd", toHex(newPage.endKey()))
+                           << LOG_KV("pageKey", toHex(page->endKey()))
+                           << LOG_KV("newPageKey", toHex(newPage.endKey()))
                            << LOG_KV("validCount", page->validCount())
                            << LOG_KV("newValidCount", newPage.validCount())
                            << LOG_KV("count", page->count()) << LOG_KV("newCount", newPage.count())

@@ -37,6 +37,7 @@
 #include <boost/property_map/property_map.hpp>
 #include <cstddef>
 #include <exception>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -216,10 +217,18 @@ public:
             boost::archive::binary_iarchive archive(inputStream, ARCHIVE_FLAG);
             archive >> *this;
         }
-        TableMeta(const TableMeta& t) { pages = t.pages; }
+        TableMeta(const TableMeta& t)
+        {
+            pages = std::make_unique<std::set<PageInfo>>();
+            *pages = *t.pages;
+        }
         TableMeta& operator=(const TableMeta& t)
         {
-            pages = t.pages;
+            if (this != &t)
+            {
+                pages = std::make_unique<std::set<PageInfo>>();
+                *pages = *t.pages;
+            }
             return *this;
         }
         TableMeta(TableMeta&& t) { pages = std::move(t.pages); }
@@ -234,24 +243,24 @@ public:
 
         auto lower_bound(std::string_view key)
         {
-            return pages.lower_bound(PageInfo(std::string(key), 0, 0));
+            return pages->lower_bound(PageInfo(std::string(key), 0, 0));
         }
         std::optional<std::string> getPageKeyNoLock(std::string_view key)
         {
-            if (pages.empty())
+            if (pages->empty())
             {  // if pages is empty
                 return std::nullopt;
             }
             auto it = lower_bound(key);
-            if (it != pages.end())
+            if (it != pages->end())
             {
                 return it->getPageKey();
             }
-            if (pages.rbegin()->getPageKey().empty())
+            if (pages->rbegin()->getPageKey().empty())
             {  // page is empty because of rollback
                 return std::nullopt;
             }
-            return pages.rbegin()->getPageKey();
+            return pages->rbegin()->getPageKey();
         }
 
         std::optional<std::string> getNextPageKeyNoLock(std::string_view key)
@@ -260,15 +269,15 @@ public:
             {
                 return std::nullopt;
             }
-            auto it = pages.upper_bound(PageInfo(std::string(key), 0, 0));
-            if (it != pages.end())
+            auto it = pages->upper_bound(PageInfo(std::string(key), 0, 0));
+            if (it != pages->end())
             {
                 return it->getPageKey();
             }
             return std::nullopt;
         }
 
-        std::set<PageInfo>& getAllPageInfoNoLock() { return std::ref(pages); }
+        std::set<PageInfo>& getAllPageInfoNoLock() { return std::ref(*pages); }
         void insertPageInfo(PageInfo&& pageInfo)
         {
             std::unique_lock lock(mutex);
@@ -283,7 +292,7 @@ public:
                 return;
             }
             auto it = lower_bound(pageInfo.getPageKey());
-            auto newIt = pages.insert(it, std::move(pageInfo));
+            auto newIt = pages->insert(it, std::move(pageInfo));
             if (c_fileLogLevel >= TRACE)
             {
                 KeyPage_LOG(TRACE)
@@ -305,9 +314,9 @@ public:
         {
             std::optional<std::string> oldPageKey;
             auto it = lower_bound(oldEndKey);
-            if (it != pages.end())
+            if (it != pages->end())
             {
-                auto node = pages.extract(it);
+                auto node = pages->extract(it);
                 // if (c_fileLogLevel >= TRACE)
                 // { // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
@@ -331,7 +340,7 @@ public:
                 }
                 node.value().setCount(count);
                 node.value().setSize(size);
-                pages.insert(std::move(node));
+                pages->insert(std::move(node));
             }
             else
             {
@@ -345,16 +354,16 @@ public:
 
         void deletePageInfoNoLock(std::string_view endkey)
         {  // remove current page info and update next page start key
-            decltype(pages)::iterator it = lower_bound(endkey);
-            if (it != pages.end() && it->getPageKey() == endkey)
+            auto it = lower_bound(endkey);
+            if (it != pages->end() && it->getPageKey() == endkey)
             {
-                pages.erase(it);
+                pages->erase(it);
             }
         }
         size_t size() const
         {
             std::shared_lock lock(mutex);
-            return pages.size();
+            return pages->size();
         }
 
         std::unique_lock<std::shared_mutex> lock() const { return std::unique_lock(mutex); }
@@ -365,7 +374,7 @@ public:
         {
             auto lock = std::shared_lock(meta.mutex);
             os << "[";
-            for (auto& pageInfo : meta.pages)
+            for (auto& pageInfo : *meta.pages)
             {
                 os << "{"
                    //    << "startKey=" << toHex(pageInfo.getStartKey())
@@ -378,15 +387,15 @@ public:
 
     private:
         mutable std::shared_mutex mutex;
-        std::set<PageInfo> pages;
+        std::unique_ptr<std::set<PageInfo>> pages = std::make_unique<std::set<PageInfo>>();
         friend class boost::serialization::access;
 
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
             std::ignore = version;
-            ar&(uint32_t)pages.size();
-            for (auto& i : pages)
+            ar&(uint32_t)pages->size();
+            for (auto& i : *pages)
             {
                 ar& i;
             }
@@ -395,14 +404,15 @@ public:
         void load(Archive& ar, const unsigned int version)
         {
             std::ignore = version;
+            pages = std::make_unique<std::set<PageInfo>>();
             uint32_t size = 0;
             ar& size;
-            auto iter = pages.begin();
+            auto iter = pages->begin();
             for (size_t i = 0; i < size; ++i)
             {
                 PageInfo info;
                 ar& info;
-                iter = pages.emplace_hint(iter, std::move(info));
+                iter = pages->emplace_hint(iter, std::move(info));
             }
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
