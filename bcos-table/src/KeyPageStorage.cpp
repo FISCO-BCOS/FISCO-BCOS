@@ -60,7 +60,7 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     size_t validCount = 0;
     for (auto& info : pageInfo)
     {
-        auto [error, data] = getData(tableView, info.getStartKey(), true);
+        auto [error, data] = getData(tableView, info.getPageKey(), true);
         boost::ignore_unused(error);
         assert(!error);
         auto& page = std::get<0>(data.value()->data);
@@ -252,12 +252,12 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                                 << LOG_KV("key", toHex(it.first.second))
                                 << LOG_KV("size", entry.size());
                         }
-                        KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta")
-                                           << LOG_KV("metaSize", sizeof(PageInfo) * meta.size())
-                                           << LOG_KV("size", entry.size())
-                                           << LOG_KV("count", meta.size())
-                                           << LOG_KV("payloadRate", sizeof(PageInfo) * meta.size() /
-                                                                        (double)entry.size());
+                        KeyPage_LOG(DEBUG)
+                            << LOG_DESC("TableMeta")
+                            << LOG_KV("metaSize", sizeof(PageInfo) * meta.size())
+                            << LOG_KV("size", entry.size()) << LOG_KV("count", meta.size())
+                            << LOG_KV("payloadRate",
+                                   sizeof(PageInfo) * meta.size() / (double)entry.size());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
                 }
@@ -287,7 +287,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             << LOG_KV("status", (int)it.second.entry.status())
                             << LOG_KV("pageSize", page.size()) << LOG_KV("size", entry.size())
                             << LOG_KV("payloadRate", page.size() / (double)entry.size());
-                        assert(it.first.second == page.startKey());
+                        assert(it.first.second == page.endKey());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
                     auto invalidKeys = page.invalidKeySet();
@@ -470,11 +470,11 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                     pageData.value()->entry.setStatus(Entry::Status::EMPTY);
                 }
                 // revert also need update pageInfo
-                auto oldStartKey = meta.updatePageInfoNoLock(pageKey.value(), page.startKey(),
-                    page.endKey(), page.validCount(), page.size());
+                auto oldStartKey = meta.updatePageInfoNoLock(
+                    pageKey.value(), page.endKey(), page.validCount(), page.size());
                 if (oldStartKey)
                 {
-                    changePageKey(change.table, oldStartKey.value(), page.startKey());
+                    changePageKey(change.table, oldStartKey.value(), page.endKey());
                 }
             }
             else
@@ -725,22 +725,22 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         {
             if (pageData->entry.status() == Entry::Status::EMPTY)
             {  // new page insert, if entries is empty means page delete entry which not exist
-                meta.insertPageInfoNoLock(PageInfo{page->startKey(), page->endKey(),
-                    (uint16_t)page->validCount(), (uint16_t)page->size()});
+                meta.insertPageInfoNoLock(
+                    PageInfo{page->endKey(), (uint16_t)page->validCount(), (uint16_t)page->size()});
                 // pageData->entry.setStatus(Entry::Status::NORMAL);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
             }
             else
             {
                 auto oldStartKey = meta.updatePageInfoNoLock(
-                    pageKey, page->startKey(), page->endKey(), page->validCount(), page->size());
+                    pageKey, page->endKey(), page->validCount(), page->size());
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
                 if (oldStartKey)
                 {  // the page key is changed, 1. delete the first key, 2. insert a smaller key
                     // if the startKey of page changed, the container also need to be updated
                     if (page->validCount() > 0)
                     {
-                        pageData = changePageKey(table, oldStartKey.value(), page->startKey());
+                        pageData = changePageKey(table, oldStartKey.value(), page->endKey());
                         page = &std::get<0>(pageData->data);
                     }
                     else
@@ -766,11 +766,11 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                            << LOG_KV("count", page->count());
         auto newPage = page->split(m_splitSize);
         // update old meta pageInfo
-        auto oldStartKey = meta.updatePageInfoNoLock(
-            pageKey, page->startKey(), page->endKey(), page->validCount(), page->size());
+        auto oldStartKey =
+            meta.updatePageInfoNoLock(pageKey, page->endKey(), page->validCount(), page->size());
         if (oldStartKey)
         {  // if the startKey of page changed, the container also need to be updated
-            pageData = changePageKey(table, oldStartKey.value(), page->startKey());
+            pageData = changePageKey(table, oldStartKey.value(), page->endKey());
             page = &std::get<0>(pageData->data);
         }
 
@@ -785,7 +785,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                            << LOG_KV("pageSize", page->size())
                            << LOG_KV("newPageSize", newPage.size());
         // insert new page to container, newPageInfo to meta
-        insertNewPage(table, newPage.startKey(), meta, std::move(newPage));
+        insertNewPage(table, newPage.endKey(), meta, std::move(newPage));
         data.value()->entry.setStatus(Entry::Status::MODIFIED);
     }
     else if (page->size() < m_mergeSize)
@@ -816,8 +816,8 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                 nextPage.merge(*page);
                 // remove current page info and update next page info
                 meta.deletePageInfoNoLock(endKey);
-                auto oldStartKey = meta.updatePageInfoNoLock(nextEndKey, nextPage.startKey(),
-                    nextPage.endKey(), nextPage.validCount(), nextPage.size());
+                auto oldStartKey = meta.updatePageInfoNoLock(
+                    nextEndKey, nextPage.endKey(), nextPage.validCount(), nextPage.size());
                 // old page also need write to disk to clean data, so not remove old page
                 // nextPageData.value()->entry.setDirty(true);
                 // pageData->entry.setDirty(true);
@@ -825,7 +825,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                 pageData->entry.setStatus(Entry::Status::DELETED);
                 if (oldStartKey)
                 {  // if the startKey of nextPage changed, the container also need to be updated
-                    changePageKey(table, oldStartKey.value(), nextPage.startKey());
+                    changePageKey(table, oldStartKey.value(), nextPage.endKey());
                 }
                 data.value()->entry.setStatus(Entry::Status::MODIFIED);
             }
