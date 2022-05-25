@@ -41,6 +41,7 @@ public:
 
     void setDstNode(std::string const& _dstNode) override { m_inner()->dstNode = _dstNode; }
     void setNextHop(std::string const& _nextHop) override { m_inner()->nextHop = _nextHop; }
+    void clearNextHop() override { m_inner()->nextHop = std::string(); }
     void setTTL(int32_t _ttl) override { m_inner()->ttl = _ttl; }
     void incTTL(int32_t _deltaTTL) override { m_inner()->ttl += _deltaTTL; }
 

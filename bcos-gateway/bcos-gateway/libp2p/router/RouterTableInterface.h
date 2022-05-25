@@ -33,6 +33,7 @@ public:
 
     virtual void setDstNode(std::string const& _dstNode) = 0;
     virtual void setNextHop(std::string const& _nextHop) = 0;
+    virtual void clearNextHop() = 0;
     virtual void setTTL(int32_t _ttl) = 0;
     virtual void incTTL(int32_t _deltaTTL) = 0;
 

@@ -8,10 +8,10 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
-#include <bcos-security/bcos-security/DataEncryption.h>
 #include <boost/asio/ssl.hpp>
 
 namespace bcos
@@ -24,9 +24,7 @@ public:
     using Ptr = std::shared_ptr<GatewayFactory>;
     GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
-      : m_chainID(_chainID),
-        m_rpcServiceName(_rpcServiceName),
-        m_dataEncrypt(_dataEncrypt)
+      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
         initCert2PubHexHandler();
         initSSLContextPubHexHandler();
