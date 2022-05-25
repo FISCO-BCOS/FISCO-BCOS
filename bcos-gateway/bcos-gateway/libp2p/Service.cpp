@@ -20,7 +20,7 @@ using namespace bcos::protocol;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
-Service::Service()
+Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
@@ -211,6 +211,7 @@ void Service::onConnect(
     else
     {
         m_sessions.insert(std::make_pair(p2pID, p2pSession));
+        callNewSessionHandlers(p2pSession);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", p2pID)
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
@@ -233,6 +234,8 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
         m_sessions.erase(it);
+        callDeleteSessionHandlers(p2pSession);
+
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
             return;
         SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
@@ -248,22 +251,6 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         }
     }
     heartBeat();
-}
-
-void Service::sendMessageBySession(
-    int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession)
-{
-    auto p2pMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    auto seq = messageFactory()->newSeq();
-    p2pMessage->setSeq(seq);
-    p2pMessage->setPacketType(_packetType);
-    p2pMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
-    _p2pSession->session()->asyncSendMessage(p2pMessage);
-
-    SERVICE_LOG(TRACE) << "sendMessageBySession" << LOG_KV("seq", p2pMessage->seq())
-                       << LOG_KV("packetType", _packetType) << LOG_KV("p2pid", _p2pSession->p2pID())
-                       << LOG_KV("payload.size()", _payload.size());
 }
 
 void Service::sendRespMessageBySession(
@@ -377,6 +364,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
         // lock to wait for async send
         callback->mutex.lock();
@@ -404,12 +392,6 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
     return P2PMessage::Ptr();
 }
 
-bool Service::connected(std::string const& _nodeID)
-{
-    RecursiveGuard l(x_sessions);
-    auto it = m_sessions.find(_nodeID);
-    return (it != m_sessions.end() && it->second->actived());
-}
 void Service::asyncSendMessageByNodeID(
     P2pID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
@@ -539,7 +521,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
 void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
     Options _options, P2PResponseCallback _callback)
 {
-    if (!connected(_dstNodeID))
+    if (!isReachable(_dstNodeID))
     {
         if (_callback)
         {

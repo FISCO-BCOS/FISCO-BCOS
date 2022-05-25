@@ -14,8 +14,9 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
-#include <bcos-gateway/libp2p/Service.h>
-#include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-gateway/libp2p/P2PMessageV2.h>
+#include <bcos-gateway/libp2p/ServiceV2.h>
+#include <bcos-gateway/libp2p/router/RouterTableImpl.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
@@ -343,9 +344,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
         // Message Factory
-        auto messageFactory = std::make_shared<P2PMessageFactory>();
+        auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
         // Session Factory
-        auto sessionFactory = std::make_shared<SessionFactory>();
+        auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
         // KeyFactory
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -357,7 +358,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         host->setSSLContextPubHandler(m_sslContextPubHandler);
 
         // init Service
-        auto service = std::make_shared<Service>();
+        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
+        auto service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
         service->setHost(host);
         service->setStaticNodes(_config->connectedNodes());
 
@@ -365,8 +367,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                   << LOG_KV("myself pub id", pubHex)
                                   << LOG_KV("rpcService", m_rpcServiceName)
                                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
-
-        service->setId(pubHex);
         service->setMessageFactory(messageFactory);
         service->setKeyFactory(keyFactory);
 
@@ -399,6 +399,16 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
                 }
             });
+        service->registerUnreachableHandler(
+            [weakptrGatewayNodeManager](std::string const& _unreachableNode) {
+                auto nodeMgr = weakptrGatewayNodeManager.lock();
+                if (!nodeMgr)
+                {
+                    return;
+                }
+                nodeMgr->onRemoveNodeIDs(_unreachableNode);
+            });
+
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
         if (!_entryPoint)
         {

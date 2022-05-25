@@ -21,6 +21,7 @@
 #include "GatewayNodeManager.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
 using namespace std;
@@ -106,16 +107,16 @@ void GatewayNodeManager::onReceiveStatusSeq(
     }
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
         *((uint32_t*)_msg->payload()->data()));
-    auto statusSeqChanged = statusChanged(_session->p2pID(), statusSeq);
-    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->p2pID())
-                            << LOG_KV("statusSeq", statusSeq)
-                            << LOG_KV("seqChanged", statusSeqChanged);
+    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
+    auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
     {
         return;
     }
-    m_p2pInterface->sendMessageBySession(
-        GatewayMessageType::RequestNodeStatus, bytesConstRef(), _session);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq request nodeStatus")
+                            << LOG_KV("from", from) << LOG_KV("statusSeq", statusSeq);
+    m_p2pInterface->asyncSendMessageByP2PNodeID(
+        GatewayMessageType::RequestNodeStatus, from, bytesConstRef());
 }
 
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
@@ -141,11 +142,12 @@ void GatewayNodeManager::onReceiveNodeStatus(
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-    auto p2pID = _session->p2pID();
-    NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("p2pid", p2pID)
+    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
+
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
                            << LOG_KV("seq", gatewayNodeStatus->seq())
                            << LOG_KV("uuid", gatewayNodeStatus->uuid());
-    updatePeerStatus(p2pID, gatewayNodeStatus);
+    updatePeerStatus(from, gatewayNodeStatus);
 }
 
 void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
@@ -187,15 +189,17 @@ void GatewayNodeManager::onRequestNodeStatus(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
+    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto nodeStatusData = generateNodeStatus();
     if (!nodeStatusData)
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
-                                  << LOG_KV("peer", _session->p2pID());
+                                  << LOG_KV("from", from);
         return;
     }
-    m_p2pInterface->sendMessageBySession(GatewayMessageType::ResponseNodeStatus,
-        bytesConstRef((byte*)nodeStatusData->data(), nodeStatusData->size()), _session);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onRequestNodeStatus") << LOG_KV("from", from);
+    m_p2pInterface->asyncSendMessageByP2PNodeID(GatewayMessageType::ResponseNodeStatus, from,
+        bytesConstRef((byte*)nodeStatusData->data(), nodeStatusData->size()));
 }
 
 bytesPointer GatewayNodeManager::generateNodeStatus()

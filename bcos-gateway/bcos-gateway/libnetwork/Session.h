@@ -66,6 +66,9 @@ public:
         m_messageHandler = messageHandler;
     }
 
+    void setHostNodeID(std::string const& _hostNodeID) { m_hostNodeID = _hostNodeID; }
+
+protected:
     virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback)
     {
         RecursiveGuard l(x_seq2Callback);
@@ -95,6 +98,8 @@ public:
             return NULL;
         }
     }
+
+    void callDefaultMsgHandler(NetworkException const& e, Message::Ptr message);
 
 private:
     void send(std::shared_ptr<bytes> _msg);
@@ -159,22 +164,29 @@ private:
     // timer to check the connection
     std::shared_ptr<boost::asio::deadline_timer> m_readIdleTimer;
     std::shared_ptr<boost::asio::deadline_timer> m_writeIdleTimer;
+
+    std::string m_hostNodeID;
 };
 
 class SessionFactory
 {
 public:
+    SessionFactory(std::string const& _hostNodeID) : m_hostNodeID(_hostNodeID) {}
     virtual ~SessionFactory(){};
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
+        session->setHostNodeID(m_hostNodeID);
         session->setHost(_server);
         session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         return session;
     }
+
+private:
+    std::string m_hostNodeID;
 };
 
 }  // namespace gateway

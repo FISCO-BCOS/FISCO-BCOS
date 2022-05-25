@@ -477,8 +477,36 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
+void Session::callDefaultMsgHandler(NetworkException const& e, Message::Ptr message)
+{
+    auto server = m_server.lock();
+    if (!server)
+    {
+        return;
+    }
+    if (!m_messageHandler)
+    {
+        SESSION_LOG(WARNING) << "onMessage can't find the default messageHandler";
+        return;
+    }
+
+    SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
+                       << LOG_KV("message.seq", message->seq());
+    auto session = shared_from_this();
+    auto handler = m_messageHandler;
+
+    server->threadPool()->enqueue(
+        [session, handler, e, message]() { handler(e, session, message); });
+}
+
 void Session::onMessage(NetworkException const& e, Message::Ptr message)
 {
+    // the forwarding message
+    if (message->dstP2PNodeID().size() > 0 && message->dstP2PNodeID() != m_hostNodeID)
+    {
+        callDefaultMsgHandler(e, message);
+        return;
+    }
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
     {
@@ -486,7 +514,6 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         if (callbackPtr && message->isRespPacket())
         {
             /// SESSION_LOG(TRACE) << "Found callbackPtr: " << message->seq();
-
             if (callbackPtr->timeoutHandler)
             {
                 callbackPtr->timeoutHandler->cancel();
@@ -512,20 +539,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         }
         else
         {
-            if (m_messageHandler)
-            {
-                SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
-                                   << LOG_KV("message.seq", message->seq());
-                auto session = shared_from_this();
-                auto handler = m_messageHandler;
-
-                server->threadPool()->enqueue(
-                    [session, handler, e, message]() { handler(e, session, message); });
-            }
-            else
-            {
-                SESSION_LOG(WARNING) << "onMessage can't find callback and default messageHandler";
-            }
+            callDefaultMsgHandler(e, message);
         }
     }
 }
