@@ -363,16 +363,16 @@ s256 precompiled::externalTouchNewFile(
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+        CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
-    auto codecResult = codec->encodeWithSig(
+    auto codecResult = codec.encodeWithSig(
         "touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response = externalRequest(
         _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
     s256 result;
     if (response->status == (int32_t)TransactionStatus::None)
     {
-        codec->decode(ref(response->data), result);
+        codec.decode(ref(response->data), result);
     }
     else
     {

@@ -39,13 +39,13 @@ public:
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
-    void desc(const std::string& tableName,
-        const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void selectByKey(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void selectByCondition(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void count(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void insert(const std::string& tableName,
@@ -66,5 +66,8 @@ private:
     void buildKeyCondition(std::optional<storage::Condition>& keyCondition,
         const std::vector<precompiled::ConditionTuple>& conditions,
         const precompiled::LimitTuple& limit) const;
+    void desc(TableInfoTuple& _tableInfo, const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
 };
 }  // namespace bcos::precompiled

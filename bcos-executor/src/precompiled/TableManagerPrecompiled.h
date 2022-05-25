@@ -49,5 +49,7 @@ private:
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void openTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void desc(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 };
 }  // namespace bcos::precompiled
