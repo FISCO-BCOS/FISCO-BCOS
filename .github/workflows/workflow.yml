@@ -297,7 +297,7 @@ jobs:
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum swap -y git git224-core
+          yum swap -y git git222
           git --version
       - uses: actions/checkout@v2
         with:
@@ -356,7 +356,7 @@ jobs:
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum swap -y git git224-core
+          yum swap -y git git222
           git --version
       - uses: actions/checkout@v2
         with:
