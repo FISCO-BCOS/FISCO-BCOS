@@ -102,7 +102,15 @@ public:
     KeyPageStorage(KeyPageStorage&&) = delete;
     KeyPageStorage& operator=(KeyPageStorage&&) = delete;
 
-    virtual ~KeyPageStorage() { m_recoder.clear(); }
+    virtual ~KeyPageStorage()
+    {
+        m_recoder.clear();
+#pragma omp parallel for
+        for (size_t i = 0; i < m_buckets.size(); ++i)
+        {
+            m_buckets[i].container.clear();
+        }
+    }
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,

@@ -10,3 +10,5 @@ find_package(Boost CONFIG QUIET REQUIRED unit_test_framework program_options)
 target_link_libraries(fisco-bcos-test ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} Boost::program_options Boost::unit_test_framework)
 
 add_test(NAME tars-test WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND fisco-bcos-test)
+
+add_subdirectory(perf)
