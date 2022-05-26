@@ -586,8 +586,9 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
         else
         {
             // empty prePrepare
-            prePrepareProposal = m_config->validator()->generateEmptyProposal(
-                m_config->pbftMessageFactory(), i, m_config->nodeIndex());
+            prePrepareProposal =
+                m_config->validator()->generateEmptyProposal(m_config->compatibilityVersion(),
+                    m_config->pbftMessageFactory(), i, m_config->nodeIndex());
             empty = true;
         }
         auto prePrepareMsg = m_config->pbftMessageFactory()->populateFrom(
