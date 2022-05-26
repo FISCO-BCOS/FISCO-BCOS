@@ -509,7 +509,8 @@ void AMOPImpl::dispatcherAMOPMessage(
     }
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _session->p2pID();
+    auto fromNodeID =
+        _message->srcP2PNodeID().empty() ? _session->p2pID() : _message->srcP2PNodeID();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:
@@ -528,11 +529,14 @@ void AMOPImpl::dispatcherAMOPMessage(
                     m_network->messageFactory()->buildMessage());
                 AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
                                << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
+                responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
+                responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());
                 responseP2PMsg->setRespPacket();
                 responseP2PMsg->setPayload(_responseData);
                 responseP2PMsg->setPacketType(_type);
-                _session->session()->asyncSendMessage(responseP2PMsg);
+                m_network->asyncSendMessageByNodeID(
+                    responseP2PMsg->dstP2PNodeID(), responseP2PMsg, nullptr);
             });
         break;
     case AMOPMessage::Type::AMOPBroadcast:

@@ -134,28 +134,46 @@ public:
     std::shared_ptr<bytes> payload() const { return m_payload; }
     void setPayload(std::shared_ptr<bytes> _payload) { m_payload = _payload; }
 
-public:
-    ssize_t decodeHeader(bytesConstRef _buffer);
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
-    bool hasOptions() const
-    {
-        return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
-               (m_packetType == GatewayMessageType::BroadcastMessage);
-    }
-
     bool encode(bytes& _buffer) override;
     ssize_t decode(bytesConstRef _buffer) override;
     bool isRespPacket() const override
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
     }
+    bool hasOptions() const
+    {
+        return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
+               (m_packetType == GatewayMessageType::BroadcastMessage);
+    }
+
+    virtual void setSrcP2PNodeID(std::string const& _srcP2PNodeID)
+    {
+        m_srcP2PNodeID = _srcP2PNodeID;
+    }
+    virtual void setDstP2PNodeID(std::string const& _dstP2PNodeID)
+    {
+        m_dstP2PNodeID = _dstP2PNodeID;
+    }
+
+    std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
+    std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
 protected:
-    uint32_t m_length = 0;
-    uint16_t m_version = 0;
+    virtual ssize_t decodeHeader(bytesConstRef _buffer);
+    virtual bool encodeHeader(bytes& _buffer);
+
+protected:
+    uint32_t m_length;
+    uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
     uint16_t m_packetType = 0;
     uint32_t m_seq = 0;
     uint16_t m_ext = 0;
+
+    // the src p2pNodeID, for message forward, only encode into the P2PMessageV2
+    std::string m_srcP2PNodeID;
+    // the dst p2pNodeID, for message forward, only encode into the P2PMessageV2
+    std::string m_dstP2PNodeID;
 
     P2PMessageOptions::Ptr m_options;  ///< options fields
 

@@ -28,10 +28,10 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/AMOPRequest.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
-#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>

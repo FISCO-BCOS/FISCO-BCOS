@@ -45,6 +45,9 @@ public:
     virtual bool isRespPacket() const = 0;
     virtual bool encode(bcos::bytes& _buffer) = 0;
     virtual ssize_t decode(bytesConstRef _buffer) = 0;
+
+    virtual std::string const& srcP2PNodeID() const = 0;
+    virtual std::string const& dstP2PNodeID() const = 0;
 };
 
 class MessageFactory

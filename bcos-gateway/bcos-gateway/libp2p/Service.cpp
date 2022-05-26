@@ -20,7 +20,7 @@ using namespace bcos::protocol;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
-Service::Service()
+Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
@@ -197,6 +197,7 @@ void Service::onConnect(
     p2pSession->setSession(session);
     p2pSession->setP2PInfo(p2pInfo);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
+    p2pSession->setProtocolInfo(m_localProtocol);
 
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
@@ -211,6 +212,7 @@ void Service::onConnect(
     else
     {
         m_sessions.insert(std::make_pair(p2pID, p2pSession));
+        callNewSessionHandlers(p2pSession);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", p2pID)
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
@@ -233,6 +235,8 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
         m_sessions.erase(it);
+        callDeleteSessionHandlers(p2pSession);
+
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
             return;
         SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
@@ -250,20 +254,12 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     heartBeat();
 }
 
-void Service::sendMessageBySession(
-    int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession)
+void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
+    Options _options, SessionCallbackFunc _callback)
 {
-    auto p2pMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    auto seq = messageFactory()->newSeq();
-    p2pMessage->setSeq(seq);
-    p2pMessage->setPacketType(_packetType);
-    p2pMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
-    _p2pSession->session()->asyncSendMessage(p2pMessage);
-
-    SERVICE_LOG(TRACE) << "sendMessageBySession" << LOG_KV("seq", p2pMessage->seq())
-                       << LOG_KV("packetType", _packetType) << LOG_KV("p2pid", _p2pSession->p2pID())
-                       << LOG_KV("payload.size()", _payload.size());
+    auto protocolVersion = _p2pSession->protocolInfo()->version();
+    _msg->setVersion(protocolVersion);
+    _p2pSession->session()->asyncSendMessage(_msg, _options, _callback);
 }
 
 void Service::sendRespMessageBySession(
@@ -275,8 +271,7 @@ void Service::sendRespMessageBySession(
     respMessage->setRespPacket();
     respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
 
-    _p2pSession->session()->asyncSendMessage(respMessage);
-
+    sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
                        << LOG_KV("p2pid", _p2pSession->p2pID())
                        << LOG_KV("payload size", _payload.size());
@@ -377,6 +372,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
         // lock to wait for async send
         callback->mutex.lock();
@@ -404,12 +400,6 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
     return P2PMessage::Ptr();
 }
 
-bool Service::connected(std::string const& _nodeID)
-{
-    RecursiveGuard l(x_sessions);
-    auto it = m_sessions.find(_nodeID);
-    return (it != m_sessions.end() && it->second->actived());
-}
 void Service::asyncSendMessageByNodeID(
     P2pID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
@@ -433,7 +423,8 @@ void Service::asyncSendMessageByNodeID(
             auto session = it->second;
             if (callback)
             {
-                session->session()->asyncSendMessage(message, options,
+                // for compatibility_version consideration
+                sendMessageToSession(session, message, options,
                     [session, callback](NetworkException e, Message::Ptr message) {
                         P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
                         if (callback)
@@ -444,7 +435,7 @@ void Service::asyncSendMessageByNodeID(
             }
             else
             {
-                session->session()->asyncSendMessage(message, options, nullptr);
+                sendMessageToSession(session, message, options, nullptr);
             }
         }
         else
@@ -539,7 +530,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
 void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
     Options _options, P2PResponseCallback _callback)
 {
-    if (!connected(_dstNodeID))
+    if (!isReachable(_dstNodeID))
     {
         if (_callback)
         {
@@ -604,7 +595,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
 
     SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
                       << LOG_KV("seq", seq);
-    _session->session()->asyncSendMessage(message, Options(), nullptr);
+    sendMessageToSession(_session, message, Options(), nullptr);
 }
 
 // receive the protocolInfo
