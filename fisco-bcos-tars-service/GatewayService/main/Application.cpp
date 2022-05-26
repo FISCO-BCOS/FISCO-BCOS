@@ -62,26 +62,30 @@ protected:
 
         gatewayConfig->initP2PConfig(pt, true);
         gatewayConfig->setNodePath(ServerConfig::BasePath);
+        gatewayConfig->setCertPath(ServerConfig::BasePath);
 
         auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
-        contextConfig->setCertPath(ServerConfig::BasePath);
         if (gatewayConfig->wsConfig()->smSSL())
         {
+            std::cout << "#### initService smSSL " << gatewayConfig->wsConfig()->smSSL();
             addConfig("sm_ca.crt");
             addConfig("sm_ssl.crt");
             addConfig("sm_enssl.crt");
             addConfig("sm_ssl.key");
             addConfig("sm_enssl.key");
             contextConfig->setSslType("sm_ssl");
-            contextConfig->initSMCertConfig(pt);
+            gatewayConfig->initSMCertConfig(pt);
+            contextConfig->setSmCertConfig(gatewayConfig->smCertConfig());
         }
         else
         {
+            std::cout << "#### initService SSL " << gatewayConfig->wsConfig()->smSSL();
             addConfig("ca.crt");
             addConfig("ssl.key");
             addConfig("ssl.crt");
             contextConfig->setSslType("ssl");
-            contextConfig->initCertConfig(pt);
+            gatewayConfig->initCertConfig(pt);
+            contextConfig->setCertConfig(gatewayConfig->certConfig());
         }
         gatewayConfig->wsConfig()->setContextConfig(contextConfig);
 

@@ -12,6 +12,7 @@ using namespace bcos;
 using namespace gateway;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
+using namespace bcos::boostssl::context;
 
 bool GatewayConfig::isValidPort(int port)
 {
@@ -161,11 +162,15 @@ void GatewayConfig::initWsConfig(const boost::property_tree::ptree& _pt)
     {
         contextConfig->setSslType("sm_ssl");
         contextConfig->initSMCertConfig(_pt);
+
+        initSMCertConfig(_pt);
+        contextConfig->setSmCertConfig(m_smCertConfig);
     }
     else
     {
         contextConfig->setSslType("ssl");
-        contextConfig->initCertConfig(_pt);
+        initCertConfig(_pt);
+        contextConfig->setCertConfig(m_certConfig);
     }
 
     m_wsConfig->setContextConfig(contextConfig);
@@ -245,4 +250,115 @@ void GatewayConfig::loadP2pConnectedNodes()
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName)
                              << LOG_KV("nodes", nodes.size());
+}
+
+/// loads ca configuration items from the configuration file
+void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
+{
+    /*
+    [cert]
+      ; directory the certificates located in
+      ca_path=./
+      ; the ca certificate file
+      ca_cert=ca.crt
+      ; the node private key file
+      node_key=ssl.key
+      ; the node certificate file
+      node_cert=ssl.crt
+    */
+    if (m_certPath.size() == 0)
+    {
+        m_certPath = _pt.get<std::string>("cert.ca_path", "./");
+    }
+    std::string caCertFile = m_certPath + "/" + _pt.get<std::string>("cert.ca_cert", "ca.crt");
+    std::string nodeCertFile = m_certPath + "/" + _pt.get<std::string>("cert.node_cert", "ssl.crt");
+    std::string nodeKeyFile = m_certPath + "/" + _pt.get<std::string>("cert.node_key", "ssl.key");
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca_path", m_certPath)
+                             << LOG_KV("ca_cert", caCertFile) << LOG_KV("node_cert", nodeCertFile)
+                             << LOG_KV("node_key", nodeKeyFile);
+
+    checkFileExist(caCertFile);
+    checkFileExist(nodeCertFile);
+    checkFileExist(nodeKeyFile);
+
+    ContextConfig::CertConfig certConfig;
+    certConfig.caCert = caCertFile;
+    certConfig.nodeCert = nodeCertFile;
+    certConfig.nodeKey = nodeKeyFile;
+
+    m_certConfig = certConfig;
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca", certConfig.caCert)
+                             << LOG_KV("node_cert", certConfig.nodeCert)
+                             << LOG_KV("node_key", certConfig.nodeKey);
+}
+
+// loads sm ca configuration items from the configuration file
+void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
+{
+    /*
+    [cert]
+    ; directory the certificates located in
+    ca_path=./
+    ; the ca certificate file
+    sm_ca_cert=sm_ca.crt
+    ; the node private key file
+    sm_node_key=sm_ssl.key
+    ; the node certificate file
+    sm_node_cert=sm_ssl.crt
+    ; the node private key file
+    sm_ennode_key=sm_enssl.key
+    ; the node certificate file
+    sm_ennode_cert=sm_enssl.crt
+    */
+    // not set the certPath, load from the configuration
+    if (m_certPath.size() == 0)
+    {
+        m_certPath = _pt.get<std::string>("cert.ca_path", "./");
+    }
+    std::string smCaCertFile =
+        m_certPath + "/" + _pt.get<std::string>("cert.sm_ca_cert", "sm_ca.crt");
+    std::string smNodeCertFile =
+        m_certPath + "/" + _pt.get<std::string>("cert.sm_node_cert", "sm_ssl.crt");
+    std::string smNodeKeyFile =
+        m_certPath + "/" + _pt.get<std::string>("cert.sm_node_key", "sm_ssl.key");
+    std::string smEnNodeCertFile =
+        m_certPath + "/" + _pt.get<std::string>("cert.sm_ennode_cert", "sm_enssl.crt");
+    std::string smEnNodeKeyFile =
+        m_certPath + "/" + _pt.get<std::string>("cert.sm_ennode_key", "sm_enssl.key");
+
+    checkFileExist(smCaCertFile);
+    checkFileExist(smNodeCertFile);
+    checkFileExist(smNodeKeyFile);
+    checkFileExist(smEnNodeCertFile);
+    checkFileExist(smEnNodeKeyFile);
+
+    ContextConfig::SMCertConfig smCertConfig;
+    smCertConfig.caCert = smCaCertFile;
+    smCertConfig.nodeCert = smNodeCertFile;
+    smCertConfig.nodeKey = smNodeKeyFile;
+    smCertConfig.enNodeCert = smEnNodeCertFile;
+    smCertConfig.enNodeKey = smEnNodeKeyFile;
+
+    m_smCertConfig = smCertConfig;
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initSMCertConfig") << LOG_KV("ca_path", m_certPath)
+                             << LOG_KV("sm_ca_cert", smCertConfig.caCert)
+                             << LOG_KV("sm_node_cert", smCertConfig.nodeCert)
+                             << LOG_KV("sm_node_key", smCertConfig.nodeKey)
+                             << LOG_KV("sm_ennode_cert", smCertConfig.enNodeCert)
+                             << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey);
+}
+
+void GatewayConfig::checkFileExist(const std::string& _path)
+{
+    auto fileContent = readContentsToString(boost::filesystem::path(_path));
+    if (!fileContent || fileContent->empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("checkFileExist: unable to load file content "
+                                                  " maybe file not exist, path: " +
+                                                  _path));
+    }
 }
