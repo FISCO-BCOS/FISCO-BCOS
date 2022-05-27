@@ -257,7 +257,7 @@ int main(int argc, const char* argv[])
     }
     auto readWriteReadEnd = std::chrono::system_clock::now();
     std::cout
-        << "|Total KeyValue=" << total << std::endl
+        << "|Total=" << total << "|kv size=" << keySet[0].size() << std::endl
         << "use keypage=" << (keyPageSize > 0 ? "true" : "false") << std::endl
         << std::endl
         << "sequential write: "

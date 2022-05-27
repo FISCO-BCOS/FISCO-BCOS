@@ -227,14 +227,14 @@ public:
         }
         TableMeta(const TableMeta& t)
         {
-            pages = std::make_unique<std::set<PageInfo>>();
+            pages = std::make_unique<std::vector<PageInfo>>();
             *pages = *t.pages;
         }
         TableMeta& operator=(const TableMeta& t)
         {
             if (this != &t)
             {
-                pages = std::make_unique<std::set<PageInfo>>();
+                pages = std::make_unique<std::vector<PageInfo>>();
                 *pages = *t.pages;
             }
             return *this;
@@ -248,10 +248,19 @@ public:
             }
             return *this;
         }
-
         auto lower_bound(std::string_view key)
         {
-            return pages->lower_bound(PageInfo(std::string(key), 0, 0));
+            return std::lower_bound(pages->begin(), pages->end(), key,
+                [](const PageInfo& lhs, const std::string_view& rhs) {
+                    return lhs.getPageKey() < rhs;
+                });
+        }
+        auto upper_bound(std::string_view key)
+        {
+            return std::upper_bound(pages->begin(), pages->end(), key,
+                [](const std::string_view& lhs, const PageInfo& rhs) {
+                    return lhs < rhs.getPageKey();
+                });
         }
         std::optional<std::string> getPageKeyNoLock(std::string_view key)
         {
@@ -277,7 +286,7 @@ public:
             {
                 return std::nullopt;
             }
-            auto it = pages->upper_bound(PageInfo(std::string(key), 0, 0));
+            auto it = upper_bound(key);
             if (it != pages->end())
             {
                 return it->getPageKey();
@@ -285,7 +294,7 @@ public:
             return std::nullopt;
         }
 
-        std::set<PageInfo>& getAllPageInfoNoLock() { return std::ref(*pages); }
+        std::vector<PageInfo>& getAllPageInfoNoLock() { return std::ref(*pages); }
         void insertPageInfo(PageInfo&& pageInfo)
         {
             std::unique_lock lock(mutex);
@@ -324,31 +333,13 @@ public:
             auto it = lower_bound(oldEndKey);
             if (it != pages->end())
             {
-                auto node = pages->extract(it);
-                // if (c_fileLogLevel >= TRACE)
-                // { // FIXME: this log is only for debug, comment it when release
-                //     KeyPage_LOG(TRACE)
-                //         << LOG_DESC("updatePageInfo") << LOG_KV("oldEndKey", toHex(oldEndKey))
-                //         << LOG_KV("valid", node.value().count) << LOG_KV("newValid", count)
-                //         << LOG_KV("size", node.value().size) << LOG_KV("newSize", size);
-                // }
-                // count == 0, means the page is empty, the rage is empty
-                if (node.value().getPageKey() != pageKey)
+                if (it->getPageKey() != pageKey)
                 {
-                    // if (c_fileLogLevel >= TRACE)
-                    // {  // FIXME: this log is only for debug, comment it when release
-                    //     KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
-                    //                        << LOG_KV("endKey", toHex(node.value().endKey))
-                    //                        << LOG_KV("newEndKey", toHex(endKey))
-                    //                        << LOG_KV("startKey",
-                    //                        toHex(node.value().getStartKey()));
-                    // }
-                    oldPageKey = node.value().getPageKey();
-                    node.value().setPageKey(pageKey);
+                    oldPageKey = it->getPageKey();
+                    it->setPageKey(pageKey);
                 }
-                node.value().setCount(count);
-                node.value().setSize(size);
-                pages->insert(std::move(node));
+                it->setCount(count);
+                it->setSize(size);
             }
             else
             {
@@ -395,7 +386,7 @@ public:
 
     private:
         mutable std::shared_mutex mutex;
-        std::unique_ptr<std::set<PageInfo>> pages = std::make_unique<std::set<PageInfo>>();
+        std::unique_ptr<std::vector<PageInfo>> pages = std::make_unique<std::vector<PageInfo>>();
         friend class boost::serialization::access;
 
         template <class Archive>
@@ -412,15 +403,12 @@ public:
         void load(Archive& ar, const unsigned int version)
         {
             std::ignore = version;
-            pages = std::make_unique<std::set<PageInfo>>();
             uint32_t size = 0;
             ar& size;
-            auto iter = pages->begin();
+            pages = std::make_unique<std::vector<PageInfo>>(size, PageInfo());
             for (size_t i = 0; i < size; ++i)
             {
-                PageInfo info;
-                ar& info;
-                iter = pages->emplace_hint(iter, std::move(info));
+                ar&(*pages)[i];
             }
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
