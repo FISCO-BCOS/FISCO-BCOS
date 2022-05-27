@@ -39,7 +39,7 @@ class ServiceInfo:
     tars_pkg_postfix = ".tgz"
     default_listen_ip = "0.0.0.0"
     cert_generationscript_path = "../src/scripts/generate_cert.sh"
-    supported_service_type = [node_service_type,
+    supported_service_type = [node_service_type, executor_service_type,
                               rpc_service_type, gateway_service_type]
 
 
