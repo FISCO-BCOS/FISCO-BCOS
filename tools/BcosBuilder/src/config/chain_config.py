@@ -26,6 +26,7 @@ class GenesisConfig:
     def __init__(self, config):
         self.config = config
         section = "group"
+        self.desc = "[[group]]"
         self.leader_period = utilities.get_value(
             self.config, section, "leader_period", 1, False)
         self.block_tx_count_limit = utilities.get_value(
@@ -37,11 +38,11 @@ class GenesisConfig:
         self.compatibility_version = utilities.get_value(
             self.config, section, "compatibility_version", "3.0.0-rc4", False)
         self.vm_type = utilities.get_item_value(
-            self.config, "vm_type", "evm", False)
+            self.config, "vm_type", "evm", False, self.desc)
         self.auth_check = utilities.get_item_value(
-            self.config, "auth_check", False, False)
+            self.config, "auth_check", False, False, self.desc)
         self.init_auth_address = utilities.get_item_value(
-            self.config, "init_auth_address", "", self.auth_check)
+            self.config, "init_auth_address", "", self.auth_check, self.desc)
 
 
 class AgencyConfig:

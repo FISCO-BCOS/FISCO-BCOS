@@ -16,10 +16,6 @@
     ; min block generation time(ms)
     min_seal_time=500
 
-[executor]
-    ; use the wasm virtual machine or not
-    is_wasm=false
-
 [storage]
     data_path=data
     enable_cache=true

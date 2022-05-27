@@ -244,7 +244,7 @@ class TarsService:
         if ret is False:
             return (False, 0)
         params = {"ticket": self.tars_token, "config_id": server_config_id, "level": TarsService.get_level(server_name), "application": self.app_name,
-                  "server_name": server_name, "set_name": "", "set_area": "", "set_group": ""}
+                  "server_name": server_name, "set_name": "", "set_area": "", "set_group": "", "node_name": node_name}
         response = requests.get(self.node_config_file_list_url, params=params)
         if TarsService.parse_response("query the node config file id for " + config_file_name, response) is False:
             return (False, 0)
