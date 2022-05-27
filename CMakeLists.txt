@@ -54,8 +54,6 @@ hunter_add_package(OpenSSL)
 find_package(OpenSSL REQUIRED)
 
 # install dependencies
-include(InstallBcosUtilities)
-include(InstallBcosCrypto)
 include(IncludeDirectories)
 
 # define targets name
@@ -79,6 +77,8 @@ add_subdirectory(bcos-txpool)
 add_subdirectory(bcos-sync)
 add_subdirectory(bcos-front)
 add_subdirectory(bcos-leader-election)
+add_subdirectory(bcos-utilities)
+add_subdirectory(bcos-crypto)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
 add_subdirectory(fisco-bcos-tars-service)
