@@ -25,8 +25,9 @@ int main(int argc, const char* argv[])
     main_options.add_options()("help,h", "print help information")("pageSize,p",
         boost::program_options::value<int>()->default_value(0),
         "sizeof page(if >0 use KeyPageStorage, else use stateStorage)")("chainLength,c",
-        boost::program_options::value<int>()->default_value(1), "storage queue length")(
-        "total,t", boost::program_options::value<int>()->default_value(100000), "data set size");
+        boost::program_options::value<int>()->default_value(1), "storage queue length")("total,t",
+        boost::program_options::value<int>()->default_value(100000), "data set size")("onlyWrite,o",
+        boost::program_options::value<bool>()->default_value(false), "only test write performance");
     boost::program_options::variables_map vm;
     try
     {
@@ -47,6 +48,7 @@ int main(int argc, const char* argv[])
     int keyPageSize = vm["pageSize"].as<int>();
     int total = vm["total"].as<int>();
     int storageChainLength = vm["chainLength"].as<int>();
+    bool onlyWrite = vm["onlyWrite"].as<bool>();
     storageChainLength = storageChainLength > 0 ? storageChainLength : 1;
     boost::log::core::get()->set_filter(
         boost::log::trivial::severity >= boost::log::trivial::error);
@@ -121,8 +123,9 @@ int main(int argc, const char* argv[])
         table = storage->openTable(testTableName).value();
     }
     auto OnlyWriteEnd = std::chrono::system_clock::now();
+
     // only read after write
-    for (int i = 0; i < total; ++i)
+    for (int i = 0; i < total && !onlyWrite; ++i)
     {
         auto key = keySet[i];
         auto entry = table->getRow(key);
@@ -135,8 +138,9 @@ int main(int argc, const char* argv[])
     auto onlyWriteReadEnd = std::chrono::system_clock::now();
     // commit and read
     auto hashImpl = std::make_shared<Keccak256>();
-    for (auto s : storages)
+    for (int i = 0; i < total && !onlyWrite; ++i)
     {
+        auto s = storages[i];
         s->hash(hashImpl);
         TraverseStorageInterface::Ptr t =
             std::dynamic_pointer_cast<bcos::storage::TraverseStorageInterface>(s);
@@ -171,13 +175,14 @@ int main(int argc, const char* argv[])
     {
         storage = std::make_shared<StateStorage>(rocksDBStorage);
     }
-    table = storage->openTable(testTableName).value();
     auto prepareCleanStorageEnd = std::chrono::system_clock::now();
-    {
+    if (!onlyWrite)
+    { // load table meta data
+        table = storage->openTable(testTableName).value();
         auto entry = table->getRow(keySet[0]);
     }
     auto loadTableMetaEnd = std::chrono::system_clock::now();
-    for (int i = 0; i < total; ++i)
+    for (int i = 0; i < total && !onlyWrite; ++i)
     {  // read
         auto key = keySet[i];
         auto entry = table->getRow(key);
@@ -217,7 +222,7 @@ int main(int argc, const char* argv[])
         return -1;
     }
     auto prepareCleanDBEnd = std::chrono::system_clock::now();
-    for (int i = 0; i < storageChainLength; ++i)
+    for (int i = 0; i < storageChainLength && !onlyWrite; ++i)
     {
         for (int j = 0; j < perStorageKeys; ++j)
         {
@@ -245,7 +250,7 @@ int main(int argc, const char* argv[])
         table = storage->openTable(testTableName).value();
     }
     auto readWriteEnd = std::chrono::system_clock::now();
-    for (int i = 0; i < total; ++i)
+    for (int i = 0; i < total && !onlyWrite; ++i)
     {
         auto key = keySet[i];
         auto entry = table->getRow(key);

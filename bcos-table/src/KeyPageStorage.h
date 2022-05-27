@@ -91,7 +91,7 @@ public:
     explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024)
       : storage::StateStorageInterface(_prev),
         m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
-        m_splitSize(m_pageSize / 2),
+        m_splitSize(m_pageSize / 3 * 2),
         m_mergeSize(m_pageSize / 4),
         m_buckets(std::thread::hardware_concurrency())
     {}
@@ -434,7 +434,7 @@ public:
             entries = p.entries;
             m_size = p.m_size;
             m_validCount = p.m_validCount;
-            m_invalidStartKeys = p.m_invalidStartKeys;
+            m_invalidPageKeys = p.m_invalidPageKeys;
         }
         Page& operator=(const Page& p)
         {
@@ -443,7 +443,7 @@ public:
                 entries = p.entries;
                 m_size = p.m_size;
                 m_validCount = p.m_validCount;
-                m_invalidStartKeys = p.m_invalidStartKeys;
+                m_invalidPageKeys = p.m_invalidPageKeys;
             }
             return *this;
         }
@@ -452,7 +452,7 @@ public:
             entries = std::move(p.entries);
             m_size = p.m_size;
             m_validCount = p.m_validCount;
-            m_invalidStartKeys = std::move(p.m_invalidStartKeys);
+            m_invalidPageKeys = std::move(p.m_invalidPageKeys);
         }
         Page& operator=(Page&& p)
         {
@@ -562,10 +562,10 @@ public:
                     pageInfoChanged = true;
                     if (!entries.empty() && key > entries.rbegin()->first)
                     {
-                        m_invalidStartKeys.insert(entries.rbegin()->first);
+                        m_invalidPageKeys.push_back(entries.rbegin()->first);
                     }
                 }
-                entries[std::string(key)] = std::move(entry);
+                entries.emplace(std::string(key), std::move(entry));
                 // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
@@ -594,10 +594,10 @@ public:
             std::shared_lock lock(mutex);
             return entries.size();
         }
-        std::set<std::string> invalidKeySet() const
+        std::list<std::string> invalidKeySet() const
         {
             std::shared_lock lock(mutex);
-            return m_invalidStartKeys;
+            return m_invalidPageKeys;
         }
         std::string startKey() const
         {
@@ -634,10 +634,10 @@ public:
                     --m_validCount;
                     ++page.m_validCount;
                 }
-                if (!m_invalidStartKeys.empty() && iter->first == *m_invalidStartKeys.begin())
+                if (!m_invalidPageKeys.empty() && iter->first == *m_invalidPageKeys.begin())
                 {
-                    page.m_invalidStartKeys.insert(
-                        m_invalidStartKeys.extract(m_invalidStartKeys.begin()));
+                    page.m_invalidPageKeys.splice(
+                        page.m_invalidPageKeys.end(), m_invalidPageKeys, m_invalidPageKeys.begin());
                 }
                 auto ret = page.entries.insert(entries.extract(iter));
                 assert(ret.inserted);
@@ -647,10 +647,10 @@ public:
                     break;
                 }
             }
-            if (!m_invalidStartKeys.empty() &&
-                entries.rbegin()->first == *m_invalidStartKeys.begin())
-            {  // if new pageKey has been pageKey, remove it from m_invalidStartKeys
-                m_invalidStartKeys.erase(m_invalidStartKeys.begin());
+            if (!page.m_invalidPageKeys.empty() &&
+                page.entries.rbegin()->first == *page.m_invalidPageKeys.rbegin())
+            {  // if new pageKey has been pageKey, remove it from m_invalidPageKeys
+                page.m_invalidPageKeys.pop_back();
             }
             return page;
         }
@@ -675,7 +675,7 @@ public:
                     entries.insert(p.entries.extract(iter));
                     iter = p.entries.begin();
                 }
-                m_invalidStartKeys.merge(p.m_invalidStartKeys);
+                m_invalidPageKeys.merge(p.m_invalidPageKeys);
             }
             else
             {
@@ -785,10 +785,10 @@ public:
                         --m_validCount;
                     }
                     entries.erase(it);
-                    if (!m_invalidStartKeys.empty() && !entries.empty() &&
-                        entries.rbegin()->first == *m_invalidStartKeys.begin())
-                    {  // if new pageKey has been pageKey, remove it from m_invalidStartKeys
-                        m_invalidStartKeys.erase(m_invalidStartKeys.begin());
+                    if (!m_invalidPageKeys.empty() && !entries.empty() &&
+                        entries.rbegin()->first == *m_invalidPageKeys.rbegin())
+                    {  // if new pageKey has been pageKey, remove it from m_invalidPageKeys
+                        m_invalidPageKeys.pop_back();
                     }
                 }
                 else
@@ -813,7 +813,7 @@ public:
         uint32_t m_validCount = 0;  // valid entry count
         friend class boost::serialization::access;
         // if startKey changed the old startKey need keep to delete old page
-        std::set<std::string> m_invalidStartKeys;
+        std::list<std::string> m_invalidPageKeys;
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {

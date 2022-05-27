@@ -610,8 +610,9 @@ BOOST_AUTO_TEST_CASE(chainLink)
             ++totalCount;
             return true;
         });
-        BOOST_REQUIRE_EQUAL(totalCount, 10 * 2 + 10);  // 10 for s_tables, every table has 1 page(10
-                                                       // entry) and 1 meta
+        BOOST_REQUIRE_EQUAL(totalCount, (9 + 1 + 1) * 10 + 10);  // 10 for s_tables, every table has
+                                                                 // 1 page(10 entry) and 1 meta and
+                                                                 // 9 invalid key
 
         // Dirty data count must be 10 * 10 + 10
         std::atomic<size_t> dirtyCount = 0;
@@ -620,8 +621,8 @@ BOOST_AUTO_TEST_CASE(chainLink)
             return true;
         });
 
-        BOOST_REQUIRE_EQUAL(dirtyCount, 10 * 2 + 10);  // 10 for s_tables, every table has 1 page(10
-                                                       // entry) and 1 meta
+        BOOST_REQUIRE_EQUAL(dirtyCount, (9 + 1 + 1) * 10 + 10);  // 10 for s_tables, every table has
+                                                                 // 1 page(10 entry) and 1 meta
 
         // Low level can't touch high level's data
         for (int i = 0; i < 10; ++i)
@@ -679,7 +680,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
         storage->parallelTraverse(false, [&](auto&& table, auto&& key, auto&& entry) {
             checks.push_back([table, key, entry] {
                 // BOOST_REQUIRE_NE(tableInfo, nullptr);
-                if (table != "s_tables" && !key.empty())
+                if (table != "s_tables" && !key.empty() && entry.status() != Entry::Status::DELETED)
                 {
                     auto l = entry.getField(0).size();
                     BOOST_REQUIRE_GE(l, 10);
@@ -695,14 +696,14 @@ BOOST_AUTO_TEST_CASE(chainLink)
             it();
         }
 
-        BOOST_REQUIRE_EQUAL(totalCount, (10 * 2 + 10) * (index + 1));
+        BOOST_REQUIRE_EQUAL(totalCount, 120 + 30 * index);
 
         checks.clear();
         dirtyCount = 0;
         storage->parallelTraverse(true, [&](auto&& table, auto&& key, auto&& entry) {
             checks.push_back([table, key, entry]() {
                 // BOOST_REQUIRE_NE(tableInfo, nullptr);
-                if (table != "s_tables" && !key.empty())
+                if (table != "s_tables" && !key.empty() && entry.status() != Entry::Status::DELETED)
                 {
                     auto l = entry.getField(0).size();
                     BOOST_REQUIRE_GE(l, 10);
@@ -718,7 +719,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
         {
             it();
         }
-        BOOST_REQUIRE_EQUAL(dirtyCount, 30 + index * 20);
+        BOOST_REQUIRE_EQUAL(dirtyCount, 120 + index * 20);
         storage->setReadOnly(true);
     }
 }
@@ -961,7 +962,8 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 
 BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 {
-    KeyPageStorage::Ptr storage1 = std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+    KeyPageStorage::Ptr storage1 =
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -992,7 +994,8 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 
 BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 {
-    KeyPageStorage::Ptr storage1 = std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+    KeyPageStorage::Ptr storage1 =
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1032,7 +1035,8 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 
 BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
 {
-    KeyPageStorage::Ptr storage1 = std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+    KeyPageStorage::Ptr storage1 =
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1308,7 +1312,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 1780);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeRandom)
@@ -1407,7 +1411,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 1780);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
@@ -1639,7 +1643,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 1780);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitRandom)
@@ -1695,7 +1699,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 19210);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 27590);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitParallelRandom)
