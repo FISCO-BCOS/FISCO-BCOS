@@ -2,6 +2,8 @@
 // Created by Jimmy Shi on 2022/5/25.
 //
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "RemoteExecutorManager.h"
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>

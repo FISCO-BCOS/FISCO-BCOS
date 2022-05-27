@@ -24,6 +24,7 @@
 #include <bcos-framework/interfaces/storage/KVStorageHelper.h>
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
@@ -33,7 +34,6 @@
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
-#include <fisco-bcos-tars-service/SchedulerService/SwitchableScheduler.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
 
@@ -509,7 +509,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
 
             auto switchableScheduler =
-                std::dynamic_pointer_cast<bcos::scheduler::SwitchableScheduler>(m_scheduler);
+                std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
             switchableScheduler->asyncSwitchTerm(_leader->seq(), [_leader](Error::Ptr&& error) {
                 INITIALIZER_LOG(INFO)
                     << "Notify scheduler switch " << (error ? "success" : "failed") << " with"

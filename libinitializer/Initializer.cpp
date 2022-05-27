@@ -39,16 +39,16 @@
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
+#include "bcos-scheduler/src/RemoteExecutorManager.h"
 #include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
-#include "fisco-bcos-tars-service/SchedulerService/RemoteExecutorManager.h"
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
-#include <fisco-bcos-tars-service/SchedulerService/SwitchableScheduler.h>
 #include <bcos-tool/LedgerConfigFetcher.cpp>
 
 using namespace bcos;
@@ -174,7 +174,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup
-    m_scheduler = std::make_shared<bcos::scheduler::SwitchableScheduler>(
+    m_scheduler = std::make_shared<bcos::scheduler::SchedulerManager>(
         schedulerSeq, factory, executorManager);
 
     // init the txpool
@@ -264,7 +264,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     auto nodeName = m_nodeConfig->nodeName();
     auto groupID = m_nodeConfig->groupId();
     auto schedulerFactory =
-        dynamic_pointer_cast<scheduler::SwitchableScheduler>(m_scheduler)->getFactory();
+        dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
     // notify blockNumber
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {

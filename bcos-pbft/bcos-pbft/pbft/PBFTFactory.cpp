@@ -25,7 +25,7 @@
 #include "protocol/PB/PBFTMessageFactoryImpl.h"
 #include "storage/LedgerStorage.h"
 #include "utilities/Common.h"
-#include <fisco-bcos-tars-service/SchedulerService/SwitchableScheduler.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <memory>
 
 using namespace bcos;
@@ -81,7 +81,7 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
 
     // PBFT and scheduler are in the same process here, we just cast m_scheduler to SchedulerService
     auto schedulerServer =
-        std::dynamic_pointer_cast<bcos::scheduler::SwitchableScheduler>(m_scheduler);
+        std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
     schedulerServer->registerOnSwitchTermHandler(
         [pbftEngine](bcos::protocol::BlockNumber blockNumber) {
             PBFT_LOG(DEBUG) << LOG_BADGE("Switch")

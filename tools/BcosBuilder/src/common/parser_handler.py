@@ -165,6 +165,14 @@ def chain_operations(args, node_type):
             cmd_func_attr = getattr(command_impl, impl_str)
             cmd_func_attr()
             return
+    if op_type == ServiceInfo.executor_service_type:
+        if command in CommandInfo.executor_command_to_impl.keys():
+            chain_config = ChainConfig(toml_config, node_type, True)
+            command_impl = NodeCommandImpl(chain_config, node_type)
+            impl_str = CommandInfo.executor_command_to_impl[command]
+            cmd_func_attr = getattr(command_impl, impl_str)
+            cmd_func_attr()
+            return
     utilities.log_info("unimplemented command")
 
 

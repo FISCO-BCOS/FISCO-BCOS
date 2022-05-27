@@ -53,6 +53,11 @@ class NodeCommandImpl:
         notice_info = "expand nodes for the given group"
         return self.execute_command(function, notice_info)
 
+    def expand_executors(self):
+        function = "expand_and_deploy_all_executors"
+        notice_info = "expand executors for the given group"
+        return self.execute_command(function, notice_info)
+
     def execute_command(self, function, notice_info):
         utilities.print_split_info()
         utilities.print_badage(notice_info)
