@@ -100,7 +100,7 @@ public:
     {
         // Will update scheduler session, clear all scheduler & executor block pipeline cache and
         // re-dispatch executor
-        m_pool.enqueue([this, schedulerSeq]() {
+        m_pool.enqueue([this, callback = std::move(callback), schedulerSeq]() {
             switchTerm(schedulerSeq);
             callback(nullptr);
         });

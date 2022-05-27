@@ -57,7 +57,7 @@ public:
 
     void executeWorker() override;
 
-    void updateIfNeed(EndPointMap endPointMap);
+    void update(EndPointMap endPointMap);
 
 
 private:

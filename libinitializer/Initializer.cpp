@@ -172,8 +172,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
 
-    int64_t schedulerSeq =
-        0;  // In Max node, this seq will be update after consensus module switch to a leader
+    int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
+                               // to a leader during startup
     m_scheduler = std::make_shared<bcos::scheduler::SwitchableScheduler>(
         schedulerSeq, factory, executorManager);
 

@@ -83,21 +83,21 @@ void RemoteExecutorManager::executeWorker()
     vector<EndpointInfo> inactiveEndPoints;
     proxy->tars_endpoints(activeEndPoints, inactiveEndPoints);
 
-    dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
-
     EndPointMap currentEndPointMap = buildEndPointMap(activeEndPoints);
 
-    updateIfNeed(currentEndPointMap);
+    if (!isSame(m_endPointMap, currentEndPointMap))
+    {
+        dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
+        update(currentEndPointMap);
+    }
+    else
+    {
+        EXECUTOR_MANAGER_LOG(TRACE) << "No need to update";
+    }
 }
 
-void RemoteExecutorManager::updateIfNeed(EndPointMap endPointMap)
+void RemoteExecutorManager::update(EndPointMap endPointMap)
 {
-    if (isSame(m_endPointMap, endPointMap))
-    {
-        EXECUTOR_MANAGER_LOG(DEBUG) << "No need to update";
-        return;
-    }
-
     // update
     clear();
     m_endPointMap = endPointMap;
