@@ -22,7 +22,7 @@
 
 #include "../vm/Precompiled.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//storage/Table.h>
 
 namespace bcos::precompiled
 {

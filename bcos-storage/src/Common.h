@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework//storage/StorageInterface.h>
 
 namespace bcos::storage
 {

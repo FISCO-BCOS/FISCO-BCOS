@@ -26,7 +26,7 @@
 #include "SchedulerService/SchedulerServiceServer.h"
 #include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/Initializer.h"
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>

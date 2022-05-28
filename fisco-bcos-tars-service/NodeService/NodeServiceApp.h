@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-tars-protocol/tars/RpcService.h"
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework//protocol/Protocol.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>

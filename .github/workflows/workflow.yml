@@ -287,8 +287,6 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-10/enable
-          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
-          source /opt/rh/llvm-toolset-7/enable
           mkdir build && cd build && cmake3 .. -DTESTS=ON -DUSE_TiKV=ON
           make -j3
           mkdir -p /root/.tiup/bin/

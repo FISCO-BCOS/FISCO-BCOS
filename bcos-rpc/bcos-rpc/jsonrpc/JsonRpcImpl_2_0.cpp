@@ -20,10 +20,10 @@
  */
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
+#include <bcos-framework//Common.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/Transaction.h>
+#include <bcos-framework//protocol/TransactionReceipt.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>

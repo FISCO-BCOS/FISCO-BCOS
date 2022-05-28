@@ -25,7 +25,7 @@
 #include "src/cast.h"
 #include "src/ir.h"
 #include "src/stream.h"
-#include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework//Common.h>
 #include <iostream>
 
 using namespace std;

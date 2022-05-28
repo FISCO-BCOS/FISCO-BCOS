@@ -19,7 +19,7 @@
  * @date 2021-10-18
  */
 #pragma once
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
+#include <bcos-framework//ledger/LedgerInterface.h>
 #include <bcos-tars-protocol/tars/LedgerService.h>
 
 namespace bcostars

@@ -31,8 +31,8 @@
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Exceptions.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//protocol/Exceptions.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>

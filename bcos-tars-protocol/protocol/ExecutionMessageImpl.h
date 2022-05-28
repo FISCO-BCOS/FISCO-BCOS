@@ -26,8 +26,8 @@
 
 #include "bcos-tars-protocol/tars/ExecutionMessage.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-framework/interfaces/executor/ExecutionMessage.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
+#include <bcos-framework//executor/ExecutionMessage.h>
+#include <bcos-framework//protocol/LogEntry.h>
 namespace bcostars
 {
 namespace protocol

@@ -21,8 +21,8 @@
 
 #pragma once
 #include "libinitializer/Initializer.h"
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//gateway/GatewayInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 namespace bcos
 {
 namespace node

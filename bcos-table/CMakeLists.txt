@@ -28,7 +28,7 @@ find_package(TBB)
 find_package(OpenMP 4.5 REQUIRED)
 
 add_library(${TABLE_TARGET} ${SRCS})
-target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} Boost::serialization TBB::tbb OpenMP::OpenMP_CXX)
+target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb OpenMP::OpenMP_CXX)
 
 if (TESTS)
     enable_testing()

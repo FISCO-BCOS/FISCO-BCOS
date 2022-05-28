@@ -20,7 +20,7 @@
 #pragma once
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework//protocol/Exceptions.h>
 #include <bcos-utilities/Common.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/test/unit_test.hpp>

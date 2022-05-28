@@ -6,7 +6,7 @@ find_package(tarscpp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
 add_library(${COMMAND_HELPER_LIB} CommandHelper.cpp)
-target_link_libraries(${COMMAND_HELPER_LIB} Boost::program_options)
+target_link_libraries(${COMMAND_HELPER_LIB} bcos-framework Boost::program_options)
 
 add_library(${PROTOCOL_INIT_LIB} ProtocolInitializer.cpp)
 target_compile_options(${PROTOCOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)

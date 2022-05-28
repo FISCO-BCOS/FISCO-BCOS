@@ -19,9 +19,9 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework//ledger/LedgerInterface.h>
+#include <bcos-framework//protocol/BlockFactory.h>
+#include <bcos-framework//storage/StorageInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-tool/NodeConfig.h>
 

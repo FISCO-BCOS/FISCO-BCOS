@@ -20,10 +20,10 @@
  */
 #include "NodeConfig.h"
 #include "VersionConverter.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/ServiceDesc.h"
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include "bcos-framework//consensus/ConsensusNode.h"
+#include "bcos-framework//ledger/LedgerTypeDef.h"
+#include "bcos-framework//protocol/ServiceDesc.h"
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

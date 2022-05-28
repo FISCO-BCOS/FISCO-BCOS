@@ -1,8 +1,8 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
-#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework//ledger/LedgerConfig.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
 #include <boost/exception/diagnostic_information.hpp>

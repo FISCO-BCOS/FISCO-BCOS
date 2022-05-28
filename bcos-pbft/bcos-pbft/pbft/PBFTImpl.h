@@ -21,7 +21,7 @@
 #pragma once
 #include "engine/BlockValidator.h"
 #include "engine/PBFTEngine.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework//consensus/ConsensusInterface.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 namespace bcos
 {

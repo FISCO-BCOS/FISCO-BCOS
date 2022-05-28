@@ -20,9 +20,9 @@
  */
 #include "LedgerStorage.h"
 #include "../utilities/Common.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
+#include <bcos-framework//storage/Table.h>
 
 using namespace bcos;
 using namespace bcos::consensus;

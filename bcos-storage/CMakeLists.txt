@@ -15,7 +15,7 @@ find_package(Boost CONFIG QUIET REQUIRED serialization thread context filesystem
 set(SRC_LIST src/Common.cpp)
 list(APPEND SRC_LIST src/RocksDBStorage.cpp)
 
-set(LIB_LIST ${TABLE_TARGET} Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb)
+set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb)
 
 if(TIKV)
     include(ProjectTiKVClient)

@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/Common.h>
 #include <string>
 #include <vector>

@@ -24,8 +24,8 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//executor/PrecompiledTypeDef.h"
+#include "bcos-framework//storage/Table.h"
 #include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>

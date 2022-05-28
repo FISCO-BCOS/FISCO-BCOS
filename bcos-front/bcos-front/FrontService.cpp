@@ -20,8 +20,8 @@
 
 #include <thread>
 
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>

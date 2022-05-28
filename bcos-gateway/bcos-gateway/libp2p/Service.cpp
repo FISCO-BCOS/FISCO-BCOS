@@ -3,7 +3,7 @@
  *  @date 20180910
  */
 
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework//protocol/CommonError.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
 #include <bcos-gateway/libnetwork/SocketFace.h>     // for SocketFace

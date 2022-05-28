@@ -3,10 +3,10 @@
 #include "Common.h"
 #include "DmcExecutor.h"
 #include "SchedulerImpl.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework//executor/PrecompiledTypeDef.h"
+#include "bcos-framework//protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <tbb/parallel_for_each.h>

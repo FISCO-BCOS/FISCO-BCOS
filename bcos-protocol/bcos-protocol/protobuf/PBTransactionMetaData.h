@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-protocol/protobuf/proto/Block.pb.h"
-#include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
+#include <bcos-framework//protocol/TransactionMetaData.h>
 namespace bcos
 {
 namespace protocol

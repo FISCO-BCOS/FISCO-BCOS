@@ -23,7 +23,7 @@
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework//security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/FileUtility.h>
 #include <memory>

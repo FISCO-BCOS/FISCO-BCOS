@@ -23,7 +23,7 @@
  */
 #pragma once
 
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework//storage/StorageInterface.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>

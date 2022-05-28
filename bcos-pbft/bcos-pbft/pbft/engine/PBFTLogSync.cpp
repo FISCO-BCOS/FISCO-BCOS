@@ -19,7 +19,7 @@
  * @date 2021-04-28
  */
 #include "PBFTLogSync.h"
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework//protocol/Protocol.h>
 
 using namespace bcos;
 using namespace bcos::front;

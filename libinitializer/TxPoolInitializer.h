@@ -20,10 +20,10 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/sealer/SealerInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework//front/FrontServiceInterface.h>
+#include <bcos-framework//ledger/LedgerInterface.h>
+#include <bcos-framework//sealer/SealerInterface.h>
+#include <bcos-framework//txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>

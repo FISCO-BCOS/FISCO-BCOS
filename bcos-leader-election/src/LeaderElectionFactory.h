@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "LeaderElection.h"
-#include <bcos-framework/interfaces/election/LeaderElectionInterface.h>
-#include <bcos-framework/interfaces/protocol/MemberInterface.h>
+#include <bcos-framework//election/LeaderElectionInterface.h>
+#include <bcos-framework//protocol/MemberInterface.h>
 #include <memory>
 
 namespace bcos

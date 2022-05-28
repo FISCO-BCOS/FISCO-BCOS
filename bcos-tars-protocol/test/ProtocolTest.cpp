@@ -13,9 +13,9 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
+#include <bcos-framework//protocol/Transaction.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>

@@ -21,7 +21,7 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
@@ -29,13 +29,13 @@
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
-#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
-#include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
+#include <bcos-framework//consensus/ConsensusNode.h>
+#include <bcos-framework//gateway/GatewayTypeDef.h>
+#include <bcos-framework//ledger/LedgerConfig.h>
+#include <bcos-framework//multigroup/ChainNodeInfoFactory.h>
+#include <bcos-framework//multigroup/GroupInfoFactory.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
 #include <tarscpp/servant/Application.h>
 #include <tarscpp/tup/Tars.h>

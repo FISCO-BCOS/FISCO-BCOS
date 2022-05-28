@@ -21,7 +21,7 @@
 
 #pragma once
 #include "bcos-sync/interfaces/BlockSyncMsgInterface.h"
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace sync

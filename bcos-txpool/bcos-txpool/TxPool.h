@@ -22,7 +22,7 @@
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxPoolStorageInterface.h"
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework//txpool/TxPoolInterface.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <thread>
 namespace bcos

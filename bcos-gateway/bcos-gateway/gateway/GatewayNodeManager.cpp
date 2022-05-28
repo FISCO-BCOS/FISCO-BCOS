@@ -19,8 +19,8 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-utilities/DataConvertUtility.h>
 

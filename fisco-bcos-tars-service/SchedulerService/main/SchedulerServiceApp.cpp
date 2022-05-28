@@ -25,7 +25,7 @@
 #include "libinitializer/SchedulerInitializer.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>

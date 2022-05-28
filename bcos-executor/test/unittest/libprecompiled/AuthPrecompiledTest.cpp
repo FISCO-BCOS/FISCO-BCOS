@@ -21,7 +21,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/extension/AuthManagerPrecompiled.h"
 #include "precompiled/extension/ContractAuthMgrPrecompiled.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;

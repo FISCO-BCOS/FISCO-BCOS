@@ -7,7 +7,7 @@
  * @date 2021-11-05
  */
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework//storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"

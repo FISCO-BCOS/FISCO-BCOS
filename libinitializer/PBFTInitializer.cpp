@@ -19,9 +19,9 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
-#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-framework//election/FailOverTypeDef.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
+#include <bcos-framework//storage/KVStorageHelper.h>
 
 #ifdef ETCD
 #include <bcos-leader-election/src/LeaderElectionFactory.h>

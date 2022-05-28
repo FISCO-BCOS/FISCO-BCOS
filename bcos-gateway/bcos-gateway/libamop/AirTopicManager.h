@@ -18,7 +18,7 @@
  * @date 2021-06-18
  */
 #pragma once
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 #include <bcos-gateway/libamop/TopicManager.h>
 namespace bcos
 {

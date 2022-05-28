@@ -21,7 +21,7 @@
 #include "NodeService.h"
 #include "Common.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-tars-protocol/client/PBFTServiceClient.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>

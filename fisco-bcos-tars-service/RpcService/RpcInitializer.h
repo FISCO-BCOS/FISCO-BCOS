@@ -20,9 +20,9 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
+#include <bcos-framework//multigroup/GroupInfoFactory.h>
+#include <bcos-framework//rpc/RPCInterface.h>
+#include <bcos-framework//election/LeaderEntryPointInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
 #include <utility>

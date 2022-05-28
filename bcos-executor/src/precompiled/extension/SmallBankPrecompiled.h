@@ -22,8 +22,8 @@
 
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//ledger/LedgerTypeDef.h>
+#include <bcos-framework//storage/Table.h>
 
 namespace bcos
 {

@@ -35,7 +35,7 @@ BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 template <size_t width>
 void testFixedWidthMerkle()
 {
-    for (auto count : std::ranges::iota_view{0, 64})
+    for (auto count = 0; count < 64; ++count)
     {
         std::vector<HashType> hashes(count);
 

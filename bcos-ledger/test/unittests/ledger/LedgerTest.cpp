@@ -23,8 +23,8 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework//ledger/LedgerTypeDef.h"
+#include "bcos-framework//protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"
@@ -33,10 +33,10 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//consensus/ConsensusNode.h>
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
+#include <bcos-framework//storage/StorageInterface.h>
+#include <bcos-framework//storage/Table.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>

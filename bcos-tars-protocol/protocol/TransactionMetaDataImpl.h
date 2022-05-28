@@ -24,7 +24,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
-#include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
+#include <bcos-framework//protocol/TransactionMetaData.h>
 
 namespace bcostars
 {

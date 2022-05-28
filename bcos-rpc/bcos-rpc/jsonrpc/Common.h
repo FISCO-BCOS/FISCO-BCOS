@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include <bcos-framework/interfaces/multigroup/GroupInfo.h>
+#include <bcos-framework//multigroup/GroupInfo.h>
 #include <json/json.h>
 #include <exception>
 

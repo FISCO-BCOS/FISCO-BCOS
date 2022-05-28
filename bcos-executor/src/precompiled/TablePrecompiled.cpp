@@ -21,7 +21,7 @@
 #include "TablePrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework//protocol/Exceptions.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>

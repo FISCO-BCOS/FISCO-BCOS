@@ -26,8 +26,8 @@
 #include "../executive/TransactionExecutive.h"
 #include "DAG.h"
 #include "../executor/TransactionExecutor.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework//protocol/Block.h"
+#include "bcos-framework//protocol/Transaction.h"
 #include <map>
 #include <memory>
 #include <queue>

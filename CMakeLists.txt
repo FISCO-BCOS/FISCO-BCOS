@@ -37,15 +37,13 @@ hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
+hunter_add_package(OpenSSL)
 
 # bcos-boostssl
 find_package(Boost CONFIG REQUIRED COMPONENTS log system filesystem chrono iostreams thread)
-hunter_add_package(bcos-boostssl)
-find_package(bcos-boostssl CONFIG REQUIRED)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
 # find OpenSSL
-hunter_add_package(OpenSSL)
 find_package(OpenSSL REQUIRED)
 
 # install dependencies
@@ -75,6 +73,7 @@ add_subdirectory(bcos-front)
 add_subdirectory(bcos-leader-election)
 add_subdirectory(bcos-utilities)
 add_subdirectory(bcos-crypto)
+add_subdirectory(bcos-boostssl)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
 add_subdirectory(fisco-bcos-tars-service)

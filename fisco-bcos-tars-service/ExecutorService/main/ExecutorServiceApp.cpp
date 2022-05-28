@@ -26,7 +26,7 @@
 #include "libinitializer/ParallelExecutor.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>

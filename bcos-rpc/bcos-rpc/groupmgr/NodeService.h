@@ -19,15 +19,15 @@
  * @date 2021-10-11
  */
 #pragma once
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/multigroup/ChainNodeInfo.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfo.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework//consensus/ConsensusInterface.h>
+#include <bcos-framework//dispatcher/SchedulerInterface.h>
+#include <bcos-framework//ledger/LedgerInterface.h>
+#include <bcos-framework//multigroup/ChainNodeInfo.h>
+#include <bcos-framework//multigroup/GroupInfo.h>
+#include <bcos-framework//protocol/BlockFactory.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
+#include <bcos-framework//sync/BlockSyncInterface.h>
+#include <bcos-framework//txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <tarscpp/servant/Application.h>
 namespace bcos

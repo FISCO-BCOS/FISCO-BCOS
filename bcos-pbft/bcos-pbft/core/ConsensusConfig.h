@@ -21,7 +21,7 @@
 #pragma once
 #include "../framework/ConsensusConfigInterface.h"
 #include "Common.h"
-#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework//protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
 

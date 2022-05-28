@@ -23,7 +23,7 @@
 #include "../MemoryStorage.h"
 #include "../mock/MockDispatcher.h"
 #include "../mock/MockLedger.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
+#include "bcos-framework//ledger/LedgerTypeDef.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "libprecompiled/Common.h"

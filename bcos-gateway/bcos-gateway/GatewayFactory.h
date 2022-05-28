@@ -6,9 +6,9 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework//election/LeaderEntryPointInterface.h>
+#include <bcos-framework//front/FrontServiceInterface.h>
+#include <bcos-framework//security/DataEncryptInterface.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>

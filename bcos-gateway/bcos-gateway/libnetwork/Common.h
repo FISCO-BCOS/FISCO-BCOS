@@ -16,7 +16,7 @@
 #include <boost/asio/ip/tcp.hpp>
 
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
+#include <bcos-framework//gateway/GatewayTypeDef.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>

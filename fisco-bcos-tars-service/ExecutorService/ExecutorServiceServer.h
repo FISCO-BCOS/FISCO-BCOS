@@ -19,7 +19,7 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
 namespace bcostars
 {

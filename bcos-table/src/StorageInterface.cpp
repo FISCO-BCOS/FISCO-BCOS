@@ -1,5 +1,5 @@
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//storage/StorageInterface.h"
+#include "bcos-framework//storage/Table.h"
 #include <optional>
 
 using namespace bcos::storage;

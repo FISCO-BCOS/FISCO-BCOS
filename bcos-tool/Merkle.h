@@ -105,7 +105,7 @@ public:
 
             if (std::ranges::find(range, hash) == std::end(range)) [[unlikely]]
                 return false;
-                
+
             if (it + 1 != proof.levels.end())
             {
                 for (auto& rangeHash : range)
@@ -176,6 +176,9 @@ public:
     {
         if (std::empty(input)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
+
+        if (!empty()) [[unlikely]]
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle already imported"});
 
         auto inputSize = std::size(input);
         m_nodes.resize(getNodeSize(inputSize));
@@ -300,8 +303,6 @@ private:
 
     std::vector<HashType> m_nodes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
-
-    constexpr static size_t MIN_PARALLEL_SIZE = 32;
 };
 
 }  // namespace bcos::tool

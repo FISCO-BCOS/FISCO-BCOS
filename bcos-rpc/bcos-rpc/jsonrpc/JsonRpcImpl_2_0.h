@@ -21,7 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework//gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>

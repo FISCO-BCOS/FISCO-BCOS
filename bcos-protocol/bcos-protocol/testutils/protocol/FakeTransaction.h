@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "bcos-protocol/protobuf/PBTransactionFactory.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework//protocol/Exceptions.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 

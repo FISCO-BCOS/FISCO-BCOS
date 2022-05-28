@@ -21,9 +21,9 @@
 #include "SystemConfigPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework//ledger/LedgerTypeDef.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/Protocol.h>
 #include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

@@ -21,8 +21,8 @@
 #include "LedgerConfigFetcher.h"
 #include "Exceptions.h"
 #include "VersionConverter.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework//ledger/LedgerTypeDef.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <bcos-utilities/Common.h>
 #include <future>
 using namespace bcos::protocol;

@@ -20,7 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>

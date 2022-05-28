@@ -26,10 +26,10 @@
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework//consensus/ConsensusInterface.h>
+#include <bcos-framework//election/LeaderEntryPointInterface.h>
+#include <bcos-framework//gateway/GatewayInterface.h>
+#include <bcos-framework//security/DataEncryptInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 #include <bcos-rpc/event/EventSub.h>

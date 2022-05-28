@@ -18,7 +18,7 @@
  * @date 2021-04-19
  */
 
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework//protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-utilities/Common.h>

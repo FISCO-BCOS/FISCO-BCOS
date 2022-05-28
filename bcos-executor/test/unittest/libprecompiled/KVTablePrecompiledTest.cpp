@@ -19,7 +19,7 @@
  */
 
 #include "precompiled/KVTablePrecompiled.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
+#include "bcos-framework//executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 

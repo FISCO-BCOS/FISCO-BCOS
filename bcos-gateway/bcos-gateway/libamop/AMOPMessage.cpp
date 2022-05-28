@@ -18,7 +18,7 @@
  * @date 2021-06-21
  */
 
-#include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework//Common.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>

@@ -28,9 +28,9 @@
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
+#include <bcos-framework//protocol/Block.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>

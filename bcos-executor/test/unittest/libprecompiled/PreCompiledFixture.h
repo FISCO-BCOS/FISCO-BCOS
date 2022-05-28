@@ -20,7 +20,7 @@
 
 #pragma once
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
+#include "bcos-framework//ledger/LedgerTypeDef.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "executive/BlockContext.h"
@@ -33,8 +33,8 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2.h>
-#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//executor/NativeExecutionMessage.h>
+#include <bcos-framework//storage/Table.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

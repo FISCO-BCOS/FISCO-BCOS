@@ -22,8 +22,8 @@
 #pragma once
 
 #include "../Common.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//protocol/BlockHeader.h"
+#include "bcos-framework//storage/Table.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>

@@ -16,8 +16,8 @@
  * @brief Unit tests for the ConsensusNode
  * @file ConsensusNodeTest.cpp
  */
-#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include <bcos-crypto/signature/key/KeyImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>

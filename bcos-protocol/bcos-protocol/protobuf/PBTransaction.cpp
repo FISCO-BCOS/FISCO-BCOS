@@ -20,7 +20,7 @@
  */
 #include "PBTransaction.h"
 #include "../Common.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework//protocol/Exceptions.h>
 
 using namespace bcos;
 using namespace bcos::protocol;

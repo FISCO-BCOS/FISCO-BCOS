@@ -20,10 +20,10 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/rpc/RPCInterface.h"
+#include "bcos-framework//rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework//dispatcher/SchedulerInterface.h>
+#include <bcos-framework//txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Log.h>

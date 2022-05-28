@@ -26,6 +26,9 @@ project(bcos-framework VERSION ${VERSION})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
+add_library(bcos-framework INTERFACE)
+target_include_directories(bcos-framework INTERFACE .)
+
 if (TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)

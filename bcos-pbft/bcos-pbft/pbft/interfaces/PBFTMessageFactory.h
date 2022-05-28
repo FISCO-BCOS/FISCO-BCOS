@@ -25,7 +25,7 @@
 #include "PBFTRequestInterface.h"
 #include "ViewChangeMsgInterface.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace consensus

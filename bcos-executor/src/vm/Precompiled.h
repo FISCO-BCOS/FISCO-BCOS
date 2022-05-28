@@ -23,7 +23,7 @@
 #include "../executive/TransactionExecutive.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>

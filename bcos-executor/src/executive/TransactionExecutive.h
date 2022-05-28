@@ -26,10 +26,10 @@
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//executor/PrecompiledTypeDef.h"
+#include "bcos-framework//protocol/BlockHeader.h"
+#include "bcos-framework//protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>

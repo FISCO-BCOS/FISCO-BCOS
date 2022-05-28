@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
+#include <bcos-framework//protocol/ProtocolInfo.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
