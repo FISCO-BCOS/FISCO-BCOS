@@ -10,16 +10,8 @@ chain_id="chain0"
 group_id="group0"
 # the genesis configuration path of the expanded group
 genesis_config_path = "generated/chain0/group0/config.genesis"
-
-# the genesis configuration path of the group, will generate new genesis configuration if not configurated
-# genesis_config_path = ""
-# VM type, now only support evm/wasm
-vm_type="evm"
 # use sm-crypto or not
 sm_crypto=false
-# enable auth-check or not
-auth_check=false
-init_auth_address=""
 
 
 [[agency]]
