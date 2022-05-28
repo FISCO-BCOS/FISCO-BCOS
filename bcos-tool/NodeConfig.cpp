@@ -50,6 +50,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadRpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadTxPoolConfig(_pt);
+    loadStorageSecurityConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
     loadSecurityConfig(_pt);
@@ -359,6 +360,43 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
 
+void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
+{
+    m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
+    if (true == m_storageSecurityEnable)
+    {
+        std::string storageSecurityKeyCenterUrl =
+            _pt.get<std::string>("storage_security.key_center_url", "");
+
+        std::vector<std::string> values;
+        boost::split(
+            values, storageSecurityKeyCenterUrl, boost::is_any_of(":"), boost::token_compress_on);
+        if (2 != values.size())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "initGlobalConfig storage_security failed! Invalid key_center_url!"));
+        }
+
+        m_storageSecurityKeyCenterIp = values[0];
+        m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
+        if (false == isValidPort(m_storageSecurityKeyCenterPort))
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
+        }
+
+        m_storageSecurityCipherDataKey =
+            _pt.get<std::string>("storage_security.cipher_data_key", "");
+        if (true == m_storageSecurityCipherDataKey.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
+        }
+    }
+}
+
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
@@ -576,4 +614,11 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
                                   "Invalid value " + value + " for configuration " + _key +
                                   ", please set the value with a valid number"));
     }
+}
+
+bool NodeConfig::isValidPort(int port)
+{
+    if (port <= 1024 || port > 65535)
+        return false;
+    return true;
 }

@@ -419,7 +419,7 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
                              << LOG_KV("maxVersion", mutableProtocol->maxVersion())
                              << LOG_KV("supportedMinVersion", m_localProtocol->minVersion())
                              << LOG_KV("supportedMaxVersion", m_localProtocol->maxVersion());
-            mutableProtocol->setVersion(ProtocolVersion::INVALID);
+            mutableProtocol->setVersion(ProtocolVersion::V0);
             i++;
             continue;
         }

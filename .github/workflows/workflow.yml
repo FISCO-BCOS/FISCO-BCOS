@@ -256,8 +256,8 @@ jobs:
           yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-10 libzstd-devel zlib-devel flex bison python-devel python3-devel java java-devel
           source /opt/rh/devtoolset-10/enable
           alias cmake='cmake3'
-          yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum swap -y git git224-core
+          yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
+          yum install -y git
           git --version
       - uses: actions/checkout@v2
         with:
@@ -315,8 +315,8 @@ jobs:
           yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-10 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
           source /opt/rh/devtoolset-10/enable
           alias cmake='cmake3'
-          yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum swap -y git git224-core
+          yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
+          yum install -y git
           git --version
       - uses: actions/checkout@v2
         with:

@@ -294,6 +294,7 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
             ->setStatus(bcos::protocol::CommonError::NotFoundClientByTopicDispatchMsg);
         responseMessage->setPacketType(AMOPClientMessageType::AMOP_RESPONSE);
         auto buffer = std::make_shared<bcos::bytes>();
+        // Note: encode the message into buffer, response to the request-sdk
         responseMessage->encode(*buffer);
         _callback(std::make_shared<Error>(CommonError::NotFoundClientByTopicDispatchMsg,
                       "NotFoundClientByTopicDispatchMsg"),
@@ -305,6 +306,9 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("asyncNotifyAMOPMessage") << LOG_KV("topic", _topic)
                            << LOG_KV("choosedSession", clientSession->endPoint());
     auto requestMsg = m_wsMessageFactory->buildMessage();
+    // Note: m_wsMessageFactory buildMessage won't generate seq automatically, we should setSeq
+    // manually when need trigger callback after receive response message from the client
+    requestMsg->setSeq(m_wsMessageFactory->newSeq());
     requestMsg->setPacketType(AMOPClientMessageType::AMOP_REQUEST);
     auto requestPayLoad = std::make_shared<bytes>(_amopRequestData.begin(), _amopRequestData.end());
     requestMsg->setPayload(requestPayLoad);

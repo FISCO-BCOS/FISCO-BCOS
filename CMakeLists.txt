@@ -56,6 +56,7 @@ include(TargetSettings)
 
 add_subdirectory(bcos-codec)
 add_subdirectory(bcos-sealer)
+add_subdirectory(bcos-security)
 add_subdirectory(bcos-tool)
 add_subdirectory(bcos-table)
 add_subdirectory(bcos-framework)
