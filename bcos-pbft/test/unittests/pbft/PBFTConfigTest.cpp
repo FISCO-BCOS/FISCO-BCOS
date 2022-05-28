@@ -18,7 +18,7 @@
  * @author: yujiechen
  * @date 2021-05-28
  */
-#include "interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
 #include <bcos-crypto/hash/Keccak256.h>

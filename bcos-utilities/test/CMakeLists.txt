@@ -19,10 +19,10 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-utilities)
-find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+find_package(Boost CONFIG REQUIRED COMPONENTS unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(${TEST_BINARY_NAME} ${BCOS_UTILITIES_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} bcos-utilities Boost::unit_test_framework)
 add_test(NAME test-rpc WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -1,10 +1,11 @@
 include(Version)
 project(bcos-crypto VERSION ${VERSION})
 
-aux_source_directory(src SRCS)
+file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
 
 add_library(bcos-crypto ${SRCS})
-# target_link_libraries(bcos-crypto PUBLIC Boost::log Boost::chrono Boost::thread)
+target_include_directories(bcos-crypto PUBLIC .)
+target_link_libraries(bcos-crypto PUBLIC bcos-utilities wedpr-crypto::crypto OpenSSL::Crypto)
 
 if(TESTS)
     enable_testing()

@@ -25,11 +25,12 @@ project(bcos-gateway VERSION ${VERSION})
 find_package(OpenSSL REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(Boost REQUIRED COMPONENTS filesystem)
 
 file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
 add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_lib_static OpenSSL::SSL OpenSSL::Crypto ${TARS_PROTOCOL_TARGET})
+target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_lib_static OpenSSL::SSL OpenSSL::Crypto Boost::filesystem ${TARS_PROTOCOL_TARGET})
 target_compile_options(${GATEWAY_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 if (APPLE)

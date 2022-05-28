@@ -28,7 +28,7 @@
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"
-#include "interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
