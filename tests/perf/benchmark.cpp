@@ -27,7 +27,8 @@ int main(int argc, const char* argv[])
         "sizeof page(if >0 use KeyPageStorage, else use stateStorage)")("chainLength,c",
         boost::program_options::value<int>()->default_value(1), "storage queue length")("total,t",
         boost::program_options::value<int>()->default_value(100000), "data set size")("onlyWrite,o",
-        boost::program_options::value<bool>()->default_value(false), "only test write performance");
+        boost::program_options::value<bool>()->default_value(false), "only test write performance")(
+        "db,d", boost::program_options::value<int>()->default_value(0), "init db keys count");
     boost::program_options::variables_map vm;
     try
     {
@@ -49,20 +50,28 @@ int main(int argc, const char* argv[])
     int total = vm["total"].as<int>();
     int storageChainLength = vm["chainLength"].as<int>();
     bool onlyWrite = vm["onlyWrite"].as<bool>();
+    int dbKeys = vm["db"].as<int>();
+
     storageChainLength = storageChainLength > 0 ? storageChainLength : 1;
+    // set log level
     boost::log::core::get()->set_filter(
         boost::log::trivial::severity >= boost::log::trivial::error);
-    std::cout << "pageSize=" << keyPageSize;
+
 
     // prepare data set
-    std::vector<std::string> keySet(total, "");
-    std::vector<std::string> valueSet(total, "");
-    for (int i = 0; i < total; ++i)
+    int max = std::max(total, dbKeys);
+    std::vector<std::string> keySet(max, "");
+    std::vector<std::string> valueSet(max, "");
+#pragma omp parallel for
+    for (int i = 0; i < max; ++i)
     {
         keySet[i] = boost::uuids::to_string(boost::uuids::random_generator()());
         valueSet[i] = boost::uuids::to_string(boost::uuids::random_generator()());
     }
 
+    std::cout << "pageSize=" << keyPageSize << "|Total=" << total << "|kv size=" << keySet[0].size()
+              << "|chain storage len=" << storageChainLength << std::endl
+              << "use keypage=" << (keyPageSize > 0 ? "true" : "false") << std::endl;
     // create storage
     StateStorageInterface::Ptr storage = nullptr;
     auto dbPath = "./testdata/testdb";
@@ -78,8 +87,22 @@ int main(int argc, const char* argv[])
         std::cout << "open db failed, " << (int)s.code() << s.getState() << std::endl;
         return -1;
     }
+    // insert init keys to rocksDB
+    if (dbKeys > 0)
+    {
+        rocksdb::WriteBatch b;
+
+#pragma omp parallel for
+        for (int i = 0; i < dbKeys; ++i)
+        {
+#pragma omp critical
+            b.Put(keySet[i], valueSet[i]);
+        }
+        db->Write(rocksdb::WriteOptions(), &b);
+    }
+
     auto rocksDBStorage =
-        std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+        std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
 
     if (keyPageSize > 0)
     {
@@ -105,9 +128,9 @@ int main(int argc, const char* argv[])
     {
         for (int j = 0; j < perStorageKeys; ++j)
         {
-            auto key = keySet[j];
+            auto key = keySet[j + perStorageKeys * i];
             auto entry = table->newEntry();
-            entry.set(valueSet[j]);
+            entry.set(valueSet[j + perStorageKeys * i]);
             table->setRow(key, entry);
         }
         storage->setReadOnly(true);
@@ -123,7 +146,9 @@ int main(int argc, const char* argv[])
         table = storage->openTable(testTableName).value();
     }
     auto OnlyWriteEnd = std::chrono::system_clock::now();
-
+    std::cout << "sequential write: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(OnlyWriteEnd - start).count()
+              << "ms" << std::endl;
     // only read after write
     for (int i = 0; i < total && !onlyWrite; ++i)
     {
@@ -131,14 +156,15 @@ int main(int argc, const char* argv[])
         auto entry = table->getRow(key);
         if (entry->get() != valueSet[i])
         {
-            std::cout << "get row failed" << std::endl;
+            std::cout << i << " get row failed at sequential read, value wrong:" << entry->get()
+                      << "!=" << valueSet[i] << std::endl;
             return -1;
         }
     }
     auto onlyWriteReadEnd = std::chrono::system_clock::now();
     // commit and read
     auto hashImpl = std::make_shared<Keccak256>();
-    for (int i = 0; i < total && !onlyWrite; ++i)
+    for (int i = 0; i < storageChainLength && !onlyWrite; ++i)
     {
         auto s = storages[i];
         s->hash(hashImpl);
@@ -166,7 +192,7 @@ int main(int argc, const char* argv[])
         return -1;
     }
     rocksDBStorage =
-        std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+        std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
     if (keyPageSize > 0)
     {
         storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
@@ -176,23 +202,43 @@ int main(int argc, const char* argv[])
         storage = std::make_shared<StateStorage>(rocksDBStorage);
     }
     auto prepareCleanStorageEnd = std::chrono::system_clock::now();
+
+    std::cout << "sequential read : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     onlyWriteReadEnd - OnlyWriteEnd)
+                     .count()
+              << "ms" << std::endl
+              << "hash and commit : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     hashAndCommitEnd - onlyWriteReadEnd)
+                     .count()
+              << "ms" << std::endl;
     if (!onlyWrite)
-    { // load table meta data
+    {  // load table meta data
         table = storage->openTable(testTableName).value();
         auto entry = table->getRow(keySet[0]);
     }
     auto loadTableMetaEnd = std::chrono::system_clock::now();
     for (int i = 0; i < total && !onlyWrite; ++i)
     {  // read
-        auto key = keySet[i];
-        auto entry = table->getRow(key);
+        auto entry = table->getRow(keySet[i]);
         if (entry->get() != valueSet[i])
         {
-            std::cout << "get row failed" << std::endl;
+            std::cout << i << " get row failed at clean read, value wrong:" << entry->get()
+                      << "!=" << valueSet[i] << std::endl;
             return -1;
         }
     }
     auto cleanReadEnd = std::chrono::system_clock::now();
+    std::cout << "clean read      : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     cleanReadEnd - prepareCleanStorageEnd)
+                     .count()
+              << "ms/"
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     loadTableMetaEnd - prepareCleanStorageEnd)
+                     .count()
+              << std::endl;
     // read and write, hash, commit
     storage.reset();
     table = Table(nullptr, nullptr);
@@ -205,8 +251,21 @@ int main(int argc, const char* argv[])
         std::cout << "open db failed, " << (int)s.code() << s.getState() << std::endl;
         return -1;
     }
+    // insert init keys to rocksDB
+    if (dbKeys > 0)
+    {
+        rocksdb::WriteBatch b;
+
+#pragma omp parallel for
+        for (int i = 0; i < dbKeys; ++i)
+        {
+#pragma omp critical
+            b.Put(keySet[i], valueSet[i]);
+        }
+        db->Write(rocksdb::WriteOptions(), &b);
+    }
     rocksDBStorage =
-        std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+        std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
     if (keyPageSize > 0)
     {
         storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
@@ -222,11 +281,16 @@ int main(int argc, const char* argv[])
         return -1;
     }
     auto prepareCleanDBEnd = std::chrono::system_clock::now();
+    std::cout << "prepareCleanDB  : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     prepareCleanDBEnd - cleanReadEnd)
+                     .count()
+              << "ms" << std::endl;
     for (int i = 0; i < storageChainLength && !onlyWrite; ++i)
     {
         for (int j = 0; j < perStorageKeys; ++j)
         {
-            auto key = keySet[j];
+            auto key = keySet[j + perStorageKeys * i];
             auto entryO = table->getRow(key);
             if (entryO)
             {
@@ -234,7 +298,7 @@ int main(int argc, const char* argv[])
                 return -1;
             }
             auto entry = table->newEntry();
-            entry.set(valueSet[j]);
+            entry.set(valueSet[j + perStorageKeys * i]);
             table->setRow(key, entry);
         }
         storage->setReadOnly(true);
@@ -256,42 +320,19 @@ int main(int argc, const char* argv[])
         auto entry = table->getRow(key);
         if (entry->get() != valueSet[i])
         {
-            std::cout << "get row failed" << std::endl;
+            std::cout << "get row failed after write" << std::endl;
             return -1;
         }
     }
     auto readWriteReadEnd = std::chrono::system_clock::now();
-    std::cout
-        << "|Total=" << total << "|kv size=" << keySet[0].size() << std::endl
-        << "use keypage=" << (keyPageSize > 0 ? "true" : "false") << std::endl
-        << std::endl
-        << "sequential write: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(OnlyWriteEnd - start).count()
-        << "ms" << std::endl
-        << "sequential read : "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(onlyWriteReadEnd - OnlyWriteEnd)
-               .count()
-        << "ms" << std::endl
-        << "hash and commit : "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(
-               hashAndCommitEnd - onlyWriteReadEnd)
-               .count()
-        << "ms" << std::endl
-        << "clean read      : "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(
-               cleanReadEnd - prepareCleanStorageEnd)
-               .count()
-        << "ms/"
-        << std::chrono::duration_cast<std::chrono::milliseconds>(
-               loadTableMetaEnd - prepareCleanStorageEnd)
-               .count()
-        << std::endl
-        << "read write      : "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(readWriteEnd - prepareCleanDBEnd)
-               .count()
-        << "ms" << std::endl
-        << "sequential read : "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(readWriteReadEnd - readWriteEnd)
-               .count()
-        << "ms" << std::endl;
+    std::cout << "read write      : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     readWriteEnd - prepareCleanDBEnd)
+                     .count()
+              << "ms" << std::endl
+              << "sequential read : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     readWriteReadEnd - readWriteEnd)
+                     .count()
+              << "ms" << std::endl;
 }

@@ -646,8 +646,8 @@ BOOST_AUTO_TEST_CASE(chainLink)
                         auto key = boost::lexical_cast<std::string>(i) +
                                    boost::lexical_cast<std::string>(k);
                         BCOS_LOG(INFO)
-                            << LOG_DESC("c") << LOG_KV("tableName", tableName) << LOG_KV("key", key)
-                            << LOG_KV("index", index) << LOG_KV("i", i);
+                            << LOG_DESC("get") << LOG_KV("tableName", tableName)
+                            << LOG_KV("key", key) << LOG_KV("index", index) << LOG_KV("i", i);
                         auto entry = table->getRow(key);
                         if (i > index)
                         {
@@ -719,7 +719,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
         {
             it();
         }
-        BOOST_REQUIRE_EQUAL(dirtyCount, 120 + index * 20);
+        BOOST_REQUIRE_EQUAL(dirtyCount, 120);
         storage->setReadOnly(true);
     }
 }
@@ -1312,7 +1312,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 3290);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeRandom)
@@ -1411,7 +1411,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 3290);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
@@ -1643,7 +1643,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 3290);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitRandom)
@@ -1699,7 +1699,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 27590);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 8830);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitParallelRandom)

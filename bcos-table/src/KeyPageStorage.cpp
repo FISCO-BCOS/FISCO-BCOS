@@ -52,9 +52,9 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
         return;
     }
     std::vector<std::string> ret;
-    auto& meta = std::get<1>(data.value()->data);
-    auto readLock = meta.rLock();
-    auto pageInfo = meta.getAllPageInfoNoLock();
+    auto meta = &std::get<1>(data.value()->data);
+    auto readLock = meta->rLock();
+    auto& pageInfo = meta->getAllPageInfoNoLock();
     auto [offset, total] = _condition->getLimit();
     ret.reserve(total);
     size_t validCount = 0;
@@ -63,8 +63,8 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
         auto [error, data] = getData(tableView, info.getPageKey(), true);
         boost::ignore_unused(error);
         assert(!error);
-        auto& page = std::get<0>(data.value()->data);
-        auto [entries, pageLock] = page.getEntries();
+        auto page = &std::get<0>(data.value()->data);
+        auto [entries, pageLock] = page->getEntries();
         boost::ignore_unused(pageLock);
         for (auto& it : entries)
         {
@@ -190,17 +190,17 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
             bucket->container.find(std::make_pair(std::string(tableView), std::string(keyView)));
         if (it != bucket->container.end())
         {  // update
-            auto& existsEntry = it->second.entry;
+            auto& existsEntry = it->second->entry;
             entryOld.emplace(std::move(existsEntry));
 
-            it->second.entry = std::move(entry);
+            it->second->entry = std::move(entry);
         }
         else
         {  // insert
             auto tableKey = std::make_pair(std::string(tableView), std::string(keyView));
-            bucket->container.emplace(std::make_pair(
-                std::move(tableKey), Data(std::string(tableView), std::string(keyView),
-                                         std::move(entry), Data::Type::NormalEntry)));
+            bucket->container.emplace(std::make_pair(std::move(tableKey),
+                std::make_shared<Data>(std::string(tableView), std::string(keyView),
+                    std::move(entry), Data::Type::NormalEntry)));
         }
 
         if (m_recoder.local())
@@ -230,82 +230,77 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
 
         for (auto& it : bucket.container)
         {
-            if (!onlyDirty || it.second.entry.dirty())
-            {
-                if (it.second.type == Data::Type::TableMeta)
-                {  // if metadata
-                    if (!it.second.entry.dirty())
-                    {  // empty table meta
-                        continue;
-                    }
-                    else
-                    {
-                        auto& meta = std::get<1>(it.second.data);
-                        auto readLock = meta.rLock();
-                        Entry entry;
-                        entry.setObject(meta);
-                        readLock.unlock();
-                        if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                        {  // FIXME: this log is only for debug, comment it when release
-                            KeyPage_LOG(TRACE)
-                                << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
-                                << LOG_KV("key", toHex(it.first.second))
-                                << LOG_KV("size", entry.size());
-                        }
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("TableMeta")
-                            << LOG_KV("metaSize", sizeof(PageInfo) * meta.size())
-                            << LOG_KV("size", entry.size()) << LOG_KV("count", meta.size())
-                            << LOG_KV("payloadRate",
-                                   sizeof(PageInfo) * meta.size() / (double)entry.size());
-                        callback(it.first.first, it.first.second, std::move(entry));
-                    }
-                }
-                else if (it.second.type == Data::Type::Page)
-                {  // if page, encode and return
-                    auto& page = std::get<0>(it.second.data);
-
+            if (it.second->type == Data::Type::TableMeta)
+            {  // if metadata
+                if (!onlyDirty || it.second->entry.dirty())
+                {
+                    auto meta = &std::get<1>(it.second->data);
+                    auto readLock = meta->rLock();
                     Entry entry;
-                    if (page.validCount() == 0)
+                    entry.setObject(*meta);
+                    readLock.unlock();
+                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    {  // FIXME: this log is only for debug, comment it when release
+                        KeyPage_LOG(TRACE)
+                            << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
+                            << LOG_KV("key", toHex(it.first.second));
+                    }
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta") << LOG_KV("count", meta->size())
+                        << LOG_KV("size", entry.size()) << LOG_KV("count", meta->size())
+                        << LOG_KV("payloadRate",
+                               sizeof(PageInfo) * meta->size() / (double)entry.size());
+                    callback(it.first.first, it.first.second, std::move(entry));
+                }
+            }
+            else if (it.second->type == Data::Type::Page)
+            {  // if page, encode and return
+                auto page = &std::get<0>(it.second->data);
+                if (!onlyDirty || it.second->entry.dirty())
+                {
+                    Entry entry;
+                    if (page->validCount() == 0)
                     {
                         KeyPage_LOG(DEBUG)
                             << LOG_DESC("Traverse deleted Page") << LOG_KV("table", it.first.first)
                             << LOG_KV("key", toHex(it.first.second))
-                            << LOG_KV("validCount", page.validCount());
+                            << LOG_KV("validCount", page->validCount());
                         entry.setStatus(Entry::Status::DELETED);
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
-                    else if (it.second.entry.dirty())
+                    else
                     {
-                        entry.setObject(page);
-                        entry.setStatus(it.second.entry.status());
+                        entry.setObject(*page);
+                        entry.setStatus(it.second->entry.status());
                         KeyPage_LOG(DEBUG)
                             << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
-                            << LOG_KV("validCount", page.validCount())
-                            << LOG_KV("count", page.count())
-                            << LOG_KV("status", (int)it.second.entry.status())
-                            << LOG_KV("pageSize", page.size()) << LOG_KV("size", entry.size())
-                            << LOG_KV("payloadRate", page.size() / (double)entry.size());
-                        assert(it.first.second == page.endKey());
+                            << LOG_KV("validCount", page->validCount())
+                            << LOG_KV("count", page->count())
+                            << LOG_KV("status", (int)it.second->entry.status())
+                            << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
+                        assert(it.first.second == page->endKey());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
-                    auto invalidKeys = page.invalidKeySet();
+                    auto invalidKeys = page->invalidKeySet();
                     for (auto& k : invalidKeys)
                     {
                         if (c_fileLogLevel >= TRACE)
                         {
                             KeyPage_LOG(TRACE)
                                 << LOG_DESC("Traverse Page delete invalid key")
-                                << LOG_KV("table", it.first.first) << LOG_KV("key", k);
+                                << LOG_KV("table", it.first.first) << LOG_KV("key", toHex(k));
                         }
                         Entry e;
                         e.setStatus(Entry::Status::DELETED);
                         callback(it.first.first, k, std::move(e));
                     }
                 }
-                else
+            }
+            else
+            {
+                if (!onlyDirty || it.second->entry.dirty())
                 {
-                    auto& entry = it.second.entry;
+                    auto& entry = it.second->entry;
                     assert(it.first.first == SYS_TABLES);
                     callback(it.first.first, it.first.second, entry);
                 }
@@ -323,7 +318,7 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
         auto& bucket = m_buckets[i];
         for (auto& it : bucket.container)
         {
-            allData.push_back(&it.second);
+            allData.push_back(it.second.get());
         }
     }
 #pragma omp parallel for
@@ -335,8 +330,8 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
         {
             if (data->type == Data::Type::Page)
             {
-                auto& page = std::get<0>(data->data);
-                auto pageHash = page.hash(data->table, hashImpl);
+                auto page = &std::get<0>(data->data);
+                auto pageHash = page->hash(data->table, hashImpl);
 #pragma omp critical
                 totalHash ^= pageHash;
             }
@@ -350,34 +345,6 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
             }
         }
     }
-    // #pragma omp parallel for
-    //     for (size_t i = 0; i < m_buckets.size(); ++i)
-    //     {
-    //         auto& bucket = m_buckets[i];
-    //         bcos::crypto::HashType bucketHash(0);
-
-    //         for (auto& it : bucket.container)
-    //         {
-    //             auto& entry = it.second.entry;
-    //             if (entry.dirty() && it.second.type != Data::Type::TableMeta)
-    //             {
-    //                 if (it.second.type == Data::Type::Page)
-    //                 {
-    //                     auto& page = std::get<0>(it.second.data);
-    //                     bucketHash ^= page.hash(it.second.table, hashImpl);
-    //                 }
-    //                 else
-    //                 {  // sys table
-    //                     auto hash = hashImpl->hash(it.second.table);
-    //                     hash ^= hashImpl->hash(it.second.key);
-    //                     hash ^= entry.hash(it.second.table, it.second.key, hashImpl);
-    //                     bucketHash ^= hash;
-    //                 }
-    //             }
-    //         }
-    // #pragma omp critical
-    //         totalHash ^= bucketHash;
-    //     }
     return totalHash;
 }
 
@@ -407,7 +374,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                             << " | " << toHex(change.entry->get());
                     }
                     auto& rollbackEntry = change.entry;
-                    it->second.entry = std::move(*rollbackEntry);
+                    it->second->entry = std::move(*rollbackEntry);
                 }
                 else
                 {
@@ -419,7 +386,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                     }
                     auto tableKey = std::make_pair(change.table, change.key);
                     bucket->container.emplace(std::make_pair(std::move(tableKey),
-                        Data(change.table, change.key, std::move(*(change.entry)),
+                        std::make_shared<Data>(change.table, change.key, std::move(*(change.entry)),
                             Data::Type::NormalEntry)));
                 }
             }
@@ -452,28 +419,34 @@ void KeyPageStorage::rollback(const Recoder& recoder)
             {
                 BOOST_THROW_EXCEPTION(*error);
             }
-            auto& meta = std::get<1>(data.value()->data);
-            auto writeLock = meta.lock();
-            auto pageKey = meta.getPageKeyNoLock(change.key);
-            if (pageKey)
+            auto meta = &std::get<1>(data.value()->data);
+            auto writeLock = meta->lock();
+            auto pageInfoOp = meta->getPageInfoNoLock(change.key);
+            if (pageInfoOp)
             {
-                auto [error, pageData] = getData(change.table, pageKey.value(), true);
-                if (error || !pageData)
+                auto pageKey = pageInfoOp.value()->getPageKey();
+                auto pageData = pageInfoOp.value()->getPageData();
+                if (!pageData)
                 {
-                    BOOST_THROW_EXCEPTION(*error);
+                    auto [error, pageDataOp] = getData(change.table, pageKey, true);
+                    if (error || !pageDataOp)
+                    {
+                        BOOST_THROW_EXCEPTION(*error);
+                    }
+                    pageData = pageDataOp.value();
                 }
-                auto& page = std::get<0>(pageData.value()->data);
-                page.rollback(change);
-                if (page.count() == 0)
+                auto page = &std::get<0>(pageData->data);
+                page->rollback(change);
+                if (page->count() == 0)
                 {  // page is empty because of rollback, means it it first created
-                    pageData.value()->entry.setStatus(Entry::Status::EMPTY);
+                    pageData->entry.setStatus(Entry::Status::EMPTY);
                 }
                 // revert also need update pageInfo
-                auto oldStartKey = meta.updatePageInfoNoLock(
-                    pageKey.value(), page.endKey(), page.validCount(), page.size());
+                auto oldStartKey = meta->updatePageInfoNoLock(
+                    pageKey, page->endKey(), page->validCount(), page->size());
                 if (oldStartKey)
                 {
-                    changePageKey(change.table, oldStartKey.value(), page.endKey());
+                    changePageKey(change.table, oldStartKey.value(), page->endKey());
                 }
             }
             else
@@ -499,15 +472,15 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
     if (it != bucket->container.end())
     {
         assert(it->first.second == key);
-        auto data = &it->second;
+        auto data = it->second.get();
         lock.unlock();
         return std::make_tuple(std::unique_ptr<Error>(nullptr), std::make_optional(data));
     }
     lock.unlock();
     // find from prev
-    Data d;
-    d.table = std::string(tableView);
-    d.key = std::string(key);
+    auto d = std::make_shared<Data>();
+    d->table = std::string(tableView);
+    d->key = std::string(key);
     do
     {
         auto prevKeyPage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(getPrev());
@@ -523,28 +496,30 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
             if (dataOption)
             {
                 d = std::move(*dataOption);
-                if (!d.key.empty())
+                if (!d->key.empty())
                 {  // set entry to clean
-                    auto& page = std::get<0>(d.data);
-                    page.clean();
+                    auto page = &std::get<0>(d->data);
+                    page->clean();
                     if (c_fileLogLevel >= TRACE)
                     {
                         KeyPage_LOG(TRACE)
-                            << LOG_DESC("copy page") << LOG_KV("table", tableView)
-                            << LOG_KV("key", toHex(key)) << LOG_KV("validCount", page.validCount())
-                            << LOG_KV("count", page.count());
+                            << LOG_DESC("import page") << LOG_KV("table", tableView)
+                            << LOG_KV("key", toHex(key)) << LOG_KV("validCount", page->validCount())
+                            << LOG_KV("count", page->count());
                     }
                 }
                 else
                 {
-                    auto& meta = std::get<1>(d.data);
+                    auto meta = &std::get<1>(d->data);
+                    meta->clean();
                     if (c_fileLogLevel >= TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("import TableMeta") << LOG_KV("table", tableView)
-                            << LOG_KV("size", meta.size());
+                            << LOG_KV("size", meta->size());
                     }
                 }
+                d->entry.setStatus(Entry::Status::NORMAL);
                 break;
             }
         }
@@ -567,8 +542,8 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
             if (entry)
             {
                 entry->setStatus(Entry::Status::NORMAL);
-                d = Data(std::string(tableView), std::string(key), std::move(*entry),
-                    key.empty() ? Data::Type::TableMeta : Data::Type::Page);
+                d = std::make_shared<Data>(std::string(tableView), std::string(key),
+                    std::move(*entry), key.empty() ? Data::Type::TableMeta : Data::Type::Page);
                 break;
             }
         }
@@ -584,21 +559,22 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
         }
         if (key.empty())
         {
-            d.data = KeyPageStorage::TableMeta();
-            d.type = Data::Type::TableMeta;
+            d->data = KeyPageStorage::TableMeta();
+            d->type = Data::Type::TableMeta;
         }
         else
         {
-            d.data = KeyPageStorage::Page();
-            d.type = Data::Type::Page;
+            d->data = KeyPageStorage::Page();
+            d->type = Data::Type::Page;
         }
-        d.entry.setStatus(Entry::Status::EMPTY);
+        d->entry.setStatus(Entry::Status::EMPTY);
     } while (0);
 
     {  // insert into cache
-        auto [bucket, writeLock] = getMutBucket(d.table, d.key);
+        auto [bucket, writeLock] = getMutBucket(d->table, d->key);
         boost::ignore_unused(writeLock);
-        auto data = &bucket->container.emplace(std::make_pair(keyPair, std::move(d))).first->second;
+        auto data =
+            bucket->container.emplace(std::make_pair(keyPair, std::move(d))).first->second.get();
         return std::make_tuple(nullptr, std::make_optional(data));
     }
 }
@@ -612,23 +588,23 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
     {
         return std::make_pair(std::move(error), std::nullopt);
     }
-    auto& meta = std::get<1>(data.value()->data);
-    auto readLock = meta.rLock();
+    auto meta = &std::get<1>(data.value()->data);
+    auto readLock = meta->rLock();
     if (key.empty())
     {  // table meta
-        if (meta.size() > 0)
+        if (meta->size() > 0)
         {
             if (c_fileLogLevel >= TRACE)
             {
                 KeyPage_LOG(TRACE) << LOG_DESC("return meta entry") << LOG_KV("table", table)
-                                   << LOG_KV("meta.size", meta.size())
+                                   << LOG_KV("size", meta->size())
                                    << LOG_KV("status", int(data.value()->entry.status()))
                                    << LOG_KV("dirty", data.value()->entry.dirty());
             }
             if (data.value()->entry.dirty())
             {
                 Entry entry;
-                entry.setObject(meta);
+                entry.setObject(*meta);
                 entry.setStatus(data.value()->entry.status());
                 return std::make_pair(nullptr, std::move(entry));
             }
@@ -639,43 +615,49 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
         }
         return std::make_pair(nullptr, std::nullopt);
     }
-    auto pageKey = meta.getPageKeyNoLock(key);
-    if (pageKey)
+    auto pageInfoOp = meta->getPageInfoNoLock(key);
+    if (pageInfoOp)
     {
-        auto [error, pageData] = getData(table, pageKey.value(), true);
-        if (error)
+        Data* pageData = pageInfoOp.value()->getPageData();
+        if (!pageData)
         {
-            return std::make_pair(std::move(error), std::nullopt);
+            auto [error, pageDataOp] = getData(table, pageInfoOp.value()->getPageKey(), true);
+            if (error)
+            {
+                return std::make_pair(std::move(error), std::nullopt);
+            }
+            pageData = pageDataOp.value();
+            pageInfoOp.value()->setPageData(pageData);
         }
-        if (pageData.value()->entry.status() == Entry::Status::EMPTY)
+        if (pageData->entry.status() == Entry::Status::EMPTY)
         {
             return std::make_pair(nullptr, std::nullopt);
         }
-
-        auto& page = std::get<0>(pageData.value()->data);
+        auto page = &std::get<0>(pageData->data);
         if (m_readOnly)
         {  // TODO: check condition, if key is pageKey, return page
-            assert(pageKey.value() == key);
-            if (page.size() > 0)
+            assert(pageInfoOp.value()->getPageKey() == key);
+            if (page->size() > 0)
             {
-                auto pageReadLock = page.rLock();
+                auto pageReadLock = page->rLock();
                 if (c_fileLogLevel >= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("return page entry") << LOG_KV("table", table)
-                        << LOG_KV("startKey", toHex(page.startKey()))
-                        << LOG_KV("EndKey", toHex(page.endKey())) << LOG_KV("pageSize", page.size())
-                        << LOG_KV("valid", page.validCount()) << LOG_KV("count", page.count())
+                        << LOG_KV("startKey", toHex(page->startKey()))
+                        << LOG_KV("EndKey", toHex(page->endKey()))
+                        << LOG_KV("pageSize", page->size()) << LOG_KV("valid", page->validCount())
+                        << LOG_KV("count", page->count())
                         << LOG_KV("dirty", data.value()->entry.dirty());
                 }
                 Entry entry;
-                entry.setObject(page);
-                entry.setStatus(pageData.value()->entry.status());
+                entry.setObject(*page);
+                entry.setStatus(pageData->entry.status());
                 return std::make_pair(nullptr, std::move(entry));
             }
             return std::make_pair(nullptr, std::nullopt);
         }
-        auto entry = page.getEntry(key);
+        auto entry = page->getEntry(key);
         // if (c_fileLogLevel >= TRACE)
         // {  // FIXME: this log is only for debug, comment it when release
         //     KeyPage_LOG(TRACE) << LOG_DESC("getEntry from page") << LOG_KV("table", table)
@@ -695,22 +677,30 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     {
         return std::move(error);
     }
-    auto& meta = std::get<1>(data.value()->data);
-    auto metaWriteLock = meta.lock();
+    auto meta = &std::get<1>(data.value()->data);
+    auto metaWriteLock = meta->lock();
     // insert or update
-    auto pageKeyOption = meta.getPageKeyNoLock(key);
-    std::string_view pageKey = key;
-    if (pageKeyOption)
+    auto pageInfoOption = meta->getPageInfoNoLock(key);
+    std::string pageKey = key;
+    Data* pageData = nullptr;
+    if (pageInfoOption)
     {
-        pageKey = pageKeyOption.value();
+        pageKey = pageInfoOption.value()->getPageKey();
+        pageData = pageInfoOption.value()->getPageData();
     }
     std::optional<Entry> entryOld;
-
-    auto [e, pageDataOp] = getData(table, pageKey, pageKeyOption.has_value());
-    auto pageData = pageDataOp.value();
-    if (e)
+    if (!pageData)
     {
-        return std::move(e);
+        auto [e, pageDataOp] = getData(table, pageKey, pageInfoOption.has_value());
+        if (e)
+        {
+            return std::move(e);
+        }
+        pageData = pageDataOp.value();
+        if (pageInfoOption)
+        {
+            pageInfoOption.value()->setPageData(pageData);
+        }
     }
     // if new entry is too big, it will trigger split
     auto page = &std::get<0>(pageData->data);
@@ -723,14 +713,14 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         {
             if (pageData->entry.status() == Entry::Status::EMPTY)
             {  // new page insert, if entries is empty means page delete entry which not exist
-                meta.insertPageInfoNoLock(
-                    PageInfo{page->endKey(), (uint16_t)page->validCount(), (uint16_t)page->size()});
+                meta->insertPageInfoNoLock(PageInfo(page->endKey(), (uint16_t)page->validCount(),
+                    (uint16_t)page->size(), pageData));
                 // pageData->entry.setStatus(Entry::Status::NORMAL);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
             }
             else
             {
-                auto oldStartKey = meta.updatePageInfoNoLock(
+                auto oldStartKey = meta->updatePageInfoNoLock(
                     pageKey, page->endKey(), page->validCount(), page->size());
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
                 if (oldStartKey)
@@ -755,6 +745,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         // page is modified, the meta maybe modified, mark meta as dirty
         data.value()->entry.setStatus(Entry::Status::MODIFIED);
     }
+    pageKey = page->endKey();
     if (page->size() > m_pageSize && page->validCount() > 1)
     {  // split page, TODO: if dag trigger split, it maybe split to different page?
         if (c_fileLogLevel >= TRACE)
@@ -768,7 +759,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         auto newPage = page->split(m_splitSize);
         // update old meta pageInfo
         auto oldStartKey =
-            meta.updatePageInfoNoLock(pageKey, page->endKey(), page->validCount(), page->size());
+            meta->updatePageInfoNoLock(pageKey, page->endKey(), page->validCount(), page->size());
         if (oldStartKey)
         {  // if the startKey of page changed, the container also need to be updated
             pageData = changePageKey(table, oldStartKey.value(), page->endKey());
@@ -790,17 +781,17 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     else if (page->size() < m_mergeSize)
     {  // merge operation
         // get next page, check size and merge current into next
-        auto nextPageKey = meta.getNextPageKeyNoLock(page->endKey());
+        auto nextPageKey = meta->getNextPageKeyNoLock(page->endKey());
         if (nextPageKey)
         {
             auto [error, nextPageData] = getData(table, nextPageKey.value());
             boost::ignore_unused(error);
             assert(!error);
-            auto& nextPage = std::get<0>(nextPageData.value()->data);
-            if (nextPage.size() < m_splitSize)
+            auto nextPage = &std::get<0>(nextPageData.value()->data);
+            if (nextPage->size() < m_splitSize)
             {
                 auto endKey = page->endKey();
-                auto nextEndKey = nextPage.endKey();
+                auto nextEndKey = nextPage->endKey();
                 KeyPage_LOG(DEBUG)
                     << LOG_DESC("merge page") << LOG_KV("table", table) << LOG_KV("key", toHex(key))
                     << LOG_KV("pageKey", toHex(pageKey))
@@ -808,15 +799,15 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                     << LOG_KV("pageEnd", toHex(endKey)) << LOG_KV("pageCount", page->validCount())
                     << LOG_KV("pageSize", page->size())
                     << LOG_KV("nextPageKey", toHex(nextPageKey.value()))
-                    << LOG_KV("nextPageStart", toHex(nextPage.startKey()))
+                    << LOG_KV("nextPageStart", toHex(nextPage->startKey()))
                     << LOG_KV("nextPageEnd", toHex(nextEndKey))
-                    << LOG_KV("nextPageCount", nextPage.validCount())
-                    << LOG_KV("nextPageSize", nextPage.size());
-                nextPage.merge(*page);
+                    << LOG_KV("nextPageCount", nextPage->validCount())
+                    << LOG_KV("nextPageSize", nextPage->size());
+                nextPage->merge(*page);
                 // remove current page info and update next page info
-                meta.deletePageInfoNoLock(endKey);
-                auto oldStartKey = meta.updatePageInfoNoLock(
-                    nextEndKey, nextPage.endKey(), nextPage.validCount(), nextPage.size());
+                meta->deletePageInfoNoLock(endKey);
+                auto oldStartKey = meta->updatePageInfoNoLock(
+                    nextEndKey, nextPage->endKey(), nextPage->validCount(), nextPage->size());
                 // old page also need write to disk to clean data, so not remove old page
                 // nextPageData.value()->entry.setDirty(true);
                 // pageData->entry.setDirty(true);
@@ -824,7 +815,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                 pageData->entry.setStatus(Entry::Status::DELETED);
                 if (oldStartKey)
                 {  // if the startKey of nextPage changed, the container also need to be updated
-                    changePageKey(table, oldStartKey.value(), nextPage.endKey());
+                    changePageKey(table, oldStartKey.value(), nextPage->endKey());
                 }
                 data.value()->entry.setStatus(Entry::Status::MODIFIED);
             }
@@ -865,7 +856,7 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getSysTableRaw
     auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
     if (it != bucket->container.end())
     {
-        auto& entry = it->second.entry;
+        auto& entry = it->second->entry;
         lock.unlock();
         return std::make_pair(nullptr, std::make_optional(entry));
     }
@@ -895,7 +886,8 @@ Entry KeyPageStorage::importExistingEntry(std::string_view table, std::string_vi
     auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
     if (it == bucket->container.end())
     {
-        Data d(std::string(table), std::string(key), std::move(entry), Data::Type::NormalEntry);
+        auto d = std::make_shared<Data>(
+            std::string(table), std::string(key), std::move(entry), Data::Type::NormalEntry);
         auto tableKey = std::make_pair(std::string(table), std::string(key));
         it = bucket->container.emplace(std::make_pair(std::move(tableKey), std::move(d))).first;
     }
@@ -904,6 +896,6 @@ Entry KeyPageStorage::importExistingEntry(std::string_view table, std::string_vi
         KeyPage_LOG(WARNING) << "Fail import existsing entry, " << table << " | " << toHex(key);
     }
 
-    return it->second.entry;
+    return it->second->entry;
 }
 }  // namespace bcos::storage

@@ -176,6 +176,10 @@ public:
     void setStatus(Status status)
     {
         m_status = status;
+        if(m_status == DELETED)
+        {
+            m_value = std::string();
+        }
         // m_dirty = true;
     }
 

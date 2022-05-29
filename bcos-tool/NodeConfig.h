@@ -264,7 +264,7 @@ private:
     // storage configuration
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
-    size_t m_keyPageSize = 1024;
+    size_t m_keyPageSize = 8192;
     std::vector<std::string> m_pd_addrs;
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";

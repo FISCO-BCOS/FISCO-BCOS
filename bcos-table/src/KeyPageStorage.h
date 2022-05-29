@@ -35,6 +35,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
+#include <boost/serialization/vector.hpp>
 #include <cstddef>
 #include <exception>
 #include <memory>
@@ -82,7 +83,7 @@ constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
 
 const char* const TABLE_META_KEY = "";
-const size_t MIN_PAGE_SIZE = 512;
+const size_t MIN_PAGE_SIZE = 2048;
 class KeyPageStorage : public virtual storage::StateStorageInterface
 {
 public:
@@ -105,7 +106,7 @@ public:
     virtual ~KeyPageStorage()
     {
         m_recoder.clear();
-#pragma omp parallel for
+        // #pragma omp parallel for
         for (size_t i = 0; i < m_buckets.size(); ++i)
         {
             m_buckets[i].container.clear();
@@ -136,13 +137,15 @@ public:
 
     void rollback(const Recoder& recoder) override;
 
+    struct Data;
     class PageInfo
     {  // all methods is not thread safe
     public:
         bool operator<(const PageInfo& rhs) const { return m_data->pageKey < rhs.m_data->pageKey; }
         PageInfo() {}
-        PageInfo(std::string _pageKey, uint16_t _count, uint16_t _size)
-          : m_data(std::make_shared<PageData>(std::move(_pageKey), _count, _size))
+        PageInfo(std::string _pageKey, uint16_t _count, uint16_t _size, Data* p)
+          : m_data(std::make_shared<PageInfoData>(std::move(_pageKey), _count, _size)),
+            m_pageData(p)
         {}
         PageInfo(PageInfo&&) = default;
         PageInfo& operator=(PageInfo&&) = default;
@@ -168,18 +171,22 @@ public:
         }
         uint16_t getSize() const { return m_data->size; }
 
+        Data* getPageData() const { return m_pageData; }
+        void setPageData(Data* p) { m_pageData = p; }
+
     private:
         void prepareMyData()
         {
-            if (m_data.use_count() != 1)
+            if (m_data.use_count() > 1)
             {
-                m_data = std::make_shared<PageData>(m_data->pageKey, m_data->count, m_data->size);
+                m_data =
+                    std::make_shared<PageInfoData>(m_data->pageKey, m_data->count, m_data->size);
             }
         }
-        struct PageData
+        struct PageInfoData
         {
-            PageData() {}
-            PageData(std::string _endKey, uint16_t _count, uint16_t _size)
+            PageInfoData() {}
+            PageInfoData(std::string _endKey, uint16_t _count, uint16_t _size)
               : pageKey(std::move(_endKey)), count(_count), size(_size)
             {}
             // startKey is not involved in comparison
@@ -187,7 +194,8 @@ public:
             uint16_t count = 0;
             uint16_t size = 0;
         };
-        std::shared_ptr<PageData> m_data = nullptr;
+        std::shared_ptr<PageInfoData> m_data = nullptr;
+        Data* m_pageData = nullptr;
         friend class boost::serialization::access;
 
         template <class Archive>
@@ -202,7 +210,7 @@ public:
         void load(Archive& ar, const unsigned int version)
         {
             std::ignore = version;
-            m_data = std::make_shared<PageData>();
+            m_data = std::make_shared<PageInfoData>();
             ar & m_data->pageKey;
             ar & m_data->count;
             ar & m_data->size;
@@ -212,7 +220,7 @@ public:
 
     struct TableMeta
     {
-        TableMeta() {}
+        TableMeta() : pages(std::make_unique<std::vector<PageInfo>>()) {}
         ~TableMeta() = default;
         TableMeta(const std::string_view value)
         {
@@ -262,7 +270,7 @@ public:
                     return lhs < rhs.getPageKey();
                 });
         }
-        std::optional<std::string> getPageKeyNoLock(std::string_view key)
+        std::optional<PageInfo*> getPageInfoNoLock(std::string_view key)
         {
             if (pages->empty())
             {  // if pages is empty
@@ -271,13 +279,13 @@ public:
             auto it = lower_bound(key);
             if (it != pages->end())
             {
-                return it->getPageKey();
+                return &*it;
             }
             if (pages->rbegin()->getPageKey().empty())
             {  // page is empty because of rollback
                 return std::nullopt;
             }
-            return pages->rbegin()->getPageKey();
+            return &pages->back();
         }
 
         std::optional<std::string> getNextPageKeyNoLock(std::string_view key)
@@ -343,10 +351,11 @@ public:
             }
             else
             {
+                assert(false);
                 KeyPage_LOG(ERROR)
-                    << LOG_DESC("updatePageInfo not found")
-                    << LOG_KV("oldPageKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                    << LOG_KV("valid", count) << LOG_KV("size", size);
+                    << LOG_DESC("updatePageInfo not found") << LOG_KV("oldEndKey", toHex(oldEndKey))
+                    << LOG_KV("endKey", toHex(pageKey)) << LOG_KV("valid", count)
+                    << LOG_KV("size", size);
             }
             return oldPageKey;
         }
@@ -365,6 +374,13 @@ public:
             return pages->size();
         }
 
+        void clean()
+        {
+            for (auto& p : *pages)
+            {
+                p.setPageData(nullptr);
+            }
+        }
         std::unique_lock<std::shared_mutex> lock() const { return std::unique_lock(mutex); }
         std::shared_lock<std::shared_mutex> rLock() const { return std::shared_lock(mutex); }
 
@@ -386,30 +402,34 @@ public:
 
     private:
         mutable std::shared_mutex mutex;
-        std::unique_ptr<std::vector<PageInfo>> pages = std::make_unique<std::vector<PageInfo>>();
+        std::unique_ptr<std::vector<PageInfo>> pages = nullptr;
         friend class boost::serialization::access;
 
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
             std::ignore = version;
-            ar&(uint32_t)pages->size();
-            for (auto& i : *pages)
-            {
-                ar& i;
-            }
+            // auto len = (uint32_t)pages->size();
+            // ar & len;
+            // for (size_t i = 0; i < pages->size(); ++i)
+            // {
+            //     ar & pages->at(i);
+            // }
+            ar << *pages;
         }
         template <class Archive>
         void load(Archive& ar, const unsigned int version)
         {
             std::ignore = version;
-            uint32_t size = 0;
-            ar& size;
-            pages = std::make_unique<std::vector<PageInfo>>(size, PageInfo());
-            for (size_t i = 0; i < size; ++i)
-            {
-                ar&(*pages)[i];
-            }
+            // uint32_t s = 0;
+            // ar & s;
+            // pages = std::make_unique<std::vector<PageInfo>>(s, PageInfo());
+            // for (size_t i = 0; i < pages->size(); ++i)
+            // {
+            //     ar & pages->at(i);
+            // }
+            pages = std::make_unique<std::vector<PageInfo>>();
+            ar >> *pages;
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
     };
@@ -513,28 +533,23 @@ public:
             bool pageInfoChanged = false;
             std::optional<Entry> ret;
             std::unique_lock lock(mutex);
-            auto it = entries.find(key);
-            if (it != entries.end())
+            auto it = entries.lower_bound(key);
+
+            m_size += entry.size();
+            if (it != entries.end() && it->first == key)
             {  // delete exist entry
                 m_size -= it->second.size();
-                if (entry.status() != Entry::Status::DELETED)
+                if (entry.status() != Entry::Status::DELETED &&
+                    it->second.status() == Entry::Status::DELETED)
                 {
-                    m_size += entry.size();
-                    if (it->second.status() == Entry::Status::DELETED)
-                    {
-                        ++m_validCount;
-                        pageInfoChanged = true;
-                    }
+                    ++m_validCount;
+                    pageInfoChanged = true;
                 }
-                else
+                if (entry.status() == Entry::Status::DELETED &&
+                    it->second.status() != Entry::Status::DELETED)
                 {
-                    entry.set(std::string());
-                    entry.setStatus(Entry::Status::DELETED);
-                    if (it->second.status() != Entry::Status::DELETED)
-                    {
-                        --m_validCount;
-                        pageInfoChanged = true;
-                    }
+                    --m_validCount;
+                    pageInfoChanged = true;
                 }
                 ret = std::move(it->second);
                 it->second = std::move(entry);
@@ -554,18 +569,17 @@ public:
                 if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_validCount;
-                    m_size += entry.size();
                     pageInfoChanged = true;
                 }
-                if (entries.size() == 0 || key > entries.rbegin()->first)
+                if (entries.empty() || key > entries.rbegin()->first)
                 {
                     pageInfoChanged = true;
-                    if (!entries.empty() && key > entries.rbegin()->first)
-                    {
+                    if (!entries.empty())
+                    {  // means key > entries.rbegin()->first is true
                         m_invalidPageKeys.push_back(entries.rbegin()->first);
                     }
                 }
-                entries.emplace(std::string(key), std::move(entry));
+                entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
                 // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
@@ -617,9 +631,9 @@ public:
             }
             return entries.rbegin()->first;
         }
-        Page split(size_t threshold)
+        auto split(size_t threshold)
         {
-            Page page;
+            auto page = Page();
             std::unique_lock lock(mutex);
             // split this page to two pages
             auto iter = entries.begin();
@@ -699,6 +713,7 @@ public:
                     iter = entries.erase(iter);
                 }
             }
+            m_invalidPageKeys.clear();
         }
         crypto::HashType hash(
             const std::string& table, const bcos::crypto::Hash::Ptr& hashImpl) const
@@ -922,7 +937,7 @@ public:
     {
         Bucket() {}
         ~Bucket() = default;
-        std::unordered_map<std::pair<std::string, std::string>, Data> container;
+        std::unordered_map<std::pair<std::string, std::string>, std::shared_ptr<Data>> container;
         std::shared_mutex mutex;
         std::optional<Data*> find(std::string_view table, std::string_view key)
         {
@@ -930,7 +945,7 @@ public:
             auto it = container.find(std::make_pair(std::string(table), std::string(key)));
             if (it != container.end())
             {
-                return &it->second;
+                return it->second.get();
             }
             return std::nullopt;
         }
@@ -938,14 +953,14 @@ public:
         std::shared_lock<std::shared_mutex> rLock() { return std::shared_lock(mutex); }
     };
 
-    std::optional<Data> copyData(std::string_view table, std::string_view key)
+    std::optional<std::shared_ptr<Data>> copyData(std::string_view table, std::string_view key)
     {
         auto [bucket, lock] = getBucket(table, key);
         boost::ignore_unused(lock);
         auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
         if (it != bucket->container.end())
         {
-            return std::make_optional(it->second);
+            return std::make_optional(std::make_shared<Data>(*it->second));
         }
         auto prevKeyPage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(getPrev());
         if (prevKeyPage)
@@ -969,8 +984,8 @@ public:
         if (entry)
         {
             entry->setStatus(Entry::Status::NORMAL);
-            return std::make_optional(Data(std::string(table), std::string(key), std::move(*entry),
-                key.empty() ? Data::Type::TableMeta : Data::Type::Page));
+            return std::make_optional(std::make_shared<Data>(std::string(table), std::string(key),
+                std::move(*entry), key.empty() ? Data::Type::TableMeta : Data::Type::Page));
         }
         return std::nullopt;
     }
@@ -990,28 +1005,28 @@ private:
         return hash % m_buckets.size();
     }
 
-    Data* changePageKey(std::string table, std::string oldPageKey, std::string newStartKey)
+    Data* changePageKey(std::string table, std::string oldPageKey, std::string newPageKey)
     {
         auto [bucket, lock] = getMutBucket(table, oldPageKey);
         boost::ignore_unused(lock);
         auto n = bucket->container.extract(std::make_pair(table, oldPageKey));
         KeyPage_LOG(DEBUG) << LOG_DESC("changePageKey") << LOG_KV("table", table)
                            << LOG_KV("oldPageKey", toHex(oldPageKey))
-                           << LOG_KV("newStartKey", toHex(newStartKey));
-        n.key().second = newStartKey;
-        n.mapped().key = newStartKey;
-        if (newStartKey.empty())
+                           << LOG_KV("newPageKey", toHex(newPageKey));
+        n.key().second = newPageKey;
+        n.mapped()->key = newPageKey;
+        if (newPageKey.empty())
         {
             return nullptr;
         }
-        auto it = bucket->container.find(std::make_pair(table, newStartKey));
+        auto it = bucket->container.find(std::make_pair(table, newPageKey));
         if (it != bucket->container.end())
         {  // erase old page to update data
             bucket->container.erase(it);
         }
         auto ret = bucket->container.insert(std::move(n));
         assert(ret.inserted);
-        return &ret.position->second;
+        return ret.position->second.get();
         // the bucket also need to be updated
     }
 
@@ -1032,26 +1047,27 @@ private:
     }
 
     void insertNewPage(std::string_view tableView, std::string_view keyView,
-        KeyPageStorage::TableMeta& meta, Page&& page)
+        KeyPageStorage::TableMeta* meta, Page&& page)
     {
-        // prepare page info
-        PageInfo info(page.endKey(), page.validCount(), page.size());
-
         // insert page
-        Data d;
-        d.table = std::string(tableView);
-        d.key = std::string(keyView);
-        d.type = Data::Type::Page;
-        d.data = std::move(page);
+        auto d = std::make_shared<Data>();
+        d->table = std::string(tableView);
+        d->key = std::string(keyView);
+        d->type = Data::Type::Page;
+        // prepare page info
+        PageInfo info(page.endKey(), page.validCount(), page.size(), d.get());
+
+        d->data = std::move(page);
+
         // d.entry.setDirty(true);
-        d.entry.setStatus(Entry::Status::MODIFIED);
+        d->entry.setStatus(Entry::Status::MODIFIED);
         auto [bucket, lock] = getMutBucket(tableView, keyView);
         boost::ignore_unused(lock);
         bucket->container.insert_or_assign(
             std::make_pair(std::string(tableView), std::string(keyView)), std::move(d));
         lock.unlock();
         // update table meta
-        meta.insertPageInfoNoLock(std::move(info));
+        meta->insertPageInfoNoLock(std::move(info));
     }
 
     std::pair<Error::UniquePtr, std::optional<Entry>> getSysTableRawEntry(
