@@ -23,8 +23,8 @@ project(bcos-table VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 
-find_package(Boost CONFIG QUIET REQUIRED serialization)
-find_package(TBB)
+find_package(Boost REQUIRED serialization)
+find_package(TBB REQUIRED)
 find_package(OpenMP 4.5 REQUIRED)
 
 add_library(${TABLE_TARGET} ${SRCS})

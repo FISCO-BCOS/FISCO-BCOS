@@ -1,6 +1,6 @@
 file(GLOB SRC_LIST "*.cpp")
 
-find_package(Boost CONFIG QUIET REQUIRED program_options)
+find_package(Boost REQUIRED program_options)
 
 foreach(source ${SRC_LIST})
     get_filename_component(filename ${source} NAME)

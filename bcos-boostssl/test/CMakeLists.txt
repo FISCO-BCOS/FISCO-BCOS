@@ -22,5 +22,5 @@ set(TEST_BINARY_NAME test-boostssl)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
-find_package(Boost CONFIG REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework)
 target_link_libraries(${TEST_BINARY_NAME} boostssl-websocket boostssl-httpserver bcos-utilities bcos-framework Boost::unit_test_framework)

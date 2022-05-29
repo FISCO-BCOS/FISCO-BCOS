@@ -3,7 +3,7 @@ file(GLOB HEADERS "*.h")
 
 find_package(tarscpp CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED program_options)
+find_package(Boost REQUIRED program_options)
 
 aux_source_directory(. SRC_LIST)
 aux_source_directory(../ SRC_LIST)

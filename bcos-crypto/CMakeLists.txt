@@ -5,7 +5,7 @@ file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
 
 add_library(bcos-crypto ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
-target_link_libraries(bcos-crypto PUBLIC bcos-utilities wedpr-crypto::crypto OpenSSL::Crypto)
+target_link_libraries(bcos-crypto PUBLIC bcos-utilities WeDPRCrypto OpenSSL::Crypto)
 
 if(TESTS)
     enable_testing()

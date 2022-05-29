@@ -7,12 +7,6 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(Options)
-include(HunterGate)
-HunterGate(
-        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/162ff7cde3d843e43afdab8fe3214275c35ef168.tar.gz"
-        SHA1 "0ba8099fe89beb0d44986c750fe0d44040725d99"
-        FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
-)
 
 include(cmake/Version.cmake)
 project(PROJECT_NAME VERSION ${VERSION})
@@ -23,28 +17,25 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 # import dependencies
-include(ProjectTCMalloc)
+# include(ProjectTCMalloc)
 include(ProjectWABT)
 include(ProjectBCOSWASM)
 
-hunter_add_package(tbb)
-hunter_add_package(Protobuf)
-hunter_add_package(Microsoft.GSL)
-hunter_add_package(wedpr-crypto)
-hunter_add_package(jsoncpp)
-hunter_add_package(evmc)
-hunter_add_package(intx)
-hunter_add_package(ethash)
-hunter_add_package(evmone)
-hunter_add_package(tarscpp)
-hunter_add_package(OpenSSL)
+# hunter_add_package(tbb)
+# hunter_add_package(Protobuf)
+# hunter_add_package(Microsoft.GSL)
+# hunter_add_package(wedpr-crypto)
+# hunter_add_package(jsoncpp)
+# hunter_add_package(evmc)
+# hunter_add_package(intx)
+# hunter_add_package(ethash)
+# hunter_add_package(evmone)
+# hunter_add_package(tarscpp)
+# hunter_add_package(OpenSSL)
 
 # bcos-boostssl
-find_package(Boost CONFIG REQUIRED COMPONENTS log system filesystem chrono iostreams thread)
-find_package(wedpr-crypto CONFIG REQUIRED)
-
-# find OpenSSL
-find_package(OpenSSL REQUIRED)
+find_package(Boost REQUIRED COMPONENTS log system filesystem chrono iostreams thread)
+find_package(WeDPRCrypto REQUIRED MODULE)
 
 # install dependencies
 include(IncludeDirectories)

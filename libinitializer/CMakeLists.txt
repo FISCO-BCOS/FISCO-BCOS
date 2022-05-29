@@ -1,6 +1,6 @@
 file(GLOB SRC_LIST "*.cpp")
 
-find_package(Boost CONFIG REQUIRED program_options)
+find_package(Boost REQUIRED program_options)
 find_package(OpenSSL REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)

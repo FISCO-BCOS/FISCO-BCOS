@@ -24,7 +24,7 @@ set(TEST_BINARY_NAME test-bcos-executor)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
 
-find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
+find_package(Boost QUIET REQUIRED unit_test_framework)
 find_package(TBB CONFIG QUIET REQUIRED)
 find_package(wedpr-crypto CONFIG REQUIRED)
 

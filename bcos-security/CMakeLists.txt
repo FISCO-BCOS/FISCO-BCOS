@@ -26,6 +26,6 @@ aux_source_directory(./bcos-security SRC_LIST)
 include_directories(./bcos-security)
 add_library(${SECURITY_TARGET} ${SRC_LIST})
 
-find_package(jsoncpp CONFIG REQUIRED)
+find_package(jsoncpp REQUIRED)
 
 target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} jsoncpp_lib_static ${CRYPTO_TARGET})

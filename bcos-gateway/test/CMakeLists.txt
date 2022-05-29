@@ -33,7 +33,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
 
-find_package(Boost CONFIG REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework)
 if (APPLE)
 # target_compile_options(${TEST_BINARY_NAME} PRIVATE -faligned-allocation)
 endif()

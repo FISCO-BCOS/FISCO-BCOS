@@ -20,7 +20,7 @@ file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-rpc)
 
-find_package(Boost CONFIG REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)

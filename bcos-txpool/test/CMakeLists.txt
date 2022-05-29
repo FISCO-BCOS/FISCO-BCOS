@@ -27,7 +27,7 @@ add_executable(${DEMO_BINARY_NAME} ${DEMO_SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} ${TXPOOL_TARGET} bcos-crypto ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
 target_link_libraries(${DEMO_BINARY_NAME} ${TXPOOL_TARGET} bcos-crypto ${PBPROTOCOL_TARGET} Boost::unit_test_framework)

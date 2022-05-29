@@ -6,13 +6,6 @@ else()
     set(SED_CMMAND sed -i)
 endif()
 
-if(HUNTER_GRPC)
-  hunter_add_package(gRPC)
-endif()
-if(HUNTER_POCOCPP)
-  hunter_add_package(PocoCpp)
-endif()
-
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git

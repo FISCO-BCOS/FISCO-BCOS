@@ -4,7 +4,6 @@ file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 # OpenSSL
-hunter_add_package(OpenSSL)
 find_package(OpenSSL REQUIRED)
 
 add_executable(http-server-sample http_server_sample.cpp)

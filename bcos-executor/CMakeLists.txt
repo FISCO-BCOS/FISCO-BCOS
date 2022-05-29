@@ -10,11 +10,11 @@ find_package(TBB CONFIG REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-find_package(evmc CONFIG REQUIRED)
+find_package(EVMC REQUIRED MODULE)
 find_package(evmone CONFIG REQUIRED)
 find_package(intx CONFIG REQUIRED)
 find_package(ethash CONFIG REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
+find_package(Boost REQUIRED serialization program_options context)
 find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)

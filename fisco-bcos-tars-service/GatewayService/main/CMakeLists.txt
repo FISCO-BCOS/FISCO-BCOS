@@ -9,7 +9,7 @@ include_directories(${CMAKE_SOURCE_DIR}/fisco-bcos-tars-service)
 
 find_package(tarscpp CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED program_options)
+find_package(Boost REQUIRED program_options)
 
 file(GLOB SRC_LIST "*.cpp")
 

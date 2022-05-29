@@ -10,7 +10,7 @@ find_package(zstd CONFIG REQUIRED)
 hunter_add_package(rocksdb)
 find_package(RocksDB CONFIG REQUIRED)
 
-find_package(Boost CONFIG QUIET REQUIRED serialization thread context filesystem)
+find_package(Boost REQUIRED serialization thread context filesystem)
 
 set(SRC_LIST src/Common.cpp)
 list(APPEND SRC_LIST src/RocksDBStorage.cpp)
