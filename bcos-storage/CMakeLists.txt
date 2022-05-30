@@ -4,11 +4,8 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment ver
 include(Version)
 project(bcos-storage VERSION ${VERSION})
 
-hunter_add_package(zstd)
-find_package(zstd CONFIG REQUIRED)
-
-hunter_add_package(rocksdb)
-find_package(RocksDB CONFIG REQUIRED)
+find_package(zstd REQUIRED)
+find_package(RocksDB REQUIRED)
 
 find_package(Boost REQUIRED serialization thread context filesystem)
 

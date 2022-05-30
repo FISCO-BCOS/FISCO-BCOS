@@ -24,9 +24,8 @@ set(TEST_BINARY_NAME test-bcos-executor)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
 
-find_package(Boost QUIET REQUIRED unit_test_framework)
-find_package(TBB CONFIG QUIET REQUIRED)
-find_package(wedpr-crypto CONFIG REQUIRED)
+find_package(Boost REQUIRED unit_test_framework)
+find_package(TBB CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} ${EXECUTOR_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::serialization)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -fno-var-tracking -Wno-unused-parameter)

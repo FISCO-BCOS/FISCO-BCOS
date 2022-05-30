@@ -23,7 +23,6 @@ include(Version)
 project(bcos-gateway VERSION ${VERSION})
 
 find_package(OpenSSL REQUIRED)
-find_package(tarscpp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem)
 

@@ -23,7 +23,6 @@ include(Version)
 project(bcos-rpc VERSION ${VERSION})
 
 find_package(jsoncpp CONFIG REQUIRED)
-find_package(tarscpp CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")

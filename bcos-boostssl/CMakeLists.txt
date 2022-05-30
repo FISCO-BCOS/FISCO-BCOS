@@ -3,8 +3,11 @@ project(bcos-boostssl VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS bcos-boostssl/*.cpp)
 
+# To be change to tassl
+find_package(OpenSSL REQUIRED Crypto SSL)
+
 add_library(bcos-boostssl ${SRCS})
-target_link_libraries(bcos-boostssl PUBLIC bcos-framework OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities OpenSSL::SSL OpenSSL::Crypto)
 
 if(TESTS)
     # enable_testing()

@@ -23,7 +23,6 @@ set(TEST_BINARY_NAME test-bcos-tars-protocol)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost REQUIRED unit_test_framework)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)

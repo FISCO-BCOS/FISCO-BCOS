@@ -1,7 +1,6 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-find_package(tarscpp CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Boost REQUIRED program_options)
 
