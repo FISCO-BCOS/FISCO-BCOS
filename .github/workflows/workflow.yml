@@ -52,7 +52,7 @@ jobs:
           toolchain: nightly-2021-06-17
           override: true
       - name: install Ubuntu dependencies
-        run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache openssl libssl-dev wget
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache openssl libssl-dev wget libgmp-dev
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
         run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
@@ -101,10 +101,10 @@ jobs:
             hunter-clang-v8-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install ccache libomp openjdk
+        run: brew install ccache libomp openjdk gmp
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev default-jdk openssl libssl-dev wget
+        run: sudo apt install -y git curl build-essential clang cmake ccache libgmp-dev libzstd-dev default-jdk openssl libssl-dev wget
       - name: configure
         if: runner.os == 'macOS'
         run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
@@ -177,7 +177,7 @@ jobs:
           toolchain: nightly-2021-06-17
           override: true
       - name: install Ubuntu dependencies
-        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache  openssl libssl-dev wget
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache  openssl libssl-dev wget libgmp-dev
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
         run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
@@ -217,7 +217,7 @@ jobs:
             hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-ubuntu-v8-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev wget
+        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev wget libgmp-dev
       - name: configure
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
@@ -274,7 +274,7 @@ jobs:
           # compile things in the container
           run: |
             apt-get update -q -y
-            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison wget
+            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison wget libgmp-dev
             /usr/sbin/update-ccache-symlinks
             echo 'export PATH="/usr/lib/ccache:$PATH"' | tee -a ~/.bashrc
             curl https://sh.rustup.rs -sSf | bash -s -- -y
@@ -293,7 +293,7 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel java java-devel wget
+          yum install -y git make gcc gcc-c++ glibc-static gmp-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel java java-devel wget
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
@@ -352,7 +352,7 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
