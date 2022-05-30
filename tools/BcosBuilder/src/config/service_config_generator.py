@@ -120,7 +120,6 @@ class ServiceConfigGenerator:
         ini_config["service"]['rpc'] = service_config.agency_config.chain_id + \
             "." + service_config.agency_config.rpc_service_name
         ini_config["chain"]['chain_id'] = service_config.agency_config.chain_id
-
         # generate failover config
         failover_section = "failover"
         if self.node_type == "max":
@@ -133,10 +132,23 @@ class ServiceConfigGenerator:
 
         # generate uuid according to chain_id and gateway_service_name
         uuid_name = ini_config["service"]['gateway']
-        # TODO: Differentiate between different agency
         ini_config[section]['uuid'] = str(
             uuid.uuid3(uuid.NAMESPACE_URL, uuid_name))
+        self.__update_storage_security_info(ini_config, service_config)
         return ini_config
+
+    def __update_storage_security_info(self, ini_config, service_config):
+        """
+        update the storage_security for config.ini
+        """
+        # TODO: access key_center to encrypt the certificates and the private keys
+        section = "storage_security"
+        ini_config[section]["enable"] = utilities.convert_bool_to_str(
+            service_config.agency_config.enable_storage_security)
+        ini_config["chain"]["sm_crypto"] = utilities.convert_bool_to_str(
+            service_config.agency_config.sm_storage_security)
+        ini_config[section]["key_center_url"] = service_config.agency_config.key_center_url
+        ini_config[section]["cipher_data_key"] = service_config.agency_config.cipher_data_key
 
     def __store_config_file(self, service_config, ini_config_content):
         for ip in service_config.deploy_ip_list:

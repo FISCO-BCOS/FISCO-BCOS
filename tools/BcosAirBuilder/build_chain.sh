@@ -1053,6 +1053,13 @@ generate_common_ini() {
 [security]
     private_key_path=conf/node.pem
 
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
