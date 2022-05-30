@@ -374,9 +374,6 @@ download_monitor_bin()
     LOG_INFO "Downloading mtail binary from ${github_link} ..."
     curl -#LO "${github_link}"
     
-    if [[ "$(ls -al . | grep "mtail.*tar.gz" | awk '{print $5}')" -lt "7618709" ]];then
-        exit_with_clean "Download mtail failed, please try again. Or download and extract it manually from ${github_link} and use -e option."
-    fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd .. 
 
     chmod a+x ${mtail_binary_path}
@@ -854,6 +851,7 @@ generate_monitor_scripts() {
     local output=${1}
     local mtail_host_list=""
     local ip_params="${2}"
+    local monitor_ip="${3}"
     local ip_array=(${ip_params//,/ })
     local ip_length=${#ip_array[@]}
     local i=0
@@ -949,8 +947,10 @@ EOF
     generate_script_template "$output/start_monitor.sh"
     cat <<EOF >> "${output}/start_monitor.sh"
 
-DOCKER_FILE=./compose.yaml
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
 docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
+echo "graphna web address: http://${monitor_ip}:3001/"
+echo "prometheus web address: http://${monitor_ip}:9090/"
 
 EOF
     chmod u+x "${output}/start_monitor.sh"
@@ -959,8 +959,8 @@ EOF
     generate_script_template "$output/stop_monitor.sh"
     cat <<EOF >> "${output}/stop_monitor.sh"
 
-DOCKER_FILE=./compose.yaml
-docker-compose -f \${DOCKER_FILE} down
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} stop
 
 EOF
     chmod u+x "${output}/stop_monitor.sh"
@@ -1440,6 +1440,7 @@ deploy_nodes()
     local count=0
     connected_nodes=""
     connected_mtail_nodes=""
+    local monitor_ip=""
     # Note: must generate the node account firstly
     ca_dir="${output_dir}"/ca
     generate_chain_cert "${sm_mode}" "${ca_dir}"
@@ -1450,6 +1451,7 @@ deploy_nodes()
         if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
             LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
         fi
+        echo $num
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
         echo "Processing IP:${ip} Total:${num}"
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
@@ -1478,6 +1480,9 @@ deploy_nodes()
             if "${monitor_mode}" ;then 
                 local port=$((mtail_listen_port + node_count))
                 connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
+                if [[ $count == 0 ]]; then
+                    monitor_ip="${ip}"
+                fi  
                 generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
             fi
             local port=$((p2p_listen_port + node_count))
@@ -1492,7 +1497,7 @@ deploy_nodes()
 
     if "${monitor_mode}" ;then 
         monitor_dir="${output_dir}/monitor"
-        generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}"
+        generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}" ${monitor_ip}
     fi
 
     local i=0
