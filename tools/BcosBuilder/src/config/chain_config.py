@@ -64,6 +64,15 @@ class AgencyConfig:
         # the failover cluster url
         self.failover_cluster_url = utilities.get_item_value(
             self.config, "failover_cluster_url", default_url, enforce_failover, self.desc)
+        # load storage_security config
+        self.enable_storage_security = utilities.get_item_value(
+            self.config, "enable_storage_security", False, False, self.desc)
+        self.sm_storage_security = utilities.get_item_value(
+            self.config, "sm_storage_security", False, False, self.desc)
+        self.key_center_url = utilities.get_item_value(
+            self.config, "key_center_url", "", False, self.desc)
+        self.cipher_data_key = utilities.get_item_value(
+            self.config, "cipher_data_key", "", False, self.desc)
 
 
 class ServiceInfoConfig:
@@ -114,6 +123,14 @@ class NodeConfig:
         self.desc = "[[agency.group.node]]."
         self.node_name = utilities.get_item_value(
             self.config, "node_name", None, True, self.desc)
+        # load storage_security
+        self.enable_storage_security = utilities.get_item_value(
+            self.config, "enable_storage_security", False, False, self.desc)
+        self.key_center_url = utilities.get_item_value(
+            self.config, "key_center_url", "", False, self.desc)
+        self.cipher_data_key = utilities.get_item_value(
+            self.config, "cipher_data_key", "", False, self.desc)
+        # parse node_service_config
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
