@@ -63,7 +63,6 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     auto paramData = _callParameters->params();
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
     if (funcSelector == name2Selector[CRYPTO_METHOD_SM3_STR])
@@ -75,7 +74,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: sm3")
                                << LOG_KV("input", toHexString(inputData))
                                << LOG_KV("result", toHexString(sm3Hash));
-        callResult->setExecResult(codec.encode(codec::toString32(sm3Hash)));
+        _callParameters->setExecResult(codec.encode(codec::toString32(sm3Hash)));
     }
     else if (funcSelector == name2Selector[CRYPTO_METHOD_KECCAK256_STR])
     {
@@ -85,22 +84,22 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: keccak256")
                                << LOG_KV("input", toHexString(inputData))
                                << LOG_KV("result", toHexString(keccak256Hash));
-        callResult->setExecResult(codec.encode(codec::toString32(keccak256Hash)));
+        _callParameters->setExecResult(codec.encode(codec::toString32(keccak256Hash)));
     }
     else if (funcSelector == name2Selector[CRYPTO_METHOD_SM2_VERIFY_STR])
     {
-        sm2Verify(_executive, paramData, callResult);
+        sm2Verify(_executive, paramData, _callParameters);
     }
     else
     {
         // no defined function
         PRECOMPILED_LOG(ERROR) << LOG_DESC("CryptoPrecompiled: undefined method")
                                << LOG_KV("funcSelector", std::to_string(funcSelector));
-        callResult->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
+        _callParameters->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
     }
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    return callResult;
+    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    return _callParameters;
 }
 
 void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
