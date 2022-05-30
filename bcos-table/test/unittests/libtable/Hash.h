@@ -38,6 +38,12 @@ public:
         memcpy(hash_result, &h, sizeof(h));
         return HashType(hash_result, 32);
     }
+    // init a hashContext
+    void* init() override { return nullptr; }
+    // update the hashContext
+    void* update(void*, bytesConstRef) override { return nullptr; }
+    // final the hashContext
+    bcos::crypto::HashType final(void*) override { return bcos::crypto::HashType(); }
 };
 
 }  // namespace crypto

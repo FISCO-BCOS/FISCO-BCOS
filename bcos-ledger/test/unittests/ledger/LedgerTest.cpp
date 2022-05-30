@@ -198,7 +198,7 @@ public:
             auto txHashList = std::make_shared<protocol::HashList>();
             for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
             {
-                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode();
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->emplace_back(txPointer);
                 txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());
