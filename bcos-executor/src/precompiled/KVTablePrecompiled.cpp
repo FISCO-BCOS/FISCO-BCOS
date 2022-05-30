@@ -64,7 +64,6 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
 
-    auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
 
@@ -77,12 +76,12 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     if (func == name2Selector[KV_TABLE_METHOD_SET])
     {
         /// set(string,string)
-        set(tableName, _executive, data, callResult, gasPricer);
+        set(tableName, _executive, data, _callParameters, gasPricer);
     }
     else if (func == name2Selector[KV_TABLE_METHOD_GET])
     {
         /// get(string)
-        get(tableName, _executive, data, callResult, gasPricer);
+        get(tableName, _executive, data, _callParameters, gasPricer);
     }
     else
     {
@@ -90,9 +89,9 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
                                << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("KVTablePrecompiled call undefined function!"));
     }
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    return callResult;
+    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    return _callParameters;
 }
 
 void KVTablePrecompiled::get(const std::string& tableName,

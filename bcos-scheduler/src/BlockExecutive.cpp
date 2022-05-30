@@ -954,7 +954,7 @@ void BlockExecutive::scheduleExecutive(ExecutiveState::Ptr executiveState)
 
 void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output)
 {
-    auto txGasUsed = TRANSACTION_GAS - output->gasAvailable();
+    auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
 #ifdef DMC_TRACE_LOG_ENABLE
