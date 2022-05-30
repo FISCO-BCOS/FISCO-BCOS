@@ -1,19 +1,10 @@
-# If found the following variables will be available:
-#       WEDPR_CRYPTO_FOUND
-#       WEDPR_CRYPTO_ROOT_DIR
-#       WEDPR_CRYPTO_INCLUDE_DIRS
-#       WEDPR_CRYPTO_LIBRARIES
-#
-# Target WeDPRCrypto::WeDPRCrypto
-#
-
 include(FindPackageHandleStandardArgs)
 include(ExternalProject)
 include(GNUInstallDirs)
 
 set(WEDPR_CRYPTO_FOUND OFF)
 
-add_library(WeDPRCrypto::WeDPRCrypto MODULE IMPORTED)
+add_library(WeDPRCrypto MODULE IMPORTED)
 if(NOT WEDPR_CRYPTO_ROOT_DIR)
   message(STATUS "Installing wedpr-crypto from github")
   set(WEDPR_CRYPTO_INSTALL "${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-install")
@@ -30,7 +21,7 @@ if(NOT WEDPR_CRYPTO_ROOT_DIR)
   set(WEDPR_CRYPTO_INCLUDE_DIRS "${WEDPR_CRYPTO_INSTALL}/include/")
   set(WEDPR_CRYPTO_LIBRARIES "${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-prefix/src/wedpr-crypto/target/release/${CMAKE_STATIC_LIBRARY_PREFIX}ffi_c_crypto_binary${CMAKE_STATIC_LIBRARY_SUFFIX}")
   
-  add_dependencies(WeDPRCrypto::WeDPRCrypto wedpr-crypto)
+  add_dependencies(WeDPRCrypto wedpr-crypto)
 else()
   message(STATUS "Find wedpr-crypto in ${WEDPR_CRYPTO_ROOT_DIR}")
   find_path(WEDPR_CRYPTO_INCLUDE_DIRS NAMES wedpr-crypto PATHS ${WEDPR_CRYPTO_ROOT_DIR}/include REQUIRED)
@@ -39,7 +30,7 @@ else()
   message(STATUS "Found wedpr-crypto include dir: ${WEDPR_CRYPTO_INCLUDE_DIRS} lib dir: ${WEDPR_CRYPTO_LIBRARIES}")
 endif()
 
-target_include_directories(WeDPRCrypto::WeDPRCrypto INTERFACE ${WEDPR_CRYPTO_INCLUDE_DIRS})
-set_property(TARGET WeDPRCrypto::WeDPRCrypto PROPERTY IMPORTED_LOCATION ${WEDPR_CRYPTO_LIBRARIES})
+target_include_directories(WeDPRCrypto INTERFACE ${WEDPR_CRYPTO_INCLUDE_DIRS})
+set_property(TARGET WeDPRCrypto PROPERTY IMPORTED_LOCATION ${WEDPR_CRYPTO_LIBRARIES})
 
 set(WEDPR_CRYPTO_FOUND ON)

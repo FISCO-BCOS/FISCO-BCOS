@@ -28,7 +28,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
 add_library(bcos-framework INTERFACE)
 target_include_directories(bcos-framework INTERFACE .)
-target_link_libraries(bcos-framework INTERFACE bcos-utilities)
+target_link_libraries(bcos-framework INTERFACE bcos-crypto)
 
 if (TESTS)
     enable_testing()
