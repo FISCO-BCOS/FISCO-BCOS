@@ -116,6 +116,11 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         /// remove((uint8,string)[],(uint32,uint32))
         removeByCondition(tableName, _executive, data, gasPricer, _callParameters);
     }
+    else if (func == name2Selector[TABLE_METHOD_COUNT])
+    {
+        /// count((uint8,string)[])
+        count(tableName, _executive, data, gasPricer, _callParameters);
+    }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled")

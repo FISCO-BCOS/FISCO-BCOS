@@ -192,8 +192,7 @@ private:
 
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
-    std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> callPrecompiled(
-        CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> create(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);

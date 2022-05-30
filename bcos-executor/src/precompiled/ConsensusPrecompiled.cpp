@@ -57,7 +57,6 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
 
-    auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
     showConsensusTable(_executive);
@@ -70,9 +69,9 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("sender is not from sys")
                                << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        callResult->setGas(gasPricer->calTotalGas());
-        return callResult;
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+        return _callParameters;
     }
 
     int result = 0;
@@ -102,10 +101,10 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
 
-    getErrorCodeOut(callResult->mutableExecResult(), result, codec);
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    return callResult;
+    getErrorCodeOut(_callParameters->mutableExecResult(), result, codec);
+    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    return _callParameters;
 }
 
 int ConsensusPrecompiled::addSealer(
