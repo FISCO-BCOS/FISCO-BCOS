@@ -33,7 +33,10 @@ public:
     HashType hash(bytesConstRef _data) override
     {
         std::hash<std::string_view> hash;
-        return HashType(hash(std::string_view((const char*)_data.data(), _data.size())));
+        auto h = hash(std::string_view((const char*)_data.data(), _data.size()));
+        uint8_t hash_result[32] = {0};
+        memcpy(hash_result, &h, sizeof(h));
+        return HashType(hash_result, 32);
     }
 };
 
