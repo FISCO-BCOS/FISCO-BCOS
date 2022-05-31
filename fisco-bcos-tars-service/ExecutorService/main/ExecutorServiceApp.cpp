@@ -128,7 +128,7 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executorFactory = ExecutorInitializer::buildFactory(ledger, m_txpool, cache, storage,
         executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize());
 
     m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
 
