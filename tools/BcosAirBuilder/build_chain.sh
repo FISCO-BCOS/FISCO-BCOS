@@ -373,7 +373,6 @@ download_monitor_bin()
     # the binary can obtained from the cos
     LOG_INFO "Downloading mtail binary from ${github_link} ..."
     curl -#LO "${github_link}"
-    
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd .. 
 
     chmod a+x ${mtail_binary_path}
@@ -951,7 +950,6 @@ DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
 docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
 echo "graphna web address: http://${monitor_ip}:3001/"
 echo "prometheus web address: http://${monitor_ip}:9090/"
-
 EOF
     chmod u+x "${output}/start_monitor.sh"
 
@@ -961,7 +959,7 @@ EOF
 
 DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
 docker-compose -f \${DOCKER_FILE} stop
-
+echo -e "\033[32m stop monitor successfully\033[0m"
 EOF
     chmod u+x "${output}/stop_monitor.sh"
 }
@@ -1056,6 +1054,13 @@ generate_common_ini() {
 [security]
     private_key_path=conf/node.pem
 
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
@@ -1063,6 +1068,8 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
+    key_page_size=0
+    ; type can be RocksDB/TiKV
     type=RocksDB
     pd_addrs=
 

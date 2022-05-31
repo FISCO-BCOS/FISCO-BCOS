@@ -14,9 +14,14 @@ rpc_ca_cert_path="generated/rpc/chain0/ca"
 # must ensure that the path configuration is correct, otherwise the ssl verification will fail
 gateway_ca_cert_path="generated/gateway/chain0/ca"
 
-
 [[agency]]
 name = "agencyA"
+# enable data disk encryption for rpc/gateway or not, default is false
+enable_storage_security = false
+# sm_storage_security = false
+# url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+# key_center_url = 
+# cipher_data_key = 
 
     [agency.rpc]
     deploy_ip=["172.25.0.5"]

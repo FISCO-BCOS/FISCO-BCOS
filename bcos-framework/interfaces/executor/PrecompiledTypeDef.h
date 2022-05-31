@@ -57,7 +57,8 @@ const char* const AUTH_CONTRACT_MGR_ADDRESS = "000000000000000000000000000000000
 
 const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
     bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
-    bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME};
+    bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME,
+    bcos::precompiled::AUTH_COMMITTEE_ADDRESS};
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)

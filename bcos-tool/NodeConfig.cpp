@@ -363,49 +363,58 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
-    if (true == m_storageSecurityEnable)
+    if (!m_storageSecurityEnable)
     {
-        std::string storageSecurityKeyCenterUrl =
-            _pt.get<std::string>("storage_security.key_center_url", "");
-
-        std::vector<std::string> values;
-        boost::split(
-            values, storageSecurityKeyCenterUrl, boost::is_any_of(":"), boost::token_compress_on);
-        if (2 != values.size())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidParameter() << errinfo_comment(
-                    "initGlobalConfig storage_security failed! Invalid key_center_url!"));
-        }
-
-        m_storageSecurityKeyCenterIp = values[0];
-        m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
-        if (false == isValidPort(m_storageSecurityKeyCenterPort))
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
-        }
-
-        m_storageSecurityCipherDataKey =
-            _pt.get<std::string>("storage_security.cipher_data_key", "");
-        if (true == m_storageSecurityCipherDataKey.empty())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
-        }
+        return;
     }
+    std::string storageSecurityKeyCenterUrl =
+        _pt.get<std::string>("storage_security.key_center_url", "");
+
+    std::vector<std::string> values;
+    boost::split(
+        values, storageSecurityKeyCenterUrl, boost::is_any_of(":"), boost::token_compress_on);
+    if (2 != values.size())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "initGlobalConfig storage_security failed! Invalid key_center_url!"));
+    }
+
+    m_storageSecurityKeyCenterIp = values[0];
+    m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
+    if (false == isValidPort(m_storageSecurityKeyCenterPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
+    }
+
+    m_storageSecurityCipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
+    if (true == m_storageSecurityCipherDataKey.empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadStorageSecurityConfig")
+                         << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
 }
 
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
+    m_keyPageSize = _pt.get<size_t>("storage.key_page_size", 0);
+    if (m_keyPageSize > 0 && m_keyPageSize < 4096)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please set storage.key_page_size greater than 4096"));
+    }
     auto pd_addrs = _pt.get<std::string>("storage.pd_addrs", "127.0.0.1:2379");
     boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
+                         << LOG_KV("KeyPage", m_keyPageSize)
                          << LOG_KV("storageType", m_storageType) << LOG_KV("pd_addrs", pd_addrs)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
@@ -481,7 +490,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     m_txGasLimit = txGasLimit;
     // the compatibility version
     m_compatibilityVersionStr = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -557,10 +566,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    if (m_compatibilityVersion > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
-    {
-        std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
-    }
+    std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                          << LOG_KV("totalNodesSize", nodeList->size());
     return nodeList;
@@ -570,13 +576,12 @@ void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
     std::string executorConfig = "";
-    if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
-    {
-        versionData = m_compatibilityVersionStr + "-";
-        std::stringstream ss;
-        ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
-        executorConfig = ss.str();
-    }
+
+    versionData = m_compatibilityVersionStr + "-";
+    std::stringstream ss;
+    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
+    executorConfig = ss.str();
+
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
       << m_txGasLimit << "-" << versionData << executorConfig;

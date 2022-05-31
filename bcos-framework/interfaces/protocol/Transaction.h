@@ -56,9 +56,9 @@ public:
     virtual ~Transaction() {}
 
     virtual void decode(bytesConstRef _txData) = 0;
-    virtual bytesConstRef encode(bool _onlyHashFields = false) const = 0;
+    virtual bytesConstRef encode() const = 0;
     virtual bytes takeEncoded() = 0;
-    virtual bcos::crypto::HashType hash() const = 0;
+    virtual bcos::crypto::HashType hash(bool _useCache = true) const = 0;
 
     virtual void verify() const
     {
@@ -68,11 +68,9 @@ public:
             return;
         }
 
-        // check the hash
-        auto hashFields = encode(true);
-        auto hash = m_cryptoSuite->hash(hashFields);
-
-        if (hash != this->hash())
+        // check the hash when verify
+        auto hashResult = hash(false);
+        if (hashResult != this->hash())
         {
             throw bcos::Exception("Hash mismatch!");
         }

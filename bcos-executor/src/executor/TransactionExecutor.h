@@ -93,7 +93,7 @@ public:
         storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck);
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize);
 
     ~TransactionExecutor() override = default;
 
@@ -157,11 +157,12 @@ protected:
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage);
+        storage::StateStorageInterface::Ptr tableFactory,
+        storage::StorageInterface::Ptr lastStorage);
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        int32_t blockVersion, storage::StateStorage::Ptr tableFactory);
+        int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
 
     std::shared_ptr<TransactionExecutive> createExecutive(
         const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
@@ -205,6 +206,8 @@ protected:
             bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
             callback);
 
+    bcos::storage::StateStorageInterface::Ptr createStateStorage(
+        bcos::storage::StorageInterface::Ptr storage);
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
     std::shared_ptr<storage::TransactionalStorageInterface> m_backendStorage;
@@ -216,14 +219,15 @@ protected:
 
     struct State
     {
-        State(bcos::protocol::BlockNumber _number, bcos::storage::StateStorage::Ptr _storage)
+        State(
+            bcos::protocol::BlockNumber _number, bcos::storage::StateStorageInterface::Ptr _storage)
           : number(_number), storage(std::move(_storage))
         {}
         State(const State&) = delete;
         State& operator=(const State&) = delete;
 
         bcos::protocol::BlockNumber number;
-        bcos::storage::StateStorage::Ptr storage;
+        bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
     bcos::storage::StorageInterface::Ptr m_lastStateStorage;
@@ -267,6 +271,7 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
+    size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
 };
 

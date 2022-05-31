@@ -96,7 +96,6 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
-    auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
     auto table = _executive->storage().openTable(precompiled::getTableName(m_tableName));
@@ -112,9 +111,9 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
             auto blockContext = _executive->blockContext().lock();
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED,
+            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED,
                 CodecWrapper(blockContext->hashHandler(), blockContext->isWasm()));
-            return callResult;
+            return _callParameters;
         }
     }
 
@@ -122,12 +121,12 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     if (func == name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT])
     {  // updateBalance(string,uint256)
         updateBalanceCall(
-            _executive, data, _callParameters->m_origin, callResult->mutableExecResult());
+            _executive, data, _callParameters->m_origin, _callParameters->mutableExecResult());
     }
     else if (func == name2Selector[SMALL_BANK_METHOD_TRS_STR2_UINT])
     {  // sendPayment(string,string,uint256)
         sendPaymentCall(
-            _executive, data, _callParameters->m_origin, callResult->mutableExecResult());
+            _executive, data, _callParameters->m_origin, _callParameters->mutableExecResult());
     }
     else
     {
@@ -135,10 +134,10 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
                                << LOG_KV("func", func);
     }
 
-    callResult->setGas(gasPricer->calTotalGas());
-    callResult->setExecResult(bytes());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setExecResult(bytes());
     // std::cout << "SmallBank Precompiled call done." << std::endl;
-    return callResult;
+    return _callParameters;
 }
 
 void SmallBankPrecompiled::updateBalanceCall(
