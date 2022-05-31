@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/archive/basic_archive.hpp>
@@ -23,7 +24,9 @@ public:
     enum Status : int8_t
     {
         NORMAL = 0,
-        DELETED
+        DELETED = 1,
+        EMPTY = 2,
+        MODIFIED = 3,  // dirty() can use status
     };
 
     constexpr static int32_t SMALL_SIZE = 32;
@@ -126,7 +129,8 @@ public:
             }
 
             std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
-            m_dirty = true;
+            m_status = MODIFIED;
+            // m_dirty = true;
         }
         else
         {
@@ -156,8 +160,15 @@ public:
         {
             m_value = std::make_shared<Input>(std::move(value));
         }
+        m_status = MODIFIED;
+        // m_dirty = true;
+    }
 
-        m_dirty = true;
+    template <typename T>
+    void setPointer(std::shared_ptr<T>&& value)
+    {
+        m_size = value->size();
+        m_value = value;
     }
 
     Status status() const { return m_status; }
@@ -165,11 +176,30 @@ public:
     void setStatus(Status status)
     {
         m_status = status;
-        m_dirty = true;
+        if(m_status == DELETED)
+        {
+            m_value = std::string();
+        }
+        // m_dirty = true;
     }
 
-    bool dirty() const { return m_dirty; }
-    void setDirty(bool dirty) { m_dirty = dirty; }
+    bool dirty() const
+    {
+        return (m_status == MODIFIED || m_status == DELETED);
+        // return m_dirty;
+    }
+    // void setDirty(bool dirty)
+    // {
+    //     if(dirty)
+    //     {
+    //         m_status = MODIFIED;
+    //     }
+    //     else
+    //     {
+    //         m_status = NORMAL;
+    //     }
+    //     // m_dirty = dirty;
+    // }
 
     int32_t size() const { return m_size; }
 
@@ -192,6 +222,38 @@ public:
     }
 
     bool valid() const { return m_status == Status::NORMAL; }
+    crypto::HashType hash(
+        std::string_view table, std::string_view key, const bcos::crypto::Hash::Ptr& hashImpl) const
+    {
+        bcos::crypto::HashType entryHash(0);
+        if (m_status == Entry::MODIFIED)
+        {
+            auto value = get();
+            bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
+            entryHash = hashImpl->hash(ref);
+            if (c_fileLogLevel >= TRACE)
+            {
+                STORAGE_LOG(TRACE)
+                    << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                    << toHex(value) << LOG_KV("hash", entryHash.abridged());
+            }
+        }
+        else if (m_status == Entry::DELETED)
+        {
+            entryHash = bcos::crypto::HashType(0x1);
+            if (c_fileLogLevel >= TRACE)
+            {
+                STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                                   << toHex(key) << LOG_KV("hash", entryHash.abridged());
+            }
+        }
+        else
+        {
+            STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | " << toHex(key)
+                               << " | " << (int)m_status;
+        }
+        return entryHash;
+    }
 
 private:
     std::string_view outputValueView(const ValueType& value) const
@@ -220,11 +282,12 @@ private:
         return view;
     }
 
-    ValueType m_value;                 // should serialization
-    int32_t m_size = 0;                // no need to serialization
-    Status m_status = Status::NORMAL;  // should serialization
-    bool m_dirty = false;              // no need to serialization
+    ValueType m_value;           // should serialization
+    int32_t m_size = 0;               // no need to serialization
+    Status m_status = Status::EMPTY;  // should serialization
+    // bool m_dirty = false;              // no need to serialization
 };
+
 }  // namespace bcos::storage
 
 namespace boost::serialization
