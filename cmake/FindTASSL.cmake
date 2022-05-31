@@ -15,7 +15,7 @@ if(NOT TASSL_ROOT_DIR)
     URL_HASH SHA1=d4ffbdc5b29cf437f5f6711cc3d4b35f04b06965
     CONFIGURE_COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tassl-project-prefix/src/tassl-project/config --prefix=${TASSL_INSTALL}
     BUILD_COMMAND make
-    INSTALL_COMMAND make install &> /dev/null || echo "Install ok"
+    INSTALL_COMMAND make install || echo "Install ok"
   )
 
   set(TASSL_INCLUDE_DIRS "${TASSL_INSTALL}/include/")
