@@ -7,7 +7,6 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-gateway)
 include_directories(${CMAKE_SOURCE_DIR}/fisco-bcos-tars-service)
 
-find_package(OpenSSL REQUIRED)
 find_package(Boost REQUIRED program_options)
 
 file(GLOB SRC_LIST "*.cpp")
@@ -19,5 +18,5 @@ target_compile_options(${GATEWAY_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-par
 if(ETCD)
     target_link_libraries(${GATEWAY_BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET} ${LEADER_ELECTION_TARGET} OpenSSL::SSL OpenSSL::Crypto TCMalloc)
 else()
-    target_link_libraries(${GATEWAY_BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET} OpenSSL::SSL OpenSSL::Crypto TCMalloc)
+    target_link_libraries(${GATEWAY_BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET} TCMalloc)
 endif()

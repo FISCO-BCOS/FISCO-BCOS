@@ -3,11 +3,11 @@ project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
 
-find_package(OpenSSL REQUIRED Crypto SSL)
+find_package(TASSL REQUIRED MODULE)
 
 add_library(bcos-crypto ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
-target_link_libraries(bcos-crypto PUBLIC bcos-utilities WeDPRCrypto OpenSSL::Crypto)
+target_link_libraries(bcos-crypto PUBLIC bcos-utilities WeDPRCrypto TASSL)
 
 if(TESTS)
     enable_testing()

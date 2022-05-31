@@ -4,7 +4,7 @@ file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 # OpenSSL
-find_package(OpenSSL REQUIRED)
+find_package(TASSL REQUIRED MODULE)
 
 add_executable(http-server-sample http_server_sample.cpp)
 target_link_libraries(http-server-sample PUBLIC jsoncpp_lib_static ${BOOSTSSL_TARGET} bcos-utilities::bcos-utilities OpenSSL::SSL OpenSSL::Crypto)
