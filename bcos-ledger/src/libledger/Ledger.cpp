@@ -767,12 +767,6 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     // setted
                     if (error)
                     {
-                        if (error->errorCode() == LedgerError::GetStorageError &&
-                            _key == SYSTEM_KEY_COMPATIBILITY_VERSION)
-                        {
-                            callback(nullptr, bcos::protocol::RC3_VERSION_STR, blockNumber);
-                            return;
-                        }
                         LEDGER_LOG(ERROR) << "GetSystemConfigByKey error, "
                                           << boost::diagnostic_information(*error);
                         callback(std::move(error), "", -1);
@@ -1420,15 +1414,12 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
-    if (versionNumber > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
-    {
-        LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                         << LOG_KV("versionNumber", versionNumber);
-        // write compatibility version
-        Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
-        sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
-    }
+    LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
+                     << LOG_KV("versionNumber", versionNumber);
+    // write compatibility version
+    Entry compatibilityVersionEntry;
+    compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
+    sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
 
     // write consensus node list
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;

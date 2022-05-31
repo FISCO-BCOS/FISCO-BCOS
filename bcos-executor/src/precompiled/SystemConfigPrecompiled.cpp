@@ -223,11 +223,6 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
     }
     catch (std::exception const& e)
     {
-        // Note: rc3 version, the compatibility_version maybe empty
-        if (_key == SYSTEM_KEY_COMPATIBILITY_VERSION)
-        {
-            return {bcos::protocol::RC3_VERSION_STR, 0};
-        }
         auto errorMsg =
             "getSysConfigByKey for " + _key + "failed, error:" + boost::diagnostic_information(e);
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;

@@ -80,14 +80,12 @@ enum ProtocolVersion : uint32_t
 };
 enum class Version : uint32_t
 {
-    RC3_VERSION = 3,
     RC4_VERSION = 4,
-    MIN_VERSION = RC3_VERSION,
+    MIN_VERSION = RC4_VERSION,
     MAX_VERSION = RC4_VERSION,
 };
-const std::string RC3_VERSION_STR = "3.0.0-rc3";
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
-const Version DEFAULT_VERSION = bcos::protocol::Version::RC3_VERSION;
+const Version DEFAULT_VERSION = bcos::protocol::Version::RC4_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
@@ -95,9 +93,6 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version cons
 {
     switch (_version)
     {
-    case bcos::protocol::Version::RC3_VERSION:
-        _out << RC3_VERSION_STR;
-        break;
     case bcos::protocol::Version::RC4_VERSION:
         _out << RC4_VERSION_STR;
         break;

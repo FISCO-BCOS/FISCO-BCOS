@@ -51,10 +51,10 @@ public:
     bool operator==(const Transaction& rhs) const { return this->hash() == rhs.hash(); }
 
     void decode(bcos::bytesConstRef _txData) override;
-    bcos::bytesConstRef encode(bool _onlyHashFields = false) const override;
+    bcos::bytesConstRef encode() const override;
     bcos::bytes takeEncoded() override { return std::move(m_buffer); }
 
-    bcos::crypto::HashType hash() const override;
+    bcos::crypto::HashType hash(bool _useCache = true) const override;
     int32_t version() const override { return m_inner()->data.version; }
     std::string_view chainId() const override { return m_inner()->data.chainID; }
     std::string_view groupId() const override { return m_inner()->data.groupID; }
@@ -99,7 +99,7 @@ public:
 private:
     std::function<bcostars::Transaction*()> m_inner;
     mutable bcos::bytes m_buffer;
-    mutable bcos::bytes m_dataBuffer;
+    mutable bcos::SharedMutex x_hash;
     mutable bcos::u256 m_nonce;
 };
 }  // namespace protocol

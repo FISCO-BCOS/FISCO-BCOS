@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(transaction)
 
     tx->verify();
     BOOST_CHECK(!tx->sender().empty());
-    auto buffer = tx->encode(false);
+    auto buffer = tx->encode();
 
     auto decodedTx = factory.createTransaction(buffer, true);
 
@@ -310,7 +310,7 @@ BOOST_AUTO_TEST_CASE(block)
             auto rhs = decodedBlock->transaction(i);
 
             // check if transaction hash re-encode
-            auto reencodeBuffer = rhs->encode(false);
+            auto reencodeBuffer = rhs->encode();
             auto redecodeBlock = transactionFactory->createTransaction(reencodeBuffer, false);
             BOOST_CHECK_EQUAL(redecodeBlock->hash().hex(), lhs->hash().hex());
 
@@ -386,7 +386,6 @@ BOOST_AUTO_TEST_CASE(block)
             BOOST_CHECK_EQUAL(bcos::asString(lhs->output()), bcos::asString(rhs->output()));
             BOOST_CHECK_EQUAL(lhs->blockNumber(), rhs->blockNumber());
         }
-
         // ensure the receipt's lifetime
         {
             BOOST_CHECK_EQUAL(

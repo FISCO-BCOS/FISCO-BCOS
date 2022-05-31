@@ -490,7 +490,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     m_txGasLimit = txGasLimit;
     // the compatibility version
     m_compatibilityVersionStr = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -566,10 +566,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    if (m_compatibilityVersion > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
-    {
-        std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
-    }
+    std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                          << LOG_KV("totalNodesSize", nodeList->size());
     return nodeList;
@@ -579,13 +576,12 @@ void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
     std::string executorConfig = "";
-    if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
-    {
-        versionData = m_compatibilityVersionStr + "-";
-        std::stringstream ss;
-        ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
-        executorConfig = ss.str();
-    }
+
+    versionData = m_compatibilityVersionStr + "-";
+    std::stringstream ss;
+    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
+    executorConfig = ss.str();
+
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
       << m_txGasLimit << "-" << versionData << executorConfig;

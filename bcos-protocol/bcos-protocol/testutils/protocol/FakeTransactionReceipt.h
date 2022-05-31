@@ -107,8 +107,9 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _crypto
               << ", encodedData size:" << encodedData->size() << std::endl;
 #endif
 
-    auto encodedDataCache = receipt->encode();
-    BOOST_CHECK(*encodedData == encodedDataCache.toBytes());
+    auto encodedDataCache = std::make_shared<bytes>();
+    receipt->encode(*encodedDataCache);
+    BOOST_CHECK(*encodedData == *encodedDataCache);
 
     // decode
     std::shared_ptr<TransactionReceipt> decodedReceipt;

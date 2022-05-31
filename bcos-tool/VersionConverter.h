@@ -33,10 +33,6 @@ inline uint32_t toVersionNumber(const std::string& _version)
 {
     auto version = _version;
     boost::to_lower(version);
-    if (version == bcos::protocol::RC3_VERSION_STR)
-    {
-        return (uint32_t)(bcos::protocol::Version::RC3_VERSION);
-    }
     if (version == bcos::protocol::RC4_VERSION_STR)
     {
         return (uint32_t)(bcos::protocol::Version::RC4_VERSION);
