@@ -23,34 +23,9 @@ public:
     using Ptr = std::shared_ptr<GatewayFactory>;
     GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName)
       : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName)
-    {
-        initCert2PubHexHandler();
-        initSSLContextPubHexHandler();
-    }
+    {}
 
     virtual ~GatewayFactory() = default;
-
-    // init the function calc public hex from the cert
-    void initCert2PubHexHandler();
-    // init the function calc public key from the ssl context
-    void initSSLContextPubHexHandler();
-
-    std::function<bool(X509* cert, std::string& pubHex)> sslContextPubHandler()
-    {
-        return m_sslContextPubHandler;
-    }
-
-    std::function<bool(const std::string& priKey, std::string& pubHex)> certPubHexHandler()
-    {
-        return m_certPubHexHandler;
-    }
-
-    // build ssl context
-    std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        const GatewayConfig::CertConfig& _certConfig);
-    // build sm ssl context
-    std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        const GatewayConfig::SMCertConfig& _smCertConfig);
 
     /**
      * @brief: construct Gateway

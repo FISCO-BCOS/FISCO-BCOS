@@ -11,10 +11,10 @@ hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
 )
 
 hunter_config(bcos-boostssl
-    VERSION 1.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/8fa241f9b60d2e4478c8b5dfe31d692f17471a11.tar.gz
-    SHA1 7dfb951edd4775f9140130026ad7026654021534
-    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON ARCH_NATIVE=${ARCH_NATIVE} URL_BASE=${URL_BASE}
+    VERSION 3.0.0-rc3-local
+    URL https://github.com/LucasLi1024/bcos-boostssl/archive/ef177363c248569456b42bc09ab393b1bb2bb60c.tar.gz
+    SHA1 cdaa3bec6b2ee4f84e10e10f7753ee0a65a56f7b
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
 hunter_config(rocksdb VERSION 6.20.3

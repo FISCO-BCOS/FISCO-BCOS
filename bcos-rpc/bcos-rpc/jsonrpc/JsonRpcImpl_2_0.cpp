@@ -1320,8 +1320,7 @@ void JsonRpcImpl_2_0::gatewayInfoToJson(
 {
     auto p2pInfo = _gatewayInfo->p2pInfo();
     _response["p2pNodeID"] = p2pInfo.p2pID;
-    _response["endPoint"] =
-        p2pInfo.nodeIPEndpoint.address() + ":" + std::to_string(p2pInfo.nodeIPEndpoint.port());
+    _response["endPoint"] = p2pInfo.hostIp + ":" + p2pInfo.hostPort;
     // set the groupNodeIDInfo
     auto groupNodeIDInfo = _gatewayInfo->nodeIDInfo();
     Json::Value groupInfo(Json::arrayValue);

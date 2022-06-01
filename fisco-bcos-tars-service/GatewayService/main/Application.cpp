@@ -51,25 +51,41 @@ protected:
 
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
+
+        // init wsConfig
+        auto wsConfig = std::make_shared<bcos::boostssl::ws::WsConfig>();
+        // Mixed = server + client
+        wsConfig->setModel(boostssl::ws::WsModel::Mixed);
+        wsConfig->setModuleName("GATEWAY");
+        wsConfig->setThreadPoolSize(gatewayConfig->threadPoolSize());
+        gatewayConfig->setWsConfig(wsConfig);
+
         gatewayConfig->initP2PConfig(pt, true);
-        gatewayConfig->setCertPath(ServerConfig::BasePath);
         gatewayConfig->setNodePath(ServerConfig::BasePath);
-        if (gatewayConfig->smSSL())
+        gatewayConfig->setCertPath(ServerConfig::BasePath);
+
+        auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
+        if (gatewayConfig->wsConfig()->smSSL())
         {
             addConfig("sm_ca.crt");
             addConfig("sm_ssl.crt");
             addConfig("sm_enssl.crt");
             addConfig("sm_ssl.key");
             addConfig("sm_enssl.key");
+            contextConfig->setSslType("sm_ssl");
             gatewayConfig->initSMCertConfig(pt);
+            contextConfig->setSmCertConfig(gatewayConfig->smCertConfig());
         }
         else
         {
             addConfig("ca.crt");
             addConfig("ssl.key");
             addConfig("ssl.crt");
+            contextConfig->setSslType("ssl");
             gatewayConfig->initCertConfig(pt);
+            contextConfig->setCertConfig(gatewayConfig->certConfig());
         }
+        gatewayConfig->wsConfig()->setContextConfig(contextConfig);
 
         // nodes.json
         addConfig("nodes.json");

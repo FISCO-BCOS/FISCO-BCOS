@@ -62,6 +62,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
     wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
 
+    wsConfig->setModuleName("RPC");
     wsConfig->setListenIP(_nodeConfig->rpcListenIP());
     wsConfig->setListenPort(_nodeConfig->rpcListenPort());
     wsConfig->setThreadPoolSize(_nodeConfig->rpcThreadPoolSize());
@@ -126,7 +127,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
 bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     bcos::boostssl::ws::WsConfig::Ptr _config)
 {
-    auto wsService = std::make_shared<bcos::boostssl::ws::WsService>();
+    auto wsService = std::make_shared<bcos::boostssl::ws::WsService>(_config->moduleName());
     auto initializer = std::make_shared<bcos::boostssl::ws::WsInitializer>();
 
     initializer->setConfig(_config);

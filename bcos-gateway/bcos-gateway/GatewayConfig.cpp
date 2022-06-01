@@ -10,6 +10,9 @@
 
 using namespace bcos;
 using namespace gateway;
+using namespace bcos::boostssl;
+using namespace bcos::boostssl::ws;
+using namespace bcos::boostssl::context;
 
 bool GatewayConfig::isValidPort(int port)
 {
@@ -86,7 +89,6 @@ void GatewayConfig::parseConnectedJson(
                                                       "connected nodes json"));
         }
 
-        std::set<NodeIPEndpoint> nodeIPEndpointSet;
         Json::Value jNodes = root["nodes"];
         if (jNodes.isArray())
         {
@@ -123,15 +125,10 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
     {
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
+        m_wsConfig = std::make_shared<boostssl::ws::WsConfig>();
+
         initP2PConfig(pt, _uuidRequired);
-        if (m_smSSL)
-        {
-            initSMCertConfig(pt);
-        }
-        else
-        {
-            initCertConfig(pt);
-        }
+        initWsConfig(pt);
     }
     catch (const std::exception& e)
     {
@@ -147,9 +144,34 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
     }
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initConfig ok!") << LOG_KV("configPath", _configPath)
-                             << LOG_KV("listenIP", m_listenIP) << LOG_KV("listenPort", m_listenPort)
-                             << LOG_KV("smSSL", m_smSSL)
-                             << LOG_KV("peers", m_connectedNodes.size());
+                             << LOG_KV("listenIP", m_wsConfig->listenIP())
+                             << LOG_KV("listenPort", m_wsConfig->listenPort())
+                             << LOG_KV("smSSL", m_wsConfig->smSSL());
+}
+
+void GatewayConfig::initWsConfig(const boost::property_tree::ptree& _pt)
+{
+    // Mixed = server + client
+    m_wsConfig->setModel(boostssl::ws::WsModel::Mixed);
+    m_wsConfig->setModuleName("GATEWAY");
+    m_wsConfig->setThreadPoolSize(m_threadPoolSize);
+
+    // init contextConfig
+    auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
+    if (m_wsConfig->smSSL())
+    {
+        contextConfig->setSslType("sm_ssl");
+        initSMCertConfig(_pt);
+        contextConfig->setSmCertConfig(m_smCertConfig);
+    }
+    else
+    {
+        contextConfig->setSslType("ssl");
+        initCertConfig(_pt);
+        contextConfig->setCertConfig(m_certConfig);
+    }
+
+    m_wsConfig->setContextConfig(contextConfig);
 }
 
 /// loads p2p configuration items from the configuration file
@@ -165,7 +187,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       listen_port=30300
       nodes_path=./
       nodes_file=nodes.json
-      */
+    */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
     if (_uuidRequired && m_uuid.size() == 0)
     {
@@ -190,9 +212,9 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
 
-    m_smSSL = smSSL;
-    m_listenIP = listenIP;
-    m_listenPort = (uint16_t)listenPort;
+    m_wsConfig->setSmSSL(smSSL);
+    m_wsConfig->setListenIP(listenIP);
+    m_wsConfig->setListenPort((uint16_t)listenPort);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
@@ -215,7 +237,12 @@ void GatewayConfig::loadP2pConnectedNodes()
     }
 
     parseConnectedJson(*jsonContent.get(), nodes);
-    m_connectedNodes = nodes;
+    auto nodesPtr = std::make_shared<std::set<NodeIPEndpoint>>();
+    for (auto node : nodes)
+    {
+        nodesPtr->insert(node);
+    }
+    m_wsConfig->setConnectPeers(nodesPtr);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")
                              << LOG_KV("nodePath", m_nodePath)
@@ -253,7 +280,7 @@ void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
     checkFileExist(nodeCertFile);
     checkFileExist(nodeKeyFile);
 
-    CertConfig certConfig;
+    ContextConfig::CertConfig certConfig;
     certConfig.caCert = caCertFile;
     certConfig.nodeCert = nodeCertFile;
     certConfig.nodeKey = nodeKeyFile;
@@ -305,7 +332,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
     checkFileExist(smEnNodeCertFile);
     checkFileExist(smEnNodeKeyFile);
 
-    SMCertConfig smCertConfig;
+    ContextConfig::SMCertConfig smCertConfig;
     smCertConfig.caCert = smCaCertFile;
     smCertConfig.nodeCert = smNodeCertFile;
     smCertConfig.nodeKey = smNodeKeyFile;

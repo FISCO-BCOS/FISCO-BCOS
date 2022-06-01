@@ -20,6 +20,8 @@
  */
 #pragma once
 #include "AMOPClient.h"
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 
 namespace bcos
 {

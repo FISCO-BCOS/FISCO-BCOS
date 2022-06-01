@@ -34,6 +34,8 @@
 
 using namespace bcos;
 using namespace bcos::event;
+using namespace bcos::boostssl;
+using namespace bcos::boostssl::ws;
 
 EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
   : bcos::Worker("t_event_sub"), m_wsService(_wsService)

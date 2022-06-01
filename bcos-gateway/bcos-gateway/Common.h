@@ -18,7 +18,7 @@
  * @date 2021-05-04
  */
 #pragma once
-#include "libnetwork/Common.h"
+
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
 #include <bcos-utilities/Exceptions.h>
 #include <tarscpp/servant/Application.h>

@@ -20,12 +20,13 @@
 #include "AMOPImpl.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
-#include <bcos-gateway/libnetwork/Common.h>
+
 #include <boost/bind/bind.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
+using namespace bcos::boostssl::ws;
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
@@ -39,9 +40,9 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
     m_timer = std::make_shared<Timer>(TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
-    m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-        boost::bind(&AMOPImpl::onAMOPMessage, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+    m_network->registerHandlerByMsgType(
+        GatewayMessageType::AMOPMessageType, boost::bind(&AMOPImpl::onAMOPMessage, this,
+                                                 boost::placeholders::_1, boost::placeholders::_2));
 }
 
 void AMOPImpl::start()
@@ -83,7 +84,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
                        << LOG_KV("nodeID", _nodeID) << LOG_KV("topicSeq", topicSeq);
 
         auto buffer = buildAndEncodeMessage(AMOPMessage::Type::RequestTopic, bytesConstRef());
-        Options option(0);
+        boostssl::ws::Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
             bytesConstRef(buffer->data(), buffer->size()), option,
             [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
@@ -363,7 +364,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
             // erase in case of select the same node when retry
             m_nodeIDs.erase(m_nodeIDs.begin());
             // try to send message to node
-            Options option(0);
+            boostssl::ws::Options option(0);
             auto self = shared_from_this();
             m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType,
                 choosedNodeID, bytesConstRef(m_buffer->data(), m_buffer->size()), option,
@@ -467,16 +468,15 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
     }
     auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPBroadcast, _data);
     m_network->asyncSendMessageByP2PNodeIDs(GatewayMessageType::AMOPMessageType, nodeIDs,
-        bytesConstRef(buffer->data(), buffer->size()), Options(0));
+        bytesConstRef(buffer->data(), buffer->size()), boostssl::ws::Options(0));
     AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadbastMessage") << LOG_DESC("send broadcast message")
                     << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
 }
 
-void AMOPImpl::onAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
+void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
 {
     auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
-    m_threadPool->enqueue([self, _e, _session, _message]() {
+    m_threadPool->enqueue([self, _p2pSession, _message]() {
         auto amop = self.lock();
         if (!amop)
         {
@@ -484,7 +484,7 @@ void AMOPImpl::onAMOPMessage(
         }
         try
         {
-            amop->dispatcherAMOPMessage(_e, _session, _message);
+            amop->dispatcherAMOPMessage(_message, _p2pSession);
         }
         catch (std::exception const& e)
         {
@@ -495,21 +495,15 @@ void AMOPImpl::onAMOPMessage(
 }
 
 void AMOPImpl::dispatcherAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
+    boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
 {
-    if (_e.errorCode() != 0 || !_message)
-    {
-        AMOP_LOG(WARNING) << LOG_DESC("onAMOPMessage error for NetworkException")
-                          << LOG_KV("error", _e.what()) << LOG_KV("code", _e.errorCode());
-        return;
-    }
     if (_message->packetType() != GatewayMessageType::AMOPMessageType)
     {
         return;
     }
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _session->p2pID();
+    auto fromNodeID = _p2pSession->nodeId();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:
@@ -523,7 +517,7 @@ void AMOPImpl::dispatcherAMOPMessage(
         break;
     case AMOPMessage::Type::AMOPRequest:
         onReceiveAMOPMessage(fromNodeID, amopMessage,
-            [this, _session, _message](bytesPointer _responseData, int16_t _type) {
+            [this, _p2pSession, _message](bytesPointer _responseData, int16_t _type) {
                 auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
                     m_network->messageFactory()->buildMessage());
                 AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
@@ -532,7 +526,7 @@ void AMOPImpl::dispatcherAMOPMessage(
                 responseP2PMsg->setRespPacket();
                 responseP2PMsg->setPayload(_responseData);
                 responseP2PMsg->setPacketType(_type);
-                _session->session()->asyncSendMessage(responseP2PMsg);
+                _p2pSession->asyncSendMessage(responseP2PMsg);
             });
         break;
     case AMOPMessage::Type::AMOPBroadcast:
