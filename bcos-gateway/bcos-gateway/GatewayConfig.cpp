@@ -161,8 +161,6 @@ void GatewayConfig::initWsConfig(const boost::property_tree::ptree& _pt)
     if (m_wsConfig->smSSL())
     {
         contextConfig->setSslType("sm_ssl");
-        contextConfig->initSMCertConfig(_pt);
-
         initSMCertConfig(_pt);
         contextConfig->setSmCertConfig(m_smCertConfig);
     }

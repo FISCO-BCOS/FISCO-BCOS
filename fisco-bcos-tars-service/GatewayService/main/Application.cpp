@@ -67,7 +67,6 @@ protected:
         auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
         if (gatewayConfig->wsConfig()->smSSL())
         {
-            std::cout << "#### initService smSSL " << gatewayConfig->wsConfig()->smSSL();
             addConfig("sm_ca.crt");
             addConfig("sm_ssl.crt");
             addConfig("sm_enssl.crt");
@@ -79,7 +78,6 @@ protected:
         }
         else
         {
-            std::cout << "#### initService SSL " << gatewayConfig->wsConfig()->smSSL();
             addConfig("ca.crt");
             addConfig("ssl.key");
             addConfig("ssl.crt");
