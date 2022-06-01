@@ -23,6 +23,7 @@
 #include <bcos-boostssl/context/ContextConfig.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <exception>
 #include <iostream>
 
@@ -35,7 +36,7 @@ using namespace bcos::boostssl::context;
 std::shared_ptr<std::string> ContextBuilder::readFileContent(boost::filesystem::path const& _file)
 {
     std::shared_ptr<std::string> content = std::make_shared<std::string>();
-    boost::filesystem::ifstream fileStream(_file, std::ifstream::binary);
+    boost::filesystem::ifstream fileStream(_file.c_str(), std::ifstream::binary);
     if (!fileStream)
     {
         return content;

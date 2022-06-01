@@ -27,7 +27,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Log.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define SCHEDULER_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_DESC("SchedulerServiceApp")
 

@@ -10,7 +10,7 @@
 #include <bcos-tars-protocol/tars/TxPoolService.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <tarscpp/servant/Servant.h>
+#include <servant/Servant.h>
 #include <memory>
 
 namespace bcostars

@@ -7,7 +7,7 @@ find_package(TASSL REQUIRED MODULE)
 
 add_library(bcos-crypto ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
-target_link_libraries(bcos-crypto PUBLIC TASSL bcos-utilities WeDPRCrypto)
+target_link_libraries(bcos-crypto PUBLIC tassl::crypto bcos-utilities WeDPRCrypto)
 
 if(TESTS)
     enable_testing()

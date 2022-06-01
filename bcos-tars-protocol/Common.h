@@ -37,8 +37,8 @@
 #include <bcos-framework//protocol/LogEntry.h>
 #include <bcos-framework//protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
-#include <tarscpp/servant/Application.h>
-#include <tarscpp/tup/Tars.h>
+#include <servant/Application.h>
+#include <tup/Tars.h>
 #include <cstdint>
 #include <functional>
 #include <memory>

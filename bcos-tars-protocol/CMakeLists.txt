@@ -22,8 +22,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment ver
 include(Version)
 project(bcos-tars-protocol VERSION ${VERSION})
 
-find_package(TARS REQUIRED MODULE)
-
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/bcos-tars-protocol/tars)
 
@@ -36,7 +34,7 @@ if (TARS_INPUT)
         add_custom_command(
             OUTPUT ${TARS_HEADER_DIR}/${TARS_NAME}.h
             WORKING_DIRECTORY ${TARS_PATH}
-            COMMAND TARS_TARS2CPP ${TARS_FILE} --dir=${TARS_HEADER_DIR}
+            COMMAND ${TARS_TARS2CPP} ${TARS_FILE} --dir=${TARS_HEADER_DIR}
             COMMENT "generating ${TARS_FILE} to ${TARS_HEADER_DIR}"
             VERBATIM
         )
@@ -52,7 +50,7 @@ aux_source_directory(./client SRC_LIST)
 
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
 target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} TARS)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tars::servant tars::util)
 
 if (TESTS)
     # fetch bcos-test

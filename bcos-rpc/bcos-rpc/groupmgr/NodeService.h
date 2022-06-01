@@ -29,7 +29,7 @@
 #include <bcos-framework//sync/BlockSyncInterface.h>
 #include <bcos-framework//txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 namespace bcos
 {
 namespace rpc

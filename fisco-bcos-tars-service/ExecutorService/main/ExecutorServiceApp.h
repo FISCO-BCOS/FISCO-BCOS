@@ -26,7 +26,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Timer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define EXECUTOR_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("ExecutorServiceApp")
 

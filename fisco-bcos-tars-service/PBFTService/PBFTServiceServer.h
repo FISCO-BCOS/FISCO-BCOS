@@ -24,8 +24,8 @@
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/tars/PBFTService.h>
-#include <tarscpp/servant/Application.h>
-#include <tarscpp/servant/Communicator.h>
+#include <servant/Application.h>
+#include <servant/Communicator.h>
 #include <mutex>
 
 namespace bcostars

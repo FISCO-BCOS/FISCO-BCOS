@@ -21,7 +21,7 @@
 #include "libnetwork/Common.h"
 #include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-utilities/Exceptions.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define GATEWAY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Gateway]"
 #define GATEWAY_CONFIG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Config]"

@@ -26,7 +26,7 @@
 #include <bcos-tars-protocol/client/PBFTServiceClient.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;

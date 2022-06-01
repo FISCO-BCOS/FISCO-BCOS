@@ -4,7 +4,7 @@
 #include "libinitializer/CommandHelper.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 using namespace bcostars;
 

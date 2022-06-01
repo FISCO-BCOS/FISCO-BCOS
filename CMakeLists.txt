@@ -32,6 +32,7 @@ include(ProjectBCOSWASM)
 # hunter_add_package(evmone)
 # hunter_add_package(tarscpp)
 # hunter_add_package(OpenSSL)
+find_package(TARS REQUIRED MODULE)
 
 # bcos-boostssl
 find_package(Boost REQUIRED COMPONENTS log system filesystem chrono iostreams thread)

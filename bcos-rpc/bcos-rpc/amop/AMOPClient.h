@@ -24,7 +24,7 @@
 #include <bcos-framework//protocol/AMOPRequest.h>
 #include <bcos-framework//rpc/RPCInterface.h>
 #include <bcos-utilities/Timer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
 namespace bcos

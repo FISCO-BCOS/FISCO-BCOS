@@ -800,7 +800,7 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
         Json::Value info;
         info["nodeID"] = *toHexString(_p->nodeId()->data());
         info["genesisHash"] = *toHexString(_p->genesisHash());
-        info["blockNumber"] = _p->number();
+        info["blockNumber"] = Json::UInt64(_p->number());
         info["latestHash"] = *toHexString(_p->hash());
         peersInfo.append(info);
         return true;

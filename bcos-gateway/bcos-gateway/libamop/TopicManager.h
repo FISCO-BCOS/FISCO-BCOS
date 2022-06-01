@@ -26,7 +26,7 @@
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Timer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 #include <algorithm>
 #include <shared_mutex>
 

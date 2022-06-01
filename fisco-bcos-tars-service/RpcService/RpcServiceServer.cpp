@@ -3,7 +3,7 @@
 #include <bcos-tars-protocol/Common.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
-#include <tarscpp/servant/Servant.h>
+#include <servant/Servant.h>
 #include <memory>
 
 using namespace bcostars;

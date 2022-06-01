@@ -23,7 +23,7 @@
 #include <bcos-framework//protocol/Protocol.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 namespace bcos::initializer
 {
