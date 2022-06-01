@@ -89,11 +89,10 @@ std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
     // parse function name
     // uint32_t func = getParamFunc(_param);
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     u256 size, signature;
-    codec->decode(_callParameters->params(), size, signature);
+    codec.decode(_callParameters->params(), size, signature);
 
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());

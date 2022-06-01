@@ -42,19 +42,19 @@ public:
         // nodeService
         c_supportedProtocols.insert({ProtocolModuleID::NodeService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1)});
+                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V1)});
         // gatewayService
         c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::GatewayService, ProtocolVersion::V1, ProtocolVersion::V1)});
+                ProtocolModuleID::GatewayService, ProtocolVersion::V0, ProtocolVersion::V1)});
         // rpcService && SDK
         c_supportedProtocols.insert({ProtocolModuleID::RpcService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::RpcService, ProtocolVersion::V1, ProtocolVersion::V1)});
+                ProtocolModuleID::RpcService, ProtocolVersion::V0, ProtocolVersion::V1)});
         // executorService
         c_supportedProtocols.insert({ProtocolModuleID::ExecutorService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::ExecutorService, ProtocolVersion::V1, ProtocolVersion::V1)});
+                ProtocolModuleID::ExecutorService, ProtocolVersion::V0, ProtocolVersion::V1)});
     }
     virtual ~GlobalConfig() {}
 

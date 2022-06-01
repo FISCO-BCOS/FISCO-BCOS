@@ -41,7 +41,7 @@ public:
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) = 0;
 
     virtual void asyncResetTxsFlag(bytesConstRef _data, bool _flag) = 0;
-    virtual PBFTProposalInterface::Ptr generateEmptyProposal(
+    virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
     virtual void notifyTransactionsResult(
@@ -100,7 +100,7 @@ public:
         return m_resettingProposals.size();
     }
 
-    PBFTProposalInterface::Ptr generateEmptyProposal(
+    PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) override
     {
         auto proposal = _factory->createPBFTProposal();
@@ -108,6 +108,7 @@ public:
         auto block = m_blockFactory->createBlock();
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
         blockHeader->populateEmptyBlock(_index, _sealerId);
+        blockHeader->setVersion(_proposalVersion);
         block->setBlockHeader(blockHeader);
         auto encodedData = std::make_shared<bytes>();
         block->encode(*encodedData);

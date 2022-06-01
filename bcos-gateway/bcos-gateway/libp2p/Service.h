@@ -34,7 +34,7 @@ class Gateway;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service(std::shared_ptr<boostssl::ws::WsService> _wsService);
+    Service(std::string const& _nodeID, std::shared_ptr<boostssl::ws::WsService> _wsService);
     virtual ~Service() { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
@@ -44,23 +44,21 @@ public:
 
     virtual bool actived() { return m_run; }
     P2pID id() const override { return m_p2pID; }
-    void setId(const P2pID& _nodeID) { m_p2pID = _nodeID; }
 
     virtual void onConnect(std::shared_ptr<boostssl::ws::WsSession> _session);
     virtual void onDisconnect(boostssl::ws::WsSession::Ptr p2pSession);
 
-    std::shared_ptr<bcos::boostssl::MessageFace> sendMessageByNodeID(
-        P2pID p2pID, std::shared_ptr<bcos::boostssl::MessageFace> message) override;
-    void sendMessageBySession(
-        int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession) override;
-    void sendRespMessageBySession(bytesConstRef _payload,
-        bcos::boostssl::MessageFace::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
-    void asyncSendMessageByNodeID(P2pID p2pID, std::shared_ptr<bcos::boostssl::MessageFace> message,
+    std::shared_ptr<P2PMessage> sendMessageByNodeID(
+        P2pID p2pID, std::shared_ptr<P2PMessage> message) override;
+    void sendRespMessageBySession(
+        bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
+
+    void asyncSendMessageByNodeID(P2pID p2pID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback,
         boostssl::ws::Options options = boostssl::ws::Options()) override;
 
-    void asyncBroadcastMessage(std::shared_ptr<bcos::boostssl::MessageFace> message,
-        boostssl::ws::Options options) override;
+    void asyncBroadcastMessage(
+        std::shared_ptr<P2PMessage> message, boostssl::ws::Options options) override;
 
     virtual std::map<boostssl::NodeIPEndpoint, P2pID> staticNodes() { return m_staticNodes; }
     virtual void setStaticNodes(const std::set<boostssl::NodeIPEndpoint>& staticNodes)
@@ -80,14 +78,16 @@ public:
     P2pInfo nodeInfo();
     P2pInfo localP2pInfo() override;
 
-    bool isConnected(P2pID const& p2pID) const override;
-
     std::shared_ptr<boostssl::ws::WsService> wsService() { return m_wsService; }
 
     std::shared_ptr<boostssl::MessageFaceFactory> messageFactory() override
     {
         return m_messageFactory;
     }
+
+    bool isConnected(P2pID const& p2pID) const override;
+    bool isReachable(P2pID const& _nodeID) const override { return isConnected(_nodeID); }
+
     virtual void setMessageFactory(std::shared_ptr<boostssl::MessageFaceFactory> _messageFactory)
     {
         m_messageFactory = _messageFactory;
@@ -121,7 +121,8 @@ public:
     }
 
     void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
-        boostssl::ws::Options options, P2PResponseCallback _callback) override;
+        boostssl::ws::Options options = boostssl::ws::Options(),
+        P2PResponseCallback _callback = nullptr) override;
 
     void asyncBroadcastMessageToP2PNodes(
         int16_t _type, bytesConstRef _payload, boostssl::ws::Options _options) override;
@@ -133,20 +134,23 @@ public:
     {
         auto handler = [_p2pMsgHandler](bcos::boostssl::MessageFace::Ptr _message,
                            bcos::boostssl::ws::WsSession::Ptr _session) {
-            _p2pMsgHandler(std::dynamic_pointer_cast<P2PMessage>(_message),
-                std::dynamic_pointer_cast<P2PSession>(_session));
+            auto p2pMsg = std::dynamic_pointer_cast<P2PMessage>(_message);
+            if (!p2pMsg)
+            {
+                return;
+            }
+            auto p2pSession = std::dynamic_pointer_cast<P2PSession>(_session);
+            if (!p2pSession)
+            {
+                return;
+            }
+            _p2pMsgHandler(p2pSession, p2pMsg);
         };
         if (!m_wsService->registerMsgHandler(_type, handler))
         {
             SERVICE_LOG(INFO) << "registerMsgHandler failed, maybe msgType has a handler"
                               << LOG_KV("msgType", _type);
         }
-    }
-
-    MessageHandler getMessageHandlerByMsgType(uint32_t _type)
-    {
-        auto msgHandler = m_wsService->getMsgHandler(_type);
-        return msgHandler;
     }
 
     void eraseHandlerByMsgType(uint32_t _type) override
@@ -157,20 +161,49 @@ public:
                               << LOG_KV("msgType", _type);
         }
     }
-
-    bool connected(std::string const& _nodeID) override;
-
     // todo: for debug, to be removed
     void reportConnectedNodes();
 
-private:
+protected:
+    virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
+        boostssl::ws::Options = boostssl::ws::Options(),
+        bcos::boostssl::ws::RespCallBack = nullptr);
+
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
-    void asyncSendProtocol(bcos::boostssl::ws::WsSession::Ptr _session);
+    void asyncSendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
-        boostssl::MessageFace::Ptr _message, std::shared_ptr<P2PSession> _session);
+        std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _message);
 
-private:
+    // handlers called when new-session
+    void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler)
+    {
+        m_newSessionHandlers.emplace_back(_handler);
+    }
+    // handlers called when delete-session
+    void registerOnDeleteSession(std::function<void(P2PSession::Ptr)> _handler)
+    {
+        m_deleteSessionHandlers.emplace_back(_handler);
+    }
+
+    virtual void callNewSessionHandlers(P2PSession::Ptr _session)
+    {
+        for (auto const& handler : m_newSessionHandlers)
+        {
+            handler(_session);
+        }
+    }
+    virtual void callDeleteSessionHandlers(P2PSession::Ptr _session)
+    {
+        for (auto const& handler : m_deleteSessionHandlers)
+        {
+            handler(_session);
+        }
+    }
+
+    virtual void onMessage(std::shared_ptr<P2PSession> _session, std::shared_ptr<P2PMessage> _msg);
+
+protected:
     std::vector<std::function<void(P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
@@ -196,6 +229,11 @@ private:
 
     // todo: add for test, to be removed
     std::shared_ptr<boost::asio::deadline_timer> m_heartbeat;
+
+    // handlers called when new-session
+    std::vector<std::function<void(P2PSession::Ptr)>> m_newSessionHandlers;
+    // handlers called when delete-session
+    std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 };
 
 }  // namespace gateway

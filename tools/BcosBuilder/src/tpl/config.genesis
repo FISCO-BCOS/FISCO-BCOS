@@ -16,3 +16,10 @@
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
+
+[executor]
+    ; use the wasm virtual machine or not, default use evm
+    is_wasm = false
+    ; enable auth_check or not, default disable
+    is_auth_check=false
+    auth_admin_account=

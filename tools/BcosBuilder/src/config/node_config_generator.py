@@ -25,11 +25,11 @@ class NodeConfigGenerator:
         self.ini_tmp_config_file = "config.ini"
         self.node_type = node_type
 
-    def generate_genesis_config(self, nodeid_list, group_config):
+    def generate_genesis_config_nodeid(self, nodeid_list, group_config):
         """
         generate the gensis config
         """
-        utilities.log_info("* generate_genesis_config")
+        utilities.log_info("* generate_genesis_config_nodeid")
         config_content = configparser.ConfigParser(
             comment_prefixes='/', allow_no_value=True)
         config_content.read(self.genesis_tpl_config)
@@ -51,6 +51,14 @@ class NodeConfigGenerator:
         version_section = "version"
         config_content[version_section]["compatibility_version"] = str(
             group_config.genesis_config.compatibility_version)
+
+        executor_section = "executor"
+        config_content[executor_section]["is_wasm"] = utilities.convert_bool_to_str(
+            group_config.genesis_config.vm_type != "evm")
+        config_content[executor_section]["is_auth_check"] = utilities.convert_bool_to_str(
+            group_config.genesis_config.auth_check)
+        config_content[executor_section]["auth_admin_account"] = group_config.genesis_config.init_auth_address
+
         utilities.log_info("* consensus_type: %s" %
                            config_content[consensus_section]["consensus_type"])
         utilities.log_info("* block_tx_count_limit: %s" %
@@ -61,7 +69,7 @@ class NodeConfigGenerator:
                            config_content[tx_section]["gas_limit"])
         utilities.log_info("* compatibility_version: %s" %
                            config_content[version_section]["compatibility_version"])
-        utilities.log_info("* generate_genesis_config success")
+        utilities.log_info("* generate_genesis_config_nodeid success")
         return config_content
 
     def generate_executor_config(self, group_config, node_config, node_name):
@@ -81,7 +89,6 @@ class NodeConfigGenerator:
         executor_ini_config[service_section]["txpool"] = self.config.chain_id + \
             "." + node_config.txpool_service_name
         # executor config
-        self.__update_executor_info(executor_ini_config, group_config)
         self.__update_storage_info(
             executor_ini_config, node_config, self.node_type)
         return executor_ini_config
@@ -96,9 +103,11 @@ class NodeConfigGenerator:
         self.__update_chain_info(ini_config, node_config)
         self.__update_service_info(ini_config, node_config, node_name)
         self.__update_failover_info(ini_config, node_config, node_type)
-        self.__update_executor_info(ini_config, group_config)
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
+        # set storage_security config
+        # TODO: access key_center to encrypt the certificates and the private keys
+        self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
 
     def __update_chain_info(self, ini_config, node_config):
@@ -136,18 +145,6 @@ class NodeConfigGenerator:
             ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
                 False)
 
-    def __update_executor_info(self, ini_config, group_config):
-        executor_section = "executor"
-        if group_config.vm_type == "evm":
-            ini_config[executor_section]["is_wasm"] = utilities.convert_bool_to_str(
-                False)
-        if group_config.vm_type == "wasm":
-            ini_config[executor_section]["is_wasm"] = utilities.convert_bool_to_str(
-                True)
-        ini_config[executor_section]["is_auth_check"] = utilities.convert_bool_to_str(
-            group_config.auth_check)
-        ini_config[executor_section]["auth_admin_account"] = group_config.init_auth_address
-
     def __update_storage_info(self, ini_config, node_config, node_type):
         if node_type != "max":
             return
@@ -156,6 +153,21 @@ class NodeConfigGenerator:
             ini_config.remove_option(storage_section, "data_path")
         ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
+
+    def __update_storage_security_info(self, ini_config, node_config, node_type):
+        """
+        update the storage_security for config.ini
+        """
+        section = "storage_security"
+        # not support storage_security for max-node
+        if node_type == "max":
+            if ini_config.has_section(section):
+                ini_config.remove_section(section)
+            return
+        ini_config[section]["enable"] = utilities.convert_bool_to_str(
+            node_config.enable_storage_security)
+        ini_config[section]["key_center_url"] = node_config.key_center_url
+        ini_config[section]["cipher_data_key"] = node_config.cipher_data_key
 
     def __generate_pem_file(self, outputdir, node_config):
         """
@@ -222,7 +234,7 @@ class NodeConfigGenerator:
             return True
         return False
 
-    def __generate_genesis_config(self, group_config, enforce_genesis_exists):
+    def generate_genesis_config(self, group_config, enforce_genesis_exists):
         if self.__genesis_config_generated(group_config):
             config_content = configparser.ConfigParser(
                 comment_prefixes='/', allow_no_value=True)
@@ -233,7 +245,7 @@ class NodeConfigGenerator:
             utilities.log_error("Please set the genesis config path firstly!")
             sys.exit(-1)
         nodeid_list = self._generate_all_node_pem(group_config)
-        return self.generate_genesis_config(nodeid_list, group_config)
+        return self.generate_genesis_config_nodeid(nodeid_list, group_config)
 
     def generate_all_config(self, enforce_genesis_exists):
         """
@@ -258,7 +270,7 @@ class NodeConfigGenerator:
         """
         generate the genesis config for all max_nodes
         """
-        genesis_config_content = self.__generate_genesis_config(
+        genesis_config_content = self.generate_genesis_config(
             group_config, enforce_genesis_exists)
         if os.path.exists(group_config.genesis_config_path) is False:
             desc = group_config.chain_id + "." + group_config.group_id

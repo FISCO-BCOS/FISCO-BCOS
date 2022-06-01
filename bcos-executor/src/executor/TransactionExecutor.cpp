@@ -53,6 +53,7 @@
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/interfaces/protocol/LogEntry.h>
@@ -75,6 +76,7 @@
 #include <functional>
 #include <gsl/gsl_util>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -95,8 +97,8 @@ crypto::Hash::Ptr GlobalHashImpl::g_hashImpl;
 
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
-    const protocol::BlockHeader::ConstPtr& currentHeader, storage::StateStorage::Ptr storage,
-    storage::StorageInterface::Ptr lastStorage)
+    const protocol::BlockHeader::ConstPtr& currentHeader,
+    storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, lastStorage, m_hashImpl,
         currentHeader, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
@@ -106,7 +108,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
 
 std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    int32_t blockVersion, storage::StateStorage::Ptr storage)
+    int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
         blockHash, timestamp, blockVersion, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
@@ -119,14 +121,15 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize = 0)
   : m_txpool(std::move(txpool)),
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
-    m_isWasm(false)
+    m_isWasm(false),
+    m_keyPageSize(keyPageSize)
 {
     assert(m_backendStorage);
 
@@ -145,24 +148,22 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
 
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
-            bcos::storage::StateStorage::Ptr stateStorage;
+            bcos::storage::StateStorageInterface::Ptr stateStorage;
             bcos::storage::StorageInterface::Ptr lastStateStorage;
             if (m_stateStorages.empty())
             {
                 if (m_cachedStorage)
                 {
-                    stateStorage = std::make_shared<bcos::storage::StateStorage>(m_cachedStorage);
+                    stateStorage = createStateStorage(m_cachedStorage);
                 }
                 else
                 {
-                    stateStorage = std::make_shared<bcos::storage::StateStorage>(m_backendStorage);
+                    stateStorage = createStateStorage(m_backendStorage);
                 }
-                lastStateStorage =
-                    m_lastStateStorage ?
-                        m_lastStateStorage :
-                        (m_cachedStorage ?
-                                std::make_shared<bcos::storage::StateStorage>(m_cachedStorage) :
-                                std::make_shared<bcos::storage::StateStorage>(m_backendStorage));
+                lastStateStorage = m_lastStateStorage ?
+                                       m_lastStateStorage :
+                                       (m_cachedStorage ? createStateStorage(m_cachedStorage) :
+                                                          createStateStorage(m_backendStorage));
             }
             else
             {
@@ -180,7 +181,7 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
 
                 prev.storage->setReadOnly(true);
                 lastStateStorage = prev.storage;
-                stateStorage = std::make_shared<bcos::storage::StateStorage>(prev.storage);
+                stateStorage = createStateStorage(prev.storage);
             }
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage, lastStateStorage);
@@ -224,7 +225,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         }
 
         // Create a temp storage
-        auto storage = std::make_shared<storage::StateStorage>(std::move(prev));
+        auto storage = createStateStorage(std::move(prev));
 
         // Create a temp block context
         // TODO: pass blockHash, version here
@@ -499,7 +500,8 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     }
 
     auto hash = last.storage->hash(m_hashImpl);
-    EXECUTOR_LOG(INFO) << "GetTableHashes success" << LOG_KV("hash", hash.hex());
+    EXECUTOR_LOG(INFO) << "GetTableHashes success" << LOG_KV("number", number)
+                       << LOG_KV("hash", hash.hex());
 
     callback(nullptr, std::move(hash));
 }
@@ -1361,12 +1363,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                         if (error)
                         {
                             EXECUTOR_LOG(ERROR)
-                                << "Execute error: " << LOG_KV("msg", error->errorMessage())
+                                << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
                                 << LOG_KV("code", error->errorCode());
                             callback(std::move(error), nullptr);
                         }
                         else
                         {
+                            EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                             callback(std::move(error), std::move(messages[0]));
                         }
                     });
@@ -1387,12 +1390,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                 if (error)
                 {
-                    EXECUTOR_LOG(ERROR) << "Execute error: " << LOG_KV("msg", error->errorMessage())
+                    EXECUTOR_LOG(ERROR) << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
                                         << LOG_KV("code", error->errorCode());
                     callback(std::move(error), nullptr);
                 }
                 else
                 {
+                    EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                     callback(std::move(error), std::move(messages[0]));
                 }
             });
@@ -1514,7 +1518,7 @@ void TransactionExecutor::removeCommittedState()
     }
 
     bcos::protocol::BlockNumber number;
-    bcos::storage::StateStorage::Ptr storage;
+    bcos::storage::StateStorageInterface::Ptr storage;
 
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -1525,7 +1529,17 @@ void TransactionExecutor::removeCommittedState()
 
     if (m_cachedStorage)
     {
-        EXECUTOR_LOG(INFO) << "Merge state number: " << number << " to cachedStorage start";
+        auto keyPageStorage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(storage);
+        if (keyPageStorage)
+        {
+            EXECUTOR_LOG(INFO) << LOG_DESC("merge keyPage to cachedStorage")
+                               << LOG_KV("number", number);
+            keyPageStorage->setReadOnly(true);
+        }
+        else
+        {
+            EXECUTOR_LOG(INFO) << "Merge state number: " << number << " to cachedStorage";
+        }
         m_cachedStorage->merge(true, *storage);
         EXECUTOR_LOG(INFO) << "Merge state number: " << number << " to cachedStorage end";
 
@@ -1669,9 +1683,19 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
         catch (std::exception& e)
         {
-            EXECUTOR_LOG(ERROR) << "Execute error: " << boost::diagnostic_information(e);
+            EXECUTOR_LOG(ERROR) << "executeTransactionsWithCriticals error: " << boost::diagnostic_information(e);
         }
     });
 
     txDag->run(m_DAGThreadNum);
+}
+
+bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
+    bcos::storage::StorageInterface::Ptr storage)
+{
+    if (m_keyPageSize > 0)
+    {
+        return std::make_shared<bcos::storage::KeyPageStorage>(storage, m_keyPageSize);
+    }
+    return std::make_shared<bcos::storage::StateStorage>(storage);
 }

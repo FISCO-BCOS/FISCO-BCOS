@@ -21,6 +21,7 @@
 
 #include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
 #include "bcos-rpc/groupmgr/TarsGroupManager.h"
+#include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
@@ -28,10 +29,12 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/interfaces/Common.h>
 #include <bcos-framework/interfaces/protocol/AMOPRequest.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -50,10 +53,15 @@ using namespace bcos::gateway;
 using namespace bcos::group;
 using namespace bcos::boostssl::ws;
 using namespace bcos::protocol;
+using namespace bcos::security;
+using namespace bcos::boostssl::context;
 
 RpcFactory::RpcFactory(std::string const& _chainID, GatewayInterface::Ptr _gatewayInterface,
-    KeyFactory::Ptr _keyFactory)
-  : m_chainID(_chainID), m_gateway(_gatewayInterface), m_keyFactory(_keyFactory)
+    KeyFactory::Ptr _keyFactory, bcos::security::DataEncryptInterface::Ptr _dataEncrypt)
+  : m_chainID(_chainID),
+    m_gateway(_gatewayInterface),
+    m_keyFactory(_keyFactory),
+    m_dataEncrypt(_dataEncrypt)
 {}
 
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
@@ -79,12 +87,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
 
     auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
     if (!_nodeConfig->rpcSmSsl())
-    {  //  ssl
-        boostssl::context::ContextConfig::CertConfig certConfig;
-        certConfig.caCert = _nodeConfig->caCert();
-        certConfig.nodeCert = _nodeConfig->nodeCert();
-        certConfig.nodeKey = _nodeConfig->nodeKey();
-        contextConfig->setCertConfig(certConfig);
+    {  // ssl
+        initCertConfig(_nodeConfig);
+        contextConfig->setCertConfig(m_certConfig);
         contextConfig->setSslType("ssl");
 
         RPC_LOG(INFO) << LOG_DESC("rpc work in ssl model")
@@ -98,13 +103,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     }
     else
     {  // sm ssl
-        boostssl::context::ContextConfig::SMCertConfig certConfig;
-        certConfig.caCert = _nodeConfig->smCaCert();
-        certConfig.nodeCert = _nodeConfig->smNodeCert();
-        certConfig.nodeKey = _nodeConfig->smNodeKey();
-        certConfig.enNodeCert = _nodeConfig->enSmNodeCert();
-        certConfig.enNodeKey = _nodeConfig->enSmNodeKey();
-        contextConfig->setSmCertConfig(certConfig);
+        initSMCertConfig(_nodeConfig);
+        contextConfig->setSmCertConfig(m_smCertConfig);
         contextConfig->setSslType("sm_ssl");
 
         RPC_LOG(INFO) << LOG_DESC("rpc work in sm ssl model")
@@ -119,9 +119,34 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                       << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
     }
 
+    // contextConfig has cert path means that build ssl context with file path instead of
+    // context
+    contextConfig->setIsCertPath(true);
     wsConfig->setContextConfig(contextConfig);
 
     return wsConfig;
+}
+
+void RpcFactory::initCertConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
+{
+    ContextConfig::CertConfig certConfig;
+    certConfig.caCert = _nodeConfig->caCert();
+    certConfig.nodeCert = _nodeConfig->nodeCert();
+    certConfig.nodeKey = _nodeConfig->nodeKey();
+
+    m_certConfig = certConfig;
+}
+
+void RpcFactory::initSMCertConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
+{
+    ContextConfig::SMCertConfig smCertConfig;
+    smCertConfig.caCert = _nodeConfig->smCaCert();
+    smCertConfig.nodeCert = _nodeConfig->smNodeCert();
+    smCertConfig.nodeKey = _nodeConfig->smNodeKey();
+    smCertConfig.enNodeCert = _nodeConfig->enSmNodeCert();
+    smCertConfig.enNodeKey = _nodeConfig->enSmNodeKey();
+
+    m_smCertConfig = smCertConfig;
 }
 
 bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
@@ -129,9 +154,30 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
 {
     auto wsService = std::make_shared<bcos::boostssl::ws::WsService>(_config->moduleName());
     auto initializer = std::make_shared<bcos::boostssl::ws::WsInitializer>();
-
     initializer->setConfig(_config);
-    initializer->initWsService(wsService);
+
+    if (m_dataEncrypt)
+    {
+        // need to decrypt nodekey file
+        auto dataEncrypt = m_dataEncrypt;
+        auto dataDecryptHandler = [dataEncrypt](const std::string& _filePath) {
+            std::shared_ptr<std::string> keycontent;
+            if (!dataEncrypt)
+            {
+                return keycontent;
+            }
+
+            keycontent = dataEncrypt->decryptFile(_filePath);
+            return keycontent;
+        };
+
+        initializer->initWsService(wsService, dataDecryptHandler);
+    }
+    else
+    {
+        // don't need to decrypt nodekey file
+        initializer->initWsService(wsService);
+    }
 
     return wsService;
 }

@@ -1,0 +1,13 @@
+module bcostars
+{
+struct RouterTableEntry
+{
+    1 require string dstNode;
+    2 optional string nextHop;
+    3 require int ttl;
+};
+struct RouterTable
+{
+    1 optional vector<RouterTableEntry> routerEntries; 
+};
+};

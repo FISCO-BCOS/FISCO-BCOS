@@ -42,6 +42,13 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
+
+    // init a hashContext
+    void* init() override { return nullptr; }
+    // update the hashContext
+    void* update(void*, bytesConstRef) override { return nullptr; }
+    // final the hashContext
+    bcos::crypto::HashType final(void*) override { return bcos::crypto::HashType(); }
 };
 struct TestRocksDBStorageFixture
 {
@@ -61,7 +68,8 @@ struct TestRocksDBStorageFixture
         rocksdb::Status s = rocksdb::DB::Open(options, path, &db);
         BOOST_CHECK_EQUAL(s.ok(), true);
 
-        rocksDBStorage = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+        rocksDBStorage =
+            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
         rocksDBStorage->asyncOpenTable(testTableName, [&](auto&& error, auto&& table) {
             BOOST_CHECK(!error);
 

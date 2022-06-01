@@ -21,6 +21,7 @@
 #include "GatewayNodeManager.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
 using namespace std;
@@ -97,21 +98,21 @@ bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string
 }
 
 void GatewayNodeManager::onReceiveStatusSeq(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg)
 {
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
         *((uint32_t*)_msg->payload()->data()));
-    auto statusSeqChanged = statusChanged(_p2pSession->nodeId(), statusSeq);
-    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq")
-                            << LOG_KV("p2pid", _p2pSession->nodeId())
-                            << LOG_KV("statusSeq", statusSeq)
-                            << LOG_KV("seqChanged", statusSeqChanged);
+    auto const& from =
+        (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _p2pSession->nodeId();
+    auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
     {
         return;
     }
-    m_p2pInterface->sendMessageBySession(
-        GatewayMessageType::RequestNodeStatus, bytesConstRef(), _p2pSession);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq request nodeStatus")
+                            << LOG_KV("from", from) << LOG_KV("statusSeq", statusSeq);
+    m_p2pInterface->asyncSendMessageByP2PNodeID(
+        GatewayMessageType::RequestNodeStatus, from, bytesConstRef());
 }
 
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
@@ -127,15 +128,17 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
 }
 
 void GatewayNodeManager::onReceiveNodeStatus(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg)
 {
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-    auto p2pID = _p2pSession->nodeId();
-    NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("p2pid", p2pID)
+    auto const& from =
+        (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _p2pSession->nodeId();
+
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
                            << LOG_KV("seq", gatewayNodeStatus->seq())
                            << LOG_KV("uuid", gatewayNodeStatus->uuid());
-    updatePeerStatus(p2pID, gatewayNodeStatus);
+    updatePeerStatus(from, gatewayNodeStatus);
 }
 
 void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
@@ -169,17 +172,20 @@ bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _gro
 }
 
 void GatewayNodeManager::onRequestNodeStatus(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg)
 {
+    auto const& from =
+        (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _p2pSession->nodeId();
     auto nodeStatusData = generateNodeStatus();
     if (!nodeStatusData)
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
-                                  << LOG_KV("peer", _p2pSession->nodeId());
+                                  << LOG_KV("from", from);
         return;
     }
-    m_p2pInterface->sendMessageBySession(GatewayMessageType::ResponseNodeStatus,
-        bytesConstRef((byte*)nodeStatusData->data(), nodeStatusData->size()), _p2pSession);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onRequestNodeStatus") << LOG_KV("from", from);
+    m_p2pInterface->asyncSendMessageByP2PNodeID(GatewayMessageType::ResponseNodeStatus, from,
+        bytesConstRef((byte*)nodeStatusData->data(), nodeStatusData->size()));
 }
 
 bytesPointer GatewayNodeManager::generateNodeStatus()

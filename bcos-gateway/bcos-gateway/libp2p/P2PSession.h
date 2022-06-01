@@ -23,8 +23,13 @@ class P2PSession : public boostssl::ws::WsSession
 public:
     using Ptr = std::shared_ptr<P2PSession>;
 
-    P2PSession(std::string _moduleName) : WsSession(_moduleName)
+    P2PSession(std::string _moduleName, std::string const& _hostNodeID)
+      : WsSession(_moduleName),
+        m_protocolInfo(std::make_shared<bcos::protocol::ProtocolInfo>()),
+        m_hostNodeID(_hostNodeID)
     {
+        // init with the minVersion
+        m_protocolInfo->setVersion(m_protocolInfo->minVersion());
         P2PSESSION_LOG(INFO) << "[P2PSession::P2PSession] this=" << this;
     }
     virtual ~P2PSession();
@@ -57,7 +62,7 @@ public:
     virtual void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
     {
         WriteGuard l(x_protocolInfo);
-        m_protocolInfo = _protocolInfo;
+        *m_protocolInfo = *_protocolInfo;
     }
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
@@ -66,30 +71,34 @@ public:
         return m_protocolInfo;
     }
 
+    void onMessage(bcos::boostssl::MessageFace::Ptr _message) override;
+
 private:
     /// gateway p2p info
     std::shared_ptr<P2pInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
 
-    bcos::protocol::ProtocolInfo::ConstPtr m_protocolInfo = nullptr;
+    bcos::protocol::ProtocolInfo::Ptr m_protocolInfo = nullptr;
     mutable bcos::SharedMutex x_protocolInfo;
+
+    std::string m_hostNodeID;
 };
 
 class P2pSessionFactory : public boostssl::ws::WsSessionFactory
-// class P2pSessionFactory
 {
 public:
     using Ptr = std::shared_ptr<P2pSessionFactory>;
-    P2pSessionFactory() = default;
+    P2pSessionFactory(std::string const& _hostNodeID) : m_hostNodeID(_hostNodeID) {}
     virtual ~P2pSessionFactory() {}
-
-public:
     virtual boostssl::ws::WsSession::Ptr createSession(std::string _moduleName) override
     {
-        auto session = std::make_shared<P2PSession>(_moduleName);
+        auto session = std::make_shared<P2PSession>(_moduleName, m_hostNodeID);
         session->setNeedCheckRspPacket(true);
         return session;
     }
+
+private:
+    std::string m_hostNodeID;
 };
 
 }  // namespace gateway

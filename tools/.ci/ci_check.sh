@@ -1,5 +1,5 @@
 #!/bin/bash
-console_branch="feature-3.0.0-rc4"
+console_branch="release-3.0.0-rc4"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`

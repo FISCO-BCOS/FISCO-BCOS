@@ -17,8 +17,7 @@ struct Entry {
 
 // 更新字段，用于update
 struct UpdateField {
-    uint32 index;
-    // string columnName;
+    string columnName;
     // 考虑工具类
     string value;
 }
@@ -27,6 +26,7 @@ struct UpdateField {
 enum ConditionOP {GT, GE, LT, LE}
 struct Condition {
     ConditionOP op;
+    // string field;
     string value;
 }
 
@@ -51,18 +51,21 @@ abstract contract TableManager {
     // 变更表字段
     // 只能新增字段，不能删除字段，新增的字段默认值为空，不能与原有字段重复
     function appendColumns(string memory path, string[] memory newColumns) public virtual returns (int32);
+
+    // 获取表信息
+    function desc(string memory tableName) public view virtual returns (TableInfo memory);
 }
 
 // 表合约，是动态Precompiled，TableManager创建时指定地址
 abstract contract Table {
-    // 获取表信息
-    function desc() public view virtual returns (TableInfo memory);
-
     // 按key查询entry
     function select(string memory key) public virtual view returns (Entry memory);
 
     // 按条件批量查询entry，condition为空则查询所有记录
     function select(Condition[] memory conditions, Limit memory limit) public virtual view returns (Entry[] memory);
+
+    // 按照条件查询count数据
+    function count(Condition[] memory conditions) public virtual view returns (uint32);
 
     // 插入数据
     function insert(Entry memory entry) public virtual returns (int32);
@@ -80,8 +83,6 @@ abstract contract Table {
 }
 
 abstract contract KVTable {
-    function desc() public view virtual returns (TableInfo memory);
-
     function get(string memory key) public view virtual returns (bool, string memory);
 
     function set(string memory key, string memory value) public virtual returns (int32);

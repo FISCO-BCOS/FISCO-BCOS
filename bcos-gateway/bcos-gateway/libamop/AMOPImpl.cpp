@@ -473,7 +473,8 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
                     << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
 }
 
-void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
+void AMOPImpl::onAMOPMessage(
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _message)
 {
     auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
     m_threadPool->enqueue([self, _p2pSession, _message]() {
@@ -484,7 +485,7 @@ void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Pt
         }
         try
         {
-            amop->dispatcherAMOPMessage(_message, _p2pSession);
+            amop->dispatcherAMOPMessage(_p2pSession, _message);
         }
         catch (std::exception const& e)
         {
@@ -495,7 +496,7 @@ void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Pt
 }
 
 void AMOPImpl::dispatcherAMOPMessage(
-    boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _message)
 {
     if (_message->packetType() != GatewayMessageType::AMOPMessageType)
     {
@@ -503,7 +504,8 @@ void AMOPImpl::dispatcherAMOPMessage(
     }
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _p2pSession->nodeId();
+    auto fromNodeID =
+        _message->srcP2PNodeID().empty() ? _p2pSession->p2pID() : _message->srcP2PNodeID();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:
@@ -522,11 +524,14 @@ void AMOPImpl::dispatcherAMOPMessage(
                     m_network->messageFactory()->buildMessage());
                 AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
                                << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
+                responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
+                responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());
                 responseP2PMsg->setRespPacket();
                 responseP2PMsg->setPayload(_responseData);
                 responseP2PMsg->setPacketType(_type);
-                _p2pSession->asyncSendMessage(responseP2PMsg);
+                m_network->asyncSendMessageByNodeID(
+                    responseP2PMsg->dstP2PNodeID(), responseP2PMsg, nullptr);
             });
         break;
     case AMOPMessage::Type::AMOPBroadcast:

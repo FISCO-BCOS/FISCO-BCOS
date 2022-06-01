@@ -41,14 +41,7 @@ public:
 
     virtual void decode(bytesConstRef _receiptData) = 0;
     virtual void encode(bytes& _encodedData) const = 0;
-    virtual bytesConstRef encode(bool _onlyHashFieldData = false) const = 0;
-
-    virtual bcos::crypto::HashType hash() const
-    {
-        auto hashFields = encode(true);
-        return m_cryptoSuite->hash(hashFields);
-    }
-
+    virtual bcos::crypto::HashType hash() const = 0;
     virtual int32_t version() const = 0;
     virtual u256 gasUsed() const = 0;
     virtual std::string_view contractAddress() const = 0;

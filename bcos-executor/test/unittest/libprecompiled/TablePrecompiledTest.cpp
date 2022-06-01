@@ -256,10 +256,10 @@ public:
         return result2;
     };
 
-    ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, const std::string& callAddress)
+    ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, std::string const& tableName)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("desc()");
+        bytes in = codec->encodeWithSig("desc(string)", tableName);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -270,7 +270,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(callAddress);
+        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -320,9 +320,29 @@ public:
             });
         auto result2 = executePromise2.get_future().get();
 
+        result2->setSeq(1001);
+
+        // get desc
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1000);
+
+        // get desc callback
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
         // call precompiled
         commitBlock(_number);
-        return result2;
+        return result4;
     }
 
     ExecutionMessage::UniquePtr selectByKey(
@@ -396,12 +416,11 @@ public:
         return result2;
     }
 
-    ExecutionMessage::UniquePtr updateByKey(protocol::BlockNumber _number, const std::string& key,
-        const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
-        const std::string& callAddress)
+    ExecutionMessage::UniquePtr count(protocol::BlockNumber _number,
+        const std::vector<ConditionTuple>& keyCond, const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update(string,(uint32,string)[])", key, _updateFields);
+        bytes in = codec->encodeWithSig("count((uint8,string)[])", keyCond);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -432,14 +451,12 @@ public:
         return result2;
     }
 
-    ExecutionMessage::UniquePtr updateByCondition(protocol::BlockNumber _number,
-        const std::vector<ConditionTuple>& conditions, const LimitTuple& _limit,
+    ExecutionMessage::UniquePtr updateByKey(protocol::BlockNumber _number, const std::string& key,
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
-        const std::string& callAddress)
+        const std::string& callAddress, bool _isErrorInTable = false)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(uint32,string)[])",
-            conditions, _limit, _updateFields);
+        bytes in = codec->encodeWithSig("update(string,(string,string)[])", key, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -465,9 +482,95 @@ public:
             });
         auto result2 = executePromise2.get_future().get();
 
+        if (_isErrorInTable)
+        {
+            // call precompiled
+            commitBlock(_number);
+            return result2;
+        }
+
+        result2->setSeq(1001);
+
+        // get desc
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1000);
+
+        // get desc callback
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
         // call precompiled
         commitBlock(_number);
-        return result2;
+        return result4;
+    }
+
+    ExecutionMessage::UniquePtr updateByCondition(protocol::BlockNumber _number,
+        const std::vector<ConditionTuple>& conditions, const LimitTuple& _limit,
+        const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
+        const std::string& callAddress)
+    {
+        nextBlock(_number);
+        bytes in =
+            codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(string,string)[])",
+                conditions, _limit, _updateFields);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(1000);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(callAddress);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->executeTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        result2->setSeq(1001);
+
+        // get desc
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1000);
+
+        // get desc callback
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
+        // call precompiled
+        commitBlock(_number);
+        return result4;
     }
 
     ExecutionMessage::UniquePtr removeByKey(
@@ -619,6 +722,16 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         auto r3 = creatTable(number++, "t_test", "id", {errorStr2}, callAddress, 0, true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
+
+    // check trim create table params
+    {
+        auto r1 = creatTable(number++, "t_test123", " id ", {" item_name ", " item_id "},
+            "420f853b49838bd3e9466c85a4cc3428c960dde3");
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        auto r2 = desc(number++, "t_test123");
+        TableInfoTuple t = {"id", {"item_name", "item_id"}};
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(t));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(createTableWasmsTest)
@@ -708,7 +821,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsTest)
     // simple append
     {
         auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
-        auto r2 = desc(number++, callAddress);
+        auto r2 = desc(number++, "t_test");
         TableInfoTuple tableInfo = {"id", {"item_name", "item_id", "v1", "v2"}};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
     }
@@ -759,7 +872,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
     // simple append
     {
         auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
-        auto r2 = desc(number++, callAddress);
+        auto r2 = desc(number++, "t_test");
         TableInfoTuple tableInfo = {"id", {"item_name", "item_id", "v1", "v2"}};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
     }
@@ -847,7 +960,7 @@ BOOST_AUTO_TEST_CASE(insertTest)
     // insert after append
     {
         auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
-        auto r2 = desc(number++, callAddress);
+        auto r2 = desc(number++, "t_test");
         TableInfoTuple tableInfo = {"id", {"item_name", "item_id", "v1", "v2"}};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
 
@@ -861,7 +974,7 @@ BOOST_AUTO_TEST_CASE(insertTest)
         BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // insert not enough value
-        auto r5= insert(number++, "id3", {"test1", "test2"}, callAddress);
+        auto r5 = insert(number++, "id3", {"test1", "test2"}, callAddress);
         BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
@@ -954,7 +1067,7 @@ BOOST_AUTO_TEST_CASE(selectTest)
         EntryTuple entryTuple = {};
         BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
     }
-    for (int j = 3; j < 2000; ++j)
+    for (int j = 3; j < 100; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
         std::string index = std::to_string(j);
@@ -964,8 +1077,8 @@ BOOST_AUTO_TEST_CASE(selectTest)
 
     // simple select by condition
     {
-        // lexicographical order， 990～999
-        ConditionTuple cond1 = {0, "990"};
+        // lexicographical order， 90～99
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10};
         auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
         std::vector<EntryTuple> entries;
@@ -973,17 +1086,26 @@ BOOST_AUTO_TEST_CASE(selectTest)
         BOOST_CHECK(entries.size() == 9);
     }
 
+    {
+        ConditionTuple cond1 = {0, "90"};
+        auto r1 = count(number++, {cond1}, callAddress);
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(uint32_t(9)));
+    }
+
     // select by condition， condition with undefined cmp
     {
-        ConditionTuple cond1 = {5, "990"};
+        ConditionTuple cond1 = {5, "90"};
         LimitTuple limit = {0, 10};
         auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        auto r2 = count(number++, {cond1}, callAddress);
+        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // select by condition， limit overflow
     {
-        ConditionTuple cond1 = {0, "990"};
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10000};
         auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
@@ -1019,7 +1141,7 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
         EntryTuple entryTuple = {};
         BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
     }
-    for (int j = 3; j < 2000; ++j)
+    for (int j = 3; j < 100; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
         std::string index = std::to_string(j);
@@ -1029,8 +1151,8 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 
     // simple select by condition
     {
-        // lexicographical order， 990～999
-        ConditionTuple cond1 = {0, "990"};
+        // lexicographical order， 90～99
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10};
         auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
         std::vector<EntryTuple> entries;
@@ -1040,7 +1162,7 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 
     // select by condition， condition with undefined cmp
     {
-        ConditionTuple cond1 = {5, "990"};
+        ConditionTuple cond1 = {5, "90"};
         LimitTuple limit = {0, 10};
         auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
@@ -1048,7 +1170,7 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 
     // select by condition， limit overflow
     {
-        ConditionTuple cond1 = {0, "990"};
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10000};
         auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
@@ -1072,7 +1194,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
 
     // simple update by key, modify 1 column
     {
-        UpdateFieldTuple updateFieldTuple1 = {0, "update"};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
@@ -1082,8 +1204,8 @@ BOOST_AUTO_TEST_CASE(updateTest)
 
     // simple update by key, modify 2 columns
     {
-        UpdateFieldTuple updateFieldTuple1 = {0, "update1"};
-        UpdateFieldTuple updateFieldTuple2 = {1, "update2"};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
+        UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple2, updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
@@ -1093,14 +1215,14 @@ BOOST_AUTO_TEST_CASE(updateTest)
 
     // update by key not exist
     {
-        UpdateFieldTuple updateFieldTuple1 = {0, "update1"};
-        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
+        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress, true);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
     // update by key, index overflow
     {
-        UpdateFieldTuple updateFieldTuple1 = {3, "update1"};
+        UpdateFieldTuple updateFieldTuple1 = {"errorField", "update1"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
@@ -1114,13 +1236,13 @@ BOOST_AUTO_TEST_CASE(updateTest)
     // update by key, value overflow
     {
         boost::log::core::get()->set_logging_enabled(false);
-        UpdateFieldTuple updateFieldTuple1 = {0, longValue};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", longValue};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
-    for (int j = 2; j < 1000; ++j)
+    for (int j = 2; j < 100; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
         std::string index = std::to_string(j);
@@ -1130,27 +1252,27 @@ BOOST_AUTO_TEST_CASE(updateTest)
 
     // simple update by condition
     {
-        // lexicographical order， 990～999
-        ConditionTuple cond1 = {0, "990"};
+        // lexicographical order， 90～99
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10};
-        UpdateFieldTuple updateFieldTuple1 = {0, "update1"};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(9)));
 
         // select
-        auto r2 = selectByKey(number++, "998", callAddress);
-        EntryTuple entryTuple = {"998", {"update1", "test998"}};
+        auto r2 = selectByKey(number++, "98", callAddress);
+        EntryTuple entryTuple = {"98", {"update1", "test98"}};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
 
         // update second column
-        UpdateFieldTuple updateFieldTuple2 = {1, "update2"};
+        UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r3 = updateByCondition(
             number++, {cond1}, limit, {updateFieldTuple1, updateFieldTuple2}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(9)));
 
         // select
-        auto r4 = selectByKey(number++, "996", callAddress);
-        EntryTuple entryTuple2 = {"996", {"update1", "update2"}};
+        auto r4 = selectByKey(number++, "96", callAddress);
+        EntryTuple entryTuple2 = {"96", {"update1", "update2"}};
         BOOST_CHECK(r4->data().toBytes() == codec->encode(entryTuple2));
     }
 }
@@ -1173,7 +1295,7 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
 
     // simple update by key, modify 1 column
     {
-        UpdateFieldTuple updateFieldTuple1 = {0, "update"};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
@@ -1183,8 +1305,8 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
 
     // simple update by key, modify 2 columns
     {
-        UpdateFieldTuple updateFieldTuple1 = {0, "update1"};
-        UpdateFieldTuple updateFieldTuple2 = {1, "update2"};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
+        UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple2, updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
@@ -1194,14 +1316,14 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
 
     // update by key not exist
     {
-        UpdateFieldTuple updateFieldTuple1 = {0, "update1"};
-        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
+        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress, true);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
     // update by key, index overflow
     {
-        UpdateFieldTuple updateFieldTuple1 = {3, "update1"};
+        UpdateFieldTuple updateFieldTuple1 = {"errorField", "update1"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
@@ -1215,13 +1337,13 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
     // update by key, value overflow
     {
         boost::log::core::get()->set_logging_enabled(false);
-        UpdateFieldTuple updateFieldTuple1 = {0, longValue};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", longValue};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
-    for (int j = 2; j < 1000; ++j)
+    for (int j = 2; j < 100; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
         std::string index = std::to_string(j);
@@ -1231,27 +1353,27 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
 
     // simple update by condition
     {
-        // lexicographical order， 990～999
-        ConditionTuple cond1 = {0, "990"};
+        // lexicographical order， 90～99
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10};
-        UpdateFieldTuple updateFieldTuple1 = {0, "update1"};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(9)));
 
         // select
-        auto r2 = selectByKey(number++, "998", callAddress);
-        EntryTuple entryTuple = {"998", {"update1", "test998"}};
+        auto r2 = selectByKey(number++, "98", callAddress);
+        EntryTuple entryTuple = {"98", {"update1", "test98"}};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
 
         // update second column
-        UpdateFieldTuple updateFieldTuple2 = {1, "update2"};
+        UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r3 = updateByCondition(
             number++, {cond1}, limit, {updateFieldTuple1, updateFieldTuple2}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(9)));
 
         // select
-        auto r4 = selectByKey(number++, "996", callAddress);
-        EntryTuple entryTuple2 = {"996", {"update1", "update2"}};
+        auto r4 = selectByKey(number++, "96", callAddress);
+        EntryTuple entryTuple2 = {"96", {"update1", "update2"}};
         BOOST_CHECK(r4->data().toBytes() == codec->encode(entryTuple2));
     }
 }
@@ -1287,7 +1409,7 @@ BOOST_AUTO_TEST_CASE(removeTest)
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
     }
 
-    for (int j = 1; j < 1000; ++j)
+    for (int j = 1; j < 100; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
         std::string index = std::to_string(j);
@@ -1297,20 +1419,20 @@ BOOST_AUTO_TEST_CASE(removeTest)
 
     // simple remove by condition
     {
-        // lexicographical order， 990～999
-        ConditionTuple cond1 = {0, "990"};
+        // lexicographical order， 90～99
+        ConditionTuple cond1 = {0, "90"};
         LimitTuple limit = {0, 10};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(9)));
 
         // select
-        auto r2 = selectByKey(number++, "998", callAddress);
+        auto r2 = selectByKey(number++, "98", callAddress);
         EntryTuple entryTuple = {};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
 
         // select
-        auto r3 = selectByKey(number++, "989", callAddress);
-        EntryTuple entryTuple2 = {"989", {"test989", "test989"}};
+        auto r3 = selectByKey(number++, "89", callAddress);
+        EntryTuple entryTuple2 = {"89", {"test89", "test89"}};
         BOOST_CHECK(r3->data().toBytes() == codec->encode(entryTuple2));
 
         // remove again

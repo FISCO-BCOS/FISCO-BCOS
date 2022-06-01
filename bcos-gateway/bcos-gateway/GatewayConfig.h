@@ -20,7 +20,7 @@ class GatewayConfig
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
 
-    GatewayConfig() = default;
+    GatewayConfig() : m_wsConfig(std::make_shared<boostssl::ws::WsConfig>()) {}
     ~GatewayConfig() = default;
 
 public:

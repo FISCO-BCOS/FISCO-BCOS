@@ -357,7 +357,7 @@ void TopicManager::queryNodeIDsByTopic(
         auto findIt = std::find_if(it->second.begin(), it->second.end(),
             [_topic](const TopicItem& _topicItem) { return _topic == _topicItem.topicName(); });
         // only return the connected nodes
-        if (findIt != it->second.end() && m_network->connected(it->first))
+        if (findIt != it->second.end() && m_network->isReachable(it->first))
         {
             _nodeIDs.push_back(it->first);
         }

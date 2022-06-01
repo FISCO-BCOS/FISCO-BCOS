@@ -4,11 +4,14 @@
  */
 
 #include <bcos-gateway/GatewayConfig.h>
+#include <bcos-security/bcos-security/KeyCenter.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;
+using namespace security;
 using namespace gateway;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
