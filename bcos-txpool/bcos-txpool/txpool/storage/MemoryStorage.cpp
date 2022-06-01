@@ -269,7 +269,7 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             {
                 return;
             }
-            auto encodedData = _tx->encode(false);
+            auto encodedData = _tx->encode();
             auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
             txsToStore->emplace_back(
                 std::make_shared<bytes>(encodedData.begin(), encodedData.end()));

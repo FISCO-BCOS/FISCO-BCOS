@@ -105,6 +105,9 @@ class NodeConfigGenerator:
         self.__update_failover_info(ini_config, node_config, node_type)
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
+        # set storage_security config
+        # TODO: access key_center to encrypt the certificates and the private keys
+        self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
 
     def __update_chain_info(self, ini_config, node_config):
@@ -150,6 +153,21 @@ class NodeConfigGenerator:
             ini_config.remove_option(storage_section, "data_path")
         ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
+
+    def __update_storage_security_info(self, ini_config, node_config, node_type):
+        """
+        update the storage_security for config.ini
+        """
+        section = "storage_security"
+        # not support storage_security for max-node
+        if node_type == "max":
+            if ini_config.has_section(section):
+                ini_config.remove_section(section)
+            return
+        ini_config[section]["enable"] = utilities.convert_bool_to_str(
+            node_config.enable_storage_security)
+        ini_config[section]["key_center_url"] = node_config.key_center_url
+        ini_config[section]["cipher_data_key"] = node_config.cipher_data_key
 
     def __generate_pem_file(self, outputdir, node_config):
         """

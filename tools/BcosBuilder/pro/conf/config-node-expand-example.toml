@@ -13,7 +13,6 @@ genesis_config_path = "generated/chain0/group0/config.genesis"
 # use sm-crypto or not
 sm_crypto=false
 
-
 [[agency]]
 name = "agencyA"
     [[agency.group]]
@@ -22,7 +21,17 @@ name = "agencyA"
         [[agency.group.node]]
         node_name = "node1"
         deploy_ip = "172.25.0.5"
+        # enable data disk encryption for bcos node or not, default is false
+        enable_storage_security = false
+        # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+        # key_center_url = 
+        # cipher_data_key = 
         
         [[agency.group.node]]
         node_name = "node2"
         deploy_ip = "172.25.0.5"
+        # enable data disk encryption for bcos node or not, default is false
+        enable_storage_security = false
+        # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+        # key_center_url = 
+        # cipher_data_key = 

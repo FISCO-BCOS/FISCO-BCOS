@@ -24,11 +24,8 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
-#include "tbb/enumerable_thread_specific.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Error.h>
+#include "bcos-table/src/StateStorageInterface.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -38,55 +35,21 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
-#include <boost/throw_exception.hpp>
-#include <future>
-#include <memory>
-#include <optional>
-#include <shared_mutex>
-#include <type_traits>
 
 namespace bcos::storage
 {
-class Recoder
-{
-public:
-    using Ptr = std::shared_ptr<Recoder>;
-    using ConstPtr = std::shared_ptr<Recoder>;
-
-    struct Change
-    {
-        Change(std::string _table, std::string _key, std::optional<Entry> _entry)
-          : table(std::move(_table)), key(std::move(_key)), entry(std::move(_entry))
-        {}
-        Change(const Change&) = delete;
-        Change& operator=(const Change&) = delete;
-        Change(Change&&) noexcept = default;
-        Change& operator=(Change&&) noexcept = default;
-
-        std::string table;
-        std::string key;
-        std::optional<Entry> entry;
-    };
-
-    void log(Change&& change) { m_changes.emplace_front(std::move(change)); }
-    auto begin() const { return m_changes.cbegin(); }
-    auto end() const { return m_changes.cend(); }
-    void clear() { m_changes.clear(); }
-
-private:
-    std::list<Change> m_changes;
-};
-
 template <bool enableLRU = false>
-class BaseStorage : public virtual storage::TraverseStorageInterface,
+class BaseStorage : public virtual storage::StateStorageInterface,
                     public virtual storage::MergeableStorageInterface
 {
 private:
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
     {                                               \
-    }                                               \
-    // log("GET", (table), (key), (entry), (desc))
+    }
+    // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
+    //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
+
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
@@ -121,9 +84,7 @@ public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
     explicit BaseStorage(std::shared_ptr<StorageInterface> prev)
-      : storage::TraverseStorageInterface(),
-        m_prev(std::move(prev)),
-        m_buckets(std::thread::hardware_concurrency())
+      : storage::StateStorageInterface(prev), m_buckets(std::thread::hardware_concurrency())
     {}
 
     BaseStorage(const BaseStorage&) = delete;
@@ -168,7 +129,7 @@ public:
             std::vector<std::string> resultKeys;
             for (auto& localIt : localKeys)
             {
-                if (localIt.second == Entry::NORMAL)
+                if (localIt.second == Entry::NORMAL || localIt.second == Entry::MODIFIED)
                 {
                     resultKeys.push_back(std::string(localIt.first));
                 }
@@ -196,7 +157,7 @@ public:
                     auto localIt = localKeys.find(*it);
                     if (localIt != localKeys.end())
                     {
-                        if (localIt->second != Entry::NORMAL)
+                        if (localIt->second == Entry::DELETED)
                         {
                             it = remoteKeys.erase(it);
                             deleted = true;
@@ -213,7 +174,7 @@ public:
 
                 for (auto& localIt : localKeys)
                 {
-                    if (localIt.second == Entry::NORMAL)
+                    if (localIt.second == Entry::NORMAL || localIt.second == Entry::MODIFIED)
                     {
                         remoteKeys.push_back(std::string(localIt.first));
                     }
@@ -234,7 +195,7 @@ public:
         {
             auto& entry = it->entry;
 
-            if (entry.status() != Entry::NORMAL)
+            if (entry.status() == Entry::DELETED)
             {
                 lock.unlock();
 
@@ -321,7 +282,7 @@ public:
                     if (it != bucket->container.end())
                     {
                         auto& entry = it->entry;
-                        if (entry.status() == Entry::NORMAL)
+                        if (entry.status() == Entry::NORMAL || entry.status() == Entry::MODIFIED)
                         {
                             results[i].emplace(entry);
 
@@ -479,81 +440,24 @@ public:
         STORAGE_LOG(INFO) << "Successful merged " << count << " records";
     }
 
-    std::optional<Table> openTable(const std::string_view& tableView)
+    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
     {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
-        asyncOpenTable(tableView, [&](auto&& error, auto&& table) {
-            openPromise.set_value({std::move(error), std::move(table)});
-        });
-
-        auto [error, table] = openPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
-
-        return table;
-    }
-
-    std::optional<Table> createTable(std::string _tableName, std::string _valueFields)
-    {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
-        asyncCreateTable(
-            _tableName, _valueFields, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-                createPromise.set_value({std::move(error), std::move(table)});
-            });
-        auto [error, table] = createPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
-
-        return table;
-    }
-
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const
-    {
-        bcos::crypto::HashType totalHash;
+        bcos::crypto::HashType totalHash(0);
 
 #pragma omp parallel for
         for (size_t i = 0; i < m_buckets.size(); ++i)
         {
             auto& bucket = m_buckets[i];
-            bcos::crypto::HashType bucketHash;
+            bcos::crypto::HashType bucketHash(0);
 
             for (auto& it : bucket.container)
             {
                 auto& entry = it.entry;
                 if (entry.dirty())
                 {
-                    auto hash = hashImpl->hash(it.table);
-                    hash ^= hashImpl->hash(it.key);
-
-                    if (entry.status() != Entry::DELETED)
-                    {
-                        auto value = entry.getField(0);
-                        bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                        auto entryHash = hashImpl->hash(ref);
-                        if (c_fileLogLevel >= TRACE)
-                        {
-                            STORAGE_LOG(TRACE)
-                                << "Calc hash, dirty entry: " << it.table << " | " << toHex(it.key)
-                                << " | " << toHex(value) << LOG_KV("hash", entryHash.abridged());
-                        }
-                        hash ^= entryHash;
-                    }
-                    else
-                    {
-                        auto entryHash = bcos::crypto::HashType(0x1);
-                        if (c_fileLogLevel >= TRACE)
-                        {
-                            STORAGE_LOG(TRACE)
-                                << "Calc hash, deleted entry: " << it.table << " | "
-                                << toHex(toHex(it.key)) << LOG_KV("hash", entryHash.abridged());
-                        }
-                        hash ^= entryHash;
-                    }
-                    bucketHash ^= hash;
+                    auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                     entry.hash(it.table, it.key, hashImpl);
+                    bucketHash ^= entryHash;
                 }
             }
 #pragma omp critical
@@ -563,15 +467,8 @@ public:
         return totalHash;
     }
 
-    void setPrev(std::shared_ptr<StorageInterface> prev)
-    {
-        std::unique_lock<std::shared_mutex> lock(m_prevMutex);
-        m_prev = std::move(prev);
-    }
 
-    typename Recoder::Ptr newRecoder() { return std::make_shared<Recoder>(); }
-    void setRecoder(typename Recoder::Ptr recoder) { m_recoder.local().swap(recoder); }
-    void rollback(const Recoder& recoder)
+    void rollback(const Recoder& recoder) override
     {
         if (m_readOnly)
         {
@@ -644,7 +541,7 @@ public:
     }
 
     void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
-    void setReadOnly(bool readOnly) { m_readOnly = readOnly; }
+
     void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
 
 private:
@@ -655,7 +552,8 @@ private:
             return entry;
         }
 
-        entry.setDirty(false);
+        // entry.setDirty(false);
+        entry.setStatus(Entry::NORMAL);
 
         auto updateCapacity = entry.size();
 
@@ -691,13 +589,7 @@ private:
         return prev;
     }
 
-    tbb::enumerable_thread_specific<typename Recoder::Ptr> m_recoder;
-
-    std::shared_ptr<StorageInterface> m_prev;
-    std::shared_mutex m_prevMutex;
-
     bool m_enableTraverse = false;
-    bool m_readOnly = false;
 
     ssize_t m_maxCapacity = 32 * 1024 * 1024;
 

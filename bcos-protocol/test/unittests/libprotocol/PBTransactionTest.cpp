@@ -87,7 +87,7 @@ void testBlock(CryptoSuite::Ptr cryptoSuite)
     auto sign = cryptoSuite->signatureImpl()->sign(*keyPair, tx.hash());
     tx.updateSignature(bcos::ref(*sign), keyPair->publicKey()->data());
 
-    auto buffer = tx.encode(false);
+    auto buffer = tx.encode();
 
     PBTransaction decodedTx(cryptoSuite, buffer, false);
 
