@@ -37,7 +37,7 @@ namespace precompiled
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
 using LimitTuple = std::tuple<uint32_t, uint32_t>;
-using UpdateFieldTuple = std::tuple<uint32_t, std::string>;
+using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
@@ -48,9 +48,6 @@ static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
 /// SYS_CONFIG table fields
 static constexpr size_t SYS_VALUE = 0;
 static constexpr const char* SYS_VALUE_FIELDS = "value";
-
-/// BFS touch method selector
-static constexpr const char* FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 
 /// FileSystem path limit
 static const size_t FS_PATH_MAX_LENGTH = 56;

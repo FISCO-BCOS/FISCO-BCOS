@@ -190,7 +190,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
             }
             auto p2pID = randomChooseP2pID();
             auto self = shared_from_this();
-            auto callback = [self, p2pID](NetworkException e, std::shared_ptr<P2PSession> session,
+            auto startT = utcTime();
+            auto callback = [self, startT, p2pID](NetworkException e,
+                                std::shared_ptr<P2PSession> session,
                                 std::shared_ptr<bcos::boostssl::MessageFace> message) {
                 boost::ignore_unused(session);
                 // network error
@@ -198,8 +200,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 {
                     GATEWAY_LOG(ERROR)
                         << LOG_BADGE("Retry") << LOG_DESC("network callback")
-                        << LOG_KV("p2pid", p2pID) << LOG_KV("errorCode", e.errorCode())
-                        << LOG_KV("errorMessage", e.what());
+                        << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
+                        << LOG_KV("errorMessage", e.what())
+                        << LOG_KV("timeCost", (utcTime() - startT));
                     // try again
                     self->trySendMessage();
                     return;
@@ -214,16 +217,17 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                     // message successfully,find another gateway and try again
                     if (respCode != CommonError::SUCCESS)
                     {
-                        GATEWAY_LOG(DEBUG)
+                        GATEWAY_LOG(WARNING)
                             << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
                             << LOG_KV("errorCode", respCode) << LOG_KV("errorMessage", e.what());
                         // try again
                         self->trySendMessage();
                         return;
                     }
-                    GATEWAY_LOG(TRACE) << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                                       << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                                       << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
+                    GATEWAY_LOG(TRACE)
+                        << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
+                        << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
+                        << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
                     // send message successfully
                     if (self->m_respFunc)
                     {
@@ -422,20 +426,19 @@ void Gateway::asyncNotifyGroupInfo(
 }
 
 void Gateway::onReceiveP2PMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg)
 {
-    auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
-    auto options = p2pMessage->options();
+    auto options = _msg->options();
     auto groupID = options->groupID();
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
-    auto payload = p2pMessage->payload();
+    auto payload = _msg->payload();
     auto bytesConstRefPayload = bytesConstRef(payload->data(), payload->size());
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
     onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
-        [groupID, srcNodeIDPtr, dstNodeIDPtr, _p2pSession, p2pMessage, gateway](Error::Ptr _error) {
+        [groupID, srcNodeIDPtr, dstNodeIDPtr, _p2pSession, _msg, gateway](Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
             if (!gatewayPtr)
             {
@@ -453,18 +456,20 @@ void Gateway::onReceiveP2PMessage(
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
             gatewayPtr->m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), p2pMessage, _p2pSession);
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _p2pSession);
         });
 }
 
 void Gateway::onReceiveBroadcastMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
+    std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg)
 {
-    auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
     auto srcNodeIDPtr =
-        m_gatewayNodeManager->keyFactory()->createKey(*(p2pMessage->options()->srcNodeID()));
-    auto groupID = p2pMessage->options()->groupID();
-    auto type = p2pMessage->ext();
+        m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
+    auto groupID = _msg->options()->groupID();
+    auto type = _msg->ext();
+    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage")
+                       << LOG_KV("src", _msg->srcP2PNodeID())
+                       << LOG_KV("dst", _msg->dstP2PNodeID());
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, srcNodeIDPtr,
-        bytesConstRef(p2pMessage->payload()->data(), p2pMessage->payload()->size()));
+        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
 }

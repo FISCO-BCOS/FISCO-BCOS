@@ -79,7 +79,7 @@ struct TransactionExecutorFixture
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
 
         executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, lruStorage, backend, executionResultFactory, hashImpl, false, false);
+            txpool, lruStorage, backend, executionResultFactory, hashImpl, false, false, false);
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),

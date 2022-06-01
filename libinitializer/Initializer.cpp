@@ -128,9 +128,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
-        storage = StorageInitializer::build(storagePath);
+        // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
+        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption(), m_nodeConfig->keyPageSize());
         schedulerStorage = storage;
-        consensusStorage = StorageInitializer::build(consensusStoragePath);
+        consensusStorage = StorageInitializer::build(
+            consensusStoragePath, m_protocolInitializer->dataEncryption());
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
@@ -188,10 +190,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
                               << LOG_KV("nodeArchType", _nodeArchType);
+
         // Note: ensure that there has at least one executor before pbft/sync execute block
         auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
             executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize());
         auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
         executorManager->addExecutor("default", parallelExecutor);
     }

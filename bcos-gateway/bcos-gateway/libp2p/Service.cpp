@@ -7,7 +7,7 @@
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-gateway/libp2p/Common.h>
-#include <bcos-gateway/libp2p/P2PInterface.h>  // for SessionCallbackFunc...
+#include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <bcos-gateway/libp2p/P2PSession.h>  // for P2PSession
 #include <bcos-gateway/libp2p/Service.h>
@@ -20,7 +20,8 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::context;
 
-Service::Service(std::shared_ptr<boostssl::ws::WsService> _wsService) : m_wsService(_wsService)
+Service::Service(std::string const& _nodeID, std::shared_ptr<boostssl::ws::WsService> _wsService)
+  : m_wsService(_wsService), m_p2pID(_nodeID)
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
@@ -269,9 +270,31 @@ void Service::onConnect(std::shared_ptr<WsSession> _session)
     }
 
     session->initP2PInfo();
-    session->setService(std::weak_ptr<Service>(shared_from_this()));
-    asyncSendProtocol(_session);
+    auto self = std::weak_ptr<Service>(shared_from_this());
+    session->setService(self);
+    session->setRecvMessageHandler(
+        [self](std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+            auto service = self.lock();
+            if (!service)
+            {
+                return;
+            }
+            auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
+            if (!p2pMessage)
+            {
+                return;
+            }
+            auto p2pSession = std::dynamic_pointer_cast<P2PSession>(_session);
+            if (!p2pSession)
+            {
+                return;
+            }
+            service->onMessage(p2pSession, p2pMessage);
+        });
+
+    asyncSendProtocol(session);
     updateStaticNodes(session->endPoint(), nodeid);
+
     if (it != m_sessions.end())
     {
         it->second = session;
@@ -279,9 +302,15 @@ void Service::onConnect(std::shared_ptr<WsSession> _session)
     else
     {
         m_sessions.insert(std::make_pair(nodeid, session));
+        callNewSessionHandlers(session);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", nodeid)
                       << LOG_KV("endpoint", session->endPoint());
+}
+
+void Service::onMessage(std::shared_ptr<P2PSession> _session, std::shared_ptr<P2PMessage> _msg)
+{
+    m_wsService->onRecvMessage(_msg, _session);
 }
 
 void Service::onDisconnect(WsSession::Ptr _session)
@@ -302,7 +331,7 @@ void Service::onDisconnect(WsSession::Ptr _session)
                            << LOG_KV("endpoint", p2pSession->endPoint());
 
         m_sessions.erase(it);
-
+        callDeleteSessionHandlers(p2pSession);
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
         {
@@ -317,39 +346,29 @@ void Service::onDisconnect(WsSession::Ptr _session)
     updateUnconnectedEndpointToWservice();
 }
 
-void Service::sendMessageBySession(
-    int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession)
+void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
+    boostssl::ws::Options _options, RespCallBack _callback)
 {
-    auto p2pMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    p2pMessage->setPacketType(_packetType);
-    p2pMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
-    _p2pSession->asyncSendMessage(p2pMessage);
-
-    SERVICE_LOG(TRACE) << "sendMessageBySession" << LOG_KV("seq", p2pMessage->seq())
-                       << LOG_KV("packetType", _packetType)
-                       << LOG_KV("p2pid", _p2pSession->nodeId())
-                       << LOG_KV("payload.size()", _payload.size());
+    auto protocolVersion = _p2pSession->protocolInfo()->version();
+    _msg->setVersion(protocolVersion);
+    _p2pSession->asyncSendMessage(_msg, _options, _callback);
 }
 
-void Service::sendRespMessageBySession(bytesConstRef _payload,
-    bcos::boostssl::MessageFace::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
+void Service::sendRespMessageBySession(
+    bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
 {
     auto respMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
 
     respMessage->setSeq(_p2pMessage->seq());
     respMessage->setRespPacket();
     respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
-    _p2pSession->asyncSendMessage(respMessage);
-
+    sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
                        << LOG_KV("p2pid", _p2pSession->nodeId())
                        << LOG_KV("payload size", _payload.size());
 }
 
-bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
-    P2pID p2pID, bcos::boostssl::MessageFace::Ptr message)
+P2PMessage::Ptr Service::sendMessageByNodeID(P2pID p2pID, P2PMessage::Ptr message)
 {
     try
     {
@@ -391,7 +410,7 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
             BOOST_THROW_EXCEPTION(error);
         }
 
-        return callback->response;
+        return std::dynamic_pointer_cast<P2PMessage>(callback->response);
     }
     catch (std::exception& e)
     {
@@ -403,14 +422,7 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
     return P2PMessage::Ptr();
 }
 
-bool Service::connected(std::string const& _nodeID)
-{
-    RecursiveGuard l(x_sessions);
-    auto it = m_sessions.find(_nodeID);
-    return (it != m_sessions.end() && it->second->isConnected());
-}
-
-void Service::asyncSendMessageByNodeID(P2pID p2pID, bcos::boostssl::MessageFace::Ptr message,
+void Service::asyncSendMessageByNodeID(P2pID p2pID, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, boostssl::ws::Options options)
 {
     try
@@ -433,10 +445,19 @@ void Service::asyncSendMessageByNodeID(P2pID p2pID, bcos::boostssl::MessageFace:
             auto session = it->second;
             if (callback)
             {
-                session->asyncSendMessage(message, options,
-                    [session, callback](bcos::Error::Ptr error, boostssl::MessageFace::Ptr message,
-                        std::shared_ptr<WsSession>) {
-                        P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+                // for compatibility_version consideration
+                sendMessageToSession(session, message, options,
+                    [session, callback](bcos::Error::Ptr error,
+                        boostssl::MessageFace::Ptr _wsMessage, std::shared_ptr<WsSession>) {
+                        if (error)
+                        {
+                            SERVICE_LOG(WARNING) << LOG_DESC("sendMessage error")
+                                                 << LOG_KV("code", error->errorCode())
+                                                 << LOG_KV("msg", error->errorMessage());
+                            return;
+                        }
+                        P2PMessage::Ptr p2pMessage =
+                            std::dynamic_pointer_cast<P2PMessage>(_wsMessage);
                         if (callback)
                         {
                             NetworkException e(error);
@@ -446,7 +467,7 @@ void Service::asyncSendMessageByNodeID(P2pID p2pID, bcos::boostssl::MessageFace:
             }
             else
             {
-                session->asyncSendMessage(message, options, nullptr);
+                sendMessageToSession(session, message, options, nullptr);
             }
         }
         else
@@ -467,15 +488,14 @@ void Service::asyncSendMessageByNodeID(P2pID p2pID, bcos::boostssl::MessageFace:
         if (callback)
         {
             m_wsService->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(),
-                    P2PMessage::Ptr());
+                callback(NetworkException(P2PExceptionType::Disconnect, "Disconnect"),
+                    P2PSession::Ptr(), P2PMessage::Ptr());
             });
         }
     }
 }
 
-void Service::asyncBroadcastMessage(
-    bcos::boostssl::MessageFace::Ptr message, boostssl::ws::Options options)
+void Service::asyncBroadcastMessage(P2PMessage::Ptr message, boostssl::ws::Options options)
 {
     try
     {
@@ -541,7 +561,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
 void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
     boostssl::ws::Options _options, P2PResponseCallback _callback)
 {
-    if (!connected(_dstNodeID))
+    if (!isReachable(_dstNodeID))
     {
         if (_callback)
         {
@@ -594,7 +614,7 @@ void Service::asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pI
 }
 
 // send the protocolInfo
-void Service::asyncSendProtocol(WsSession::Ptr _session)
+void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
     auto payload = std::make_shared<bytes>();
     m_codec->encode(m_localProtocol, *payload);
@@ -604,12 +624,12 @@ void Service::asyncSendProtocol(WsSession::Ptr _session)
 
     SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
                       << LOG_KV("seq", message->seq());
-    _session->asyncSendMessage(message, Options(), nullptr);
+    sendMessageToSession(_session, message, boostssl::ws::Options(), nullptr);
 }
 
 // receive the protocolInfo
 void Service::onReceiveProtocol(
-    boostssl::MessageFace::Ptr _message, std::shared_ptr<P2PSession> _session)
+    std::shared_ptr<P2PSession> _session, std::shared_ptr<P2PMessage> _message)
 {
     try
     {

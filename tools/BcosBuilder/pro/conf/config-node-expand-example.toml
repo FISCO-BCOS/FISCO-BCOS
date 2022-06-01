@@ -10,17 +10,8 @@ chain_id="chain0"
 group_id="group0"
 # the genesis configuration path of the expanded group
 genesis_config_path = "generated/chain0/group0/config.genesis"
-
-# the genesis configuration path of the group, will generate new genesis configuration if not configurated
-# genesis_config_path = ""
-# VM type, now only support evm/wasm
-vm_type="evm"
 # use sm-crypto or not
 sm_crypto=false
-# enable auth-check or not
-auth_check=false
-init_auth_address=""
-
 
 [[agency]]
 name = "agencyA"
@@ -30,7 +21,17 @@ name = "agencyA"
         [[agency.group.node]]
         node_name = "node1"
         deploy_ip = "172.25.0.5"
+        # enable data disk encryption for bcos node or not, default is false
+        enable_storage_security = false
+        # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+        # key_center_url = 
+        # cipher_data_key = 
         
         [[agency.group.node]]
         node_name = "node2"
         deploy_ip = "172.25.0.5"
+        # enable data disk encryption for bcos node or not, default is false
+        enable_storage_security = false
+        # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+        # key_center_url = 
+        # cipher_data_key = 

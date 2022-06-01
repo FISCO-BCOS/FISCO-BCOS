@@ -949,9 +949,10 @@ EOF
     generate_script_template "$output/start_monitor.sh"
     cat <<EOF >> "${output}/start_monitor.sh"
 
-DOCKER_FILE=./compose.yaml
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
 docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
-
+echo -e "\033[32m start monitor successfully\033[0m"
+echo -e "\033[32m Please access grafana by https://host_ip:3001 \033[0m"
 EOF
     chmod u+x "${output}/start_monitor.sh"
 
@@ -959,9 +960,9 @@ EOF
     generate_script_template "$output/stop_monitor.sh"
     cat <<EOF >> "${output}/stop_monitor.sh"
 
-DOCKER_FILE=./compose.yaml
-docker-compose -f \${DOCKER_FILE} down
-
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} stop
+echo -e "\033[32m stop monitor successfully\033[0m"
 EOF
     chmod u+x "${output}/stop_monitor.sh"
 }
@@ -1056,19 +1057,22 @@ generate_common_ini() {
 [security]
     private_key_path=conf/node.pem
 
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
 
-[executor]
-    ; use the wasm virtual machine or not
-    is_wasm=${wasm_mode}
-    is_auth_check=${auth_mode}
-    auth_admin_account=${auth_admin_account}
-
 [storage]
     data_path=data
     enable_cache=true
+    key_page_size=0
+    ; type can be RocksDB/TiKV
     type=RocksDB
     pd_addrs=
 
@@ -1235,6 +1239,11 @@ generate_genesis_config() {
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
+[executor]
+    ; use the wasm virtual machine or not
+    is_wasm=${wasm_mode}
+    is_auth_check=${auth_mode}
+    auth_admin_account=${auth_admin_account}
 EOF
 }
 

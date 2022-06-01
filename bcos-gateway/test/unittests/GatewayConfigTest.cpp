@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
         BOOST_CHECK_EQUAL(config->wsConfig()->listenIP(), "127.0.0.1");
         BOOST_CHECK_EQUAL(config->wsConfig()->listenPort(), 12345);
         BOOST_CHECK_EQUAL(config->wsConfig()->smSSL(), false);
-        BOOST_CHECK_EQUAL(config->wsConfig()->connectedPeers()->size(), 3);
+        BOOST_CHECK_EQUAL(config->wsConfig()->connectPeers()->size(), 3);
 
         auto certConfig = config->certConfig();
         BOOST_CHECK(!certConfig.caCert.empty());
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
         BOOST_CHECK_EQUAL(config->wsConfig()->listenIP(), "0.0.0.0");
         BOOST_CHECK_EQUAL(config->wsConfig()->listenPort(), 54321);
         BOOST_CHECK_EQUAL(config->wsConfig()->smSSL(), true);
-        BOOST_CHECK_EQUAL(config->wsConfig()->connectedPeers()->size(), 1);
+        BOOST_CHECK_EQUAL(config->wsConfig()->connectPeers()->size(), 1);
 
         auto smCertConfig = config->smCertConfig();
         BOOST_CHECK(!smCertConfig.caCert.empty());

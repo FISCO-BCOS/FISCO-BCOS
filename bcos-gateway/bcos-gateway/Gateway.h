@@ -175,7 +175,7 @@ protected:
     // for UT
     Gateway() {}
     virtual void onReceiveP2PMessage(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
+        std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg);
 
     /**
      * @brief: receive group broadcast message
@@ -185,7 +185,7 @@ protected:
      * @return void
      */
     virtual void onReceiveBroadcastMessage(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
+        std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg);
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 

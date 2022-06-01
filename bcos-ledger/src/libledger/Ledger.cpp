@@ -175,7 +175,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // hash 2 receipts
-
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
@@ -201,7 +200,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                     [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
             }
         });
-
 
     LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
@@ -769,12 +767,6 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     // setted
                     if (error)
                     {
-                        if (error->errorCode() == LedgerError::GetStorageError &&
-                            _key == SYSTEM_KEY_COMPATIBILITY_VERSION)
-                        {
-                            callback(nullptr, bcos::protocol::RC3_VERSION_STR, blockNumber);
-                            return;
-                        }
                         LEDGER_LOG(ERROR) << "GetSystemConfigByKey error, "
                                           << boost::diagnostic_information(*error);
                         callback(std::move(error), "", -1);
@@ -786,7 +778,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                         LEDGER_LOG(WARNING) << "Entry doesn't exists";
                     }
 
-                    LEDGER_LOG(TRACE) << "Entry value: " << entry->get();
+                    LEDGER_LOG(TRACE) << "Entry value: " << toHex(entry->get());
 
                     auto [value, number] = entry->getObject<SystemConfigEntry>();
 
@@ -1366,6 +1358,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
                      << LOG_KV("compatibilityVersion", _compatibilityVersion)
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
                      << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
+
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
@@ -1421,15 +1414,12 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
-    if (versionNumber > (uint32_t)(bcos::protocol::Version::RC3_VERSION))
-    {
-        LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                         << LOG_KV("versionNumber", versionNumber);
-        // write compatibility version
-        Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
-        sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
-    }
+    LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
+                     << LOG_KV("versionNumber", versionNumber);
+    // write compatibility version
+    Entry compatibilityVersionEntry;
+    compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
+    sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
 
     // write consensus node list
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;

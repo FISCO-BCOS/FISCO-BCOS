@@ -56,13 +56,18 @@ void ExecutorServiceApp::createAndInitExecutor()
 {
     // fetch config
     m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
+    m_genesisConfigPath = ServerConfig::BasePath + "/config.genesis";
     addConfig("config.ini");
+    addConfig("config.genesis");
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor: fetch config success")
-                               << LOG_KV("iniConfigPath", m_iniConfigPath);
+                               << LOG_KV("iniConfigPath", m_iniConfigPath)
+                               << LOG_KV("genesisConfigPath", m_genesisConfigPath);
 
     // init log
     boost::property_tree::ptree pt;
+    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_iniConfigPath, pt);
+    boost::property_tree::read_ini(m_genesisConfigPath, genesisPt);
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
     m_logInitializer->setLogPath(getLogPath());
     m_logInitializer->initLog(pt);
@@ -71,7 +76,8 @@ void ExecutorServiceApp::createAndInitExecutor()
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("loadNodeConfig");
     m_nodeConfig =
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    m_nodeConfig->loadConfig(m_iniConfigPath);
+    m_nodeConfig->loadConfig(pt);
+    m_nodeConfig->loadGenesisConfig(genesisPt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();

@@ -75,15 +75,9 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
 
     u256 index = fromEvmC(*_key);
     u256 value = fromEvmC(*_value);
-    u256 oldValue = hostContext.store(index);
-
-    if (value == oldValue)
-        return EVMC_STORAGE_UNCHANGED;
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (oldValue == 0)
-        status = EVMC_STORAGE_ADDED;
-    else if (value == 0)
+    if (value == 0)
     {
         status = EVMC_STORAGE_DELETED;
         hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;

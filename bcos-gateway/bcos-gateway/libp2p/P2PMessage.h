@@ -98,23 +98,21 @@ protected:
 class P2PMessage : public bcos::boostssl::MessageFace
 {
 public:
-    using Ptr = std::shared_ptr<P2PMessage>;
-
     /// length(4) + version(2) + packetType(2) + seqLength(2) + ext(2)
     const static size_t MESSAGE_HEADER_LENGTH = 12;
     const static size_t MAX_MESSAGE_LENGTH =
         100 * 1024 * 1024;  ///< The maximum length of data is 100M.
-public:
+
+    using Ptr = std::shared_ptr<P2PMessage>;
     P2PMessage()
     {
         m_payload = std::make_shared<bytes>();
         m_options = std::make_shared<P2PMessageOptions>();
     }
 
-    virtual ~P2PMessage() {}
+    ~P2PMessage() override {}
 
-public:
-    uint32_t length() const { return m_length; }
+    uint32_t length() const override { return m_length; }
     virtual void setLength(uint32_t _length) { m_length = _length; }
 
     uint16_t version() const override { return m_version; }
@@ -123,8 +121,8 @@ public:
     uint16_t packetType() const override { return m_packetType; }
     virtual void setPacketType(uint16_t _packetType) override { m_packetType = _packetType; }
 
-    std::string seq() const override { return m_seq; }
-    virtual void setSeq(std::string _seq) override { m_seq = _seq; }
+    std::string const& seq() const override { return m_seq; }
+    void setSeq(std::string _seq) override { m_seq = _seq; }
 
     uint16_t ext() const override { return m_ext; }
     virtual void setExt(uint16_t _ext) override { m_ext = _ext; }
@@ -133,33 +131,64 @@ public:
     void setOptions(P2PMessageOptions::Ptr _options) { m_options = _options; }
 
     std::shared_ptr<bytes> payload() const override { return m_payload; }
-    void setPayload(std::shared_ptr<bytes> _payload) override { m_payload = _payload; }
+    virtual void setPayload(std::shared_ptr<bytes> _payload) override { m_payload = _payload; }
 
-public:
-    ssize_t decodeHeader(bytesConstRef _buffer);
+    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
+    bool isRespPacket() const override
+    {
+        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
+    }
+
+    bool encode(bytes& _buffer) override;
+    int64_t decode(bytesConstRef _buffer) override;
+
+    virtual void setSrcP2PNodeID(std::string const& _srcP2PNodeID)
+    {
+        m_srcP2PNodeID = _srcP2PNodeID;
+    }
+    virtual void setDstP2PNodeID(std::string const& _dstP2PNodeID)
+    {
+        m_dstP2PNodeID = _dstP2PNodeID;
+    }
+
+    virtual std::string const& srcP2PNodeID() const { return m_srcP2PNodeID; }
+    virtual std::string const& dstP2PNodeID() const { return m_dstP2PNodeID; }
+
     bool hasOptions() const
     {
         return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
                (m_packetType == GatewayMessageType::BroadcastMessage);
     }
 
-    bool encode(bytes& _buffer) override;
-    int64_t decode(bytesConstRef _buffer) override;
+protected:
+    virtual ssize_t decodeHeader(bytesConstRef _buffer);
+    virtual bool encodeHeader(bytes& _buffer);
+
 
 protected:
-    uint32_t m_length = 0;
+    uint32_t m_length;
+    uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
+    uint16_t m_packetType = 0;
+    std::string m_seq;
+    uint16_t m_ext = 0;
+
+    // the src p2pNodeID, for message forward, only encode into the P2PMessageV2
+    std::string m_srcP2PNodeID;
+    // the dst p2pNodeID, for message forward, only encode into the P2PMessageV2
+    std::string m_dstP2PNodeID;
 
     P2PMessageOptions::Ptr m_options;  ///< options fields
+    std::shared_ptr<bcos::bytes> m_payload;
 };
 
 class P2PMessageFactory : public bcos::boostssl::MessageFaceFactory
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageFactory>;
-    virtual ~P2PMessageFactory() {}
+    P2PMessageFactory() = default;
+    ~P2PMessageFactory() override {}
 
-public:
-    virtual bcos::boostssl::MessageFace::Ptr buildMessage() override
+    bcos::boostssl::MessageFace::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
         return message;

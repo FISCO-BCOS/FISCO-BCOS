@@ -26,6 +26,7 @@ class GenesisConfig:
     def __init__(self, config):
         self.config = config
         section = "group"
+        self.desc = "[[group]]"
         self.leader_period = utilities.get_value(
             self.config, section, "leader_period", 1, False)
         self.block_tx_count_limit = utilities.get_value(
@@ -36,6 +37,12 @@ class GenesisConfig:
             self.config, section, "gas_limit", "3000000000", False)
         self.compatibility_version = utilities.get_value(
             self.config, section, "compatibility_version", "3.0.0-rc4", False)
+        self.vm_type = utilities.get_item_value(
+            self.config, "vm_type", "evm", False, self.desc)
+        self.auth_check = utilities.get_item_value(
+            self.config, "auth_check", False, False, self.desc)
+        self.init_auth_address = utilities.get_item_value(
+            self.config, "init_auth_address", "", self.auth_check, self.desc)
 
 
 class AgencyConfig:
@@ -57,6 +64,15 @@ class AgencyConfig:
         # the failover cluster url
         self.failover_cluster_url = utilities.get_item_value(
             self.config, "failover_cluster_url", default_url, enforce_failover, self.desc)
+        # load storage_security config
+        self.enable_storage_security = utilities.get_item_value(
+            self.config, "enable_storage_security", False, False, self.desc)
+        self.sm_storage_security = utilities.get_item_value(
+            self.config, "sm_storage_security", False, False, self.desc)
+        self.key_center_url = utilities.get_item_value(
+            self.config, "key_center_url", "", False, self.desc)
+        self.cipher_data_key = utilities.get_item_value(
+            self.config, "cipher_data_key", "", False, self.desc)
 
 
 class ServiceInfoConfig:
@@ -107,6 +123,14 @@ class NodeConfig:
         self.desc = "[[agency.group.node]]."
         self.node_name = utilities.get_item_value(
             self.config, "node_name", None, True, self.desc)
+        # load storage_security
+        self.enable_storage_security = utilities.get_item_value(
+            self.config, "enable_storage_security", False, False, self.desc)
+        self.key_center_url = utilities.get_item_value(
+            self.config, "key_center_url", "", False, self.desc)
+        self.cipher_data_key = utilities.get_item_value(
+            self.config, "cipher_data_key", "", False, self.desc)
+        # parse node_service_config
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
@@ -193,14 +217,14 @@ class GroupConfig:
             "generated/", self.chain_id, self.group_id, "config.genesis")
         self.genesis_config_path = utilities.get_item_value(
             self.config, "genesis_config_path", default_genesis_config_path, False, self.desc)
-        self.vm_type = utilities.get_item_value(
-            self.config, "vm_type", "evm", False, self.desc)
+        # self.vm_type = utilities.get_item_value(
+        #     self.config, "vm_type", "evm", False, self.desc)
         self.sm_crypto = utilities.get_item_value(
             self.config, "sm_crypto", False, False, self.desc)
-        self.auth_check = utilities.get_item_value(
-            self.config, "auth_check", False, False, self.desc)
-        self.init_auth_address = utilities.get_item_value(
-            self.config, "init_auth_address", "", self.auth_check, self.desc)
+        # self.auth_check = utilities.get_item_value(
+        #     self.config, "auth_check", False, False, self.desc)
+        # self.init_auth_address = utilities.get_item_value(
+        #     self.config, "init_auth_address", "", self.auth_check, self.desc)
         self.genesis_config = GenesisConfig(self.config)
         self.node_list = []
 

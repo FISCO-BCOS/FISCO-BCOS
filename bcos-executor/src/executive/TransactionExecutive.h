@@ -88,7 +88,7 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector)
     {
-        m_recoder = m_blockContext.lock()->storage()->newRecoder();
+        m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.lock()->hashHandler();
     }
 
@@ -192,8 +192,7 @@ private:
 
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
-    std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> callPrecompiled(
-        CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> create(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);

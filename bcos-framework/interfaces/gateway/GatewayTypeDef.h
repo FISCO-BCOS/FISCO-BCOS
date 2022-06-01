@@ -40,6 +40,10 @@ enum GatewayMessageType : int16_t
     AMOPMessageType = 0x7,
     WSMessageType = 0x8,
     SyncNodeSeq = 0x9,
+    RouterTableSyncSeq = 0xa,
+    RouterTableResponse = 0xb,
+    RouterTableRequest = 0xc,
+    ForwardMessage = 0xd,
 };
 
 /// node info obtained from the certificate

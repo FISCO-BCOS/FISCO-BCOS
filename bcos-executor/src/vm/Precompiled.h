@@ -158,7 +158,7 @@ protected:
     crypto::Hash::Ptr m_hashImpl;
 
 protected:
-    std::optional<bcos::storage::Table> createTable(storage::StateStorage::Ptr _tableFactory,
+    std::optional<bcos::storage::Table> createTable(storage::StateStorageInterface::Ptr _tableFactory,
         const std::string& _tableName, const std::string& _valueField);
 
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;

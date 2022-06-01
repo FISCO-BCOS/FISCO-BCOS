@@ -83,11 +83,11 @@ protected:
     virtual void broadcastStatusSeq();
 
     virtual void onReceiveStatusSeq(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
+        std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg);
     virtual void onRequestNodeStatus(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
+        std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg);
     virtual void onReceiveNodeStatus(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
+        std::shared_ptr<P2PSession> _p2pSession, std::shared_ptr<P2PMessage> _msg);
     virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
 

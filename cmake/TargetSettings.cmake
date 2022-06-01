@@ -25,6 +25,9 @@ set(TXPOOL_TARGET "txpool")
 # bcos-sealer
 set(SEALER_TARGET "sealer")
 
+#bcos-security
+set(SECURITY_TARGET "security")
+
 # bcos-sync
 set(SYNC_TARGET "sync")
 

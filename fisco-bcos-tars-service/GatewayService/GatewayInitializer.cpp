@@ -61,8 +61,6 @@ void GatewayInitializer::init(std::string const& _configPath)
     bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
-                             << LOG_KV("certPath",
-                                    m_gatewayConfig->wsConfig()->contextConfig()->certPath())
                              << LOG_KV("nodePath", m_gatewayConfig->nodePath())
                              << LOG_KV("gatewayServiceName", gatewayServiceName);
     auto gateway =

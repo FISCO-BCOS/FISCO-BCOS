@@ -69,14 +69,14 @@ public:
     virtual void asyncSendBroadbastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
-    virtual void onAMOPMessage(
-        boostssl::MessageFace::Ptr _message, gateway::P2PSession::Ptr _p2pSession);
+    virtual void onAMOPMessage(std::shared_ptr<bcos::gateway::P2PSession> _p2pSession,
+        std::shared_ptr<bcos::gateway::P2PMessage> _message);
 
     virtual TopicManager::Ptr topicManager() { return m_topicManager; }
 
 protected:
-    virtual void dispatcherAMOPMessage(
-        boostssl::MessageFace::Ptr _message, gateway::P2PSession::Ptr _p2pSession);
+    virtual void dispatcherAMOPMessage(std::shared_ptr<bcos::gateway::P2PSession> _p2pSession,
+        std::shared_ptr<bcos::gateway::P2PMessage> _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
      * @return void

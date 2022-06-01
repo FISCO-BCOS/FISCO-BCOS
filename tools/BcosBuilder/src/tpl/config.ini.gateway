@@ -20,8 +20,17 @@
     node_cert=ssl.crt
 
 [chain]
+    ; use SM crypto or not, should nerver be changed
+    sm_crypto=false
     chain_id=chain0
 
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
 [failover]
     ; enable failover or not, default disable
     enable = false

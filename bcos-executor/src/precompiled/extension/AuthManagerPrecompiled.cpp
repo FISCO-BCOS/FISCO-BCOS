@@ -201,16 +201,15 @@ void AuthManagerPrecompiled::getAdmin(
     bytesConstRef data = getParamData(_callParameters->input());
     std::string path;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(data, path);
+        codec.decode(data, path);
     }
     else
     {
         Address contractAddress;
-        codec->decode(data, contractAddress);
+        codec.decode(data, contractAddress);
         path = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin")
@@ -221,7 +220,7 @@ void AuthManagerPrecompiled::getAdmin(
                            << LOG_KV("admin", adminStr);
     gasPricer->updateMemUsed(1);
     _callParameters->setExecResult(
-        blockContext->isWasm() ? codec->encode(adminStr) : codec->encode(Address(adminStr)));
+        blockContext->isWasm() ? codec.encode(adminStr) : codec.encode(Address(adminStr)));
 }
 
 void AuthManagerPrecompiled::resetAdmin(
@@ -233,19 +232,18 @@ void AuthManagerPrecompiled::resetAdmin(
     std::string admin;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
         Address adminAddress;
-        codec->decode(data, contractAddress, adminAddress);
+        codec.decode(data, contractAddress, adminAddress);
         path = contractAddress.hex();
         admin = adminAddress.hex();
     }
     else
     {
-        codec->decode(data, path, admin);
+        codec.decode(data, path, admin);
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
                            << LOG_KV("path", path) << LOG_KV("admin", admin);
@@ -254,11 +252,11 @@ void AuthManagerPrecompiled::resetAdmin(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("sender is not from sys") << LOG_KV("path", path)
                                << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
@@ -279,17 +277,16 @@ void AuthManagerPrecompiled::setMethodAuthType(
     string32 _type;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(data, contractAddress, _func, _type);
+        codec.decode(data, contractAddress, _func, _type);
         path = contractAddress.hex();
     }
     else
     {
-        codec->decode(data, path, _func, _type);
+        codec.decode(data, path, _func, _type);
     }
     auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
@@ -298,11 +295,11 @@ void AuthManagerPrecompiled::setMethodAuthType(
                                << LOG_DESC("Permission denied, only admin can set contract access.")
                                << LOG_KV("address", path)
                                << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
@@ -322,22 +319,21 @@ void AuthManagerPrecompiled::checkMethodAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
         Address accountAddress;
-        codec->decode(data, contractAddress, _func, accountAddress);
+        codec.decode(data, contractAddress, _func, accountAddress);
         path = contractAddress.hex();
         account = accountAddress.hex();
     }
     else
     {
-        codec->decode(data, path, _func, account);
+        codec.decode(data, path, _func, account);
     }
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
@@ -357,20 +353,19 @@ void AuthManagerPrecompiled::getMethodAuth(
     string32 _func;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(data, contractAddress, _func);
+        codec.decode(data, contractAddress, _func);
         path = contractAddress.hex();
     }
     else
     {
-        codec->decode(data, path, _func);
+        codec.decode(data, path, _func);
     }
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
@@ -390,20 +385,19 @@ void AuthManagerPrecompiled::setMethodAuth(
     std::string account;
     string32 _func;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     bytesConstRef data = getParamData(_callParameters->input());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
         Address accountAddress;
-        codec->decode(data, contractAddress, _func, accountAddress);
+        codec.decode(data, contractAddress, _func, accountAddress);
         path = contractAddress.hex();
         account = accountAddress.hex();
     }
     else
     {
-        codec->decode(data, path, _func, account);
+        codec.decode(data, path, _func, account);
     }
     auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
@@ -412,11 +406,11 @@ void AuthManagerPrecompiled::setMethodAuth(
                                << LOG_DESC("Permission denied, only admin can set contract access.")
                                << LOG_KV("address", path)
                                << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -436,16 +430,15 @@ void AuthManagerPrecompiled::setContractStatus(
     bool isFreeze = false;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(data, address, isFreeze);
+        codec.decode(data, address, isFreeze);
     }
     else
     {
         Address contractAddress;
-        codec->decode(data, contractAddress, isFreeze);
+        codec.decode(data, contractAddress, isFreeze);
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
@@ -459,11 +452,11 @@ void AuthManagerPrecompiled::setContractStatus(
                                << LOG_DESC("Permission denied, only admin can set contract access.")
                                << LOG_KV("address", address)
                                << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
@@ -483,23 +476,22 @@ void AuthManagerPrecompiled::contractAvailable(
     std::string address;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(data, address);
+        codec.decode(data, address);
     }
     else
     {
         Address contractAddress;
-        codec->decode(data, contractAddress);
+        codec.decode(data, contractAddress);
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
                            << LOG_KV("address", address);
 
     auto newParams =
-        codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
@@ -516,15 +508,14 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     PrecompiledExecResult::Ptr const& _callParameters)
 {
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     bytes selector = blockContext->isWasm() ?
-                         codec->encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
-                         codec->encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
-    auto data = codec->encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), selector);
+                         codec.encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
+                         codec.encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
+    auto data = codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), selector);
     auto response = externalRequest(_executive, ref(data), _callParameters->m_origin,
         authMgrAddress, _to, _callParameters->m_staticCall, false, _callParameters->m_gas, true);
 
@@ -537,7 +528,7 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     }
     std::string admin = "";
 
-    codec->decode(ref(response->data), admin);
+    codec.decode(ref(response->data), admin);
 
     return admin;
 }
@@ -574,12 +565,11 @@ void AuthManagerPrecompiled::getDeployType(
 
 {
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     u256 type = getDeployAuthType(_executive);
     gasPricer->updateMemUsed(1);
-    _callParameters->setExecResult(codec->encode(type));
+    _callParameters->setExecResult(codec.encode(type));
 }
 
 void AuthManagerPrecompiled::setDeployType(
@@ -590,12 +580,11 @@ void AuthManagerPrecompiled::setDeployType(
     string32 _type;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(data, _type);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(data, _type);
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
     u256 type = _type[_type.size() - 1];
@@ -605,7 +594,7 @@ void AuthManagerPrecompiled::setDeployType(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("deploy auth type must be 1 or 2.");
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
     }
     auto table = _executive->storage().openTable("/apps");
@@ -615,7 +604,7 @@ void AuthManagerPrecompiled::setDeployType(
 
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 void AuthManagerPrecompiled::setDeployAuth(
@@ -626,21 +615,20 @@ void AuthManagerPrecompiled::setDeployAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(data, account);
+        codec.decode(data, account);
     }
     else
     {
         Address accountAddress;
-        codec->decode(data, accountAddress);
+        codec.decode(data, accountAddress);
         account = accountAddress.hex();
     }
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
@@ -666,7 +654,7 @@ void AuthManagerPrecompiled::setDeployAuth(
 
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 void AuthManagerPrecompiled::hasDeployAuth(
@@ -677,19 +665,18 @@ void AuthManagerPrecompiled::hasDeployAuth(
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(data, account);
+        codec.decode(data, account);
     }
     else
     {
         Address accountAddress;
-        codec->decode(data, accountAddress);
+        codec.decode(data, accountAddress);
         account = accountAddress.hex();
     }
-    _callParameters->setExecResult(codec->encode(checkDeployAuth(_executive, account)));
+    _callParameters->setExecResult(codec.encode(checkDeployAuth(_executive, account)));
 }
 
 bool AuthManagerPrecompiled::checkDeployAuth(

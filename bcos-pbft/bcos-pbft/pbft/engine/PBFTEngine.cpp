@@ -1040,23 +1040,23 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
                        << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
         return false;
     }
+    if (_fromNode && !isTimeout())
+    {
+        PBFT_LOG(INFO) << LOG_DESC("sendRecoverResponse to the node try to trigger viewchange")
+                       << LOG_KV("dst", _fromNode->shortHex()) << printPBFTMsgInfo(_viewChangeMsg)
+                       << m_config->printCurrentState();
+        sendRecoverResponse(_fromNode);
+    }
     // check the view
     if ((_viewChangeMsg->view() < m_config->view()) ||
         (_viewChangeMsg->view() + 1 < m_config->toView()))
     {
-        if (_fromNode)
+        if (_fromNode && isTimeout())
         {
-            if (isTimeout())
-            {
-                PBFT_LOG(INFO) << LOG_DESC("send viewchange to the node whose view falling behind")
-                               << LOG_KV("dst", _fromNode->shortHex())
-                               << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
-                sendViewChange(_fromNode);
-            }
-            PBFT_LOG(INFO) << LOG_DESC("sendRecoverResponse to the node whose view falling behind")
+            PBFT_LOG(INFO) << LOG_DESC("send viewchange to the node whose view falling behind")
                            << LOG_KV("dst", _fromNode->shortHex())
                            << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
-            sendRecoverResponse(_fromNode);
+            sendViewChange(_fromNode);
         }
     }
     if (_viewChangeMsg->view() < m_config->view())

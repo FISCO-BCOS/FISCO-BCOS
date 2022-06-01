@@ -47,8 +47,8 @@ public:
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
-    void sm2Verify(
-        bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult, CodecWrapper::Ptr _codec);
+    void sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult);
 };
 }  // namespace precompiled
 }  // namespace bcos

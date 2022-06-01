@@ -94,8 +94,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
 
     auto blockContext = _executive->blockContext().lock();
     auto authAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     if (_callParameters->m_sender != authAddress)
     {
@@ -168,16 +167,15 @@ void ContractAuthMgrPrecompiled::getAdmin(
 
     std::string path;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(_callParameters->params(), path);
+        codec.decode(_callParameters->params(), path);
     }
     else
     {
         Address contractAddress;
-        codec->decode(_callParameters->params(), contractAddress);
+        codec.decode(_callParameters->params(), contractAddress);
         path = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("getAdmin")
@@ -204,7 +202,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("getAdmin success") << LOG_KV("admin", adminStr);
     gasPricer->updateMemUsed(1);
-    _callParameters->setExecResult(codec->encode(adminStr));
+    _callParameters->setExecResult(codec.encode(adminStr));
 }
 
 void ContractAuthMgrPrecompiled::resetAdmin(
@@ -217,19 +215,18 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     std::string path;
     std::string admin;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
         Address adminAddress;
-        codec->decode(_callParameters->params(), contractAddress, adminAddress);
+        codec.decode(_callParameters->params(), contractAddress, adminAddress);
         path = contractAddress.hex();
         admin = adminAddress.hex();
     }
     else
     {
-        codec->decode(_callParameters->params(), path, admin);
+        codec.decode(_callParameters->params(), path, admin);
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
                            << LOG_KV("path", path) << LOG_KV("admin", admin);
@@ -246,7 +243,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     table->setRow(ADMIN_FIELD, std::move(newEntry));
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 void ContractAuthMgrPrecompiled::setMethodAuthType(
@@ -261,17 +258,16 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     string32 _func;
     string32 _type;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(_callParameters->params(), contractAddress, _func, _type);
+        codec.decode(_callParameters->params(), contractAddress, _func, _type);
         path = contractAddress.hex();
     }
     else
     {
-        codec->decode(_callParameters->params(), path, _func, _type);
+        codec.decode(_callParameters->params(), path, _func, _type);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     uint8_t type = _type[_type.size() - 1];
@@ -284,7 +280,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("path not found") << LOG_KV("path", path);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
     auto entry = table->getRow(METHOD_AUTH_TYPE);
@@ -293,8 +289,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("method_auth_type row not found")
                                << LOG_KV("path", path);
-        getErrorCodeOut(
-            _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
         return;
     }
 
@@ -312,7 +307,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
 
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 void ContractAuthMgrPrecompiled::checkMethodAuth(
@@ -327,23 +322,22 @@ void ContractAuthMgrPrecompiled::checkMethodAuth(
     string32 _func;
     std::string account;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
         Address accountAddress;
-        codec->decode(_callParameters->params(), contractAddress, _func, accountAddress);
+        codec.decode(_callParameters->params(), contractAddress, _func, accountAddress);
         path = contractAddress.hex();
         account = accountAddress.hex();
     }
     else
     {
-        codec->decode(_callParameters->params(), path, _func, account);
+        codec.decode(_callParameters->params(), path, _func, account);
     }
     auto result = checkMethodAuth(
         _executive, path, codec::fromString32(_func).ref().getCroppedData(0, 4), account);
-    _callParameters->setExecResult(codec->encode(result));
+    _callParameters->setExecResult(codec.encode(result));
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
 }
 
@@ -421,17 +415,16 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
     string32 _func;
     bytes funcBytes;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(_callParameters->params(), contractAddress, _func);
+        codec.decode(_callParameters->params(), contractAddress, _func);
         path = contractAddress.hex();
     }
     else
     {
-        codec->decode(_callParameters->params(), path, _func);
+        codec.decode(_callParameters->params(), path, _func);
     }
     funcBytes = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     path = getAuthTableName(path);
@@ -456,7 +449,7 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
     {
         // func not set acl, return empty
         _callParameters->setExecResult(
-            codec->encode(uint8_t(0), std::move(accessList), std::move(blockList)));
+            codec.encode(uint8_t(0), std::move(accessList), std::move(blockList)));
     }
     else
     {
@@ -474,7 +467,7 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
             }
         }
         _callParameters->setExecResult(
-            codec->encode(uint8_t(getMethodType), std::move(accessList), std::move(blockList)));
+            codec.encode(uint8_t(getMethodType), std::move(accessList), std::move(blockList)));
     }
     gasPricer->updateMemUsed(authMap.size());
 }
@@ -488,20 +481,19 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     std::string account;
     string32 _func;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(_callParameters->params(), path, _func, account);
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), path, _func, account);
     if (!blockContext->isWasm())
     {
         Address contractAddress;
         Address accountAddress;
-        codec->decode(_callParameters->params(), contractAddress, _func, accountAddress);
+        codec.decode(_callParameters->params(), contractAddress, _func, accountAddress);
         path = contractAddress.hex();
         account = accountAddress.hex();
     }
     else
     {
-        codec->decode(_callParameters->params(), path, _func, account);
+        codec.decode(_callParameters->params(), path, _func, account);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
@@ -514,7 +506,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found, should not set acl")
                                << LOG_KV("path", path);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
     s256 authType = getMethodAuthType(_executive, path, ref(func));
@@ -528,7 +520,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("error auth type") << LOG_KV("path", path)
                                << LOG_KV("type", authType);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
     }
     auto entry = table->getRow(getTypeStr);
@@ -572,7 +564,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                    << LOG_DESC("auth map parse error") << LOG_KV("path", path);
             getErrorCodeOut(
-                _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, *codec);
+                _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
             return;
         }
     }
@@ -580,7 +572,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     table->setRow(getTypeStr, std::move(entry.value()));
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
@@ -661,16 +653,15 @@ void ContractAuthMgrPrecompiled::setContractStatus(
     std::string address;
     bool isFreeze = false;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(_callParameters->params(), address, isFreeze);
+        codec.decode(_callParameters->params(), address, isFreeze);
     }
     else
     {
         Address contractAddress;
-        codec->decode(_callParameters->params(), contractAddress, isFreeze);
+        codec.decode(_callParameters->params(), contractAddress, isFreeze);
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -682,7 +673,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found") << LOG_KV("path", path);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
@@ -692,7 +683,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
     table->setRow("status", std::move(entry));
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
-    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, *codec);
+    getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
 
 void ContractAuthMgrPrecompiled::contractAvailable(
@@ -704,16 +695,15 @@ void ContractAuthMgrPrecompiled::contractAvailable(
 
     std::string address;
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
-        codec->decode(_callParameters->params(), address);
+        codec.decode(_callParameters->params(), address);
     }
     else
     {
         Address contractAddress;
-        codec->decode(_callParameters->params(), contractAddress);
+        codec.decode(_callParameters->params(), contractAddress);
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -724,7 +714,7 @@ void ContractAuthMgrPrecompiled::contractAvailable(
     {
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot get contract status"));
     }
-    _callParameters->setExecResult(codec->encode(result));
+    _callParameters->setExecResult(codec.encode(result));
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
 }
 
