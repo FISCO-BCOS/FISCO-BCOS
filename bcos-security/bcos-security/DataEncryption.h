@@ -39,7 +39,7 @@ public:
 
 public:
     DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig) : m_nodeConfig(nodeConfig) {}
-    ~DataEncryption() = default;
+    ~DataEncryption() override {}
 
 public:
     void init() override;

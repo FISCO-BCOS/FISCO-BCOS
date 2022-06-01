@@ -31,7 +31,7 @@ public:
     using Ptr = std::shared_ptr<DataEncryptInterface>;
 
     DataEncryptInterface() = default;
-    ~DataEncryptInterface() = default;
+    virtual ~DataEncryptInterface() = default;
 
 public:
     virtual void init() = 0;
