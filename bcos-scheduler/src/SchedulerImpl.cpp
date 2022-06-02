@@ -123,11 +123,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             });
 
 
-        auto currentBlockNumber =
-            blockNumberFuture.get_future().get()
+        auto currentBlockNumber = blockNumberFuture.get_future().get();
 
-                if (currentBlockNumber != 0 &&
-                    currentBlockNumber + 1 != block->blockHeaderConst()->number())
+        if (currentBlockNumber != 0 &&
+            currentBlockNumber + 1 != block->blockHeaderConst()->number())
         {
             auto message =
                 (boost::format(
