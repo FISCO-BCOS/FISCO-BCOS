@@ -176,7 +176,6 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                             << LOG_KV("gasUsed", header->gasUsed())
                             << LOG_KV("signatureSize", signature.size());
 
-        m_lastExecutedBlockNumber.store(header->number());
         m_lastExecuteFinishTime = utcTime();
         executeLock->unlock();
         callback(std::move(error), std::move(header), _sysBlock);
