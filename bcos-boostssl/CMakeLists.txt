@@ -7,7 +7,7 @@ file(GLOB_RECURSE SRCS bcos-boostssl/*.cpp)
 # find_package(TASSL REQUIRED MODULE)
 
 add_library(bcos-boostssl ${SRCS})
-target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities TASSL)
+target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities tassl::ssl)
 
 if(TESTS)
     # enable_testing()

@@ -17,22 +17,11 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 # import dependencies
-# include(ProjectTCMalloc)
 include(ProjectWABT)
 include(ProjectBCOSWASM)
 
-# hunter_add_package(tbb)
-# hunter_add_package(Protobuf)
-# hunter_add_package(Microsoft.GSL)
-# hunter_add_package(wedpr-crypto)
-# hunter_add_package(jsoncpp)
-# hunter_add_package(evmc)
-# hunter_add_package(intx)
-# hunter_add_package(ethash)
-# hunter_add_package(evmone)
-# hunter_add_package(tarscpp)
-# hunter_add_package(OpenSSL)
 find_package(TARS REQUIRED MODULE)
+find_package(TASSL REQUIRED MODULE)
 
 # bcos-boostssl
 find_package(Boost REQUIRED COMPONENTS log system filesystem chrono iostreams thread)
