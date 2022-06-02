@@ -30,7 +30,7 @@ ServiceV2::ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _router
     m_routerTable(m_routerTableFactory->createRouterTable())
 {
     m_routerTable->setNodeID(m_nodeID);
-    m_routerTable->setUnreachableTTL(c_unreachableTTL);
+    m_routerTable->setUnreachableDistance(c_unreachableDistance);
     // process router packet related logic
     registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
         boost::bind(&ServiceV2::onReceiveRouterSeq, this, boost::placeholders::_1,
@@ -103,7 +103,7 @@ void ServiceV2::joinRouterTable(
                              << LOG_KV("dst", _generatedFrom);
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_generatedFrom);
-    entry->setTTL(0);
+    entry->setDistance(0);
     if (m_routerTable->update(unreachableNodes, m_nodeID, entry) && !updated)
     {
         updated = true;
@@ -182,7 +182,7 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
     std::set<std::string> unreachableNodes;
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_session->p2pID());
-    entry->setTTL(0);
+    entry->setDistance(0);
     if (!m_routerTable->update(unreachableNodes, m_nodeID, entry))
     {
         SERVICE_ROUTER_LOG(INFO) << LOG_DESC("onNewSession: RouterTable not changed")
@@ -237,7 +237,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     std::shared_ptr<P2PMessage> _message, CallbackFuncWithSession _callback, Options _options)
 {
     auto dstNodeID = _message->dstP2PNodeID();
-    // without nextHop: maybe network unreachable or with ttl equal to 1
+    // without nextHop: maybe network unreachable or with distance equal to 1
     auto nextHop = m_routerTable->getNextHop(dstNodeID);
     if (nextHop.size() == 0)
     {
