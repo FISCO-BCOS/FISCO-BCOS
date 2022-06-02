@@ -1,5 +1,5 @@
 include(FindPackageHandleStandardArgs)
-include(ExternalProject)
+include(FetchContent)
 include(GNUInstallDirs)
 
 add_library(evmone::intx MODULE IMPORTED)
@@ -12,6 +12,7 @@ if(NOT EVMONE_ROOT_DIR)
   ExternalProject_Add(evmone-project
     URL https://${URL_BASE}/FISCO-BCOS/evmone/archive/53ff1c54a2ee5ebcc499586da62ac6e1bb8735cd.tar.gz
     URL_HASH SHA1=e6c1a8f1acd908c770426bb5015d45b3f9138179
+    PATCH_COMMAND sed -i "s\/\#add_standalone_library\/add_standalone_library\/g" lib/evmone/CMakeLists.txt
     CMAKE_ARGS -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=${EVMONE_INSTALL} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
   )
 

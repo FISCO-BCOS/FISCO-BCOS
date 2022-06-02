@@ -1,7 +1,7 @@
 find_package(ZLIB REQUIRED)
 
 add_executable(perf_demo perf_demo.cpp)
-target_link_libraries(perf_demo PRIVATE ${BCOS_CRYPTO_TARGET} Boost::log OpenSSL::Crypto ZLIB::ZLIB)
+target_link_libraries(perf_demo PRIVATE bcos-crypto Boost::log tassl::crypto ZLIB::ZLIB)
 
 if(ENABLE_IPPCRYPTO)
     find_package(IPPCrypto REQUIRED MODULE)
@@ -11,5 +11,5 @@ if(ENABLE_IPPCRYPTO)
 
     add_executable(hasher_test hasher_test.cpp)
     target_include_directories(hasher_test PUBLIC ${IPPCRYPTO_INCLUDE_DIRS})
-    target_link_libraries(hasher_test PUBLIC ${BCOS_CRYPTO_TARGET} Boost::thread OpenSSL::Crypto ${IPPCRYPTO_LIBRARIES} ZLIB::ZLIB)
+    target_link_libraries(hasher_test PUBLIC ${BCOS_CRYPTO_TARGET} Boost::thread tassl::crypto ${IPPCRYPTO_LIBRARIES} ZLIB::ZLIB)
 endif()

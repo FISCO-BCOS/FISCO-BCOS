@@ -7,7 +7,7 @@ set(TASSL_FOUND OFF)
 add_library(tassl::crypto MODULE IMPORTED)
 add_library(tassl::ssl MODULE IMPORTED)
 if(NOT TASSL_ROOT_DIR)
-  message(STATUS "Installing tassl from github")
+  message(STATUS "Install tassl from github")
   set(TASSL_INSTALL "${CMAKE_CURRENT_BINARY_DIR}/tassl-install")
   make_directory(${TASSL_INSTALL}/include)
 

@@ -10,6 +10,7 @@ target_link_libraries(bcos-crypto PUBLIC tassl::ssl tassl::crypto bcos-utilities
 if(TESTS)
     enable_testing()
     add_subdirectory(test)
+    add_subdirectory(demo)
 endif()
 
 # include(GNUInstallDirs)
