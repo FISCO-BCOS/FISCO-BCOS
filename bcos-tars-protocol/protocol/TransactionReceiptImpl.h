@@ -107,6 +107,9 @@ public:
 
     void setMessage(std::string&& _message) override { m_inner()->message = std::move(_message); }
 
+    void setBlockHash(bcos::crypto::HashType const& _blockHash) override;
+    void setVersion(int32_t _version) override;
+
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;

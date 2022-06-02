@@ -57,6 +57,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/interfaces/protocol/LogEntry.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/blocked_range.h>
@@ -100,8 +101,14 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, lastStorage, m_hashImpl,
-        currentHeader, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
+    auto blockVersion = currentHeader->version();
+    auto vmSchedule = FiscoBcosScheduleV4;
+    if (blockVersion > (int32_t)bcos::protocol::Version::RC4_VERSION)
+    {
+        vmSchedule = FiscoBcosScheduleV5;
+    }
+    BlockContext::Ptr context = make_shared<BlockContext>(
+        storage, lastStorage, m_hashImpl, currentHeader, vmSchedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -110,8 +117,14 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
+    // upgrade the vmSchedule
+    auto vmSchedule = FiscoBcosScheduleV4;
+    if (blockVersion > (int32_t)bcos::protocol::Version::RC4_VERSION)
+    {
+        vmSchedule = FiscoBcosScheduleV5;
+    }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
+        blockHash, timestamp, blockVersion, vmSchedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -1362,14 +1375,15 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                         if (error)
                         {
-                            EXECUTOR_LOG(ERROR)
-                                << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
-                                << LOG_KV("code", error->errorCode());
+                            EXECUTOR_LOG(ERROR) << "asyncExecuteExecutiveFlow error: "
+                                                << LOG_KV("msg", error->errorMessage())
+                                                << LOG_KV("code", error->errorCode());
                             callback(std::move(error), nullptr);
                         }
                         else
                         {
-                            EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
+                            EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: "
+                                                << messages[0]->toString();
                             callback(std::move(error), std::move(messages[0]));
                         }
                     });
@@ -1390,13 +1404,15 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                 if (error)
                 {
-                    EXECUTOR_LOG(ERROR) << "asyncExecuteExecutiveFlow error: " << LOG_KV("msg", error->errorMessage())
+                    EXECUTOR_LOG(ERROR) << "asyncExecuteExecutiveFlow error: "
+                                        << LOG_KV("msg", error->errorMessage())
                                         << LOG_KV("code", error->errorCode());
                     callback(std::move(error), nullptr);
                 }
                 else
                 {
-                    EXECUTOR_LOG(TRACE) << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
+                    EXECUTOR_LOG(TRACE)
+                        << "asyncExecuteExecutiveFlow complete: " << messages[0]->toString();
                     callback(std::move(error), std::move(messages[0]));
                 }
             });
@@ -1683,7 +1699,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
         catch (std::exception& e)
         {
-            EXECUTOR_LOG(ERROR) << "executeTransactionsWithCriticals error: " << boost::diagnostic_information(e);
+            EXECUTOR_LOG(ERROR) << "executeTransactionsWithCriticals error: "
+                                << boost::diagnostic_information(e);
         }
     });
 

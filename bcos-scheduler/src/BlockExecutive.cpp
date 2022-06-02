@@ -416,6 +416,8 @@ void BlockExecutive::asyncNotify(
         auto submitResult = m_transactionSubmitResultFactory->createTxSubmitResult();
         submitResult->setTransactionIndex(index);
         submitResult->setBlockHash(blockHash);
+        // set blockHash for the receipt
+        it.receipt->setBlockHash(blockHash);
         submitResult->setTxHash(it.transactionHash);
         submitResult->setStatus(it.receipt->status());
         submitResult->setTransactionReceipt(it.receipt);
@@ -962,11 +964,12 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
                    << " -> contextID:" << output->contextID() - m_startContextID << std::endl;
 #endif
     // write receipt in results
-    m_executiveResults[output->contextID() - m_startContextID].receipt =
-        m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-            output->newEVMContractAddress(),
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
-            output->status(), output->takeData(), m_block->blockHeaderConst()->number());
+    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+        output->newEVMContractAddress(),
+        std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
+        output->status(), output->takeData(), m_block->blockHeaderConst()->number());
+    receipt->setVersion(m_block->blockHeaderConst()->version());
+    m_executiveResults[output->contextID() - m_startContextID].receipt = receipt;
 }
 
 

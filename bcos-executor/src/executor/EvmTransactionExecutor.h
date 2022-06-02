@@ -43,7 +43,6 @@ public:
             std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck, keyPageSize)
     {
         m_isWasm = false;
-        m_schedule = FiscoBcosScheduleV4;
         initPrecompiled();
         assert(m_precompiledContract);
         assert(!m_constantPrecompiled->empty());
@@ -54,7 +53,6 @@ public:
 
 private:
     void initPrecompiled();
-
 };
 
 }  // namespace executor

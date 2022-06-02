@@ -272,7 +272,6 @@ protected:
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
     size_t m_keyPageSize = 0;
-    VMSchedule m_schedule = FiscoBcosScheduleV4;
 };
 
 }  // namespace executor

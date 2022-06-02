@@ -281,6 +281,16 @@ static const VMSchedule FiscoBcosScheduleV4 = [] {
     return schedule;
 }();
 
+static const VMSchedule FiscoBcosScheduleV5 = [] {
+    VMSchedule schedule = FiscoBcosScheduleV4;
+    schedule.extcodesizeGas = 1000;
+    schedule.extcodecopyGas = 200;
+    schedule.balanceGas = 0;
+    schedule.sloadGas = 10;
+    schedule.callGas = 500;
+    return schedule;
+}();
+
 static const VMSchedule BCOSWASMSchedule = [] {
     VMSchedule schedule = FiscoBcosScheduleV4;
     schedule.maxCodeSize = 0xF00000;  // 15MB
@@ -289,8 +299,6 @@ static const VMSchedule BCOSWASMSchedule = [] {
     schedule.txDataZeroGas = schedule.txDataNonZeroGas;
     return schedule;
 }();
-
-static const VMSchedule DefaultSchedule = FiscoBcosScheduleV4;
 
 struct ImportRequirements
 {

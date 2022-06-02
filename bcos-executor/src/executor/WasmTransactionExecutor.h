@@ -43,7 +43,6 @@ public:
             std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck, keyPageSize)
     {
         m_isWasm = true;
-        m_schedule = BCOSWASMSchedule;
         initPrecompiled();
         assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);

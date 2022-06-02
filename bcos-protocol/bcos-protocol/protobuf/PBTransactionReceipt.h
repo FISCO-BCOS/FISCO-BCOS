@@ -76,6 +76,10 @@ public:
         return m_cryptoSuite->hash(hashData);
     }
 
+
+    void setBlockHash(bcos::crypto::HashType const&) override {}
+    void setVersion(int32_t) override {}
+
 private:
     PBTransactionReceipt(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_t _version,
         u256 const& _gasUsed, const std::string_view& _contractAddress, LogEntriesPtr _logEntries,
