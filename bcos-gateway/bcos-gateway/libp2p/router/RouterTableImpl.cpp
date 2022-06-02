@@ -62,41 +62,43 @@ bool RouterTable::erase(std::set<std::string>& _unreachableNodes, std::string co
     // erase router-entry of the _p2pNodeID
     if (m_routerEntries.count(_p2pNodeID))
     {
-        // Note: reset the ttl to m_unreachableTTL, to notify that the _p2pNodeID is unreachable
+        // Note: reset the distance to m_unreachableDistance, to notify that the _p2pNodeID is
+        // unreachable
         auto entry = m_routerEntries.at(_p2pNodeID);
-        entry->setTTL(m_unreachableTTL);
+        entry->setDistance(m_unreachableDistance);
         entry->clearNextHop();
         _unreachableNodes.insert(entry->dstNode());
 
         SERVICE_ROUTER_LOG(INFO) << LOG_DESC("erase: make the router unreachable")
-                                 << LOG_KV("dst", _p2pNodeID) << LOG_KV("ttl", entry->ttl())
+                                 << LOG_KV("dst", _p2pNodeID)
+                                 << LOG_KV("distance", entry->distance())
                                  << LOG_KV("size", m_routerEntries.size());
         updated = true;
     }
     // update the router-entry with nextHop equal to _p2pNodeID to be unreachable
-    updateTTLForAllRouterEntries(_unreachableNodes, _p2pNodeID, m_unreachableTTL);
+    updateDistanceForAllRouterEntries(_unreachableNodes, _p2pNodeID, m_unreachableDistance);
     return updated;
 }
 
-void RouterTable::updateTTLForAllRouterEntries(
-    std::set<std::string>& _unreachableNodes, std::string const& _nextHop, int32_t _newTTL)
+void RouterTable::updateDistanceForAllRouterEntries(
+    std::set<std::string>& _unreachableNodes, std::string const& _nextHop, int32_t _newDistance)
 {
     for (auto& it : m_routerEntries)
     {
         auto entry = it.second;
         if (entry->nextHop() == _nextHop)
         {
-            auto oldTTL = entry->ttl();
-            entry->setTTL(_newTTL + 1);
-            if (entry->ttl() >= m_unreachableTTL)
+            auto oldDistance = entry->distance();
+            entry->setDistance(_newDistance + 1);
+            if (entry->distance() >= m_unreachableDistance)
             {
                 entry->clearNextHop();
                 _unreachableNodes.insert(entry->dstNode());
             }
             SERVICE_ROUTER_LOG(INFO)
-                << LOG_DESC("update entry since the nextHop ttl has been updated")
+                << LOG_DESC("update entry since the nextHop distance has been updated")
                 << LOG_KV("dst", entry->dstNode()) << LOG_KV("nextHop", _nextHop)
-                << LOG_KV("ttl", entry->ttl()) << LOG_KV("oldTTL", oldTTL)
+                << LOG_KV("distance", entry->distance()) << LOG_KV("oldDistance", oldDistance)
                 << LOG_KV("size", m_routerEntries.size());
         }
     }
@@ -107,7 +109,7 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
 {
     SERVICE_ROUTER_LOG(TRACE) << LOG_DESC("RouterTable: receive entry")
                               << LOG_KV("dst", _entry->dstNode())
-                              << LOG_KV("distance", _entry->ttl())
+                              << LOG_KV("distance", _entry->distance())
                               << LOG_KV("from", _generatedFrom);
     auto ret = updateDstNodeEntry(_generatedFrom, _entry);
     // the dst entry has not been updated
@@ -120,21 +122,22 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     {
         return false;
     }
-    // get the latest ttl
+    // get the latest distance
     auto currentEntry = m_routerEntries.at(_entry->dstNode());
-    auto newTTL = currentEntry->ttl();
-    if (newTTL >= m_unreachableTTL)
+    auto _newDistance = currentEntry->distance();
+    if (_newDistance >= m_unreachableDistance)
     {
         currentEntry->clearNextHop();
         _unreachableNodes.insert(_entry->dstNode());
     }
-    // the dst entry has updated, update the ttl of the router-entries with nextHop equal to dstNode
+    // the dst entry has updated, update the distance of the router-entries with nextHop equal to
+    // dstNode
     UpgradeGuard ul(l);
-    if (newTTL == 1)
+    if (_newDistance == 1)
     {
         currentEntry->clearNextHop();
     }
-    updateTTLForAllRouterEntries(_unreachableNodes, _entry->dstNode(), newTTL);
+    updateDistanceForAllRouterEntries(_unreachableNodes, _entry->dstNode(), _newDistance);
     return true;
 }
 
@@ -151,7 +154,7 @@ bool RouterTable::updateDstNodeEntry(
     if (!m_routerEntries.count(_entry->dstNode()))
     {
         UpgradeGuard ul(l);
-        _entry->incTTL(1);
+        _entry->incDistance(1);
         if (_generatedFrom != m_nodeID)
         {
             _entry->setNextHop(_generatedFrom);
@@ -159,50 +162,52 @@ bool RouterTable::updateDstNodeEntry(
         m_routerEntries.insert(std::make_pair(_entry->dstNode(), _entry));
         SERVICE_ROUTER_LOG(INFO) << LOG_DESC(
                                         "updateDstNodeEntry: insert new entry into the routerTable")
-                                 << LOG_KV("ttl", _entry->ttl()) << LOG_KV("dst", _entry->dstNode())
+                                 << LOG_KV("distance", _entry->distance())
+                                 << LOG_KV("dst", _entry->dstNode())
                                  << LOG_KV("nextHop", _entry->nextHop())
                                  << LOG_KV("size", m_routerEntries.size());
         return true;
     }
-    // discover smaller ttl
+    // discover smaller distance
     auto currentEntry = m_routerEntries.at(_entry->dstNode());
-    auto currentTTL = currentEntry->ttl();
-    auto ttl = _entry->ttl() + 1;
-    if (currentTTL > ttl)
+    auto currentDistance = currentEntry->distance();
+    auto distance = _entry->distance() + 1;
+    if (currentDistance > distance)
     {
         UpgradeGuard ul(l);
         if (_generatedFrom != m_nodeID)
         {
             currentEntry->setNextHop(_generatedFrom);
         }
-        currentEntry->setTTL(ttl);
-        SERVICE_ROUTER_LOG(INFO) << LOG_DESC(
-                                        "updateDstNodeEntry: Discover smaller ttl, update entry")
-                                 << LOG_KV("ttl", currentEntry->ttl())
-                                 << LOG_KV("oldTTL", currentTTL) << LOG_KV("dst", _entry->dstNode())
-                                 << LOG_KV("nextHop", _entry->nextHop())
-                                 << LOG_KV("size", m_routerEntries.size());
+        currentEntry->setDistance(distance);
+        SERVICE_ROUTER_LOG(INFO)
+            << LOG_DESC("updateDstNodeEntry: Discover smaller distance, update entry")
+            << LOG_KV("distance", currentEntry->distance())
+            << LOG_KV("oldDistance", currentDistance) << LOG_KV("dst", _entry->dstNode())
+            << LOG_KV("nextHop", _entry->nextHop()) << LOG_KV("size", m_routerEntries.size());
         return true;
     }
-    // the ttl information for the nextHop changed
+    // the distance information for the nextHop changed
     if (currentEntry->nextHop() == _generatedFrom)
     {
-        // ttl not updated
-        if (currentEntry->ttl() == ttl)
+        // distance not updated
+        if (currentEntry->distance() == distance)
         {
             return false;
         }
         // unreachable condition
-        if (currentEntry->ttl() >= m_unreachableTTL && ttl >= m_unreachableTTL)
+        if (currentEntry->distance() >= m_unreachableDistance && distance >= m_unreachableDistance)
         {
             return false;
         }
-        currentEntry->setTTL(ttl);
-        SERVICE_ROUTER_LOG(INFO)
-            << LOG_DESC(
-                   "updateDstNodeEntry: ttl of the nextHop Entry updated, update the current entry")
-            << LOG_KV("dst", currentEntry->dstNode()) << LOG_KV("nextHop", currentEntry->nextHop())
-            << LOG_KV("ttl", currentEntry->ttl()) << LOG_KV("size", m_routerEntries.size());
+        currentEntry->setDistance(distance);
+        SERVICE_ROUTER_LOG(INFO) << LOG_DESC(
+                                        "updateDstNodeEntry: distance of the nextHop Entry "
+                                        "updated, update the current entry")
+                                 << LOG_KV("dst", currentEntry->dstNode())
+                                 << LOG_KV("nextHop", currentEntry->nextHop())
+                                 << LOG_KV("distance", currentEntry->distance())
+                                 << LOG_KV("size", m_routerEntries.size());
         return true;
     }
     return false;
@@ -217,7 +222,7 @@ std::string RouterTable::getNextHop(std::string const& _nodeID)
         return emptyNextHop;
     }
     auto entry = m_routerEntries.at(_nodeID);
-    if (entry->ttl() >= m_unreachableTTL)
+    if (entry->distance() >= m_unreachableDistance)
     {
         return emptyNextHop;
     }
@@ -231,7 +236,7 @@ std::set<std::string> RouterTable::getAllReachableNode()
     for (auto const& it : m_routerEntries)
     {
         auto entry = it.second;
-        if (entry->ttl() < m_unreachableTTL)
+        if (entry->distance() < m_unreachableDistance)
         {
             reachableNodes.insert(entry->dstNode());
         }
