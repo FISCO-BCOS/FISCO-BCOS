@@ -39,14 +39,7 @@ public:
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_block(std::move(block)),
-        m_scheduler(scheduler),
-        m_startContextID(startContextID),
-        m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-        m_blockFactory(_blockFactory),
-        m_staticCall(staticCall)
-    {}
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory);
 
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
@@ -85,6 +78,8 @@ public:
     bool isCall() { return m_staticCall; }
     bool sysBlock() const { return m_isSysBlock; }
 
+    void start() { m_isRunning = true; }
+    void stop() { m_isRunning = false; }
 
 private:
     struct CommitStatus
@@ -93,6 +88,7 @@ private:
         std::atomic_size_t success = 0;
         std::atomic_size_t failed = 0;
         std::function<void(const CommitStatus&)> checkAndCommit;
+        mutable SharedMutex x_lock;
     };
     void batchNextBlock(std::function<void(Error::UniquePtr)> callback);
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
@@ -141,6 +137,7 @@ private:
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
+    int64_t m_schedulerTermId;
     size_t m_startContextID;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
@@ -153,6 +150,8 @@ private:
     bool m_hasPrepared = false;
     bool m_hasDAG = false;
     mutable SharedMutex x_dmcExecutorLock;
+
+    bool m_isRunning = false;
 };
 
 }  // namespace bcos::scheduler

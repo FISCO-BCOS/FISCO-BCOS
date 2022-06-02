@@ -85,3 +85,20 @@ void ExecutiveState::setResumeParam(CallParameters::UniquePtr pullParam)
     m_status = NEED_RESUME;
     m_executive->setExchangeMessage(std::move(pullParam));
 }
+
+
+void ExecutiveState::appendKeyLocks(std::vector<std::string> keyLocks)
+{
+    switch (getStatus())
+    {
+    case NEED_RUN:
+        std::copy(keyLocks.begin(), keyLocks.end(), std::back_inserter(m_input->keyLocks));
+        break;
+    case PAUSED:
+    case NEED_RESUME:
+        m_executive->appendResumeKeyLocks(std::move(keyLocks));
+        break;
+    case FINISHED:
+        break;
+    }
+}

@@ -22,6 +22,9 @@ class NodeController:
     def generate_all_config(self):
         return self.node_generator.generate_all_config(False)
 
+    def generate_all_executor_config(self):
+        return self.node_generator.generate_all_executor_config()
+
     def deploy_group_services(self):
         """
         deploy max node for all group
@@ -75,11 +78,29 @@ class NodeController:
             return False
         return True
 
+    def generate_all_executor_expand_config(self):
+        """
+        generate expand config
+        """
+        if self.node_generator.generate_all_executor_config() is False:
+            return False
+        return True
+
     def expand_and_deploy_all_nodes(self):
         """
         expand and deploy all nodes
         """
         if self.generate_all_expand_config() is False:
+            return False
+        if self.deploy_group_services() is False:
+            return False
+        return True
+
+    def expand_and_deploy_all_executors(self):
+        """
+        expand and deploy all executor
+        """
+        if self.generate_all_executor_expand_config() is False:
             return False
         if self.deploy_group_services() is False:
             return False
