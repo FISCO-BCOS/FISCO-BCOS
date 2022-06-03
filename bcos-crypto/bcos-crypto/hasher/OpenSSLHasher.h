@@ -6,7 +6,7 @@
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 
-namespace bcos::crypto::openssl
+namespace bcos::crypto::hasher::openssl
 {
 
 enum HasherType
@@ -115,4 +115,4 @@ static_assert(Hasher<OpenSSL_SHA3_256_Hasher>, "Assert OpenSSLHasher type");
 static_assert(Hasher<OpenSSL_SHA2_256_Hasher>, "Assert OpenSSLHasher type");
 static_assert(Hasher<OPENSSL_SM3_Hasher>, "Assert OpenSSLHasher type");
 
-}  // namespace bcos::crypto::openssl
+}  // namespace bcos::crypto::hasher::openssl

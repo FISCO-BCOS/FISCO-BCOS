@@ -5,7 +5,11 @@ namespace bcos::crypto
 {
 
 template <class Key>
-concept PrivateKey = TrivialObject<Key>;
+concept PrivateKey = requires(Key key)
+{
+    TrivialObject<decltype(key.value)>;
+    typename Key::type;
+};
 
 template <class Key>
 concept PublicKey = TrivialObject<Key>;

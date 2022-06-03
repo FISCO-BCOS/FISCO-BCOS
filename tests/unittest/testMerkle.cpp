@@ -1,4 +1,4 @@
-#include <bcos-crypto/interfaces/crypto/hasher/OpenSSLHasher.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-tool/Merkle.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
@@ -33,24 +33,14 @@ struct TestBinaryMerkleTrieFixture
 BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 
 template <size_t width>
-void testFixedWidthMerkle()
+void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHashes)
 {
-    for (auto count = 0; count < 64; ++count)
+    for (auto count = 0lu; count < std::size(inputHashes); ++count)
     {
-        std::vector<HashType> hashes(count);
+        std::span<HashType const> hashes(inputHashes.data(), count);
 
-#pragma omp parallel
-        {
-            crypto::openssl::OpenSSL_SHA3_256_Hasher hasher;
-#pragma omp for
-            for (decltype(count) i = 0; i < count; ++i)
-            {
-                hasher.update(i);
-                hashes[i] = hasher.final();
-            }
-        }
-
-        bcos::tool::Merkle<bcos::crypto::openssl::OpenSSL_SHA3_256_Hasher, HashType> trie;
+        bcos::tool::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType, width>
+            trie;
         BOOST_CHECK_THROW(
             trie.import(std::vector<HashType>{}), boost::wrapexcept<std::invalid_argument>);
 
@@ -85,16 +75,35 @@ void testFixedWidthMerkle()
     }
 }
 
+template <size_t i>
+constexpr void loopWidthTest(bcos::tool::InputRange<HashType> auto const& inputHashes)
+{
+    testFixedWidthMerkle<i>(inputHashes);
+
+    if constexpr (i > 2)
+    {
+        loopWidthTest<i - 1>(inputHashes);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(merkle)
 {
-    testFixedWidthMerkle<2>();
-    testFixedWidthMerkle<3>();
-    testFixedWidthMerkle<4>();
-    testFixedWidthMerkle<5>();
-    testFixedWidthMerkle<6>();
-    testFixedWidthMerkle<7>();
-    testFixedWidthMerkle<16>();
+    std::array<HashType, 128> hashes;
+#pragma omp parallel
+    {
+        crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
+#pragma omp for
+        for (auto i = 0lu; i < hashes.size(); ++i)
+        {
+            hasher.update(i);
+            hashes[i] = hasher.final();
+        }
+    }
+
+    loopWidthTest<32>(hashes);
 }
+
+BOOST_AUTO_TEST_CASE(performance) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

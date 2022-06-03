@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Exceptions.h"
-#include "bcos-crypto/interfaces/crypto/Concepts.h"
-#include <bcos-crypto/interfaces/crypto/hasher/Hasher.h>
+#include "bcos-crypto/Concepts.h"
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bits/ranges_algo.h>
 #include <boost/format.hpp>
 #include <boost/serialization/serialization.hpp>
@@ -20,18 +20,18 @@ namespace bcos::tool
 
 template <class Range, class HashType>
 concept InputRange =
-    std::ranges::random_access_range<Range> && bcos::crypto::TrivialObject<HashType> &&
+    std::ranges::random_access_range<Range> && bcos::crypto::trivial::Object<HashType> &&
     std::is_same_v<std::remove_cvref_t<std::ranges::range_value_t<Range>>, HashType>;
 
 template <class Range, class HashType>
 concept OutputRange = std::ranges::random_access_range<Range> &&
-    std::ranges::output_range<Range, HashType> && bcos::crypto::TrivialObject<HashType>;
+    std::ranges::output_range<Range, HashType> && bcos::crypto::trivial::Object<HashType>;
 
 template <class Range, class HashType>
 concept Proof =
     std::ranges::input_range<Range> && std::is_same_v<std::ranges::range_value_t<Range>, HashType>;
 
-template <bcos::crypto::Hasher HasherType, class HashType, size_t width = 2>
+template <bcos::crypto::hasher::Hasher HasherType, class HashType, size_t width = 2>
 class Merkle
 {
 public:
