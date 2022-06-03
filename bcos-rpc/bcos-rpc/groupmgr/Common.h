@@ -45,7 +45,8 @@ inline bcos::crypto::CryptoSuite::Ptr createCryptoSuite()
 inline bcos::crypto::CryptoSuite::Ptr createSMCryptoSuite()
 {
     auto hashImpl = std::make_shared<bcos::crypto::SM3>();
-    auto signatureImpl = std::make_shared<bcos::crypto::FastSM2Crypto>();
+    // auto signatureImpl = std::make_shared<bcos::crypto::FastSM2Crypto>(); //TODO: Fix fastsm2
+    auto signatureImpl = std::make_shared<bcos::crypto::SM2Crypto>();
     auto encryptImpl = std::make_shared<bcos::crypto::SM4Crypto>();
     return std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }

@@ -19,6 +19,8 @@
  * @author yujiechen
  */
 #pragma once
+
+#ifdef SM2_OPTIMIZE
 #include <wedpr-crypto/WedprUtilities.h>
 
 namespace bcos
@@ -38,3 +40,4 @@ int8_t fast_sm2_derive_public_key(
     const CInputBuffer* raw_private_key, COutputBuffer* output_public_key);
 }  // namespace crypto
 }  // namespace bcos
+#endif

@@ -93,7 +93,8 @@ void ProtocolInitializer::createCryptoSuite()
 void ProtocolInitializer::createSMCryptoSuite()
 {
     auto hashImpl = std::make_shared<SM3>();
-    auto signatureImpl = std::make_shared<FastSM2Crypto>();
+    // auto signatureImpl = std::make_shared<FastSM2Crypto>(); //TODO: fix fastsm2
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto encryptImpl = std::make_shared<SM4Crypto>();
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }
