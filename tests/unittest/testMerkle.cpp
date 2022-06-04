@@ -4,9 +4,11 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <future>
 #include <iterator>
 #include <ostream>
+#include <random>
 #include <stdexcept>
 
 using HashType = std::array<std::byte, 32>;
@@ -35,6 +37,9 @@ BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 template <size_t width>
 void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHashes)
 {
+    HashType emptyHash;
+    emptyHash.fill(std::byte(0));
+
     for (auto count = 0lu; count < std::size(inputHashes); ++count)
     {
         std::span<HashType const> hashes(inputHashes.data(), count);
@@ -52,20 +57,24 @@ void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHash
         else
         {
             BOOST_CHECK_NO_THROW(trie.import(std::as_const(hashes)));
-            // std::cout << trie;
 
-            HashType emptyHash;
             BOOST_CHECK_THROW(
                 trie.generateProof(emptyHash), boost::wrapexcept<std::invalid_argument>);
 
             for (auto& hash : hashes)
             {
                 auto proof = trie.generateProof(hash);
-                // std::cout << proof;
 
                 BOOST_CHECK(trie.verifyProof(proof, hash, trie.root()));
-
                 BOOST_CHECK(!trie.verifyProof(proof, emptyHash, trie.root()));
+
+                auto dis = std::uniform_int_distribution(0lu, proof.hashes.size() - 1);
+                std::mt19937 prng{std::random_device{}()};
+
+                auto index = dis(prng);
+                proof.hashes[index] = emptyHash;
+
+                BOOST_CHECK(!trie.verifyProof(proof, hash, trie.root()));
 
                 proof.hashes.clear();
                 BOOST_CHECK_THROW(trie.verifyProof(proof, emptyHash, trie.root()),
@@ -89,15 +98,11 @@ constexpr void loopWidthTest(bcos::tool::InputRange<HashType> auto const& inputH
 BOOST_AUTO_TEST_CASE(merkle)
 {
     std::array<HashType, 128> hashes;
-#pragma omp parallel
+    crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
+    for (auto i = 0lu; i < hashes.size(); ++i)
     {
-        crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
-#pragma omp for
-        for (auto i = 0lu; i < hashes.size(); ++i)
-        {
-            hasher.update(i);
-            hashes[i] = hasher.final();
-        }
+        hasher.update(i);
+        hashes[i] = hasher.final();
     }
 
     loopWidthTest<32>(hashes);
