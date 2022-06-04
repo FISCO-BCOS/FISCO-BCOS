@@ -18,5 +18,5 @@ target_compile_options(${GATEWAY_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-par
 if(ETCD)
     target_link_libraries(${GATEWAY_BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET} ${LEADER_ELECTION_TARGET})
 else()
-    target_link_libraries(${GATEWAY_BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET})
+    target_link_libraries(${GATEWAY_BINARY_NAME} bcos-crypto ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET})
 endif()

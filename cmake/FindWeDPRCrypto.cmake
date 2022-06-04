@@ -24,15 +24,6 @@ if(NOT WEDPR_CRYPTO_ROOT_DIR)
     INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-prefix/src/wedpr-crypto/third_party/include" "${WEDPR_CRYPTO_INSTALL}/include/wedpr-crypto"
   )
 
-  # ExternalProject_Add(wedpr-fisco-bcos
-  #   URL https://${URL_BASE}/WeBankBlockchain/WeDPR-Lab-Crypto/archive/0e3ca8614808825da4f91acc51e1031a5184119e.tar.gz
-  #   URL_HASH SHA1=dcbb69c96085ada1d107380b3771fd8e177ad207
-  #   CONFIGURE_COMMAND ""
-  #   BUILD_COMMAND cargo +nightly-2021-06-17 build --release
-  #     --manifest-path ${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-prefix/src/wedpr-crypto/ffi/ffi_c/ffi_c_fisco_bcos/Cargo.toml
-  #   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-prefix/src/wedpr-crypto/third_party/include" "${WEDPR_CRYPTO_INSTALL}/include/wedpr-crypto"
-  # )
-
   set(WEDPR_CRYPTO_INCLUDE_DIRS "${WEDPR_CRYPTO_INSTALL}/include/")
   set(WEDPR_CRYPTO_crypto_LIBRARIES "${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-prefix/src/wedpr-crypto/target/release/${CMAKE_STATIC_LIBRARY_PREFIX}ffi_c_crypto_binary${CMAKE_STATIC_LIBRARY_SUFFIX}")
   set(WEDPR_CRYPTO_fisco-bcos_LIBRARIES "${CMAKE_CURRENT_BINARY_DIR}/wedpr-crypto-prefix/src/wedpr-crypto/target/release/${CMAKE_STATIC_LIBRARY_PREFIX}ffi_c_fisco_bcos${CMAKE_STATIC_LIBRARY_SUFFIX}")

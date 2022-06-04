@@ -15,11 +15,11 @@
  *
  * @brief perf for bcos-crypto
  * @file perf_demo.cpp
- * @date 2021.04.07
- * @author yujiechen
+ * @date 2022.06.04
+ * @author yujiechen ancelmo
  */
 
-#include <bcos-crypto/interfaces/crypto/hasher/OpenSSLHasher.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -77,7 +77,7 @@ std::vector<bcos::h256> hashPerf(
 }
 
 std::vector<bcos::h256> hashingPerf(
-    bcos::crypto::Hasher auto& hasher, std::string_view _inputData, size_t _count)
+    bcos::crypto::hasher::Hasher auto& hasher, std::string_view _inputData, size_t _count)
 {
     std::vector<bcos::h256> result(_count);
 
@@ -124,7 +124,7 @@ void stTest(std::string_view inputData, size_t _count)
     auto hashImpl2 = std::make_shared<class Sha3>();
     auto sha3Old = hashPerf(hashImpl2, "SHA3", inputData, _count);
 
-    openssl::OpenSSL_SHA3_256_Hasher hasherSHA3;
+    hasher::openssl::OpenSSL_SHA3_256_Hasher hasherSHA3;
     auto sha3New = hashingPerf(hasherSHA3, inputData, _count);
 
     for (size_t i = 0; i < _count; ++i)
@@ -141,7 +141,7 @@ void stTest(std::string_view inputData, size_t _count)
     auto hashImpl3 = std::make_shared<SM3>();
     auto sm3Old = hashPerf(hashImpl3, "SM3", inputData, _count);
 
-    openssl::OPENSSL_SM3_Hasher hasherSM3;
+    hasher::openssl::OPENSSL_SM3_Hasher hasherSM3;
     auto sm3New = hashingPerf(hasherSM3, inputData, _count);
 
     for (size_t i = 0; i < _count; ++i)
@@ -157,7 +157,7 @@ void stTest(std::string_view inputData, size_t _count)
     auto hashImpl4 = std::make_shared<Sha256>();
     auto sha256Old = hashPerf(hashImpl4, "SHA256", inputData, _count);
 
-    openssl::OpenSSL_SHA2_256_Hasher hasherSHA2;
+    hasher::openssl::OpenSSL_SHA2_256_Hasher hasherSHA2;
     auto sha256New = hashingPerf(hasherSHA2, inputData, _count);
 
     for (size_t i = 0; i < _count; ++i)

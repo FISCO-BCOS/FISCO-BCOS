@@ -39,6 +39,7 @@ void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHash
 {
     HashType emptyHash;
     emptyHash.fill(std::byte(0));
+    auto seed = std::random_device{}();
 
     for (auto count = 0lu; count < std::size(inputHashes); ++count)
     {
@@ -69,10 +70,8 @@ void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHash
                 BOOST_CHECK(!trie.verifyProof(proof, emptyHash, trie.root()));
 
                 auto dis = std::uniform_int_distribution(0lu, proof.hashes.size() - 1);
-                std::mt19937 prng{std::random_device{}()};
-
-                auto index = dis(prng);
-                proof.hashes[index] = emptyHash;
+                std::mt19937 prng{seed};
+                proof.hashes[dis(prng)] = emptyHash;
 
                 BOOST_CHECK(!trie.verifyProof(proof, hash, trie.root()));
 

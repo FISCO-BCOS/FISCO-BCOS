@@ -1,5 +1,5 @@
-#include <bcos-crypto/interfaces/crypto/hasher/IPPCryptoHasher.h>
-#include <bcos-crypto/interfaces/crypto/hasher/OpenSSLHasher.h>
+#include <bcos-crypto/hasher/IPPCryptoHasher.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <boost/core/demangle.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
@@ -13,7 +13,7 @@
 #include <vector>
 
 using namespace bcos;
-using namespace bcos::crypto;
+using namespace bcos::crypto::hasher;
 
 template <Hasher HasherType>
 auto hasherTest(std::string_view name, std::ranges::random_access_range auto&& input,
