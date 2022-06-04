@@ -5,8 +5,6 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bits/ranges_algo.h>
 #include <boost/format.hpp>
-#include <boost/serialization/serialization.hpp>
-#include <boost/serialization/split_member.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <exception>
@@ -48,46 +46,6 @@ public:
     {
         std::vector<HashType> hashes;
         std::vector<size_t> levels;
-
-        BOOST_SERIALIZATION_SPLIT_MEMBER()
-
-        template <typename Archive>
-        void load(Archive& ar, [[maybe_unused]] const unsigned int version)
-        {
-            size_t inWidth = 0;
-            ar& inWidth;
-
-            checkWidth(inWidth);
-
-            ar& hashes;
-            ar& levels;
-        }
-
-        template <typename Archive>
-        void save(Archive& ar, [[maybe_unused]] const unsigned int version) const
-        {
-            ar& width;
-            ar& hashes;
-            ar& levels;
-        }
-
-        friend std::ostream& operator<<(std::ostream& stream, const Proof& proof)
-        {
-            auto range = std::ranges::subrange(proof.hashes.begin(), proof.hashes.begin());
-            size_t level = 0;
-            for (auto length : proof.levels)
-            {
-                range = {std::end(range), std::end(range) + length};
-                stream << "Level " << level;
-                for (auto& hash : range)
-                {
-                    stream << " " << hash;
-                }
-                stream << std::endl;
-                ++level;
-            }
-            return stream;
-        }
     };
 
     static bool verifyProof(const Proof& proof, HashType hash, const HashType& root)
@@ -209,27 +167,6 @@ public:
 
     auto empty() const { return m_nodes.empty() || m_levels.empty(); }
 
-    BOOST_SERIALIZATION_SPLIT_MEMBER()
-
-    template <typename Archive>
-    void load(Archive& ar, [[maybe_unused]] const unsigned int version)
-    {
-        decltype(width) inWidth;
-        ar& inWidth;
-        checkDepth<HasherType, HashType, width>(inWidth);
-
-        ar& m_nodes;
-        ar& m_levels;
-    }
-
-    template <typename Archive>
-    void save(Archive& ar, [[maybe_unused]] const unsigned int version) const
-    {
-        ar& width;
-        ar& m_nodes;
-        ar& m_levels;
-    }
-
     friend std::ostream& operator<<(std::ostream& stream, const Merkle& merkle)
     {
         auto range = std::ranges::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
@@ -247,6 +184,9 @@ public:
         }
         return stream;
     }
+
+    std::vector<HashType> m_nodes;
+    std::vector<typename decltype(m_nodes)::size_type> m_levels;
 
 private:
     auto getNodeSize(std::integral auto inputSize) const
@@ -300,9 +240,6 @@ private:
                     inWidth)
                     .str()});
     }
-
-    std::vector<HashType> m_nodes;
-    std::vector<typename decltype(m_nodes)::size_type> m_levels;
 };
 
 }  // namespace bcos::tool

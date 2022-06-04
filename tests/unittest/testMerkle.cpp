@@ -1,5 +1,6 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-tool/Merkle.h>
+#include <bcos-tool/MerkleSerialization.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
