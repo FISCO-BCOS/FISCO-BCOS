@@ -43,6 +43,10 @@ bool P2PMessageV2::encodeHeader(bytes& _buffer)
                           << LOG_KV("dstP2PNodeID length", m_dstP2PNodeID.size());
         return false;
     }
+    // ecode ttl
+    auto ttlData = boost::asio::detail::socket_ops::host_to_network_short(m_ttl);
+    _buffer.insert(_buffer.end(), (byte*)&ttlData, (byte*)&ttlData + 2);
+
     // encode srcP2PNodeID
     auto srcP2PNodeIDLen =
         boost::asio::detail::socket_ops::host_to_network_short(m_srcP2PNodeID.size());
@@ -65,6 +69,11 @@ ssize_t P2PMessageV2::decodeHeader(bytesConstRef _buffer)
         return offset;
     }
     ssize_t length = _buffer.size();
+    // decode ttl
+    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
+    m_ttl = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+
+    offset += 2;
     CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
     // decode srcP2PNodeID, the length of srcP2PNodeID is 2-bytes
     uint16_t srcP2PNodeIDLen =
