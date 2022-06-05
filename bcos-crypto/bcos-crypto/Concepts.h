@@ -27,7 +27,8 @@ namespace bcos::crypto::trivial
 {
 
 template <class Object>
-concept Value = std::is_trivial_v<std::remove_cvref_t<Object>>;
+concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> &&
+    !std::is_pointer_v<std::remove_cvref_t<Object>>;
 
 #if (defined __clang__) && (__clang_major__ < 15)
 template <class Object>

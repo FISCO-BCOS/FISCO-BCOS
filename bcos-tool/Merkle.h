@@ -13,7 +13,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace bcos::tool
+namespace bcos::tool::merkle
 {
 
 template <class Range, class HashType>
@@ -167,24 +167,6 @@ public:
 
     auto empty() const { return m_nodes.empty() || m_levels.empty(); }
 
-    friend std::ostream& operator<<(std::ostream& stream, const Merkle& merkle)
-    {
-        auto range = std::ranges::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
-        size_t level = 0;
-        for (auto length : merkle.m_levels)
-        {
-            range = {std::end(range), std::end(range) + length};
-            stream << "Level " << level;
-            for (auto& hash : range)
-            {
-                stream << " " << hash;
-            }
-            stream << std::endl;
-            ++level;
-        }
-        return stream;
-    }
-
     std::vector<HashType> m_nodes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
 
@@ -242,4 +224,4 @@ private:
     }
 };
 
-}  // namespace bcos::tool
+}  // namespace bcos::tool::merkle

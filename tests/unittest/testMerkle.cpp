@@ -3,6 +3,8 @@
 #include <bcos-tool/MerkleSerialization.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
@@ -31,12 +33,25 @@ namespace bcos::test
 {
 struct TestBinaryMerkleTrieFixture
 {
+    std::array<HashType, 128> hashes;
+
+    TestBinaryMerkleTrieFixture()
+    {
+        crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
+        std::mt19937 prng(std::random_device{}());
+
+        for (auto& element : hashes)
+        {
+            hasher.update(prng());
+            element = hasher.final();
+        }
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 
 template <size_t width>
-void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHashes)
+void testFixedWidthMerkle(bcos::tool::merkle::InputRange<HashType> auto const& inputHashes)
 {
     HashType emptyHash;
     emptyHash.fill(std::byte(0));
@@ -46,7 +61,8 @@ void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHash
     {
         std::span<HashType const> hashes(inputHashes.data(), count);
 
-        bcos::tool::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType, width>
+        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
+            width>
             trie;
         BOOST_CHECK_THROW(
             trie.import(std::vector<HashType>{}), boost::wrapexcept<std::invalid_argument>);
@@ -85,7 +101,7 @@ void testFixedWidthMerkle(bcos::tool::InputRange<HashType> auto const& inputHash
 }
 
 template <size_t i>
-constexpr void loopWidthTest(bcos::tool::InputRange<HashType> auto const& inputHashes)
+constexpr void loopWidthTest(bcos::tool::merkle::InputRange<HashType> auto const& inputHashes)
 {
     testFixedWidthMerkle<i>(inputHashes);
 
@@ -97,15 +113,17 @@ constexpr void loopWidthTest(bcos::tool::InputRange<HashType> auto const& inputH
 
 BOOST_AUTO_TEST_CASE(merkle)
 {
-    std::array<HashType, 128> hashes;
-    crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
-    for (auto i = 0lu; i < hashes.size(); ++i)
-    {
-        hasher.update(i);
-        hashes[i] = hasher.final();
-    }
-
     loopWidthTest<32>(hashes);
+}
+
+BOOST_AUTO_TEST_CASE(serialize)
+{
+    using MerkleType =
+        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
+            4>;
+    MerkleType trie1;
+    BOOST_CHECK_NO_THROW(trie1.import(hashes));
+    std::cout.operator<<(trie1) << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(performance) {}

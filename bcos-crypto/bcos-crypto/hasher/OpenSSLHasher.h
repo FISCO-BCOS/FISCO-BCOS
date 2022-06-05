@@ -1,14 +1,14 @@
 #pragma once
 
-#include "Hasher.h"
+#include "../Concepts.h"
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <span>
 #include <stdexcept>
 
 namespace bcos::crypto::hasher::openssl
 {
-
 enum HasherType
 {
     SM3_256,
@@ -17,11 +17,10 @@ enum HasherType
 };
 
 template <HasherType hasherType>
-class OpenSSLHasher : public HasherBase<OpenSSLHasher<hasherType>>
+class OpenSSLHasher
 {
 public:
-    OpenSSLHasher()
-      : HasherBase<OpenSSLHasher<hasherType>>(), m_mdCtx(EVP_MD_CTX_new()), m_init(false)
+    OpenSSLHasher() : m_mdCtx(EVP_MD_CTX_new()), m_init(false)
     {
         if (!m_mdCtx) [[unlikely]]
         {
@@ -33,39 +32,8 @@ public:
     OpenSSLHasher(OpenSSLHasher&&) = default;
     OpenSSLHasher& operator=(const OpenSSLHasher&) = delete;
     OpenSSLHasher& operator=(OpenSSLHasher&&) = default;
-    ~OpenSSLHasher() override = default;
+    ~OpenSSLHasher() = default;
 
-    void impl_update(std::span<std::byte const> in)
-    {
-        if (!m_init)
-        {
-            init();
-            m_init = true;
-        }
-        if (!EVP_DigestUpdate(m_mdCtx.get(), in.data(), in.size())) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
-        }
-    }
-
-    void impl_final(std::span<std::byte> out)
-    {
-        m_init = false;
-        if (out.size() < HASH_SIZE) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
-        }
-        if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
-            [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
-        }
-    }
-
-    constexpr static size_t impl_hashSize() noexcept { return HASH_SIZE; }
-
-
-private:
     void init()
     {
         auto md = chooseMD();
@@ -107,12 +75,56 @@ private:
     constexpr static size_t HASH_SIZE = 32;
 };
 
+template <bcos::crypto::hasher::openssl::HasherType type>
+void update(OpenSSLHasher<type>& hasher, bcos::crypto::trivial::Object auto&& in)
+{
+    if (!hasher.m_init)
+    {
+        hasher.init();
+        hasher.m_init = true;
+    }
+    auto view = bcos::crypto::trivial::toView(std::forward<decltype(in)>(in));
+
+    if (!EVP_DigestUpdate(hasher.m_mdCtx.get(), view.data(), view.size())) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
+    }
+}
+
+template <bcos::crypto::hasher::openssl::HasherType type>
+void final(OpenSSLHasher<type>& hasher, bcos::crypto::trivial::Object auto&& out)
+{
+    hasher.m_init = false;
+    if (out.size() < OpenSSLHasher<type>::HASH_SIZE) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+    }
+    auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
+
+    if (!EVP_DigestFinal(hasher.m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()),
+            nullptr)) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
+    }
+}
+
 using OpenSSL_SHA3_256_Hasher = OpenSSLHasher<SHA3_256>;
 using OpenSSL_SHA2_256_Hasher = OpenSSLHasher<SHA2_256>;
 using OPENSSL_SM3_Hasher = OpenSSLHasher<SM3_256>;
-
-static_assert(Hasher<OpenSSL_SHA3_256_Hasher>, "Assert OpenSSLHasher type");
-static_assert(Hasher<OpenSSL_SHA2_256_Hasher>, "Assert OpenSSLHasher type");
-static_assert(Hasher<OPENSSL_SM3_Hasher>, "Assert OpenSSLHasher type");
-
 }  // namespace bcos::crypto::hasher::openssl
+
+#include "Hasher.h"
+
+namespace bcos::crypto::hasher
+{
+
+// using bcos::crypto::hasher::openssl::final;
+// using bcos::crypto::hasher::openssl::update;
+
+static_assert(
+    Hasher<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher>, "Assert OpenSSLHasher type");
+static_assert(
+    Hasher<bcos::crypto::hasher::openssl::OpenSSL_SHA2_256_Hasher>, "Assert OpenSSLHasher type");
+static_assert(
+    Hasher<bcos::crypto::hasher::openssl::OPENSSL_SM3_Hasher>, "Assert OpenSSLHasher type");
+}  // namespace bcos::crypto::hasher

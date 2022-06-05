@@ -25,40 +25,36 @@
 #include <boost/test/unit_test.hpp>
 #include <iterator>
 #include <string>
+#include <type_traits>
 
-using namespace bcos;
-using namespace crypto;
 using namespace bcos::crypto::hasher;
 
 namespace bcos::test
 {
 
-BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture)
-BOOST_AUTO_TEST_CASE(testSHA256)
+using HashType = std::array<std::byte, 32>;
+
+BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture) BOOST_AUTO_TEST_CASE(testSHA256)
 {
     std::string a = "arg";
 
     openssl::OpenSSL_SHA3_256_Hasher hash1;
-    hash1.update(a);
-    hash1.update("abcdefg");
-    hash1.update(100);
+    update(hash1, a);
+    update(hash1, "abcdefg");
+    update(hash1, 100);
 
-    auto h1 = hash1.final();
-    auto h2 = openssl::OpenSSL_SHA3_256_Hasher{}.update(a).update("abcdefg").update(100).final();
+    HashType h1;
+    final(hash1, h1);
 
-    BOOST_CHECK_EQUAL(h1, h2);
-}
+    openssl::OpenSSL_SHA3_256_Hasher hash2;
+    update(hash2, a);
+    char s[] = "abcdefg";
+    update(hash2, s);
+    auto b = 100;
+    update(hash2, b);
 
-BOOST_AUTO_TEST_CASE(opensslKeccak256)
-{
-    std::string str = "hash12345";
-    std::string str1 = "hash12345";
-
-    openssl::OpenSSL_SHA3_256_Hasher hash1;
-    hash1.update(str1);
-
-    auto h1 = hash1.final();
-    auto h2 = openssl::OpenSSL_SHA3_256_Hasher{}.calculate(str1);
+    HashType h2;
+    final(hash2, h2);
 
     BOOST_CHECK_EQUAL(h1, h2);
 }
@@ -70,37 +66,36 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     bcos::h256 h(100);
     std::span<byte const> hView(h.data(), h.size);
 
-    auto hash = openssl::OpenSSL_SHA3_256_Hasher{}
-                    .update(100)
-                    .update(a)
-                    .update(view)
-                    .update(hView)
-                    .update("bbbc")
-                    .final();
+    openssl::OpenSSL_SHA3_256_Hasher hasher1;
+    update(hasher1, 100);
+    update(hasher1, a);
+    update(hasher1, view);
+    update(hasher1, hView);
+    update(hasher1, "bbbc");
+
+    HashType hash;
+    final(hasher1, hash);
 
     decltype(hash) emptyHash;
+    emptyHash.fill(std::byte('0'));
     BOOST_CHECK_NE(hash, emptyHash);
 
     std::string a1 = "str123456789012345678901234567890";
     view = a1;
     char by[] = "bbbc";
     int be = 100;
-    auto hash2 = openssl::OpenSSL_SHA3_256_Hasher{}
-                     .update(be)
-                     .update(a1)
-                     .update(view)
-                     .update(std::span((const byte*)h.data(), h.size))
-                     .update(by)
-                     .final();
+
+    openssl::OpenSSL_SHA3_256_Hasher hasher2;
+    update(hasher2, be);
+    update(hasher2, a1);
+    update(hasher2, view);
+    update(hasher2, std::span((const byte*)h.data(), h.size));
+    update(hasher2, by);
+
+    HashType hash2;
+    final(hasher2, hash2);
 
     BOOST_CHECK_EQUAL(hash, hash2);
-
-    std::vector<std::string> strList;
-    strList.emplace_back("hello world!");
-
-    std::vector<std::vector<std::string>> multiStrList;
-
-    // openssl::OpenSSL_SHA3_256_Hasher{}.update(multiStrList).final();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
