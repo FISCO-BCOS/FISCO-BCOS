@@ -62,12 +62,11 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) {
-        if (_v > (uint32_t)(g_BCOSConfig.maxSupportedVersion()) ||
-            _v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
+        if (_v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
         {
             std::stringstream errorMsg;
-            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
-                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
+            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) +
+                                 " failed for lower than min_supported_version")
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
             PRECOMPILED_LOG(WARNING) << errorMsg.str() << LOG_KV("setValue", _v);
             BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
