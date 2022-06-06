@@ -121,6 +121,8 @@ ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
         offset += 2;
 
         CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + nodeIDLength, length);
+        bytes emptyBuffer;
+        m_srcNodeID->swap(emptyBuffer);
         m_srcNodeID->insert(
             m_srcNodeID->begin(), (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
         offset += nodeIDLength;
@@ -171,7 +173,8 @@ bool P2PMessage::encodeHeader(bytes& _buffer)
 
 bool P2PMessage::encode(bytes& _buffer)
 {
-    _buffer.clear();
+    bytes emptyBuffer;
+    _buffer.swap(emptyBuffer);
     if (!encodeHeader(_buffer))
     {
         return false;

@@ -283,12 +283,32 @@ void ServiceV2::onMessage(NetworkException _e, SessionFace::Ptr _session, Messag
         SERVICE_LOG(TRACE) << LOG_DESC("onMessage") << LOG_KV("from", p2pMsg->srcP2PNodeID())
                            << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                            << LOG_KV("type", p2pMsg->packetType())
-                           << LOG_KV("rsp", p2pMsg->isRespPacket())
+                           << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
                            << LOG_KV("payLoadSize", p2pMsg->payload()->size());
         Service::onMessage(_e, _session, _message, _p2pSessionWeakPtr);
         return;
     }
     // forward the message again
+    auto ttl = p2pMsg->ttl();
+    if (ttl <= 0)
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("onMessage: expired ttl")
+                             << LOG_KV("from", p2pMsg->srcP2PNodeID())
+                             << LOG_KV("dst", p2pMsg->dstP2PNodeID())
+                             << LOG_KV("type", p2pMsg->packetType())
+                             << LOG_KV("rsp", p2pMsg->isRespPacket())
+                             << LOG_KV("payLoadSize", p2pMsg->payload()->size())
+                             << LOG_KV("ttl", ttl);
+        return;
+    }
+    p2pMsg->setTTL(ttl - 1);
+    SERVICE_LOG(TRACE) << LOG_DESC("onMessage: asyncSendMessageByNodeIDWithMsgForward")
+                       << LOG_KV("from", p2pMsg->srcP2PNodeID())
+                       << LOG_KV("dst", p2pMsg->dstP2PNodeID())
+                       << LOG_KV("type", p2pMsg->packetType())
+                       << LOG_KV("rsp", p2pMsg->isRespPacket())
+                       << LOG_KV("payLoadSize", p2pMsg->payload()->size())
+                       << LOG_KV("ttl", p2pMsg->ttl());
     asyncSendMessageByNodeIDWithMsgForward(p2pMsg, nullptr);
 }
 
