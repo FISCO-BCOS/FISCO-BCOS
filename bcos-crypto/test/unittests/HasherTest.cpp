@@ -63,14 +63,13 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     std::span<byte const> hView(h.data(), h.size);
 
     openssl::OpenSSL_SHA3_256_Hasher hasher1;
-    update(hasher1, 100);
-    update(hasher1, a);
-    update(hasher1, view);
-    update(hasher1, hView);
-    update(hasher1, "bbbc");
+    hasher1.update(100);
+    hasher1.update(a);
+    hasher1.update(view);
+    hasher1.update(hView);
+    hasher1.update("bbbc");
 
-    HashType hash;
-    final(hasher1, hash);
+    auto hash = final(hasher1);
 
     decltype(hash) emptyHash;
     emptyHash.fill(std::byte('0'));
@@ -82,14 +81,13 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     int be = 100;
 
     openssl::OpenSSL_SHA3_256_Hasher hasher2;
-    update(hasher2, be);
-    update(hasher2, a1);
-    update(hasher2, view);
-    update(hasher2, std::span((const byte*)h.data(), h.size));
-    update(hasher2, by);
+    hasher2.update(be);
+    hasher2.update(a1);
+    hasher2.update(view);
+    hasher2.update(std::span((const byte*)h.data(), h.size));
+    hasher2.update(by);
 
-    HashType hash2;
-    final(hasher2, hash2);
+    auto hash2 = final(hasher2);
 
     BOOST_CHECK_EQUAL(hash, hash2);
 }

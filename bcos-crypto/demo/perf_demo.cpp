@@ -88,10 +88,10 @@ std::vector<bcos::h256> hashingPerf(
 
     for (size_t i = 0; i < _count; i++)
     {
-        update(hasher, _inputData);
+        hasher.update(_inputData);
         std::span<std::byte> view{
             (std::byte*)result[i].data(), (std::span<std::byte>::size_type)result[i].size};
-        final(hasher, view);
+        hasher.final(view);
     }
 
     std::cout << "input data size: " << (double)_inputData.size() / 1000.0
