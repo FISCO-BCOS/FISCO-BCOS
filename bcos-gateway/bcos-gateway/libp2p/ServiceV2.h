@@ -102,7 +102,7 @@ protected:
     std::map<std::string, uint32_t> m_node2Seq;
     mutable SharedMutex x_node2Seq;
 
-    const int c_unreachableTTL = 10;
+    const int c_unreachableDistance = 10;
 
     // called when the given node unreachable
     std::vector<std::function<void(std::string)>> m_unreachableHandlers;

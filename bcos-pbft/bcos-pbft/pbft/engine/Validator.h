@@ -173,7 +173,7 @@ public:
 
     void setVerifyCompletedHook(std::function<void()> _hook) override
     {
-        WriteGuard l(x_verifyCompletedHook);
+        RecursiveGuard l(x_verifyCompletedHook);
         m_verifyCompletedHook = _hook;
     }
 
@@ -194,26 +194,25 @@ protected:
 
     void triggerVerifyCompletedHook()
     {
-        ReadGuard l(x_verifyCompletedHook);
+        RecursiveGuard l(x_verifyCompletedHook);
         if (!m_verifyCompletedHook)
         {
             return;
         }
+        auto callback = m_verifyCompletedHook;
+        m_verifyCompletedHook = nullptr;
         auto self = std::weak_ptr<TxsValidator>(shared_from_this());
-        m_worker->enqueue([self]() {
+        m_worker->enqueue([self, callback]() {
             auto validator = self.lock();
             if (!validator)
             {
                 return;
             }
-            UpgradableGuard l(validator->x_verifyCompletedHook);
-            if (!validator->m_verifyCompletedHook)
+            if (!callback)
             {
                 return;
             }
-            validator->m_verifyCompletedHook();
-            UpgradeGuard ul(l);
-            validator->m_verifyCompletedHook = nullptr;
+            callback();
         });
     }
     virtual bool insertResettingProposal(bcos::crypto::HashType const& _hash)
@@ -239,7 +238,7 @@ protected:
     mutable SharedMutex x_resettingProposals;
 
     std::function<void()> m_verifyCompletedHook = nullptr;
-    mutable SharedMutex x_verifyCompletedHook;
+    mutable RecursiveMutex x_verifyCompletedHook;
 };
 }  // namespace consensus
 }  // namespace bcos

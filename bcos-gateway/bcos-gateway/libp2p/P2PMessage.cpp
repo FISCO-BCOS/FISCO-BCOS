@@ -27,16 +27,6 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
 
-#define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
-    do                                                                                       \
-    {                                                                                        \
-        if ((offset) > (length))                                                             \
-        {                                                                                    \
-            throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
-                                    " ,length: " + std::to_string(length));                  \
-        }                                                                                    \
-    } while (0);
-
 bool P2PMessageOptions::encode(bytes& _buffer)
 {
     // parameters check
@@ -131,6 +121,8 @@ ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
         offset += 2;
 
         CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + nodeIDLength, length);
+        bytes emptyBuffer;
+        m_srcNodeID->swap(emptyBuffer);
         m_srcNodeID->insert(
             m_srcNodeID->begin(), (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
         offset += nodeIDLength;
@@ -181,7 +173,8 @@ bool P2PMessage::encodeHeader(bytes& _buffer)
 
 bool P2PMessage::encode(bytes& _buffer)
 {
-    _buffer.clear();
+    bytes emptyBuffer;
+    _buffer.swap(emptyBuffer);
     if (!encodeHeader(_buffer))
     {
         return false;
@@ -267,6 +260,8 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
         offset += optionsOffset;
     }
 
+    uint32_t length = _buffer.size();
+    CHECK_OFFSET_WITH_THROW_EXCEPTION(m_length, length);
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // payload
     m_payload = std::make_shared<bytes>(data.begin(), data.end());

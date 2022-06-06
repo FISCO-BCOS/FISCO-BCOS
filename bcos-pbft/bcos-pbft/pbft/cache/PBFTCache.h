@@ -125,6 +125,7 @@ public:
         m_submitted.store(false);
         m_precommitted.store(false);
         m_checkpointProposal = nullptr;
+        m_timer->stop();
     }
 
 protected:

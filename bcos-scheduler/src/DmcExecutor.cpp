@@ -26,7 +26,7 @@ bool DmcExecutor::prepare()
 #ifdef DMC_TRACE_LOG_ENABLE
     // logging
     m_executivePool.forEach(MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
-        DMC_LOG(TRACE) << " 1.PendingMsg: \t [--] " << executiveState->toString() << std::endl;
+        DMC_LOG(TRACE) << " 1.PendingMsg: \t\t [--] " << executiveState->toString() << std::endl;
         return true;
     });
 #endif
@@ -35,23 +35,12 @@ bool DmcExecutor::prepare()
     m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_PREPARE,
         [this](int64_t contextID, ExecutiveState::Ptr executiveState) {
             auto hint = handleExecutiveMessage(executiveState);
-            switch (hint)
-            {
-            case MessageHint::NEED_SEND:
-            case MessageHint::NEED_SCHEDULE_OUT:
-            case MessageHint::LOCKED:
-            case MessageHint::END:
-            {
+            m_executivePool.markAs(contextID, hint);
+
 #ifdef DMC_TRACE_LOG_ENABLE
-                DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " "
-                               << ExecutivePool::toString(hint) << std::endl;
+            DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " "
+                           << ExecutivePool::toString(hint) << std::endl;
 #endif
-                m_executivePool.markAs(contextID, hint);
-                break;
-            }
-            default:
-                break;
-            }
             return true;
         });
 
@@ -87,7 +76,7 @@ bool DmcExecutor::unlockPrepare()
                     message->from(), message->keyLockAcquired(), contextID, seq))
             {
 #ifdef DMC_TRACE_LOG_ENABLE
-                DMC_LOG(TRACE) << "Waiting key, contract: " << contextID << " | " << seq << " | "
+                DMC_LOG(TRACE) << " Waiting key, contract: " << contextID << " | " << seq << " | "
                                << message->from()
                                << " keyLockAcquired: " << toHex(message->keyLockAcquired())
                                << std::endl;
@@ -96,7 +85,7 @@ bool DmcExecutor::unlockPrepare()
             else
             {
 #ifdef DMC_TRACE_LOG_ENABLE
-                DMC_LOG(TRACE) << "Wait key lock success, " << contextID << " | " << seq << " | "
+                DMC_LOG(TRACE) << " Wait key lock success, " << contextID << " | " << seq << " | "
                                << message->from()
                                << " keyLockAcquired: " << toHex(message->keyLockAcquired())
                                << std::endl;
@@ -204,7 +193,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             message->setKeyLocks(std::move(keyLocks));
 #ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " 4.SendToExecutor:\t >>>> " << executiveState->toString()
-                           << " >>>> flowAddr:" << m_contractAddress << std::endl;
+                           << " >>>> [" << m_name << "]:" << m_contractAddress << std::endl;
 #endif
             messages->push_back(std::move(message));
 
@@ -240,8 +229,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 if (error)
                 {
-                    SCHEDULER_LOG(ERROR)
-                        << "Execute transaction error: " << boost::diagnostic_information(*error);
+                    SCHEDULER_LOG(ERROR) << "Execute transaction error: " << error->errorMessage();
 
                     callback(std::move(error), ERROR);
                 }
@@ -261,6 +249,9 @@ void DmcExecutor::handleCreateMessage(ExecutiveState::Ptr executiveState)
 
     if (message->type() == protocol::ExecutionMessage::SEND_BACK)
     {
+        // must clear callstack
+        executiveState->callStack = std::stack<int64_t, std::list<int64_t>>();
+
         if (message->transactionHash() != h256(0))
         {
             message->setType(protocol::ExecutionMessage::TXHASH);
@@ -333,17 +324,18 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::REVERT:
     {
         executiveState->callStack.pop();
-        // Empty stack, execution is finished
         if (executiveState->callStack.empty())
         {
+            // Empty stack, execution is finished
             f_onTxFinished(std::move(message));
             return MessageHint::END;
         }
-
-        message->setSeq(executiveState->callStack.top());
-        message->setCreate(false);
-
-        return MessageHint::NEED_SEND;
+        else
+        {
+            message->setSeq(executiveState->callStack.top());
+            message->setCreate(false);
+            return MessageHint::NEED_SEND;
+        }
     }
         // Retry type, send again
     case protocol::ExecutionMessage::KEY_LOCK:
@@ -381,8 +373,8 @@ void DmcExecutor::handleExecutiveOutputs(
         ExecutiveState::Ptr executiveState = m_executivePool.get(contextID);
         executiveState->message = std::move(output);
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " 5.RevFromExecutor: <<<< addr:" << m_contractAddress << " <<<< "
-                       << executiveState->toString() << std::endl;
+        DMC_LOG(TRACE) << " 5.RevFromExecutor: <<<< [" << m_name << "]:" << m_contractAddress
+                       << " <<<< " << executiveState->toString() << std::endl;
 #endif
 
         if (to == m_contractAddress)

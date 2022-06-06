@@ -27,7 +27,7 @@
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-scheduler/src/SchedulerFactory.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
@@ -42,14 +42,28 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerSeq)
+    {
+        bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
+            std::move(storage), executionMessageFactory, std::move(blockFactory),
+            std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm);
+
+        return factory.build(schedulerSeq);
+    }
+
+    static bcos::scheduler::SchedulerFactory::Ptr buildFactory(
+        bcos::scheduler::ExecutorManager::Ptr executorManager,
+        bcos::ledger::LedgerInterface::Ptr _ledger,
+        bcos::storage::TransactionalStorageInterface::Ptr storage,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
     {
-        auto scheduler = std::make_shared<scheduler::SchedulerImpl>(std::move(executorManager),
+        return std::make_shared<bcos::scheduler::SchedulerFactory>(std::move(executorManager),
             std::move(_ledger), std::move(storage), executionMessageFactory,
             std::move(blockFactory), std::move(transactionSubmitResultFactory), std::move(hashImpl),
             isAuthCheck, isWasm);
-        scheduler->fetchGasLimit();
-        return scheduler;
     }
 };
 }  // namespace bcos::initializer
