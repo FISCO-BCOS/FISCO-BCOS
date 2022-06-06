@@ -48,6 +48,7 @@ public:
         initPrecompiled();
         assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);
+        m_schedule = BCOSWASMSchedule;
     }
 
     ~WasmTransactionExecutor() override = default;

@@ -128,8 +128,8 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
 {
     auto blockVersion = currentHeader->version();
-    auto vmSchedule = FiscoBcosScheduleV4;
-    if (blockVersion > (int32_t)bcos::protocol::Version::RC4_VERSION)
+    auto vmSchedule = m_schedule;
+    if (blockVersion > (int32_t)bcos::protocol::Version::RC4_VERSION && !m_isWasm)
     {
         vmSchedule = FiscoBcosScheduleV5;
     }
@@ -144,8 +144,8 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     // upgrade the vmSchedule
-    auto vmSchedule = FiscoBcosScheduleV4;
-    if (blockVersion > (int32_t)bcos::protocol::Version::RC4_VERSION)
+    auto vmSchedule = m_schedule;
+    if (blockVersion > (int32_t)bcos::protocol::Version::RC4_VERSION && !m_isWasm)
     {
         vmSchedule = FiscoBcosScheduleV5;
     }
