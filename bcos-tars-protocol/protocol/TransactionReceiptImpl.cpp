@@ -87,6 +87,12 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
         boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
     hashImpl->update(hashContext,
         bcos::bytesConstRef((bcos::byte*)(&blockNumber), sizeof(blockNumber) / sizeof(uint8_t)));
+    // string stateRoot: 8
+    if (hashFields.version >= (int32_t)bcos::protocol::Version::V3_0_VERSION)
+    {
+        hashImpl->update(hashContext, bcos::bytesConstRef((bcos::byte*)hashFields.stateRoot.data(),
+                                          hashFields.stateRoot.size()));
+    }
     // calculate the hash
     auto hashResult = hashImpl->final(hashContext);
     m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
@@ -100,4 +106,19 @@ bcos::u256 TransactionReceiptImpl::gasUsed() const
         return boost::lexical_cast<bcos::u256>(m_inner()->data.gasUsed);
     }
     return {};
+}
+
+
+void TransactionReceiptImpl::setStateRoot(bcos::crypto::HashType const& _stateRoot)
+{
+    m_inner()->data.stateRoot.assign(_stateRoot.begin(), _stateRoot.end());
+    std::vector<tars::Char> emptyBuffer;
+    m_inner()->dataHash.swap(emptyBuffer);
+}
+
+void TransactionReceiptImpl::setVersion(int32_t _version)
+{
+    m_inner()->data.version = _version;
+    std::vector<tars::Char> emptyBuffer;
+    m_inner()->dataHash.swap(emptyBuffer);
 }

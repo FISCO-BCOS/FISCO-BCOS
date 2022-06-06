@@ -144,8 +144,13 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
     }
-    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    auto version = blockContext->blockVersion();
+    // Not recommend gas calculation for system-contract
+    if (version <= (int32_t)(bcos::protocol::Version::RC4_VERSION))
+    {
+        gasPricer->updateMemUsed(_callParameters->m_execResult.size());
+        _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    }
     return _callParameters;
 }
 

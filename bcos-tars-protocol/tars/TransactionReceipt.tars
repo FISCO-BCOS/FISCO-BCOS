@@ -13,6 +13,7 @@ module bcostars {
         5 optional vector<byte> output;
         6 optional vector<LogEntry> logEntries;
         7 require long blockNumber;
+        8 optional string stateRoot;
     };
 
     struct TransactionReceipt {

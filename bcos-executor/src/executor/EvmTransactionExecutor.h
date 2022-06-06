@@ -44,11 +44,11 @@ public:
             isAuthCheck, keyPageSize, std::move(name))
     {
         m_isWasm = false;
-        m_schedule = FiscoBcosScheduleV4;
         initPrecompiled();
         assert(m_precompiledContract);
         assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);
+        m_schedule = FiscoBcosScheduleV4;
     }
 
     ~EvmTransactionExecutor() override = default;
