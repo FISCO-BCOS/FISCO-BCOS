@@ -107,7 +107,7 @@ public:
 
     void setMessage(std::string&& _message) override { m_inner()->message = std::move(_message); }
 
-    void setBlockHash(bcos::crypto::HashType const& _blockHash) override;
+    void setStateRoot(bcos::crypto::HashType const& _stateRoot) override;
     void setVersion(int32_t _version) override;
 
 private:

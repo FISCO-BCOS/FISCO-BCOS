@@ -135,6 +135,7 @@ class NodeConfig:
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
         self.service_list = []
+        self.key_page_size = 0
         self.__parse_node_service_config(node_type)
 
     def __parse_node_service_config(self, node_type):

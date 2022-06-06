@@ -51,7 +51,7 @@ public:
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
     virtual BlockNumber blockNumber() const = 0;
 
-    virtual void setBlockHash(bcos::crypto::HashType const& _blockHash) = 0;
+    virtual void setStateRoot(bcos::crypto::HashType const& _stateRoot) = 0;
     virtual void setVersion(int32_t _version) = 0;
     // additional information on transaction execution, no need to be involved in the hash
     // calculation

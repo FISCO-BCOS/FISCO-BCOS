@@ -153,6 +153,7 @@ class NodeConfigGenerator:
             ini_config.remove_option(storage_section, "data_path")
         ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
+        ini_config[storage_section]["key_page_size"] = node_config.key_page_size
 
     def __update_storage_security_info(self, ini_config, node_config, node_type):
         """

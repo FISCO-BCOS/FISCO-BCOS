@@ -19,6 +19,8 @@
  */
 #include "Sealer.h"
 #include "Common.h"
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
@@ -136,7 +138,9 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setConsensusWeights(std::move(weightList));
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
     // set the version
-    _block->blockHeader()->setVersion(m_sealerConfig->consensus()->compatibilityVersion());
+    auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
+        (uint32_t)g_BCOSConfig.maxSupportedVersion());
+    _block->blockHeader()->setVersion(version);
 
     auto encodedData = std::make_shared<bytes>();
     _block->encode(*encodedData);
@@ -145,7 +149,8 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("curNum", m_sealingManager->currentNumber())
                    << LOG_KV("hash", _block->blockHeader()->hash().abridged())
                    << LOG_KV("sysTxs", _containSysTxs)
-                   << LOG_KV("txsSize", _block->transactionsHashSize());
+                   << LOG_KV("txsSize", _block->transactionsHashSize())
+                   << LOG_KV("version", version);
     m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(*encodedData),
         _block->blockHeader()->number(), _block->blockHeader()->hash(),
         [_block](Error::Ptr _error) {

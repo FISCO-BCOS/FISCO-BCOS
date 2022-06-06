@@ -80,13 +80,16 @@ enum ProtocolVersion : uint32_t
 };
 enum class Version : uint32_t
 {
-    V3_0_0_VERSION = 0x03000000,
+    V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = RC4_VERSION,
+    MAX_VERSION = V3_0_VERSION,
 };
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
-const std::string V3_0_0_VERSION_STR = "3.0.0";
+const std::string V3_0_VERSION_STR = "3.0.0";
+
+const std::string RC_VERSION_PREFIX = "3.0.0-rc";
+
 const Version DEFAULT_VERSION = bcos::protocol::Version::RC4_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
@@ -98,8 +101,8 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version cons
     case bcos::protocol::Version::RC4_VERSION:
         _out << RC4_VERSION_STR;
         break;
-    case bcos::protocol::Version::V3_0_0_VERSION:
-        _out << V3_0_0_VERSION_STR;
+    case bcos::protocol::Version::V3_0_VERSION:
+        _out << V3_0_VERSION_STR;
         break;
     default:
         _out << "Unknown";

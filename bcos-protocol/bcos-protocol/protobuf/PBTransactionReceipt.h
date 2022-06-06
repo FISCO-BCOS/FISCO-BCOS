@@ -77,7 +77,7 @@ public:
     }
 
 
-    void setBlockHash(bcos::crypto::HashType const&) override {}
+    void setStateRoot(bcos::crypto::HashType const&) override {}
     void setVersion(int32_t) override {}
 
 private:

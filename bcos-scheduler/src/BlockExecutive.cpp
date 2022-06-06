@@ -6,6 +6,7 @@
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
@@ -450,8 +451,6 @@ void BlockExecutive::asyncNotify(
         auto submitResult = m_transactionSubmitResultFactory->createTxSubmitResult();
         submitResult->setTransactionIndex(index);
         submitResult->setBlockHash(blockHash);
-        // set blockHash for the receipt
-        it.receipt->setBlockHash(blockHash);
         submitResult->setTxHash(it.transactionHash);
         submitResult->setStatus(it.receipt->status());
         submitResult->setTransactionReceipt(it.receipt);
@@ -742,6 +741,12 @@ void BlockExecutive::onDmcExecuteFinish(
             // Set result to m_block
             for (auto& it : m_executiveResults)
             {
+                auto version = m_block->blockHeaderConst()->version();
+                if (version >= (int32_t)bcos::protocol::Version::V3_0_VERSION)
+                {
+                    it.receipt->setStateRoot(hash);
+                    it.receipt->setVersion(version);
+                }
                 m_block->appendReceipt(it.receipt);
             }
             auto executedBlockHeader =
@@ -1075,7 +1080,6 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         output->newEVMContractAddress(),
         std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
         output->status(), output->takeData(), m_block->blockHeaderConst()->number());
-    receipt->setVersion(m_block->blockHeaderConst()->version());
     m_executiveResults[output->contextID() - m_startContextID].receipt = receipt;
 }
 
