@@ -39,22 +39,18 @@ BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture) BOOST_AUTO_TEST_CASE(tes
     std::string a = "arg";
 
     openssl::OpenSSL_SHA3_256_Hasher hash1;
-    update(hash1, a);
-    update(hash1, "abcdefg");
-    update(hash1, 100);
-
-    HashType h1;
-    final(hash1, h1);
+    hash1.update(a);
+    hash1.update("abcdefg");
+    hash1.update(100);
+    auto h1 = final(hash1);
 
     openssl::OpenSSL_SHA3_256_Hasher hash2;
-    update(hash2, a);
+    hash2.update(a);
     char s[] = "abcdefg";
-    update(hash2, s);
+    hash2.update(s);
     auto b = 100;
-    update(hash2, b);
-
-    HashType h2;
-    final(hash2, h2);
+    hash2.update(b);
+    auto h2 = final(hash2);
 
     BOOST_CHECK_EQUAL(h1, h2);
 }

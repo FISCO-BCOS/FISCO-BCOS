@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Concepts.h"
+#include "Hasher.h"
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -34,6 +35,8 @@ public:
     OpenSSLHasher& operator=(OpenSSLHasher&&) = default;
     ~OpenSSLHasher() = default;
 
+    constexpr static size_t HASH_SIZE = 32;
+
     void init()
     {
         auto md = chooseMD();
@@ -41,6 +44,37 @@ public:
         if (!EVP_DigestInit(m_mdCtx.get(), md)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestInit error!"});
+        }
+    }
+
+    void update(bcos::crypto::trivial::Object auto&& in)
+    {
+        if (!m_init)
+        {
+            init();
+            m_init = true;
+        }
+        auto view = bcos::crypto::trivial::toView(std::forward<decltype(in)>(in));
+
+        if (!EVP_DigestUpdate(m_mdCtx.get(), view.data(), view.size())) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
+        }
+    }
+
+    void final(bcos::crypto::trivial::Object auto&& out)
+    {
+        m_init = false;
+        if (out.size() < HASH_SIZE) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+        }
+        auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
+
+        if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()), nullptr))
+            [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
         }
     }
 
@@ -71,60 +105,14 @@ public:
 
     std::unique_ptr<EVP_MD_CTX, Deleter> m_mdCtx;
     bool m_init;
-
-    constexpr static size_t HASH_SIZE = 32;
 };
-
-template <bcos::crypto::hasher::openssl::HasherType type>
-void update(OpenSSLHasher<type>& hasher, bcos::crypto::trivial::Object auto&& in)
-{
-    if (!hasher.m_init)
-    {
-        hasher.init();
-        hasher.m_init = true;
-    }
-    auto view = bcos::crypto::trivial::toView(std::forward<decltype(in)>(in));
-
-    if (!EVP_DigestUpdate(hasher.m_mdCtx.get(), view.data(), view.size())) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
-    }
-}
-
-template <bcos::crypto::hasher::openssl::HasherType type>
-void final(OpenSSLHasher<type>& hasher, bcos::crypto::trivial::Object auto&& out)
-{
-    hasher.m_init = false;
-    if (out.size() < OpenSSLHasher<type>::HASH_SIZE) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
-    }
-    auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
-
-    if (!EVP_DigestFinal(hasher.m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()),
-            nullptr)) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
-    }
-}
 
 using OpenSSL_SHA3_256_Hasher = OpenSSLHasher<SHA3_256>;
 using OpenSSL_SHA2_256_Hasher = OpenSSLHasher<SHA2_256>;
 using OPENSSL_SM3_Hasher = OpenSSLHasher<SM3_256>;
+
+static_assert(Hasher<OpenSSL_SHA3_256_Hasher>, "Assert OpenSSLHasher type");
+static_assert(Hasher<OpenSSL_SHA2_256_Hasher>, "Assert OpenSSLHasher type");
+static_assert(Hasher<OPENSSL_SM3_Hasher>, "Assert OpenSSLHasher type");
+
 }  // namespace bcos::crypto::hasher::openssl
-
-#include "Hasher.h"
-
-namespace bcos::crypto::hasher
-{
-
-// using bcos::crypto::hasher::openssl::final;
-// using bcos::crypto::hasher::openssl::update;
-
-static_assert(
-    Hasher<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher>, "Assert OpenSSLHasher type");
-static_assert(
-    Hasher<bcos::crypto::hasher::openssl::OpenSSL_SHA2_256_Hasher>, "Assert OpenSSLHasher type");
-static_assert(
-    Hasher<bcos::crypto::hasher::openssl::OPENSSL_SM3_Hasher>, "Assert OpenSSLHasher type");
-}  // namespace bcos::crypto::hasher

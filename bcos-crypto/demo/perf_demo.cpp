@@ -19,13 +19,13 @@
  * @author yujiechen ancelmo
  */
 
-#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/hash/Sha3.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -88,11 +88,10 @@ std::vector<bcos::h256> hashingPerf(
 
     for (size_t i = 0; i < _count; i++)
     {
-        hasher.update(_inputData);
+        update(hasher, _inputData);
         std::span<std::byte> view{
             (std::byte*)result[i].data(), (std::span<std::byte>::size_type)result[i].size};
-
-        hasher.final(view);
+        final(hasher, view);
     }
 
     std::cout << "input data size: " << (double)_inputData.size() / 1000.0
