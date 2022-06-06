@@ -326,7 +326,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             SCHEDULER_LOG(INFO) << "CommitBlock success" << LOG_KV("block number", blockNumber)
                                 << LOG_KV("gas limit", m_gasLimit);
 
-            if (m_txNotifier)
+            // Note: block number = 0, means system deploy, and tx is not existed in txpool.
+            // So it should not exec tx notifier
+            if (m_txNotifier && blockNumber != 0)
             {
                 SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
                 frontBlock.asyncNotify(m_txNotifier,
@@ -566,7 +568,6 @@ void SchedulerImpl::asyncGetLedgerConfig(
                         default:
                             BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError,
                                 "Unknown type: " + boost::lexical_cast<std::string>(type)));
-                            break;
                         }
                     },
                     [&ledgerConfig](bcos::protocol::BlockNumber number) {
