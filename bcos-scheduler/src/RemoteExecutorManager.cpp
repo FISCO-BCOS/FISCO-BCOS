@@ -14,14 +14,14 @@
 using namespace bcos::scheduler;
 
 
-RemoteExecutorManager::EndPointMap buildEndPointMap(const vector<EndpointInfo>& endPointInfos)
+RemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInfo>& endPointInfos)
 {
-    RemoteExecutorManager::EndPointMap endPointMap =
-        std::make_shared<std::map<std::string, uint16_t>>();
+    RemoteExecutorManager::EndPointSet endPointSet =
+        std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
 
     if (endPointInfos.empty())
     {
-        return endPointMap;
+        return endPointSet;
     }
 
     for (const EndpointInfo& endPointInfo : endPointInfos)
@@ -30,31 +30,10 @@ RemoteExecutorManager::EndPointMap buildEndPointMap(const vector<EndpointInfo>& 
         {
             continue;  // ignore error endpoint info
         }
-        endPointMap->insert({endPointInfo.host(), endPointInfo.port()});
-    }
-    return endPointMap;
-}
 
-bool isSame(RemoteExecutorManager::EndPointMap a, RemoteExecutorManager::EndPointMap b)
-{
-    if (a->size() != b->size())
-    {
-        return false;
+        endPointSet->insert({endPointInfo.host(), endPointInfo.port()});
     }
-
-    if (a->empty() && b->empty())
-    {
-        return true;
-    }
-
-    for (auto hostAndPort : *a)
-    {
-        if ((*b)[hostAndPort.first] != hostAndPort.second)
-        {
-            return false;
-        }
-    }
-    return true;
+    return endPointSet;
 }
 
 void dumpEndPointsLog(
@@ -85,9 +64,9 @@ void RemoteExecutorManager::executeWorker()
     vector<EndpointInfo> inactiveEndPoints;
     proxy->tars_endpoints(activeEndPoints, inactiveEndPoints);
 
-    EndPointMap currentEndPointMap = buildEndPointMap(activeEndPoints);
+    EndPointSet currentEndPointMap = buildEndPointSet(activeEndPoints);
 
-    if (!isSame(m_endPointMap, currentEndPointMap))
+    if (*m_endPointSet != *currentEndPointMap)
     {
         dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
         update(currentEndPointMap);
@@ -98,12 +77,12 @@ void RemoteExecutorManager::executeWorker()
     }
 }
 
-void RemoteExecutorManager::update(EndPointMap endPointMap)
+void RemoteExecutorManager::update(EndPointSet endPointSet)
 {
     // update
     clear();
-    m_endPointMap = endPointMap;
-    for (auto hostAndPort : *m_endPointMap)
+    m_endPointSet = endPointSet;
+    for (auto hostAndPort : *m_endPointSet)
     {
         auto host = hostAndPort.first;
         auto port = hostAndPort.second;

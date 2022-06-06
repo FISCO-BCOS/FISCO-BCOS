@@ -1,4 +1,4 @@
-file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp)
+file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp)
 
 # cmake settings
 set(TEST_BINARY_NAME bcos-dispatcher-test)

@@ -196,7 +196,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
     }
 
-    if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("connect executor")
+                              << LOG_KV("nodeArchType", _nodeArchType);
+        executorManager->start();
+    }
+    else
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
                               << LOG_KV("nodeArchType", _nodeArchType);

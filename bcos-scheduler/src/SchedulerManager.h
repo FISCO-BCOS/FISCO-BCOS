@@ -67,7 +67,7 @@ public:
         SchedulerTerm next() { return SchedulerTerm(m_schedulerSeq); }
         int64_t getSchedulerTermID()
         {
-            int64_t id = m_schedulerSeq * 10e14 + m_executorSeq;
+            int64_t id = (m_schedulerSeq << 32) + m_executorSeq;
             if (id <= 0)
             {
                 BCOS_LOG(FATAL) << "SchedulerTermID overflow!"
@@ -93,7 +93,7 @@ private:
 
 private:
     SchedulerImpl::Ptr m_scheduler;
-    SchedulerImpl::Ptr m_oldScheduler;
+    SchedulerImpl::Ptr m_oldScheduler;  // TODO: no to use this
     SchedulerFactory::Ptr m_factory;
     SchedulerTerm m_schedulerTerm;
     RemoteExecutorManager::Ptr m_remoteExecutorManager;

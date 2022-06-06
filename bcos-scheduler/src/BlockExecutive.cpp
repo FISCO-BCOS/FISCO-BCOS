@@ -704,8 +704,13 @@ void BlockExecutive::onDmcExecuteFinish(
         std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
     m_currentTimePoint = now;
 
+    auto dmcChecksum = m_dmcRecorder->dumpAndClearChecksum();
+
     if (m_staticCall)
     {
+        DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "DMC execute for call finished."
+                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+
         // Set result to m_block
         for (auto& it : m_executiveResults)
         {
@@ -715,6 +720,9 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
+        DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "DMC execute for transaction finished."
+                      << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](
                            Error::UniquePtr error, crypto::HashType hash) {
@@ -1033,8 +1041,14 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         }
         auto executor = m_scheduler->executorManager()->dispatchExecutor(contractAddress);
         auto executorInfo = m_scheduler->executorManager()->getExecutorInfo(contractAddress);
+
+        if (!m_dmcRecorder)
+        {
+            m_dmcRecorder = std::make_shared<DmcStepRecorder>();
+        }
+
         auto dmcExecutor = std::make_shared<DmcExecutor>(executorInfo->name, contractAddress,
-            m_block, executor, m_keyLocks, m_scheduler->m_hashImpl);
+            m_block, executor, m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions
@@ -1082,6 +1096,9 @@ void BlockExecutive::serialPrepareExecutor()
     // Notice:
     // For the same DMC lock priority
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
+
+    // update DMC recorder for debugging
+    m_dmcRecorder->nextDmcRound();
 
     /// Handle normal message
     bool hasScheduleOutMessage;
