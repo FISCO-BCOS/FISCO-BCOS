@@ -189,7 +189,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     << "Executor load from backend storage, check storage blockNumber"
                     << LOG_KV("storageBlockNumber", storageBlockNumber)
                     << LOG_KV("requestBlockNumber", blockHeader->number()) << std::endl;
-                if (blockHeader->number() - storageBlockNumber != 1)
+                if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
                 {
                     auto fmt = boost::format(
                                    "[%] Block number mismatch in storage! request: %d, current in "
