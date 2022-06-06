@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Merkle.h"
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <boost/serialization/serialization.hpp>
 #include <iostream>
 
@@ -26,9 +27,7 @@ void serialize(Archive& ar, typename bcos::tool::merkle::Merkle<HasherType, Hash
 
 namespace std
 {
-template <bcos::crypto::hasher::Hasher HasherType, class HashType, size_t width = 2>
-ostream& operator<<(
-    ostream& stream, const bcos::tool::merkle::Merkle<HasherType, HashType, width>& merkle)
+ostream& operator<<(ostream& stream, bcos::tool::merkle::Merkle& merkle)
 {
     auto range = std::ranges::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
     size_t level = 0;

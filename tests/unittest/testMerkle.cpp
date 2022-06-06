@@ -43,7 +43,7 @@ struct TestBinaryMerkleTrieFixture
         for (auto& element : hashes)
         {
             hasher.update(prng());
-            element = hasher.final();
+            hasher.final(element);
         }
     }
 };
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(serialize)
             4>;
     MerkleType trie1;
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
-    std::cout.operator<<(trie1) << std::endl;
+    std::cout << trie1 << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(performance) {}

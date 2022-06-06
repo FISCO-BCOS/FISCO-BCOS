@@ -70,7 +70,7 @@ public:
                 {
                     hasher.update(rangeHash);
                 }
-                hash = hasher.final();
+                hasher.final(hash);
             }
         }
 
@@ -169,6 +169,9 @@ public:
 
     std::vector<HashType> m_nodes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
+
+    friend std::ostream& operator<<(std::ostream& stream, const bcos::tool::merkle::Merkle& merkle)
+    {}
 
 private:
     auto getNodeSize(std::integral auto inputSize) const
