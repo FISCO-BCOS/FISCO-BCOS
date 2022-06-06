@@ -126,8 +126,8 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, lastStorage, m_hashImpl,
-        currentHeader, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
+    BlockContext::Ptr context = make_shared<BlockContext>(
+        storage, lastStorage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -137,7 +137,7 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
+        blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
