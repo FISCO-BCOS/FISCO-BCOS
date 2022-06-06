@@ -91,8 +91,8 @@ hunter_config(abseil VERSION ${HUNTER_abseil_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS
 hunter_config(gRPC VERSION ${HUNTER_gRPC_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
 
 hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
-    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/f9d60fa510e5fbe24413b4abdf1ea3a48f9ee6aa.tar.gz
-    SHA1 e56121278bf07587d58d154b4615f96575957d6f
+    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/58c6dbd7599eae60cf547e51d6ace4cd7bff2255.tar.gz
+    SHA1 df96f97d027c6c2b2edf7e908bd23925cf061dba
 )
 
 hunter_config(tarscpp VERSION 3.0.4-local

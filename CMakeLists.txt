@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.14)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif ()
