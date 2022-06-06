@@ -18,7 +18,7 @@
     ; url of the key center, in format of ip:port
     ;key_center_url=
     ;cipher_data_key=
-    
+
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
@@ -28,6 +28,7 @@
     enable_cache=true
     type=RocksDB
     pd_addrs=
+    key_page_size=0
 
 [txpool]
     ; size of the txpool, default is 15000
@@ -48,7 +49,7 @@
     lease_ttl=3
     ; the address of etcd, can configure multiple comma-separated
     cluster_url=127.0.0.1:2379
-    
+
 [log]
     enable=true
     log_path=./log

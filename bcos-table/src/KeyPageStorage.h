@@ -270,21 +270,37 @@ public:
                     return lhs < rhs.getPageKey();
                 });
         }
-        std::optional<PageInfo*> getPageInfoNoLock(std::string_view key)
+        inline std::optional<PageInfo*> getPageInfoNoLock(std::string_view key)
         {
+            count += 1;
             if (pages->empty())
             {  // if pages is empty
                 return std::nullopt;
             }
+            if (lastPageInfoIndex < pages->size())
+            {
+                auto lastPageInfo = &pages->at(lastPageInfoIndex);
+                if (lastPageInfo->getPageData())
+                {
+                    auto page = &std::get<0>(lastPageInfo->getPageData()->data);
+                    if (page->startKey() <= key && key <= page->endKey())
+                    {
+                        hit += 1;
+                        return lastPageInfo;
+                    }
+                }
+            }
             auto it = lower_bound(key);
             if (it != pages->end())
             {
+                lastPageInfoIndex = it - pages->begin();
                 return &*it;
             }
             if (pages->rbegin()->getPageKey().empty())
             {  // page is empty because of rollback
                 return std::nullopt;
             }
+            lastPageInfoIndex = pages->size() - 1;
             return &pages->back();
         }
 
@@ -322,51 +338,73 @@ public:
             {
                 KeyPage_LOG(TRACE)
                     << LOG_DESC("insert new pageInfo")
-                    << LOG_KV("endKey", toHex(newIt->getPageKey()))
+                    << LOG_KV("pageKey", toHex(newIt->getPageKey()))
                     << LOG_KV("valid", newIt->getCount()) << LOG_KV("size", newIt->getSize());
             }
         }
-        std::pair<std::optional<std::string>, std::unique_lock<std::shared_mutex>> updatePageInfo(
-            std::string_view oldEndKey, const std::string& endKey, size_t count, size_t size)
-        {
-            std::unique_lock lock(mutex);
-            auto oldPageKey = updatePageInfoNoLock(oldEndKey, endKey, count, size);
-            return std::make_pair(oldPageKey, std::move(lock));
-        }
 
-        std::optional<std::string> updatePageInfoNoLock(
-            std::string_view oldEndKey, const std::string& pageKey, size_t count, size_t size)
+        std::optional<std::string> updatePageInfoNoLock(std::string_view oldEndKey,
+            const std::string& pageKey, size_t count, size_t size,
+            std::optional<PageInfo*> pageInfo)
         {
             std::optional<std::string> oldPageKey;
-            auto it = lower_bound(oldEndKey);
-            if (it != pages->end())
-            {
-                if (it->getPageKey() != pageKey)
+            auto updateInfo = [&](PageInfo* p) {
+                if (p->getPageKey() != pageKey)
                 {
-                    oldPageKey = it->getPageKey();
-                    it->setPageKey(pageKey);
+                    oldPageKey = p->getPageKey();
+                    p->setPageKey(pageKey);
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
+                                           << LOG_KV("oldPageKey", toHex(oldPageKey.value()))
+                                           << LOG_KV("newPageKey", toHex(pageKey))
+                                           << LOG_KV("count", count) << LOG_KV("size", size);
+                    }
                 }
-                it->setCount(count);
-                it->setSize(size);
+                p->setCount(count);
+                p->setSize(size);
+            };
+            if (pageInfo.has_value())
+            {
+                updateInfo(pageInfo.value());
             }
             else
             {
-                assert(false);
-                KeyPage_LOG(ERROR)
-                    << LOG_DESC("updatePageInfo not found") << LOG_KV("oldEndKey", toHex(oldEndKey))
-                    << LOG_KV("endKey", toHex(pageKey)) << LOG_KV("valid", count)
-                    << LOG_KV("size", size);
+                auto it = lower_bound(oldEndKey);
+                if (it != pages->end())
+                {
+                    updateInfo(&*it);
+                }
+                else
+                {
+                    assert(false);
+                    KeyPage_LOG(ERROR)
+                        << LOG_DESC("updatePageInfo not found")
+                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
+                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                }
             }
             return oldPageKey;
         }
 
-        void deletePageInfoNoLock(std::string_view endkey)
+        std::optional<PageInfo*> deletePageInfoNoLock(
+            std::string_view endkey, std::optional<PageInfo*> pageInfo)
         {  // remove current page info and update next page start key
-            auto it = lower_bound(endkey);
+            std::vector<PageInfo>::iterator it;
+            if (pageInfo)
+            {
+                auto offset = pageInfo.value() - &*pages->begin();
+                it = pages->begin() + offset;
+            }
+            else
+            {
+                it = lower_bound(endkey);
+            }
             if (it != pages->end() && it->getPageKey() == endkey)
             {
-                pages->erase(it);
+                return &*pages->erase(it);
             }
+            return std::nullopt;
         }
         size_t size() const
         {
@@ -399,12 +437,15 @@ public:
             os << "]";
             return os;
         }
+        double hitRate() { return hit / (double)count; }
 
     private:
+        uint32_t count = 0;
+        uint32_t hit = 0;
         mutable std::shared_mutex mutex;
         std::unique_ptr<std::vector<PageInfo>> pages = nullptr;
         friend class boost::serialization::access;
-
+        size_t lastPageInfoIndex = 0;
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
@@ -527,29 +568,33 @@ public:
             std::unique_lock lock(mutex);
             return std::make_pair(std::ref(entries), std::move(lock));
         }
-        std::tuple<std::optional<Entry>, bool> setEntry(std::string_view key, Entry entry)
+        inline std::tuple<std::optional<Entry>, bool> setEntry(
+            const std::string_view& key, Entry&& entry)
         {  // TODO: do not exist entry optimization: insert a empty entry to cache, then
             // entry status none should return null optional
             bool pageInfoChanged = false;
             std::optional<Entry> ret;
             std::unique_lock lock(mutex);
             auto it = entries.lower_bound(key);
-
             m_size += entry.size();
             if (it != entries.end() && it->first == key)
             {  // delete exist entry
                 m_size -= it->second.size();
-                if (entry.status() != Entry::Status::DELETED &&
-                    it->second.status() == Entry::Status::DELETED)
+                if (entry.status() != Entry::Status::DELETED)
                 {
-                    ++m_validCount;
-                    pageInfoChanged = true;
+                    if (it->second.status() == Entry::Status::DELETED)
+                    {
+                        ++m_validCount;
+                        pageInfoChanged = true;
+                    }
                 }
-                if (entry.status() == Entry::Status::DELETED &&
-                    it->second.status() != Entry::Status::DELETED)
+                else
                 {
-                    --m_validCount;
-                    pageInfoChanged = true;
+                    if (it->second.status() != Entry::Status::DELETED)
+                    {
+                        --m_validCount;
+                        pageInfoChanged = true;
+                    }
                 }
                 ret = std::move(it->second);
                 it->second = std::move(entry);
@@ -576,7 +621,7 @@ public:
                     pageInfoChanged = true;
                     if (!entries.empty())
                     {  // means key > entries.rbegin()->first is true
-                        m_invalidPageKeys.push_back(entries.rbegin()->first);
+                        m_invalidPageKeys.emplace_back(entries.rbegin()->first);
                     }
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
@@ -591,7 +636,7 @@ public:
                 //                        << LOG_KV("status", (int)entry.status());
                 // }
             }
-            return std::make_tuple(ret, pageInfoChanged);
+            return std::make_tuple(std::move(ret), pageInfoChanged);
         }
         size_t size() const
         {
@@ -1005,8 +1050,16 @@ private:
         return hash % m_buckets.size();
     }
 
-    Data* changePageKey(std::string table, std::string oldPageKey, std::string newPageKey)
+    Data* changePageKey(
+        std::string table, const std::string& oldPageKey, const std::string& newPageKey)
     {
+        if (newPageKey.empty())
+        {
+            KeyPage_LOG(ERROR) << LOG_DESC("changePageKey empty page") << LOG_KV("table", table)
+                               << LOG_KV("oldPageKey", toHex(oldPageKey))
+                               << LOG_KV("newPageKey", toHex(newPageKey));
+            return nullptr;
+        }
         auto [bucket, lock] = getMutBucket(table, oldPageKey);
         boost::ignore_unused(lock);
         auto n = bucket->container.extract(std::make_pair(table, oldPageKey));

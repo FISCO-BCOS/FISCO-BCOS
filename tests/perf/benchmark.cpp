@@ -66,7 +66,9 @@ int main(int argc, const char* argv[])
     for (int i = 0; i < max; ++i)
     {
         keySet[i] = boost::uuids::to_string(boost::uuids::random_generator()());
+        boost::erase_all(keySet[i], "-");
         valueSet[i] = boost::uuids::to_string(boost::uuids::random_generator()());
+        boost::erase_all(valueSet[i], "-");
     }
 
     std::cout << "pageSize=" << keyPageSize << "|Total=" << total << "|kv size=" << keySet[0].size()
