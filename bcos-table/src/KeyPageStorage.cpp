@@ -242,14 +242,16 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                     {  // FIXME: this log is only for debug, comment it when release
                         KeyPage_LOG(TRACE)
-                            << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
+                            << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
                             << LOG_KV("key", toHex(it.first.second));
                     }
+
                     KeyPage_LOG(DEBUG)
-                        << LOG_DESC("TableMeta") << LOG_KV("count", meta->size())
+                        << LOG_DESC("Traverse TableMeta") << LOG_KV("count", meta->size())
                         << LOG_KV("size", entry.size()) << LOG_KV("count", meta->size())
                         << LOG_KV("payloadRate",
-                               sizeof(PageInfo) * meta->size() / (double)entry.size());
+                               sizeof(PageInfo) * meta->size() / (double)entry.size())
+                        << LOG_KV("predictHit", meta->hitRate());
                     callback(it.first.first, it.first.second, std::move(entry));
                 }
             }
@@ -440,10 +442,11 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 if (page->count() == 0)
                 {  // page is empty because of rollback, means it it first created
                     pageData->entry.setStatus(Entry::Status::EMPTY);
+                    continue;
                 }
                 // revert also need update pageInfo
                 auto oldStartKey = meta->updatePageInfoNoLock(
-                    pageKey, page->endKey(), page->validCount(), page->size());
+                    pageKey, page->endKey(), page->validCount(), page->size(), pageInfoOp);
                 if (oldStartKey)
                 {
                     changePageKey(change.table, oldStartKey.value(), page->endKey());
@@ -721,7 +724,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
             else
             {
                 auto oldStartKey = meta->updatePageInfoNoLock(
-                    pageKey, page->endKey(), page->validCount(), page->size());
+                    pageKey, page->endKey(), page->validCount(), page->size(), pageInfoOption);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
                 if (oldStartKey)
                 {  // the page key is changed, 1. delete the first key, 2. insert a smaller key
@@ -758,8 +761,8 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         }
         auto newPage = page->split(m_splitSize);
         // update old meta pageInfo
-        auto oldStartKey =
-            meta->updatePageInfoNoLock(pageKey, page->endKey(), page->validCount(), page->size());
+        auto oldStartKey = meta->updatePageInfoNoLock(
+            pageKey, page->endKey(), page->validCount(), page->size(), pageInfoOption);
         if (oldStartKey)
         {  // if the startKey of page changed, the container also need to be updated
             pageData = changePageKey(table, oldStartKey.value(), page->endKey());
@@ -798,16 +801,15 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                     << LOG_KV("pageStart", toHex(page->startKey()))
                     << LOG_KV("pageEnd", toHex(endKey)) << LOG_KV("pageCount", page->validCount())
                     << LOG_KV("pageSize", page->size())
-                    << LOG_KV("nextPageKey", toHex(nextPageKey.value()))
                     << LOG_KV("nextPageStart", toHex(nextPage->startKey()))
                     << LOG_KV("nextPageEnd", toHex(nextEndKey))
                     << LOG_KV("nextPageCount", nextPage->validCount())
                     << LOG_KV("nextPageSize", nextPage->size());
                 nextPage->merge(*page);
                 // remove current page info and update next page info
-                meta->deletePageInfoNoLock(endKey);
-                auto oldStartKey = meta->updatePageInfoNoLock(
-                    nextEndKey, nextPage->endKey(), nextPage->validCount(), nextPage->size());
+                auto nextPageInfoOp = meta->deletePageInfoNoLock(endKey, pageInfoOption);
+                auto oldStartKey = meta->updatePageInfoNoLock(nextEndKey, nextPage->endKey(),
+                    nextPage->validCount(), nextPage->size(), nextPageInfoOp);
                 // old page also need write to disk to clean data, so not remove old page
                 // nextPageData.value()->entry.setDirty(true);
                 // pageData->entry.setDirty(true);
