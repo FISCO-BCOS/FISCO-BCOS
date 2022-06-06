@@ -19,6 +19,7 @@
  * @date: 2021-09-14
  */
 
+#include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
@@ -74,12 +75,14 @@ struct TransactionExecutorFixture
 
         txpool = std::make_shared<MockTxPool>();
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
+        ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
 
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, lruStorage, backend, executionResultFactory, hashImpl, false, false, false);
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+            backend, executionResultFactory, hashImpl, false, false, false);
+
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
@@ -100,6 +103,7 @@ struct TransactionExecutorFixture
     CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<MockTxPool> txpool;
     std::shared_ptr<MockTransactionalStorage> backend;
+    std::shared_ptr<MockLedger> ledger;
     std::shared_ptr<Keccak256> hashImpl;
 
     KeyPairInterface::Ptr keyPair;
@@ -179,9 +183,9 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader->setNumber(1);
-
+    ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -250,9 +254,9 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     // start new block
     auto blockHeader2 = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader2->setNumber(2);
-
+    ledger->setBlockNumber(blockHeader2->number() - 1);
     std::promise<void> nextPromise2;
-    executor->nextBlockHeader(std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
 
         nextPromise2.set_value();
@@ -406,9 +410,9 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader->setNumber(1);
-
+    ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -785,9 +789,9 @@ BOOST_AUTO_TEST_CASE(performance)
 
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(blockNumber);
-
+        ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -1000,9 +1004,9 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
 
     auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader->setNumber(1);
-
+    ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -1118,9 +1122,9 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(1);
-
+        ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -1298,8 +1302,10 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(2);
 
+        ledger->setBlockNumber(blockHeader->number() - 1);
+
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });

@@ -139,8 +139,8 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
                     }
 
                     const auto& [contract, key] = std::get<1>(*source);
-                    SCHEDULER_LOG(TRACE)
-                        << "Releasing key lock, contract: " << contract << " key: " << key;
+                    SCHEDULER_LOG(TRACE) << "Releasing key lock, contract: " << contract
+                                         << " key: " << bcos::toHexString(key);
                 }
                 boost::remove_edge(*range.first, *graph);
             }

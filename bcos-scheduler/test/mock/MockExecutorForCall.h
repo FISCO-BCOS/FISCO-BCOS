@@ -18,7 +18,8 @@ public:
 
     ~MockParallelExecutorForCall() override {}
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
         BOOST_FAIL("Unexpected nextBlockHeader!");

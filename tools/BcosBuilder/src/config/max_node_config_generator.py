@@ -38,6 +38,18 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
                 "generate ini config for BcosExecutorService of group %s success" % group_config.group_id)
         return True
 
+    def generate_all_executor_config(self):
+        """
+        generate all config for max-node
+        """
+        for group_config in self.chain_config.group_list.values():
+            if self.__generate_all_executor_config(group_config) is False:
+                return False
+            utilities.print_badage(
+                "generate ini config for BcosExecutorService of group %s success" % group_config.group_id)
+        return True
+
+
     def __generate_all_executor_config(self, group_config):
         """
         generate the config for all executor service
@@ -60,9 +72,9 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
             executor_dir, self.genesis_tmp_config_file)
 
         ini_store = self.store_config(executor_config_content, "executor ini",
-                                      executor_config_path, max_node_config.node_service.service_name)
+                                      executor_config_path, max_node_config.node_service.service_name, True)
         genesis_store = self.store_config(executor_genesis_content, "executor genesis",
-                                          executor_genesis_path, max_node_config.node_service.service_name)
+                                          executor_genesis_path, max_node_config.node_service.service_name, True)
         return ini_store and genesis_store
 
     def __get_and_generate_executor_base_path(self, node_config):

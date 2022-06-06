@@ -95,7 +95,7 @@ struct SchedulerFixture
 
         scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
             executionMessageFactory, blockFactory, transactionSubmitResultFactory, hashImpl, true,
-            false);
+            false, 0);
 
         std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->registerTransactionNotifier(
             std::move(notifier));

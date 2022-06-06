@@ -89,8 +89,8 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     }
     else
     {
-        BOOST_CHECK_EQUAL(ret, 18);
-        BOOST_CHECK_EQUAL(decodeMsg->length(), 18);
+        BOOST_CHECK_EQUAL(ret, 20);
+        BOOST_CHECK_EQUAL(decodeMsg->length(), 20);
     }
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), 0);
@@ -167,7 +167,7 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     int16_t headerLen = 14;
     if (version > 0)
     {
-        headerLen = 18;
+        headerLen = 20;
     }
 
     encodeMsg->setSeq(seq);

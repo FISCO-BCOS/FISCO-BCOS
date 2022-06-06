@@ -29,6 +29,7 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
 {
     auto contextID = txInput->contextID;
     auto seq = txInput->seq;
+    auto type = txInput->type;
     auto executiveState = m_executives[{contextID, seq}];
     if (executiveState == nullptr)
     {
@@ -50,12 +51,16 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
         executiveState->setResumeParam(std::move(txInput));
     }
 
-    if (!m_hasFirstRun)
+    if (seq == 0 && type == CallParameters::MESSAGE)
     {
+        // the tx has not been executed ever (created by a user)
         m_originFlow.push(executiveState);
     }
     else
     {
+        // the tx is not first run:
+        // 1. created by sending from a contract
+        // 2. is a revert message, seq = 0 but type = REVERT
         m_pausedPool.erase({contextID, seq});
         m_waitingFlow.insert({contextID, seq});
     };
@@ -94,7 +99,6 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
     try
     {
         bcos::WriteGuard lock(x_lock);
-        m_hasFirstRun = true;
 
         // must run all messages in waiting pool before origin pool
         if (!m_waitingFlow.empty())
@@ -121,10 +125,27 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
 
 void ExecutiveStackFlow::runWaitingFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn)
 {
+    std::vector<std::string> lastKeyLocks;
+    auto callback = [&lastKeyLocks, onTxReturn = std::move(onTxReturn)](
+                        CallParameters::UniquePtr output) {
+        if (output->type == CallParameters::MESSAGE || output->type == CallParameters::KEY_LOCK)
+        {
+            lastKeyLocks = output->keyLocks;
+        }
+        else
+        {
+            lastKeyLocks = {};
+        }
+
+        onTxReturn(std::move(output));
+    };
+
     for (auto contextIDAndSeq : m_waitingFlow)
     {
         auto executiveState = m_executives[contextIDAndSeq];
-        runOne(executiveState, onTxReturn);
+        executiveState->appendKeyLocks(std::move(lastKeyLocks));
+
+        runOne(executiveState, callback);
     }
 
     m_waitingFlow.clear();

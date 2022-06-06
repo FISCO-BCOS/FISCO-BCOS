@@ -39,10 +39,10 @@ void ExecutorServiceApp::initialize()
 {
     try
     {
-        m_timer = std::make_shared<bcos::Timer>(3000, "registerExecutor");
+        // m_timer = std::make_shared<bcos::Timer>(3000, "registerExecutor");
         createAndInitExecutor();
-        m_timer->registerTimeoutHandler(boost::bind(&ExecutorServiceApp::registerExecutor, this));
-        m_timer->start();
+        // m_timer->registerTimeoutHandler(boost::bind(&ExecutorServiceApp::registerExecutor,
+        // this)); m_timer->start();
     }
     catch (std::exception const& e)
     {
@@ -122,11 +122,15 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-    auto executor = ExecutorInitializer::build(m_txpool, cache, storage, executionMessageFactory,
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-        m_nodeConfig->isAuthCheck());
 
-    m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
+    auto blockFactory = m_protocolInitializer->blockFactory();
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
+
+    auto executorFactory = ExecutorInitializer::buildFactory(ledger, m_txpool, cache, storage,
+        executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+
+    m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
 
     ExecutorServiceParam param;
     param.executor = m_executor;
@@ -139,7 +143,7 @@ void ExecutorServiceApp::createAndInitExecutor()
         throw std::runtime_error("load endpoint information failed");
     }
     m_executorName = ret.second;
-    registerExecutor();
+    // registerExecutor();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor success");
 }
 
