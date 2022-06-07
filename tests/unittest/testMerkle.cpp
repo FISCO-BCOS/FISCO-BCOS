@@ -3,7 +3,11 @@
 #include <bcos-tool/MerkleSerialization.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/stream.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
@@ -31,6 +35,9 @@ std::ostream& operator<<(std::ostream& stream, const HashType& hash)
 
 namespace bcos::test
 {
+
+using namespace bcos::tool::merkle;
+
 struct TestBinaryMerkleTrieFixture
 {
     std::array<HashType, 128> hashes;
@@ -116,7 +123,7 @@ BOOST_AUTO_TEST_CASE(merkle)
     loopWidthTest<32>(hashes);
 }
 
-BOOST_AUTO_TEST_CASE(serialize)
+BOOST_AUTO_TEST_CASE(serializeMerkle)
 {
     using MerkleType =
         bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
@@ -124,6 +131,53 @@ BOOST_AUTO_TEST_CASE(serialize)
     MerkleType trie1;
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
     std::cout << trie1 << std::endl;
+
+    std::string value;
+    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
+    boost::archive::binary_oarchive oarchive(outputStream);
+
+    oarchive << trie1;
+    outputStream.flush();
+
+    BOOST_CHECK(!value.empty());
+
+    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+        value.data(), value.size());
+    boost::archive::binary_iarchive iarchive(inputStream);
+
+    MerkleType trie2;
+    iarchive >> trie2;
+
+    BOOST_CHECK_EQUAL(trie1, trie2);
+}
+
+BOOST_AUTO_TEST_CASE(serializeProof)
+{
+    using MerkleType =
+        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
+            4>;
+    MerkleType trie1;
+    BOOST_CHECK_NO_THROW(trie1.import(hashes));
+
+    auto proof1 = trie1.generateProof(hashes[0]);
+    std::cout << proof1 << std::endl;
+    std::string value;
+    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
+    boost::archive::binary_oarchive oarchive(outputStream);
+
+    oarchive << proof1;
+    outputStream.flush();
+
+    BOOST_CHECK(!value.empty());
+
+    Proof<HashType> proof2;
+    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+        value.data(), value.size());
+    boost::archive::binary_iarchive iarchive(inputStream);
+
+    iarchive >> proof2;
+
+    BOOST_CHECK_EQUAL(proof1, proof2);
 }
 
 BOOST_AUTO_TEST_CASE(performance) {}

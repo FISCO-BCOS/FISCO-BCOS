@@ -25,15 +25,21 @@ template <class Range, class HashType>
 concept OutputRange = std::ranges::random_access_range<Range> &&
     std::ranges::output_range<Range, HashType> && bcos::crypto::trivial::Object<HashType>;
 
-template <class Range, class HashType>
-concept Proof =
-    std::ranges::input_range<Range> && std::is_same_v<std::ranges::range_value_t<Range>, HashType>;
+template <class HashType>
+struct Proof
+{
+    std::vector<HashType> hashes;
+    std::vector<size_t> levels;
+
+    auto operator<=>(const Proof& rhs) const = default;
+};
 
 template <bcos::crypto::hasher::Hasher HasherType, class HashType, size_t width = 2>
 class Merkle
 {
 public:
     static_assert(width >= 2, "Width too short, at least 2");
+    using ProofType = Proof<HashType>;
 
     Merkle() = default;
     Merkle(const Merkle&) = default;
@@ -42,13 +48,9 @@ public:
     Merkle& operator=(Merkle&&) = default;
     ~Merkle() = default;
 
-    struct Proof
-    {
-        std::vector<HashType> hashes;
-        std::vector<size_t> levels;
-    };
+    auto operator<=>(const Merkle& rhs) const = default;
 
-    static bool verifyProof(const Proof& proof, HashType hash, const HashType& root)
+    static bool verifyProof(const ProofType& proof, HashType hash, const HashType& root)
     {
         if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
@@ -82,7 +84,7 @@ public:
         return true;
     }
 
-    Proof generateProof(const HashType& hash) const
+    ProofType generateProof(const HashType& hash) const
     {
         if (empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
@@ -97,7 +99,7 @@ public:
         auto start = levelRange.begin() + index;
         auto end = std::min(start + width, levelRange.end());
 
-        Proof proof;
+        ProofType proof;
         proof.hashes.reserve(m_levels.size() * width);
         proof.levels.reserve(m_levels.size());
 
@@ -169,9 +171,6 @@ public:
 
     std::vector<HashType> m_nodes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
-
-    friend std::ostream& operator<<(std::ostream& stream, const bcos::tool::merkle::Merkle& merkle)
-    {}
 
 private:
     auto getNodeSize(std::integral auto inputSize) const
