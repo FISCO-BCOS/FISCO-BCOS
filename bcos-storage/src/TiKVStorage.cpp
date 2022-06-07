@@ -88,9 +88,8 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     {
         if (!isValid(_table, _key))
         {
-            STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("asyncGetRow empty tableName or key") << LOG_KV("table", _table)
-                << LOG_KV("key", *toHexString(_key));
+            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+                                      << LOG_KV("table", _table) << LOG_KV("key", toHex(_key));
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), {});
             return;
         }
@@ -101,19 +100,25 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto end = utcTime();
         if (value.empty())
         {
-            STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetRow empty") << LOG_KV("table", _table)
-                                    << LOG_KV("key", *toHexString(_key)) << LOG_KV("dbKey", dbKey);
+            if (c_fileLogLevel >= TRACE)
+            {
+                STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetRow empty") << LOG_KV("table", _table)
+                                        << LOG_KV("key", toHex(_key)) << LOG_KV("dbKey", dbKey);
+            }
             _callback(nullptr, {});
             return;
         }
 
         auto entry = std::make_optional<Entry>();
         entry->set(value);
+        if (c_fileLogLevel >= TRACE)
+        {
+            STORAGE_TIKV_LOG(TRACE)
+                << LOG_DESC("asyncGetRow") << LOG_KV("table", _table) << LOG_KV("key", toHex(_key))
+                << LOG_KV("read time(ms)", end - start)
+                << LOG_KV("callback time(ms)", utcTime() - end);
+        }
         _callback(nullptr, std::move(entry));
-        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-                                << LOG_KV("key", *toHexString(_key))
-                                << LOG_KV("read time(ms)", end - start)
-                                << LOG_KV("callback time(ms)", utcTime() - end);
     }
     catch (const std::exception& e)
     {
@@ -210,8 +215,11 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
         }
         else
         {
-            STORAGE_TIKV_LOG(DEBUG)
-                << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
+            if (c_fileLogLevel >= TRACE)
+            {
+                STORAGE_TIKV_LOG(TRACE)
+                    << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
+            }
             std::string value = std::string(_entry.get());
             txn.set(dbKey, value);
         }

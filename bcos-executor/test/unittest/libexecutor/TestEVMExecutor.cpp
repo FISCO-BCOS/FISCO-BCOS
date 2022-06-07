@@ -66,7 +66,7 @@ struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()
     {
-        // boost::log::core::get()->set_logging_enabled(false);
+        boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -98,6 +98,7 @@ struct TransactionExecutorFixture
 
         codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
     }
+    ~TransactionExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }
 
     TransactionExecutor::Ptr executor;
     CryptoSuite::Ptr cryptoSuite;
@@ -898,6 +899,8 @@ BOOST_AUTO_TEST_CASE(performance)
 
         now = std::chrono::system_clock::now();
         // Check the result
+        std::vector<u256> values = {};
+        values.reserve(count);
         for (size_t i = 0; i < count; ++i)
         {
             params = std::make_unique<NativeExecutionMessage>();
@@ -933,16 +936,20 @@ BOOST_AUTO_TEST_CASE(performance)
 
             bcos::u256 value(0);
             codec->decode(balanceResult->data(), value);
-
-            if (i < count - 1)
-            {
-                BOOST_CHECK_EQUAL(value, u256(1000000 - 10));
-            }
-            else
-            {
-                BOOST_CHECK_EQUAL(value, u256(1000000 + 10 * (count - 1)));
-            }
+            values.push_back(value);
+//
+//            if (i < count - 1)
+//            {
+//                BOOST_CHECK_EQUAL(value, u256(1000000 - 10));
+//            }
+//            else
+//            {
+//                BOOST_CHECK_EQUAL(value, u256(1000000 + 10 * (count - 1)));
+//            }
         }
+        size_t c = std::count(values.begin(), values.end(), u256(1000000 - 10));
+        BOOST_CHECK(c == count - 1);
+        BOOST_CHECK_EQUAL(values.at(values.size() - 1), u256(1000000 + 10 * (count - 1)));
 
         std::cout << "Check elapsed: "
                   << (std::chrono::system_clock::now() - now).count() / 1000 / 1000 << std::endl;
@@ -951,15 +958,7 @@ BOOST_AUTO_TEST_CASE(performance)
             blockNumber, [&hash](bcos::Error::UniquePtr error, crypto::HashType resultHash) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK_NE(resultHash, h256());
-
-                if (hash == h256())
-                {
-                    hash = resultHash;
-                }
-                else
-                {
-                    hash = resultHash;
-                }
+                hash = resultHash;
             });
     }
 }
