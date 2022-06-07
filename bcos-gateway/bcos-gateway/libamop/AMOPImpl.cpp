@@ -383,6 +383,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     bcos::Error::Ptr error = nullptr;
                     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
                     {
+                        // zero copy overhead
                         auto amopMsg = self->m_messageFactory->buildMessage(ref(*_responseData));
                         auto errorMessage =
                             std::string(amopMsg->data().begin(), amopMsg->data().end());
@@ -429,6 +430,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
     bcos::Error::Ptr error = nullptr;
     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
     {
+        // zero copy overhead
         auto amopMsg = m_messageFactory->buildMessage(ref(*_responseData));
         auto errorMessage = std::string(amopMsg->data().begin(), amopMsg->data().end());
         auto errorCode = amopMsg->status();
@@ -507,6 +509,7 @@ void AMOPImpl::dispatcherAMOPMessage(
     {
         return;
     }
+    // zero copy overhead
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
     auto fromNodeID =
