@@ -41,3 +41,5 @@ enable_storage_security = false
         pd_addrs="172.25.0.5:2379"
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.5"]
+        monitor_listen_port = "3901"
+        monitor_log_path = "/root/app/tars/framework/app_log/" 

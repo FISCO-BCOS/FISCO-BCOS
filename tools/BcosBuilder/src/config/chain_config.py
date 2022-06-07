@@ -43,6 +43,12 @@ class GenesisConfig:
             self.config, "auth_check", False, False, self.desc)
         self.init_auth_address = utilities.get_item_value(
             self.config, "init_auth_address", "", self.auth_check, self.desc)
+        self.deploy_ip = utilities.get_item_value(
+            self.config, "deploy_ip", None, True, self.desc)
+        self.monitor_listen_port = utilities.get_item_value(
+            self.config, "monitor_listen_port", None, True, self.desc)
+        self.monitor_log_path = utilities.get_item_value(
+            self.config, "monitor_log_path", None, True, self.desc)                   
 
 
 class AgencyConfig:
