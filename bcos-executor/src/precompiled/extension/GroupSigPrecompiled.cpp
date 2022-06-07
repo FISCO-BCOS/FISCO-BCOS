@@ -69,7 +69,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
             result = GroupSigApi::group_verify(signature, message, gpkInfo, paramInfo);
             gasPricer->appendOperation(InterfaceOpcode::GroupSigVerify);
         }
-        catch (std::string& errorMsg)
+        catch (std::exception& error)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(errorMsg)
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
