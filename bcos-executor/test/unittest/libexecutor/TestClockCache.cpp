@@ -124,10 +124,12 @@ BOOST_AUTO_TEST_CASE(EvictionPolicy)
     BOOST_CHECK(bigCache->insert(303, new int(304)));
 
     // Insert entries much more than cache capacity.
+    bool insertResult = true;
     for (auto i = 0; i < 10000; ++i)
     {
-        BOOST_CHECK(bigCache->insert(1000 + i, new int(2000 + i)));
+        insertResult = insertResult && bigCache->insert(1000 + i, new int(2000 + i));
     }
+    BOOST_CHECK(insertResult);
 
     // Check whether the entries inserted in the beginning
     // are evicted. Ones without extra ref are evicted and
