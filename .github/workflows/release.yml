@@ -36,7 +36,7 @@ jobs:
             hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-clang-v1-notest-${{ runner.temp }}-
       - name: install macOS dependencies
-        run: brew install ccache libomp
+        run: brew install ccache libomp gmp
       - name: configure
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
@@ -122,7 +122,7 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
+          yum install -y git make gcc gcc-c++ glibc-static gmp-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm

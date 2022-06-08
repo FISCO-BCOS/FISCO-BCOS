@@ -24,7 +24,7 @@ include(BuildInfoGenerator)
 
 # import dependencies
 include(ProjectGroupSig)
-hunter_add(cryptopp)
+include(ProjectCryptopp)
 include(ProjectTCMalloc)
 include(ProjectWABT)
 include(ProjectBCOSWASM)

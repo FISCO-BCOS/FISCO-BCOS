@@ -71,7 +71,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
         }
         catch (std::exception& error)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(errorMsg)
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error.what())
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
             _callParameters->setExecResult(codec->encode(u256((int)VERIFY_GROUP_SIG_FAILED)));

@@ -69,9 +69,9 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
             result = RingSigApi::LinkableRingSig::ring_verify(signature, message, paramInfo);
             gasPricer->appendOperation(InterfaceOpcode::GroupSigVerify);
         }
-        catch (std::string& errorMsg)
+        catch (std::exception& error)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(errorMsg)
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error.what())
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("paramInfo", paramInfo);
             _callParameters->setExecResult(codec->encode(u256((int)VERIFY_RING_SIG_FAILED)));
