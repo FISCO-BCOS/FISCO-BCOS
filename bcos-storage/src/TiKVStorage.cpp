@@ -32,6 +32,8 @@
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
 #include <exception>
+#include <optional>
+#include <stdexcept>
 
 using namespace bcos::storage;
 using namespace pingcap::kv;
@@ -156,23 +158,20 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                 auto snap = Snapshot(m_cluster.get());
                 auto result = snap.BatchGet(realKeys);
                 auto end = utcTime();
-
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i)
-                        {
-                            auto value = result[realKeys[i]];
-                            if (!value.empty())
-                            {
-                                entries[i] = std::make_optional(Entry());
-                                entries[i]->set(value);
-                            }
-                            else
-                            {
-                                STORAGE_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
-                            }
-                        }
-                    });
+                for (size_t i = 0; i < realKeys.size(); ++i)
+                {
+                    auto nh = result.extract(realKeys[i]);
+                    if (nh.empty() || nh.mapped().empty())
+                    {
+                        entries[i] = std::nullopt;
+                        STORAGE_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
+                    }
+                    else
+                    {
+                        entries[i] = std::make_optional(Entry());
+                        entries[i]->set(std::move(nh.mapped()));
+                    }
+                }
                 auto decode = utcTime();
                 STORAGE_TIKV_LOG(DEBUG)
                     << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)

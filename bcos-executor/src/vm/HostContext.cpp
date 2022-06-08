@@ -96,25 +96,30 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
         isSMCrypto = true;
     }
     metrics = &ethMetrics;
+    m_startTime = utcTimeUs();
 }
 
 std::string HostContext::get(const std::string_view& _key)
 {
+    auto start = utcTimeUs();
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
         return std::string(entry->getField(0));
     }
-
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return std::string();
 }
 
 void HostContext::set(const std::string_view& _key, std::string _value)
 {
+    auto start = utcTimeUs();
     Entry entry;
     entry.importFields({std::move(_value)});
 
     m_executive->storage().setRow(m_tableName, _key, std::move(entry));
+    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
@@ -215,7 +220,8 @@ evmc_result HostContext::callBuiltInPrecompiled(
     {
         try
         {
-            auto precompiledCallParams = std::make_shared<precompiled::PrecompiledExecResult>(_request);
+            auto precompiledCallParams =
+                std::make_shared<precompiled::PrecompiledExecResult>(_request);
             precompiledCallParams = m_executive->execPrecompiled(precompiledCallParams);
             callResults->gas = precompiledCallParams->m_gas;
             resultCode = (int32_t)TransactionStatus::None;
@@ -307,6 +313,8 @@ VMSchedule const& HostContext::vmSchedule() const
 
 u256 HostContext::store(const u256& _n)
 {
+    auto start = utcTimeUs();
+
     auto key = toEvmC(_n);
     auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
 
@@ -318,6 +326,7 @@ u256 HostContext::store(const u256& _n)
         //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
         //                         << LOG_KV("value", toHex(entry->get()));
         // }
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
         return fromBigEndian<u256>(entry->getField(0));
     }
     // else
@@ -325,12 +334,13 @@ u256 HostContext::store(const u256& _n)
     //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
     //                         << LOG_KV("value", "not found");
     // }
-
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return u256();
 }
 
 void HostContext::setStore(u256 const& _n, u256 const& _v)
 {
+    auto start = utcTimeUs();
     auto key = toEvmC(_n);
     auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
 
@@ -345,6 +355,7 @@ void HostContext::setStore(u256 const& _n, u256 const& _v)
     Entry entry;
     entry.importFields({std::move(valueBytes)});
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
+    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)
@@ -390,7 +401,10 @@ std::string_view HostContext::myAddress() const
 
 std::optional<storage::Entry> HostContext::code()
 {
-    return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+    auto start = utcTimeUs();
+    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
+    return entry;
 }
 
 h256 HostContext::codeHash()
