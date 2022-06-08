@@ -158,7 +158,7 @@ def chain_operations(args, node_type):
             cmd_func_attr = getattr(command_impl, impl_str)
             cmd_func_attr()
             return
-    if  op_type == ServiceInfo.monitor_service_type:
+    if op_type == ServiceInfo.monitor_service_type:
         if command in CommandInfo.node_command_to_impl.keys():
             chain_config = ChainConfig(toml_config, node_type, True)
             command_impl = MonitorCommandImpl(chain_config, node_type)

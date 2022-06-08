@@ -16,12 +16,10 @@ class MonitorConfigGenerator:
         self.config = config
         self.node_type = node_type
         self.root_dir = "./generated"
-        self.monitor_src_tpl_config = ConfigInfo.monitor_src_config_tpl_path
         self.monitor_start_scirpts_file = "start_monitor.sh"
         self.monitor_stop_scirpts_file = "stop_monitor.sh"
-        self.monitor_target_tpl_config = ConfigInfo.monitor_target_config_tpl_path
+        self.monitor_tpl_config = ConfigInfo.monitor_config_tpl_path
         self.prometheus_tpl_config = ConfigInfo.prometheus_config_tpl_path
-        self.mtail_tpl_config = ConfigInfo.mtail_config_tpl_path
         self.mtail_tmp_config_file = "node.mtail"
         self.mtail_tmp_path = "mtail/"
         self.mtail_start_scirpts_file = "start_mtail_monitor.sh"
@@ -29,7 +27,7 @@ class MonitorConfigGenerator:
         self.mtail_binary_file = os.path.join(
             ConfigInfo.tpl_binary_path, "mtail")
         self.mtail_src_tpl_config = os.path.join(
-            ConfigInfo.tpl_src_monitor_path, self.mtail_tmp_path)
+            ConfigInfo.tpl_src_mtail_path, self.mtail_tmp_path)
 
     def generate_all_mtail_config(self, group_config):
         """
@@ -64,14 +62,12 @@ class MonitorConfigGenerator:
                 if self.node_type == "pro":
                     if utilities.execute_ansible_with_command(mtail_start_scripts_path, node_config.deploy_ip, node_config.monitor_listen_port) is False:
                         return False
-                    # if utilities.execute_mtail_with_command(mtail_start_scripts_path, node_config.monitor_listen_port) is False:
-                    #     return False
                 else:
                     for ip in node_config.deploy_ip:
                         if utilities.execute_ansible_with_command(mtail_start_scripts_path, ip, node_config.monitor_listen_port) is False:
                             return False
         monitor_start_scripts_path = os.path.join(
-            self.monitor_target_tpl_config, self.monitor_start_scirpts_file)
+            self.monitor_tpl_config, self.monitor_start_scirpts_file)
         return utilities.execute_monitor_with_command(monitor_start_scripts_path)
 
     def stop_monitor_config(self):
@@ -84,14 +80,12 @@ class MonitorConfigGenerator:
                 if self.node_type == "pro":
                     if utilities.execute_ansible_with_command(mtail_start_scripts_path, node_config.deploy_ip, node_config.monitor_listen_port) is False:
                         return False
-                    # if utilities.execute_mtail_with_command(mtail_start_scripts_path, node_config.monitor_listen_port) is False:
-                    #     return False
                 else:
                     for ip in node_config.deploy_ip:
                         if utilities.execute_ansible_with_command(mtail_start_scripts_path, ip, node_config.monitor_listen_port) is False:
                             return False
         monitor_stop_scripts_path = os.path.join(
-            self.monitor_target_tpl_config, self.monitor_stop_scirpts_file)
+            self.monitor_tpl_config, self.monitor_stop_scirpts_file)
         return utilities.execute_monitor_with_command(monitor_stop_scripts_path)
 
     def generate_monitor_config(self):
@@ -168,9 +162,9 @@ class MonitorConfigGenerator:
         shutil.copy(self.mtail_binary_file, mtail_target_tpl_config)
         mtail_config_path = os.path.join(
             node_log_path, self.mtail_tmp_path, self.mtail_tmp_config_file)
-        ini_config_content = self.__generate_mtail_config(
+        config_content = self.__generate_mtail_config(
             mtail_config_path, node_config)
-        if self.store_mtail_config(ini_config_content, "mtail", mtail_config_path, node_config.node_service.service_name) is False:
+        if self.store_mtail_config(config_content, "mtail", mtail_config_path, node_config.node_service.service_name) is False:
             return False
 
         mtail_start_scripts_path = os.path.join(
@@ -218,11 +212,10 @@ class MonitorConfigGenerator:
         """
         generate and store graphna&prometheus config for monitor
         """
-        #shutil.copytree(self.monitor_src_tpl_config, self.monitor_target_tpl_config)
         monitor_config_content = self.__generate_monitor_config(targets)
         if self.store_monitor_config(monitor_config_content, "monitor", self.prometheus_tpl_config) is False:
             return False
 
         monitor_start_scripts_path = os.path.join(
-            self.monitor_target_tpl_config, self.monitor_start_scirpts_file)
+            self.monitor_tpl_config, self.monitor_start_scirpts_file)
         return utilities.execute_monitor_with_command(monitor_start_scripts_path)
