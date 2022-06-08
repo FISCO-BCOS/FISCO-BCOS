@@ -26,7 +26,7 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
 
 
-target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} GroupSig Cryptopp ${WEDPR_EXTEND_LIB} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt)
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC GroupSig Cryptopp jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${WEDPR_EXTEND_LIB} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt)
 
 # add_subdirectory(test/trie-test)
 # add_subdirectory(test/flow-graph)
