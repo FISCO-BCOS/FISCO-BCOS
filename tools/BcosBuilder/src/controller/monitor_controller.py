@@ -2,10 +2,6 @@
 # -*- coding: UTF-8 -*-
 import re
 from config.monitor_config_generator import MonitorConfigGenerator
-from common import utilities
-import requests
-import sys
-import os
 
 
 class MonitorController:

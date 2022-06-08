@@ -4,7 +4,6 @@ import sys
 import os
 import subprocess
 import logging
-import re
 
 logging.basicConfig(format='%(message)s',
                     level=logging.INFO)

@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from math import fabs
 from common import utilities
 from common.utilities import ConfigInfo
 import os
