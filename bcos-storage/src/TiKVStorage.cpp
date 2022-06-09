@@ -20,6 +20,10 @@
  */
 #include "TiKVStorage.h"
 #include "Common.h"
+#include "Poco/FileChannel.h"
+#include "Poco/FormattingChannel.h"
+#include "Poco/PatternFormatter.h"
+#include "Poco/StreamChannel.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "pingcap/kv/BCOS2PC.h"
@@ -32,6 +36,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
 #include <exception>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
 
@@ -43,12 +48,25 @@ using namespace std;
 #define STORAGE_TIKV_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-TiKV]"
 namespace bcos::storage
 {
-std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::string>& pdAddrs)
+std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
+    const std::vector<std::string>& pdAddrs, const std::string& logPath)
 {
     pingcap::ClusterConfig config;
     // TODO: why config this?
     config.tiflash_engine_key = "engine";
-    config.tiflash_engine_value = "tiflash";
+    config.tiflash_engine_value = "tikv";
+    // auto pChannel = Poco::AutoPtr<Poco::StreamChannel>(new Poco::StreamChannel(std::cerr));
+    auto fileChannel =
+        Poco::AutoPtr<Poco::FileChannel>(new Poco::FileChannel(logPath + "/tikv-client.log"));
+    fileChannel->setProperty("path", logPath + "/tikv-client.log");
+    fileChannel->setProperty("rotation", "20 M");
+    fileChannel->setProperty("archive", "timestamp");
+    Poco::AutoPtr<Poco::Channel> pChannel(new Poco::FormattingChannel(
+        Poco::AutoPtr<Poco::Formatter>(new Poco::PatternFormatter("%Y-%m-%d %H:%M:%S %s: %t")),
+        fileChannel));
+    // auto pChannel = Poco::AutoPtr<Poco::SimpleFileChannel>(new Poco::SimpleFileChannel());
+    Poco::Logger::root().setLevel(c_fileLogLevel + 2);  // Poco::Message::PRIO_TRACE
+    Poco::Logger::root().setChannel(pChannel);
     return std::make_shared<Cluster>(pdAddrs, config);
 }
 }  // namespace bcos::storage
@@ -288,15 +306,15 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
         }
         else
         {
+            STORAGE_TIKV_LOG(INFO)
+                << "asyncPrepare secondary" << LOG_KV("blockNumber", param.number)
+                << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
+                << LOG_KV("startTS", param.startTS) << LOG_KV("encode time(ms)", encode - start);
             m_committer->prewriteKeys(param.startTS);
             auto write = utcTime();
             m_committer = nullptr;
             STORAGE_TIKV_LOG(INFO)
-                << "asyncPrepare secondary" << LOG_KV("blockNumber", param.number)
-                << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                << LOG_KV("startTS", param.startTS) << LOG_KV("encode time(ms)", encode - start)
-                << LOG_KV("prewrite time(ms)", write - encode)
-                << LOG_KV("callback time(ms)", utcTime() - write);
+                << "asyncPrepare secondary finished" << LOG_KV("prewrite time(ms)", write - encode);
             callback(nullptr, 0);
         }
     }

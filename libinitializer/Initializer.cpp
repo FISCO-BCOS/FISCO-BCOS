@@ -139,9 +139,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
     }
     else
     {
