@@ -127,14 +127,14 @@ void SchedulerServiceApp::createScheduler()
 {
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(
-        blockFactory, StorageInitializer::build(m_nodeConfig->pdAddrs()));
+        blockFactory, StorageInitializer::build(m_nodeConfig->pdAddrs(), m_logInitializer->logPath()));
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
     auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs()), executionMessageFactory, blockFactory,
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), m_logInitializer->logPath()), executionMessageFactory, blockFactory,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
