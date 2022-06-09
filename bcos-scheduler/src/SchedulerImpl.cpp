@@ -155,11 +155,17 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     if (blockExecutive == nullptr)
     {
         // the block has not been prepared, just make a new one here
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock ")
+                             << "Not hit prepared block executive, create."
+                             << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_gasLimit, verify);
     }
     else
     {
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock ")
+                             << "Hit prepared block executive cache, use it."
+                             << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive->block()->setBlockHeader(block->blockHeader());
     }
 
@@ -554,6 +560,8 @@ void SchedulerImpl::preExecuteBlock(
     auto startT = utcTime();
     SCHEDULER_LOG(INFO) << "preExecuteBlock request"
                         << LOG_KV("block number", block->blockHeaderConst()->number())
+                        << LOG_KV("tx count",
+                               block->transactionsSize() + block->transactionsMetaDataSize())
                         << LOG_KV("startT(ms)", startT);
 
     auto callback = [startT, _callback = std::move(_callback)](bcos::Error::Ptr&& error) {
