@@ -47,6 +47,10 @@ public:
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
     void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override;
+
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(Error::Ptr&&)> callback) override;
+
     void asyncSwitchTerm(int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback);
 
 

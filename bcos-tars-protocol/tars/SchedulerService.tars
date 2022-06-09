@@ -8,6 +8,7 @@
 module bcostars {
     interface SchedulerService
     {
+        Error preExecuteBlock(Block _block, bool _verify);
         Error executeBlock(Block _block, bool _verify, out BlockHeader _executedHeader, out bool _sysBlock);
         Error commitBlock(BlockHeader _header, out LedgerConfig _ledgerConfig);
 

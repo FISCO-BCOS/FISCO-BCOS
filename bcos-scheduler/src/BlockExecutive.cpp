@@ -189,6 +189,7 @@ void BlockExecutive::prepare()
         }
     }
 #pragma omp flush(m_hasDAG)
+
     // prepare all executors
     if (!m_hasDAG)
     {

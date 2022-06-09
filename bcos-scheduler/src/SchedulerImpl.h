@@ -81,6 +81,9 @@ public:
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(Error::Ptr&&)> callback) override;
+
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
     inline void fetchGasLimit(protocol::BlockNumber _number = -1)
@@ -126,7 +129,7 @@ public:
         m_isRunning = true;
         for (auto& blockExecutive : *m_blocks)
         {
-            blockExecutive.start();
+            blockExecutive->start();
         }
 
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "Start with termId: " << getSchedulerTermId()
@@ -137,7 +140,7 @@ public:
         m_isRunning = false;
         for (auto& blockExecutive : *m_blocks)
         {
-            blockExecutive.stop();
+            blockExecutive->stop();
         }
     }
 
@@ -146,10 +149,23 @@ private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
-    std::shared_ptr<std::list<BlockExecutive>> m_blocks =
-        std::make_shared<std::list<BlockExecutive>>();
+    BlockExecutive::Ptr getPreparedBlock(
+        bcos::protocol::BlockNumber blockNumber, int64_t timestamp);
+
+    void setPreparedBlock(bcos::protocol::BlockNumber blockNumber, int64_t timestamp,
+        BlockExecutive::Ptr blockExecutive);
+
+    // remove prepared all block <= oldBlockNumber
+    void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
+
+    std::shared_ptr<std::list<BlockExecutive::Ptr>> m_blocks =
+        std::make_shared<std::list<BlockExecutive::Ptr>>();
 
     std::shared_ptr<std::list<BlockExecutive>> m_stoppedBlockExecutives;
+
+    std::map<bcos::protocol::BlockNumber, std::map<int64_t, BlockExecutive::Ptr>>
+        m_preparedBlocks;  // blockNumber -> <timestamp -> BlockExecutive>
+    mutable SharedMutex x_preparedBlockMutex;
 
     std::mutex m_blocksMutex;
 
