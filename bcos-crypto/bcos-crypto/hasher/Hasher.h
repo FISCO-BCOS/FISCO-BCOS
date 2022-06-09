@@ -1,5 +1,6 @@
 #pragma once
 #include "../Concepts.h"
+#include <concepts>
 #include <ranges>
 #include <span>
 #include <type_traits>
@@ -11,7 +12,7 @@ template <class HasherType>
 concept Hasher = requires(HasherType hasher)
 {
     HasherType{};
-    HasherType::HASH_SIZE;
+    HasherType::HASH_SIZE->std::integral;
     hasher.update(std::span<std::byte>{});
     hasher.update(std::span<std::byte const>{});
     hasher.final(std::span<std::byte>{});

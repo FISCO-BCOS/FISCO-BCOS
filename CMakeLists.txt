@@ -21,7 +21,6 @@ include(ProjectWABT)
 include(ProjectBCOSWASM)
 
 find_package(TARS REQUIRED MODULE)
-find_package(TASSL REQUIRED MODULE)
 
 # bcos-boostssl
 find_package(Boost REQUIRED COMPONENTS log system filesystem chrono iostreams thread)
