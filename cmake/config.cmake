@@ -104,3 +104,14 @@ hunter_config(etcd-cpp-apiv3 VERSION 0.2.5-local
     URL "https://${URL_BASE}/FISCO-BCOS/etcd-cpp-apiv3/archive/704a0ea5ea4aeddc28f7d921135b6c34d00f06f1.tar.gz"
     SHA1 3f2efe0ae536997d2dcaf2b253b6d7a35f731dba
 )
+
+hunter_config(
+    cryptopp VERSION "cryptopp-local"
+    URL
+    "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/cryptopp_bccc6443.tar.gz
+    https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/cryptopp_bccc6443.tar.gz
+    https://github.com/weidai11/cryptopp/archive/bccc6443c4d4d611066c2de4c17109380cf97704.tar.gz"
+    SHA1
+    741f4cb65bce77b56afb9a913c792b501bd0f956
+    #CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE CMAKE_BUILD_TYPE=Release HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON BUILD_SHARED_LIBS=OFF
+)
