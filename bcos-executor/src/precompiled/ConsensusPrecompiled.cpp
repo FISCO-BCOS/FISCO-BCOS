@@ -57,8 +57,6 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
 
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
-
     showConsensusTable(_executive);
 
     auto blockContext = _executive->blockContext().lock();
@@ -69,8 +67,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("sender is not from sys")
                                << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
         return _callParameters;
     }
 
@@ -99,11 +96,11 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        BOOST_THROW_EXCEPTION(
+            bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
     }
 
-    getErrorCodeOut(_callParameters->mutableExecResult(), result, codec);
-    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setExecResult(codec.encode(int32_t(result)));
     return _callParameters;
 }
 
@@ -279,6 +276,10 @@ int ConsensusPrecompiled::removeNode(
     {
         consensusList.erase(it);
     }
+    else
+    {
+        return CODE_NODE_NOT_EXIST;  // Not found
+    }
 
     auto sealerSize = std::count_if(consensusList.begin(), consensusList.end(),
         [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
@@ -310,7 +311,7 @@ int ConsensusPrecompiled::setWeight(
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+    if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);

@@ -677,7 +677,7 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         codec->decode(response1->data(), address);
         BOOST_CHECK(address.hex() == tableTestAddress);
         auto response2 = list(number++, "/tables");
-        s256 ret;
+        int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
         BOOST_CHECK(ret == 0);
@@ -747,7 +747,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
     // check create
     {
         auto response2 = list(number++, "/tables");
-        s256 ret;
+        int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
         BOOST_CHECK(ret == 0);
@@ -809,7 +809,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsTest)
         codec->decode(response1->data(), address);
         BOOST_CHECK(address.hex() == tableTestAddress);
         auto response2 = list(number++, "/tables");
-        s256 ret;
+        int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
         BOOST_CHECK(ret == 0);
@@ -860,7 +860,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
     // check create
     {
         auto response2 = list(number++, "/tables");
-        s256 ret;
+        int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
         BOOST_CHECK(ret == 0);

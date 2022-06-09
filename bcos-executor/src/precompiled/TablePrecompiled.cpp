@@ -247,6 +247,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     // merge keys from storage and eqKeys
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
+    entries.reserve(tableKeyList.size());
     for (auto& key : tableKeyList)
     {
         auto tableEntry = _executive->storage().getRow(tableName, key);
@@ -439,7 +440,8 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
             BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
         }
-        updateValue.push_back({std::distance(columns.begin(), it), std::move(value)});
+        std::pair<uint32_t, std::string> p = {std::distance(columns.begin(), it), std::move(value)};
+        updateValue.emplace_back(std::move(p));
     }
 
     for (auto& key : tableKeyList)
