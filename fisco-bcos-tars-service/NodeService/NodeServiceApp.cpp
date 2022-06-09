@@ -88,6 +88,9 @@ void NodeServiceApp::initNodeService()
         Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
     auto rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
     m_nodeInitializer->initNotificationHandlers(rpc);
+
+    // NOTE: this should be last called
+    m_nodeInitializer->initSysContract();
 }
 
 void NodeServiceApp::initTarsNodeService()

@@ -436,13 +436,17 @@ BOOST_AUTO_TEST_CASE(consensus_test)
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
-        if (result3->data().toBytes() != codec->encode(s256(_errorCode)))
+        if(_errorCode!=0)
         {
-            PRECOMPILED_LOG(TRACE) << "Mismatch result: " << toHex(result3->data().toBytes())
-                                   << " expect: " << toHex(codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(int32_t(_errorCode)));
+            if (result3->data().toBytes() != codec->encode(int32_t(_errorCode)))
+            {
+                PRECOMPILED_LOG(TRACE) << "Mismatch result: " << toHex(result3->data().toBytes())
+                                       << " expect: " << toHex(codec->encode(int32_t(_errorCode)));
+            }
         }
         commitBlock(_number);
+        return result3;
     };
 
     // node id too short
@@ -467,6 +471,12 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         callFunc(number++, "addObserverTest(string)", node2, -1, 0);
     }
 
+    // set weigh to observer
+    {
+       auto r = callFunc(number++, "setWeightTest(string,uint256)", node2, 123, 0);
+       BOOST_CHECK(r->status() == 15);
+    }
+
     // add errorNode
     {
         callFunc(number++, "addObserverTest(string)", errorNode, -1, CODE_INVALID_NODE_ID);
@@ -486,6 +496,10 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         callFunc(number++, "removeTest(string)", node2, -1, CODE_NODE_NOT_EXIST);
 
         // add observer node2
+        callFunc(number++, "addObserverTest(string)", node2, -1, 0);
+        // add sealer again
+        callFunc(number++, "addSealerTest(string,uint256)", node2, 1, 0);
+        // add observer again
         callFunc(number++, "addObserverTest(string)", node2, -1, 0);
     }
 
