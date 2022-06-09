@@ -369,7 +369,7 @@ s256 precompiled::externalTouchNewFile(
         "touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response = externalRequest(
         _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
-    s256 result;
+    int32_t result = 0;
     if (response->status == (int32_t)TransactionStatus::None)
     {
         codec.decode(ref(response->data), result);
