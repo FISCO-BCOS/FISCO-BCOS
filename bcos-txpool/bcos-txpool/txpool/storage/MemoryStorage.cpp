@@ -269,7 +269,7 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             {
                 return;
             }
-            auto encodedData = _tx->encode(false);
+            auto encodedData = _tx->encode();
             auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
             txsToStore->emplace_back(
                 std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
@@ -460,9 +460,12 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
         {
             auto totalTime = (utcTime() - m_tpsStatstartTime);
-            auto tps = (m_onChainTxsCount * 1000) / totalTime;
-            TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
-                             << LOG_KV("totalTime", totalTime);
+            if (totalTime > 0)
+            {
+                auto tps = (m_onChainTxsCount * 1000) / totalTime;
+                TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
+                                 << LOG_KV("totalTime", totalTime);
+            }
             m_tpsStatstartTime.store(0);
             m_onChainTxsCount.store(0);
         }

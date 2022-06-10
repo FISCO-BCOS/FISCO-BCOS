@@ -38,22 +38,59 @@ void TransactionReceiptImpl::encode(bcos::bytes& _encodedData) const
     output.getByteBuffer().swap(_encodedData);
 }
 
-bcos::bytesConstRef TransactionReceiptImpl::encode(bool) const
-{
-    BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Unsupported method!"));
-}
-
+// Note: not thread-safe
 bcos::crypto::HashType TransactionReceiptImpl::hash() const
 {
-    if (m_inner()->dataHash.empty())
+    if (!m_inner()->dataHash.empty())
     {
-        tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-        m_inner()->data.writeTo(output);
-        auto hash = m_cryptoSuite->hash(output.getByteBuffer());
-        m_inner()->dataHash.assign(hash.begin(), hash.end());
+        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
     }
-
-    return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+    auto hashImpl = m_cryptoSuite->hashImpl();
+    auto hashContext = hashImpl->init();
+    auto const& hashFields = m_inner()->data;
+    // int version: 1
+    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)(&version), sizeof(version) / sizeof(uint8_t)));
+    // string gasUsed: 2
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)hashFields.gasUsed.data(), hashFields.gasUsed.size()));
+    // string contractAddress: 3
+    hashImpl->update(
+        hashContext, bcos::bytesConstRef((bcos::byte*)hashFields.contractAddress.data(),
+                         hashFields.contractAddress.size()));
+    // int status: 4
+    long status = boost::asio::detail::socket_ops::host_to_network_long(hashFields.status);
+    hashImpl->update(
+        hashContext, bcos::bytesConstRef((bcos::byte*)(&status), sizeof(status) / sizeof(uint8_t)));
+    // vector<byte> output: 5
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)hashFields.output.data(), hashFields.output.size()));
+    // vector<LogEntry> logEntries: 6
+    for (auto const& log : hashFields.logEntries)
+    {
+        // string address: 1
+        hashImpl->update(
+            hashContext, bcos::bytesConstRef((bcos::byte*)log.address.data(), log.address.size()));
+        // vector<vector<byte>> topic: 2
+        for (auto const& topicItem : log.topic)
+        {
+            hashImpl->update(
+                hashContext, bcos::bytesConstRef((bcos::byte*)topicItem.data(), topicItem.size()));
+        }
+        // vector<byte> data: 3
+        hashImpl->update(
+            hashContext, bcos::bytesConstRef((bcos::byte*)log.data.data(), log.data.size()));
+    }
+    // long blockNumber: 7
+    long blockNumber =
+        boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)(&blockNumber), sizeof(blockNumber) / sizeof(uint8_t)));
+    // calculate the hash
+    auto hashResult = hashImpl->final(hashContext);
+    m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+    return hashResult;
 }
 
 bcos::u256 TransactionReceiptImpl::gasUsed() const

@@ -26,6 +26,7 @@
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
 #include "precompiled/extension/UserPrecompiled.h"
@@ -79,10 +80,14 @@ public:
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
+        ledger = std::make_shared<MockLedger>();
+        ledger->setBlockNumber(header->number() - 1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, nullptr, storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth);
+
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+            storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth, false);
+
         createSysTable();
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -109,8 +114,9 @@ public:
         header->setNumber(1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, nullptr, storage, executionResultFactory, smHashImpl, _isWasm, false);
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+            storage, executionResultFactory, smHashImpl, _isWasm, false, false);
+
         createSysTable();
         codec = std::make_shared<CodecWrapper>(smHashImpl, _isWasm);
 
@@ -228,16 +234,16 @@ public:
     {
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(blockNumber);
-
+        ledger->setBlockNumber(blockNumber - 1);
         std::promise<void> nextPromise;
         executor->nextBlockHeader(
-            blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
+            0, blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
         nextPromise.get_future().get();
     }
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
-       TwoPCParams commitParams{};
+        TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
         std::promise<void> preparePromise;
@@ -262,6 +268,7 @@ protected:
     StateStorage::Ptr memoryTableFactory;
     TransactionExecutor::Ptr executor;
     std::shared_ptr<MockTxPool> txpool;
+    std::shared_ptr<MockLedger> ledger;
     KeyPairInterface::Ptr keyPair;
 
     CodecWrapper::Ptr codec;

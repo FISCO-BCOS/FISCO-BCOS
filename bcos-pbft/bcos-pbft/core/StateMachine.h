@@ -43,10 +43,15 @@ public:
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
         std::function<void(bool)> _onExecuteFinished) override;
 
+    void asyncPreApply(
+        ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) override;
+
 private:
     void apply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
         std::function<void(bool)> _onExecuteFinished);
+
+    void preApply(ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished);
 
 protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;

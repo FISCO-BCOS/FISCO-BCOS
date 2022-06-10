@@ -107,6 +107,11 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         {
             if (status.IsNotFound())
             {
+                if (c_fileLogLevel >= TRACE)
+                {
+                    STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("not found") << LOG_KV("table", _table)
+                                               << LOG_KV("key", toHex(_key));
+                }
                 _callback(nullptr, {});
                 return;
             }
@@ -129,7 +134,6 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         entry->set(std::move(value));
 
         _callback(nullptr, entry);
-
 
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
@@ -314,11 +318,22 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
 
                 if (entry.status() == Entry::DELETED)
                 {
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
+                                                   << LOG_KV("key", toHex(key));
+                    }
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
                     m_writeBatch->Delete(dbKey);
                 }
                 else
                 {
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_ROCKSDB_LOG(TRACE)
+                            << LOG_DESC("write") << LOG_KV("table", table)
+                            << LOG_KV("key", toHex(key)) << LOG_KV("size", entry.size());
+                    }
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
 
                     std::string value(entry.get().data(), entry.get().size());

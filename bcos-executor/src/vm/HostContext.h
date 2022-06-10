@@ -27,6 +27,7 @@
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -46,7 +47,14 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext() = default;
+    ~HostContext()
+    {
+        // auto total = utcTimeUs() - m_startTime;
+        // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
+        //                      << LOG_KV("storageTimeProportion",
+        //                             (m_getTimeUsed + m_setTimeUsed) / (double)total)
+        //                      << LOG_KV("get", m_getTimeUsed) << LOG_KV("set", m_setTimeUsed);
+    };
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
@@ -131,6 +139,9 @@ public:
 
     static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
+    uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
+    uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
+
 private:
     void depositFungibleAsset(
         const std::string_view& _to, const std::string& _assetName, uint64_t _amount);
@@ -145,6 +156,9 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+    std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
+    std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
+    std::atomic_uint64_t m_startTime = {0};    // microsecond
 };
 
 }  // namespace executor

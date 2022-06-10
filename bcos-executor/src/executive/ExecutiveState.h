@@ -55,6 +55,8 @@ public:
     int64_t getContextID() { return m_contextID; }
     int64_t getSeq() { return m_seq; }
 
+    void appendKeyLocks(std::vector<std::string> keyLocks);
+
 private:
     bool m_isStaticCall;
     int64_t m_contextID;

@@ -25,7 +25,7 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
@@ -34,8 +34,11 @@ public:
         m_blockFactory(std::move(blockFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
-        m_isWasm(isWasm)
-    {}
+        m_isWasm(isWasm),
+        m_schedulerTermId(schedulerTermId)
+    {
+        start();
+    }
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
@@ -78,6 +81,9 @@ public:
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(Error::Ptr&&)> callback) override;
+
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
     inline void fetchGasLimit(protocol::BlockNumber _number = -1)
@@ -116,11 +122,51 @@ public:
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 
+    int64_t getSchedulerTermId() { return m_schedulerTermId; }
+
+    void start()
+    {
+        m_isRunning = true;
+        for (auto& blockExecutive : *m_blocks)
+        {
+            blockExecutive->start();
+        }
+
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "Start with termId: " << getSchedulerTermId()
+                             << std::endl;
+    }
+    void stop()
+    {
+        m_isRunning = false;
+        for (auto& blockExecutive : *m_blocks)
+        {
+            blockExecutive->stop();
+        }
+    }
+
+
 private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
-    std::list<BlockExecutive> m_blocks;
+    BlockExecutive::Ptr getPreparedBlock(
+        bcos::protocol::BlockNumber blockNumber, int64_t timestamp);
+
+    void setPreparedBlock(bcos::protocol::BlockNumber blockNumber, int64_t timestamp,
+        BlockExecutive::Ptr blockExecutive);
+
+    // remove prepared all block <= oldBlockNumber
+    void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
+
+    std::shared_ptr<std::list<BlockExecutive::Ptr>> m_blocks =
+        std::make_shared<std::list<BlockExecutive::Ptr>>();
+
+    std::shared_ptr<std::list<BlockExecutive>> m_stoppedBlockExecutives;
+
+    std::map<bcos::protocol::BlockNumber, std::map<int64_t, BlockExecutive::Ptr>>
+        m_preparedBlocks;  // blockNumber -> <timestamp -> BlockExecutive>
+    mutable SharedMutex x_preparedBlockMutex;
+
     std::mutex m_blocksMutex;
 
     std::mutex m_executeMutex;
@@ -128,7 +174,6 @@ private:
 
     std::atomic_int64_t m_calledContextID = 1;
 
-    std::atomic<bcos::protocol::BlockNumber> m_lastExecutedBlockNumber = 0;
     uint64_t m_gasLimit = TRANSACTION_GAS;
 
     ExecutorManager::Ptr m_executorManager;
@@ -146,5 +191,9 @@ private:
         std::function<void(Error::Ptr)>)>
         m_txNotifier;
     uint64_t m_lastExecuteFinishTime = 0;
+
+    int64_t m_schedulerTermId;
+
+    bool m_isRunning = false;
 };
 }  // namespace bcos::scheduler

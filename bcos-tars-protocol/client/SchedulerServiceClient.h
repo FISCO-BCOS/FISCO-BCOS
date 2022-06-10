@@ -53,6 +53,9 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(bcos::Error::Ptr&&)> callback) override;
+
     void status(
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) override
     {

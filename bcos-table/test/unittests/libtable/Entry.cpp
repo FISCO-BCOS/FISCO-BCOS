@@ -91,7 +91,8 @@ BOOST_AUTO_TEST_CASE(copyFrom)
     BOOST_TEST(entry2->getField(0) == "value3");
     *entry2 = *entry2;
     BOOST_TEST(entry2->dirty() == true);
-    entry2->setDirty(false);
+    // entry2->setDirty(false);
+    entry2->setStatus(Entry::Status::NORMAL);
     BOOST_TEST(entry2->dirty() == false);
     // test setField lValue and rValue
     entry2->setField(0, string("value2"));
@@ -105,7 +106,7 @@ BOOST_AUTO_TEST_CASE(functions)
 {
     auto entry = std::make_shared<Entry>(tableInfo);
     BOOST_TEST(entry->dirty() == false);
-    BOOST_TEST(entry->status() == Entry::Status::NORMAL);
+    BOOST_TEST(entry->status() == Entry::Status::EMPTY);
     entry->setStatus(Entry::Status::DELETED);
     BOOST_TEST(entry->status() == Entry::Status::DELETED);
     BOOST_TEST(entry->dirty() == true);

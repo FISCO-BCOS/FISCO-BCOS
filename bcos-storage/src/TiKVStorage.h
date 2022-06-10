@@ -37,7 +37,7 @@ namespace bcos
 {
 namespace storage
 {
-std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::string>& pdAddrs);
+std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::string>& pdAddrs, const std::string& logPath);
 
 class TiKVStorage : public TransactionalStorageInterface
 {

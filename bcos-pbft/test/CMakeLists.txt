@@ -25,5 +25,9 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
 
+<<<<<<< HEAD
 target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} ${TABLE_TARGET} bcos-crypto ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
+=======
+target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} ${TABLE_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} ${SCHEDULER_TARGET} Boost::unit_test_framework)
+>>>>>>> upstream/release-3.0.0-rc4
 add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

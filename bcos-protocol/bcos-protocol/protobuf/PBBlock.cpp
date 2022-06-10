@@ -189,7 +189,7 @@ void PBBlock::encodeTransactions() const
     tbb::parallel_for(tbb::blocked_range<int>(0, txsNum), [&](const tbb::blocked_range<int>& _r) {
         for (auto i = _r.begin(); i < _r.end(); i++)
         {
-            auto data = (*m_transactions)[i]->encode(false);
+            auto data = (*m_transactions)[i]->encode();
             m_pbRawBlock->set_transactions(i, data.data(), data.size());
         }
     });

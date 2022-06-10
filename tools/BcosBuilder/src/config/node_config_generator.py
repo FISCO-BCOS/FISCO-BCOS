@@ -105,6 +105,9 @@ class NodeConfigGenerator:
         self.__update_failover_info(ini_config, node_config, node_type)
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
+        # set storage_security config
+        # TODO: access key_center to encrypt the certificates and the private keys
+        self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
 
     def __update_chain_info(self, ini_config, node_config):
@@ -127,8 +130,9 @@ class NodeConfigGenerator:
             "." + node_config.agency_config.rpc_service_name
         ini_config[service_section]["gateway"] = self.config.chain_id + \
             "." + node_config.agency_config.gateway_service_name
-        ini_config[service_section]["executor"] = self.config.chain_id + \
-            "." + node_config.node_service.service_name
+        if hasattr(node_config, 'executor_service'):
+            ini_config[service_section]["executor"] = self.config.chain_id + \
+                "." + node_config.executor_service.service_name
 
     def __update_failover_info(self, ini_config, node_config, node_type):
         # generate the member_id for failover
@@ -150,6 +154,22 @@ class NodeConfigGenerator:
             ini_config.remove_option(storage_section, "data_path")
         ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
+        ini_config[storage_section]["key_page_size"] = node_config.key_page_size
+
+    def __update_storage_security_info(self, ini_config, node_config, node_type):
+        """
+        update the storage_security for config.ini
+        """
+        section = "storage_security"
+        # not support storage_security for max-node
+        if node_type == "max":
+            if ini_config.has_section(section):
+                ini_config.remove_section(section)
+            return
+        ini_config[section]["enable"] = utilities.convert_bool_to_str(
+            node_config.enable_storage_security)
+        ini_config[section]["key_center_url"] = node_config.key_center_url
+        ini_config[section]["cipher_data_key"] = node_config.cipher_data_key
 
     def __generate_pem_file(self, outputdir, node_config):
         """
@@ -157,8 +177,11 @@ class NodeConfigGenerator:
         """
         pem_path = os.path.join(outputdir, self.node_pem_file)
         node_id_path = os.path.join(outputdir, self.node_id_file)
-        utilities.generate_private_key(
-            node_config.sm_crypto, outputdir)
+
+        # if the file is not exist, generate it
+        if os.path.exists(pem_path) is False or os.path.exists(node_id_path) is False:
+            utilities.generate_private_key(
+                node_config.sm_crypto, outputdir)
         node_id = ""
         with open(node_id_path, 'r', encoding='utf-8') as f:
             node_id = f.read()
@@ -216,14 +239,14 @@ class NodeConfigGenerator:
             return True
         return False
 
-    def generate_genesis_config(self, group_config, enforce_genesis_exists):
+    def generate_genesis_config(self, group_config, must_genesis_exists):
         if self.__genesis_config_generated(group_config):
             config_content = configparser.ConfigParser(
                 comment_prefixes='/', allow_no_value=True)
             config_content.read(group_config.genesis_config_path)
             self._generate_all_node_pem(group_config)
             return config_content
-        if enforce_genesis_exists is True:
+        if must_genesis_exists is True:
             utilities.log_error("Please set the genesis config path firstly!")
             sys.exit(-1)
         nodeid_list = self._generate_all_node_pem(group_config)
@@ -257,20 +280,20 @@ class NodeConfigGenerator:
         if os.path.exists(group_config.genesis_config_path) is False:
             desc = group_config.chain_id + "." + group_config.group_id
             self.store_config(genesis_config_content, "genesis",
-                              group_config.genesis_config_path, desc)
+                              group_config.genesis_config_path, desc, False)
         for node_config in group_config.node_list:
             node_path = self.__get_and_generate_node_base_path(node_config)
             genesis_config_path = os.path.join(
                 node_path, self.genesis_tmp_config_file)
-            if self.store_config(genesis_config_content, "genesis", genesis_config_path, node_config.node_service.service_name) is False:
+            if self.store_config(genesis_config_content, "genesis", genesis_config_path, node_config.node_service.service_name, False) is False:
                 return False
         return True
 
-    def store_config(self, config_content, config_type, config_path, desc):
+    def store_config(self, config_content, config_type, config_path, desc, ignore_if_exists):
         """
         store the generated genesis config content for given node
         """
-        if os.path.exists(config_path):
+        if os.path.exists(config_path) and ignore_if_exists is False:
             utilities.log_error("* store %s config for %s failed for the config %s already exists." %
                                 (config_type, desc, config_path))
             return False
@@ -290,4 +313,4 @@ class NodeConfigGenerator:
             group_config, node_config, node_config.node_service.service_name, self.node_type)
         node_path = self.__get_and_generate_node_base_path(node_config)
         ini_config_path = os.path.join(node_path, self.ini_tmp_config_file)
-        return self.store_config(ini_config_content, "ini", ini_config_path, node_config.node_service.service_name)
+        return self.store_config(ini_config_content, "ini", ini_config_path, node_config.node_service.service_name, False)

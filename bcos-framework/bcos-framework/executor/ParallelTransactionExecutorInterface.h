@@ -44,7 +44,8 @@ public:
     ParallelTransactionExecutorInterface() = default;
     virtual ~ParallelTransactionExecutorInterface() = default;
 
-    virtual void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    virtual void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) = 0;
 
     virtual void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -96,6 +97,10 @@ public:
 
     virtual void getABI(
         std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) = 0;
+
+    virtual void start(){};
+
+    virtual void stop(){};
 };
 }  // namespace executor
 }  // namespace bcos

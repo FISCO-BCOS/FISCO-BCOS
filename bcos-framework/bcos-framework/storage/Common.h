@@ -66,7 +66,7 @@ struct Condition
     // string compare, "12" < "2"
     void LT(const std::string& value) { m_conditions.emplace_back(Comparator::LT, value); }
     void LE(const std::string& value) { m_conditions.emplace_back(Comparator::LE, value); }
-    void limit(size_t start, size_t end) { m_limit = std::pair<size_t, size_t>(start, end); }
+    void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
 
@@ -129,7 +129,6 @@ struct Condition
         Comparator cmp;
         std::string value;
     };
-
     std::vector<cond> m_conditions;
     std::pair<size_t, size_t> m_limit;
 };

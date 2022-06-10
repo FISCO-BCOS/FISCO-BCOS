@@ -89,6 +89,8 @@ public:
 
     virtual void restart();
 
+    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
+
 protected:
     virtual void initSendResponseHandler();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -178,8 +180,6 @@ protected:
         std::shared_ptr<PBFTBaseMessageInterface> _pbftMessage, SendResponseCallback _sendResponse);
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
-
-    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
 private:
     // utility functions

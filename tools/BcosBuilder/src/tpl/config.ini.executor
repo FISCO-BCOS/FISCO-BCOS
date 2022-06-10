@@ -8,14 +8,11 @@
 [service]
     scheduler=chain0
 
-[executor]
-    ; use the wasm virtual machine or not
-    is_wasm=false
-
 [storage]
     enable_cache=true
     pd_addrs=
-    
+    key_page_size=0
+
 [log]
     enable=true
     log_path=./log

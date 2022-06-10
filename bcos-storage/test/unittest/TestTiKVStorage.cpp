@@ -36,6 +36,12 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
+    // init a hashContext
+    void* init() override { return nullptr; }
+    // update the hashContext
+    void* update(void*, bytesConstRef) override { return nullptr; }
+    // final the hashContext
+    bcos::crypto::HashType final(void*) override { return bcos::crypto::HashType(); }
 };
 
 struct TestTiKVStorageFixture
@@ -43,7 +49,7 @@ struct TestTiKVStorageFixture
     TestTiKVStorageFixture()
     {
         std::vector<std::string> pd_addrs{"127.0.0.1:2379"};
-        m_cluster = newTiKVCluster(pd_addrs);
+        m_cluster = newTiKVCluster(pd_addrs, "./");
 
         storage = std::make_shared<TiKVStorage>(m_cluster);
         storage->asyncOpenTable(testTableName, [&](auto error, auto table) {

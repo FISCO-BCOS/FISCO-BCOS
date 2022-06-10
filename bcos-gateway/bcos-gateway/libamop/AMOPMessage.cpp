@@ -32,6 +32,10 @@ const size_t AMOPMessage::HEADER_LENGTH;
 
 bool AMOPMessage::encode(bcos::bytes& _buffer)
 {
+    // encode version
+    uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
+    _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
+
     uint16_t type = boost::asio::detail::socket_ops::host_to_network_short(m_type);
     _buffer.insert(_buffer.end(), (byte*)&type, (byte*)&type + 2);
     uint16_t status = boost::asio::detail::socket_ops::host_to_network_short(m_status);
@@ -52,6 +56,11 @@ ssize_t AMOPMessage::decode(bcos::bytesConstRef _buffer)
         return -1;
     }
     std::size_t offset = 0;
+    // decode version
+    m_version = boost::asio::detail::socket_ops::network_to_host_short(
+        *((uint16_t*)(_buffer.data() + offset)));
+    offset += 2;
+
     m_type = boost::asio::detail::socket_ops::network_to_host_short(
         *((uint16_t*)(_buffer.data() + offset)));
     offset += 2;

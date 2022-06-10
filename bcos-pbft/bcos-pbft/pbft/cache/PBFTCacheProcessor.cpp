@@ -264,6 +264,8 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
                               "Receive valid system prePrepare proposal, stop to notify sealing")
                        << LOG_KV("waitSealUntil", proposalIndex);
     }
+    tryToPreApplyProposal(_committedProposal);  // will query scheduler to encode message and fill
+                                                // txbytes in blocks
     tryToApplyCommitQueue();
 }
 
@@ -300,6 +302,13 @@ ProposalInterface::ConstPtr PBFTCacheProcessor::getAppliedCheckPointProposal(
         return nullptr;
     }
     return (m_caches[_index])->checkPointProposal();
+}
+
+bool PBFTCacheProcessor::tryToPreApplyProposal(ProposalInterface::Ptr _proposal)
+{
+    m_config->stateMachine()->asyncPreApply(_proposal, [](bool success) { (void)success; });
+
+    return true;
 }
 
 bool PBFTCacheProcessor::tryToApplyCommitQueue()

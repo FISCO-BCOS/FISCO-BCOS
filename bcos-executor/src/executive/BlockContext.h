@@ -49,11 +49,11 @@ class BlockContext : public std::enable_shared_from_this<BlockContext>
 public:
     typedef std::shared_ptr<BlockContext> Ptr;
 
-    BlockContext(std::shared_ptr<storage::StateStorage> storage, crypto::Hash::Ptr _hashImpl,
+    BlockContext(std::shared_ptr<storage::StateStorageInterface> storage, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
         uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
 
-    BlockContext(std::shared_ptr<storage::StateStorage> storage,
+    BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
         protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
         bool _isAuthCheck);
@@ -62,7 +62,7 @@ public:
         const protocol::Transaction::ConstPtr& _tx)>;
     virtual ~BlockContext(){};
 
-    std::shared_ptr<storage::StateStorage> storage() { return m_storage; }
+    std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
 
     bcos::storage::StorageInterface::Ptr lastStorage() { return m_lastStorage; }
 
@@ -104,7 +104,7 @@ private:
     bool m_isAuthCheck = false;
 
     uint64_t m_txGasLimit = 3000000000;
-    std::shared_ptr<storage::StateStorage> m_storage;
+    std::shared_ptr<storage::StateStorageInterface> m_storage;
     bcos::storage::StorageInterface::Ptr m_lastStorage = nullptr;
     crypto::Hash::Ptr m_hashImpl;
 };

@@ -25,6 +25,16 @@
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
 
+#define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
+    do                                                                                       \
+    {                                                                                        \
+        if ((offset) > (length))                                                             \
+        {                                                                                    \
+            throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
+                                    " ,length: " + std::to_string(length));                  \
+        }                                                                                    \
+    } while (0);
+
 namespace bcos
 {
 namespace gateway

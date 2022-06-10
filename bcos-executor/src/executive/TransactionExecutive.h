@@ -88,7 +88,7 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector)
     {
-        m_recoder = m_blockContext.lock()->storage()->newRecoder();
+        m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.lock()->hashHandler();
     }
 
@@ -178,6 +178,12 @@ public:
         m_exchangeMessage = std::move(callParameters);
     }
 
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    {
+        std::copy(
+            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
+    }
+
     CallParameters::UniquePtr resume()
     {
         EXECUTOR_LOG(TRACE) << "Context switch to executive coroutine, from resume";
@@ -192,8 +198,7 @@ private:
 
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
-    std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> callPrecompiled(
-        CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> create(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);

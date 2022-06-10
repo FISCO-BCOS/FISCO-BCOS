@@ -139,11 +139,11 @@ public:
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
         auto result =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
         auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result2);
     }
 
@@ -155,13 +155,13 @@ public:
         m_param->setBlockTxCountLimit(0);
 
         auto result1 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result1);
         auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(!result2);
         auto result3 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result3);
     }
 
@@ -198,7 +198,7 @@ public:
             auto txHashList = std::make_shared<protocol::HashList>();
             for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
             {
-                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode();
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->emplace_back(txPointer);
                 txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());

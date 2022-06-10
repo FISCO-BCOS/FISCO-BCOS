@@ -204,6 +204,13 @@ class TarsService:
             utilities.log_debug("add config file for application %s, config file path: %s, service_name: %s" %
                                 (self.app_name, config_file_path, server_name))
             self.add_server_config_file(
+                "", config_file_name, server_name, config_file_path, empty_server_config)
+        (ret, id) = self.get_config_file_id(
+            config_file_name, server_name, node_name)
+        if ret is False:
+            utilities.log_debug("add config file for node: %s, app: %s, config: %s, service: %s" %
+                                (node_name, self.app_name, config_file_path, server_name))
+            self.add_server_config_file(
                 node_name, config_file_name, server_name, config_file_path, empty_server_config)
         return self.update_service_config(config_file_name, server_name, node_name, config_file_path)
 
@@ -257,7 +264,7 @@ class TarsService:
         for item in result["data"]:
             if "filename" in item and item["filename"] == config_file_name and item["node_name"] == node_name:
                 return (True, item["id"])
-        utilities.log_error("the node config file %s not found, node: %s, :%s:" % (
+        utilities.log_info("the node config file %s not found, node: %s, :%s:" % (
             config_file_name, node_name, str(result["data"])))
         return (False, 0)
 

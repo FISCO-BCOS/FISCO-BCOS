@@ -281,7 +281,7 @@ public:
         if (_errorCode != 0)
         {
             std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
         }
 
         commitBlock(_number);
@@ -478,7 +478,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls dir
     {
         auto result = list(_number++, "/tables");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -490,7 +490,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls regular
     {
         auto result = list(_number++, "/tables/test2");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -502,7 +502,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls not exist
     {
         auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
@@ -512,7 +512,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls /
     {
         auto result = list(_number++, "/");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls dir
     {
         auto result = list(_number++, "/tables");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -548,7 +548,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls regular
     {
         auto result = list(_number++, "/tables/test2");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -560,7 +560,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls not exist
     {
         auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
@@ -570,7 +570,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls /
     {
         auto result = list(_number++, "/");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);

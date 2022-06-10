@@ -27,7 +27,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
-#include <bcos-scheduler/src/ExecutorManager.h>
+#include <bcos-scheduler/src/RemoteExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
@@ -127,13 +127,14 @@ void SchedulerServiceApp::createScheduler()
 {
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(
-        blockFactory, StorageInitializer::build(m_nodeConfig->pdAddrs()));
+        blockFactory, StorageInitializer::build(m_nodeConfig->pdAddrs(), m_logInitializer->logPath()));
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-    auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
+    auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
+        m_nodeConfig->executorServiceName());
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs()), executionMessageFactory, blockFactory,
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), m_logInitializer->logPath()), executionMessageFactory, blockFactory,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);

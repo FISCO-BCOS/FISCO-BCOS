@@ -21,7 +21,8 @@ public:
 
     const std::string& name() const { return m_name; }
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
         SCHEDULER_LOG(TRACE) << "Receiving nextBlock: " << blockHeader->number();

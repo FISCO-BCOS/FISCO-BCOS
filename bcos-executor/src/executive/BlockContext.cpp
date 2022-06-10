@@ -40,7 +40,7 @@ using namespace bcos::protocol;
 using namespace bcos::precompiled;
 using namespace std;
 
-BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
+BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
     uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
@@ -55,7 +55,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     m_hashImpl(_hashImpl)
 {}
 
-BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
+BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
     protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)

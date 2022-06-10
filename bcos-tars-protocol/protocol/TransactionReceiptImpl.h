@@ -53,7 +53,6 @@ public:
     ~TransactionReceiptImpl() override {}
     void decode(bcos::bytesConstRef _receiptData) override;
     void encode(bcos::bytes& _encodedData) const override;
-    bcos::bytesConstRef encode(bool _onlyHashFieldData = false) const override;
     bcos::crypto::HashType hash() const override;
 
     int32_t version() const override { return m_inner()->data.version; }

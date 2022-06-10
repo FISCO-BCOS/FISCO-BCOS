@@ -62,14 +62,13 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) {
-        if (_v > (uint32_t)(g_BCOSConfig.maxSupportedVersion()) ||
-            _v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
+        if (_v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
         {
             std::stringstream errorMsg;
-            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
-                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
+            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) +
+                                 " failed for lower than min_supported_version")
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
-            PRECOMPILED_LOG(WARNING) << errorMsg.str() << LOG_KV("settedValue", _v);
+            PRECOMPILED_LOG(WARNING) << errorMsg.str() << LOG_KV("setValue", _v);
             BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
         }
     }));
@@ -88,8 +87,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
 
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto callResult = std::make_shared<PrecompiledExecResult>();
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -98,7 +95,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
                 << LOG_KV("sender", _callParameters->m_sender);
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
         }
         else
         {
@@ -123,7 +120,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue)
                                   << LOG_KV("enableNum", blockContext->number() + 1);
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, codec);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         }
     }
     else if (func == name2Selector[SYSCONFIG_METHOD_GET_STR])
@@ -137,8 +134,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("getValueByKey func") << LOG_KV("configKey", configKey);
 
         auto valueNumberPair = getSysConfigByKey(_executive, configKey);
-        callResult->setExecResult(
-            codec.encode(valueNumberPair.first, u256(valueNumberPair.second)));
+        _callParameters->setExecResult(codec.encode(valueNumberPair.first, valueNumberPair.second));
     }
     else
     {
@@ -146,9 +142,8 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
     }
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    return callResult;
+    _callParameters->setGas(_callParameters->m_gas);
+    return _callParameters;
 }
 
 void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)
@@ -224,11 +219,6 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
     }
     catch (std::exception const& e)
     {
-        // Note: rc3 version, the compatibility_version maybe empty
-        if (_key == SYSTEM_KEY_COMPATIBILITY_VERSION)
-        {
-            return {bcos::protocol::RC3_VERSION_STR, 0};
-        }
         auto errorMsg =
             "getSysConfigByKey for " + _key + "failed, error:" + boost::diagnostic_information(e);
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;

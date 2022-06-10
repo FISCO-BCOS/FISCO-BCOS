@@ -373,10 +373,6 @@ download_monitor_bin()
     # the binary can obtained from the cos
     LOG_INFO "Downloading mtail binary from ${github_link} ..."
     curl -#LO "${github_link}"
-    
-    if [[ "$(ls -al . | grep "mtail.*tar.gz" | awk '{print $5}')" -lt "7618709" ]];then
-        exit_with_clean "Download mtail failed, please try again. Or download and extract it manually from ${github_link} and use -e option."
-    fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd .. 
 
     chmod a+x ${mtail_binary_path}
@@ -949,9 +945,10 @@ EOF
     generate_script_template "$output/start_monitor.sh"
     cat <<EOF >> "${output}/start_monitor.sh"
 
-DOCKER_FILE=./compose.yaml
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
 docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
-
+echo -e "\033[32m start monitor successfully\033[0m"
+echo -e "\033[32m Please access grafana by https://host_ip:3001 \033[0m"
 EOF
     chmod u+x "${output}/start_monitor.sh"
 
@@ -959,9 +956,9 @@ EOF
     generate_script_template "$output/stop_monitor.sh"
     cat <<EOF >> "${output}/stop_monitor.sh"
 
-DOCKER_FILE=./compose.yaml
-docker-compose -f \${DOCKER_FILE} down
-
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} stop
+echo -e "\033[32m stop monitor successfully\033[0m"
 EOF
     chmod u+x "${output}/stop_monitor.sh"
 }
@@ -1056,6 +1053,13 @@ generate_common_ini() {
 [security]
     private_key_path=conf/node.pem
 
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
@@ -1063,6 +1067,8 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
+    key_page_size=0
+    ; type can be RocksDB/TiKV
     type=RocksDB
     pd_addrs=
 

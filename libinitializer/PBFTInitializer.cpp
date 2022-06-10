@@ -28,6 +28,7 @@
 #endif
 
 #include <bcos-pbft/pbft/PBFTFactory.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
@@ -383,9 +384,10 @@ void PBFTInitializer::createPBFT()
     auto keyPair = m_protocolInitializer->keyPair();
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
     // create pbft
-    auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
-        m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory());
+    auto pbftFactory = std::make_shared<PBFTFactory>(m_nodeArchType,
+        m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
+        kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
+        m_protocolInitializer->txResultFactory());
 
     m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
@@ -517,6 +519,14 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
             m_blockSync->enableAsMaster(_success);
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
+
+            auto schedulerManager =
+                std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
+            schedulerManager->asyncSwitchTerm(_leader->seq(), [_leader](Error::Ptr&& error) {
+                INITIALIZER_LOG(INFO)
+                    << "Notify scheduler switch " << (error ? "failed" : "success") << " with"
+                    << LOG_KV("seq", _leader->seq());
+            });
         });
     INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
                           << LOG_KV("nodeConfig", nodeConfig);

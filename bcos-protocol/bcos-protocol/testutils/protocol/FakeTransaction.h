@@ -79,7 +79,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     }
     auto addr = _keyPair->address(_cryptoSuite->hashImpl());
     BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
-    auto encodedData = pbTransaction->encode(false);
+    auto encodedData = pbTransaction->encode();
     // auto encodedDataCache = pbTransaction->encode();
     // BOOST_CHECK(encodedData.toBytes() == encodedDataCache.toBytes());
 #if 0

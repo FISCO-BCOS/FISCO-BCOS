@@ -81,6 +81,10 @@ public:
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
 
+    // for performance, do the things before executing block in executor.
+    void preExecuteBlock(
+        bcos::protocol::Block::Ptr, bool, std::function<void(Error::Ptr&&)>) override{};
+
 private:
     FakeLedger::Ptr m_ledger;
     BlockFactory::Ptr m_blockFactory;
