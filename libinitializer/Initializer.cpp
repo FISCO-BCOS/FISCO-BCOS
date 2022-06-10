@@ -263,7 +263,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
-    initSysContract();
 }
 
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)

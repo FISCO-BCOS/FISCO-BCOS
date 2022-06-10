@@ -340,6 +340,10 @@ int ConsensusPrecompiled::setWeight(
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
     if (it != consensusList.end())
     {
+        if (it->type != ledger::CONSENSUS_SEALER)
+        {
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
+        }
         it->weight = weight;
         it->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
     }
