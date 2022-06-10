@@ -43,6 +43,9 @@ set_property(TARGET PbcSig PROPERTY INTERFACE_LINK_LIBRARIES Pbc)
 set_property(TARGET PbcSig PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${DEPS_INCLUDE_DIR})
 add_dependencies(PbcSig GroupSigLib)
 
+find_package(cryptopp CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
+
 add_library(GroupSig STATIC IMPORTED)
 set(GROUPSIG_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/libgroup_sig${LIB_SUFFIX})
 set(GROUPSIG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/include)
@@ -51,5 +54,6 @@ file(MAKE_DIRECTORY ${GROUPSIG_INCLUDE_DIR})  # Must exist.
 set_property(TARGET GroupSig PROPERTY IMPORTED_LOCATION ${GROUPSIG_LIBRARY})
 set_property(TARGET GroupSig PROPERTY INTERFACE_LINK_LIBRARIES PbcSig Pbc Gmp)
 set_property(TARGET GroupSig PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${GROUPSIG_INCLUDE_DIR} ${DEPS_INCLUDE_DIR})
+add_dependencies(GroupSigLib jsoncpp_lib_static cryptopp-static)
 add_dependencies(GroupSig GroupSigLib)
 unset(SOURCE_DIR)
