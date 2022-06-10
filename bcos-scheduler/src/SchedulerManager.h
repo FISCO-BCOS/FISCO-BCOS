@@ -47,6 +47,10 @@ public:
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
     void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override;
+
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(Error::Ptr&&)> callback) override;
+
     void asyncSwitchTerm(int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback);
 
 
@@ -67,7 +71,7 @@ public:
         SchedulerTerm next() { return SchedulerTerm(m_schedulerSeq); }
         int64_t getSchedulerTermID()
         {
-            int64_t id = m_schedulerSeq * 10e14 + m_executorSeq;
+            int64_t id = (m_schedulerSeq << 32) + m_executorSeq;
             if (id <= 0)
             {
                 BCOS_LOG(FATAL) << "SchedulerTermID overflow!"
@@ -93,7 +97,7 @@ private:
 
 private:
     SchedulerImpl::Ptr m_scheduler;
-    SchedulerImpl::Ptr m_oldScheduler;
+    SchedulerImpl::Ptr m_oldScheduler;  // TODO: no to use this
     SchedulerFactory::Ptr m_factory;
     SchedulerTerm m_schedulerTerm;
     RemoteExecutorManager::Ptr m_remoteExecutorManager;

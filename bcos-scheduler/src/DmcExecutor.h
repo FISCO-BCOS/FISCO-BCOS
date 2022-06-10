@@ -21,6 +21,7 @@
 
 
 #pragma once
+#include "DmcStepRecorder.h"
 #include "Executive.h"
 #include "ExecutivePool.h"
 #include "ExecutorManager.h"
@@ -53,13 +54,15 @@ public:
 
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl)
+        GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
+        DmcStepRecorder::Ptr dmcRecorder)
       : m_name(name),
         m_contractAddress(contractAddress),
         m_block(block),
         m_executor(executor),
         m_keyLocks(keyLocks),
-        m_hashImpl(hashImpl)
+        m_hashImpl(hashImpl),
+        m_dmcRecorder(dmcRecorder)
     {}
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
@@ -111,6 +114,7 @@ private:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     GraphKeyLocks::Ptr m_keyLocks;
     bcos::crypto::Hash::Ptr m_hashImpl;
+    DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
 
 
@@ -119,4 +123,5 @@ private:
     std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> f_onTxFinished;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
 };
+
 }  // namespace bcos::scheduler

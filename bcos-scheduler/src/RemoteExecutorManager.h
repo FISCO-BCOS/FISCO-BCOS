@@ -32,7 +32,7 @@ class RemoteExecutorManager : public ExecutorManager, Worker
 {
 public:
     using Ptr = std::shared_ptr<RemoteExecutorManager>;
-    using EndPointMap = std::shared_ptr<std::map<std::string, uint16_t>>;
+    using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     RemoteExecutorManager(std::string executorServiceName) : Worker("RemoteExecutorManager", 1000)
     {
@@ -44,6 +44,12 @@ public:
         m_executorServiceName = executorServiceName + "." + bcos::protocol::EXECUTOR_SERVANT_NAME;
 
         EXECUTOR_MANAGER_LOG(INFO) << "Initialize " << threadName() << " "
+                                   << LOG_KV("executorServiceName", m_executorServiceName);
+    }
+
+    void start()
+    {
+        EXECUTOR_MANAGER_LOG(INFO) << "Start" << threadName() << " "
                                    << LOG_KV("executorServiceName", m_executorServiceName);
         startWorking();
     }
@@ -57,7 +63,7 @@ public:
 
     void executeWorker() override;
 
-    void update(EndPointMap endPointMap);
+    void update(EndPointSet endPointMap);
 
     bool empty() { return size() == 0; }
 
@@ -77,6 +83,6 @@ private:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
 
-    EndPointMap m_endPointMap = std::make_shared<std::map<std::string, uint16_t>>();
+    EndPointSet m_endPointSet = std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
 };
 }  // namespace bcos::scheduler

@@ -7,9 +7,10 @@ void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verif
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
         callback)
 {
-    bcos::ReadGuard l(x_switchTermMutex);
+    bcos::ReadGuard lock(x_switchTermMutex);
     if (m_remoteExecutorManager->empty())
     {
+        lock.release();
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "No executor started!"),
             nullptr, false);
@@ -24,9 +25,10 @@ void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verif
 void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
 {
-    bcos::ReadGuard l(x_switchTermMutex);
+    bcos::ReadGuard lock(x_switchTermMutex);
     if (m_remoteExecutorManager->empty())
     {
+        lock.release();
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "No executor started!"),
             nullptr);
@@ -41,9 +43,10 @@ void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 void SchedulerManager::status(
     std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback)
 {
-    bcos::ReadGuard l(x_switchTermMutex);
+    bcos::ReadGuard lock(x_switchTermMutex);
     if (m_remoteExecutorManager->empty())
     {
+        lock.release();
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "No executor started!"),
             nullptr);
@@ -58,9 +61,10 @@ void SchedulerManager::status(
 void SchedulerManager::call(protocol::Transaction::Ptr tx,
     std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
-    bcos::ReadGuard l(x_switchTermMutex);
+    bcos::ReadGuard lock(x_switchTermMutex);
     if (m_remoteExecutorManager->empty())
     {
+        lock.release();
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "No executor started!"),
             nullptr);
@@ -113,6 +117,14 @@ void SchedulerManager::getABI(
     m_scheduler->getABI(contract, std::move(callback));
 }
 
+void SchedulerManager::preExecuteBlock(
+    bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr&&)> callback)
+{
+    bcos::ReadGuard l(x_switchTermMutex);
+    initSchedulerIfNotExist();
+    m_scheduler->preExecuteBlock(block, verify, std::move(callback));
+}
+
 void SchedulerManager::asyncSwitchTerm(
     int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback)
 {
@@ -131,7 +143,10 @@ void SchedulerManager::initSchedulerIfNotExist()
     {
         static bcos::SharedMutex mutex;
         bcos::WriteGuard lock(mutex);
-        updateScheduler(m_schedulerTerm.getSchedulerTermID());
+        if (!m_scheduler)
+        {
+            updateScheduler(m_schedulerTerm.getSchedulerTermID());
+        }
     }
 
     // testTriggerSwitch();  // Just a test code, TODO: remove me
