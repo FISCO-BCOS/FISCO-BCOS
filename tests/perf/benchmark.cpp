@@ -26,8 +26,10 @@ int main(int argc, const char* argv[])
         boost::program_options::value<int>()->default_value(0),
         "sizeof page(if >0 use KeyPageStorage, else use stateStorage)")("chainLength,c",
         boost::program_options::value<int>()->default_value(1), "storage queue length")("total,t",
-        boost::program_options::value<int>()->default_value(100000), "data set size")("onlyWrite,o",
-        boost::program_options::value<bool>()->default_value(false), "only test write performance")(
+        boost::program_options::value<int>()->default_value(100000),
+        "data set size")("onlyWrite,o", boost::program_options::value<bool>()->default_value(false),
+        "only test write performance")("sorted,s",
+        boost::program_options::value<bool>()->default_value(true), "use sorted data set")(
         "db,d", boost::program_options::value<int>()->default_value(0), "init db keys count");
     boost::program_options::variables_map vm;
     try
@@ -50,6 +52,7 @@ int main(int argc, const char* argv[])
     int total = vm["total"].as<int>();
     int storageChainLength = vm["chainLength"].as<int>();
     bool onlyWrite = vm["onlyWrite"].as<bool>();
+    bool sorted = vm["sorted"].as<bool>();
     int dbKeys = vm["db"].as<int>();
 
     storageChainLength = storageChainLength > 0 ? storageChainLength : 1;
@@ -69,6 +72,11 @@ int main(int argc, const char* argv[])
         boost::erase_all(keySet[i], "-");
         valueSet[i] = boost::uuids::to_string(boost::uuids::random_generator()());
         boost::erase_all(valueSet[i], "-");
+    }
+    if (sorted)
+    {
+        std::sort(keySet.begin(), keySet.end());
+        std::sort(valueSet.begin(), valueSet.end());
     }
 
     std::cout << "pageSize=" << keyPageSize << "|Total=" << total << "|kv size=" << keySet[0].size()

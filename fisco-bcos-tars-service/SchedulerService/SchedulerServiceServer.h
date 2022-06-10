@@ -62,6 +62,9 @@ public:
     bcostars::Error registerExecutor(
         std::string const& _name, tars::TarsCurrentPtr _current) override;
 
+    bcostars::Error preExecuteBlock(
+        const bcostars::Block& _block, tars::Bool _verify, tars::TarsCurrentPtr current) override;
+
 private:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

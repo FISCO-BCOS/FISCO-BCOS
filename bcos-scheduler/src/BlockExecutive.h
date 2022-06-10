@@ -29,6 +29,7 @@ namespace bcos::scheduler
 {
 class SchedulerImpl;
 class DmcExecutor;
+class DmcStepRecorder;
 
 class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
@@ -122,6 +123,8 @@ private:
     std::string preprocessAddress(const std::string_view& address);
 
     std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
+    std::shared_ptr<DmcStepRecorder> m_dmcRecorder;
+
     std::vector<ExecutiveResult> m_executiveResults;
 
     size_t m_gasUsed = 0;

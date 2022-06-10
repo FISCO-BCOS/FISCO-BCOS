@@ -83,6 +83,9 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(gateway->amop()->topicManager());
     topicManager->setLocalClient(m_rpc);
     m_nodeInitializer->initNotificationHandlers(m_rpc);
+
+    // NOTE: this should be last called
+    m_nodeInitializer->initSysContract();
 }
 
 void AirNodeInitializer::start()

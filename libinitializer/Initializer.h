@@ -75,6 +75,7 @@ public:
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath, bool _airVersion);
 
+    /// NOTE: this should be last called
     void initSysContract();
 
 private:

@@ -200,6 +200,9 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             return true;
         });
 
+    // record all send message for debug
+    m_dmcRecorder->recordSends(m_contractAddress, *messages);
+
     if (messages->size() == 1 && (*messages)[0]->staticCall())
     {
         // is static call
@@ -364,6 +367,8 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
 void DmcExecutor::handleExecutiveOutputs(
     std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs)
 {
+    m_dmcRecorder->recordReceives(m_contractAddress, outputs);
+
     for (auto& output : outputs)
     {
         std::string to = {output->to().data(), output->to().size()};

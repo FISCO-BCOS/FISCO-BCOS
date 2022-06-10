@@ -139,9 +139,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
     }
     else
     {
@@ -196,7 +196,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
     }
 
-    if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("connect executor")
+                              << LOG_KV("nodeArchType", _nodeArchType);
+        executorManager->start();
+    }
+    else
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
                               << LOG_KV("nodeArchType", _nodeArchType);
@@ -257,7 +263,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
-    initSysContract();
 }
 
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
