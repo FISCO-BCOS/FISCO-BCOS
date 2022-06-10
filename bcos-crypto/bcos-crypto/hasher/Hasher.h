@@ -12,7 +12,7 @@ template <class HasherType>
 concept Hasher = requires(HasherType hasher)
 {
     HasherType{};
-    HasherType::HASH_SIZE->std::integral;
+    HasherType::HASH_SIZE;
     hasher.update(std::span<std::byte>{});
     hasher.update(std::span<std::byte const>{});
     hasher.final(std::span<std::byte>{});

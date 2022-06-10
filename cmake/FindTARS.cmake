@@ -10,14 +10,6 @@ if(NOT TARS_ROOT_DIR)
   message(STATUS "Install TARS from github")
   set(TARS_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/tars-install)
 
-  ExternalProject_Add(tars-project
-    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5ef1e21daaf1e143e81be5c7560c879f76edf447.tar.gz
-    URL_HASH SHA1=000a070a99d82740f2f238f2defbc2ee7ff3bf76
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TARS_INSTALL} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-  )
-
-  set(TARS_INCLUDE_DIRS "${TARS_INSTALL}/include")
-  make_directory(${TARS_INCLUDE_DIRS})
   set(TARS_parse_LIBRARIES
     "${TARS_INSTALL}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}tarsparse${CMAKE_STATIC_LIBRARY_SUFFIX}"
   )
@@ -27,6 +19,16 @@ if(NOT TARS_ROOT_DIR)
   set(TARS_util_LIBRARIES
     "${TARS_INSTALL}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}tarsutil${CMAKE_STATIC_LIBRARY_SUFFIX}"
   )
+
+  ExternalProject_Add(tars-project
+    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5ef1e21daaf1e143e81be5c7560c879f76edf447.tar.gz
+    URL_HASH SHA1=000a070a99d82740f2f238f2defbc2ee7ff3bf76
+    BUILD_BYPRODUCTS ${TARS_parse_LIBRARIES} ${TARS_servant_LIBRARIES} ${TARS_util_LIBRARIES}
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TARS_INSTALL} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+  )
+
+  set(TARS_INCLUDE_DIRS "${TARS_INSTALL}/include")
+  make_directory(${TARS_INCLUDE_DIRS})
 
   add_dependencies(tars::parse tars-project)
   add_dependencies(tars::servant tars-project)
