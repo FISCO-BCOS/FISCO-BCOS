@@ -151,9 +151,13 @@ public:
         m_msgHandlers.erase(_type);
     }
 
+
+    void asyncSendMessage(
+        P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options = Options());
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
-        Options = Options(), SessionCallbackFunc = SessionCallbackFunc());
+        Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
 
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol

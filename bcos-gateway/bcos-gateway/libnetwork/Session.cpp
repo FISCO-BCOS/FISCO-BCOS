@@ -197,7 +197,6 @@ void Session::write()
         m_writeQueue.pop();
 
         enter_time = task.second;
-        auto session = shared_from_this();
         auto buffer = task.first;
 
         auto server = m_server.lock();
@@ -207,9 +206,16 @@ void Session::write()
             {
                 // asio::buffer referecne buffer, so buffer need alive before
                 // asio::buffer be used
+                auto self = std::weak_ptr<Session>(shared_from_this());
                 server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
-                    boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
-                        boost::asio::placeholders::bytes_transferred, buffer));
+                    [self, buffer](const boost::system::error_code _error, std::size_t _size) {
+                        auto session = self.lock();
+                        if (!session)
+                        {
+                            return;
+                        }
+                        session->onWrite(_error, _size, buffer);
+                    });
             }
             else
             {
@@ -285,9 +291,14 @@ void Session::drop(DisconnectReason _reason)
     if (server && m_messageHandler)
     {
         auto handler = m_messageHandler;
-        auto self = shared_from_this();
+        auto self = std::weak_ptr<Session>(shared_from_this());
         server->threadPool()->enqueue([handler, self, errorCode, errorMsg]() {
-            handler(NetworkException(errorCode, errorMsg), self, Message::Ptr());
+            auto session = self.lock();
+            if (!session)
+            {
+                return;
+            }
+            handler(NetworkException(errorCode, errorMsg), session, Message::Ptr());
         });
     }
 
@@ -492,11 +503,16 @@ void Session::callDefaultMsgHandler(NetworkException const& e, Message::Ptr mess
 
     SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
                        << LOG_KV("message.seq", message->seq());
-    auto session = shared_from_this();
     auto handler = m_messageHandler;
-
-    server->threadPool()->enqueue(
-        [session, handler, e, message]() { handler(e, session, message); });
+    auto weakSession = std::weak_ptr<Session>(shared_from_this());
+    server->threadPool()->enqueue([weakSession, handler, e, message]() {
+        auto session = weakSession.lock();
+        if (!session)
+        {
+            return;
+        }
+        handler(e, session, message);
+    });
 }
 
 void Session::onMessage(NetworkException const& e, Message::Ptr message)
@@ -518,23 +534,19 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             {
                 callbackPtr->timeoutHandler->cancel();
             }
-
-            if (callbackPtr->callback)
+            auto callback = callbackPtr->callback;
+            if (callback)
             {
-                auto callback = callbackPtr->callback;
-                if (callback)
-                {
-                    auto self = std::weak_ptr<Session>(shared_from_this());
-                    server->threadPool()->enqueue([e, callback, self, message]() {
-                        callback(e, message);
+                auto self = std::weak_ptr<Session>(shared_from_this());
+                server->threadPool()->enqueue([e, callback, self, message]() {
+                    callback(e, message);
 
-                        auto s = self.lock();
-                        if (s)
-                        {
-                            s->removeSeqCallback(message->seq());
-                        }
-                    });
-                }
+                    auto s = self.lock();
+                    if (s)
+                    {
+                        s->removeSeqCallback(message->seq());
+                    }
+                });
             }
         }
         else

@@ -255,11 +255,29 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 }
 
 void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
-    Options _options, SessionCallbackFunc _callback)
+    Options _options, CallbackFuncWithSession _callback)
 {
     auto protocolVersion = _p2pSession->protocolInfo()->version();
     _msg->setVersion(protocolVersion);
-    _p2pSession->session()->asyncSendMessage(_msg, _options, _callback);
+    if (!_callback)
+    {
+        _p2pSession->session()->asyncSendMessage(_msg, _options, nullptr);
+        return;
+    }
+    auto weakSession = std::weak_ptr<P2PSession>(_p2pSession);
+    _p2pSession->session()->asyncSendMessage(
+        _msg, _options, [weakSession, _callback](NetworkException e, Message::Ptr message) {
+            auto session = weakSession.lock();
+            if (!session)
+            {
+                return;
+            }
+            P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+            if (_callback)
+            {
+                _callback(e, session, p2pMessage);
+            }
+        });
 }
 
 void Service::sendRespMessageBySession(
@@ -400,6 +418,21 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
     return P2PMessage::Ptr();
 }
 
+void Service::asyncSendMessage(
+    P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
+{
+    RecursiveGuard l(x_sessions);
+    for (auto const& it : m_sessions)
+    {
+        if (it.second->p2pID().size() == 0)
+        {
+            continue;
+        }
+        sendMessageToSession(it.second, message, options, callback);
+        break;
+    }
+}
+
 void Service::asyncSendMessageByNodeID(
     P2pID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
@@ -421,22 +454,8 @@ void Service::asyncSendMessageByNodeID(
                 message->setSeq(m_messageFactory->newSeq());
             }
             auto session = it->second;
-            if (callback)
-            {
-                // for compatibility_version consideration
-                sendMessageToSession(session, message, options,
-                    [session, callback](NetworkException e, Message::Ptr message) {
-                        P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-                        if (callback)
-                        {
-                            callback(e, session, p2pMessage);
-                        }
-                    });
-            }
-            else
-            {
-                sendMessageToSession(session, message, options, nullptr);
-            }
+            // for compatibility_version consideration
+            sendMessageToSession(session, message, options, callback);
         }
         else
         {
