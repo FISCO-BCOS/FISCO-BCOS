@@ -97,6 +97,10 @@ void WasmTransactionExecutor::initPrecompiled()
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
     if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert(
@@ -106,10 +110,6 @@ void WasmTransactionExecutor::initPrecompiled()
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    m_constantPrecompiled->insert(
-        {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled->insert(
-        {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
     set<string> builtIn = {CRYPTO_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);

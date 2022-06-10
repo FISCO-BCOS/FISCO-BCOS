@@ -43,6 +43,8 @@ set_property(TARGET PbcSig PROPERTY INTERFACE_LINK_LIBRARIES Pbc)
 set_property(TARGET PbcSig PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${DEPS_INCLUDE_DIR})
 add_dependencies(PbcSig GroupSigLib)
 
+hunter_add_package(cryptopp)
+hunter_add_package(jsoncpp)
 find_package(cryptopp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
