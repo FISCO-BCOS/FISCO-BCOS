@@ -24,16 +24,11 @@
  */
 #pragma once
 
-<<<<<<< HEAD
-#include "bcos-framework//storage/StorageInterface.h"
-#include "bcos-framework//storage/Table.h"
+#include "StateStorageInterface.h"
+#include "bcos-framework/storage/Table.h"
 #include "tbb/enumerable_thread_specific.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
-=======
-#include "bcos-table/src/StateStorageInterface.h"
-#include <bcos-utilities/BoostLog.h>
->>>>>>> upstream/release-3.0.0-rc4
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -53,16 +48,14 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 private:
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }
+    {}
     // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
     //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
 
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }                                               \
+    {}                                              \
     // log("SET", (table), (key), (entry), (desc))
 
     // for debug
@@ -101,7 +94,10 @@ public:
     BaseStorage(BaseStorage&&) = delete;
     BaseStorage& operator=(BaseStorage&&) = delete;
 
-    virtual ~BaseStorage() { m_recoder.clear(); }
+    virtual ~BaseStorage()
+    {
+        m_recoder.clear();
+    }
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,
@@ -548,9 +544,15 @@ public:
         }
     }
 
-    void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
+    void setEnableTraverse(bool enableTraverse)
+    {
+        m_enableTraverse = enableTraverse;
+    }
 
-    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
+    void setMaxCapacity(ssize_t capacity)
+    {
+        m_maxCapacity = capacity;
+    }
 
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry)

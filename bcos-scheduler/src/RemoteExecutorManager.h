@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-scheduler/src/ExecutorManager.h"
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-utilities/Worker.h>
 
 #define EXECUTOR_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER")

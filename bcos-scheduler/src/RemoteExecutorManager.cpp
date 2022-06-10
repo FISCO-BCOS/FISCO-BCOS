@@ -7,8 +7,8 @@
 #include "RemoteExecutorManager.h"
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <tarscpp/servant/Application.h>
-#include <tarscpp/servant/ObjectProxy.h>
+#include <servant/Application.h>
+#include <servant/ObjectProxy.h>
 #include <sstream>
 
 using namespace bcos::scheduler;

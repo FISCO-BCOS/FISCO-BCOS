@@ -19,7 +19,7 @@
  */
 #include "Sealer.h"
 #include "Common.h"
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 
 using namespace bcos;
 using namespace bcos::sealer;

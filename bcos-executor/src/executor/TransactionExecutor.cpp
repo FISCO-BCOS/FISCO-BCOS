@@ -45,7 +45,6 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-<<<<<<< HEAD
 #include "bcos-framework//dispatcher/SchedulerInterface.h"
 #include "bcos-framework//executor/ExecutionMessage.h"
 #include "bcos-framework//executor/PrecompiledTypeDef.h"
@@ -54,17 +53,6 @@
 #include "bcos-framework//protocol/TransactionReceipt.h"
 #include "bcos-framework//storage/StorageInterface.h"
 #include "bcos-framework//storage/Table.h"
-=======
-#include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-table/src/KeyPageStorage.h"
->>>>>>> upstream/release-3.0.0-rc4
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework//protocol/LogEntry.h>
