@@ -15,7 +15,6 @@ hunter_add_package(evmone)
 hunter_add_package(intx)
 hunter_add_package(ethash)
 
-find_package(cryptopp CONFIG REQUIRED)
 find_package(evmc CONFIG REQUIRED)
 find_package(evmone CONFIG REQUIRED)
 find_package(intx CONFIG REQUIRED)
@@ -26,7 +25,7 @@ find_package(jsoncpp CONFIG REQUIRED)
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
 
-target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${WEDPR_EXTEND_LIB} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig cryptopp-static)
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${WEDPR_EXTEND_LIB} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig Cryptopp)
 
 # add_subdirectory(test/trie-test)
 # add_subdirectory(test/flow-graph)

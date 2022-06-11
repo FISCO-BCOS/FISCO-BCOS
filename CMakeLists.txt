@@ -23,12 +23,12 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 # import dependencies
+include(ProjectCryptopp)
 include(ProjectGroupSig)
 include(ProjectTCMalloc)
 include(ProjectWABT)
 include(ProjectBCOSWASM)
 
-hunter_add_package(cryptopp)
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
