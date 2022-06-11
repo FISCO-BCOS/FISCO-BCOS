@@ -140,8 +140,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        schedulerStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        consensusStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
     }
     else
     {
@@ -168,19 +170,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
+    // init the txpool
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
+        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
-        m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+        m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+        m_nodeConfig->isWasm());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup
     m_scheduler =
         std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
-
-    // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
 
     std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;

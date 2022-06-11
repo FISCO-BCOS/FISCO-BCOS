@@ -14,6 +14,7 @@
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
@@ -40,15 +41,16 @@ public:
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory);
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txPool);
 
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory, uint64_t _gasLimit,
-        bool _syncBlock)
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory)
+            _blockFactory, _txPool)
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
@@ -119,7 +121,15 @@ private:
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
+
+    bcos::protocol::ExecutionMessage::UniquePtr buildMessage(
+        ContextID contextID, bcos::protocol::Transaction::ConstPtr tx);
+    void buildExecutivesFromMetaData();
+    void buildExecutivesFromNormalTransaction();
+
     void serialPrepareExecutor();
+    bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
+        bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);
 
     std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
@@ -144,6 +154,7 @@ private:
     size_t m_startContextID;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    bcos::txpool::TxPoolInterface::Ptr m_txPool;
 
     size_t m_gasLimit = TRANSACTION_GAS;
     std::atomic_bool m_isSysBlock = false;
@@ -152,6 +163,7 @@ private:
     bool m_syncBlock = false;
     bool m_hasPrepared = false;
     bool m_hasDAG = false;
+    mutable SharedMutex x_prepareLock;
     mutable SharedMutex x_dmcExecutorLock;
 
     bool m_isRunning = false;
