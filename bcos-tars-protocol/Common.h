@@ -233,10 +233,10 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     ledgerConfig->setObserverNodeList(*observerNodeList);
 
     auto hash = bcos::crypto::HashType();
-    if (_ledgerConfig.hash.size() >= bcos::crypto::HashType::size)
+    if (_ledgerConfig.hash.size() >= bcos::crypto::HashType::SIZE)
     {
         hash = bcos::crypto::HashType(
-            (const bcos::byte*)_ledgerConfig.hash.data(), bcos::crypto::HashType::size);
+            (const bcos::byte*)_ledgerConfig.hash.data(), bcos::crypto::HashType::SIZE);
     }
     ledgerConfig->setHash(hash);
     ledgerConfig->setBlockNumber(_ledgerConfig.blockNumber);

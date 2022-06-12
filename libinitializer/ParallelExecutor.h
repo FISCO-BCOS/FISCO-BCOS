@@ -1,14 +1,8 @@
 #pragma once
 
 #include "bcos-executor/src/executor/TransactionExecutor.h"
-<<<<<<< HEAD
-#include "bcos-framework//executor/ExecutionMessage.h"
-#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
-=======
-#include "bcos-executor/src/executor/TransactionExecutorFactory.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
->>>>>>> upstream/release-3.0.0-rc4
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <thread>
 

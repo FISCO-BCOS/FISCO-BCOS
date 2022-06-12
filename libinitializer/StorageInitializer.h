@@ -60,17 +60,10 @@ public:
     }
 
     static bcos::storage::TransactionalStorageInterface::Ptr build(
-<<<<<<< HEAD
         [[maybe_unused]] const std::vector<std::string>& _pdAddrs)
     {
 #ifdef TIKV
         auto cluster = storage::newTiKVCluster(_pdAddrs);
-=======
-        const std::vector<std::string>& _pdAddrs, const std::string& _logPath)
-    {
-        boost::filesystem::create_directories(_logPath);
-        auto cluster = storage::newTiKVCluster(_pdAddrs, _logPath);
->>>>>>> upstream/release-3.0.0-rc4
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
 #else
         return {};

@@ -31,26 +31,21 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "bcos-framework//executor/NativeExecutionMessage.h"
-#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework//protocol/GlobalConfig.h"
-#include "bcos-framework//protocol/Protocol.h"
-#include "bcos-framework//protocol/ProtocolTypeDef.h"
-#include "bcos-framework//rpc/RPCInterface.h"
+#include "bcos-framework/executor/NativeExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/rpc/RPCInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-scheduler/src/RemoteExecutorManager.h"
 #include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
-
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-<<<<<<< HEAD
-#include <bcos-framework//protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
-=======
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
->>>>>>> upstream/release-3.0.0-rc4
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
@@ -144,9 +139,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
+#ifdef TIKV
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        schedulerStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        consensusStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+#endif
     }
     else
     {

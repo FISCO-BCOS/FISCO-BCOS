@@ -37,12 +37,12 @@ bcostars::Error LedgerServiceServer::asyncGetBatchTxsByHashList(
     auto hashList = std::make_shared<bcos::crypto::HashList>();
     for (auto const& hash : _txsHashList)
     {
-        if (hash.size() < bcos::crypto::HashType::size)
+        if (hash.size() < bcos::crypto::HashType::SIZE)
         {
             continue;
         }
         hashList->emplace_back(bcos::crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(hash.data()), bcos::crypto::HashType::size));
+            reinterpret_cast<const bcos::byte*>(hash.data()), bcos::crypto::HashType::SIZE));
     }
     m_ledger->asyncGetBatchTxsByHashList(hashList, _withProof,
         [current](bcos::Error::Ptr _error, bcos::protocol::TransactionsPtr _txsList,
@@ -131,10 +131,10 @@ bcostars::Error LedgerServiceServer::asyncGetBlockNumberByHash(
 {
     current->setResponse(false);
     bcos::crypto::HashType blockHash;
-    if (_blockHash.size() >= bcos::crypto::HashType::size)
+    if (_blockHash.size() >= bcos::crypto::HashType::SIZE)
     {
         blockHash = bcos::crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(_blockHash.data()), bcos::crypto::HashType::size);
+            reinterpret_cast<const bcos::byte*>(_blockHash.data()), bcos::crypto::HashType::SIZE);
     }
     // _blockHash
     m_ledger->asyncGetBlockNumberByHash(
@@ -186,10 +186,10 @@ bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
 {
     current->setResponse(false);
     bcos::crypto::HashType txHash;
-    if (_txHash.size() >= bcos::crypto::HashType::size)
+    if (_txHash.size() >= bcos::crypto::HashType::SIZE)
     {
         txHash = bcos::crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(_txHash.data()), bcos::crypto::HashType::size);
+            reinterpret_cast<const bcos::byte*>(_txHash.data()), bcos::crypto::HashType::SIZE);
     }
 
     m_ledger->asyncGetTransactionReceiptByHash(txHash, _withProof,

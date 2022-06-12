@@ -917,36 +917,36 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 
         bcos::protocol::TwoPCParams executorParams;
         executorParams.number = number();
-        tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
-            m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
-                SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
 
-                executorIt->commit(executorParams, [status](bcos::Error::Ptr&& error) {
+        // Change tbb to for
+        for (auto const& executorIt : *(m_scheduler->m_executorManager))
+        {
+            SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
+
+            executorIt->commit(executorParams, [status](bcos::Error::Ptr&& error) {
+                {
+                    WriteGuard lock(status->x_lock);
+                    if (error)
                     {
-                        WriteGuard lock(status->x_lock);
-                        if (error)
-                        {
-                            SCHEDULER_LOG(ERROR) << "Commit executor error!"
-                                                 << boost::diagnostic_information(*error);
-                            ++status->failed;
-                        }
-                        else
-                        {
-                            ++status->success;
-                            SCHEDULER_LOG(DEBUG)
-                                << "Commit executor success, success: " << status->success;
-                        }
-
-                        if (status->success + status->failed < status->total)
-                        {
-                            return;
-                        }
+                        SCHEDULER_LOG(ERROR)
+                            << "Commit executor error!" << boost::diagnostic_information(*error);
+                        ++status->failed;
                     }
-                    status->checkAndCommit(*status);
-                });
+                    else
+                    {
+                        ++status->success;
+                        SCHEDULER_LOG(DEBUG)
+                            << "Commit executor success, success: " << status->success;
+                    }
+
+                    if (status->success + status->failed < status->total)
+                    {
+                        return;
+                    }
+                }
+                status->checkAndCommit(*status);
             });
         }
-        // });
     });
 }
 

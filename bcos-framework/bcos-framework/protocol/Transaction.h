@@ -23,10 +23,12 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <concepts>
 #include <shared_mutex>
-namespace bcos
-{
-namespace protocol
+#include <span>
+#include <type_traits>
+
+namespace bcos::protocol
 {
 enum TransactionType
 {
@@ -181,5 +183,4 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

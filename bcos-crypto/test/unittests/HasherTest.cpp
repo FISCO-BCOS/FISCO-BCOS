@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     std::string a = "str123456789012345678901234567890";
     std::string_view view = a;
     bcos::h256 h(100);
-    std::span<byte const> hView(h.data(), h.size);
+    std::span<byte const> hView(h.data(), h.SIZE);
 
     openssl::OpenSSL_SHA3_256_Hasher hasher1;
     hasher1.update(100);
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     hasher2.update(be);
     hasher2.update(a1);
     hasher2.update(view);
-    hasher2.update(std::span((const byte*)h.data(), h.size));
+    hasher2.update(std::span((const byte*)h.data(), h.SIZE));
     hasher2.update(by);
 
     auto hash2 = final(hasher2);

@@ -28,13 +28,12 @@ namespace crypto
 {
 HashType inline sm3Hash(bytesConstRef _data)
 {
-    HashType hashData;
-    CInputBuffer hashInput{(const char*)_data.data(), _data.size()};
-    COutputBuffer hashResult{(char*)hashData.data(), HashType::size};
-    wedpr_sm3_hash(&hashInput, &hashResult);
-    // Note: Due to the return value optimize of the C++ compiler, there will be no additional copy
-    // overhead
-    return hashData;
+    hasher::openssl::OpenSSL_SM3_Hasher hasher;
+    hasher.update(_data);
+
+    HashType out;
+    hasher.final(out);
+    return out;
 }
 class SM3 : public Hash
 {
@@ -43,6 +42,11 @@ public:
     SM3() { setHashImplType(HashImplType::Sm3Hash); }
     virtual ~SM3() {}
     HashType hash(bytesConstRef _data) override { return sm3Hash(_data); }
+
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
+    };
 };
 }  // namespace crypto
 }  // namespace bcos

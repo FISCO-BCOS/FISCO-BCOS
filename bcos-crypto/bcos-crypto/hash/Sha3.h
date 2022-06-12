@@ -29,13 +29,12 @@ namespace crypto
 {
 HashType inline sha3Hash(bytesConstRef _data)
 {
-    HashType hashData;
-    CInputBuffer hashInput{(const char*)_data.data(), _data.size()};
-    COutputBuffer hashResult{(char*)hashData.data(), HashType::size};
-    wedpr_sha3_hash(&hashInput, &hashResult);
-    // Note: Due to the return value optimize of the C++ compiler, there will be no additional copy
-    // overhead
-    return hashData;
+    hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
+    hasher.update(_data);
+
+    HashType out;
+    hasher.final(out);
+    return out;
 }
 class Sha3 : public Hash
 {
@@ -44,6 +43,11 @@ public:
     Sha3() { setHashImplType(HashImplType::Sha3); }
     virtual ~Sha3() {}
     HashType hash(bytesConstRef _data) override { return sha3Hash(_data); }
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{
+            bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{}};
+    };
 };
 }  // namespace crypto
 }  // namespace bcos

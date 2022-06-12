@@ -50,7 +50,7 @@ public:
     void setHash(bcos::crypto::HashType const& _hash) override
     {
         m_hash = _hash;
-        m_rawProposal->set_hash(_hash.data(), bcos::crypto::HashType::size);
+        m_rawProposal->set_hash(_hash.data(), bcos::crypto::HashType::SIZE);
     }
     // the payload of the proposal
     bcos::bytesConstRef data() const override
@@ -140,12 +140,12 @@ protected:
     virtual void deserializeObject()
     {
         auto const& hashData = m_rawProposal->hash();
-        if (hashData.size() < bcos::crypto::HashType::size)
+        if (hashData.size() < bcos::crypto::HashType::SIZE)
         {
             return;
         }
         m_hash =
-            bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::size);
+            bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE);
     }
 
 protected:

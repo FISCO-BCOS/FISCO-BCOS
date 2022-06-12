@@ -59,7 +59,7 @@ public:
     void setHash(bcos::crypto::HashType const& _hash) override
     {
         m_hash = _hash;
-        m_baseMessage->set_hash(m_hash.data(), bcos::crypto::HashType::size);
+        m_baseMessage->set_hash(m_hash.data(), bcos::crypto::HashType::SIZE);
     }
 
     PacketType packetType() const override { return m_packetType; }
@@ -98,7 +98,7 @@ public:
     void setSignatureDataHash(bcos::crypto::HashType const& _hash) override
     {
         m_dataHash = _hash;
-        m_baseMessage->set_signaturehash(_hash.data(), bcos::crypto::HashType::size);
+        m_baseMessage->set_signaturehash(_hash.data(), bcos::crypto::HashType::SIZE);
     }
     bool verifySignature(
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::PublicPtr _pubKey) override
@@ -123,17 +123,17 @@ protected:
     virtual void deserializeToObject()
     {
         auto const& hashData = m_baseMessage->hash();
-        if (hashData.size() >= bcos::crypto::HashType::size)
+        if (hashData.size() >= bcos::crypto::HashType::SIZE)
         {
             m_hash =
-                bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::size);
+                bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE);
         }
 
         auto const& signatureDataHash = m_baseMessage->signaturehash();
-        if (signatureDataHash.size() >= bcos::crypto::HashType::size)
+        if (signatureDataHash.size() >= bcos::crypto::HashType::SIZE)
         {
             m_dataHash = bcos::crypto::HashType(
-                (byte const*)signatureDataHash.c_str(), bcos::crypto::HashType::size);
+                (byte const*)signatureDataHash.c_str(), bcos::crypto::HashType::SIZE);
         }
     }
 

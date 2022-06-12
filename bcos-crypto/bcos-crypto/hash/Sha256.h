@@ -31,7 +31,7 @@ HashType inline sha256Hash(bytesConstRef _data)
 {
     HashType hashData;
     CInputBuffer hashInput{(const char*)_data.data(), _data.size()};
-    COutputBuffer hashResult{(char*)hashData.data(), HashType::size};
+    COutputBuffer hashResult{(char*)hashData.data(), HashType::SIZE};
     wedpr_sha256_hash(&hashInput, &hashResult);
     // Note: Due to the return value optimize of the C++ compiler, there will be no additional copy
     // overhead
@@ -44,6 +44,11 @@ public:
     Sha256() { setHashImplType(HashImplType::Sha3); }
     virtual ~Sha256() {}
     HashType hash(bytesConstRef _data) override { return sha256Hash(_data); }
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{
+            bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{}};
+    };
 };
 }  // namespace crypto
 }  // namespace bcos

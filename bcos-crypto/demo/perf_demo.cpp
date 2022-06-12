@@ -89,9 +89,7 @@ std::vector<bcos::h256> hashingPerf(
     for (size_t i = 0; i < _count; i++)
     {
         hasher.update(_inputData);
-        std::span<std::byte> view{
-            (std::byte*)result[i].data(), (std::span<std::byte>::size_type)result[i].size};
-        hasher.final(view);
+        hasher.final(result[i]);
     }
 
     std::cout << "input data size: " << (double)_inputData.size() / 1000.0
@@ -140,7 +138,7 @@ void stTest(std::string_view inputData, size_t _count)
     auto hashImpl3 = std::make_shared<SM3>();
     auto sm3Old = hashPerf(hashImpl3, "SM3", inputData, _count);
 
-    hasher::openssl::OPENSSL_SM3_Hasher hasherSM3;
+    hasher::openssl::OpenSSL_SM3_Hasher hasherSM3;
     auto sm3New = hashingPerf(hasherSM3, inputData, _count);
 
     for (size_t i = 0; i < _count; ++i)

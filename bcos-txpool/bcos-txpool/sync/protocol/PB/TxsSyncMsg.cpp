@@ -84,7 +84,7 @@ void TxsSyncMsg::setTxsHash(HashList const& _txsHash)
     m_rawSyncMessage->clear_txshash();
     for (auto const& hash : _txsHash)
     {
-        m_rawSyncMessage->add_txshash(hash.data(), HashType::size);
+        m_rawSyncMessage->add_txshash(hash.data(), HashType::SIZE);
     }
 }
 
@@ -95,6 +95,6 @@ void TxsSyncMsg::deserializeObject()
     {
         auto const& hashData = m_rawSyncMessage->txshash(i);
         m_txsHash->emplace_back(
-            HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::size));
+            HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE));
     }
 }

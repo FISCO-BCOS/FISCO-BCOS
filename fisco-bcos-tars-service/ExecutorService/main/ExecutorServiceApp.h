@@ -20,16 +20,9 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
-<<<<<<< HEAD
-#include <bcos-framework//dispatcher/SchedulerInterface.h>
-#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
-#include <bcos-framework//txpool/TxPoolInterface.h>
-=======
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
->>>>>>> upstream/release-3.0.0-rc4
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Timer.h>

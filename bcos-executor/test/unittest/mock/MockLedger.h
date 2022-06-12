@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test

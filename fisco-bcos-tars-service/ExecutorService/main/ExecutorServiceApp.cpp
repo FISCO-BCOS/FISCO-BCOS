@@ -26,7 +26,7 @@
 #include "libinitializer/ParallelExecutor.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
@@ -105,8 +105,9 @@ void ExecutorServiceApp::createAndInitExecutor()
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(
         schedulerPrx, m_protocolInitializer->cryptoSuite());
 
-    // create executor
+// create executor
     auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_logInitializer->logPath());
+
     std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
     {

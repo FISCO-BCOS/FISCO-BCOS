@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Exceptions.h"
-#include "bcos-crypto/Concepts.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bits/ranges_algo.h>
 #include <boost/format.hpp>

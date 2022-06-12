@@ -46,49 +46,31 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
         return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
     }
     auto hashImpl = m_cryptoSuite->hashImpl();
-    auto hashContext = hashImpl->init();
+    auto hasher = hashImpl->hasher();
     auto const& hashFields = m_inner()->data;
-    // int version: 1
     long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
-    hashImpl->update(hashContext,
-        bcos::bytesConstRef((bcos::byte*)(&version), sizeof(version) / sizeof(uint8_t)));
-    // string gasUsed: 2
-    hashImpl->update(hashContext,
-        bcos::bytesConstRef((bcos::byte*)hashFields.gasUsed.data(), hashFields.gasUsed.size()));
-    // string contractAddress: 3
-    hashImpl->update(
-        hashContext, bcos::bytesConstRef((bcos::byte*)hashFields.contractAddress.data(),
-                         hashFields.contractAddress.size()));
-    // int status: 4
+    hasher.update(version);
+    hasher.update(hashFields.gasUsed);
+    hasher.update(hashFields.contractAddress);
     long status = boost::asio::detail::socket_ops::host_to_network_long(hashFields.status);
-    hashImpl->update(
-        hashContext, bcos::bytesConstRef((bcos::byte*)(&status), sizeof(status) / sizeof(uint8_t)));
-    // vector<byte> output: 5
-    hashImpl->update(hashContext,
-        bcos::bytesConstRef((bcos::byte*)hashFields.output.data(), hashFields.output.size()));
+    hasher.update(status);
+    hasher.update(hashFields.output);
     // vector<LogEntry> logEntries: 6
     for (auto const& log : hashFields.logEntries)
     {
-        // string address: 1
-        hashImpl->update(
-            hashContext, bcos::bytesConstRef((bcos::byte*)log.address.data(), log.address.size()));
-        // vector<vector<byte>> topic: 2
+        hasher.update(log.address);
         for (auto const& topicItem : log.topic)
         {
-            hashImpl->update(
-                hashContext, bcos::bytesConstRef((bcos::byte*)topicItem.data(), topicItem.size()));
+            hasher.update(topicItem);
         }
-        // vector<byte> data: 3
-        hashImpl->update(
-            hashContext, bcos::bytesConstRef((bcos::byte*)log.data.data(), log.data.size()));
+        hasher.update(log.data);
     }
-    // long blockNumber: 7
     long blockNumber =
         boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
-    hashImpl->update(hashContext,
-        bcos::bytesConstRef((bcos::byte*)(&blockNumber), sizeof(blockNumber) / sizeof(uint8_t)));
+    hasher.update(blockNumber);
     // calculate the hash
-    auto hashResult = hashImpl->final(hashContext);
+    bcos::crypto::HashType hashResult;
+    hasher.final(hashResult);
     m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
     return hashResult;
 }

@@ -62,7 +62,7 @@ public:
         N * 8, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
     enum
     {
-        size = N
+        SIZE = N
     };
     // construct FixedBytes from string
     enum StringDataType
@@ -337,6 +337,9 @@ public:
         return ret;
     }
 
+    auto begin() { return m_data.begin(); }
+    auto end() { return m_data.end(); }
+    auto size() const { return SIZE; }
     void clear() { m_data.fill(0); }
 
 private:

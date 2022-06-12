@@ -1,5 +1,5 @@
 #pragma once
-#include "../Concepts.h"
+#include "../TrivialObject.h"
 #include <concepts>
 #include <ranges>
 #include <span>

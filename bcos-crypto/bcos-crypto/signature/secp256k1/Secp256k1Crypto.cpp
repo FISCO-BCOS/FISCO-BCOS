@@ -34,7 +34,7 @@ std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
 {
     FixedBytes<SECP256K1_SIGNATURE_LEN> signatureDataArray;
     CInputBuffer privateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
-    CInputBuffer msgHash{(const char*)_hash.data(), HashType::size};
+    CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
     COutputBuffer secp256k1SignatureResult{
         (char*)signatureDataArray.data(), SECP256K1_SIGNATURE_LEN};
     auto retCode = wedpr_secp256k1_sign(&privateKey, &msgHash, &secp256k1SignatureResult);
@@ -52,7 +52,7 @@ bool bcos::crypto::secp256k1Verify(
     PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-    CInputBuffer msgHash{(const char*)_hash.data(), HashType::size};
+    CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
     CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
     auto verifyResult = wedpr_secp256k1_verify(&publicKey, &msgHash, &signature);
     if (verifyResult == WEDPR_SUCCESS)
@@ -78,7 +78,7 @@ KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
 
 PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
 {
-    CInputBuffer msgHash{(const char*)_hash.data(), HashType::size};
+    CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
     CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
     auto pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
     COutputBuffer publicKeyResult{pubKey->mutableData(), pubKey->size()};

@@ -23,15 +23,21 @@ using namespace bcos;
 using namespace bcos::crypto;
 HashType bcos::crypto::keccak256Hash(bytesConstRef _data)
 {
-    h256 hashData;
-    CInputBuffer hashInput{(const char*)_data.data(), _data.size()};
-    COutputBuffer hashResult{(char*)hashData.data(), HashType::size};
-    wedpr_keccak256_hash(&hashInput, &hashResult);
-    // Note: Due to the return value optimize of the C++ compiler, there will be no additional copy
-    // overhead
-    return hashData;
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    hasher.update(_data);
+
+    HashType out;
+    hasher.final(out);
+    return out;
 }
+
 HashType Keccak256::hash(bytesConstRef _data)
 {
     return keccak256Hash(_data);
+}
+
+bcos::crypto::hasher::AnyHasher Keccak256::hasher()
+{
+    return bcos::crypto::hasher::AnyHasher{
+        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}};
 }

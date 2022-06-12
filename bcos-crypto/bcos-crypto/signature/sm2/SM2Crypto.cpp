@@ -44,7 +44,7 @@ std::shared_ptr<bytes> SM2Crypto::sign(
     FixedBytes<SM2_SIGNATURE_LEN> signatureDataArray;
     CInputBuffer rawPrivateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
     CInputBuffer rawPublicKey{_keyPair.publicKey()->constData(), _keyPair.publicKey()->size()};
-    CInputBuffer rawMsgHash{(const char*)_hash.data(), HashType::size};
+    CInputBuffer rawMsgHash{(const char*)_hash.data(), HashType::SIZE};
     COutputBuffer sm2SignatureResult{(char*)signatureDataArray.data(), SM2_SIGNATURE_LEN};
     auto retCode = m_signer(&rawPrivateKey, &rawPublicKey, &rawMsgHash, &sm2SignatureResult);
     if (retCode != WEDPR_SUCCESS)
@@ -66,7 +66,7 @@ std::shared_ptr<bytes> SM2Crypto::sign(
 bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-    CInputBuffer messageHash{(const char*)_hash.data(), HashType::size};
+    CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
 
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), SM2_SIGNATURE_LEN);
     CInputBuffer signature{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};

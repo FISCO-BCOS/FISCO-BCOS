@@ -57,7 +57,7 @@ PBTransaction::PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_
     m_transaction->set_hashfieldsdata(encodedHashFieldsData->data(), encodedHashFieldsData->size());
 
     auto hash = m_cryptoSuite->hash(*encodedHashFieldsData);
-    m_transaction->set_hashfieldshash(hash.data(), hash.size);
+    m_transaction->set_hashfieldshash(hash.data(), hash.SIZE);
     // set import time
     m_transaction->set_import_time(_importTime);
 }
@@ -111,7 +111,7 @@ bcos::crypto::HashType PBTransaction::hash(bool _useCache) const
     auto data = bytesConstRef((bcos::byte*)m_transaction->hashfieldsdata().data(),
         m_transaction->hashfieldsdata().size());
     auto hash = m_cryptoSuite->hash(data);
-    m_transaction->set_hashfieldshash(hash.data(), HashType::size);
+    m_transaction->set_hashfieldshash(hash.data(), HashType::SIZE);
     return hash;
 }
 
