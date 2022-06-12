@@ -142,6 +142,8 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     }
     catch (const std::exception& e)
     {
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table)
+                                << LOG_KV("key", toHex(_key)) << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncGetRow failed!", e), {});
     }
 }
@@ -202,7 +204,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRows failed") << LOG_KV("table", _table)
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRows failed") << LOG_KV("table", _table)
                                 << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncGetRows failed! ", e),
             std::vector<std::optional<Entry>>());
@@ -245,6 +247,8 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
     }
     catch (const std::exception& e)
     {
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncSetRow failed") << LOG_KV("table", _table)
+                                << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncSetRow failed! ", e));
     }
 }
@@ -320,6 +324,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
     }
     catch (const std::exception& e)
     {
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed") << LOG_KV("message", e.what());
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncPrepare failed! ", e), 0);
     }
 }
