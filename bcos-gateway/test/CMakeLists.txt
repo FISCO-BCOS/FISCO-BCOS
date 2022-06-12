@@ -38,5 +38,5 @@ if (APPLE)
 # target_compile_options(${TEST_BINARY_NAME} PRIVATE -faligned-allocation)
 endif()
 
-target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework ${FRONT_TARGET} bcos-crypto)
+target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TARS_PROTOCOL_TARGET} ${FRONT_TARGET} bcos-crypto Boost::unit_test_framework)
 add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

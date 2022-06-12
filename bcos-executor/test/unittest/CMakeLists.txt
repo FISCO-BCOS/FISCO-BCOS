@@ -22,12 +22,12 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 set(TEST_BINARY_NAME test-bcos-executor)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
+target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include)
 
 find_package(Boost REQUIRED unit_test_framework)
 find_package(TBB CONFIG REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} ${EXECUTOR_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::serialization)
+target_link_libraries(${TEST_BINARY_NAME} ${EXECUTOR_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} bcos-framework Boost::serialization Boost::unit_test_framework)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -fno-var-tracking -Wno-unused-parameter)
 add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 

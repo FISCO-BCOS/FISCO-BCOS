@@ -24,8 +24,8 @@
  */
 #pragma once
 #include "boost/filesystem.hpp"
-#include <bcos-framework//security/DataEncryptInterface.h>
-#include <bcos-framework//storage/StorageInterface.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <bcos-storage/src/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
@@ -35,8 +35,8 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::string& _storagePath, const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
+    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
+        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
     {
         // FIXME: use blobDB of RocksDB
         boost::filesystem::create_directories(_storagePath);
@@ -51,7 +51,6 @@ public:
         options.enable_blob_files = keyPageSize > 1 ? true : false;
         // options.min_blob_size = 1024;
 
-
         // open DB
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
 
@@ -59,15 +58,15 @@ public:
             std::unique_ptr<rocksdb::DB>(db), _dataEncrypt);
     }
 
-    static bcos::storage::TransactionalStorageInterface::Ptr build(
-        [[maybe_unused]] const std::vector<std::string>& _pdAddrs)
-    {
 #ifdef TIKV
-        auto cluster = storage::newTiKVCluster(_pdAddrs);
+    static bcos::storage::TransactionalStorageInterface::Ptr build(
+        const std::vector<std::string>& _pdAddrs, const std::string& _logPath)
+    {
+        boost::filesystem::create_directories(_logPath);
+        auto cluster = storage::newTiKVCluster(_pdAddrs, _logPath);
+
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
-#else
-        return {};
-#endif
     }
+#endif
 };
 }  // namespace bcos::initializer

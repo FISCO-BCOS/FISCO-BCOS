@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 
 project(Tars-Service-Test)
 
-file(GLOB_RECURSE SOURCES "./unittest/*.cpp")
+file(GLOB_RECURSE SOURCES "unittest/*.cpp")
 
 find_package(OpenMP 4.5 REQUIRED)
 find_package(TBB CONFIG REQUIRED)
