@@ -88,7 +88,6 @@ macro(configure_project)
     default_option(CRYPTO OFF)
     default_option(FRAMEWORK OFF)
     default_option(UTILITIES OFF)
-    default_option(OTHERS OFF)
 
     default_option(ALL_COMPONENTS ON)
     if(ALL_COMPONENTS)

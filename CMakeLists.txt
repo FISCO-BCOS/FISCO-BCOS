@@ -42,6 +42,7 @@ endif()
 if(ALL_COMPONENTS)
     find_package(TARS REQUIRED MODULE)
 
+    add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)
     add_subdirectory(bcos-tool)
