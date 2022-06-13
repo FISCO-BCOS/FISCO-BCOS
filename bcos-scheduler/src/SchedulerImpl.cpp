@@ -40,7 +40,20 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         m_lastExecuteFinishTime = 0;
     }
     auto signature = block->blockHeaderConst()->signatureList();
-    fetchGasLimit(block->blockHeaderConst()->number());
+    try
+    {
+        fetchGasLimit(block->blockHeaderConst()->number());
+    }
+    catch (std::exception& e)
+    {
+        SCHEDULER_LOG(ERROR) << "fetchGasLimit exception: " << boost::diagnostic_information(e);
+        _callback(BCOS_ERROR_WITH_PREV_PTR(
+                      SchedulerError::fetchGasLimitError, "etchGasLimit exception", e),
+            nullptr, false);
+        return;
+    }
+
+
     SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock request"
                         << LOG_KV("block number", block->blockHeaderConst()->number())
                         << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)

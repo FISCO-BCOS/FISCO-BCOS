@@ -31,7 +31,8 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::txpool::TxPoolInterface::Ptr _txPool)
-  : m_block(std::move(block)),
+  : m_dmcRecorder(std::make_shared<DmcStepRecorder>()),
+    m_block(std::move(block)),
     m_scheduler(scheduler),
     m_schedulerTermId(scheduler->getSchedulerTermId()),
     m_startContextID(startContextID),
@@ -64,6 +65,11 @@ void BlockExecutive::prepare()
     else if (m_block->transactionsSize() > 0)
     {
         buildExecutivesFromNormalTransaction();
+    }
+    else
+    {
+        SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: empty block"
+                             << LOG_KV("block number", m_block->blockHeaderConst()->number());
     }
 #pragma omp flush(m_hasDAG)
 
@@ -134,12 +140,14 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
 #pragma omp critical
         m_hasDAG = enableDAG;
     }
+#pragma omp flush(m_hasDAG)
     return message;
 }
 
 void BlockExecutive::buildExecutivesFromMetaData()
 {
-    SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
+    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromMetaData"
+                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
                          << LOG_KV("", m_block->transactionsMetaDataSize());
 
     auto txs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
@@ -223,7 +231,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
 void BlockExecutive::buildExecutivesFromNormalTransaction()
 {
-    SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
+    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
+                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
                          << LOG_KV("tx count", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
@@ -713,14 +722,14 @@ void BlockExecutive::DMCExecute(
     auto lastT = utcTime();
     DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tStart" << LOG_KV("blockNumber", number())
                    << LOG_KV("round", m_dmcRecorder->getRound())
-                   << LOG_KV("checksum", m_dmcRecorder->getChecksum());
+                   << LOG_KV("checksum", m_dmcRecorder->getChecksum()) << std::endl;
 
     // prepare all dmcExecutor
     serialPrepareExecutor();
     DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tSerialPrepareExecutor finish"
                    << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                   << LOG_KV("cost", utcTime() - lastT);
+                   << LOG_KV("cost", utcTime() - lastT) << std::endl;
     lastT = utcTime();
 
     // dump address for omp parallization
@@ -732,6 +741,13 @@ void BlockExecutive::DMCExecute(
     }
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->total = contractAddress.size();
+
+    // if is empty block, just return
+    if (contractAddress.size() == 0)
+    {
+        onDmcExecuteFinish(std::move(callback));
+        return;
+    }
 
     auto executorCallback = [this, lastT, batchStatus = std::move(batchStatus),
                                 callback = std::move(callback)](
@@ -787,7 +803,7 @@ void BlockExecutive::DMCExecute(
                        << LOG_KV("blockNumber", number())
                        << LOG_KV("round", m_dmcRecorder->getRound())
                        << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                       << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
+                       << LOG_KV("cost(after prepare finish)", utcTime() - lastT) << std::endl;
 
         if (batchStatus->error != 0)
         {
@@ -812,6 +828,7 @@ void BlockExecutive::DMCExecute(
         }
     };
 
+
 // for each dmcExecutor
 #pragma omp parallel for
     for (size_t i = 0; i < contractAddress.size(); i++)
@@ -824,7 +841,7 @@ void BlockExecutive::DMCExecute(
                    << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                    << LOG_KV("cost", utcTime() - lastT)
-                   << LOG_KV("contractNum", contractAddress.size());
+                   << LOG_KV("contractNum", contractAddress.size()) << std::endl;
 }
 
 void BlockExecutive::onDmcExecuteFinish(
@@ -841,7 +858,8 @@ void BlockExecutive::onDmcExecuteFinish(
     if (m_staticCall)
     {
         DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "DMCExecute for call finished."
-                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum)
+                       << std::endl;
 
         // Set result to m_block
         for (auto& it : m_executiveResults)
@@ -853,7 +871,8 @@ void BlockExecutive::onDmcExecuteFinish(
     else
     {
         DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "DMCExecute for transaction finished."
-                      << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+                      << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum)
+                      << std::endl;
 
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](

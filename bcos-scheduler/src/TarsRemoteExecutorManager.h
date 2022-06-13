@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief Manager remote executor
- * @file RemoteExecutorManager.h
+ * @file TarsRemoteExecutorManager.h
  * @author: jimmyshi
  * @date: 2022-05-25
  */
@@ -28,13 +28,14 @@
 
 namespace bcos::scheduler
 {
-class RemoteExecutorManager : public ExecutorManager, Worker
+class TarsRemoteExecutorManager : public ExecutorManager, Worker
 {
 public:
-    using Ptr = std::shared_ptr<RemoteExecutorManager>;
+    using Ptr = std::shared_ptr<TarsRemoteExecutorManager>;
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
-    RemoteExecutorManager(std::string executorServiceName) : Worker("RemoteExecutorManager", 1000)
+    TarsRemoteExecutorManager(std::string executorServiceName)
+      : Worker("TarsRemoteExecutorManager", 1000)
     {
         if (executorServiceName.empty())
         {
@@ -54,7 +55,7 @@ public:
         startWorking();
     }
 
-    virtual ~RemoteExecutorManager() { stopWorking(); };
+    virtual ~TarsRemoteExecutorManager() { stopWorking(); };
 
     void setRemoteExecutorChangeHandler(std::function<void()> handler)
     {
