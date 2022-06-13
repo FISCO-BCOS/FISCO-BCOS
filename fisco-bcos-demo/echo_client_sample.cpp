@@ -32,13 +32,14 @@ using namespace bcos::tool;
 
 void usage()
 {
-    std::cerr << "Usage: ./echo-client-sample qps(MBit/s) payloadSize(KBytes, default is 1MBytes)\n"
+    std::cerr << "Usage: ./echo-client-sample qps(MBit/s) ${server_address} ${port} "
+                 "payloadSize(KBytes, default is 1MBytes)\n"
               << std::endl;
     exit(0);
 }
 
-void sendMessage(std::shared_ptr<P2PMessage> _msg, std::shared_ptr<Service> _service,
-    std::shared_ptr<RateLimiter> _rateLimiter)
+void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<P2PMessage> _msg,
+    std::shared_ptr<Service> _service, std::shared_ptr<RateLimiter> _rateLimiter)
 {
     while (true)
     {
@@ -47,9 +48,9 @@ void sendMessage(std::shared_ptr<P2PMessage> _msg, std::shared_ptr<Service> _ser
         _msg->setSeq(seq);
         auto startT = utcTime();
         auto msgSize = _msg->payload()->size();
-        _service->asyncSendMessage(
-            _msg, [msgSize, startT](NetworkException _e, std::shared_ptr<P2PSession> _session,
-                      std::shared_ptr<P2PMessage>) {
+        _service->asyncSendMessageByEndPoint(_endPoint, _msg,
+            [msgSize, startT](NetworkException _e, std::shared_ptr<P2PSession> _session,
+                std::shared_ptr<P2PMessage>) {
                 if (_e.errorCode())
                 {
                     BCOS_LOG(WARNING) << LOG_DESC("asyncSendMessage network error")
@@ -64,16 +65,19 @@ void sendMessage(std::shared_ptr<P2PMessage> _msg, std::shared_ptr<Service> _ser
 
 int main(int argc, char** argv)
 {
-    if (argc <= 1)
+    if (argc <= 3)
     {
         usage();
     }
-    uint64_t qps = (atol(argv[1])) * 1024 * 1024;
+    std::string hostIp = argv[1];
+    uint16_t port = atoi(argv[2]);
+    NodeIPEndpoint serverEndPoint(hostIp, port);
+    uint64_t qps = (atol(argv[3])) * 1024 * 1024;
     // default payLoadSize is 1MB
     uint64_t payLoadSize = 1024 * 1024;
-    if (argc > 2)
+    if (argc > 3)
     {
-        payLoadSize = (atol(argv[2]) * 1024);
+        payLoadSize = (atol(argv[4]) * 1024);
     }
     std::cout << "### payLoad:" << payLoadSize << std::endl;
     std::cout << "### qps: " << qps << std::endl;
@@ -102,6 +106,6 @@ int main(int argc, char** argv)
     std::string randStr(payLoadSize, 'a');
     msg->setPayload(std::make_shared<bytes>(randStr.begin(), randStr.end()));
     auto rateLimiter = std::make_shared<RateLimiter>(packetQPS);
-    sendMessage(msg, service, rateLimiter);
+    sendMessage(serverEndPoint, msg, service, rateLimiter);
     return EXIT_SUCCESS;
 }

@@ -13,6 +13,7 @@
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
+#include <bcos-gateway/libnetwork/IOServicePool.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
@@ -339,7 +340,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         // init ASIOInterface
         auto asioInterface = std::make_shared<ASIOInterface>();
-        asioInterface->setIOService(std::make_shared<ba::io_service>());
+        asioInterface->setIOServicePool(std::make_shared<IOServicePool>());
         asioInterface->setSSLContext(sslContext);
         asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 

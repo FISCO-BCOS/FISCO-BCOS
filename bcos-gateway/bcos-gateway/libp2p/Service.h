@@ -152,8 +152,8 @@ public:
     }
 
 
-    void asyncSendMessage(
-        P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options = Options());
+    void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options = Options());
 
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,

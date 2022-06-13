@@ -418,18 +418,17 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
     return P2PMessage::Ptr();
 }
 
-void Service::asyncSendMessage(
-    P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
+void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
+    CallbackFuncWithSession callback, Options options)
 {
     RecursiveGuard l(x_sessions);
     for (auto const& it : m_sessions)
     {
-        if (it.second->p2pID().size() == 0)
+        if (it.second->session()->nodeIPEndpoint() == _endPoint)
         {
-            continue;
+            sendMessageToSession(it.second, message, options, callback);
+            break;
         }
-        sendMessageToSession(it.second, message, options, callback);
-        break;
     }
 }
 
