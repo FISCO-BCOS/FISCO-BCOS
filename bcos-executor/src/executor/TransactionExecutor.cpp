@@ -543,7 +543,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
             });
     }
 
-    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("executeTransactions") << LOG_KV("prepareT", prepareT)
+    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("dmcExecuteTransactions") << LOG_KV("prepareT", prepareT)
                              << LOG_KV("total", (utcTime() - recoredT));
 }
 

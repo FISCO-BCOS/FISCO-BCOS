@@ -227,9 +227,17 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     else
     {
         // is transaction
+        auto lastT = utcTime();
         m_executor->dmcExecuteTransactions(m_contractAddress, *messages,
-            [this, messages, callback = std::move(callback)](bcos::Error::UniquePtr error,
+            [this, lastT, messages, callback = std::move(callback)](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+                // update batch
+                DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t Executor execute finish"
+                               << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
+                               << LOG_KV("txNum", messages->size())
+                               << LOG_KV("round", m_dmcRecorder->getRound())
+                               << LOG_KV("cost", utcTime() - lastT);
+
                 if (error)
                 {
                     SCHEDULER_LOG(ERROR) << "Execute transaction error: " << error->errorMessage();

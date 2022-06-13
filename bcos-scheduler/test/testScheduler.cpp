@@ -27,6 +27,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -45,83 +46,7 @@ namespace bcos::test
 {
 struct SchedulerFixture
 {
-    SchedulerFixture()
-    {
-        hashImpl = std::make_shared<Keccak256>();
-        signature = std::make_shared<Secp256k1Crypto>();
-        suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
-
-        ledger = std::make_shared<MockLedger>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>();
-        storage = std::make_shared<MockTransactionalStorage>();
-
-        auto stateStorage = std::make_shared<storage::StateStorage>(nullptr);
-        storage->m_storage = stateStorage;
-
-        transactionFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite);
-        transactionReceiptFactory =
-            std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
-        executionMessageFactory = std::make_shared<bcos::executor::NativeExecutionMessageFactory>();
-
-        blockHeaderFactory = std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite);
-        blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
-            suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
-
-        transactionSubmitResultFactory =
-            std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>();
-        auto notifier = [/*latch = &latch*/](bcos::protocol::BlockNumber,
-                            bcos::protocol::TransactionSubmitResultsPtr _results,
-                            std::function<void(Error::Ptr)> _callback) {
-            SCHEDULER_LOG(TRACE) << "Submit callback execute, results size:" << _results->size();
-            if (_callback)
-            {
-                _callback(nullptr);
-            }
-            // BOOST_CHECK(_results->size() == 8000);
-            /*BOOST_CHECK_EQUAL(result->status(), 0);
-            BOOST_CHECK_NE(result->blockHash(), h256(0));
-            BOOST_CHECK(result->transactionReceipt());
-            BOOST_CHECK_LT(result->transactionIndex(), 1000 * 8);*/
-
-            // auto receipt = result->transactionReceipt();
-            // auto output = receipt->output();
-            // std::string_view outputStr((char*)output.data(), output.size());
-            // BOOST_CHECK_EQUAL(outputStr, "Hello world!");
-            /*if (latch)
-            {
-                latch->get()->count_down();
-            }*/
-        };
-
-        scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, transactionSubmitResultFactory, hashImpl, true,
-            false, 0);
-
-        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->registerTransactionNotifier(
-            std::move(notifier));
-
-        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->fetchGasLimit();
-
-        keyPair = suite->signatureImpl()->generateKeyPair();
-    }
-
-    ledger::LedgerInterface::Ptr ledger;
-    scheduler::ExecutorManager::Ptr executorManager;
-    std::shared_ptr<MockTransactionalStorage> storage;
-    protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
-    protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory;
-    protocol::BlockHeaderFactory::Ptr blockHeaderFactory;
-    bcos::crypto::Hash::Ptr hashImpl;
-    scheduler::SchedulerImpl::Ptr scheduler;
-    bcos::crypto::KeyPairInterface::Ptr keyPair;
-
-    bcostars::protocol::TransactionFactoryImpl::Ptr transactionFactory;
-    bcos::crypto::SignatureCrypto::Ptr signature;
-    bcos::crypto::CryptoSuite::Ptr suite;
-    bcostars::protocol::BlockFactoryImpl::Ptr blockFactory;
-    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory;
-
-    std::unique_ptr<boost::latch> latch;
+    SchedulerFixture() {}
 };
 
 /* // TODO: update this unittest to support batch txs sending logic

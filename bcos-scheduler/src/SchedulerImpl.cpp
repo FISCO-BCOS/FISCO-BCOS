@@ -53,7 +53,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     auto callback = [_callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock response"
-                            << LOG_KV("error", error == nullptr ? "null" : error->what());
+                            << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
 
@@ -159,7 +159,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                              << "Not hit prepared block executive, create."
                              << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
-            m_transactionSubmitResultFactory, false, m_blockFactory, m_gasLimit, verify);
+            m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
     }
     else
     {
@@ -222,7 +222,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto callback = [_callback = std::move(_callback)](
                         bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
         SCHEDULER_LOG(INFO) << METRIC << "CommitBlock response"
-                            << LOG_KV("error", error == nullptr ? "null" : error->what());
+                            << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
     };
 
@@ -428,7 +428,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     // Create temp executive
     auto blockExecutive =
         std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID.fetch_add(1),
-            m_transactionSubmitResultFactory, true, m_blockFactory, m_gasLimit, false);
+            m_transactionSubmitResultFactory, true, m_blockFactory, m_txPool, m_gasLimit, false);
 
     blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
                                   protocol::TransactionReceipt::Ptr&& receipt) {
@@ -566,7 +566,7 @@ void SchedulerImpl::preExecuteBlock(
 
     auto callback = [startT, _callback = std::move(_callback)](bcos::Error::Ptr&& error) {
         SCHEDULER_LOG(INFO) << METRIC << "preExecuteBlock response"
-                            << LOG_KV("error", error == nullptr ? "null" : error->what())
+                            << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok")
                             << LOG_KV("cost(ms)", utcTime() - startT);
         _callback(error == nullptr ? nullptr : std::move(error));
     };
@@ -583,10 +583,11 @@ void SchedulerImpl::preExecuteBlock(
     }
 
     blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
-        m_transactionSubmitResultFactory, false, m_blockFactory, m_gasLimit, verify);
-    blockExecutive->prepare();
+        m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
 
     setPreparedBlock(blockNumber, timestamp, blockExecutive);
+
+    blockExecutive->prepare();
 
     callback(nullptr);
 }

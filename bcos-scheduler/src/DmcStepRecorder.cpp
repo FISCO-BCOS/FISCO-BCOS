@@ -91,5 +91,6 @@ void DmcStepRecorder::recordReceives(
 
 void DmcStepRecorder::nextDmcRound()
 {
+    m_round++;
     m_checksum = m_sendChecksum.fetch_xor(m_receiveChecksum.fetch_xor(m_checksum));
 }
