@@ -236,7 +236,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                                << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
                                << LOG_KV("txNum", messages->size())
                                << LOG_KV("round", m_dmcRecorder->getRound())
-                               << LOG_KV("cost", utcTime() - lastT);
+                               << LOG_KV("cost", utcTime() - lastT) << std::endl;
 
                 if (error)
                 {
