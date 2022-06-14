@@ -134,6 +134,11 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setData(tx->input().toBytes());
     message->setStaticCall(m_staticCall);
 
+    if (message->create())
+    {
+        message->setABI(std::string(tx->abi()));
+    }
+
     bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
     {
@@ -254,10 +259,6 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 
         auto contextID = i + m_startContextID;
         auto message = buildMessage(contextID, tx);
-        if (message->create())
-        {
-            message->setABI(std::string(tx->abi()));
-        }
         std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
         registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
