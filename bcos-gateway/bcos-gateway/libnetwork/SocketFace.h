@@ -32,7 +32,7 @@ public:
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
-    virtual std::shared_ptr<ba::io_context> ioService() { return nullptr; }
+    virtual std::shared_ptr<ba::io_context> ioService() = 0;
 };
 }  // namespace gateway
 }  // namespace bcos

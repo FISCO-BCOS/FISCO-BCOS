@@ -13,7 +13,6 @@
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
-#include <bcos-gateway/libnetwork/IOServicePool.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
@@ -21,6 +20,7 @@
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos::rpc;
 using namespace bcos;
