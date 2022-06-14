@@ -562,25 +562,33 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
 void Session::checkNetworkStatus()
 {
     m_idleCheckTimer->restart();
-    auto now = utcSteadyTime();
-    // read idle
-    if ((m_lastReadTime + m_idleTimeInterval) < now)
+    try
     {
-        SESSION_LOG(WARNING)
-            << LOG_DESC(
-                   "Long time without read operation, maybe session inactivated, drop the session")
-            << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
-        drop(IdleWaitTimeout);
-        return;
+        auto now = utcSteadyTime();
+        // read idle
+        if ((m_lastReadTime + m_idleTimeInterval) < now)
+        {
+            SESSION_LOG(WARNING) << LOG_DESC(
+                                        "Long time without read operation, maybe session "
+                                        "inactivated, drop the session")
+                                 << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+            drop(IdleWaitTimeout);
+            return;
+        }
+        // write idle
+        if ((m_lastWriteTime + m_idleTimeInterval) < now)
+        {
+            SESSION_LOG(WARNING) << LOG_DESC(
+                                        "Long time without write operation, maybe session "
+                                        "inactivated, drop the session")
+                                 << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+            drop(IdleWaitTimeout);
+            return;
+        }
     }
-    // write idle
-    if ((m_lastWriteTime + m_idleTimeInterval) < now)
+    catch (std::exception const& e)
     {
-        SESSION_LOG(WARNING)
-            << LOG_DESC(
-                   "Long time without write operation, maybe session inactivated, drop the session")
-            << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
-        drop(IdleWaitTimeout);
-        return;
+        SESSION_LOG(WARNING) << LOG_DESC("checkNetworkStatus error")
+                             << LOG_KV("msg", boost::diagnostic_information(e));
     }
 }
