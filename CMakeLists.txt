@@ -16,10 +16,6 @@ configure_project()
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
-# import dependencies
-include(ProjectWABT)
-include(ProjectBCOSWASM)
-
 # install dependencies
 include(IncludeDirectories)
 
@@ -41,6 +37,9 @@ if(UTILITIES)
 endif()
 if(ALL_COMPONENTS)
     find_package(TARS REQUIRED MODULE)
+    # import dependencies
+    include(ProjectWABT)
+    include(ProjectBCOSWASM)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
