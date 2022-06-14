@@ -56,14 +56,14 @@ using namespace bcos::tool;
 using namespace bcos::initializer;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway)
+    bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, "", true);
-    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true);
+    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true, _logPath);
 }
 void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    std::string const& _privateKeyPath)
+    std::string const& _privateKeyPath, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
@@ -72,7 +72,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
         m_nodeConfig->gatewayServiceName());
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
-    init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false);
+    init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);
 }
 
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
@@ -104,7 +104,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion)
+    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
     // build the front service
     m_frontServiceInitializer =
@@ -139,11 +139,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
         schedulerStorage =
-            StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
         consensusStorage =
-            StorageInitializer::build(m_nodeConfig->pdAddrs(), m_nodeConfig->storagePath());
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
     }
     else
     {

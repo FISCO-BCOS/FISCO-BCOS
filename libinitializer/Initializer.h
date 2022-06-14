@@ -60,17 +60,18 @@ public:
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
     void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway);
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, const std::string& _logPath);
     void initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
-        std::string const& _privateKeyPath);
+        std::string const& _privateKeyPath, const std::string& _logPath);
 
     virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
 
 public:
     virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion);
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion,
+        const std::string& _logPath);
 
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath, bool _airVersion);
