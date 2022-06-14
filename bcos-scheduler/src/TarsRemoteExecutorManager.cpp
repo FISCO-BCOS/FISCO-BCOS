@@ -4,19 +4,18 @@
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "RemoteExecutorManager.h"
+#include "TarsRemoteExecutorManager.h"
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <tarscpp/servant/Application.h>
 #include <tarscpp/servant/ObjectProxy.h>
 #include <sstream>
 
 using namespace bcos::scheduler;
 
 
-RemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInfo>& endPointInfos)
+TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInfo>& endPointInfos)
 {
-    RemoteExecutorManager::EndPointSet endPointSet =
+    TarsRemoteExecutorManager::EndPointSet endPointSet =
         std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
 
     if (endPointInfos.empty())
@@ -55,7 +54,7 @@ void dumpEndPointsLog(
     EXECUTOR_MANAGER_LOG(DEBUG) << ss.str();
 }
 
-void RemoteExecutorManager::executeWorker()
+void TarsRemoteExecutorManager::executeWorker()
 {
     auto proxy = tars::Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(
         m_executorServiceName);
@@ -77,7 +76,7 @@ void RemoteExecutorManager::executeWorker()
     }
 }
 
-void RemoteExecutorManager::update(EndPointSet endPointSet)
+void TarsRemoteExecutorManager::update(EndPointSet endPointSet)
 {
     // update
     clear();
