@@ -5,6 +5,10 @@ file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
 
 find_package(OpenSSL REQUIRED)
 
+# if(NOT UTILITIES)
+#     find_package(bcos-utilities REQUIRED)
+# endif()
+
 add_library(bcos-crypto ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
 target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto bcos-utilities wedpr::crypto)
@@ -17,4 +21,4 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS bcos-crypto ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(DIRECTORY "bcos-crypto" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-crypto" FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY "bcos-crypto" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
