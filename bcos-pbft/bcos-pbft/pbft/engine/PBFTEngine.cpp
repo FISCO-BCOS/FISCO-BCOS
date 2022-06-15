@@ -200,8 +200,11 @@ void PBFTEngine::onProposalApplySuccess(
     // only broadcast message to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    auto startT = utcTime();
+    auto recordT = utcTime();
     // Note: must lock here to ensure thread safe
     RecursiveGuard l(m_mutex);
+    auto lockT = (utcTime() - startT);
     // restart the timer when proposal execute finished to in case of timeout
     if (m_config->timer()->running())
     {
@@ -213,6 +216,9 @@ void PBFTEngine::onProposalApplySuccess(
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
+    PBFT_LOG(INFO) << LOG_DESC("onProposalApplySuccess") << LOG_KV("index", checkPointMsg->index())
+                   << LOG_KV("hash", checkPointMsg->hash().abridged()) << LOG_KV("lockT", lockT)
+                   << LOG_KV("timecost", (utcTime() - recordT));
 }
 
 // called after proposal executed successfully

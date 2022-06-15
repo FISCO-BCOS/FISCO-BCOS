@@ -364,29 +364,11 @@ void Host::start()
     {
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
-        m_hostThread = std::make_shared<std::thread>([&] {
-            bcos::pthread_setThreadName("io_service");
-            while (haveNetwork())
-            {
-                try
-                {
-                    if (asioInterface()->acceptor())
-                    {
-                        startAccept();
-                    }
-                    asioInterface()->run();
-                }
-                catch (std::exception& e)
-                {
-                    HOST_LOG(WARNING) << LOG_DESC("Exception in Host Thread:")
-                                      << boost::diagnostic_information(e);
-                }
-
-                asioInterface()->reset();
-            }
-
-            HOST_LOG(INFO) << "Host exit";
-        });
+        if (m_asioInterface->acceptor())
+        {
+            startAccept();
+        }
+        m_asioInterface->start();
     }
 }
 
@@ -526,12 +508,6 @@ void Host::stop()
     {
         m_asioInterface->stop();
     }
-
-    if (m_hostThread && m_hostThread->joinable())
-    {
-        m_hostThread->join();
-    }
-
     if (m_threadPool)
     {
         m_threadPool->stop();

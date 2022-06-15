@@ -20,6 +20,7 @@
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -339,7 +340,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         // init ASIOInterface
         auto asioInterface = std::make_shared<ASIOInterface>();
-        asioInterface->setIOService(std::make_shared<ba::io_service>());
+        asioInterface->setIOServicePool(std::make_shared<IOServicePool>());
         asioInterface->setSSLContext(sslContext);
         asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
