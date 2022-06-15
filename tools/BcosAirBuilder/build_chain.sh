@@ -745,39 +745,39 @@ group = "group0"
 
 
 gauge p2p_session_actived by host , node
-/\[P2PService\]\[Service\]heartBeat,connected count=(?P<count>\d+)/ {
+/\[P2PService\]\[Service\]\[METRIC\]heartBeat,connected count=(?P<count>\d+)/ {
   p2p_session_actived[host][node] = \$count
 }
 
 gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[Core\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
-
 histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[Core\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 } 
 
+
 histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge ledger_block_height by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]reachNewView,committedIndex=(?P<committedIndex>\d+)/ {
-  ledger_block_height[chain][group][host][node] = \$committedIndex
+/\[LEDGER\]\[METRIC\]asyncPrewriteBlock,number=(?P<number>\d+)/ {
+  ledger_block_height[chain][group][host][node] = \$number
 }
 
 gauge txpool_pending_tx_size by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]reachNewView,.*?unsealedTxs=(?P<unsealedTxs>\d+)/ {
-  txpool_pending_tx_size[chain][group][host][node] = \$unsealedTxs
+/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+  txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
 }
 EOF
 
@@ -885,7 +885,7 @@ services:
 
   grafana:
     container_name: grafana
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:7.3.3
     restart: unless-stopped
     user: '0'
     network_mode: host

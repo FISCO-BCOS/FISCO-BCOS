@@ -71,7 +71,8 @@ enable_storage_security = false
         # key_center_url = 
         # cipher_data_key =
         monitor_listen_port = "3902"
-        monitor_log_path = "/root/app/tars/framework/app_log/"  
+        # monitor log path example:"/root/app/tars/framework/app_log/" 
+        monitor_log_path = "" 
 
 [[agency]]
 name = "agencyB"
@@ -106,4 +107,5 @@ enable_storage_security = false
         # key_center_url = 
         # cipher_data_key =
         monitor_listen_port = "3901"
-        monitor_log_path = "/root/app/tars/framework/app_log/" 
+        # monitor log path example:"/root/app/tars/framework/app_log/" 
+        monitor_log_path = "" 
