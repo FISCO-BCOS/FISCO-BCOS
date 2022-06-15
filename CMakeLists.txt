@@ -60,6 +60,7 @@ if(ALL_COMPONENTS)
     add_subdirectory(bcos-front)
     add_subdirectory(bcos-leader-election)
     add_subdirectory(libinitializer)
+    add_subdirectory(lightnode)
     add_subdirectory(fisco-bcos-air)
     add_subdirectory(fisco-bcos-tars-service)
 
