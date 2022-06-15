@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-executor/src/executor/TransactionExecutor.h"
+#include "bcos-executor/src/executor/TransactionExecutorFactory.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -11,18 +12,51 @@ namespace bcos::initializer
 class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
 {
 public:
-    ParallelExecutor(bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
-      : m_pool("exec", std::thread::hardware_concurrency()), m_executor(std::move(executor))
-    {}
+    ParallelExecutor(bcos::executor::TransactionExecutorFactory::Ptr factory)
+      : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
+    {
+        refreshExecutor(0);
+    }
+
     ~ParallelExecutor() noexcept override {}
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void refreshExecutor(int64_t schedulerTermId)
+    {
+        // refresh when receive larger schedulerTermId
+        if (schedulerTermId > m_schedulerTermId)
+        {
+            static bcos::SharedMutex mutex;
+            WriteGuard l(mutex);
+            if (m_schedulerTermId != schedulerTermId)
+            {
+                // remove old executor and build new
+                if (m_executor)
+                {
+                    m_executor->stop();
+                    m_oldExecutor = m_executor;  // TODO: remove this
+                }
+
+                // TODO: check cycle reference in executor to avoid memory leak
+                EXECUTOR_LOG(DEBUG)
+                    << LOG_BADGE("Switch") << "ExecutorSwitch: Build new executor instance with "
+                    << LOG_KV("schedulerTermId", schedulerTermId);
+                m_executor = m_factory->build();
+
+                m_schedulerTermId = schedulerTermId;
+            }
+        }
+    }
+
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
-        m_pool.enqueue(
-            [this, blockHeader = std::move(blockHeader), callback = std::move(callback)]() {
-                m_executor->nextBlockHeader(blockHeader, std::move(callback));
-            });
+        refreshExecutor(schedulerTermId);
+
+        m_pool.enqueue([this, schedulerTermId, blockHeader = std::move(blockHeader),
+                           callback = std::move(callback)]() {
+            m_executor->nextBlockHeader(schedulerTermId, blockHeader, std::move(callback));
+        });
     }
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -146,6 +180,10 @@ public:
 
 private:
     bcos::ThreadPool m_pool;
-    bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
+    bcos::executor::TransactionExecutor::Ptr m_executor;
+    bcos::executor::TransactionExecutor::Ptr m_oldExecutor;
+    int64_t m_schedulerTermId = -1;
+
+    bcos::executor::TransactionExecutorFactory::Ptr m_factory;
 };
 }  // namespace bcos::initializer

@@ -62,12 +62,11 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) {
-        if (_v > (uint32_t)(g_BCOSConfig.maxSupportedVersion()) ||
-            _v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
+        if (_v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
         {
             std::stringstream errorMsg;
-            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
-                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
+            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) +
+                                 " failed for lower than min_supported_version")
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
             PRECOMPILED_LOG(WARNING) << errorMsg.str() << LOG_KV("setValue", _v);
             BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
@@ -88,7 +87,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
 
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -97,7 +95,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
                 << LOG_KV("sender", _callParameters->m_sender);
-            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
         }
         else
         {
@@ -122,7 +120,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue)
                                   << LOG_KV("enableNum", blockContext->number() + 1);
-            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         }
     }
     else if (func == name2Selector[SYSCONFIG_METHOD_GET_STR])
@@ -136,8 +134,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("getValueByKey func") << LOG_KV("configKey", configKey);
 
         auto valueNumberPair = getSysConfigByKey(_executive, configKey);
-        _callParameters->setExecResult(
-            codec.encode(valueNumberPair.first, u256(valueNumberPair.second)));
+        _callParameters->setExecResult(codec.encode(valueNumberPair.first, valueNumberPair.second));
     }
     else
     {
@@ -145,8 +142,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
     }
-    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGas(_callParameters->m_gas);
     return _callParameters;
 }
 

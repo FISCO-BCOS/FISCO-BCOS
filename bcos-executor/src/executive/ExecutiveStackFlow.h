@@ -97,8 +97,6 @@ private:
     ExecutiveFactory::Ptr m_executiveFactory;
 
     mutable SharedMutex x_lock;
-
-    bool m_hasFirstRun = false;
 };
 
 

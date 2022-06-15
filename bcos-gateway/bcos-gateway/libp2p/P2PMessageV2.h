@@ -32,9 +32,15 @@ public:
     P2PMessageV2() : P2PMessage() {}
     ~P2PMessageV2() override {}
 
+    virtual int16_t ttl() const { return m_ttl; }
+    virtual void setTTL(int16_t _ttl) { m_ttl = _ttl; }
+
 protected:
     ssize_t decodeHeader(bytesConstRef _buffer) override;
     bool encodeHeader(bytes& _buffer) override;
+
+protected:
+    int16_t m_ttl = 10;
 };
 
 class P2PMessageFactoryV2 : public MessageFactory

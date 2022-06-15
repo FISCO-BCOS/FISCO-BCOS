@@ -173,6 +173,9 @@ void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
+
+        // retry after 500ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
         m_cacheProcessor->updateCommitQueue(_proposal);
         return;

@@ -247,6 +247,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     // merge keys from storage and eqKeys
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
+    entries.reserve(tableKeyList.size());
     for (auto& key : tableKeyList)
     {
         auto tableEntry = _executive->storage().getRow(tableName, key);
@@ -367,6 +368,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     TableInfoTuple tableInfo;
     // external call table manager desc
     desc(tableInfo, tableName, _executive, _callParameters);
+    auto keyField = std::get<0>(tableInfo);
     auto columns = std::get<1>(tableInfo);
     auto values = existEntry->getObject<std::vector<std::string>>();
     for (const auto& kv : updateFields)
@@ -376,6 +378,14 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         checkLengthValidate(
             value, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_FIELD_VALUE_LENGTH_OVERFLOW);
         auto const it = std::find(columns.begin(), columns.end(), field);
+        if (field == keyField)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError("Table update fields cannot contains key field"));
+        }
         if (it == columns.end())
         {
             PRECOMPILED_LOG(ERROR)
@@ -421,6 +431,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     TableInfoTuple tableInfo;
     // external call table manager desc
     desc(tableInfo, tableName, _executive, _callParameters);
+    auto keyField = std::get<0>(tableInfo);
     auto columns = std::get<1>(tableInfo);
 
     std::vector<std::pair<uint32_t, std::string>> updateValue;
@@ -432,6 +443,14 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         checkLengthValidate(
             value, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_FIELD_VALUE_LENGTH_OVERFLOW);
         auto const it = std::find(columns.begin(), columns.end(), field);
+        if (field == keyField)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError("Table update fields cannot contains key field"));
+        }
         if (it == columns.end())
         {
             PRECOMPILED_LOG(ERROR)
@@ -439,7 +458,8 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
             BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
         }
-        updateValue.push_back({std::distance(columns.begin(), it), std::move(value)});
+        std::pair<uint32_t, std::string> p = {std::distance(columns.begin(), it), std::move(value)};
+        updateValue.emplace_back(std::move(p));
     }
 
     for (auto& key : tableKeyList)

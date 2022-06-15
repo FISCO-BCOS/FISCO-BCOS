@@ -178,6 +178,12 @@ public:
         m_exchangeMessage = std::move(callParameters);
     }
 
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    {
+        std::copy(
+            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
+    }
+
     CallParameters::UniquePtr resume()
     {
         EXECUTOR_LOG(TRACE) << "Context switch to executive coroutine, from resume";

@@ -11,6 +11,7 @@ logging.basicConfig(format='%(message)s',
 
 class ServiceInfo:
     node_service_type = "node"
+    executor_service_type = "executor"
     rpc_service_type = "rpc"
     gateway_service_type = "gateway"
     monitor_service_type = "monitor"
@@ -38,7 +39,7 @@ class ServiceInfo:
     tars_pkg_postfix = ".tgz"
     default_listen_ip = "0.0.0.0"
     cert_generationscript_path = "../src/scripts/generate_cert.sh"
-    supported_service_type = [node_service_type, monitor_service_type,
+    supported_service_type = [node_service_type, monitor_service_type, executor_service_type,
                               rpc_service_type, gateway_service_type]
 
 
@@ -88,6 +89,7 @@ class CommandInfo:
                             upgrade: "upgrade_nodes", undeploy: "undeploy_nodes", start: "start_all", stop: "stop_all", expand: "expand_nodes"}
     monitor_command_to_impl = {deploy: "deploy_monitor",
                                start: "start_monitor", stop: "stop_monitor"}
+    executor_command_to_impl = {gen_config: "gen_executor_config", expand: "expand_executors"}
     service_command_impl = {gen_config: "gen_service_config", upload: "upload_service", deploy: "deploy_service",
                             upgrade: "upgrade_service", undeploy: "delete_service", start: "start_service", stop: "stop_service", expand: "expand_service"}
 

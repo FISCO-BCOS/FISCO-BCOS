@@ -14,6 +14,7 @@
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
@@ -29,6 +30,7 @@ namespace bcos::scheduler
 {
 class SchedulerImpl;
 class DmcExecutor;
+class DmcStepRecorder;
 
 class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
@@ -39,22 +41,16 @@ public:
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_block(std::move(block)),
-        m_scheduler(scheduler),
-        m_startContextID(startContextID),
-        m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-        m_blockFactory(_blockFactory),
-        m_staticCall(staticCall)
-    {}
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txPool);
 
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory, uint64_t _gasLimit,
-        bool _syncBlock)
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory)
+            _blockFactory, _txPool)
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
@@ -85,6 +81,8 @@ public:
     bool isCall() { return m_staticCall; }
     bool sysBlock() const { return m_isSysBlock; }
 
+    void start() { m_isRunning = true; }
+    void stop() { m_isRunning = false; }
 
 private:
     struct CommitStatus
@@ -93,6 +91,7 @@ private:
         std::atomic_size_t success = 0;
         std::atomic_size_t failed = 0;
         std::function<void(const CommitStatus&)> checkAndCommit;
+        mutable SharedMutex x_lock;
     };
     void batchNextBlock(std::function<void(Error::UniquePtr)> callback);
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
@@ -122,10 +121,20 @@ private:
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
+
+    bcos::protocol::ExecutionMessage::UniquePtr buildMessage(
+        ContextID contextID, bcos::protocol::Transaction::ConstPtr tx);
+    void buildExecutivesFromMetaData();
+    void buildExecutivesFromNormalTransaction();
+
     void serialPrepareExecutor();
+    bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
+        bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);
 
     std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
+    std::shared_ptr<DmcStepRecorder> m_dmcRecorder;
+
     std::vector<ExecutiveResult> m_executiveResults;
 
     size_t m_gasUsed = 0;
@@ -141,9 +150,11 @@ private:
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
+    int64_t m_schedulerTermId;
     size_t m_startContextID;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    bcos::txpool::TxPoolInterface::Ptr m_txPool;
 
     size_t m_gasLimit = TRANSACTION_GAS;
     std::atomic_bool m_isSysBlock = false;
@@ -152,7 +163,10 @@ private:
     bool m_syncBlock = false;
     bool m_hasPrepared = false;
     bool m_hasDAG = false;
+    mutable SharedMutex x_prepareLock;
     mutable SharedMutex x_dmcExecutorLock;
+
+    bool m_isRunning = false;
 };
 
 }  // namespace bcos::scheduler

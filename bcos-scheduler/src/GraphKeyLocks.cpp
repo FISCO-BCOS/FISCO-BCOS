@@ -110,6 +110,11 @@ std::vector<std::string> GraphKeyLocks::getKeyLocksNotHoldingByContext(
 
 void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
 {
+    if (m_vertexes.count(Vertex(contextID)) == 0)
+    {
+        return;
+    }
+
     SCHEDULER_LOG(TRACE) << "Release key lock, contextID: " << contextID << " seq: " << seq;
 
     KEY_LOCK_LOG(TRACE) << " [*****] -> " << contextID << " | " << seq << std::endl;
@@ -139,8 +144,8 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
                     }
 
                     const auto& [contract, key] = std::get<1>(*source);
-                    SCHEDULER_LOG(TRACE)
-                        << "Releasing key lock, contract: " << contract << " key: " << key;
+                    SCHEDULER_LOG(TRACE) << "Releasing key lock, contract: " << contract
+                                         << " key: " << bcos::toHexString(key);
                 }
                 boost::remove_edge(*range.first, *graph);
             }

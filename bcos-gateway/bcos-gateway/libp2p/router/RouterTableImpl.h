@@ -42,12 +42,12 @@ public:
     void setDstNode(std::string const& _dstNode) override { m_inner()->dstNode = _dstNode; }
     void setNextHop(std::string const& _nextHop) override { m_inner()->nextHop = _nextHop; }
     void clearNextHop() override { m_inner()->nextHop = std::string(); }
-    void setTTL(int32_t _ttl) override { m_inner()->ttl = _ttl; }
-    void incTTL(int32_t _deltaTTL) override { m_inner()->ttl += _deltaTTL; }
+    void setDistance(int32_t _distance) override { m_inner()->distance = _distance; }
+    void incDistance(int32_t _deltaDistance) override { m_inner()->distance += _deltaDistance; }
 
     std::string const& dstNode() const override { return m_inner()->dstNode; }
     std::string const& nextHop() const override { return m_inner()->nextHop; }
-    int32_t ttl() const override { return m_inner()->ttl; }
+    int32_t distance() const override { return m_inner()->distance; }
 
     bcostars::RouterTableEntry const& inner() const { return *(m_inner()); }
 
@@ -79,7 +79,10 @@ public:
     void setNodeID(std::string const& _nodeID) override { m_nodeID = _nodeID; }
     std::string const& nodeID() const override { return m_nodeID; }
 
-    void setUnreachableTTL(int _unreachableTTL) override { m_unreachableTTL = _unreachableTTL; }
+    void setUnreachableDistance(int _unreachableDistance) override
+    {
+        m_unreachableDistance = _unreachableDistance;
+    }
 
     std::string getNextHop(std::string const& _nodeID) override;
     std::set<std::string> getAllReachableNode() override;
@@ -87,8 +90,8 @@ public:
 private:
     bool updateDstNodeEntry(
         std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry);
-    void updateTTLForAllRouterEntries(
-        std::set<std::string>& _unreachableNodes, std::string const& _nextHop, int32_t _newTTL);
+    void updateDistanceForAllRouterEntries(std::set<std::string>& _unreachableNodes,
+        std::string const& _nextHop, int32_t _newDistance);
 
 private:
     std::string m_nodeID;
@@ -96,7 +99,7 @@ private:
     std::map<std::string, RouterTableEntryInterface::Ptr> m_routerEntries;
     mutable SharedMutex x_routerEntries;
 
-    int m_unreachableTTL = 10;
+    int m_unreachableDistance = 10;
 };
 
 class RouterTableFactoryImpl : public RouterTableFactory

@@ -77,6 +77,21 @@ bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispa
     }
 }
 
+bcos::scheduler::ExecutorManager::ExecutorInfo::Ptr ExecutorManager::getExecutorInfo(
+    const std::string_view& contract)
+{
+    std::shared_lock l(m_mutex);
+    auto it = m_contract2ExecutorInfo.find(contract);
+    if (it == m_contract2ExecutorInfo.end())
+    {
+        return nullptr;
+    }
+    else
+    {
+        return it->second;
+    }
+}
+
 void ExecutorManager::removeExecutor(const std::string_view& name)
 {
     std::unique_lock lock(m_mutex);

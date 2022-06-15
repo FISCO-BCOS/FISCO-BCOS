@@ -25,6 +25,8 @@ enum SchedulerError
     DAGError,
     ExecutorNotEstablishedError,
     fetchGasLimitError,
+    Stopped,
+    InvalidBlockVersion,
 };
 
 inline const uint64_t TRANSACTION_GAS = 3000000000;

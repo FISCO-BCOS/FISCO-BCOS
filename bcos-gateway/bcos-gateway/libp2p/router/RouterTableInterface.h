@@ -34,12 +34,12 @@ public:
     virtual void setDstNode(std::string const& _dstNode) = 0;
     virtual void setNextHop(std::string const& _nextHop) = 0;
     virtual void clearNextHop() = 0;
-    virtual void setTTL(int32_t _ttl) = 0;
-    virtual void incTTL(int32_t _deltaTTL) = 0;
+    virtual void setDistance(int32_t _distance) = 0;
+    virtual void incDistance(int32_t _deltaDistance) = 0;
 
     virtual std::string const& dstNode() const = 0;
     virtual std::string const& nextHop() const = 0;
-    virtual int32_t ttl() const = 0;
+    virtual int32_t distance() const = 0;
 };
 
 class RouterTableInterface
@@ -57,7 +57,7 @@ public:
 
     virtual void setNodeID(std::string const& _nodeID) = 0;
     virtual std::string const& nodeID() const = 0;
-    virtual void setUnreachableTTL(int _unreachableTTL) = 0;
+    virtual void setUnreachableDistance(int _unreachableDistance) = 0;
     virtual std::string getNextHop(std::string const& _nodeID) = 0;
     virtual std::set<std::string> getAllReachableNode() = 0;
 

@@ -4,7 +4,7 @@ struct RouterTableEntry
 {
     1 require string dstNode;
     2 optional string nextHop;
-    3 require int ttl;
+    3 require int distance;
 };
 struct RouterTable
 {
