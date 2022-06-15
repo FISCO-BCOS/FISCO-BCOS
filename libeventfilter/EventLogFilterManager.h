@@ -112,20 +112,21 @@ public:
     // add _filter to m_filters waiting for loop thread to process
     void addEventLogFilter(EventLogFilter::Ptr _filter);
     // delete _filter in m_filters waiting for loop thread to process
-    void cancelEventLogFilter(EventLogFilter::Ptr _filter);
+    void cancelEventLogFilter(const std::string& _filterID);
 
 private:
     // the vector for all EventLogFilter
     EventLogFilterVector m_filters;
     // the EventLogFilter to be add to m_filters
     EventLogFilterVector m_waitAddFilter;
-    // metux for m_waitAddFilter
+    // mutex for m_waitAddFilter
     mutable std::mutex m_addMutex;
     // the count of EventLogFilter to be add to m_filters, reduce the range of lock
     std::atomic<uint64_t> m_waitAddCount{0};
     // the EventLogFilter to be removed in m_filters
-    EventLogFilterVector m_waitCancelFilter;
-    // metux for m_waitCancelFilter
+    std::vector<std::string> m_waitCancelFilterIDs;
+
+    // mutex for m_waitCancelFilter
     mutable std::mutex m_cancelMutex;
     // the count of EventLogFilter to be removed in m_filters, reduce the range of lock
     std::atomic<uint64_t> m_waitCancelCount{0};
