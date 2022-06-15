@@ -20,6 +20,10 @@ class LightNodeInitializer
 {
 public:
     LightNodeInitializer() = default;
+    LightNodeInitializer(const LightNodeInitializer&) = default;
+    LightNodeInitializer(LightNodeInitializer&&) = default;
+    LightNodeInitializer& operator=(const LightNodeInitializer&) = default;
+    LightNodeInitializer& operator=(LightNodeInitializer&&) = default;
     virtual ~LightNodeInitializer() { stop(); }
 
     void init(std::string const& _configFilePath, std::string const& _genesisFile)
@@ -58,9 +62,8 @@ public:
         auto pbftInitializer = m_nodeInitializer->pbftInitializer();
         auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
         auto nodeService = std::make_shared<bcos::rpc::NodeService>(m_nodeInitializer->ledger(),
-            m_nodeInitializer->scheduler(), m_nodeInitializer->txPoolInitializer()->txpool(),
-            pbftInitializer->pbft(), pbftInitializer->blockSync(),
-            m_nodeInitializer->protocolInitializer()->blockFactory());
+            m_nodeInitializer->scheduler(), nullptr, pbftInitializer->pbft(),
+            pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
 
         // create rpc
         bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
