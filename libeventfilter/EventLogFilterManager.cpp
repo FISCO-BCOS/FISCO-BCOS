@@ -1,5 +1,6 @@
 
 #include "EventLogFilterManager.h"
+#include "libdevcore/Log.h"
 #include <json/json.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/TopicInfo.h>
@@ -213,35 +214,19 @@ int32_t EventLogFilterManager::cancelEventLogFilterByRequest(
     const EventLogFilterParams::Ptr _params, uint32_t _version)
 {
     ResponseCode responseCode = ResponseCode::SUCCESS;
-
-    EventLogFilter::Ptr filter = NULL;
-    for (auto it = m_filters.begin(); it != m_filters.end(); it++)
-    {
-        if ((*it)->getParams()->getFilterID() == _params->getFilterID())
-        {
-            filter = *it;
-        }
-    }
-    if (filter != NULL)
-    {
-        cancelEventLogFilter(filter);
-    }
-    else
-    {
-        responseCode = NONEXISTENT_EVENT;
-    }
-
+    cancelEventLogFilter(_params->getFilterID());
     EVENT_LOG(INFO) << LOG_BADGE("cancelEventLogFilterByRequest") << LOG_KV("result", responseCode)
-                    << LOG_KV("channel protocol version", _version);
+                    << LOG_KV("channel protocol version", _version)
+                    << LOG_KV("filterID", _params->getFilterID());
     return responseCode;
 }
 
 // delete _filter in m_filters waiting for loop thread to process
-void EventLogFilterManager::cancelEventLogFilter(EventLogFilter::Ptr _filter)
+void EventLogFilterManager::cancelEventLogFilter(const std::string& _filterID)
 {
     {
         std::lock_guard<std::mutex> l(m_cancelMutex);
-        m_waitCancelFilter.push_back(_filter);
+        m_waitCancelFilterIDs.push_back(_filterID);
         m_waitCancelCount += 1;
     }
 }
@@ -270,9 +255,8 @@ void EventLogFilterManager::cancelFilter()
         std::lock_guard<std::mutex> l(m_cancelMutex);
         {
             // delete all waiting filters in m_filters to be processed
-            for (EventLogFilter::Ptr filter : m_waitCancelFilter)
+            for (const std::string& cannelFilterID : m_waitCancelFilterIDs)
             {
-                string cannelFilterID = filter->getParams()->getFilterID();
                 for (auto it = m_filters.begin(); it != m_filters.end();)
                 {
                     string filterID = (*it)->getParams()->getFilterID();
@@ -289,7 +273,7 @@ void EventLogFilterManager::cancelFilter()
                 }
             }
 
-            m_waitCancelFilter.clear();
+            m_waitCancelFilterIDs.clear();
             m_waitCancelCount = 0;
         }
     }
