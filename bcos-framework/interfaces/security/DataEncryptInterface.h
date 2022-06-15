@@ -20,6 +20,8 @@
  */
 
 #pragma once
+#include <memory>
+#include <bcos-utilities/Common.h>
 
 namespace bcos
 {
@@ -29,7 +31,6 @@ class DataEncryptInterface
 {
 public:
     using Ptr = std::shared_ptr<DataEncryptInterface>;
-
     DataEncryptInterface() = default;
     virtual ~DataEncryptInterface() = default;
 

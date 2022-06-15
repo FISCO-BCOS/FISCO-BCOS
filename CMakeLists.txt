@@ -83,6 +83,10 @@ add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
 add_subdirectory(fisco-bcos-tars-service)
 
+if (BUILD_DEMO)
+    add_subdirectory(fisco-bcos-demo)
+endif ()
+
 if (TESTS)
     enable_testing()
     add_subdirectory(tests)
