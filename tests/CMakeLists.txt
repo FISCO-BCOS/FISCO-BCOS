@@ -15,3 +15,4 @@ target_link_libraries(fisco-bcos-test PUBLIC ${TOOL_TARGET} ${CRYPTO_TARGET} ${T
 add_test(NAME tars-test WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND fisco-bcos-test)
 
 add_subdirectory(perf)
+add_subdirectory(preview)

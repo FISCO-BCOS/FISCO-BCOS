@@ -214,15 +214,6 @@ private:
 
         return expectOutputSize;
     }
-
-    static void checkWidth(size_t inWidth)
-    {
-        if (inWidth != width)
-            BOOST_THROW_EXCEPTION(std::runtime_error{
-                (boost::format("Proof width mismatch merkle width! Expect: %lu, got: %lu") % width %
-                    inWidth)
-                    .str()});
-    }
 };
 
 }  // namespace bcos::tool::merkle
