@@ -393,7 +393,6 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           source /opt/rh/llvm-toolset-7/enable
           mkdir build && cd build && cmake3 .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
-          tail -f /__w/FISCO-BCOS/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-build-*.log &
           make -j3
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
