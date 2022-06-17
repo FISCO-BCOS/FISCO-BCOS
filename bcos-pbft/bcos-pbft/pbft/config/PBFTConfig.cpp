@@ -116,7 +116,6 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // the node is syncing, reset the timeout state to false for view recovery
     if (m_syncingHighestNumber > _ledgerConfig->blockNumber())
     {
-        m_timeoutState = true;
         m_syncingState = true;
         // notify resetSealing(the syncing node should not seal block)
         notifyResetSealing();
