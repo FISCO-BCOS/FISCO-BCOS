@@ -24,7 +24,7 @@ include(BuildInfoGenerator)
 
 # import dependencies
 include(ProjectCryptopp)
-#include(ProjectJsonCpp)
+include(ProjectJsonCpp)
 include(ProjectGroupSig)
 include(ProjectTCMalloc)
 include(ProjectWABT)

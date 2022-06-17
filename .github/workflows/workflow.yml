@@ -396,6 +396,9 @@ jobs:
           make -j3
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
+      -name: show error log
+        if: always()
+        run: cat /__w/FISCO-BCOS/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-build-*.log
       - name: tar fisco-bcos for CentOS
         run: cd build && cp -r fisco-bcos-air bin && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
