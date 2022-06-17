@@ -352,8 +352,19 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                     return;
                 }
             }
-
-            EXECUTOR_NAME_LOG(TRACE) << "Call success";
+            if (!error)
+            {
+                EXECUTOR_NAME_LOG(TRACE)
+                    << "Call success" << LOG_KV("staticCall", result->staticCall())
+                    << LOG_KV("from", result->from()) << LOG_KV("to", result->to())
+                    << LOG_KV("context", result->contextID());
+            }
+            else
+            {
+                EXECUTOR_NAME_LOG(WARNING)
+                    << LOG_DESC("Call error") << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
+            }
             callback(std::move(error), std::move(result));
         });
 }
@@ -1519,7 +1530,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                              << LOG_KV("keyLockSize", input->keyLocks().size())
                              << LOG_KV("contextID", input->contextID())
                              << LOG_KV("seq", input->seq())
-                             << LOG_KV("type", std::to_string(input->type()));
+                             << LOG_KV("type", std::to_string(input->type()))
+                             << LOG_KV("staticCall", input->staticCall());
     switch (input->type())
     {
     case bcos::protocol::ExecutionMessage::TXHASH:

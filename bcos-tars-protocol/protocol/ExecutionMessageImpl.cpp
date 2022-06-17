@@ -69,12 +69,14 @@ gsl::span<std::string const> ExecutionMessageImpl::keyLocks() const
 }
 std::vector<std::string> ExecutionMessageImpl::takeKeyLocks()
 {
+    m_inner()->keyLocks.clear();
     return std::move(m_keyLocks);
 }
 
 void ExecutionMessageImpl::setKeyLocks(std::vector<std::string> keyLocks)
 {
     m_keyLocks = std::move(keyLocks);
+    m_inner()->keyLocks.clear();
     for (auto const& keyLock : m_keyLocks)
     {
         m_inner()->keyLocks.emplace_back(keyLock);

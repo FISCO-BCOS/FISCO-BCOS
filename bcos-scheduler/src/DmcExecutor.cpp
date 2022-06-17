@@ -190,10 +190,10 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     if (messages->size() == 1 && (*messages)[0]->staticCall())
     {
         DMC_LOG(TRACE) << "send call request, address:" << m_contractAddress
-                       << LOG_KV("executor", m_name) << LOG_KV("to", message->to())
-                       << LOG_KV("contextID", contextID)
-                       << LOG_KV("internalCall", message->internalCall())
-                       << LOG_KV("type", message->type());
+                       << LOG_KV("executor", m_name) << LOG_KV("to", (*messages)[0]->to())
+                       << LOG_KV("contextID", (*messages)[0]->contextID())
+                       << LOG_KV("internalCall", (*messages)[0]->internalCall())
+                       << LOG_KV("type", (*messages)[0]->type());
         // is static call
         m_executor->call(std::move((*messages)[0]),
             [this, callback = std::move(callback)](
@@ -377,7 +377,7 @@ void DmcExecutor::handleExecutiveOutputs(
         // bcos::ReadGuard lock(x_concurrentLock);
         ExecutiveState::Ptr executiveState = m_executivePool.get(contextID);
         executiveState->message = std::move(output);
-        DMC_LOG(TRACE) << " 5.RevFromExecutor: <<<< [" << m_name << "]:" << m_contractAddress
+        DMC_LOG(TRACE) << " 5.RecvFromExecutor: <<<< [" << m_name << "]:" << m_contractAddress
                        << " <<<< " << executiveState->toString();
         if (to == m_contractAddress)
         {
