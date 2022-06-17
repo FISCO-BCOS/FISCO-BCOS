@@ -57,7 +57,7 @@ ExternalProject_Add(jsoncpp
 
 # Create jsoncpp imported library
 ExternalProject_Get_Property(jsoncpp INSTALL_DIR)
-add_library(JsonCpp STATIC IMPORTED)
+add_library(JsonCpp STATIC IMPORTED GLOBAL)
 set(JSONCPP_LIBRARY ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsoncpp${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(JSONCPP_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${JSONCPP_INCLUDE_DIR})  # Must exist.

@@ -131,7 +131,7 @@ ExternalProject_Add(cryptopp
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
 )
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)
-add_library(Cryptopp STATIC IMPORTED)
+add_library(Cryptopp STATIC IMPORTED GLOBAL)
 
 set(CRYPTOPP_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}cryptopp${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(CRYPTOPP_INCLUDE_DIR ${INSTALL_DIR}/include)
