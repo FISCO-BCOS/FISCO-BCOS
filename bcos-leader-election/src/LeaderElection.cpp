@@ -40,7 +40,7 @@ void LeaderElection::start()
     {
         m_config->start();
     }
-    auto leader = m_config->getLeader();
+    auto leader = m_config->fetchLeader();
     if (!leader)
     {
         return;
@@ -82,6 +82,11 @@ bool LeaderElection::campaignLeader()
     try
     {
         RecursiveGuard l(m_mutex);
+        // already has leader
+        if (m_config->getLeader())
+        {
+            return false;
+        }
         auto ret = grantLease();
         if (!ret.first)
         {
@@ -136,6 +141,7 @@ bool LeaderElection::campaignLeader()
         m_keepAlive = std::make_shared<etcd::KeepAlive>(*(m_config->etcdClient()),
             boost::bind(&LeaderElection::onKeepAliveException, this, boost::placeholders::_1),
             keepAliveTTL, leaseID);
+        m_config->setLeaderToSelf(leaseID, response.value().modified_index());
         auto leader = m_config->getLeader();
         if (m_onCampaignHandler)
         {
@@ -200,13 +206,16 @@ void LeaderElection::tryToSwitchToBackup()
 
 void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self)
 {
-    ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig") << LOG_KV("ID", _self->memberID());
-    m_config->updateSelf(_self);
+    RecursiveGuard l(m_mutex);
 
+    m_config->updateSelf(_self);
+    ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig") << LOG_KV("ID", _self->memberID());
     // update the configuration if the node is leader
     auto leader = m_config->getLeader();
     if (!leader || leader->memberID() != _self->memberID())
     {
+        ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig return for the node is not leader")
+                           << LOG_KV("leaderID", leader ? leader->memberID() : "None");
         return;
     }
     auto leaseID = leader->leaseID();

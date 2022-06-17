@@ -30,8 +30,25 @@ void PBFTImpl::start()
         PBFT_LOG(WARNING) << LOG_DESC("The PBFT module has already been started!");
         return;
     }
-    m_pbftEngine->start();
     m_running = true;
+    m_pbftEngine->start();
+
+    // Note: only replay the PBFT state when all-modules ready
+    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
+    auto config = m_pbftEngine->pbftConfig();
+    auto stateProposals = config->storage()->loadState(ledgerConfig->blockNumber());
+    if (stateProposals && stateProposals->size() > 0)
+    {
+        m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
+        auto lowWaterMarkIndex = stateProposals->size() - 1;
+        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
+        config->setLowWaterMark(lowWaterMark + 1);
+        PBFT_LOG(INFO) << LOG_DESC("init PBFT state")
+                       << LOG_KV("stateProposals", stateProposals->size())
+                       << LOG_KV("lowWaterMark", lowWaterMark)
+                       << LOG_KV("highWaterMark", config->highWaterMark());
+    }
+    config->timer()->start();
     PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
 }
 
@@ -131,20 +148,6 @@ void PBFTImpl::init()
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
-    auto stateProposals = config->storage()->loadState(ledgerConfig->blockNumber());
-    if (stateProposals && stateProposals->size() > 0)
-    {
-        m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
-        auto lowWaterMarkIndex = stateProposals->size() - 1;
-        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
-        config->setLowWaterMark(lowWaterMark + 1);
-        PBFT_LOG(INFO) << LOG_DESC("init PBFT state")
-                       << LOG_KV("stateProposals", stateProposals->size())
-                       << LOG_KV("lowWaterMark", lowWaterMark)
-                       << LOG_KV("highWaterMark", config->highWaterMark());
-    }
-    config->timer()->start();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 
