@@ -69,6 +69,7 @@ gsl::span<std::string const> ExecutionMessageImpl::keyLocks() const
 }
 std::vector<std::string> ExecutionMessageImpl::takeKeyLocks()
 {
+    // Note: must clear the tars-container here when takeKeyLocks
     m_inner()->keyLocks.clear();
     return std::move(m_keyLocks);
 }
@@ -76,6 +77,7 @@ std::vector<std::string> ExecutionMessageImpl::takeKeyLocks()
 void ExecutionMessageImpl::setKeyLocks(std::vector<std::string> keyLocks)
 {
     m_keyLocks = std::move(keyLocks);
+    // Note: must clear the tars-container here before set new keyLocks
     m_inner()->keyLocks.clear();
     for (auto const& keyLock : m_keyLocks)
     {

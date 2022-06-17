@@ -32,11 +32,16 @@ void PBFTImpl::start()
     }
     m_running = true;
     m_pbftEngine->start();
+    recoverState();
+    PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
+}
 
+void PBFTImpl::recoverState()
+{
     // Note: only replay the PBFT state when all-modules ready
     PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
     auto config = m_pbftEngine->pbftConfig();
-    auto stateProposals = config->storage()->loadState(ledgerConfig->blockNumber());
+    auto stateProposals = config->storage()->loadState(config->committedProposal()->index());
     if (stateProposals && stateProposals->size() > 0)
     {
         m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
@@ -49,7 +54,6 @@ void PBFTImpl::start()
                        << LOG_KV("highWaterMark", config->highWaterMark());
     }
     config->timer()->start();
-    PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
 }
 
 void PBFTImpl::stop()
