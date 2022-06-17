@@ -723,14 +723,14 @@ void BlockExecutive::DMCExecute(
     auto lastT = utcTime();
     DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tStart" << LOG_KV("blockNumber", number())
                    << LOG_KV("round", m_dmcRecorder->getRound())
-                   << LOG_KV("checksum", m_dmcRecorder->getChecksum()) << std::endl;
+                   << LOG_KV("checksum", m_dmcRecorder->getChecksum());
 
     // prepare all dmcExecutor
     serialPrepareExecutor();
     DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tSerialPrepareExecutor finish"
                    << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                   << LOG_KV("cost", utcTime() - lastT) << std::endl;
+                   << LOG_KV("cost", utcTime() - lastT);
     lastT = utcTime();
 
     // dump address for omp parallization
@@ -804,7 +804,7 @@ void BlockExecutive::DMCExecute(
                        << LOG_KV("blockNumber", number())
                        << LOG_KV("round", m_dmcRecorder->getRound())
                        << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                       << LOG_KV("cost(after prepare finish)", utcTime() - lastT) << std::endl;
+                       << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
 
         if (batchStatus->error != 0)
         {
@@ -842,7 +842,7 @@ void BlockExecutive::DMCExecute(
                    << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                    << LOG_KV("cost", utcTime() - lastT)
-                   << LOG_KV("contractNum", contractAddress.size()) << std::endl;
+                   << LOG_KV("contractNum", contractAddress.size());
 }
 
 void BlockExecutive::onDmcExecuteFinish(
@@ -859,8 +859,7 @@ void BlockExecutive::onDmcExecuteFinish(
     if (m_staticCall)
     {
         DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "DMCExecute for call finished."
-                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum)
-                       << std::endl;
+                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // Set result to m_block
         for (auto& it : m_executiveResults)
@@ -872,8 +871,7 @@ void BlockExecutive::onDmcExecuteFinish(
     else
     {
         DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "DMCExecute for transaction finished."
-                      << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum)
-                      << std::endl;
+                      << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](
@@ -1230,10 +1228,8 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
-#ifdef DMC_TRACE_LOG_ENABLE
     DMC_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                   << " -> contextID:" << output->contextID() - m_startContextID << std::endl;
-#endif
+                   << " -> contextID:" << output->contextID() - m_startContextID;
     // write receipt in results
     m_executiveResults[output->contextID() - m_startContextID].receipt =
         m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
@@ -1266,11 +1262,9 @@ void BlockExecutive::serialPrepareExecutor()
         // for each current DmcExecutor
         for (auto& address : currentExecutors)
         {
-#ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: \t----------------- addr:" << address
                            << " | number:" << m_block->blockHeaderConst()->number()
-                           << " -----------------" << std::endl;
-#endif
+                           << " -----------------";
             hasScheduleOutMessage |=
                 m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
         }
@@ -1291,11 +1285,9 @@ void BlockExecutive::serialPrepareExecutor()
         {
             continue;  // must jump finished executor
         }
-#ifdef DMC_TRACE_LOG_ENABLE
         DMC_LOG(TRACE) << " 3.UnlockPrepare: \t |---------------- addr:" << address
                        << " | number:" << std::to_string(m_block->blockHeaderConst()->number())
-                       << " ----------------|" << std::endl;
-#endif
+                       << " ----------------|";
 
         allFinished = false;
         bool need = dmcExecutor->unlockPrepare();
@@ -1310,11 +1302,8 @@ void BlockExecutive::serialPrepareExecutor()
         for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
         {
             auto& address = it->first;
-#ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
-                           << m_block->blockHeaderConst()->number() << " -----------------"
-                           << std::endl;
-#endif
+                           << m_block->blockHeaderConst()->number() << " -----------------";
             if (m_dmcExecutors[address]->detectLockAndRevert())
             {
                 needRevert = true;
