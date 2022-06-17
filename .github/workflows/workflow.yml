@@ -396,7 +396,7 @@ jobs:
           make -j3
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
-      -name: show error log
+      - name: show error log
         if: always()
         run: cat /__w/FISCO-BCOS/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-build-*.log
       - name: tar fisco-bcos for CentOS
