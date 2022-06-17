@@ -169,14 +169,11 @@ void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
                               "proposal execute failed and re-push the proposal "
                               "into the cache")
                        << printPBFTProposal(_proposal);
-        // retry after 20ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
-
-        // retry after 500ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
         m_cacheProcessor->updateCommitQueue(_proposal);
         return;
     }
@@ -1187,13 +1184,13 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
 bool PBFTEngine::handleNewViewMsg(NewViewMsgInterface::Ptr _newViewMsg)
 {
     PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg: receive newViewChangeMsg")
-                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState() << std::endl;
+                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
     if (!isValidNewViewMsg(_newViewMsg))
     {
         return false;
     }
     PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg success") << printPBFTMsgInfo(_newViewMsg)
-                   << m_config->printCurrentState() << std::endl;
+                   << m_config->printCurrentState();
     reHandlePrePrepareProposals(_newViewMsg);
     return true;
 }

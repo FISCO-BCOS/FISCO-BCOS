@@ -201,8 +201,7 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
         m_scheduler->stop();
         m_oldScheduler = m_scheduler;
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "SchedulerSwitch: scheduler term switch "
-                             << m_scheduler->getSchedulerTermId() << "->" << schedulerTermId
-                             << std::endl;
+                             << m_scheduler->getSchedulerTermId() << "->" << schedulerTermId;
     }
 
     m_scheduler = m_factory->build(schedulerTermId);
