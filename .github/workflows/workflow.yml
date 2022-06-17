@@ -352,7 +352,7 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 patch ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
@@ -396,7 +396,7 @@ jobs:
           make -j3
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
-      - name: show error log
+      - name: show detail log
         if: always()
         run: cat /__w/FISCO-BCOS/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-build-*.log
       - name: tar fisco-bcos for CentOS
