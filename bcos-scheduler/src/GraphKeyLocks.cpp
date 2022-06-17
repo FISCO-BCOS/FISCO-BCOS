@@ -54,13 +54,12 @@ bool GraphKeyLocks::acquireKeyLock(
                                        "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
                                        "exists: [%ld]") %
                                        contract % toHex(key) % contextID % seq %
-                                       std::get<0>(*vertex)
-                                << std::endl;
+                                       std::get<0>(*vertex);
 
             // Key lock holding by another context
             addEdge(contextVertex, keyVertex, seq);
             KEY_LOCK_LOG(TRACE) << " [[" << std::string(contract) << ":" << toHex(key) << "]]  -> "
-                                << contextID << " | " << seq << std::endl;
+                                << contextID << " | " << seq;
             return false;
         }
     }
@@ -71,7 +70,7 @@ bool GraphKeyLocks::acquireKeyLock(
     // Add an own edge
     addEdge(keyVertex, contextVertex, seq);
     KEY_LOCK_LOG(TRACE) << " [" << std::string(contract) << ":" << toHex(key) << "]  -> "
-                        << contextID << " | " << seq << std::endl;
+                        << contextID << " | " << seq;
 
     SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract << " key: " << key
                          << " contextID: " << contextID << " seq: " << seq;
@@ -117,7 +116,7 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
 
     SCHEDULER_LOG(TRACE) << "Release key lock, contextID: " << contextID << " seq: " << seq;
 
-    KEY_LOCK_LOG(TRACE) << " [*****] -> " << contextID << " | " << seq << std::endl;
+    KEY_LOCK_LOG(TRACE) << " [*****] -> " << contextID << " | " << seq;
     auto vertex = touchContext(contextID);
 
     auto edgeRemoveFunc = [seq, graph = &m_graph](auto range) mutable -> bool {

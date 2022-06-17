@@ -1184,13 +1184,13 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
 bool PBFTEngine::handleNewViewMsg(NewViewMsgInterface::Ptr _newViewMsg)
 {
     PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg: receive newViewChangeMsg")
-                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState() << std::endl;
+                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
     if (!isValidNewViewMsg(_newViewMsg))
     {
         return false;
     }
     PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg success") << printPBFTMsgInfo(_newViewMsg)
-                   << m_config->printCurrentState() << std::endl;
+                   << m_config->printCurrentState();
     reHandlePrePrepareProposals(_newViewMsg);
     return true;
 }
