@@ -1,5 +1,5 @@
 #pragma once
-#include "../Concepts.h"
+#include "../TrivialObject.h"
 
 namespace bcos::crypto
 {

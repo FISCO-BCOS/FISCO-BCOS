@@ -1,22 +1,54 @@
-
-#include "StorageInterface2.h"
+#include "Coroutine.h"
 #include <iostream>
 
-bcos::storage::V2::Coroutine<std::string> callStorage()
-{
-    bcos::storage::V2::Storage storage;
+using namespace bcos::storage::V2;
 
-    std::cout << "Prepare key done!" << std::endl;
-    auto key = std::tuple{std::string_view{"table"}, std::string_view{"key"}};
-    auto str = co_await storage.getRow(key);
-    std::cout << "Str is: " << str << std::endl;
+Coroutine getRow()
+{
+    std::cout << "[getRow] I am coroutine!" << std::endl;
+    std::cout << "[getRow] Going to do some async operator!" << std::endl;
+    // do some real async operator, async_read_some(...)
+
+    co_yield 100;
+
+    std::cout << "[getRow] Resume from yield!" << std::endl;
+    std::cout << "[getRow] Goint to do another async operator!" << std::endl;
+    // do some real async operator, async_write_some(...)
+
+    co_yield 200;
+
+    std::cout << "[getRow] Resume from yield again!" << std::endl;
+    std::cout << "[getRow] I am over!" << std::endl;
+
+    co_return;
+}
+
+Coroutine foo()
+{
+    std::cout << "[foo] I am coroutine" << std::endl;
+    std::cout << "[foo] Goint to call getRow() sync!" << std::endl;
+
+    co_await getRow();
+
+    std::cout << "[foo] Call getRow() is done!" << std::endl;
+
+    co_return;
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
-    std::cout << "Start call!" << std::endl;
-    callStorage();
-    std::cout << "End call!" << std::endl;
+    std::cout << "[Main] Start call!" << std::endl;
+    // auto coroutine = getRow();
+    auto coroutine = foo();
+
+    // Start the coroutine
+    while (!coroutine.done())
+    {
+        std::cout << "[Main] Resume the coroutine!" << std::endl;
+        coroutine.resume();
+    }
+
+    std::cout << "[Main] End call!" << std::endl;
 
     return 0;
 }

@@ -96,8 +96,7 @@ public:
         return true;
     }
 
-    bool operator!=(PBFTProposal const& _proposal) { return !(operator==(_proposal)); }
-
+    // bool operator!=(PBFTProposal const& _proposal) { return !(operator==(_proposal)); }
 
     bytesPointer encode() const override
     {

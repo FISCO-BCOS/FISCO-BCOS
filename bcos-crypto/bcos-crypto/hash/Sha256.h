@@ -20,8 +20,6 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <wedpr-crypto/WedprCrypto.h>
-#include <wedpr-crypto/WedprUtilities.h>
 
 namespace bcos
 {
@@ -29,13 +27,12 @@ namespace crypto
 {
 HashType inline sha256Hash(bytesConstRef _data)
 {
-    HashType hashData;
-    CInputBuffer hashInput{(const char*)_data.data(), _data.size()};
-    COutputBuffer hashResult{(char*)hashData.data(), HashType::SIZE};
-    wedpr_sha256_hash(&hashInput, &hashResult);
-    // Note: Due to the return value optimize of the C++ compiler, there will be no additional copy
-    // overhead
-    return hashData;
+    hasher::openssl::OpenSSL_SHA2_256_Hasher hasher;
+    hasher.update(_data);
+
+    HashType out;
+    hasher.final(out);
+    return out;
 }
 class Sha256 : public Hash
 {
