@@ -178,16 +178,32 @@ protected:
 
     virtual void callNewSessionHandlers(P2PSession::Ptr _session)
     {
-        for (auto const& handler : m_newSessionHandlers)
+        try
         {
-            handler(_session);
+            for (auto const& handler : m_newSessionHandlers)
+            {
+                handler(_session);
+            }
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("callNewSessionHandlers exception")
+                                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     }
     virtual void callDeleteSessionHandlers(P2PSession::Ptr _session)
     {
-        for (auto const& handler : m_deleteSessionHandlers)
+        try
         {
-            handler(_session);
+            for (auto const& handler : m_deleteSessionHandlers)
+            {
+                handler(_session);
+            }
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("callDeleteSessionHandlers exception")
+                                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     }
 
