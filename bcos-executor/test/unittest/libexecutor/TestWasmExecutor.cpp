@@ -25,7 +25,7 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "Common.h"
+// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework//executor/ExecutionMessage.h"
 #include "bcos-framework//protocol/Transaction.h"
