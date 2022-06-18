@@ -428,24 +428,37 @@ void Session::doRead()
                 while (true)
                 {
                     Message::Ptr message = s->m_messageFactory->buildMessage();
-                    ssize_t result =
-                        message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
-                    if (result > 0)
+                    try
                     {
-                        /// SESSION_LOG(TRACE) << "Decode success: " << result;
-                        NetworkException e(P2PExceptionType::Success, "Success");
-                        s->onMessage(e, message);
-                        s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                        // Note: the decode function may throw exception
+                        ssize_t result =
+                            message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
+                        if (result > 0)
+                        {
+                            /// SESSION_LOG(TRACE) << "Decode success: " << result;
+                            NetworkException e(P2PExceptionType::Success, "Success");
+                            s->onMessage(e, message);
+                            s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                        }
+                        else if (result == 0)
+                        {
+                            s->doRead();
+                            break;
+                        }
+                        else
+                        {
+                            SESSION_LOG(ERROR)
+                                << LOG_DESC("Decode message error") << LOG_KV("result", result);
+                            s->onMessage(
+                                NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
+                                message);
+                            break;
+                        }
                     }
-                    else if (result == 0)
+                    catch (std::exception const& e)
                     {
-                        s->doRead();
-                        break;
-                    }
-                    else
-                    {
-                        SESSION_LOG(ERROR)
-                            << LOG_DESC("Decode message error") << LOG_KV("result", result);
+                        SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
+                                           << LOG_KV("error", boost::diagnostic_information(e));
                         s->onMessage(
                             NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
                             message);
