@@ -105,12 +105,12 @@ public:
         m_rawProposal->set_signature(_data.data(), _data.size());
     }
 
-    bool operator==(Proposal const _proposal)
+    bool operator==(Proposal const _proposal) const
     {
         return _proposal.index() == index() && _proposal.hash() == hash() &&
                _proposal.data().toBytes() == data().toBytes();
     }
-    bool operator!=(Proposal const _proposal) { return !(operator==(_proposal)); }
+    bool operator!=(Proposal const _proposal) const { return !(operator==(_proposal)); }
 
     std::shared_ptr<RawProposal> rawProposal() { return m_rawProposal; }
 

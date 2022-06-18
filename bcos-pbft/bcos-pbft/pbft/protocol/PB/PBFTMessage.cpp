@@ -119,7 +119,7 @@ void PBFTMessage::setProposals(PBFTProposalList const& _proposals)
     }
 }
 
-bool PBFTMessage::operator==(PBFTMessage const& _pbftMessage)
+bool PBFTMessage::operator==(PBFTMessage const& _pbftMessage) const
 {
     if (!PBFTBaseMessage::operator==(_pbftMessage))
     {

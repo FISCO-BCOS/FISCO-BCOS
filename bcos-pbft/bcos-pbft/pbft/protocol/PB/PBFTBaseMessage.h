@@ -109,7 +109,7 @@ public:
     int64_t index() const override { return m_baseMessage->index(); }
     void setIndex(int64_t _index) override { m_baseMessage->set_index(_index); }
 
-    bool operator==(PBFTBaseMessage const& _pbftMessage)
+    bool operator==(PBFTBaseMessage const& _pbftMessage) const
     {
         return (timestamp() == _pbftMessage.timestamp()) && (version() == _pbftMessage.version()) &&
                (generatedFrom() == _pbftMessage.generatedFrom()) &&

@@ -78,7 +78,7 @@ public:
     virtual void decodeAndSetSignature(
         bcos::crypto::CryptoSuite::Ptr _pbftConfig, bytesConstRef _data);
 
-    bool operator==(PBFTMessage const& _pbftMessage);
+    bool operator==(PBFTMessage const& _pbftMessage) const;
 
     bytesConstRef signatureData() override
     {
