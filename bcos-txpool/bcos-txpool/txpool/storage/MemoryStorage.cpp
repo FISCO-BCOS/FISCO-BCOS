@@ -277,9 +277,10 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             auto txHash = _tx->hash();
             txsHash->emplace_back(txHash);
             txpoolStorage->m_config->ledger()->asyncStoreTransactions(
-                txsToStore, txsHash, [txHash](Error::Ptr _error) {
+                txsToStore, txsHash, [_tx, txHash](Error::Ptr _error) {
                     if (_error == nullptr)
                     {
+                        _tx->setStoreToBackend(true);
                         return;
                     }
                     TXPOOL_LOG(WARNING) << LOG_DESC("asyncPreStoreTransaction failed")
@@ -553,6 +554,11 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
+        {
+            continue;
+        }
+        // only seal the txs have been stored to the backend
+        if (!tx->storeToBackend())
         {
             continue;
         }

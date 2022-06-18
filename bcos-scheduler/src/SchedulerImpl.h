@@ -134,8 +134,8 @@ public:
             blockExecutive->start();
         }
 
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "Start with termId: " << getSchedulerTermId()
-                             << std::endl;
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
+                             << "Start with termId: " << getSchedulerTermId();
     }
     void stop()
     {
