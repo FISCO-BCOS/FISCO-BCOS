@@ -600,16 +600,17 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     {
         return CheckResult::INVALID;
     }
+    bool proposalCommitted = m_cacheProcessor->proposalCommitted(_pbftReq->index());
     if (_pbftReq->index() < m_config->lowWaterMark() ||
         _pbftReq->index() < m_config->expectedCheckPoint() ||
-        _pbftReq->index() <= m_config->syncingHighestNumber() ||
-        m_cacheProcessor->proposalCommitted(_pbftReq->index()))
+        _pbftReq->index() <= m_config->syncingHighestNumber() || proposalCommitted)
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid index")
                         << LOG_KV("highWaterMark", m_config->highWaterMark())
                         << LOG_KV("lowWaterMark", m_config->lowWaterMark())
                         << printPBFTMsgInfo(_pbftReq) << m_config->printCurrentState()
-                        << LOG_KV("syncingNumber", m_config->syncingHighestNumber());
+                        << LOG_KV("syncingNumber", m_config->syncingHighestNumber())
+                        << LOG_KV("proposalCommitted", proposalCommitted);
         return CheckResult::INVALID;
     }
     // case index equal
