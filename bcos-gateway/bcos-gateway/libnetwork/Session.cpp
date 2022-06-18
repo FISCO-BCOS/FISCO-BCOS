@@ -504,37 +504,46 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         {
             return;
         }
-        // the forwarding message
-        if (message->dstP2PNodeID().size() > 0 && message->dstP2PNodeID() != session->m_hostNodeID)
+        try
         {
-            session->m_messageHandler(e, session, message);
-            return;
+            // the forwarding message
+            if (message->dstP2PNodeID().size() > 0 &&
+                message->dstP2PNodeID() != session->m_hostNodeID)
+            {
+                session->m_messageHandler(e, session, message);
+                return;
+            }
+            auto server = session->m_server.lock();
+            // in-activate session
+            if (!session->m_actived || !server || !server->haveNetwork())
+            {
+                return;
+            }
+            auto callbackPtr = session->getCallbackBySeq(message->seq());
+            // without callback, call default handler
+            if (!callbackPtr || !message->isRespPacket())
+            {
+                session->m_messageHandler(e, session, message);
+                return;
+            }
+            // with callback
+            if (callbackPtr->timeoutHandler)
+            {
+                callbackPtr->timeoutHandler->cancel();
+            }
+            auto callback = callbackPtr->callback;
+            session->removeSeqCallback(message->seq());
+            if (!callback)
+            {
+                return;
+            }
+            callback(e, message);
         }
-        auto server = session->m_server.lock();
-        // in-activate session
-        if (!session->m_actived || !server || !server->haveNetwork())
+        catch (std::exception const& e)
         {
-            return;
+            SESSION_LOG(WARNING) << LOG_DESC("onMessage exception")
+                                 << LOG_KV("msg", boost::diagnostic_information(e));
         }
-        auto callbackPtr = session->getCallbackBySeq(message->seq());
-        // without callback, call default handler
-        if (!callbackPtr || !message->isRespPacket())
-        {
-            session->m_messageHandler(e, session, message);
-            return;
-        }
-        // with callback
-        if (callbackPtr->timeoutHandler)
-        {
-            callbackPtr->timeoutHandler->cancel();
-        }
-        auto callback = callbackPtr->callback;
-        session->removeSeqCallback(message->seq());
-        if (!callback)
-        {
-            return;
-        }
-        callback(e, message);
     });
 }
 
