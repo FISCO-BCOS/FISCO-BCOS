@@ -428,24 +428,37 @@ void Session::doRead()
                 while (true)
                 {
                     Message::Ptr message = s->m_messageFactory->buildMessage();
-                    ssize_t result =
-                        message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
-                    if (result > 0)
+                    try
                     {
-                        /// SESSION_LOG(TRACE) << "Decode success: " << result;
-                        NetworkException e(P2PExceptionType::Success, "Success");
-                        s->onMessage(e, message);
-                        s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                        // Note: the decode function may throw exception
+                        ssize_t result =
+                            message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
+                        if (result > 0)
+                        {
+                            /// SESSION_LOG(TRACE) << "Decode success: " << result;
+                            NetworkException e(P2PExceptionType::Success, "Success");
+                            s->onMessage(e, message);
+                            s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                        }
+                        else if (result == 0)
+                        {
+                            s->doRead();
+                            break;
+                        }
+                        else
+                        {
+                            SESSION_LOG(ERROR)
+                                << LOG_DESC("Decode message error") << LOG_KV("result", result);
+                            s->onMessage(
+                                NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
+                                message);
+                            break;
+                        }
                     }
-                    else if (result == 0)
+                    catch (std::exception const& e)
                     {
-                        s->doRead();
-                        break;
-                    }
-                    else
-                    {
-                        SESSION_LOG(ERROR)
-                            << LOG_DESC("Decode message error") << LOG_KV("result", result);
+                        SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
+                                           << LOG_KV("error", boost::diagnostic_information(e));
                         s->onMessage(
                             NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
                             message);
@@ -504,37 +517,46 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         {
             return;
         }
-        // the forwarding message
-        if (message->dstP2PNodeID().size() > 0 && message->dstP2PNodeID() != session->m_hostNodeID)
+        try
         {
-            session->m_messageHandler(e, session, message);
-            return;
+            // the forwarding message
+            if (message->dstP2PNodeID().size() > 0 &&
+                message->dstP2PNodeID() != session->m_hostNodeID)
+            {
+                session->m_messageHandler(e, session, message);
+                return;
+            }
+            auto server = session->m_server.lock();
+            // in-activate session
+            if (!session->m_actived || !server || !server->haveNetwork())
+            {
+                return;
+            }
+            auto callbackPtr = session->getCallbackBySeq(message->seq());
+            // without callback, call default handler
+            if (!callbackPtr || !message->isRespPacket())
+            {
+                session->m_messageHandler(e, session, message);
+                return;
+            }
+            // with callback
+            if (callbackPtr->timeoutHandler)
+            {
+                callbackPtr->timeoutHandler->cancel();
+            }
+            auto callback = callbackPtr->callback;
+            session->removeSeqCallback(message->seq());
+            if (!callback)
+            {
+                return;
+            }
+            callback(e, message);
         }
-        auto server = session->m_server.lock();
-        // in-activate session
-        if (!session->m_actived || !server || !server->haveNetwork())
+        catch (std::exception const& e)
         {
-            return;
+            SESSION_LOG(WARNING) << LOG_DESC("onMessage exception")
+                                 << LOG_KV("msg", boost::diagnostic_information(e));
         }
-        auto callbackPtr = session->getCallbackBySeq(message->seq());
-        // without callback, call default handler
-        if (!callbackPtr || !message->isRespPacket())
-        {
-            session->m_messageHandler(e, session, message);
-            return;
-        }
-        // with callback
-        if (callbackPtr->timeoutHandler)
-        {
-            callbackPtr->timeoutHandler->cancel();
-        }
-        auto callback = callbackPtr->callback;
-        session->removeSeqCallback(message->seq());
-        if (!callback)
-        {
-            return;
-        }
-        callback(e, message);
     });
 }
 
