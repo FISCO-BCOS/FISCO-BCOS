@@ -1,5 +1,4 @@
 #pragma once
-#include "../TrivialObject.h"
 #include <concepts>
 #include <ranges>
 #include <span>
@@ -12,8 +11,7 @@ template <class HasherType>
 concept Hasher = requires(HasherType hasher)
 {
     HasherType{};
-    HasherType::HASH_SIZE;
-    hasher.update(std::span<std::byte>{});
+    HasherType::HASH_SIZE > 0;
     hasher.update(std::span<std::byte const>{});
     hasher.final(std::span<std::byte>{});
 };
