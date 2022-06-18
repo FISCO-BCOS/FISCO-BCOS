@@ -144,6 +144,9 @@ public:
     }
 
 protected:
+    virtual void recoverState();
+
+protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
     bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;

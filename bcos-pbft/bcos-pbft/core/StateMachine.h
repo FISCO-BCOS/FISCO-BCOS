@@ -35,7 +35,10 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : m_scheduler(_scheduler), m_blockFactory(_blockFactory)
     {
+        // since execute block is serial, only use one thread to decrease the timecost
         m_worker = std::make_shared<ThreadPool>("stateMachine", 1);
+        m_schedulerWorker =
+            std::make_shared<ThreadPool>("preExec", (std::thread::hardware_concurrency() * 2));
     }
     ~StateMachine() override {}
 
@@ -57,6 +60,9 @@ protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::ThreadPool::Ptr m_worker;
+    // threadPool used for scheduler preExecuteBlock, since preExecuteBlock may fetch transactions
+    // from the txpool, it need to use multiple thread to improve the txs-fetching-speed
+    bcos::ThreadPool::Ptr m_schedulerWorker;
 };
 }  // namespace consensus
 }  // namespace bcos

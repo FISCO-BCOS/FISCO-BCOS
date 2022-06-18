@@ -173,8 +173,6 @@ private:
 
     bool m_run = false;
 
-    std::shared_ptr<std::thread> m_hostThread;
-
     P2PInfo m_p2pInfo;
 };
 }  // namespace gateway

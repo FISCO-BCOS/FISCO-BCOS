@@ -198,6 +198,13 @@ public:
 private:
     void acquireKeyLock(const std::string_view& key)
     {
+        /*
+        if (!key.compare(ACCOUNT_CODE))
+        {
+            // ignore static system key
+            return;
+        }
+*/
         if (m_existsKeyLocks.find(key) != m_existsKeyLocks.end())
         {
             m_externalAcquireKeyLocks(std::string(key));

@@ -313,6 +313,7 @@ bool PBFTCacheProcessor::tryToPreApplyProposal(ProposalInterface::Ptr _proposal)
 
 bool PBFTCacheProcessor::tryToApplyCommitQueue()
 {
+    notifyToSealNextBlock();
     while (!m_committedQueue.empty() &&
            m_committedQueue.top()->index() < m_config->expectedCheckPoint())
     {

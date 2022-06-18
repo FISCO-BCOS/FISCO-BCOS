@@ -80,6 +80,7 @@ struct KeyPageStorageFixture
 {
     KeyPageStorageFixture()
     {
+        boost::log::core::get()->set_logging_enabled(false);
         hashImpl = make_shared<Header256Hash>();
         auto stateStorage = make_shared<StateStorage>(nullptr);
         stateStorage->setEnableTraverse(true);
@@ -90,7 +91,7 @@ struct KeyPageStorageFixture
         c.limit(0, 100);
     }
 
-    ~KeyPageStorageFixture() {}
+    ~KeyPageStorageFixture() { boost::log::core::get()->set_logging_enabled(true); }
     std::optional<Table> createDefaultTable()
     {
         std::promise<std::optional<Table>> createPromise;
@@ -2142,7 +2143,7 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
 
 
     size_t count = 10;
-    auto keyCount = 10000;
+    auto keyCount = 1000;
     auto index = 0;
     srand(time(NULL));
     // std::list<KeyPageStorage::Ptr> keypages0;

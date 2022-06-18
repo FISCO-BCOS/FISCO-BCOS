@@ -29,13 +29,16 @@ using namespace bcos::ledger;
 BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
     size_t startContextID,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory)
-  : m_block(std::move(block)),
+    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+    bcos::txpool::TxPoolInterface::Ptr _txPool)
+  : m_dmcRecorder(std::make_shared<DmcStepRecorder>()),
+    m_block(std::move(block)),
     m_scheduler(scheduler),
     m_schedulerTermId(scheduler->getSchedulerTermId()),
     m_startContextID(startContextID),
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
     m_blockFactory(_blockFactory),
+    m_txPool(_txPool),
     m_staticCall(staticCall)
 {
     start();
@@ -47,15 +50,136 @@ void BlockExecutive::prepare()
     {
         return;
     }
+    WriteGuard lock(x_prepareLock);
+    if (m_hasPrepared)
+    {
+        return;
+    }
 
     auto startT = utcTime();
 
     if (m_block->transactionsMetaDataSize() > 0)
     {
-        SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                             << LOG_KV("", m_block->transactionsMetaDataSize());
+        buildExecutivesFromMetaData();
+    }
+    else if (m_block->transactionsSize() > 0)
+    {
+        buildExecutivesFromNormalTransaction();
+    }
+    else
+    {
+        SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: empty block"
+                             << LOG_KV("block number", m_block->blockHeaderConst()->number());
+    }
+#pragma omp flush(m_hasDAG)
 
-        m_executiveResults.resize(m_block->transactionsMetaDataSize());
+    // prepare all executors
+    if (!m_hasDAG)
+    {
+        // prepare DMC executor
+        serialPrepareExecutor();
+    }
+
+    m_hasPrepared = true;
+
+    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("prepareBlockExecutive")
+                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                         << LOG_KV(
+                                "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
+                         << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                         << LOG_KV("timeCost", (utcTime() - startT));
+}
+
+bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
+    ContextID contextID, bcos::protocol::Transaction::ConstPtr tx)
+{
+    auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
+    message->setType(protocol::ExecutionMessage::MESSAGE);
+    message->setContextID(contextID);
+    message->setTransactionHash(tx->hash());
+    message->setOrigin(toHex(tx->sender()));
+    message->setFrom(std::string(message->origin()));
+
+
+    if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+    {
+        // LIQUID
+        if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+        {
+            message->setCreate(true);
+        }
+        message->setTo(std::string(tx->to()));
+    }
+    else
+    {
+        // SOLIDITY
+        if (tx->to().empty())
+        {
+            message->setCreate(true);
+        }
+        else
+        {
+            if (m_scheduler->m_isAuthCheck && !m_staticCall &&
+                m_block->blockHeaderConst()->number() == 0 &&
+                tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+            {
+                // if enable auth check, and first deploy auth contract
+                message->setCreate(true);
+            }
+            message->setTo(preprocessAddress(tx->to()));
+        }
+    }
+    message->setDepth(0);
+    message->setGasAvailable(m_gasLimit);
+    message->setData(tx->input().toBytes());
+    message->setStaticCall(m_staticCall);
+
+    if (message->create())
+    {
+        message->setABI(std::string(tx->abi()));
+    }
+
+    bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+
+    {
+#pragma omp critical
+        m_hasDAG = enableDAG;
+    }
+#pragma omp flush(m_hasDAG)
+    return message;
+}
+
+void BlockExecutive::buildExecutivesFromMetaData()
+{
+    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromMetaData"
+                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                         << LOG_KV("", m_block->transactionsMetaDataSize());
+
+    auto txs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
+
+    m_executiveResults.resize(m_block->transactionsMetaDataSize());
+    if (txs)
+    {
+        // can fetch tx from txpool, build message which type is MESSAGE
+#pragma omp parallel for
+        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
+        {
+            auto metaData = m_block->transactionMetaData(i);
+            if (metaData)
+            {
+                m_executiveResults[i].transactionHash = metaData->hash();
+                m_executiveResults[i].source = metaData->source();
+            }
+            auto contextID = i + m_startContextID;
+            auto message = buildMessage(contextID, (*txs)[i]);
+            std::string to = {message->to().data(), message->to().size()};
+#pragma omp critical
+            registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
+        }
+    }
+    else
+    {
+        // only has txHash, build message which type is TXHASH
 #pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
         {
@@ -73,7 +197,6 @@ void BlockExecutive::prepare()
             message->setType(protocol::ExecutionMessage::TXHASH);
             // Note: set here for fetching txs when send_back
             message->setTransactionHash(metaData->hash());
-
 
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
             {
@@ -100,8 +223,6 @@ void BlockExecutive::prepare()
             message->setDepth(0);
             message->setGasAvailable(m_gasLimit);
             message->setStaticCall(false);
-
-
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
             std::string to = {message->to().data(), message->to().size()};
@@ -109,103 +230,99 @@ void BlockExecutive::prepare()
             m_hasDAG = enableDAG;
             registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
         }
-#pragma omp flush(m_hasDAG)
     }
-    else if (m_block->transactionsSize() > 0)
-    {
-        SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                             << LOG_KV("tx count", m_block->transactionsSize());
+}
 
-        m_executiveResults.resize(m_block->transactionsSize());
+
+void BlockExecutive::buildExecutivesFromNormalTransaction()
+{
+    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
+                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                         << LOG_KV("tx count", m_block->transactionsSize());
+
+    m_executiveResults.resize(m_block->transactionsSize());
 #pragma omp parallel for
-        for (size_t i = 0; i < m_block->transactionsSize(); ++i)
+    for (size_t i = 0; i < m_block->transactionsSize(); ++i)
+    {
+        auto tx = m_block->transaction(i);
+        if (!m_isSysBlock)
         {
-            auto tx = m_block->transaction(i);
-            if (!m_isSysBlock)
+            auto toAddress = tx->to();
+            if (bcos::precompiled::c_systemTxsAddress.count(
+                    std::string(toAddress.begin(), toAddress.end())))
             {
-                auto toAddress = tx->to();
-                if (bcos::precompiled::c_systemTxsAddress.count(
-                        std::string(toAddress.begin(), toAddress.end())))
-                {
-                    m_isSysBlock.store(true);
-                }
+                m_isSysBlock.store(true);
             }
-            m_executiveResults[i].transactionHash = tx->hash();
-            m_executiveResults[i].source = tx->source();
+        }
+        m_executiveResults[i].transactionHash = tx->hash();
+        m_executiveResults[i].source = tx->source();
 
-            auto contextID = i + m_startContextID;
-            auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            message->setType(protocol::ExecutionMessage::MESSAGE);
-            message->setContextID(contextID);
-            message->setTransactionHash(tx->hash());
-            message->setOrigin(toHex(tx->sender()));
-            message->setFrom(std::string(message->origin()));
+        auto contextID = i + m_startContextID;
+        auto message = buildMessage(contextID, tx);
+        std::string to = {message->to().data(), message->to().size()};
+#pragma omp critical
+        registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
+    }
+}
 
+bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
+    bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool)
+{
+    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: fillBlock start"
+                         << LOG_KV("number", block->blockHeaderConst()->number())
+                         << LOG_KV("txNum", block->transactionsMetaDataSize());
+    bcos::protocol::TransactionsPtr txs = nullptr;
+    auto lastT = utcTime();
+    if (txPool != nullptr)
+    {
+        // Get tx hash list
+        auto txHashes = std::make_shared<protocol::HashList>();
+        for (size_t i = 0; i < block->transactionsMetaDataSize(); ++i)
+        {
+            txHashes->emplace_back(block->transactionMetaData(i)->hash());
+        }
 
-            if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-            {
-                // LIQUID
-                if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+        std::shared_ptr<std::promise<bcos::protocol::TransactionsPtr>> txsPromise =
+            std::make_shared<std::promise<bcos::protocol::TransactionsPtr>>();
+        txPool->asyncFillBlock(
+            txHashes, [txsPromise](Error::Ptr error, bcos::protocol::TransactionsPtr txs) {
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+                if (!txsPromise)
                 {
-                    message->setCreate(true);
+                    return;
                 }
-                message->setTo(std::string(tx->to()));
-            }
-            else
-            {
-                // SOLIDITY
-                if (tx->to().empty())
+
+                if (error)
                 {
-                    message->setCreate(true);
+                    txsPromise->set_value(nullptr);
                 }
                 else
                 {
-                    if (m_scheduler->m_isAuthCheck && !m_staticCall &&
-                        m_block->blockHeaderConst()->number() == 0 &&
-                        tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
-                    {
-                        // if enable auth check, and first deploy auth contract
-                        message->setCreate(true);
-                    }
-                    message->setTo(preprocessAddress(tx->to()));
+                    txsPromise->set_value(txs);
                 }
-            }
-            if (message->create())
-            {
-                message->setABI(std::string(tx->abi()));
-            }
-            message->setDepth(0);
-            message->setGasAvailable(m_gasLimit);
-            message->setData(tx->input().toBytes());
-            message->setStaticCall(m_staticCall);
-
-            bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
-
-            std::string to = {message->to().data(), message->to().size()};
-
-#pragma omp critical
-            m_hasDAG = enableDAG;
-            registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
+            });
+        auto future = txsPromise->get_future();
+        if (future.wait_for(std::chrono::milliseconds(10 * 1000)) != std::future_status::ready)
+        {
+            // 10s timeout
+            SCHEDULER_LOG(ERROR) << "BlockExecutive prepare: fillBlock timeout/error"
+                                 << LOG_KV("number", block->blockHeaderConst()->number())
+                                 << LOG_KV("txNum", block->transactionsMetaDataSize())
+                                 << LOG_KV("cost", utcTime() - lastT)
+                                 << LOG_KV("fetchNum", txs ? txs->size() : 0);
+            return nullptr;
         }
+        txs = future.get();
+        txsPromise = nullptr;
     }
-#pragma omp flush(m_hasDAG)
-
-    // prepare all executors
-    if (!m_hasDAG)
-    {
-        // prepare DMC executor
-        serialPrepareExecutor();
-    }
-
-    m_hasPrepared = true;
-
-    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("prepareBlockExecutive")
-                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                         << LOG_KV(
-                                "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                         << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
-                         << LOG_KV("timeCost", (utcTime() - startT));
+    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: fillBlock end"
+                         << LOG_KV("number", block->blockHeaderConst()->number())
+                         << LOG_KV("txNum", block->transactionsMetaDataSize())
+                         << LOG_KV("cost", utcTime() - lastT)
+                         << LOG_KV("fetchNum", txs ? txs->size() : 0);
+    return txs;
 }
+
 void BlockExecutive::asyncCall(
     std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
@@ -600,8 +717,21 @@ void BlockExecutive::DMCExecute(
         return;
     }
 
+    // update DMC recorder for debugging
+    m_dmcRecorder->nextDmcRound();
+
+    auto lastT = utcTime();
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tStart" << LOG_KV("blockNumber", number())
+                   << LOG_KV("round", m_dmcRecorder->getRound())
+                   << LOG_KV("checksum", m_dmcRecorder->getChecksum());
+
     // prepare all dmcExecutor
     serialPrepareExecutor();
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tSerialPrepareExecutor finish"
+                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
+                   << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                   << LOG_KV("cost", utcTime() - lastT);
+    lastT = utcTime();
 
     // dump address for omp parallization
     std::vector<std::string> contractAddress;
@@ -613,10 +743,16 @@ void BlockExecutive::DMCExecute(
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->total = contractAddress.size();
 
-    auto executorCallback = [this, batchStatus = std::move(batchStatus),
+    // if is empty block, just return
+    if (contractAddress.size() == 0)
+    {
+        onDmcExecuteFinish(std::move(callback));
+        return;
+    }
+
+    auto executorCallback = [this, lastT, batchStatus = std::move(batchStatus),
                                 callback = std::move(callback)](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
-        // update batch
         if (error || status == DmcExecutor::Status::ERROR)
         {
             batchStatus->error++;
@@ -664,6 +800,12 @@ void BlockExecutive::DMCExecute(
         }
 
         // handle batch result(only one thread can get in here)
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tJoint all contract result"
+                       << LOG_KV("blockNumber", number())
+                       << LOG_KV("round", m_dmcRecorder->getRound())
+                       << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                       << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
+
         if (batchStatus->error != 0)
         {
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -687,6 +829,7 @@ void BlockExecutive::DMCExecute(
         }
     };
 
+
 // for each dmcExecutor
 #pragma omp parallel for
     for (size_t i = 0; i < contractAddress.size(); i++)
@@ -694,6 +837,12 @@ void BlockExecutive::DMCExecute(
         auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
         dmcExecutor->go(executorCallback);
     }
+
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tSent to executor"
+                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
+                   << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                   << LOG_KV("cost", utcTime() - lastT)
+                   << LOG_KV("contractNum", contractAddress.size());
 }
 
 void BlockExecutive::onDmcExecuteFinish(
@@ -709,7 +858,7 @@ void BlockExecutive::onDmcExecuteFinish(
 
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "DMC execute for call finished."
+        DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "DMCExecute for call finished."
                        << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // Set result to m_block
@@ -721,7 +870,7 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "DMC execute for transaction finished."
+        DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "DMCExecute for transaction finished."
                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // All Transaction finished, get hash
@@ -1081,10 +1230,8 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
-#ifdef DMC_TRACE_LOG_ENABLE
     DMC_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                   << " -> contextID:" << output->contextID() - m_startContextID << std::endl;
-#endif
+                   << " -> contextID:" << output->contextID() - m_startContextID;
     // write receipt in results
     m_executiveResults[output->contextID() - m_startContextID].receipt =
         m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
@@ -1099,9 +1246,6 @@ void BlockExecutive::serialPrepareExecutor()
     // Notice:
     // For the same DMC lock priority
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
-
-    // update DMC recorder for debugging
-    m_dmcRecorder->nextDmcRound();
 
     /// Handle normal message
     bool hasScheduleOutMessage;
@@ -1120,11 +1264,9 @@ void BlockExecutive::serialPrepareExecutor()
         // for each current DmcExecutor
         for (auto& address : currentExecutors)
         {
-#ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: \t----------------- addr:" << address
                            << " | number:" << m_block->blockHeaderConst()->number()
-                           << " -----------------" << std::endl;
-#endif
+                           << " -----------------";
             hasScheduleOutMessage |=
                 m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
         }
@@ -1145,11 +1287,9 @@ void BlockExecutive::serialPrepareExecutor()
         {
             continue;  // must jump finished executor
         }
-#ifdef DMC_TRACE_LOG_ENABLE
         DMC_LOG(TRACE) << " 3.UnlockPrepare: \t |---------------- addr:" << address
                        << " | number:" << std::to_string(m_block->blockHeaderConst()->number())
-                       << " ----------------|" << std::endl;
-#endif
+                       << " ----------------|";
 
         allFinished = false;
         bool need = dmcExecutor->unlockPrepare();
@@ -1164,11 +1304,8 @@ void BlockExecutive::serialPrepareExecutor()
         for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
         {
             auto& address = it->first;
-#ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
-                           << m_block->blockHeaderConst()->number() << " -----------------"
-                           << std::endl;
-#endif
+                           << m_block->blockHeaderConst()->number() << " -----------------";
             if (m_dmcExecutors[address]->detectLockAndRevert())
             {
                 needRevert = true;

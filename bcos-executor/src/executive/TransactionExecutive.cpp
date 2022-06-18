@@ -824,6 +824,10 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     // enc([call precompiled parameters],[user call parameters])
     auto newParams = codec.encode(codeParameters, callParameters->data);
     callParameters->data = std::move(newParams);
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled")
+                         << LOG_KV("codeAddr", callParameters->codeAddress)
+                         << LOG_KV("recvAddr", callParameters->receiveAddress)
+                         << LOG_KV("datasize", callParameters->data.size());
     auto callResult = callPrecompiled(std::move(callParameters));
 
     callResult->receiveAddress = callResult->codeAddress;

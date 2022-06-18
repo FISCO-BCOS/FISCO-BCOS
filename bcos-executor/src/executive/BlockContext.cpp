@@ -68,6 +68,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
 
 ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)
 {
+    bcos::ReadGuard l(x_executiveFlows);
     auto it = m_executiveFlows.find(codeAddress);
     if (it == m_executiveFlows.end())
     {
@@ -85,5 +86,6 @@ ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddre
 void BlockContext::setExecutiveFlow(
     std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow)
 {
+    bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
 }

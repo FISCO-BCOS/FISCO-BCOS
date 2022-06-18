@@ -6,11 +6,12 @@
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <atomic>
 #include <sstream>
+#include <string>
 #include <string_view>
-
 
 namespace bcos::scheduler
 {
+
 class DmcStepRecorder
 {
     // Record DMC step for debugging inconsistency bug
@@ -32,15 +33,28 @@ public:
 
     void nextDmcRound();
 
-    std::string dumpAndClearChecksum()
+    uint32_t getRound() { return m_round; }
+
+    std::string getChecksum()
+    {
+        std::stringstream ss;
+        ss << std::setbase(16) << m_checksum;  // to hex
+        return ss.str();
+    }
+
+    void clear()
     {
         m_sendChecksum = 0;
         m_receiveChecksum = 0;
-
-        std::stringstream ss;
-        ss << std::setbase(16) << m_checksum;  // to hex
         m_checksum = 0;
-        return ss.str();
+        m_round = 0;
+    }
+
+    std::string dumpAndClearChecksum()
+    {
+        std::string checksum = getChecksum();
+        clear();
+        return checksum;
     }
 
     // TODO: record execute history
@@ -49,6 +63,7 @@ public:
 private:
     std::atomic<uint32_t> m_sendChecksum = 0;
     std::atomic<uint32_t> m_receiveChecksum = 0;
+    uint32_t m_round = 0;
     uint32_t m_checksum = 0;
 
     uint32_t getMessageChecksum(const protocol::ExecutionMessage::UniquePtr& message);

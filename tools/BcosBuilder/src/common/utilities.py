@@ -4,7 +4,6 @@ import sys
 import os
 import subprocess
 import logging
-import re
 
 logging.basicConfig(format='%(message)s',
                     level=logging.INFO)
@@ -15,6 +14,7 @@ class ServiceInfo:
     executor_service_type = "executor"
     rpc_service_type = "rpc"
     gateway_service_type = "gateway"
+    monitor_service_type = "monitor"
 
     ssl_file_list = ["ca.crt", "ssl.key", "ssl.crt"]
     sm_ssl_file_list = ["sm_ca.crt", "sm_ssl.key",
@@ -39,12 +39,15 @@ class ServiceInfo:
     tars_pkg_postfix = ".tgz"
     default_listen_ip = "0.0.0.0"
     cert_generationscript_path = "../src/scripts/generate_cert.sh"
-    supported_service_type = [node_service_type, executor_service_type,
+    supported_service_type = [node_service_type, monitor_service_type, executor_service_type,
                               rpc_service_type, gateway_service_type]
 
 
 class ConfigInfo:
     tpl_abs_path = "../src/tpl/"
+    tpl_src_mtail_path = "../src/scripts/"
+    tpl_binary_path = "./binary/"
+    tpl_monitor_path = "../docker/host/linux/monitor/"
     pwd_path = os.getcwd()
     rpc_config_tpl_path = os.path.join(
         pwd_path, tpl_abs_path, "config.ini.rpc")
@@ -54,6 +57,12 @@ class ConfigInfo:
         pwd_path, tpl_abs_path, "config.genesis")
     node_config_tpl_path = os.path.join(
         pwd_path, tpl_abs_path, "config.ini.node")
+    mtail_config_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "node.mtail")
+    monitor_config_tpl_path = os.path.join(
+        pwd_path, tpl_monitor_path, "")
+    prometheus_config_tpl_path = os.path.join(
+        pwd_path, tpl_monitor_path, "prometheus/prometheus.yml")
     executor_config_tpl_path = os.path.join(
         pwd_path, tpl_abs_path, "config.ini.executor")
 
@@ -78,6 +87,8 @@ class CommandInfo:
     chain_sub_parser_name = "chain"
     node_command_to_impl = {gen_config: "gen_node_config", upload: "upload_nodes", deploy: "deploy_nodes",
                             upgrade: "upgrade_nodes", undeploy: "undeploy_nodes", start: "start_all", stop: "stop_all", expand: "expand_nodes"}
+    monitor_command_to_impl = {deploy: "deploy_monitor",
+                               start: "start_monitor", stop: "stop_monitor"}
     executor_command_to_impl = {gen_config: "gen_executor_config", expand: "expand_executors"}
     service_command_impl = {gen_config: "gen_service_config", upload: "upload_service", deploy: "deploy_service",
                             upgrade: "upgrade_service", undeploy: "delete_service", start: "start_service", stop: "stop_service", expand: "expand_service"}
@@ -160,6 +171,71 @@ def generate_cert_with_command(sm_type, command, outputdir, ca_cert_info):
         ServiceInfo.cert_generationscript_path, outputdir, command, sm_mode, ca_cert_info)
     if execute_command(generate_cert_cmd) is False:
         log_error("%s failed" % command)
+        sys.exit(-1)
+    return True
+
+
+def execute_monitor_with_command(monitor_execute__scripts_path):
+    """
+    execute common for the monitor
+    """
+    execute_monitor_cmd = "bash %s" % (
+        monitor_execute__scripts_path)
+    if execute_command(execute_monitor_cmd) is False:
+        log_error("%s failed exec " % monitor_execute__scripts_path)
+        sys.exit(-1)
+    return True
+
+
+def execute_mtail_with_command(mtail_execute_scripts_path, mtail_listen_port):
+    """
+    execute mtail for the monitor
+    """
+    execute_mtail_cmd = "bash %s %s " % (
+        mtail_execute_scripts_path, mtail_listen_port)
+    if execute_command(execute_mtail_cmd) is False:
+        log_error("%s failed start" % mtail_execute_scripts_path)
+        sys.exit(-1)
+    return True
+
+
+def execute_ansible_copy_with_command(deploy_ip, srcDir, destDir):
+    """
+    execute ansible for the monitor
+
+    """
+    execute_copy_matil_cmd = 'ansible %s -m copy -a "src=%s dest=%s/ mode=0755"' % (
+        deploy_ip, srcDir, destDir)
+    if execute_command(execute_copy_matil_cmd) is False:
+        log_error("%s failed copy mtail config for ansible" % srcDir)
+        sys.exit(-1)
+    return True
+
+
+def execute_ansible_with_command(start_scripts_path, deploy_ip, mtail_listen_port):
+    """
+    execute ansible for the monitor
+
+    """
+    execute_matil_cmd = 'ansible %s -m shell -a "bash %s %s "' % (
+        deploy_ip, start_scripts_path, mtail_listen_port)
+    if execute_command(execute_matil_cmd) is False:
+        log_error("%s failed start mtail config by ansible" %
+                  start_scripts_path)
+        sys.exit(-1)
+    return True
+
+
+def execute_ansible_with_monitor_command(start_scripts_path, deploy_ip):
+    """
+    execute ansible for the monitor
+
+    """
+    execute_matil_cmd = 'ansible %s -m shell -a "%s"' % (
+        deploy_ip, start_scripts_path)
+    if execute_command(execute_matil_cmd) is False:
+        log_error("%s failed start mtail config by ansible" %
+                  start_scripts_path)
         sys.exit(-1)
     return True
 

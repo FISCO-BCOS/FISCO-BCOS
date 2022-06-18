@@ -70,3 +70,7 @@ enable_storage_security = false
         pd_addrs="172.25.0.3:2379"
         deploy_ip = ["172.25.0.3"]
         executor_deploy_ip=["172.25.0.3"]
+        monitor_listen_port = "3901"
+        # the tikv storage pd-addresses
+        # monitor log path example:"/root/app/tars/framework/app_log/" 
+        monitor_log_path = ""  

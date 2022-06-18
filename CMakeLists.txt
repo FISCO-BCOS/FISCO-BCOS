@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.14)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif ()
@@ -41,6 +41,7 @@ if(ALL_COMPONENTS)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
 
+<<<<<<< HEAD
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)
@@ -69,6 +70,16 @@ if(ALL_COMPONENTS)
         add_subdirectory(tests)
     endif ()
 endif()
+=======
+if (BUILD_DEMO)
+    add_subdirectory(fisco-bcos-demo)
+endif ()
+
+if (TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif ()
+>>>>>>> upstream/release-3.0.0-rc4
 
 # for code coverage
 if (COVERAGE)

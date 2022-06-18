@@ -188,7 +188,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     << LOG_BADGE("Switch")
                     << "Executor load from backend storage, check storage blockNumber"
                     << LOG_KV("storageBlockNumber", storageBlockNumber)
-                    << LOG_KV("requestBlockNumber", blockHeader->number()) << std::endl;
+                    << LOG_KV("requestBlockNumber", blockHeader->number());
                 if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
                 {
                     auto fmt = boost::format(
@@ -352,8 +352,19 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                     return;
                 }
             }
-
-            EXECUTOR_NAME_LOG(TRACE) << "Call success";
+            if (!error)
+            {
+                EXECUTOR_NAME_LOG(TRACE)
+                    << "Call success" << LOG_KV("staticCall", result->staticCall())
+                    << LOG_KV("from", result->from()) << LOG_KV("to", result->to())
+                    << LOG_KV("context", result->contextID());
+            }
+            else
+            {
+                EXECUTOR_NAME_LOG(WARNING)
+                    << LOG_DESC("Call error") << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
+            }
             callback(std::move(error), std::move(result));
         });
 }
@@ -543,7 +554,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
             });
     }
 
-    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("executeTransactions") << LOG_KV("prepareT", prepareT)
+    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("dmcExecuteTransactions") << LOG_KV("prepareT", prepareT)
                              << LOG_KV("total", (utcTime() - recoredT));
 }
 
@@ -1519,7 +1530,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                              << LOG_KV("keyLockSize", input->keyLocks().size())
                              << LOG_KV("contextID", input->contextID())
                              << LOG_KV("seq", input->seq())
-                             << LOG_KV("type", std::to_string(input->type()));
+                             << LOG_KV("type", std::to_string(input->type()))
+                             << LOG_KV("staticCall", input->staticCall());
     switch (input->type())
     {
     case bcos::protocol::ExecutionMessage::TXHASH:

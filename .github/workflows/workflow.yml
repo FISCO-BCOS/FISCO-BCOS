@@ -55,7 +55,7 @@ jobs:
         run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache openssl libssl-dev wget
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
-        run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
+        run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DBUILD_DEMO=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
       - name: compile
         run: cd build && make -j3
       - name: make test

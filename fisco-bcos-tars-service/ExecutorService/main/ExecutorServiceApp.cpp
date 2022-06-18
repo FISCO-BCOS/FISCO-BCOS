@@ -108,8 +108,7 @@ void ExecutorServiceApp::createAndInitExecutor()
         schedulerPrx, m_protocolInitializer->cryptoSuite());
 
     // create executor
-    auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), m_logInitializer->logPath());
-
+    auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath());
     std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
     {

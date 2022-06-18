@@ -182,6 +182,12 @@ public:
         m_running = true;
         m_masterNode.store(true);
     }
+    void start() override { recoverState(); }
+    void init() override
+    {
+        PBFTImpl::init();
+        start();
+    }
     ~FakePBFTImpl() {}
 };
 

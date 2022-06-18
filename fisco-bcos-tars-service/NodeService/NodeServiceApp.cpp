@@ -82,7 +82,7 @@ void NodeServiceApp::initNodeService()
 {
     m_nodeInitializer = std::make_shared<Initializer>();
     m_nodeInitializer->initMicroServiceNode(
-        m_nodeArchType, m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath);
+        m_nodeArchType, m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath, getLogPath());
     auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
     auto rpcServicePrx =
         Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);

@@ -47,7 +47,7 @@ public:
 
     void clear()
     {
-        std::unique_lock lock(m_mutex);
+        WriteGuard lock(m_mutex);
         m_contract2ExecutorInfo.clear();
         m_name2Executors.clear();
         m_executorPriorityQueue = std::priority_queue<ExecutorInfo::Ptr,
@@ -80,7 +80,7 @@ private:
         m_name2Executors;
     std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>
         m_executorPriorityQueue;
-    std::shared_mutex m_mutex;
+    mutable SharedMutex m_mutex;
 
     bcos::executor::ParallelTransactionExecutorInterface::Ptr const& executorView(
         const decltype(m_name2Executors)::value_type& value) const

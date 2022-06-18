@@ -42,7 +42,7 @@ protected:
         bcos::gateway::GatewayInterface::Ptr _gateway)
     {
         m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
-        m_nodeInitializer->initAirNode(_configFilePath, _genesisFile, _gateway);
+        m_nodeInitializer->initAirNode(_configFilePath, _genesisFile, _gateway, m_logInitializer->logPath());
     }
 
 private:

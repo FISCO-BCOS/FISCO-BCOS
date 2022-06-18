@@ -72,12 +72,11 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         }
         else
         {
-            auto seq = _msg->seq();
             // remove the callback
-            _session->getAndRemoveRespCallback(seq);
             BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
                               << LOG_DESC("unable to send response for session has been inactive")
-                              << LOG_KV("req", req) << LOG_KV("resp", _resp) << LOG_KV("seq", seq)
+                              << LOG_KV("req", req) << LOG_KV("resp", _resp)
+                              << LOG_KV("seq", _msg->seq())
                               << LOG_KV(
                                      "endpoint", _session ? _session->endPoint() : std::string(""));
         }

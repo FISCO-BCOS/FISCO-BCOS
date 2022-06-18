@@ -745,39 +745,39 @@ group = "group0"
 
 
 gauge p2p_session_actived by host , node
-/\[P2PService\]\[Service\]heartBeat,connected count=(?P<count>\d+)/ {
+/\[P2PService\]\[Service\]\[METRIC\]heartBeat,connected count=(?P<count>\d+)/ {
   p2p_session_actived[host][node] = \$count
 }
 
 gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[Core\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
-
 histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[Core\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 } 
 
+
 histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge ledger_block_height by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]reachNewView,committedIndex=(?P<committedIndex>\d+)/ {
-  ledger_block_height[chain][group][host][node] = \$committedIndex
+/\[LEDGER\]\[METRIC\]asyncPrewriteBlock,number=(?P<number>\d+)/ {
+  ledger_block_height[chain][group][host][node] = \$number
 }
 
 gauge txpool_pending_tx_size by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]reachNewView,.*?unsealedTxs=(?P<unsealedTxs>\d+)/ {
-  txpool_pending_tx_size[chain][group][host][node] = \$unsealedTxs
+/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+  txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
 }
 EOF
 
@@ -850,6 +850,7 @@ generate_monitor_scripts() {
     local output=${1}
     local mtail_host_list=""
     local ip_params="${2}"
+    local monitor_ip="${3}"
     local ip_array=(${ip_params//,/ })
     local ip_length=${#ip_array[@]}
     local i=0
@@ -884,7 +885,7 @@ services:
 
   grafana:
     container_name: grafana
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:7.3.3
     restart: unless-stopped
     user: '0'
     network_mode: host
@@ -947,8 +948,8 @@ EOF
 
 DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
 docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
-echo -e "\033[32m start monitor successfully\033[0m"
-echo -e "\033[32m Please access grafana by https://host_ip:3001 \033[0m"
+echo "graphna web address: http://${monitor_ip}:3001/"
+echo "prometheus web address: http://${monitor_ip}:9090/"
 EOF
     chmod u+x "${output}/start_monitor.sh"
 
@@ -1446,6 +1447,7 @@ deploy_nodes()
     local count=0
     connected_nodes=""
     connected_mtail_nodes=""
+    local monitor_ip=""
     # Note: must generate the node account firstly
     ca_dir="${output_dir}"/ca
     generate_chain_cert "${sm_mode}" "${ca_dir}"
@@ -1456,6 +1458,7 @@ deploy_nodes()
         if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
             LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
         fi
+        echo $num
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
         echo "Processing IP:${ip} Total:${num}"
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
@@ -1484,6 +1487,9 @@ deploy_nodes()
             if "${monitor_mode}" ;then 
                 local port=$((mtail_listen_port + node_count))
                 connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
+                if [[ $count == 0 ]]; then
+                    monitor_ip="${ip}"
+                fi  
                 generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
             fi
             local port=$((p2p_listen_port + node_count))
@@ -1498,7 +1504,7 @@ deploy_nodes()
 
     if "${monitor_mode}" ;then 
         monitor_dir="${output_dir}/monitor"
-        generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}"
+        generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}" ${monitor_ip}
     fi
 
     local i=0

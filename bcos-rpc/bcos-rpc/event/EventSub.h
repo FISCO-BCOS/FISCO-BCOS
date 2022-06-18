@@ -112,9 +112,6 @@ public:
     std::shared_ptr<EventSubMatcher> matcher() const { return m_matcher; }
     void setMatcher(std::shared_ptr<EventSubMatcher> _matcher) { m_matcher = _matcher; }
 
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
-    std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
-
     int64_t maxBlockProcessPerLoop() const { return m_maxBlockProcessPerLoop; }
     void setMaxBlockProcessPerLoop(int64_t _maxBlockProcessPerLoop)
     {
@@ -139,8 +136,6 @@ public:
 private:
     // group manager
     bcos::rpc::GroupManager::Ptr m_groupManager;
-    // io context
-    std::shared_ptr<boost::asio::io_context> m_ioc;
     // match for event log compare
     std::shared_ptr<EventSubMatcher> m_matcher;
     // message factory
