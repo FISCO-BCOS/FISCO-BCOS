@@ -17,6 +17,10 @@
             "version>=": "1.1.1-tassl"
         },
         "boost-log",
+        "boost-beast",
+        "boost-uuid",
+        "boost-coroutine2",
+        "boost-property-map",
         "boost-chrono",
         "boost-iostreams",
         "boost-thread",

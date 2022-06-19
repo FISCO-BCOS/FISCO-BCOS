@@ -41,7 +41,7 @@ jobs:
       - name: Configure for macos
         if: runner.os == 'macOS'
         run:
-          mkdir -p build && cd build && CC="$(brew --prefix llvm)/bin/clang" CXX="$(brew --prefix llvm)/bin/clang++" cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && CC="gcc-10" CXX="g++-10" cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
       - name: Configure for linux and windows
         if: runner.os != 'macOS'
         run:
