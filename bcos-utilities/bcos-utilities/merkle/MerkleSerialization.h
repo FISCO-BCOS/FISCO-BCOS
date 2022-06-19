@@ -10,16 +10,14 @@
 namespace boost::serialization
 {
 template <class Archive, class T1, class T2, size_t T3>
-void serialize(Archive& ar, bcos::tool::merkle::Merkle<T1, T2, T3>& merkle,
-    [[maybe_unused]] unsigned int version)
+void serialize(Archive& ar, bcos::tool::merkle::Merkle<T1, T2, T3>& merkle, [[maybe_unused]] unsigned int version)
 {
     ar& merkle.m_nodes;
     ar& merkle.m_levels;
 }
 
 template <class Archive, class HashType>
-void serialize(
-    Archive& ar, bcos::tool::merkle::Proof<HashType>& proof, [[maybe_unused]] unsigned int version)
+void serialize(Archive& ar, bcos::tool::merkle::Proof<HashType>& proof, [[maybe_unused]] unsigned int version)
 {
     ar& proof.hashes;
     ar& proof.levels;

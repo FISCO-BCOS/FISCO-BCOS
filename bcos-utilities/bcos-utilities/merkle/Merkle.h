@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Exceptions.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bits/ranges_algo.h>
 #include <boost/format.hpp>
@@ -63,7 +62,7 @@ public:
             if (std::ranges::find(range, hash) == std::end(range)) [[unlikely]]
                 return false;
 
-            if (it + 1 != proof.levels.end())
+            if (std::next(it) != proof.levels.end())
             {
                 for (auto& rangeHash : range)
                 {
@@ -85,6 +84,7 @@ public:
 
         // Query the first level hashes(ordered)
         auto levelRange = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+
         auto it = std::ranges::lower_bound(levelRange, hash);
         if (it == levelRange.end() || *it != hash) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
