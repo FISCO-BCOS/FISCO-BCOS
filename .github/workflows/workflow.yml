@@ -12,11 +12,9 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
-env:
-  CCACHE_DIR: ${{ github.workspace }}/ccache
-
 jobs:
-  name: build
+  build:
+    name: build
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
