@@ -1,0 +1,10 @@
+{
+  "registries": [
+    {
+      "kind": "git",
+      "repository": "https://github.com/FISCO-BCOS/registry",
+      "baseline": "4bb896c0886048618b0765fbd2ed3652d2fdf34c",
+      "packages": [ "openssl", "evmone", "evmc", "tarscpp" ]
+    }
+  ]
+}
