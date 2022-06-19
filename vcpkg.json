@@ -18,6 +18,7 @@
         "boost-thread",
         "boost-test",
         "boost-multiprecision",
+        "boost-program-options",
         "tbb",
         "rocksdb",
         "zlib",
