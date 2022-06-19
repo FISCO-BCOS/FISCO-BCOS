@@ -20,6 +20,8 @@
         "boost-beast",
         "boost-uuid",
         "boost-coroutine2",
+        "boost-heap",
+        "boost-graph",
         "boost-property-map",
         "boost-chrono",
         "boost-iostreams",
