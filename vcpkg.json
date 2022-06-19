@@ -12,6 +12,10 @@
             "name": "vcpkg-cmake-config",
             "host": true
         },
+        {
+            "name": "openssl",
+            "version>=": "1.1.1-tassl"
+        },
         "boost-log",
         "boost-chrono",
         "boost-iostreams",
@@ -25,8 +29,8 @@
         "jsoncpp",
         "zstd",
         "protobuf",
-        "openssl",
         "evmc",
         "evmone"
-    ]
+    ],
+    "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
 }
