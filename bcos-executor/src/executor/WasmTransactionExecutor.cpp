@@ -37,6 +37,8 @@
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/GroupSigPrecompiled.h"
+#include "../precompiled/extension/RingSigPrecompiled.h"
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "bcos-codec/abi/ContractABIType.h"
@@ -95,6 +97,10 @@ void WasmTransactionExecutor::initPrecompiled()
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
     if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert(
