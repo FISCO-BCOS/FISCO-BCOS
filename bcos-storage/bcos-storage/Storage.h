@@ -1,19 +1,52 @@
 #pragma once
 
+#include <boost/type_traits.hpp>
 #include <ranges>
+#include <type_traits>
 
 namespace bcos::storage
 {
 
-template <class StorageType>
-concept Storage = requires(StorageType storage)
+template <class Function, class KeyType>
+concept GetRowsFunction = requires(typename boost::function_traits<Function>::arg1_type getRowArg1,
+    typename boost::function_traits<Function>::arg2_type getRowsArg2,
+    typename std::ranges::range_value_t<typename boost::function_traits<Function>::arg2_type> getRowsArg2ValueType)
 {
-    typename StorageType::Table;
-    typename StorageType::Key;
-
-    storage.getRow(typename StorageType::TABLE_TYPE{}, typename StorageType::KEY_TYPE{});
-    storage.getRows(typename StorageType::TABLE_TYPE{}, std::ranges::range keylist);
+    {
+        getRowArg1
+        } -> std::convertible_to<KeyType>;
+    {
+        getRowsArg2
+        } -> std::ranges::range;
+    {
+        getRowsArg2ValueType
+        } -> std::same_as<KeyType>;
 };
+
+template <class StorageType>
+concept Storage = requires(StorageType storage, decltype(&StorageType::getRows) getRowsFunction)
+{
+    typename StorageType::TableType;
+    typename StorageType::KeyType;
+
+    storage.getRow(typename StorageType::TableType{}, typename StorageType::KeyType{});
+    {
+        getRowsFunction
+        } -> GetRowsFunction<typename StorageType::KeyType>;
+};
+
+class StorageImpl
+{
+public:
+    using TableType = std::string_view;
+    using KeyType = std::string_view;
+
+    void getRow([[maybe_unused]] TableType table, [[maybe_unused]] KeyType key) {}
+    void getRows([[maybe_unused]] TableType table, [[maybe_unused]] std::vector<KeyType> keys) {}
+};
+
+static_assert(GetRowsFunction<decltype(&StorageImpl::getRows), std::string_view>, "Not a storage!");
+static_assert(Storage<StorageImpl>, "fail!");
 
 // class StorageInterface
 // {
