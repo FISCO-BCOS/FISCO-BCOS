@@ -39,6 +39,8 @@
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/GroupSigPrecompiled.h"
+#include "../precompiled/extension/RingSigPrecompiled.h"
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
@@ -153,6 +155,10 @@ void EvmTransactionExecutor::initPrecompiled()
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
+    m_constantPrecompiled->insert(
+        {GROUPSIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {RINGSIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
