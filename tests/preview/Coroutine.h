@@ -14,14 +14,6 @@ struct Promise;
 struct Coroutine : public std::coroutine_handle<Promise>
 {
     using promise_type = Promise;
-
-    bool await_ready() { return false; }
-    void await_suspend(std::coroutine_handle<> handle)
-    {
-        std::cout << "[Coroutine] await_suspend!" << std::endl;
-        handle.resume();
-    }
-    void await_resume() {}
 };
 
 struct Promise

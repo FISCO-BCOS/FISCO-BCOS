@@ -23,23 +23,11 @@ Coroutine getRow()
     co_return;
 }
 
-Coroutine foo()
-{
-    std::cout << "[foo] I am coroutine" << std::endl;
-    std::cout << "[foo] Goint to call getRow() sync!" << std::endl;
-
-    co_await getRow();
-
-    std::cout << "[foo] Call getRow() is done!" << std::endl;
-
-    co_return;
-}
-
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
     std::cout << "[Main] Start call!" << std::endl;
     // auto coroutine = getRow();
-    auto coroutine = foo();
+    auto coroutine = getRow();
 
     // Start the coroutine
     while (!coroutine.done())

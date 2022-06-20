@@ -69,7 +69,7 @@ jobs:
       - name: Prepare centos tools
         run: |
           yum install yum install -y epel-release centos-release-scl
-          yum install -y devtoolset-10  rh-perl530-perl cmake3
+          yum install -y devtoolset-10 llvm-toolset-7-clang-devel rh-perl530-perl cmake3
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
       - name: Prepare vcpkg
@@ -79,6 +79,7 @@ jobs:
         run: |
           . /opt/rh/devtoolset-10/enable
           . /opt/rh/rh-perl530/enable
+          . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
           cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
