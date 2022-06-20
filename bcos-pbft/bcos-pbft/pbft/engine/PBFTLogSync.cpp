@@ -108,11 +108,11 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
                           << LOG_KV("from", _nodeID->shortHex())
                           << LOG_KV("errorCode", _error->errorCode())
                           << LOG_KV("errorMsg", _error->errorMessage());
+        for (size_t i = 0; i < _offset; i++)
+        {
+            m_pbftCache->eraseCommittedProposalList(_startIndex + i);
+        }
         return;
-    }
-    for (size_t i = 0; i < _offset; i++)
-    {
-        m_pbftCache->eraseCommittedProposalList(_startIndex + i);
     }
     if (_data.size() == 0)
     {
