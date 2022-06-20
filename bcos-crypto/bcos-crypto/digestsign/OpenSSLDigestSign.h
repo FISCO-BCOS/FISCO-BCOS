@@ -95,5 +95,7 @@ public:
     };
 };
 
-static_assert(DigestSign<OpenSSLDigest<SM2>>, "");
+using OpenSSL_SM2_DigestSign = OpenSSLDigestSign<SM2>;
+
+static_assert(DigestSign<OpenSSL_SM2_DigestSign>, "Assert OpenSSLHasher type");
 }  // namespace bcos::crypto::digestsign::openssl
