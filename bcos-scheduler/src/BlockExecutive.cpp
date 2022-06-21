@@ -1179,10 +1179,13 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
 DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractAddress)
 {
+    {
+    bcos::ReadGuard l(x_dmcExecutors);
     auto dmcExecutorIt = m_dmcExecutors.find(contractAddress);
     if (dmcExecutorIt != m_dmcExecutors.end())
     {
         return dmcExecutorIt->second;
+    }
     }
     {
         bcos::WriteGuard lock(x_dmcExecutorLock);
