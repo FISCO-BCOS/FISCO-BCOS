@@ -295,6 +295,18 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     config->setExecutedBlock(config->blockNumber());
                     return;
                 }
+                auto executedBlock = config->executedBlock();
+                if (orgBlockHeader->number() > executedBlock + 1)
+                {
+                    BLKSYNC_LOG(WARNING)
+                        << LOG_BADGE("Download")
+                        << LOG_DESC("BlockSync: drop the appliedBlock for discontinuous")
+                        << LOG_KV("executedBlock", executedBlock)
+                        << LOG_KV("nextBlock", downloadQueue->m_config->nextBlock())
+                        << LOG_KV("number", orgBlockHeader->number())
+                        << LOG_KV("hash", orgBlockHeader->hash().abridged());
+                    return;
+                }
                 // Note: continue to execute the next block only after sysBlock is submitted
                 if (!_sysBlock)
                 {
@@ -309,7 +321,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                                   << LOG_KV("txsSize", _block->transactionsSize())
                                   << LOG_KV("nextBlock", downloadQueue->m_config->nextBlock())
                                   << LOG_KV(
-                                         "exectedBlock", downloadQueue->m_config->executedBlock())
+                                         "executedBlock", downloadQueue->m_config->executedBlock())
                                   << LOG_KV("timeCost", (utcTime() - startT))
                                   << LOG_KV("node", downloadQueue->m_config->nodeID()->shortHex())
                                   << LOG_KV("sysBlock", _sysBlock);
