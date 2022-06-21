@@ -57,7 +57,7 @@ public:
         BOOST_CHECK_EQUAL(inputs.size(), 100);
 
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages(inputs.size());
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+        for (auto i = 0u; i < inputs.size(); ++i)
         {
             BOOST_TEST(inputs[i].get());
             BOOST_CHECK_EQUAL(inputs[i]->type(), protocol::ExecutionMessage::MESSAGE);
@@ -79,7 +79,7 @@ public:
             callback) override
     {
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
-        for (auto i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
             executeTransaction(std::move(inputs[i]),
                 [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {

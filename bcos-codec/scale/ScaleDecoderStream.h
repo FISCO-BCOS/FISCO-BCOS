@@ -423,7 +423,7 @@ private:
 
 private:
     gsl::span<byte const> m_span;
-    gsl::span<byte const>::const_iterator m_currentIterator;
+    gsl::span<byte const>::iterator m_currentIterator;
     SizeType m_currentIndex;
 };
 }  // namespace scale

@@ -19,10 +19,10 @@
  * @date 2021-04-21
  */
 #pragma once
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <string>
-#include <limits>
 
 namespace bcos
 {
@@ -46,6 +46,7 @@ enum NodeArchitectureType
     AIR = 0,
     PRO = 1,
     MAX = 2,
+    LIGHT
 };
 
 enum MessageType
@@ -98,12 +99,8 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version cons
 {
     switch (_version)
     {
-    case bcos::protocol::Version::RC4_VERSION:
-        _out << RC4_VERSION_STR;
-        break;
-    default:
-        _out << "Unknown";
-        break;
+    case bcos::protocol::Version::RC4_VERSION: _out << RC4_VERSION_STR; break;
+    default: _out << "Unknown"; break;
     }
     return _out;
 }
@@ -111,21 +108,11 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {
     switch (_nodeType)
     {
-    case NodeType::None:
-        _out << "None";
-        break;
-    case NodeType::CONSENSUS_NODE:
-        _out << "CONSENSUS_NODE";
-        break;
-    case NodeType::OBSERVER_NODE:
-        _out << "OBSERVER_NODE";
-        break;
-    case NodeType::NODE_OUTSIDE_GROUP:
-        _out << "NODE_OUTSIDE_GROUP";
-        break;
-    default:
-        _out << "Unknown";
-        break;
+    case NodeType::None: _out << "None"; break;
+    case NodeType::CONSENSUS_NODE: _out << "CONSENSUS_NODE"; break;
+    case NodeType::OBSERVER_NODE: _out << "OBSERVER_NODE"; break;
+    case NodeType::NODE_OUTSIDE_GROUP: _out << "NODE_OUTSIDE_GROUP"; break;
+    default: _out << "Unknown"; break;
     }
     return _out;
 }

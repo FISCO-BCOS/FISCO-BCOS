@@ -29,8 +29,10 @@ include_directories(./abi)
 aux_source_directory(./scale SRC_LIST)
 include_directories(./scale)
 
+find_package(Microsoft.GSL CONFIG REQUIRED)
+
 add_library(${CODEC_TARGET} ${SRC_LIST} ${HEADERS})
-target_link_libraries(${CODEC_TARGET} PUBLIC bcos-crypto)
+target_link_libraries(${CODEC_TARGET} PUBLIC bcos-crypto Microsoft.GSL::GSL)
 
 if (TESTS)
     enable_testing()

@@ -128,7 +128,7 @@ void KeyPageStorage::asyncGetRows(std::string_view tableView,
             {
                 Error::UniquePtr err;
                 // #pragma omp parallel for
-                for (gsl::index i = 0; i < _keys.size(); ++i)
+                for (auto i = 0u; i < _keys.size(); ++i)
                 {
                     auto [error, entry] = getSysTableRawEntry(tableView, _keys[i]);
                     if (error)
@@ -145,7 +145,7 @@ void KeyPageStorage::asyncGetRows(std::string_view tableView,
             {  // page
                 Error::UniquePtr err(nullptr);
                 // TODO: because of page and lock, maybe not parallel is better
-                for (gsl::index i = 0; i < _keys.size(); ++i)
+                for (auto i = 0u; i < _keys.size(); ++i)
                 {
                     asyncGetRow(tableView, _keys[i],
                         [i, &results, &err](Error::UniquePtr _error, std::optional<Entry> _entry) {

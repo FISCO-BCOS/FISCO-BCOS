@@ -74,7 +74,7 @@
 #include <cassert>
 #include <exception>
 #include <functional>
-#include <gsl/gsl_util>
+#include <gsl/util>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -429,7 +429,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     auto startT = utcTime();
     // for fill block
     auto txHashes = make_shared<HashList>();
-    std::vector<decltype(inputs)::index_type> indexes;
+    std::vector<decltype(inputs)::size_type> indexes;
     auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
 
     // final result
@@ -438,7 +438,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 
     bool isStaticCall = true;
 #pragma omp parallel for
-    for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+    for (auto i = 0u; i < inputs.size(); ++i)
     {
         auto& params = inputs[i];
 
@@ -619,7 +619,7 @@ void TransactionExecutor::dagExecuteTransactions(
     auto startT = utcTime();
     // for fill block
     auto txHashes = make_shared<HashList>();
-    std::vector<decltype(inputs)::index_type> indexes;
+    std::vector<size_t> indexes;
     auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
 
     // final result
@@ -627,7 +627,7 @@ void TransactionExecutor::dagExecuteTransactions(
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
 #pragma omp parallel for
-    for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+    for (auto i = 0u; i < inputs.size(); ++i)
     {
         auto& params = inputs[i];
         switch (params->type())

@@ -273,10 +273,10 @@ public:
                 auto missinges = std::tuple<std::vector<std::string_view>,
                     std::vector<std::tuple<std::string, size_t>>>();
 
-                std::atomic_long existsCount = 0;
+                std::atomic_ulong existsCount = 0;
 
 #pragma omp parallel for
-                for (gsl::index i = 0; i < _keys.size(); ++i)
+                for (auto i = 0u; i < _keys.size(); ++i)
                 {
                     auto [bucket, lock] = getBucket(tableView, _keys[i]);
                     boost::ignore_unused(lock);

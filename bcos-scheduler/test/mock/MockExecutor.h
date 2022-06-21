@@ -63,7 +63,7 @@ public:
         BOOST_CHECK_EQUAL(inputs.size(), 100);
 
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages(inputs.size());
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+        for (auto i = 0u; i < inputs.size(); ++i)
         {
             auto [it, inserted] = m_dagHashes.emplace(inputs[i]->transactionHash());
             boost::ignore_unused(it);

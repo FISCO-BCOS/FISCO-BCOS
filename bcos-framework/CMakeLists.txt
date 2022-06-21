@@ -24,9 +24,11 @@ project(bcos-framework VERSION ${VERSION})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
+find_package(Microsoft.GSL CONFIG REQUIRED)
+
 add_library(bcos-framework INTERFACE)
 target_include_directories(bcos-framework INTERFACE .)
-target_link_libraries(bcos-framework INTERFACE bcos-crypto)
+target_link_libraries(bcos-framework INTERFACE bcos-crypto Microsoft.GSL::GSL)
 
 if (TESTS)
     enable_testing()

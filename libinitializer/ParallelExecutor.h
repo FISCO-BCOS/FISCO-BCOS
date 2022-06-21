@@ -77,9 +77,9 @@ public:
         // Note: copy the inputs here in case of inputs has been released
         auto inputsVec =
             std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
-            inputsVec->emplace_back(std::move(inputs.at(i)));
+            inputsVec->emplace_back(std::move(inputs[i]));
         }
         m_pool.enqueue([this, contractAddress = std::move(contractAddress), inputsVec,
                            callback = std::move(callback)] {
@@ -94,9 +94,9 @@ public:
     {
         auto inputsVec =
             std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
-            inputsVec->emplace_back(std::move(inputs.at(i)));
+            inputsVec->emplace_back(std::move(inputs[i]));
         }
         m_pool.enqueue([this, inputsVec, callback = std::move(callback)] {
             m_executor->dagExecuteTransactions(*inputsVec, std::move(callback));

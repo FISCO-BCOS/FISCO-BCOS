@@ -29,6 +29,7 @@
         "boost-test",
         "boost-multiprecision",
         "boost-program-options",
+        "ms-gsl",
         "tbb",
         "rocksdb",
         "zlib",
