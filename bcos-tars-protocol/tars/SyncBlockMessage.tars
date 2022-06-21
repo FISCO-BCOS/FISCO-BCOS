@@ -1,0 +1,17 @@
+#include "Block.tars"
+
+module bcostars {
+
+struct RequestBlockHeaders
+{
+    1 require unsigned int currentBlockHeight;
+    2 require unsigned int requestBlockCount;
+};
+
+struct ResponseBlockHeaders
+{
+    1 require unsigned int blockHeight;
+    2 require vector<BlockHeader> blockHeaders;
+};
+
+};

@@ -6,7 +6,7 @@ namespace bcos::sync
 {
 
 template <class MessageType>
-concept RequestBlockHeadersMessage = requires(MessageType message)
+concept RequestBlockHeaders = requires(MessageType message)
 {
     MessageType{};
     std::unsigned_integral<decltype(message.currentBlockHeight)>;
@@ -14,7 +14,7 @@ concept RequestBlockHeadersMessage = requires(MessageType message)
 };
 
 template <class MessageType>
-concept ResponseBlockHeadersMessage = requires(MessageType message)
+concept ResponseBlockHeaders = requires(MessageType message)
 {
     MessageType{};
     std::unsigned_integral<decltype(message.blockHeight)>;
