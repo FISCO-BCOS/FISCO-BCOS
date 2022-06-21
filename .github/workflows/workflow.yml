@@ -81,7 +81,7 @@ jobs:
           . /opt/rh/devtoolset-10/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
-          . source /opt/rh/llvm-toolset-7/enable
+          . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
           cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
