@@ -6,7 +6,7 @@
 
 namespace bcos::sync
 {
-template <RequestBlockHeadersMessage RequestType, ResponseBlockHeadersMessage ResponseType>
+template <RequestBlockHeaders RequestType, ResponseBlockHeaders ResponseType>
 class BlockSyncerClient
 {
 public:
@@ -18,7 +18,8 @@ public:
             nodes = m_nodes;
         }
 
-        for (auto& it : nodes->nodeIDList()) {
+        for (auto& it : nodes->nodeIDList())
+        {
             RequestType request;
             request.currentBlockHeight = 0;
             request.requestBlockCount = 10;
