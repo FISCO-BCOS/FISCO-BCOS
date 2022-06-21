@@ -49,7 +49,7 @@ jobs:
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
       - name: Compile
         run: 
-          cd build && cmake --build . --parallel
+          cd build && cmake --build . --parallel 3
       - name: Test
         if: runner.os != 'Windows'
         run:
@@ -85,7 +85,7 @@ jobs:
           mkdir -p build
           cd build
           cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-          cmake3 --build . --parallel
+          cmake3 --build . --parallel 3
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
