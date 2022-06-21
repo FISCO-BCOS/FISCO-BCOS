@@ -1306,8 +1306,8 @@ void TransactionExecutor::rollback(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams;
-    storageParams.number = params.number;
+    bcos::protocol::TwoPCParams storageParams{
+        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
     m_backendStorage->asyncRollback(
         storageParams, [this, callback = std::move(callback)](auto&& error) {
             if (!m_isRunning)
@@ -1796,14 +1796,13 @@ void TransactionExecutor::removeCommittedState()
         }
 
         m_cachedStorage->merge(true, *storage);
-        EXECUTOR_NAME_LOG(INFO) << "Merge state number: " << number << " to cachedStorage end";
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
         m_lastStateStorage = m_stateStorages.back().storage;
-        EXECUTOR_NAME_LOG(DEBUG) << "LatestStateStorage"
-                                 << LOG_KV("storageNumber", m_stateStorages.back().number)
-                                 << LOG_KV("commitNumber", number);
+        EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
+                                << LOG_KV("storageNumber", m_stateStorages.back().number)
+                                << LOG_KV("commitNumber", number);
         it = m_stateStorages.erase(it);
         if (it != m_stateStorages.end())
         {

@@ -58,7 +58,7 @@ LOG_INFO() {
 
 LOG_FATAL() {
     local content=${1}
-    echo -e "\033[31m[FALT] ${content}\033[0m"
+    echo -e "\033[31m[FATAL] ${content}\033[0m"
     exit 1
 }
 
@@ -368,12 +368,12 @@ download_monitor_bin()
     if [ -n "${macOS}" ];then
         package_name="${mtail_binary_name}_${compatibility_mtail_version}_Darwin_x86_64.tar.gz"
     fi
-    
+
     local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
     # the binary can obtained from the cos
     LOG_INFO "Downloading mtail binary from ${github_link} ..."
     curl -#LO "${github_link}"
-    mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd .. 
+    mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
 
     chmod a+x ${mtail_binary_path}
 }
@@ -471,7 +471,7 @@ deploy nodes e.g
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -m
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -s
 expand node e.g
-    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos 
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
 EOF
@@ -495,7 +495,7 @@ parse_params() {
         t)
             mtail_binary_path="$OPTARG"
             file_must_exists "${mtail_binary_path}"
-            ;;    
+            ;;
         C) command="${OPTARG}"
             ;;
         d) ca_dir="${OPTARG}"
@@ -507,20 +507,20 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
-        m) 
-           monitor_mode="true" 
+        m)
+           monitor_mode="true"
            ;;
-        i) 
+        i)
            mtail_ip_param="${OPTARG}"
-           ;;   
-        M) prometheus_dir="${OPTARG}" ;;   
+           ;;
+        M) prometheus_dir="${OPTARG}" ;;
         D) docker_mode="true"
            if [ -n "${macOS}" ];then
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
         A) auth_mode="true" ;;
-        w) wasm_mode="true";; 
+        w) wasm_mode="true";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -731,7 +731,7 @@ host = "${ip}"
 
 #node
 hidden text node
-node = "${node}" 
+node = "${node}"
 
 #chain id
 hidden text chain
@@ -762,7 +762,7 @@ histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , gr
 gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
 /\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
-} 
+}
 
 
 histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
@@ -864,7 +864,7 @@ generate_monitor_scripts() {
         fi
         mtail_host_list="${mtail_host_list}'${ip}'${delim}"
     done
-    
+
 
     mkdir -p $(dirname $output/compose.yaml)
     cat <<EOF >> "${output}/compose.yaml"
@@ -1060,7 +1060,7 @@ generate_common_ini() {
     ; url of the key center, in format of ip:port
     ;key_center_url=
     ;cipher_data_key=
-    
+
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
@@ -1428,7 +1428,7 @@ deploy_nodes()
     else
         help
     fi
-    #check the binary 
+    #check the binary
     if [ -z "${docker_mode}" ];then
         download_bin
         if [[ ! -f "$binary_path" ]]; then
@@ -1436,10 +1436,10 @@ deploy_nodes()
         fi
     fi
     if "${monitor_mode}" ;then
-        download_monitor_bin 
+        download_monitor_bin
         if [[ ! -f "$mtail_binary_path" ]]; then
             LOG_FATAL "mtail binary exec ${mtail_binary_path} not exist, Must copy binary file ${mtail_binary_name} to ${mtail_binary_path}"
-        fi  
+        fi
     fi
 
     local i=0
@@ -1464,13 +1464,13 @@ deploy_nodes()
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
 
         nodes_dir="${output_dir}/${ip}"
-        # start_all.sh and stop_all.sh 
+        # start_all.sh and stop_all.sh
         generate_all_node_scripts "${nodes_dir}"
         if [ -z "${docker_mode}" ];then
             cp "${binary_path}" "${nodes_dir}"
         fi
-        if "${monitor_mode}" ;then 
-            cp $mtail_binary_path "${nodes_dir}"   
+        if "${monitor_mode}" ;then
+            cp $mtail_binary_path "${nodes_dir}"
         fi
         ca_cert_dir="${nodes_dir}"/ca
         mkdir -p ${ca_cert_dir}
@@ -1484,7 +1484,7 @@ deploy_nodes()
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
             generate_node_scripts "${node_dir}" "${docker_mode}"
-            if "${monitor_mode}" ;then 
+            if "${monitor_mode}" ;then
                 local port=$((mtail_listen_port + node_count))
                 connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
                 if [[ $count == 0 ]]; then
@@ -1502,7 +1502,7 @@ deploy_nodes()
         done
     done
 
-    if "${monitor_mode}" ;then 
+    if "${monitor_mode}" ;then
         monitor_dir="${output_dir}/monitor"
         generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}" ${monitor_ip}
     fi

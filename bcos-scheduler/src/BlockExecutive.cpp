@@ -1058,6 +1058,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
                                  << boost::diagnostic_information(*error);
 
             ++status->failed;
+            status->checkAndCommit(*status);
+            return;
         }
         else
         {
