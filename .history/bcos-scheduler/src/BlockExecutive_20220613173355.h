@@ -165,7 +165,6 @@ private:
     bool m_hasDAG = false;
     mutable SharedMutex x_prepareLock;
     mutable SharedMutex x_dmcExecutorLock;
-    mutable SharedMutex x_dmcExecutors;
 
     bool m_isRunning = false;
 };

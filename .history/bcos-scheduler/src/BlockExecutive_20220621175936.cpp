@@ -1189,7 +1189,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
     }
     {
         bcos::WriteGuard lock(x_dmcExecutorLock);
-        auto dmcExecutorIt = m_dmcExecutors.find(contractAddress);
+        dmcExecutorIt = m_dmcExecutors.find(contractAddress);
         if (dmcExecutorIt != m_dmcExecutors.end())
         {
             return dmcExecutorIt->second;
