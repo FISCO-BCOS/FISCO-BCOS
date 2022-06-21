@@ -6,7 +6,7 @@ project(bcos-scheduler VERSION ${VERSION})
 aux_source_directory(src SRCS)
 
 add_library(${SCHEDULER_TARGET} ${SRCS})
-target_link_libraries(${SCHEDULER_TARGET} PUBLIC ${TABLE_TARGET} ${TARS_PROTOCOL_TARGET} tars::util)
+target_link_libraries(${SCHEDULER_TARGET} PUBLIC ${TABLE_TARGET} ${TARS_PROTOCOL_TARGET})
 
 if(TESTS)
     enable_testing()
