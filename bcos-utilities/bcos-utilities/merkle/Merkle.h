@@ -186,7 +186,7 @@ private:
     size_t calculateLevelHashes(InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
     {
         auto inputSize = std::size(input);
-        auto outputSize = std::size(output);
+        [[maybe_unused]] auto outputSize = std::size(output);
         auto expectOutputSize = getLevelSize(inputSize);
 
         assert(inputSize > 0);
