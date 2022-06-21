@@ -22,7 +22,14 @@ public:
         {
             RequestType request;
             request.currentBlockHeight = 0;
-            request.requestBlockCount = 10;
+
+            auto buffer = request.encode();
+
+            m_front->asyncSendMessageByNodeID(0, it, bytesConstRef{buffer}, 0,
+                [](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data, const std::string& _id,
+                    front::ResponseFunc _respFunc) {
+                });  // TODO: fixup
+                     // moduleid
         }
     }
 
@@ -31,5 +38,7 @@ private:
 
     bcos::gateway::GroupNodeInfo::Ptr m_nodes;
     std::mutex m_nodesMutex;
+
+    size_t m_requestBlockCount = 10;
 };
 }  // namespace bcos::sync
