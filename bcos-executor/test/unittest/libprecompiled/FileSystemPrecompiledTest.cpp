@@ -554,7 +554,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 1);
         BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(ls.at(0)) == executor::FS_TYPE_CONTRACT);
     }
 
     // ls not exist
@@ -609,7 +609,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
         codec->decode(lsResult2->data(), code, ls2);
         BOOST_CHECK(ls2.size() == 1);
         BOOST_CHECK(std::get<0>(ls2[0]) == "test");
-        BOOST_CHECK(std::get<1>(ls2[0]) == FS_TYPE_DIR);
+        BOOST_CHECK(std::get<1>(ls2[0]) == executor::FS_TYPE_DIR);
     }
 
     // mkdir /tables/test1/test
