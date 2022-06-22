@@ -24,17 +24,21 @@
 using namespace bcos;
 using namespace bcos::election;
 
-bcos::protocol::MemberInterface::Ptr CampaignConfig::getLeader()
+bcos::protocol::MemberInterface::Ptr CampaignConfig::fetchLeader()
 {
+    auto leader = getLeader();
+    if (leader)
     {
-        ReadGuard l(x_leader);
-        if (m_leader)
-        {
-            return m_leader;
-        }
+        return leader;
     }
     // TODO: check the mode is sync or async
     fetchLeaderInfoFromEtcd();
+    return m_leader;
+}
+
+bcos::protocol::MemberInterface::Ptr CampaignConfig::getLeader()
+{
+    ReadGuard l(x_leader);
     return m_leader;
 }
 
@@ -60,6 +64,12 @@ void CampaignConfig::fetchLeaderInfoFromEtcd()
     }
 }
 
+void CampaignConfig::resetLeader(bcos::protocol::MemberInterface::Ptr _leader)
+{
+    WriteGuard l(x_leader);
+    m_leader = _leader;
+}
+
 bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
 {
     if (!_response.is_ok())
@@ -72,6 +82,7 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
                                   << LOG_KV("key", m_leaderKey);
             return false;
         }
+        resetLeader(nullptr);
         // the key has already been cleared or not has been set, calls m_triggerCampaign
         if (m_triggerCampaign)
         {
@@ -86,17 +97,17 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
     auto valueVersion = _response.value().version();
     if (valueVersion == 0)
     {
+        resetLeader(nullptr);
         auto ret = m_triggerCampaign();
-        ELECTION_LOG(INFO) << LOG_DESC("The leader key is released now, trigger campaign")
-                           << LOG_KV("key", m_leaderKey) << LOG_KV("success", ret);
+        ELECTION_LOG(WARNING) << LOG_DESC("The leader key is released now, trigger campaign")
+                              << LOG_KV("key", m_leaderKey) << LOG_KV("success", ret);
         return false;
     }
     auto leader = m_memberFactory->createMember(_response.value().as_string());
     auto seq = _response.value().modified_index();
     leader->setSeq(seq);
     leader->setLeaseID(_response.value().lease());
-    WriteGuard l(x_leader);
-    m_leader = leader;
+    resetLeader(leader);
     ELECTION_LOG(INFO) << LOG_DESC("checkAndUpdateLeaderKey success")
                        << LOG_KV("leaderKey", m_leaderKey) << LOG_KV("leader", m_leader->memberID())
                        << LOG_KV("version", valueVersion) << LOG_KV("modifiedIndex", seq)

@@ -73,10 +73,6 @@ CallParameters::UniquePtr ExecutiveState::go()
     // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;
     output->seq = m_seq;
-
-    // std::cout << "[EXECUTOR] <<<< " << m_contextID << " | "
-    //<< (output ? output->toString() : "null") << std::endl;
-
     return output;
 }
 

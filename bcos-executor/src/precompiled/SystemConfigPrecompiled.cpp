@@ -87,7 +87,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
 
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -96,7 +95,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
                 << LOG_KV("sender", _callParameters->m_sender);
-            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
         }
         else
         {
@@ -121,7 +120,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue)
                                   << LOG_KV("enableNum", blockContext->number() + 1);
-            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         }
     }
     else if (func == name2Selector[SYSCONFIG_METHOD_GET_STR])
@@ -135,8 +134,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("getValueByKey func") << LOG_KV("configKey", configKey);
 
         auto valueNumberPair = getSysConfigByKey(_executive, configKey);
-        _callParameters->setExecResult(
-            codec.encode(valueNumberPair.first, u256(valueNumberPair.second)));
+        _callParameters->setExecResult(codec.encode(valueNumberPair.first, valueNumberPair.second));
     }
     else
     {
@@ -149,7 +147,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     if (version <= (int32_t)(bcos::protocol::Version::RC4_VERSION))
     {
         gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-        _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+        _callParameters->setGas(_callParameters->m_gas);
     }
     return _callParameters;
 }

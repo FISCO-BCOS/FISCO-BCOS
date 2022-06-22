@@ -56,7 +56,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
     // create gateway
-    // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true, 
+    // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
     // otherwise dataEncryption() will return nullptr
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
         m_nodeInitializer->protocolInitializer()->dataEncryption());
@@ -65,7 +65,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create the node
     m_nodeInitializer->init(
-        bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, m_gateway, true);
+        bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, m_gateway, true, m_logInitializer->logPath());
 
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
@@ -83,6 +83,9 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(gateway->amop()->topicManager());
     topicManager->setLocalClient(m_rpc);
     m_nodeInitializer->initNotificationHandlers(m_rpc);
+
+    // NOTE: this should be last called
+    m_nodeInitializer->initSysContract();
 }
 
 void AirNodeInitializer::start()

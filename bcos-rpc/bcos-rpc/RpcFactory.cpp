@@ -31,6 +31,7 @@
 #include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
+#include <bcos-rpc/jsonrpc/DupTestTxJsonRpcImpl_2_0.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -323,8 +324,14 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
+    //*
     auto jsonRpcInterface =
         std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
+    /*/
+        auto jsonRpcInterface =
+            std::make_shared<bcos::rpc::DupTestTxJsonRpcImpl_2_0>(_groupManager, m_gateway,
+       _wsService);
+        //*/
     auto httpServer = _wsService->httpServer();
     if (httpServer)
     {
@@ -341,7 +348,6 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     auto eventSub = eventSubFactory->buildEventSub(_wsService);
 
     auto matcher = std::make_shared<event::EventSubMatcher>();
-    eventSub->setIoc(_wsService->ioc());
     eventSub->setGroupManager(_groupManager);
     eventSub->setMessageFactory(_wsService->messageFactory());
     eventSub->setMatcher(matcher);

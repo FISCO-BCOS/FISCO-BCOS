@@ -7,6 +7,7 @@
  */
 #pragma once
 #include <bcos-gateway/libnetwork/Socket.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
@@ -38,10 +39,10 @@ public:
     virtual ~ASIOInterface() {}
     virtual void setType(int type) { m_type = type; }
 
-    virtual std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
-    virtual void setIOService(std::shared_ptr<ba::io_service> ioService)
+    virtual std::shared_ptr<ba::io_context> ioService() { return m_ioServicePool->getIOService(); }
+    virtual void setIOServicePool(IOServicePool::Ptr _ioServicePool)
     {
-        m_ioService = ioService;
+        m_ioServicePool = _ioServicePool;
     }
 
     virtual std::shared_ptr<ba::ssl::context> sslContext() { return m_sslContext; }
@@ -53,13 +54,13 @@ public:
     virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
     {
         return std::make_shared<boost::asio::deadline_timer>(
-            *m_ioService, boost::posix_time::milliseconds(timeout));
+            *(m_ioServicePool->getIOService()), boost::posix_time::milliseconds(timeout));
     }
 
     virtual std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
     {
-        std::shared_ptr<SocketFace> m_socket =
-            std::make_shared<Socket>(*m_ioService, *m_sslContext, nodeIPEndpoint);
+        std::shared_ptr<SocketFace> m_socket = std::make_shared<Socket>(
+            m_ioServicePool->getIOService(), *m_sslContext, nodeIPEndpoint);
         return m_socket;
     }
 
@@ -67,40 +68,22 @@ public:
 
     virtual void init(std::string listenHost, uint16_t listenPort)
     {
-        m_strand = std::make_shared<boost::asio::io_service::strand>(*m_ioService);
-        m_resolver = std::make_shared<bi::tcp::resolver>(*m_ioService);
-        m_acceptor = std::make_shared<bi::tcp::acceptor>(
-            *m_ioService, bi::tcp::endpoint(bi::make_address(listenHost), listenPort));
+        m_strand =
+            std::make_shared<boost::asio::io_context::strand>(*(m_ioServicePool->getIOService()));
+        m_resolver = std::make_shared<bi::tcp::resolver>(*(m_ioServicePool->getIOService()));
+        m_acceptor = std::make_shared<bi::tcp::acceptor>(*(m_ioServicePool->getIOService()),
+            bi::tcp::endpoint(bi::make_address(listenHost), listenPort));
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
         m_acceptor->set_option(optionReuseAddress);
     }
 
-    virtual void run() { m_ioService->run(); }
-
-    virtual void stop()
-    {
-        // shutdown acceptor
-        if (m_acceptor && m_acceptor->is_open())
-        {
-            m_acceptor->cancel();
-            m_acceptor->close();
-        }
-
-        m_ioService->stop();
-    }
-
-    virtual void reset()
-    {
-        if (m_ioService->stopped())
-        {
-            m_ioService->reset();
-        }
-    }
+    virtual void start() { m_ioServicePool->start(); }
+    virtual void stop() { m_ioServicePool->stop(); }
 
     virtual void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
         boost::system::error_code = boost::system::error_code())
     {
-        m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
+        m_acceptor->async_accept(socket->ref(), handler);
     }
 
     virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler);
@@ -109,7 +92,8 @@ public:
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
         auto type = m_type;
-        m_ioService->post([type, socket, buffers, handler]() {
+        auto ioService = socket->ioService();
+        ioService->post([type, socket, buffers, handler]() {
             if (socket->isConnected())
             {
                 switch (type)
@@ -171,14 +155,6 @@ public:
         socket->sslref().async_handshake(type, handler);
     }
 
-    virtual void asyncWait(boost::asio::deadline_timer* m_timer,
-        boost::asio::io_service::strand& m_strand, Handler_Type handler,
-        boost::system::error_code = boost::system::error_code())
-    {
-        if (m_timer)
-            m_timer->async_wait(m_strand.wrap(handler));
-    }
-
     virtual void setVerifyCallback(
         std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true)
     {
@@ -188,8 +164,8 @@ public:
     virtual void strandPost(Base_Handler handler) { m_strand->post(handler); }
 
 protected:
-    std::shared_ptr<ba::io_service> m_ioService;
-    std::shared_ptr<ba::io_service::strand> m_strand;
+    IOServicePool::Ptr m_ioServicePool;
+    std::shared_ptr<ba::io_context::strand> m_strand;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;
     std::shared_ptr<bi::tcp::resolver> m_resolver;
     std::shared_ptr<ba::ssl::context> m_sslContext;

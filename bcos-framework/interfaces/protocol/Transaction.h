@@ -149,6 +149,9 @@ public:
     void setBatchHash(bcos::crypto::HashType const& _hash) const { m_batchHash = _hash; }
     bcos::crypto::HashType const& batchHash() const { return m_batchHash; }
 
+    bool storeToBackend() const { return m_storeToBackend; }
+    void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
+
 protected:
     mutable bcos::bytes m_sender;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
@@ -173,6 +176,8 @@ protected:
     mutable std::atomic_bool m_invalid = {false};
     // the transaction is the system transaction or not
     mutable std::atomic_bool m_systemTx = {false};
+    // the transaction has been stored to the storage or not
+    mutable std::atomic_bool m_storeToBackend = {false};
 };
 
 using Transactions = std::vector<Transaction::Ptr>;

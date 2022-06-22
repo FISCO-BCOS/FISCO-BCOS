@@ -14,7 +14,9 @@ class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
 public:
     ParallelExecutor(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
-    {}
+    {
+        refreshExecutor(0);
+    }
 
     ~ParallelExecutor() noexcept override {}
 
@@ -31,7 +33,7 @@ public:
                 if (m_executor)
                 {
                     m_executor->stop();
-                    m_oldExecutor = m_executor;
+                    m_oldExecutor = m_executor;  // TODO: remove this
                 }
 
                 // TODO: check cycle reference in executor to avoid memory leak

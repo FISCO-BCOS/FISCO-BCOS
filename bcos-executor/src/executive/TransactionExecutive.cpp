@@ -76,7 +76,8 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
         if (blockContext->lastStorage())
         {
             m_lastStorageWrapper = std::make_shared<SyncStorageWrapper>(
-                std::dynamic_pointer_cast<bcos::storage::StateStorageInterface>(blockContext->lastStorage()),
+                std::dynamic_pointer_cast<bcos::storage::StateStorageInterface>(
+                    blockContext->lastStorage()),
                 std::bind(
                     &TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
                 m_recoder);
@@ -823,6 +824,10 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     // enc([call precompiled parameters],[user call parameters])
     auto newParams = codec.encode(codeParameters, callParameters->data);
     callParameters->data = std::move(newParams);
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled")
+                         << LOG_KV("codeAddr", callParameters->codeAddress)
+                         << LOG_KV("recvAddr", callParameters->receiveAddress)
+                         << LOG_KV("datasize", callParameters->data.size());
     auto callResult = callPrecompiled(std::move(callParameters));
 
     callResult->receiveAddress = callResult->codeAddress;

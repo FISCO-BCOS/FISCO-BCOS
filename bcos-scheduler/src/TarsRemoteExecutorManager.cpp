@@ -4,24 +4,23 @@
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "RemoteExecutorManager.h"
+#include "TarsRemoteExecutorManager.h"
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <tarscpp/servant/Application.h>
 #include <tarscpp/servant/ObjectProxy.h>
 #include <sstream>
 
 using namespace bcos::scheduler;
 
 
-RemoteExecutorManager::EndPointMap buildEndPointMap(const vector<EndpointInfo>& endPointInfos)
+TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInfo>& endPointInfos)
 {
-    RemoteExecutorManager::EndPointMap endPointMap =
-        std::make_shared<std::map<std::string, uint16_t>>();
+    TarsRemoteExecutorManager::EndPointSet endPointSet =
+        std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
 
     if (endPointInfos.empty())
     {
-        return endPointMap;
+        return endPointSet;
     }
 
     for (const EndpointInfo& endPointInfo : endPointInfos)
@@ -30,31 +29,10 @@ RemoteExecutorManager::EndPointMap buildEndPointMap(const vector<EndpointInfo>& 
         {
             continue;  // ignore error endpoint info
         }
-        endPointMap->insert({endPointInfo.host(), endPointInfo.port()});
-    }
-    return endPointMap;
-}
 
-bool isSame(RemoteExecutorManager::EndPointMap a, RemoteExecutorManager::EndPointMap b)
-{
-    if (a->size() != b->size())
-    {
-        return false;
+        endPointSet->insert({endPointInfo.host(), endPointInfo.port()});
     }
-
-    if (a->empty() && b->empty())
-    {
-        return true;
-    }
-
-    for (auto hostAndPort : *a)
-    {
-        if ((*b)[hostAndPort.first] != hostAndPort.second)
-        {
-            return false;
-        }
-    }
-    return true;
+    return endPointSet;
 }
 
 void dumpEndPointsLog(
@@ -76,7 +54,7 @@ void dumpEndPointsLog(
     EXECUTOR_MANAGER_LOG(DEBUG) << ss.str();
 }
 
-void RemoteExecutorManager::executeWorker()
+void TarsRemoteExecutorManager::executeWorker()
 {
     auto proxy = tars::Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(
         m_executorServiceName);
@@ -85,9 +63,9 @@ void RemoteExecutorManager::executeWorker()
     vector<EndpointInfo> inactiveEndPoints;
     proxy->tars_endpoints(activeEndPoints, inactiveEndPoints);
 
-    EndPointMap currentEndPointMap = buildEndPointMap(activeEndPoints);
+    EndPointSet currentEndPointMap = buildEndPointSet(activeEndPoints);
 
-    if (!isSame(m_endPointMap, currentEndPointMap))
+    if (*m_endPointSet != *currentEndPointMap)
     {
         dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
         update(currentEndPointMap);
@@ -98,12 +76,12 @@ void RemoteExecutorManager::executeWorker()
     }
 }
 
-void RemoteExecutorManager::update(EndPointMap endPointMap)
+void TarsRemoteExecutorManager::update(EndPointSet endPointSet)
 {
     // update
     clear();
-    m_endPointMap = endPointMap;
-    for (auto hostAndPort : *m_endPointMap)
+    m_endPointSet = endPointSet;
+    for (auto hostAndPort : *m_endPointSet)
     {
         auto host = hostAndPort.first;
         auto port = hostAndPort.second;

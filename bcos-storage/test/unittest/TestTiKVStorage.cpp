@@ -49,7 +49,7 @@ struct TestTiKVStorageFixture
     TestTiKVStorageFixture()
     {
         std::vector<std::string> pd_addrs{"127.0.0.1:2379"};
-        m_cluster = newTiKVCluster(pd_addrs);
+        m_cluster = newTiKVCluster(pd_addrs, "./");
 
         storage = std::make_shared<TiKVStorage>(m_cluster);
         storage->asyncOpenTable(testTableName, [&](auto error, auto table) {

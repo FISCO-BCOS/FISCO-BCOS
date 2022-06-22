@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief Manager remote executor
- * @file RemoteExecutorManager.h
+ * @file TarsRemoteExecutorManager.h
  * @author: jimmyshi
  * @date: 2022-05-25
  */
@@ -28,13 +28,14 @@
 
 namespace bcos::scheduler
 {
-class RemoteExecutorManager : public ExecutorManager, Worker
+class TarsRemoteExecutorManager : public ExecutorManager, Worker
 {
 public:
-    using Ptr = std::shared_ptr<RemoteExecutorManager>;
-    using EndPointMap = std::shared_ptr<std::map<std::string, uint16_t>>;
+    using Ptr = std::shared_ptr<TarsRemoteExecutorManager>;
+    using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
-    RemoteExecutorManager(std::string executorServiceName) : Worker("RemoteExecutorManager", 1000)
+    TarsRemoteExecutorManager(std::string executorServiceName)
+      : Worker("TarsRemoteExecutorManager", 1000)
     {
         if (executorServiceName.empty())
         {
@@ -45,10 +46,16 @@ public:
 
         EXECUTOR_MANAGER_LOG(INFO) << "Initialize " << threadName() << " "
                                    << LOG_KV("executorServiceName", m_executorServiceName);
+    }
+
+    void start()
+    {
+        EXECUTOR_MANAGER_LOG(INFO) << "Start" << threadName() << " "
+                                   << LOG_KV("executorServiceName", m_executorServiceName);
         startWorking();
     }
 
-    virtual ~RemoteExecutorManager() { stopWorking(); };
+    virtual ~TarsRemoteExecutorManager() { stopWorking(); };
 
     void setRemoteExecutorChangeHandler(std::function<void()> handler)
     {
@@ -57,7 +64,7 @@ public:
 
     void executeWorker() override;
 
-    void update(EndPointMap endPointMap);
+    void update(EndPointSet endPointMap);
 
     bool empty() { return size() == 0; }
 
@@ -77,6 +84,6 @@ private:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
 
-    EndPointMap m_endPointMap = std::make_shared<std::map<std::string, uint16_t>>();
+    EndPointSet m_endPointSet = std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
 };
 }  // namespace bcos::scheduler

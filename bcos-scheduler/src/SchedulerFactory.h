@@ -13,7 +13,7 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
       : m_executorManager(executorManager),
@@ -21,6 +21,7 @@ public:
         m_storage(storage),
         m_executionMessageFactory(executionMessageFactory),
         m_blockFactory(blockFactory),
+        m_txPool(txPool),
         m_transactionSubmitResultFactory(transactionSubmitResultFactory),
         m_hashImpl(hashImpl),
         m_isAuthCheck(isAuthCheck),
@@ -30,8 +31,8 @@ public:
     scheduler::SchedulerImpl::Ptr build(int64_t schedulerTermId)
     {
         auto scheduler = std::make_shared<scheduler::SchedulerImpl>(m_executorManager, m_ledger,
-            m_storage, m_executionMessageFactory, m_blockFactory, m_transactionSubmitResultFactory,
-            m_hashImpl, m_isAuthCheck, m_isWasm, schedulerTermId);
+            m_storage, m_executionMessageFactory, m_blockFactory, m_txPool,
+            m_transactionSubmitResultFactory, m_hashImpl, m_isAuthCheck, m_isWasm, schedulerTermId);
         scheduler->fetchGasLimit();
 
         scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);
@@ -60,6 +61,7 @@ private:
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck;
