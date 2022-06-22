@@ -1,10 +1,15 @@
 #pragma once
+#include "Basic.h"
 #include <concepts>
 #include <ranges>
 #include <type_traits>
 
-namespace bcos::concepts
+namespace bcos::concepts::block
 {
+
+template <class BlockNumberType>
+concept BlockNumber = std::integral<BlockNumberType>;
+
 template <class ParentInfoType>
 concept ParentInfo = requires(ParentInfoType parentInfo)
 {
@@ -28,9 +33,9 @@ concept BlockHeaderData = requires(BlockHeaderDataType blockHeaderData)
     blockHeaderData.txRoot;
     blockHeaderData.receiptRoot;
     blockHeaderData.stateRoot;
-    std::unsigned_integral<decltype(blockHeaderData.blockNumber)>;
+    BlockNumber<decltype(blockHeaderData.blockNumber)>;
     std::unsigned_integral<decltype(blockHeaderData.gasUsed)>;
-    std::integral<decltype(blockHeaderData.timestamp)>;
+    std::unsigned_integral<decltype(blockHeaderData.timestamp)>;
     std::integral<decltype(blockHeaderData.sealer)>;
     std::ranges::range<decltype(blockHeaderData.sealerList)>;
     blockHeaderData.extraData;
@@ -40,9 +45,32 @@ concept BlockHeaderData = requires(BlockHeaderDataType blockHeaderData)
 template <class BlockHeaderType>
 concept BlockHeader = requires(BlockHeaderType block)
 {
+    bcos::concepts::Serializable<BlockHeaderType>;
+
+    BlockHeaderType{};
     BlockHeaderData<decltype(block.data)>;
     block.dataHash;
     requires std::ranges::range<decltype(block.signatureList)> &&
         Signature<std::ranges::range_value_t<decltype(block.signatureList)>>;
 };
-}  // namespace bcos::concepts
+
+template <class BlockType>
+concept Block = requires(BlockType block)
+{
+    bcos::concepts::Serializable<BlockType>;
+    BlockHeader<typename BlockType::BlockHeader>;
+    typename BlockType::Transaction;  // TODO: add transaction concept
+
+    BlockType{};
+    std::integral<decltype(block.version)>;
+    std::integral<decltype(block.type)>;
+    BlockHeader<decltype(block.blockHeader)>;
+    requires std::ranges::range<decltype(block.transactions)>;          // TODO: add transaction concept
+    requires std::ranges::range<decltype(block.receipts)>;              // TODO: add receipt concept
+    requires std::ranges::range<decltype(block.transactionsMetaData)>;  // TODO: add metadata concept
+    requires std::ranges::range<decltype(block.receiptsHash)> &&
+        ByteBuffer<std::ranges::range_value_t<decltype(block.receiptsHash)>>;
+    requires std::ranges::range<decltype(block.nonceList)> &&
+        ByteBuffer<std::ranges::range_value_t<decltype(block.nonceList)>>;
+};
+}  // namespace bcos::concepts::block
