@@ -1,5 +1,6 @@
 #include "bcos-ledger/bcos-ledger/LedgerImpl.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-tars-protocol/tars/Block.h>
 #include <boost/test/unit_test.hpp>
 #include <ranges>
 
@@ -30,7 +31,7 @@ BOOST_FIXTURE_TEST_SUITE(LedgerImplTest, LedgerImplFixture)
 
 BOOST_AUTO_TEST_CASE(getBlock)
 {
-    LedgerImpl ledger{MockMemoryStorage{}};
+    LedgerImpl<MockMemoryStorage, bcostars::Block> ledger{MockMemoryStorage{}};
 
     std::string hash = "Hello world!";
     [[maybe_unused]] auto [num1, num2] = ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS>(hash);

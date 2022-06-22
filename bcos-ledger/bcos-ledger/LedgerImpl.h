@@ -44,7 +44,7 @@ public:
 
             return blockHeader;
         }
-        else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS>)
+        else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> || std::is_same_v<Flag, BLOCK_RECEIPTS>)
         {
             auto entry = m_storage.getRow(SYS_NUMBER_2_TXS, blockNumberStr);
             if (!entry) [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"}); }
@@ -55,26 +55,34 @@ public:
 
             struct
             {
-                auto const& operator()(decltype(block.transactionsMetaData)& metaData) { return metaData.hash; }
+                auto const& operator()(decltype(block.transactionsMetaData) const& metaData) { return metaData.hash; }
             } HashFunc;
-
             auto range = std::tuple{boost::make_transform_iterator(block.transactionsMetaData.begin(), HashFunc),
                 boost::make_transform_iterator(block.transactionsMetaData.end(), HashFunc)};
 
-            auto transactionBuffers = m_storage.getRows(SYS_HASH_2_TX, range);
-            std::vector<typename Block::Transaction> transactions(std::size(transactionBuffers));
+            constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
+            using OutputItemType =
+                std::conditional_t<isTransaction, typename Block::Transaction, typename Block::Receipt>;
+            auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+            auto buffers = m_storage.getRows(tableName, range);
+            std::vector<OutputItemType> outputs{std::size(buffers)};
 
-            for (auto i = 0u; i < std::size(transactionBuffers); ++i)  // TODO: can be parallel
+            for (auto i = 0u; i < std::size(buffers); ++i)  // TODO: can be parallel
             {
-                transactions[i].decode(transactionBuffers[i]);
+                outputs[i].decode(buffers[i]);
             }
-            return transactions;
+            return outputs;
         }
-        else if constexpr (std::is_same_v<Flag, BLOCK_RECEIPTS>) {}
         else if constexpr (std::is_same_v<Flag, BLOCK>)
         {
             auto [header, transactions, receipts] =
                 getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(blockNumber);
+            Block block;
+            block.blockHeader = std::move(header);
+            block.transactions = std::move(transactions);
+            block.receipts = std::move(receipts);
+
+            return block;
         }
         else { static_assert(!sizeof(blockNumber), "Wrong input flag!"); }
 
