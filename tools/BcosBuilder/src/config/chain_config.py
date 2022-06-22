@@ -45,7 +45,6 @@ class GenesisConfig:
             self.config, "init_auth_address", "", self.auth_check, self.desc)
 
 
-
 class AgencyConfig:
     def __init__(self, config, chain_id, default_url, enforce_failover):
         """
@@ -97,8 +96,6 @@ class ServiceInfoConfig:
             self.config, "listen_port", 20200, False, self.desc)
         self.thread_count = utilities.get_item_value(
             self.config, "thread_count", 4, False, self.desc)
-        # self.expanded_ip = utilities.get_item_value(
-        #    self.config, "expanded_ip", "", False)
         # peers info
         self.peers = utilities.get_item_value(
             self.config, "peers", [], False, self.desc)
@@ -136,7 +133,7 @@ class NodeConfig:
         self.monitor_listen_port = utilities.get_item_value(
             self.config, "monitor_listen_port", None, True, self.desc)
         self.monitor_log_path = utilities.get_item_value(
-            self.config, "monitor_log_path", None, True, self.desc)     
+            self.config, "monitor_log_path", None, True, self.desc)
         # parse node_service_config
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list

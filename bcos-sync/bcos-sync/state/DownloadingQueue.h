@@ -86,6 +86,8 @@ public:
         return m_commitQueue.size();
     }
 
+    virtual void onCommitFailed(bcos::protocol::Block::Ptr _failedBlock);
+
 protected:
     // clear queue
     virtual void clearQueue();

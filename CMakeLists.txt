@@ -22,14 +22,6 @@ configure_project()
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
-# import dependencies
-include(ProjectCryptopp)
-include(ProjectJsonCpp)
-include(ProjectGroupSig)
-include(ProjectTCMalloc)
-include(ProjectWABT)
-include(ProjectBCOSWASM)
-
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
@@ -42,6 +34,13 @@ hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
 hunter_add_package(etcd-cpp-apiv3)
+hunter_add_package(cryptopp)
+
+# import dependencies
+include(ProjectGroupSig)
+include(ProjectTCMalloc)
+include(ProjectWABT)
+include(ProjectBCOSWASM)
 
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
