@@ -54,29 +54,28 @@ public:
 
 private:
     void getAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
-
-    void resetAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
-
-    void setMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
-
-    void checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
-
-    void getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
-
-    void setMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bool _isClose, const PrecompiledGas::Ptr& gasPricer,
         PrecompiledExecResult::Ptr const& _callParameters);
 
+    void resetAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    void setMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    void checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    void getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    void setMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bool _isClose, PrecompiledExecResult::Ptr const& _callParameters);
+
     void setContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void contractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     int32_t getMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path, bytesConstRef _func);

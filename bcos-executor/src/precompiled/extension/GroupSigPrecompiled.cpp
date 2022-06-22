@@ -37,11 +37,11 @@ public constant returns(int, bool);
 }
 */
 
-const char* const GroupSig_METHOD_SET_STR = "groupSigVerify(string,string,string,string)";
+const char* const GROUP_SIG_METHOD_SET_STR = "groupSigVerify(string,string,string,string)";
 
 GroupSigPrecompiled::GroupSigPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    name2Selector[GroupSig_METHOD_SET_STR] = getFuncSelector(GroupSig_METHOD_SET_STR, _hashImpl);
+    name2Selector[GROUP_SIG_METHOD_SET_STR] = getFuncSelector(GROUP_SIG_METHOD_SET_STR, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
@@ -55,9 +55,8 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
-    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
 
-    if (func == name2Selector[GroupSig_METHOD_SET_STR])
+    if (func == name2Selector[GROUP_SIG_METHOD_SET_STR])
     {
         // groupSigVerify(string)
         std::string signature, message, gpkInfo, paramInfo;
@@ -82,7 +81,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
                                    << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
             result = false;
         }
-        int retCode = CODE_SUCCESS;
+        int32_t retCode = CODE_SUCCESS;
         if (!result)
         {
             retCode = VERIFY_GROUP_SIG_FAILED;
@@ -93,7 +92,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        _callParameters->setExecResult(codec->encode((int)CODE_UNKNOW_FUNCTION_CALL, false));
+        _callParameters->setExecResult(codec->encode((int32_t)CODE_UNKNOW_FUNCTION_CALL, false));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
