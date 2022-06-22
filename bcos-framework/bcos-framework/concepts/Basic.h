@@ -9,6 +9,9 @@ namespace bcos::concepts
 template <class ByteBufferType>
 concept ByteBuffer = std::ranges::range<ByteBufferType> &&(sizeof(std::ranges::range_value_t<ByteBufferType>) == 1);
 
+template <class HashType>
+concept Hash = ByteBuffer<HashType>;
+
 template <class ObjectType>
 concept Serializable = requires(
     ObjectType object, typename boost::function_traits<decltype(&ObjectType::decode)>::arg1_type decodeArg1)
@@ -21,4 +24,4 @@ concept Serializable = requires(
         } -> ByteBuffer;
     {object.decode(decodeArg1)};
 };
-};  // namespace bcos::concepts
+}  // namespace bcos::concepts
