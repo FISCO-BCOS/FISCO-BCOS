@@ -25,7 +25,7 @@ template <TarsStruct Struct>
 class TarsSerializable
 {
 public:
-    std::vector<std::byte> encode()
+    std::vector<std::byte> encode() const
     {
         tars::TarsOutputStream<bcostars::protocol::BufferWriterStdByteVector> output;
         impl().writeTo(output);
@@ -34,6 +34,14 @@ public:
         output.getByteBuffer().swap(out);
 
         return out;
+    }
+
+    void decode(std::vector<std::byte const> const& data)
+    {
+        tars::TarsInputStream<tars::BufferReader> input;
+        input.setBuffer((const char*)data.data(), data.size());
+
+        impl()->readFrom(input);
     }
 
 private:
