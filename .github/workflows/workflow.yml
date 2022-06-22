@@ -58,6 +58,9 @@ jobs:
   build_centos:
     name: build_centos
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        buildtype: ['Debug', 'Release']
     container: docker.io/centos:7
     steps:
       - uses: actions/checkout@v2
