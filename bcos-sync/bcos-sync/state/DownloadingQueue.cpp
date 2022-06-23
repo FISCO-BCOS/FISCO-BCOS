@@ -263,6 +263,10 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
         m_config->setExecutedBlock(m_config->blockNumber());
         return;
     }
+    if (blockHeader->number() <= m_config->executedBlock())
+    {
+        return;
+    }
     auto startT = utcTime();
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
     m_config->scheduler()->executeBlock(_block, true,
@@ -477,6 +481,7 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
                 if (_error)
                 {
                     downloadingQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
+                    downloadingQueue->onCommitFailed(_block);
                     BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock: store transactions failed")
                                          << LOG_KV("number", blockHeader->number())
                                          << LOG_KV("hash", blockHeader->hash().abridged())
@@ -518,11 +523,14 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             if (_error != nullptr)
             {
                 downloadingQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlockState failed")
-                                     << LOG_KV("number", blockHeader->number())
-                                     << LOG_KV("hash", blockHeader->hash().abridged())
-                                     << LOG_KV("code", _error->errorCode())
-                                     << LOG_KV("message", _error->errorMessage());
+                downloadingQueue->onCommitFailed(_block);
+                BLKSYNC_LOG(WARNING)
+                    << LOG_DESC("commitBlockState failed")
+                    << LOG_KV("executedBlock", downloadingQueue->m_config->executedBlock())
+                    << LOG_KV("number", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
             _ledgerConfig->setTxsSize(_block->transactionsSize());
@@ -540,7 +548,8 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlockState success")
                               << LOG_KV("number", blockHeader->number())
                               << LOG_KV("hash", blockHeader->hash().abridged())
-                              << LOG_KV("exectedBlock", downloadingQueue->m_config->executedBlock())
+                              << LOG_KV(
+                                     "executedBlock", downloadingQueue->m_config->executedBlock())
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
                               << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex());
         }
@@ -578,4 +587,59 @@ void DownloadingQueue::clearExpiredCache(BlockQueue& _queue, SharedMutex& _lock)
     {
         _queue.pop();
     }
+}
+
+void DownloadingQueue::onCommitFailed(bcos::protocol::Block::Ptr _failedBlock)
+{
+    auto blockHeader = _failedBlock->blockHeader();
+    BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed") << LOG_KV("number", blockHeader->number())
+                      << LOG_KV("hash", blockHeader->hash().abridged())
+                      << LOG_KV("executedBlock", m_config->executedBlock());
+
+    // re-push failedBlock to commitQueue
+    {
+        WriteGuard l(x_commitQueue);
+        m_commitQueue.push(_failedBlock);
+    }
+
+    auto topBlock = top();
+    bcos::protocol::BlockNumber topNumber = std::numeric_limits<bcos::protocol::BlockNumber>::max();
+    if (topBlock)
+    {
+        topNumber = topBlock->blockHeader()->number();
+    }
+    size_t rePushedBlockCount = 0;
+    {
+        // re-push un-committed block into m_blocks
+        // Note: this operation is low performance and low frequency
+        WriteGuard l(x_commitQueue);
+        WriteGuard lock(x_blocks);
+        if (m_commitQueue.empty())
+        {
+            return;
+        }
+        std::vector<bcos::protocol::Block::Ptr> tmpBlockCache;
+        while (!m_commitQueue.empty())
+        {
+            auto topBlock = m_commitQueue.top();
+            if (topBlock->blockHeader()->number() >= topNumber)
+            {
+                break;
+            }
+            rePushedBlockCount++;
+            tmpBlockCache.emplace_back(topBlock);
+            m_blocks.push(topBlock);
+            m_commitQueue.pop();
+        }
+        // writeBack tmpBlockCache to m_commitQueue
+        for (auto block : tmpBlockCache)
+        {
+            m_commitQueue.push(block);
+        }
+    }
+    BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: update commitQueue and executingQueue")
+                      << LOG_KV("commitQueueSize", m_commitQueue.size())
+                      << LOG_KV("blocksQueueSize", m_blocks.size())
+                      << LOG_KV("topNumber", topNumber)
+                      << LOG_KV("rePushedBlockCount", rePushedBlockCount);
 }
