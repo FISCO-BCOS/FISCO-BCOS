@@ -146,7 +146,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     // Not recommend gas calculation for system-contract
     if (version <= (int32_t)(bcos::protocol::Version::RC4_VERSION))
     {
-        gasPricer->updateMemUsed(_callParameters->m_execResult.size());
         _callParameters->setGas(_callParameters->m_gas);
     }
     return _callParameters;
