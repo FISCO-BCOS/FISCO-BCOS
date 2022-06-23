@@ -188,7 +188,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     << LOG_BADGE("Switch")
                     << "Executor load from backend storage, check storage blockNumber"
                     << LOG_KV("storageBlockNumber", storageBlockNumber)
-                    << LOG_KV("requestBlockNumber", blockHeader->number()) << std::endl;
+                    << LOG_KV("requestBlockNumber", blockHeader->number());
                 if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
                 {
                     auto fmt = boost::format(
@@ -352,8 +352,19 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                     return;
                 }
             }
-
-            EXECUTOR_NAME_LOG(TRACE) << "Call success";
+            if (!error)
+            {
+                EXECUTOR_NAME_LOG(TRACE)
+                    << "Call success" << LOG_KV("staticCall", result->staticCall())
+                    << LOG_KV("from", result->from()) << LOG_KV("to", result->to())
+                    << LOG_KV("context", result->contextID());
+            }
+            else
+            {
+                EXECUTOR_NAME_LOG(WARNING)
+                    << LOG_DESC("Call error") << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
+            }
             callback(std::move(error), std::move(result));
         });
 }
@@ -1295,8 +1306,8 @@ void TransactionExecutor::rollback(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams;
-    storageParams.number = params.number;
+    bcos::protocol::TwoPCParams storageParams{
+        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
     m_backendStorage->asyncRollback(
         storageParams, [this, callback = std::move(callback)](auto&& error) {
             if (!m_isRunning)
@@ -1519,7 +1530,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                              << LOG_KV("keyLockSize", input->keyLocks().size())
                              << LOG_KV("contextID", input->contextID())
                              << LOG_KV("seq", input->seq())
-                             << LOG_KV("type", std::to_string(input->type()));
+                             << LOG_KV("type", std::to_string(input->type()))
+                             << LOG_KV("staticCall", input->staticCall());
     switch (input->type())
     {
     case bcos::protocol::ExecutionMessage::TXHASH:
@@ -1784,14 +1796,13 @@ void TransactionExecutor::removeCommittedState()
         }
 
         m_cachedStorage->merge(true, *storage);
-        EXECUTOR_NAME_LOG(INFO) << "Merge state number: " << number << " to cachedStorage end";
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
         m_lastStateStorage = m_stateStorages.back().storage;
-        EXECUTOR_NAME_LOG(DEBUG) << "LatestStateStorage"
-                                 << LOG_KV("storageNumber", m_stateStorages.back().number)
-                                 << LOG_KV("commitNumber", number);
+        EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
+                                << LOG_KV("storageNumber", m_stateStorages.back().number)
+                                << LOG_KV("commitNumber", number);
         it = m_stateStorages.erase(it);
         if (it != m_stateStorages.end())
         {

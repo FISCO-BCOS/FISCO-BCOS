@@ -34,4 +34,7 @@ name = "agencyA"
         enable_storage_security = false
         # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
         # key_center_url = 
-        # cipher_data_key = 
+        # cipher_data_key =
+        monitor_listen_port = "3901"
+        # monitor log path example:"/root/app/tars/framework/app_log/" 
+        monitor_log_path = "" 

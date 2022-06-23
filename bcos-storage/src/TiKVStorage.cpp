@@ -61,14 +61,15 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
     fileChannel->setProperty("path", logPath + "/tikv-client.log");
     fileChannel->setProperty("rotation", "20 M");
     fileChannel->setProperty("archive", "timestamp");
-    auto formatter =
-        Poco::AutoPtr<Poco::Formatter>(new Poco::PatternFormatter("%Y-%m-%d %H:%M:%S %s: %t"));
+    auto formatter = Poco::AutoPtr<Poco::Formatter>(
+        new Poco::PatternFormatter("%L%p|%Y-%m-%d %H:%M:%S.%i|%T-%I|[%s]%t"));
     formatter->setProperty("times", "local");
     Poco::AutoPtr<Poco::Channel> pChannel(new Poco::FormattingChannel(formatter, fileChannel));
     // auto pChannel = Poco::AutoPtr<Poco::SimpleFileChannel>(new Poco::SimpleFileChannel());
     Poco::Logger::root().setLevel((int)c_fileLogLevel < (int)Poco::Message::PRIO_WARNING ?
                                       Poco::Message::PRIO_INFORMATION :
-                                      c_fileLogLevel + 3);  // Poco::Message::PRIO_TRACE
+                                      c_fileLogLevel + 3);
+    // Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);
     Poco::Logger::root().setChannel(pChannel);
     return std::make_shared<Cluster>(pdAddrs, config);
 }
@@ -187,6 +188,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                 auto snap = Snapshot(m_cluster.get());
                 auto result = snap.BatchGet(realKeys);
                 auto end = utcTime();
+                size_t validCount = 0;
                 for (size_t i = 0; i < realKeys.size(); ++i)
                 {
                     auto nh = result.extract(realKeys[i]);
@@ -197,6 +199,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                     }
                     else
                     {
+                        ++validCount;
                         entries[i] = std::make_optional(Entry());
                         entries[i]->set(std::move(nh.mapped()));
                     }
@@ -204,7 +207,8 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                 auto decode = utcTime();
                 STORAGE_TIKV_LOG(DEBUG)
                     << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
-                    << LOG_KV("count", entries.size()) << LOG_KV("read time(ms)", end - start)
+                    << LOG_KV("count", entries.size()) << LOG_KV("validCount", validCount)
+                    << LOG_KV("read time(ms)", end - start)
                     << LOG_KV("decode time(ms)", decode - end)
                     << LOG_KV("callback time(ms)", utcTime() - decode);
                 _callback(nullptr, std::move(entries));
@@ -367,14 +371,14 @@ void TiKVStorage::asyncCommit(
         if (m_committer)
         {
             m_committer->commitKeys();
+            auto end = utcTime();
+            STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
+                                << LOG_KV("startTS", params.startTS)
+                                << LOG_KV("time(ms)", end - start)
+                                << LOG_KV("callback time(ms)", utcTime() - end);
             m_committer = nullptr;
         }
-        auto end = utcTime();
         callback(nullptr);
-        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
-                               << LOG_KV("startTS", params.startTS)
-                               << LOG_KV("time(ms)", end - start)
-                               << LOG_KV("callback time(ms)", utcTime() - end);
     }
     catch (const pingcap::Exception& e)
     {

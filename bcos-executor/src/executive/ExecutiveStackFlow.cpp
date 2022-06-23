@@ -34,20 +34,12 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
     if (executiveState == nullptr)
     {
         // add to top if not exists
-        /*
-        std::cout << "[EXECUTOR] >>>> " << contextID << " | " << seq << " | " << txInput->toString()
-                  << " | NEED_RUN" << std::endl;
-                  */
         executiveState = std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
         m_executives[{contextID, seq}] = executiveState;
     }
     else
     {
         // update resume params
-        /*
-        std::cout << "[EXECUTOR] >>>> " << contextID << " | " << seq << " | " << txInput->toString()
-                  << " | NEED_RESUME" << std::endl;
-                  */
         executiveState->setResumeParam(std::move(txInput));
     }
 

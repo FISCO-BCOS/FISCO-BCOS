@@ -33,11 +33,16 @@ void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr
     for (auto proposal : _proposals)
     {
         // the proposal has already been committed
-        if (proposal->index() <= m_config->committedProposal()->index() ||
-            m_proposalsToStableConsensus.count(proposal->index()))
+        if (proposal->index() <= m_config->committedProposal()->index())
         {
+            PBFT_LOG(DEBUG) << LOG_DESC("initState: skip committedProposal")
+                            << LOG_KV("index", proposal->index())
+                            << LOG_KV("hash", proposal->hash().abridged());
             continue;
         }
+        PBFT_LOG(DEBUG) << LOG_DESC("initState: apply committedProposal")
+                        << LOG_KV("index", proposal->index())
+                        << LOG_KV("hash", proposal->hash().abridged());
         // set the txs status to be sealed
         m_config->validator()->asyncResetTxsFlag(proposal->data(), true);
         // try to verify and load the proposal
@@ -313,6 +318,7 @@ bool PBFTCacheProcessor::tryToPreApplyProposal(ProposalInterface::Ptr _proposal)
 
 bool PBFTCacheProcessor::tryToApplyCommitQueue()
 {
+    notifyToSealNextBlock();
     while (!m_committedQueue.empty() &&
            m_committedQueue.top()->index() < m_config->expectedCheckPoint())
     {

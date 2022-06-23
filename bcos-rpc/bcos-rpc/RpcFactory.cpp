@@ -348,7 +348,6 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     auto eventSub = eventSubFactory->buildEventSub(_wsService);
 
     auto matcher = std::make_shared<event::EventSubMatcher>();
-    eventSub->setIoc(_wsService->ioc());
     eventSub->setGroupManager(_groupManager);
     eventSub->setMessageFactory(_wsService->messageFactory());
     eventSub->setMatcher(matcher);

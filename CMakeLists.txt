@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.14)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif ()
@@ -22,11 +22,6 @@ configure_project()
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
-# import dependencies
-include(ProjectTCMalloc)
-include(ProjectWABT)
-include(ProjectBCOSWASM)
-
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
@@ -39,6 +34,13 @@ hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
 hunter_add_package(etcd-cpp-apiv3)
+hunter_add_package(cryptopp)
+
+# import dependencies
+include(ProjectGroupSig)
+include(ProjectTCMalloc)
+include(ProjectWABT)
+include(ProjectBCOSWASM)
 
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
@@ -79,6 +81,10 @@ add_subdirectory(bcos-leader-election)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
 add_subdirectory(fisco-bcos-tars-service)
+
+if (BUILD_DEMO)
+    add_subdirectory(fisco-bcos-demo)
+endif ()
 
 if (TESTS)
     enable_testing()

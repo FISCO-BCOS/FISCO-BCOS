@@ -123,7 +123,6 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
         nodeList.push_back(faker->nodeID());
         syncPeerList.push_back(faker);
     }
-
     for (size_t i = 0; i < medianBlockNumberPeerSize; i++)
     {
         auto faker = std::make_shared<SyncFixture>(_cryptoSuite, gateWay, medianBlockNumber + 1);
@@ -158,7 +157,8 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
 
     size_t peerSize = maxBlockNumberPeerSize + medianBlockNumberPeerSize + minBlockNumberPeerSize;
     // check peers
-    while (!checkPeer(syncPeerList, peerSize))
+    auto startT = utcTime();
+    while (!checkPeer(syncPeerList, peerSize) && (utcTime() - startT <= 60 * 1000))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
@@ -185,7 +185,8 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
     BOOST_CHECK(invalidFaker->syncConfig()->knownHighestNumber() == 0);
 
     // wait the nodes to sync blocks
-    while (!downloadFinish(syncPeerList, maxBlockNumber))
+    startT = utcTime();
+    while (!downloadFinish(syncPeerList, maxBlockNumber) && (utcTime() - startT <= 60 * 1000))
     {
         for (auto faker : syncPeerList)
         {

@@ -49,9 +49,10 @@ class BlockContext : public std::enable_shared_from_this<BlockContext>
 public:
     typedef std::shared_ptr<BlockContext> Ptr;
 
-    BlockContext(std::shared_ptr<storage::StateStorageInterface> storage, crypto::Hash::Ptr _hashImpl,
-        bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+    BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
+        crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
+        uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
+        bool _isAuthCheck);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
@@ -87,9 +88,14 @@ public:
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
 
-    void clear() { m_executiveFlows.clear(); }
+    void clear()
+    {
+        bcos::WriteGuard l(x_executiveFlows);
+        m_executiveFlows.clear();
+    }
 
 private:
+    mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
 
 

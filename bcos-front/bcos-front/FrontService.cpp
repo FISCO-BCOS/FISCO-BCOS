@@ -644,8 +644,6 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
 {
     if (_error)
     {
-        FRONT_LOG(TRACE) << LOG_DESC("onMessageTimeout") << LOG_KV("error", _error)
-                         << LOG_KV("uuid", _uuid);
         return;
     }
 
