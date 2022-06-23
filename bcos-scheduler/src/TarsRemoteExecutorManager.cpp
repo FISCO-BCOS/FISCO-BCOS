@@ -80,7 +80,7 @@ void TarsRemoteExecutorManager::executeWorker()
                                         << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
         }
     }
-    catch (std::exception e)
+    catch (std::exception const& e)
     {
         EXECUTOR_MANAGER_LOG(ERROR) << "Workloop exception: " << e.what();
     }
