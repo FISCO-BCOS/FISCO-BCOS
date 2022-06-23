@@ -43,7 +43,7 @@ public:
             decltype(Block::blockHeader) blockHeader;
             bcos::concepts::serialize::decode(blockHeader, field);
 
-            return blockHeader;
+            return std::tuple_cat(std::tuple{blockHeader}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> || std::is_same_v<Flag, BLOCK_RECEIPTS>)
         {
@@ -57,21 +57,25 @@ public:
 
             struct
             {
-                auto const& operator()(std::ranges::range_value_t<decltype(block.transactionsMetaData)> const& metaData)
+                auto operator()(typename decltype(block.transactionsMetaData)::value_type const& metaData) const
                 {
-                    return metaData.hash;
+                    return std::string_view{metaData.hash.data(), metaData.hash.size()};
                 }
             } GetMetaHashFunc;
-            auto range = std::tuple{boost::make_transform_iterator(block.transactionsMetaData.begin(), GetMetaHashFunc),
-                boost::make_transform_iterator(block.transactionsMetaData.end(), GetMetaHashFunc)};
+
+            auto begin = boost::make_transform_iterator(block.transactionsMetaData.cbegin(), GetMetaHashFunc);
+            auto end = boost::make_transform_iterator(block.transactionsMetaData.cend(), GetMetaHashFunc);
+            auto range = std::ranges::subrange{begin, end};
+
+            std::ranges::begin(range);
 
             constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
             using OutputItemType =
                 std::conditional_t<isTransaction, std::ranges::range_value_t<decltype(Block::transactions)>,
                     std::ranges::range_value_t<decltype(Block::receipts)>>;
             auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
-            auto entries = m_storage.getRows(tableName, range);
-            std::vector<OutputItemType> outputs{std::size(entries)};
+            auto entries = m_storage.getRows(std::string_view{tableName}, range);
+            std::vector<OutputItemType> outputs(std::size(entries));
 
             for (auto i = 0u; i < std::size(entries); ++i)  // TODO: can be parallel
             {
@@ -80,7 +84,8 @@ public:
                 auto field = entries[i]->getField(0);
                 bcos::concepts::serialize::decode(outputs[i], field);
             }
-            return outputs;
+
+            return std::tuple_cat(std::tuple{outputs}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else if constexpr (std::is_same_v<Flag, BLOCK>)
         {
@@ -91,11 +96,9 @@ public:
             block.transactions = std::move(transactions);
             block.receipts = std::move(receipts);
 
-            return block;
+            return std::tuple_cat(std::tuple{block}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else { static_assert(!sizeof(blockNumber), "Wrong input flag!"); }
-
-        return std::tuple_cat(std::tuple{typeid(Flag).name()}, std::tuple{getBlock<Flags...>(blockNumber)});
     }
 
 private:

@@ -46,3 +46,8 @@ void decode(bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::B
     object.readFrom(input);
 }
 }  // namespace bcos::concepts::serialize
+
+namespace bcos::concepts::hash
+{
+
+}
