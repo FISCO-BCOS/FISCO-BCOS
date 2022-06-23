@@ -39,7 +39,7 @@
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
-#include "bcos-scheduler/src/RemoteExecutorManager.h"
+#include "bcos-scheduler/src/TarsRemoteExecutorManager.h"
 #include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -56,14 +56,14 @@ using namespace bcos::tool;
 using namespace bcos::initializer;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway)
+    bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, "", true);
-    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true);
+    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true, _logPath);
 }
 void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    std::string const& _privateKeyPath)
+    std::string const& _privateKeyPath, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
@@ -72,7 +72,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
         m_nodeConfig->gatewayServiceName());
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
-    init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false);
+    init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);
 }
 
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
@@ -104,7 +104,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion)
+    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
     // build the front service
     m_frontServiceInitializer =
@@ -139,9 +139,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        schedulerStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        consensusStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
     }
     else
     {
@@ -163,24 +165,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
     }
-    auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
+    auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
     auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
+    // init the txpool
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
+        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
-        m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+        m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+        m_nodeConfig->isWasm());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup
     m_scheduler =
         std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
-
-    // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
 
     std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
@@ -196,7 +199,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
     }
 
-    if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("connect executor")
+                              << LOG_KV("nodeArchType", _nodeArchType);
+        executorManager->start();
+    }
+    else
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
                               << LOG_KV("nodeArchType", _nodeArchType);
@@ -257,7 +266,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
-    initSysContract();
 }
 
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)

@@ -169,14 +169,11 @@ void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
                               "proposal execute failed and re-push the proposal "
                               "into the cache")
                        << printPBFTProposal(_proposal);
-        // retry after 20ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
-
-        // retry after 500ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
         m_cacheProcessor->updateCommitQueue(_proposal);
         return;
     }
@@ -200,8 +197,11 @@ void PBFTEngine::onProposalApplySuccess(
     // only broadcast message to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    auto startT = utcTime();
+    auto recordT = utcTime();
     // Note: must lock here to ensure thread safe
     RecursiveGuard l(m_mutex);
+    auto lockT = (utcTime() - startT);
     // restart the timer when proposal execute finished to in case of timeout
     if (m_config->timer()->running())
     {
@@ -213,6 +213,9 @@ void PBFTEngine::onProposalApplySuccess(
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
+    PBFT_LOG(INFO) << LOG_DESC("onProposalApplySuccess") << LOG_KV("index", checkPointMsg->index())
+                   << LOG_KV("hash", checkPointMsg->hash().abridged()) << LOG_KV("lockT", lockT)
+                   << LOG_KV("timecost", (utcTime() - recordT));
 }
 
 // called after proposal executed successfully
@@ -597,16 +600,17 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     {
         return CheckResult::INVALID;
     }
+    bool proposalCommitted = m_cacheProcessor->proposalCommitted(_pbftReq->index());
     if (_pbftReq->index() < m_config->lowWaterMark() ||
         _pbftReq->index() < m_config->expectedCheckPoint() ||
-        _pbftReq->index() <= m_config->syncingHighestNumber() ||
-        m_cacheProcessor->proposalCommitted(_pbftReq->index()))
+        _pbftReq->index() <= m_config->syncingHighestNumber() || proposalCommitted)
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid index")
                         << LOG_KV("highWaterMark", m_config->highWaterMark())
                         << LOG_KV("lowWaterMark", m_config->lowWaterMark())
                         << printPBFTMsgInfo(_pbftReq) << m_config->printCurrentState()
-                        << LOG_KV("syncingNumber", m_config->syncingHighestNumber());
+                        << LOG_KV("syncingNumber", m_config->syncingHighestNumber())
+                        << LOG_KV("proposalCommitted", proposalCommitted);
         return CheckResult::INVALID;
     }
     // case index equal
@@ -1181,13 +1185,13 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
 bool PBFTEngine::handleNewViewMsg(NewViewMsgInterface::Ptr _newViewMsg)
 {
     PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg: receive newViewChangeMsg")
-                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState() << std::endl;
+                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
     if (!isValidNewViewMsg(_newViewMsg))
     {
         return false;
     }
     PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg success") << printPBFTMsgInfo(_newViewMsg)
-                   << m_config->printCurrentState() << std::endl;
+                   << m_config->printCurrentState();
     reHandlePrePrepareProposals(_newViewMsg);
     return true;
 }

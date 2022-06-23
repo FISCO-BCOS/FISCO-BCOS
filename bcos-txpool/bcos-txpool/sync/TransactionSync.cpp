@@ -206,13 +206,17 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
             Error::Ptr _error, TransactionsPtr _fetchedTxs,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>>) {
             // hit all the txs
-            if (this->onGetMissedTxsFromLedger(
-                    *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished) == 0)
+            auto missedTxsSize = this->onGetMissedTxsFromLedger(
+                *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished);
+            if (missedTxsSize == 0)
             {
                 return;
             }
-            if (!_generatedNodeID)
+            if (!_generatedNodeID || _generatedNodeID->data() == m_config->nodeID()->data())
             {
+                SYNC_LOG(WARNING)
+                    << LOG_DESC("requestMissedTxs failed from the ledger for Transaction missing")
+                    << LOG_KV("missedTxs", missedTxsSize);
                 _onVerifyFinished(
                     std::make_shared<Error>(CommonError::TransactionsMissing,
                         "requestMissedTxs failed from the ledger for Transaction missing"),
@@ -275,6 +279,8 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
         SYNC_LOG(DEBUG) << LOG_DESC("onGetMissedTxsFromLedger: hit all transactions");
         _onVerifyFinished(nullptr, true);
     }
+    SYNC_LOG(TRACE) << LOG_DESC("onGetMissedTxsFromLedger: missing txs")
+                    << LOG_KV("missCount", _missedTxs.size());
     return _missedTxs.size();
 }
 

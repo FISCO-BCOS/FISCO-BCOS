@@ -277,9 +277,10 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             auto txHash = _tx->hash();
             txsHash->emplace_back(txHash);
             txpoolStorage->m_config->ledger()->asyncStoreTransactions(
-                txsToStore, txsHash, [txHash](Error::Ptr _error) {
+                txsToStore, txsHash, [_tx, txHash](Error::Ptr _error) {
                     if (_error == nullptr)
                     {
+                        _tx->setStoreToBackend(true);
                         return;
                     }
                     TXPOOL_LOG(WARNING) << LOG_DESC("asyncPreStoreTransaction failed")
@@ -460,9 +461,12 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
         {
             auto totalTime = (utcTime() - m_tpsStatstartTime);
-            auto tps = (m_onChainTxsCount * 1000) / totalTime;
-            TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
-                             << LOG_KV("totalTime", totalTime);
+            if (totalTime > 0)
+            {
+                auto tps = (m_onChainTxsCount * 1000) / totalTime;
+                TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
+                                 << LOG_KV("totalTime", totalTime);
+            }
             m_tpsStatstartTime.store(0);
             m_onChainTxsCount.store(0);
         }
@@ -550,6 +554,11 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
+        {
+            continue;
+        }
+        // only seal the txs have been stored to the backend
+        if (!tx->storeToBackend())
         {
             continue;
         }

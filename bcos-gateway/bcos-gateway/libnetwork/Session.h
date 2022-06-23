@@ -6,7 +6,10 @@
 
 #pragma once
 
+#include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/Timer.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -14,9 +17,6 @@
 #include <mutex>
 #include <set>
 #include <utility>
-
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>
 
 namespace bcos
 {
@@ -44,7 +44,7 @@ public:
     bool actived() const override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host);
+    virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
@@ -99,7 +99,7 @@ protected:
         }
     }
 
-    void callDefaultMsgHandler(NetworkException const& e, Message::Ptr message);
+    virtual void checkNetworkStatus();
 
 private:
     void send(std::shared_ptr<bytes> _msg);
@@ -116,8 +116,6 @@ private:
     bool checkRead(boost::system::error_code _ec);
 
     void onTimeout(const boost::system::error_code& error, uint32_t seq);
-    void updateIdleTimer(std::shared_ptr<boost::asio::deadline_timer> _idleTimer);
-    void onIdle(const boost::system::error_code& error);
 
     /// Perform a single round of the write operation. This could end up calling
     /// itself asynchronously.
@@ -159,11 +157,12 @@ private:
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
-    uint64_t m_idleTimeInterval = 60;
+    uint64_t m_idleTimeInterval = 60 * 1000;
 
     // timer to check the connection
-    std::shared_ptr<boost::asio::deadline_timer> m_readIdleTimer;
-    std::shared_ptr<boost::asio::deadline_timer> m_writeIdleTimer;
+    std::atomic<uint64_t> m_lastReadTime;
+    std::atomic<uint64_t> m_lastWriteTime;
+    std::shared_ptr<bcos::Timer> m_idleCheckTimer;
 
     std::string m_hostNodeID;
 };

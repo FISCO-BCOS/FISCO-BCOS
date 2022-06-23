@@ -16,8 +16,19 @@ find_package(RocksDB CONFIG REQUIRED)
 
 find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
 
+if(NOT (TARGET zstd::zstd))
+  # use zstd::libzstd_static instead zstd::zstd(depended by RocksDB)
+  get_target_property(zstd_INCLUDE_DIRS zstd::libzstd_static INTERFACE_INCLUDE_DIRECTORIES)
+  get_target_property(zstd_LIBRARIES zstd::libzstd_static LOCATION)
+  add_library(zstd::zstd UNKNOWN IMPORTED)
+  set_target_properties(zstd::zstd
+    PROPERTIES
+      IMPORTED_LOCATION ${zstd_LIBRARIES}
+      INTERFACE_INCLUDE_DIRECTORIES ${zstd_INCLUDE_DIRS})
+endif()
+
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_link_libraries(${STORAGE_TARGET} PUBLIC ${TABLE_TARGET} Boost::serialization zstd::libzstd_static RocksDB::rocksdb kv_client)
+target_link_libraries(${STORAGE_TARGET} PUBLIC ${TABLE_TARGET} Boost::serialization RocksDB::rocksdb kv_client)
 
 if (TESTS)
     enable_testing()

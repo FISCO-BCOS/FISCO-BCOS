@@ -3,6 +3,7 @@
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-scheduler/src/Common.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 

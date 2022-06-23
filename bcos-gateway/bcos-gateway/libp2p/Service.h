@@ -151,9 +151,13 @@ public:
         m_msgHandlers.erase(_type);
     }
 
+
+    void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options = Options());
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
-        Options = Options(), SessionCallbackFunc = SessionCallbackFunc());
+        Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
 
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
@@ -174,16 +178,32 @@ protected:
 
     virtual void callNewSessionHandlers(P2PSession::Ptr _session)
     {
-        for (auto const& handler : m_newSessionHandlers)
+        try
         {
-            handler(_session);
+            for (auto const& handler : m_newSessionHandlers)
+            {
+                handler(_session);
+            }
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("callNewSessionHandlers exception")
+                                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     }
     virtual void callDeleteSessionHandlers(P2PSession::Ptr _session)
     {
-        for (auto const& handler : m_deleteSessionHandlers)
+        try
         {
-            handler(_session);
+            for (auto const& handler : m_deleteSessionHandlers)
+            {
+                handler(_session);
+            }
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("callDeleteSessionHandlers exception")
+                                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     }
 

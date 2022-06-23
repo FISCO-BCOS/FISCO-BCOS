@@ -187,6 +187,8 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        BOOST_THROW_EXCEPTION(
+            bcos::protocol::PrecompiledError("AuthManagerPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());

@@ -36,31 +36,35 @@ public:
         AMOPResponse = 0x5,
         AMOPBroadcast = 0x5
     };
-    /// type(2) + data
-    const static size_t HEADER_LENGTH = 4;
+    /// type(2) + status(2) + version(2)
+    const static size_t HEADER_LENGTH = 6;
     /// the max length of topic(65535)
     const static size_t MAX_TOPIC_LENGTH = 0xffff;
 
-public:
+
     using Ptr = std::shared_ptr<AMOPMessage>;
     AMOPMessage() {}
     AMOPMessage(bytesConstRef _data) { decode(_data); }
     virtual ~AMOPMessage() {}
 
-public:
-    uint16_t type() const { return m_type; }
-    void setType(uint16_t _type) { m_type = _type; }
+    virtual uint16_t type() const { return m_type; }
+    virtual void setType(uint16_t _type) { m_type = _type; }
 
-    bytesConstRef data() const { return m_data; }
-    void setData(bcos::bytesConstRef _data) { m_data = _data; }
+    virtual bytesConstRef data() const { return m_data; }
+    // Note: must maintain life time for _data
+    virtual void setData(bcos::bytesConstRef _data) { m_data = _data; }
     virtual void setStatus(uint16_t _status) { m_status = _status; }
-    uint16_t status() const { return m_status; }
+    virtual uint16_t status() const { return m_status; }
+
+    virtual uint16_t version() const { return m_version; }
+    virtual void setVersion(uint16_t version) { m_version = version; }
 
 public:
     bool encode(bytes& _buffer);
     ssize_t decode(bytesConstRef _buffer);
 
 private:
+    uint16_t m_version = 0;
     uint16_t m_type{0};
     uint16_t m_status{0};
     bcos::bytesConstRef m_data = bytesConstRef();
@@ -71,6 +75,7 @@ public:
     using Ptr = std::shared_ptr<AMOPMessageFactory>;
     AMOPMessageFactory() = default;
     AMOPMessage::Ptr buildMessage() { return std::make_shared<AMOPMessage>(); }
+    // Note: must maintain lifetime of _data
     AMOPMessage::Ptr buildMessage(bytesConstRef _data)
     {
         return std::make_shared<AMOPMessage>(_data);

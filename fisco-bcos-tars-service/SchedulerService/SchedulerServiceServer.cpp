@@ -114,3 +114,15 @@ bcostars::Error SchedulerServiceServer::registerExecutor(
     });
     return bcostars::Error();
 }
+
+bcostars::Error SchedulerServiceServer::preExecuteBlock(
+    const bcostars::Block& _block, tars::Bool _verify, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    auto bcosBlock = std::make_shared<bcostars::protocol::BlockImpl>(
+        m_blockFactory->transactionFactory(), m_blockFactory->receiptFactory(), _block);
+    m_scheduler->preExecuteBlock(bcosBlock, _verify, [_current](bcos::Error::Ptr&& _error) {
+        async_response_preExecuteBlock(_current, toTarsError(_error));
+    });
+    return bcostars::Error();
+}

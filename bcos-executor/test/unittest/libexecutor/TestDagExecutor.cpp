@@ -73,7 +73,7 @@ struct DagExecutorFixture
 {
     DagExecutorFixture()
     {
-        // boost::log::core::get()->set_logging_enabled(false);
+        boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -96,6 +96,9 @@ struct DagExecutorFixture
                 ->data(),
             64);
         createSysTable();
+    }
+    ~DagExecutorFixture(){
+        boost::log::core::get()->set_logging_enabled(true);
     }
 
     void createSysTable()
