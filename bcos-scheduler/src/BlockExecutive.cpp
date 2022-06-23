@@ -721,14 +721,14 @@ void BlockExecutive::DMCExecute(
     m_dmcRecorder->nextDmcRound();
 
     auto lastT = utcTime();
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t [+] Start"
-                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.0:\t [+] Start\t\t\t"
+                   << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("blockNumber", number())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum());
 
     // prepare all dmcExecutor
     serialPrepareExecutor();
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t [-] SerialPrepareExecutor finish"
-                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
+                   << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("blockNumber", number())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                    << LOG_KV("cost", utcTime() - lastT);
     lastT = utcTime();
@@ -800,9 +800,9 @@ void BlockExecutive::DMCExecute(
         }
 
         // handle batch result(only one thread can get in here)
-        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t <<< Joint all contract result"
-                       << LOG_KV("blockNumber", number())
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.5:\t <<< Joint all executor result\t"
                        << LOG_KV("round", m_dmcRecorder->getRound())
+                       << LOG_KV("blockNumber", number())
                        << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                        << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
 
@@ -829,8 +829,8 @@ void BlockExecutive::DMCExecute(
         }
     };
 
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t >>> Send to executor"
-                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.2:\t >>> Start send to executors\t"
+                   << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("blockNumber", number())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                    << LOG_KV("cost", utcTime() - lastT)
                    << LOG_KV("contractNum", contractAddress.size());
@@ -842,14 +842,6 @@ void BlockExecutive::DMCExecute(
         auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
         dmcExecutor->go(executorCallback);
     }
-
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat")
-                   << "DMCExecute:\t ---"
-                      " Send to executor finish"
-                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
-                   << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                   << LOG_KV("cost", utcTime() - lastT)
-                   << LOG_KV("contractNum", contractAddress.size());
 }
 
 void BlockExecutive::onDmcExecuteFinish(
@@ -865,7 +857,8 @@ void BlockExecutive::onDmcExecuteFinish(
 
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "\t  [^] DMCExecute for call finished."
+        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:"
+                       << "\t " << LOG_BADGE("DMCRecorder") << " DMCExecute for call finished "
                        << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // Set result to m_block
@@ -877,8 +870,10 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "\t [^] DMCExecute for transaction finished."
-                      << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
+                      << "\t " << LOG_BADGE("DMCRecorder")
+                      << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
+                      << LOG_KV("checksum", dmcChecksum);
 
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](

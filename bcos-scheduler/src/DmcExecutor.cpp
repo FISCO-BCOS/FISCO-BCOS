@@ -217,22 +217,21 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     {
         // is transaction
         auto lastT = utcTime();
-        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t --> send executor message"
-                       << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
-                       << LOG_KV("txNum", messages->size())
-                       << LOG_KV("number", m_block->blockHeader()->number())
-                       << LOG_KV("round", m_dmcRecorder->getRound())
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.3:\t --> Send to executor\t\t"
+                       << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("name", m_name)
+                       << LOG_KV("contract", m_contractAddress) << LOG_KV("txNum", messages->size())
+                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
                        << LOG_KV("cost", utcTime() - lastT);
 
         m_executor->dmcExecuteTransactions(m_contractAddress, *messages,
             [this, lastT, messages, callback = std::move(callback)](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 // update batch
-                DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t <-- Executor execute finish"
+                DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.4:\t <-- Receive from executor\t"
+                               << LOG_KV("round", m_dmcRecorder->getRound())
                                << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
                                << LOG_KV("txNum", messages->size())
-                               << LOG_KV("number", m_block->blockHeader()->number())
-                               << LOG_KV("round", m_dmcRecorder->getRound())
+                               << LOG_KV("blockNumber", m_block->blockHeader()->number())
                                << LOG_KV("cost", utcTime() - lastT);
 
                 if (error)
