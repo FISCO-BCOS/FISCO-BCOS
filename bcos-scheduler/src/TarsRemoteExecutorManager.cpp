@@ -35,12 +35,12 @@ TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInf
     return endPointSet;
 }
 
-void dumpEndPointsLog(
+std::string dumpEndPointsLog(
     const vector<EndpointInfo>& activeEndPoints, const vector<EndpointInfo>& inactiveEndPoints)
 {
     // dump logs
     std::stringstream ss;
-    ss << "Detect executor endpoints. active:[";
+    ss << "active:[";
     for (const EndpointInfo& endpointInfo : activeEndPoints)
     {
         ss << endpointInfo.host() << ":" << endpointInfo.port() << ", ";
@@ -51,28 +51,42 @@ void dumpEndPointsLog(
         ss << endpointInfo.host() << ":" << endpointInfo.port() << ", ";
     }
     ss << "]";
-    EXECUTOR_MANAGER_LOG(DEBUG) << ss.str();
+    return ss.str();
 }
 
 void TarsRemoteExecutorManager::executeWorker()
 {
-    auto proxy = tars::Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(
-        m_executorServiceName);
-
-    vector<EndpointInfo> activeEndPoints;
-    vector<EndpointInfo> inactiveEndPoints;
-    proxy->tars_endpoints(activeEndPoints, inactiveEndPoints);
-
-    EndPointSet currentEndPointMap = buildEndPointSet(activeEndPoints);
-
-    if (*m_endPointSet != *currentEndPointMap)
+    try
     {
-        dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
-        update(currentEndPointMap);
+        auto proxy =
+            tars::Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(
+                m_executorServiceName);
+
+        vector<EndpointInfo> activeEndPoints;
+        vector<EndpointInfo> inactiveEndPoints;
+        proxy->tars_endpoints(activeEndPoints, inactiveEndPoints);
+
+        EndPointSet currentEndPointMap = buildEndPointSet(activeEndPoints);
+
+        if (*m_endPointSet != *currentEndPointMap)
+        {
+            EXECUTOR_MANAGER_LOG(DEBUG) << "Update current endpoint map: "
+                                        << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
+            update(currentEndPointMap);
+        }
+        else
+        {
+            EXECUTOR_MANAGER_LOG(TRACE) << "No need to update endpoint map: "
+                                        << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
+        }
     }
-    else
+    catch (std::exception e)
     {
-        EXECUTOR_MANAGER_LOG(TRACE) << "No need to update";
+        EXECUTOR_MANAGER_LOG(ERROR) << "Workloop exception: " << e.what();
+    }
+    catch (...)
+    {
+        EXECUTOR_MANAGER_LOG(ERROR) << "Workloop exception";
     }
 }
 

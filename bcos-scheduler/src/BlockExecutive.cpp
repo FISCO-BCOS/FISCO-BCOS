@@ -721,13 +721,13 @@ void BlockExecutive::DMCExecute(
     m_dmcRecorder->nextDmcRound();
 
     auto lastT = utcTime();
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tStart" << LOG_KV("blockNumber", number())
-                   << LOG_KV("round", m_dmcRecorder->getRound())
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t [+] Start"
+                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum());
 
     // prepare all dmcExecutor
     serialPrepareExecutor();
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tSerialPrepareExecutor finish"
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t [-] SerialPrepareExecutor finish"
                    << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                    << LOG_KV("cost", utcTime() - lastT);
@@ -800,7 +800,7 @@ void BlockExecutive::DMCExecute(
         }
 
         // handle batch result(only one thread can get in here)
-        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tJoint all contract result"
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t <<< Joint all contract result"
                        << LOG_KV("blockNumber", number())
                        << LOG_KV("round", m_dmcRecorder->getRound())
                        << LOG_KV("checksum", m_dmcRecorder->getChecksum())
@@ -829,6 +829,11 @@ void BlockExecutive::DMCExecute(
         }
     };
 
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t >>> Send to executor"
+                   << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
+                   << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                   << LOG_KV("cost", utcTime() - lastT)
+                   << LOG_KV("contractNum", contractAddress.size());
 
 // for each dmcExecutor
 #pragma omp parallel for
@@ -838,7 +843,9 @@ void BlockExecutive::DMCExecute(
         dmcExecutor->go(executorCallback);
     }
 
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\tSent to executor"
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat")
+                   << "DMCExecute:\t ---"
+                      " Send to executor finish"
                    << LOG_KV("blockNumber", number()) << LOG_KV("round", m_dmcRecorder->getRound())
                    << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                    << LOG_KV("cost", utcTime() - lastT)
@@ -858,7 +865,7 @@ void BlockExecutive::onDmcExecuteFinish(
 
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "DMCExecute for call finished."
+        DMC_LOG(TRACE) << LOG_BADGE("DMCRecorder") << "\t  [^] DMCExecute for call finished."
                        << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // Set result to m_block
@@ -870,7 +877,7 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "DMCExecute for transaction finished."
+        DMC_LOG(INFO) << LOG_BADGE("DMCRecorder") << "\t [^] DMCExecute for transaction finished."
                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // All Transaction finished, get hash

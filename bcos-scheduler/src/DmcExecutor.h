@@ -31,10 +31,11 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
-#define DMC_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("DMC")
-//#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
+//#define DMC_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("DMC")
+#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
+
 class DmcExecutor
 {
 public:

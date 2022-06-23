@@ -105,7 +105,7 @@ void runDagTest(shared_ptr<TxDAGInterface> _txDag, int _total,
 void txDagTest(shared_ptr<TxDAGInterface> txDag)
 {
     int total = 100;
-    ID criticalNum = 2;
+    ID criticalNum = 6;
     vector<int> runnings(criticalNum, -1);
 
     auto id2CriticalFun = [&](ID id) -> vector<bytes> {
