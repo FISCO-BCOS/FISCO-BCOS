@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
-if (NOT DEFINED URL_BASE)
+
+if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
-endif ()
+endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
@@ -9,6 +10,13 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 include(Options)
 
 include(cmake/Version.cmake)
+
+# vcpkg init
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        CACHE STRING "Vcpkg toolchain file")
+endif()
+
 project(PROJECT_NAME VERSION ${VERSION})
 
 configure_project()
@@ -25,18 +33,23 @@ include(TargetSettings)
 if(BOOSTSSL)
     add_subdirectory(bcos-boostssl)
 endif()
+
 if(FRAMEWORK)
     add_subdirectory(bcos-framework)
 endif()
+
 if(CRYPTO)
     find_package(WeDPRCrypto REQUIRED MODULE)
     add_subdirectory(bcos-crypto)
 endif()
+
 if(UTILITIES)
     add_subdirectory(bcos-utilities)
 endif()
+
 if(ALL_COMPONENTS)
     find_package(TARS REQUIRED MODULE)
+
     # import dependencies
     include(ProjectWABT)
     include(ProjectBCOSWASM)
@@ -64,14 +77,14 @@ if(ALL_COMPONENTS)
     add_subdirectory(fisco-bcos-air)
     add_subdirectory(fisco-bcos-tars-service)
 
-    if (TESTS)
+    if(TESTS)
         enable_testing()
         add_subdirectory(tests)
-    endif ()
+    endif()
 endif()
 
 # for code coverage
-if (COVERAGE)
+if(COVERAGE)
     include(Coverage)
     config_coverage("tars-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-endif ()
+endif()
