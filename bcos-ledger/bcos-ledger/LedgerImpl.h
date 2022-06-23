@@ -3,6 +3,7 @@
 #include <bcos-framework/concepts/Block.h>
 #include <bcos-framework/concepts/Storage.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <boost/iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/lexical_cast.hpp>
@@ -39,37 +40,45 @@ public:
             if (!entry) [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"}); }
 
             auto field = entry->getField(0);
-            typename Block::BlockHeader blockHeader;
-            blockHeader.decode(field);
+            decltype(Block::blockHeader) blockHeader;
+            bcos::concepts::serialize::decode(blockHeader, field);
 
             return blockHeader;
         }
         else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> || std::is_same_v<Flag, BLOCK_RECEIPTS>)
         {
             auto entry = m_storage.getRow(SYS_NUMBER_2_TXS, blockNumberStr);
-            if (!entry) [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"}); }
+            if (!entry) [[unlikely]]
+                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
 
             auto field = entry->getField(0);
             Block block;
-            block.decode(field);
+            bcos::concepts::serialize::decode(block, field);
 
             struct
             {
-                auto const& operator()(decltype(block.transactionsMetaData) const& metaData) { return metaData.hash; }
-            } HashFunc;
-            auto range = std::tuple{boost::make_transform_iterator(block.transactionsMetaData.begin(), HashFunc),
-                boost::make_transform_iterator(block.transactionsMetaData.end(), HashFunc)};
+                auto const& operator()(std::ranges::range_value_t<decltype(block.transactionsMetaData)> const& metaData)
+                {
+                    return metaData.hash;
+                }
+            } GetMetaHashFunc;
+            auto range = std::tuple{boost::make_transform_iterator(block.transactionsMetaData.begin(), GetMetaHashFunc),
+                boost::make_transform_iterator(block.transactionsMetaData.end(), GetMetaHashFunc)};
 
             constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
             using OutputItemType =
-                std::conditional_t<isTransaction, typename Block::Transaction, typename Block::Receipt>;
+                std::conditional_t<isTransaction, std::ranges::range_value_t<decltype(Block::transactions)>,
+                    std::ranges::range_value_t<decltype(Block::receipts)>>;
             auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
-            auto buffers = m_storage.getRows(tableName, range);
-            std::vector<OutputItemType> outputs{std::size(buffers)};
+            auto entries = m_storage.getRows(tableName, range);
+            std::vector<OutputItemType> outputs{std::size(entries)};
 
-            for (auto i = 0u; i < std::size(buffers); ++i)  // TODO: can be parallel
+            for (auto i = 0u; i < std::size(entries); ++i)  // TODO: can be parallel
             {
-                outputs[i].decode(buffers[i]);
+                if (!entries[i]) [[unlikely]]
+                    BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
+                auto field = entries[i]->getField(0);
+                bcos::concepts::serialize::decode(outputs[i], field);
             }
             return outputs;
         }

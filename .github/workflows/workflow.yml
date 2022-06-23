@@ -43,7 +43,7 @@ jobs:
       - name: Configure for macos
         if: runner.os == 'macOS'
         run:
-          alias ar='/usr/local/opt/llvm@12/bin/llvm-ar'
+          ln -s /usr/local/opt/llvm@12/bin/llvm-ar /usr/local/bin/ar
           mkdir -p build && cd build && CC="gcc-10" CXX="g++-10" cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
       - name: Configure for linux and windows
         if: runner.os != 'macOS'

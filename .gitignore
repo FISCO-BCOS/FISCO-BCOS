@@ -53,6 +53,9 @@ deps/**
 # log
 *.log
 
+# vcpkg
+vcpkg
+
 # clangd file
 compile_commands.json
 .cache

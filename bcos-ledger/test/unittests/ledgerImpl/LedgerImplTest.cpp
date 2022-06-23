@@ -1,18 +1,23 @@
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-ledger/bcos-ledger/LedgerImpl.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <boost/test/unit_test.hpp>
+#include <optional>
 #include <ranges>
 
 using namespace bcos::ledger;
 
 struct MockMemoryStorage
 {
-    bcos::storage::Entry getRow([[maybe_unused]] std::string_view table, [[maybe_unused]] std::string_view key)
+    std::optional<bcos::storage::Entry> getRow(
+        [[maybe_unused]] std::string_view table, [[maybe_unused]] std::string_view key)
     {
         return {};
     }
-    std::vector<bcos::storage::Entry> getRows(
+    std::vector<std::optional<bcos::storage::Entry>> getRows(
         [[maybe_unused]] std::string_view table, [[maybe_unused]] std::ranges::range auto const& keys)
     {
         return {};
@@ -33,8 +38,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
 {
     LedgerImpl<MockMemoryStorage, bcostars::Block> ledger{MockMemoryStorage{}};
 
-    std::string hash = "Hello world!";
-    [[maybe_unused]] auto [num1, num2] = ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS>(hash);
+    [[maybe_unused]] auto [num1, num2] = ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS>(0);
 
     std::cout << "num is : " << num1 << ", " << num2 << std::endl;
 }

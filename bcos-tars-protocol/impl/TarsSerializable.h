@@ -3,6 +3,7 @@
 #include "tup/Tars.h"
 #include <bcos-framework/concepts/Serialize.h>
 #include <concepts>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -37,10 +38,10 @@ std::vector<std::byte> encode(bcostars::protocol::impl::TarsStruct auto const& o
     return out;
 }
 
-void decode(bcostars::protocol::impl::TarsStruct auto& object, std::vector<std::byte const> const& data)
+void decode(bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& data)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)data.data(), data.size());
+    input.setBuffer((const char*)std::data(data), std::size(data));
 
     object.readFrom(input);
 }

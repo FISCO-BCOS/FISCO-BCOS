@@ -46,8 +46,7 @@ concept BlockHeaderData = requires(BlockHeaderDataType blockHeaderData)
 template <class BlockHeaderType>
 concept BlockHeader = requires(BlockHeaderType block)
 {
-    bcos::concepts::Serializable<BlockHeaderType>;
-
+    serialize::Serializable<BlockHeaderType>;
     BlockHeaderType{};
     BlockHeaderData<decltype(block.data)>;
     block.dataHash;
@@ -58,9 +57,7 @@ concept BlockHeader = requires(BlockHeaderType block)
 template <class BlockType>
 concept Block = requires(BlockType block)
 {
-    bcos::concepts::Serializable<BlockType>;
-    BlockHeader<typename BlockType::BlockHeader>;
-    typename BlockType::Transaction;  // TODO: add transaction concept
+    serialize::Serializable<BlockType>;
 
     BlockType{};
     std::integral<decltype(block.version)>;
