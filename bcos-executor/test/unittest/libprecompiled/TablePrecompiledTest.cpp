@@ -754,7 +754,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
         BOOST_CHECK(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
         BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
-        BOOST_CHECK(std::get<1>(fileInfo) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(fileInfo) == executor::FS_TYPE_CONTRACT);
     }
 
     // createTable exist
@@ -867,7 +867,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
         BOOST_CHECK(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
         BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
-        BOOST_CHECK(std::get<1>(fileInfo) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(fileInfo) == executor::FS_TYPE_CONTRACT);
     }
     // simple append
     {

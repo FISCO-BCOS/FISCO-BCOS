@@ -94,8 +94,8 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize, std::string name);
-
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;
 
@@ -285,9 +285,11 @@ protected:
     bool m_isWasm = false;
     size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
-
+    std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
+    void initEvmEnvironment();
+    void initWasmEnvironment();
 };
 
 }  // namespace executor
