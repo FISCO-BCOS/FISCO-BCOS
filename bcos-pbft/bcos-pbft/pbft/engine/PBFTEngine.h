@@ -89,6 +89,8 @@ public:
 
     virtual void restart();
 
+    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
+
 protected:
     virtual void initSendResponseHandler();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,

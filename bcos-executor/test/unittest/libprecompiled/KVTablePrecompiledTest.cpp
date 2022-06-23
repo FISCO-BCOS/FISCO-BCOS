@@ -19,7 +19,7 @@
  */
 
 #include "precompiled/KVTablePrecompiled.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
+#include "bcos-framework//executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
@@ -140,10 +140,10 @@ public:
         return result6;
     };
 
-    ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, const std::string& callAddress)
+    ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, std::string const& tableName)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("desc()");
+        bytes in = codec->encodeWithSig("desc(string)", tableName);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -154,7 +154,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(callAddress);
+        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -362,7 +362,7 @@ BOOST_AUTO_TEST_CASE(descTest)
         creatKVTable(number++, "t_kv_test", "id", "item_name", address);
     }
 
-    auto result2 = desc(number++, address);
+    auto result2 = desc(number++, "t_kv_test");
     TableInfoTuple tableInfo = {"id", {"item_name"}};
     BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
 }
@@ -378,7 +378,7 @@ BOOST_AUTO_TEST_CASE(descWasmTest)
         BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
     }
 
-    auto result2 = desc(number++, address);
+    auto result2 = desc(number++, "t_kv_test");
     TableInfoTuple tableInfo = {"id", {"item_name"}};
     BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
 }

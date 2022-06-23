@@ -18,7 +18,7 @@
  * @date 2021-06-21
  */
 #pragma once
-#include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework//Common.h>
 #include <json/json.h>
 #include <memory>
 #include <set>

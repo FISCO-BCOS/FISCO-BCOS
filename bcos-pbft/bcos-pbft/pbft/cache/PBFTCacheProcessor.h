@@ -88,29 +88,7 @@ public:
         return precommitCacheList;
     }
 
-    PBFTMessageList preCommitCachesWithoutData()
-    {
-        PBFTMessageList precommitCacheList;
-        auto waitSealUntil = m_config->waitSealUntil();
-        auto committedIndex = m_config->committedProposal()->index();
-        for (auto it = m_caches.begin(); it != m_caches.end();)
-        {
-            auto precommitCache = it->second->preCommitWithoutData();
-            if (precommitCache != nullptr)
-            {
-                // should not handle the proposal future than the system proposal
-                if (waitSealUntil > committedIndex && precommitCache->index() > waitSealUntil)
-                {
-                    it = m_caches.erase(it);
-                    continue;
-                }
-                precommitCacheList.push_back(precommitCache);
-            }
-            it++;
-        }
-        return precommitCacheList;
-    }
-
+    PBFTMessageList preCommitCachesWithoutData();
     virtual void checkAndPreCommit();
     virtual void checkAndCommit();
 
@@ -154,6 +132,8 @@ public:
     {
         m_committedProposalNotifier = _committedProposalNotifier;
     }
+
+    bool tryToPreApplyProposal(ProposalInterface::Ptr _proposal);
     bool tryToApplyCommitQueue();
 
     void removeFutureProposals();
@@ -215,6 +195,8 @@ public:
         m_stableCheckPointQueue.swap(emptyStableCheckPointQueue);
         m_recoverReqCache.clear();
     }
+
+    void resetUnCommittedCacheState(bcos::protocol::BlockNumber _number);
 
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,

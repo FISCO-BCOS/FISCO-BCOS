@@ -26,15 +26,16 @@
 
 #include "../Common.h"
 #include "../dag/CriticalFields.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
@@ -89,15 +90,17 @@ public:
     using Ptr = std::shared_ptr<TransactionExecutor>;
     using ConstPtr = std::shared_ptr<const TransactionExecutor>;
 
-    TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
-        storage::MergeableStorageInterface::Ptr cachedStorage,
+    TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck);
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize, std::string name);
+
 
     ~TransactionExecutor() override = default;
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override;
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -146,6 +149,9 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
+    void start() override { m_isRunning = true; }
+    void stop() override { m_isRunning = false; }
+
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::function<void(
@@ -157,11 +163,12 @@ protected:
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage);
+        storage::StateStorageInterface::Ptr tableFactory,
+        storage::StorageInterface::Ptr lastStorage);
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        int32_t blockVersion, storage::StateStorage::Ptr tableFactory);
+        int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
 
     std::shared_ptr<TransactionExecutive> createExecutive(
         const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
@@ -205,6 +212,14 @@ protected:
             bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
             callback);
 
+
+    bcos::storage::StateStorageInterface::Ptr createStateStorage(
+        bcos::storage::StorageInterface::Ptr storage);
+
+    protocol::BlockNumber getBlockNumberInStorage();
+
+    std::string m_name;
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
     std::shared_ptr<storage::TransactionalStorageInterface> m_backendStorage;
@@ -216,14 +231,15 @@ protected:
 
     struct State
     {
-        State(bcos::protocol::BlockNumber _number, bcos::storage::StateStorage::Ptr _storage)
+        State(
+            bcos::protocol::BlockNumber _number, bcos::storage::StateStorageInterface::Ptr _storage)
           : number(_number), storage(std::move(_storage))
         {}
         State(const State&) = delete;
         State& operator=(const State&) = delete;
 
         bcos::protocol::BlockNumber number;
-        bcos::storage::StateStorage::Ptr storage;
+        bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
     bcos::storage::StorageInterface::Ptr m_lastStateStorage;
@@ -267,7 +283,11 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
+    size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
+
+    bool m_isRunning = false;
+    int64_t m_schedulerTermId = -1;
 };
 
 }  // namespace executor

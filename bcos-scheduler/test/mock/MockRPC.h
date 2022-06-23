@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Common.h"
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/thread/latch.hpp>
 

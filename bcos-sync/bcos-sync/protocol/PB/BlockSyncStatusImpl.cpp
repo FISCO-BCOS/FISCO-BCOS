@@ -34,24 +34,24 @@ void BlockSyncStatusImpl::decode(bytesConstRef _data)
 void BlockSyncStatusImpl::deserializeObject()
 {
     auto const& hashData = m_syncMessage->hash();
-    if (hashData.size() >= HashType::size)
+    if (hashData.size() >= HashType::SIZE)
     {
-        m_hash = HashType((byte const*)hashData.data(), HashType::size);
+        m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
     }
     auto const& genesisHashData = m_syncMessage->genesishash();
-    if (genesisHashData.size() >= HashType::size)
+    if (genesisHashData.size() >= HashType::SIZE)
     {
-        m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::size);
+        m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
     }
 }
 void BlockSyncStatusImpl::setHash(HashType const& _hash)
 {
     m_hash = _hash;
-    m_syncMessage->set_hash(_hash.data(), HashType::size);
+    m_syncMessage->set_hash(_hash.data(), HashType::SIZE);
 }
 
 void BlockSyncStatusImpl::setGenesisHash(HashType const& _gensisHash)
 {
     m_genesisHash = _gensisHash;
-    m_syncMessage->set_genesishash(_gensisHash.data(), HashType::size);
+    m_syncMessage->set_genesishash(_gensisHash.data(), HashType::SIZE);
 }

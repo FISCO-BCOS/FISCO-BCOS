@@ -23,17 +23,16 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
-#include "../precompiled/PrecompiledResult.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//executor/PrecompiledTypeDef.h"
+#include "bcos-framework//protocol/BlockHeader.h"
+#include "bcos-framework//protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/coroutine2/all.hpp>
 #include <boost/coroutine2/coroutine.hpp>
 #include <functional>
 #include <variant>
@@ -88,7 +87,7 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector)
     {
-        m_recoder = m_blockContext.lock()->storage()->newRecoder();
+        m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.lock()->hashHandler();
     }
 
@@ -170,12 +169,18 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             _constantPrecompiled);
 
-    std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
-        bytesConstRef param, const std::string& origin, const std::string& sender, int64_t gasLeft);
+    std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
+        precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
         m_exchangeMessage = std::move(callParameters);
+    }
+
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    {
+        std::copy(
+            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
     }
 
     CallParameters::UniquePtr resume()
@@ -192,8 +197,7 @@ private:
 
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
-    std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> callPrecompiled(
-        CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> create(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);

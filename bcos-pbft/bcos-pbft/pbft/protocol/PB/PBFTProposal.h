@@ -71,7 +71,7 @@ public:
         m_pbftRawProposal->clear_signaturelist();
     }
 
-    bool operator==(PBFTProposal const& _proposal)
+    bool operator==(PBFTProposal const& _proposal) const
     {
         if (!Proposal::operator==(_proposal))
         {
@@ -96,8 +96,7 @@ public:
         return true;
     }
 
-    bool operator!=(PBFTProposal const& _proposal) { return !(operator==(_proposal)); }
-
+    bool operator!=(PBFTProposal const& _proposal) const { return !(operator==(_proposal)); }
 
     bytesPointer encode() const override
     {

@@ -19,7 +19,7 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <json/json.h>
 
@@ -36,7 +36,7 @@ class FileSystemPrecompiledFixture : public PrecompiledFixture
 public:
     FileSystemPrecompiledFixture() { init(false); }
 
-    virtual ~FileSystemPrecompiledFixture() {}
+    ~FileSystemPrecompiledFixture() override {}
 
     void init(bool _isWasm)
     {
@@ -281,15 +281,15 @@ public:
         if (_errorCode != 0)
         {
             std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
         }
 
         commitBlock(_number);
         return result2;
     };
 
-    ExecutionMessage::UniquePtr mkdir(
-        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
+    ExecutionMessage::UniquePtr mkdir(protocol::BlockNumber _number, std::string const& path,
+        int _errorCode = 0, bool errorInPrecompiled = false)
     {
         bytes in = codec->encodeWithSig("mkdir(string)", path);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -317,6 +317,11 @@ public:
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
+        if (errorInPrecompiled)
+        {
+            commitBlock(_number);
+            return result2;
+        }
         // call precompiled
         result2->setSeq(1001);
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
@@ -473,7 +478,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls dir
     {
         auto result = list(_number++, "/tables");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -485,7 +490,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls regular
     {
         auto result = list(_number++, "/tables/test2");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -497,7 +502,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls not exist
     {
         auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
@@ -507,7 +512,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls /
     {
         auto result = list(_number++, "/");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -531,7 +536,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls dir
     {
         auto result = list(_number++, "/tables");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -543,7 +548,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls regular
     {
         auto result = list(_number++, "/tables/test2");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -555,7 +560,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls not exist
     {
         auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
@@ -565,7 +570,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls /
     {
         auto result = list(_number++, "/");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -614,12 +619,14 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 
     // mkdir /tables/test1
     {
-        auto result = mkdir(_number++, "/tables/test1", CODE_FILE_ALREADY_EXIST);
+        auto result = mkdir(_number++, "/tables/test1", 0, true);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
     }
 
     // mkdir /tables
     {
-        auto result = mkdir(_number++, "/tables", CODE_FILE_INVALID_PATH);
+        auto result = mkdir(_number++, "/tables", 0, true);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
     }
 
     // mkdir in wrong path
@@ -641,7 +648,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 
 BOOST_AUTO_TEST_CASE(linkTest)
 {
-    BlockNumber number = 1;
+    BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string contractName = "Hello";

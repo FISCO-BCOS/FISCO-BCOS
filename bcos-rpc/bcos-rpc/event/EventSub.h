@@ -20,8 +20,8 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework//ledger/LedgerInterface.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSubTask.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-utilities/Worker.h>
@@ -38,8 +38,11 @@ namespace bcos
 namespace ws
 {
 class WsSession;
-class WsMessage;
 }  // namespace ws
+namespace boostssl
+{
+class MessageFace;
+}
 
 namespace event
 {
@@ -59,9 +62,9 @@ public:
     void executeWorker() override;
 
 public:
-    virtual void onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
+    virtual void onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    virtual void onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
+    virtual void onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
 
 public:
@@ -74,8 +77,7 @@ public:
      * @return bool: if _session is inactive, false will be return
      */
     bool sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _session,
-        std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& _id,
-        int32_t _status);
+        std::shared_ptr<bcos::boostssl::MessageFace> _msg, const std::string& _id, int32_t _status);
 
     /**
      * @brief: send event log list to client
@@ -110,9 +112,6 @@ public:
     std::shared_ptr<EventSubMatcher> matcher() const { return m_matcher; }
     void setMatcher(std::shared_ptr<EventSubMatcher> _matcher) { m_matcher = _matcher; }
 
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
-    std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
-
     int64_t maxBlockProcessPerLoop() const { return m_maxBlockProcessPerLoop; }
     void setMaxBlockProcessPerLoop(int64_t _maxBlockProcessPerLoop)
     {
@@ -125,11 +124,11 @@ public:
         m_groupManager = _groupManager;
     }
 
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> messageFactory() const
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> messageFactory() const
     {
         return m_messageFactory;
     }
-    void setMessageFactory(std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> _messageFactory)
+    void setMessageFactory(std::shared_ptr<bcos::boostssl::MessageFaceFactory> _messageFactory)
     {
         m_messageFactory = _messageFactory;
     }
@@ -137,12 +136,10 @@ public:
 private:
     // group manager
     bcos::rpc::GroupManager::Ptr m_groupManager;
-    // io context
-    std::shared_ptr<boost::asio::io_context> m_ioc;
     // match for event log compare
     std::shared_ptr<EventSubMatcher> m_matcher;
     // message factory
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_messageFactory;
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> m_messageFactory;
 
 private:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;

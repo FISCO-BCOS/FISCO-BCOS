@@ -1,4 +1,4 @@
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-storage/src/RocksDBStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
@@ -42,6 +42,10 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
+    }
 };
 struct TestRocksDBStorageFixture
 {
@@ -61,7 +65,8 @@ struct TestRocksDBStorageFixture
         rocksdb::Status s = rocksdb::DB::Open(options, path, &db);
         BOOST_CHECK_EQUAL(s.ok(), true);
 
-        rocksDBStorage = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+        rocksDBStorage =
+            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
         rocksDBStorage->asyncOpenTable(testTableName, [&](auto&& error, auto&& table) {
             BOOST_CHECK(!error);
 

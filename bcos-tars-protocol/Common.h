@@ -21,7 +21,7 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
@@ -29,16 +29,16 @@
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
-#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
-#include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
+#include <bcos-framework//consensus/ConsensusNode.h>
+#include <bcos-framework//gateway/GatewayTypeDef.h>
+#include <bcos-framework//ledger/LedgerConfig.h>
+#include <bcos-framework//multigroup/ChainNodeInfoFactory.h>
+#include <bcos-framework//multigroup/GroupInfoFactory.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
-#include <tarscpp/servant/Application.h>
-#include <tarscpp/tup/Tars.h>
+#include <servant/Application.h>
+#include <tup/Tars.h>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -136,7 +136,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
         (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
     nodeInfo->setNodeProtocol(std::move(*bcosProtocolInfo));
     // recover system version(data version)
-    nodeInfo->setSystemVersion(_tarsNodeInfo.systemVersion);
+    nodeInfo->setCompatibilityVersion(_tarsNodeInfo.compatibilityVersion);
     return nodeInfo;
 }
 
@@ -179,8 +179,8 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
     tarsNodeInfo.protocolInfo.moduleID = protocol->protocolModuleID();
     tarsNodeInfo.protocolInfo.minVersion = protocol->minVersion();
     tarsNodeInfo.protocolInfo.maxVersion = protocol->maxVersion();
-    // write the systemVersion
-    tarsNodeInfo.systemVersion = _nodeInfo->systemVersion();
+    // write the compatibilityVersion
+    tarsNodeInfo.compatibilityVersion = _nodeInfo->compatibilityVersion();
     return tarsNodeInfo;
 }
 
@@ -233,16 +233,18 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     ledgerConfig->setObserverNodeList(*observerNodeList);
 
     auto hash = bcos::crypto::HashType();
-    if (_ledgerConfig.hash.size() >= bcos::crypto::HashType::size)
+    if (_ledgerConfig.hash.size() >= bcos::crypto::HashType::SIZE)
     {
         hash = bcos::crypto::HashType(
-            (const bcos::byte*)_ledgerConfig.hash.data(), bcos::crypto::HashType::size);
+            (const bcos::byte*)_ledgerConfig.hash.data(), bcos::crypto::HashType::SIZE);
     }
     ledgerConfig->setHash(hash);
     ledgerConfig->setBlockNumber(_ledgerConfig.blockNumber);
     ledgerConfig->setBlockTxCountLimit(_ledgerConfig.blockTxCountLimit);
     ledgerConfig->setLeaderSwitchPeriod(_ledgerConfig.leaderSwitchPeriod);
     ledgerConfig->setSealerId(_ledgerConfig.sealerId);
+    ledgerConfig->setGasLimit(std::make_tuple(_ledgerConfig.gasLimit, _ledgerConfig.blockNumber));
+    ledgerConfig->setCompatibilityVersion(_ledgerConfig.compatibilityVersion);
     return ledgerConfig;
 }
 
@@ -269,6 +271,8 @@ inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr
     ledgerConfig.blockTxCountLimit = _ledgerConfig->blockTxCountLimit();
     ledgerConfig.leaderSwitchPeriod = _ledgerConfig->leaderSwitchPeriod();
     ledgerConfig.sealerId = _ledgerConfig->sealerId();
+    ledgerConfig.gasLimit = std::get<0>(_ledgerConfig->gasLimit());
+    ledgerConfig.compatibilityVersion = _ledgerConfig->compatibilityVersion();
 
     // set consensusNodeList
     ledgerConfig.consensusNodeList = toTarsConsensusNodeList(_ledgerConfig->consensusNodeList());

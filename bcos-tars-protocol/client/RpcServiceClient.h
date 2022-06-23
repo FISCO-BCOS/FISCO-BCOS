@@ -27,9 +27,9 @@
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/tars/RpcService.h"
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 #include <bcos-utilities/Common.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 #include <boost/core/ignore_unused.hpp>
 
 namespace bcostars

@@ -95,11 +95,11 @@ void LedgerServiceClient::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber 
         void callback_asyncGetBlockHashByNumber(
             const bcostars::Error& ret, const vector<tars::Char>& _blockHash) override
         {
-            if (_blockHash.size() >= bcos::crypto::HashType::size)
+            if (_blockHash.size() >= bcos::crypto::HashType::SIZE)
             {
                 auto hashData =
                     bcos::crypto::HashType(reinterpret_cast<const bcos::byte*>(_blockHash.data()),
-                        bcos::crypto::HashType::size);
+                        bcos::crypto::HashType::SIZE);
                 m_callback(toBcosError(ret), hashData);
                 return;
             }

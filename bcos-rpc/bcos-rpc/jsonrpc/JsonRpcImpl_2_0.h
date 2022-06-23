@@ -21,7 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework//gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
@@ -280,13 +280,14 @@ protected:
 
     void onRPCRequest(const std::string& _requestBody, Sender _sender) override;
 
-    virtual void handleRpcRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void handleRpcRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
-private:
+
     // TODO: check perf influence
     NodeService::Ptr getNodeService(
         std::string const& _groupID, std::string const& _nodeName, std::string const& _command);
+
     template <typename T>
     void checkService(T _service, std::string _serviceName)
     {
@@ -297,6 +298,7 @@ private:
         }
     }
 
+private:
     void gatewayInfoToJson(Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _gatewayInfo);
     void gatewayInfoToJson(Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
         bcos::gateway::GatewayInfosPtr _peersInfo);

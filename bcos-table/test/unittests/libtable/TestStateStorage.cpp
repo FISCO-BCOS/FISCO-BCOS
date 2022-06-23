@@ -18,7 +18,7 @@
  */
 
 #include "Hash.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework//storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -128,135 +128,288 @@ BOOST_AUTO_TEST_CASE(create_Table)
 BOOST_AUTO_TEST_CASE(rollback)
 {
     auto ret = createDefaultTable();
-    BOOST_TEST(ret);
+    BOOST_REQUIRE(ret);
     auto table = tableFactory->openTable(testTableName);
 
     auto deleteEntry = table->newEntry();
     deleteEntry.setStatus(Entry::DELETED);
-    BOOST_CHECK_NO_THROW(table->setRow("name", deleteEntry));
+    BOOST_REQUIRE_NO_THROW(table->setRow("name", deleteEntry));
 
+    auto hash = tableFactory->hash(hashImpl);
+
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("ab98649ca506b076000000000000000000000000000000000000000000000001").hex());
+#endif
     auto entry = std::make_optional(table->newEntry());
-    BOOST_CHECK_NO_THROW(entry->setField(0, "Lili"));
-    BOOST_CHECK_NO_THROW(table->setRow("name", *entry));
-    entry = table->getRow("name");
-    BOOST_TEST(entry);
-    BOOST_TEST(entry->dirty() == true);
-    BOOST_TEST(entry->getField(0) == "Lili");
+    BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
+    BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
 
-    auto savePoint = tableFactory->newRecoder();
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
+    entry = table->getRow("name");
+    BOOST_REQUIRE(entry.has_value());
+    BOOST_REQUIRE(entry->dirty() == true);
+    BOOST_REQUIRE(entry->getField(0) == "Lili");
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
+    auto savePoint = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint);
 
     entry = table->newEntry();
     entry->setField(0, "12345");
     table->setRow("id", *entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("id");
-    BOOST_TEST(entry);
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_TEST(entry);
-
-    auto savePoint1 = tableFactory->newRecoder();
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
+    auto savePoint1 = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint1);
 
     entry = table->newEntry();
     entry->setField(0, "500");
     table->setRow("balance", *entry);
-
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("balance");
-    BOOST_TEST(entry);
-
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_TEST(entry);
-
-    auto savePoint2 = tableFactory->newRecoder();
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
+#endif
+    auto savePoint2 = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint2);
 
     auto deleteEntry2 = std::make_optional(table->newDeletedEntry());
     table->setRow("name", *deleteEntry2);
+    hash = tableFactory->hash(hashImpl);
 
+// delete entry will cause hash mismatch
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("4160d337ddd671e0000000000000000000000000000000000000000000000001").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_CHECK(!entry);
-
+    BOOST_REQUIRE(!entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("4160d337ddd671e0000000000000000000000000000000000000000000000001").hex());
+#endif
     std::cout << "Try remove balance" << std::endl;
     tableFactory->rollback(*savePoint2);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_CHECK_NE(entry->status(), Entry::DELETED);
-
+    BOOST_REQUIRE_NE(entry->status(), Entry::DELETED);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
+#endif
     tableFactory->rollback(*savePoint1);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_TEST(entry);
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("balance");
-    BOOST_TEST(!entry);
+    BOOST_REQUIRE(!entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
 
     tableFactory->rollback(*savePoint);
     entry = table->getRow("name");
-    BOOST_TEST(entry);
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("balance");
-    BOOST_TEST(!entry);
+    BOOST_REQUIRE(!entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("id");
-    BOOST_TEST(!entry);
+    BOOST_REQUIRE(!entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
 
     // insert without version
     entry = table->newEntry();
     entry->setField(0, "new record");
-    BOOST_CHECK_NO_THROW(table->setRow("id", *entry));
+    BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("2c14904fc33bbbae000000000000000000000000000000000000000000000000").hex());
+#endif
+
+    entry = table->newDeletedEntry();
+    BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    hash = tableFactory->hash(hashImpl);
+    // delete entry will cause hash mismatch
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("159ca8eb7641c2c1000000000000000000000000000000000000000000000001").hex());
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(rollback2)
 {
     auto hash0 = tableFactory->hash(hashImpl);
     // auto savePoint0 = tableFactory->savepoint();
-    auto savePoint0 = tableFactory->newRecoder();
+    auto savePoint0 = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint0);
-
+    BOOST_REQUIRE(hash0 == crypto::HashType(0));
     auto ret = createDefaultTable();
-    BOOST_TEST(ret);
+    BOOST_REQUIRE(ret);
     auto table = tableFactory->openTable(testTableName);
 
     auto deleteEntry = table->newDeletedEntry();
     table->setRow("name", deleteEntry);
+    auto hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("ab98649ca506b076000000000000000000000000000000000000000000000001").hex());
+#endif
     auto entry = std::make_optional(table->newEntry());
     // entry->setField("key", "name");
     entry->setField(0, "Lili");
     table->setRow("name", *entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_TEST(entry);
-    // BOOST_TEST(table->dirty() == true);
-    BOOST_TEST(entry->dirty() == true);
-    BOOST_TEST(entry->getField(0) == "Lili");
-
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
+    // BOOST_REQUIRE(table->dirty() == true);
+    BOOST_REQUIRE(entry->dirty() == true);
+    BOOST_REQUIRE(entry->getField(0) == "Lili");
     // auto savePoint = tableFactory->savepoint();
-    auto savePoint = tableFactory->newRecoder();
+    auto savePoint = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint);
 
     entry = table->newEntry();
     // entry->setField("key", "id");
     entry->setField(0, "12345");
     table->setRow("id", *entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("id");
-    BOOST_TEST(entry);
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("name");
-    BOOST_TEST(entry);
-    // BOOST_TEST(table->dirty() == true);
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
+#endif
+    // BOOST_REQUIRE(table->dirty() == true);
 
     tableFactory->rollback(*savePoint);
 
     entry = table->getRow("name");
-    BOOST_TEST(entry);
+    BOOST_REQUIRE(entry.has_value());
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("balance");
-    BOOST_TEST(!entry);
+    BOOST_REQUIRE(!entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
     entry = table->getRow("id");
-    BOOST_TEST(!entry);
-    // BOOST_TEST(table->dirty() == true);
-    tableFactory->rollback(*savePoint0);
+    BOOST_REQUIRE(!entry);
+    hash = tableFactory->hash(hashImpl);
+#if defined(__APPLE__)
+    BOOST_CHECK_EQUAL(hash.hex(),
+        crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
+#endif
 
+    // BOOST_REQUIRE(table->dirty() == true);
+    tableFactory->rollback(*savePoint0);
+    hash = tableFactory->hash(hashImpl);
+    BOOST_REQUIRE(hash.hex() == crypto::HashType("").hex());
     entry = table->getRow("name");
-    BOOST_CHECK(!entry);
+    BOOST_REQUIRE(!entry);
 
     auto hash00 = tableFactory->hash(hashImpl);
-    BOOST_CHECK_EQUAL_COLLECTIONS(hash0.begin(), hash0.end(), hash00.begin(), hash00.end());
-    BOOST_TEST(hash00 == hash0);
+    BOOST_REQUIRE(hash00 == crypto::HashType(0));
+
+    BOOST_REQUIRE_EQUAL_COLLECTIONS(hash0.begin(), hash0.end(), hash00.begin(), hash00.end());
+    BOOST_REQUIRE(hash00 == hash0);
     table = tableFactory->openTable(testTableName);
-    BOOST_TEST(!table);
+    BOOST_REQUIRE(!table);
 }
 
 BOOST_AUTO_TEST_CASE(rollback3)
@@ -278,7 +431,6 @@ BOOST_AUTO_TEST_CASE(hash)
     BOOST_CHECK_NO_THROW(table->setRow("name", *entry));
     entry = table->getRow("name");
     BOOST_TEST(entry);
-    auto tableFactory0 = make_shared<StateStorage>(tableFactory);
 
     entry = std::make_optional(table->newEntry());
     // entry->setField("key", "id");
@@ -297,7 +449,7 @@ BOOST_AUTO_TEST_CASE(hash)
 
     auto dbHash1 = tableFactory->hash(hashImpl);
 
-    auto savePoint = tableFactory->newRecoder();
+    auto savePoint = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint);
     auto idEntry = table->getRow("id");
 
@@ -674,7 +826,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     }
 
     // Test rollback
-    auto recoder = tableStorage->newRecoder();
+    auto recoder = std::make_shared<Recoder>();
     tableStorage->setRecoder(recoder);
     for (size_t i = 70; i < 80; ++i)
     {
@@ -843,7 +995,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
-    auto recoder = storage2->newRecoder();
+    auto recoder = std::make_shared<Recoder>();
     storage2->setRecoder(recoder);
 
     Entry entry2;
@@ -882,7 +1034,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
-    auto recoder = storage2->newRecoder();
+    auto recoder = std::make_shared<Recoder>();
     storage2->setRecoder(recoder);
 
     Entry entry2;

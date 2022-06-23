@@ -52,7 +52,7 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(${PBFT_TARGET} PUBLIC jsoncpp_lib_static ${UTILITIES_TARGET} ${TOOL_TARGET})
+target_link_libraries(${PBFT_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} bcos-framework ${SCHEDULER_TARGET} jsoncpp_static)
 
 if (TESTS)
     # fetch bcos-test    

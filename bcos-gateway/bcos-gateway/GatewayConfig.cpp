@@ -4,11 +4,14 @@
  */
 
 #include <bcos-gateway/GatewayConfig.h>
+#include <bcos-security/bcos-security/KeyCenter.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;
+using namespace security;
 using namespace gateway;
 
 bool GatewayConfig::isValidPort(int port)

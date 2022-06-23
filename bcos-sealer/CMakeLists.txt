@@ -26,4 +26,4 @@ aux_source_directory(./bcos-sealer SRC_LIST)
 include_directories(./bcos-sealer)
 add_library(${SEALER_TARGET} ${SRC_LIST})
 
-target_link_libraries(${SEALER_TARGET} PUBLIC ${UTILITIES_TARGET})
+target_link_libraries(${SEALER_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework)

@@ -24,7 +24,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "TransactionReceiptImpl.h"
-#include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
+#include <bcos-framework//protocol/TransactionReceiptFactory.h>
 
 
 namespace bcostars

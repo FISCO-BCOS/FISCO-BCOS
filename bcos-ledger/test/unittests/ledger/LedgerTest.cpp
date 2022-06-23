@@ -23,20 +23,20 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework//ledger/LedgerTypeDef.h"
+#include "bcos-framework//protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"
-#include "interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//consensus/ConsensusNode.h>
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
+#include <bcos-framework//storage/StorageInterface.h>
+#include <bcos-framework//storage/Table.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -139,11 +139,11 @@ public:
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
         auto result =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
         auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result2);
     }
 
@@ -155,13 +155,13 @@ public:
         m_param->setBlockTxCountLimit(0);
 
         auto result1 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result1);
         auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(!result2);
         auto result3 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC3_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result3);
     }
 
@@ -169,7 +169,7 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
+        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
             m_fakeBlocks = fakeBlocks(
                 m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
             fakeBlockPromise.set_value(true);
@@ -181,7 +181,7 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
+        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
             m_fakeBlocks = fakeEmptyBlocks(
                 m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
             fakeBlockPromise.set_value(true);
@@ -198,7 +198,7 @@ public:
             auto txHashList = std::make_shared<protocol::HashList>();
             for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
             {
-                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode();
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->emplace_back(txPointer);
                 txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());
@@ -723,7 +723,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBatchTxsByHashList(hashList, true,
-        [=, &p1](Error::Ptr _error, protocol::TransactionsPtr _txList,
+        [=, &p1, this](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
@@ -736,7 +736,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBatchTxsByHashList(fullHashList, true,
-        [=, &p2](Error::Ptr _error, protocol::TransactionsPtr _txList,
+        [=, &p2, this](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);

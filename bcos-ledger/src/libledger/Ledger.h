@@ -18,13 +18,13 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/storage/Common.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework//ledger/LedgerInterface.h"
+#include "bcos-framework//ledger/LedgerTypeDef.h"
+#include "bcos-framework//protocol/BlockFactory.h"
+#include "bcos-framework//protocol/BlockHeaderFactory.h"
+#include "bcos-framework//protocol/ProtocolTypeDef.h"
+#include "bcos-framework//storage/Common.h"
+#include "bcos-framework//storage/StorageInterface.h"
 #include "utilities/MerkleProofUtility.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>

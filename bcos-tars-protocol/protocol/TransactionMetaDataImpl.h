@@ -24,7 +24,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
-#include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
+#include <bcos-framework//protocol/TransactionMetaData.h>
 
 namespace bcostars
 {
@@ -55,10 +55,10 @@ public:
     bcos::crypto::HashType hash() const override
     {
         auto const& hashBytes = m_inner()->hash;
-        if (hashBytes.size() == bcos::crypto::HashType::size)
+        if (hashBytes.size() == bcos::crypto::HashType::SIZE)
         {
             bcos::crypto::HashType hash(reinterpret_cast<const bcos::byte*>(hashBytes.data()),
-                bcos::crypto::HashType::size);
+                bcos::crypto::HashType::SIZE);
             return hash;
         }
         return bcos::crypto::HashType();

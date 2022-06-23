@@ -20,8 +20,8 @@
 
 #include <thread>
 
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
@@ -122,7 +122,7 @@ void FrontService::start()
             }
         });
 
-    m_frontServiceThread = std::make_shared<std::thread>([=]() {
+    m_frontServiceThread = std::make_shared<std::thread>([=, this]() {
         while (m_run)
         {
             try
@@ -419,7 +419,7 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
                              << LOG_KV("maxVersion", mutableProtocol->maxVersion())
                              << LOG_KV("supportedMinVersion", m_localProtocol->minVersion())
                              << LOG_KV("supportedMaxVersion", m_localProtocol->maxVersion());
-            mutableProtocol->setVersion(ProtocolVersion::INVALID);
+            mutableProtocol->setVersion(ProtocolVersion::V0);
             i++;
             continue;
         }

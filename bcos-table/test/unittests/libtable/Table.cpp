@@ -17,9 +17,9 @@
  * @file Table.cpp
  */
 
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//storage/Table.h"
 #include "Hash.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework//storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/ThreadPool.h>

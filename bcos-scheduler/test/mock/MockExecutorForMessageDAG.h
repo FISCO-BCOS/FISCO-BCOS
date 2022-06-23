@@ -1,8 +1,8 @@
 #pragma once
 #include "Common.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework//protocol/ProtocolTypeDef.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -19,7 +19,8 @@ public:
 
     const std::string& name() const { return m_name; }
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
         SCHEDULER_LOG(TRACE) << "Receiving nextBlock: " << blockHeader->number();
@@ -56,7 +57,7 @@ public:
         BOOST_CHECK_EQUAL(inputs.size(), 100);
 
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages(inputs.size());
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+        for (auto i = 0u; i < inputs.size(); ++i)
         {
             BOOST_TEST(inputs[i].get());
             BOOST_CHECK_EQUAL(inputs[i]->type(), protocol::ExecutionMessage::MESSAGE);
@@ -78,7 +79,7 @@ public:
             callback) override
     {
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
-        for (auto i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
             executeTransaction(std::move(inputs[i]),
                 [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {

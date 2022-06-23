@@ -13,9 +13,9 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/ProtocolTypeDef.h>
+#include <bcos-framework//protocol/Transaction.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(transaction)
 
     tx->verify();
     BOOST_CHECK(!tx->sender().empty());
-    auto buffer = tx->encode(false);
+    auto buffer = tx->encode();
 
     auto decodedTx = factory.createTransaction(buffer, true);
 
@@ -310,7 +310,7 @@ BOOST_AUTO_TEST_CASE(block)
             auto rhs = decodedBlock->transaction(i);
 
             // check if transaction hash re-encode
-            auto reencodeBuffer = rhs->encode(false);
+            auto reencodeBuffer = rhs->encode();
             auto redecodeBlock = transactionFactory->createTransaction(reencodeBuffer, false);
             BOOST_CHECK_EQUAL(redecodeBlock->hash().hex(), lhs->hash().hex());
 
@@ -386,7 +386,6 @@ BOOST_AUTO_TEST_CASE(block)
             BOOST_CHECK_EQUAL(bcos::asString(lhs->output()), bcos::asString(rhs->output()));
             BOOST_CHECK_EQUAL(lhs->blockNumber(), rhs->blockNumber());
         }
-
         // ensure the receipt's lifetime
         {
             BOOST_CHECK_EQUAL(
@@ -544,7 +543,7 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
         chainNode->appendServiceInfo(bcos::protocol::ServiceType::SCHEDULER, "SCHEDULER");
         chainNode->setIniConfig(iniConfig);
         chainNode->setNodeID(nodeID);
-        chainNode->setSystemVersion(10);
+        chainNode->setCompatibilityVersion(10);
         chainNode->setNodeType(bcos::protocol::NodeType::CONSENSUS_NODE);
         chainNode->setMicroService(true);
         chainNode->setNodeProtocol(protocolInfo);
@@ -568,7 +567,7 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
     BOOST_CHECK(firstNodeInfo->iniConfig() == iniConfig);
     BOOST_CHECK(firstNodeInfo->nodeID() == nodeID);
     BOOST_CHECK(firstNodeInfo->microService() == true);
-    BOOST_CHECK(firstNodeInfo->systemVersion() == 10);
+    BOOST_CHECK(firstNodeInfo->compatibilityVersion() == 10);
     BOOST_CHECK(firstNodeInfo->nodeType() == bcos::protocol::NodeType::CONSENSUS_NODE);
     BOOST_CHECK(firstNodeInfo->serviceName(bcos::protocol::ServiceType::SCHEDULER) == "SCHEDULER");
 

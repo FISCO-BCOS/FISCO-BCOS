@@ -22,7 +22,7 @@
 
 #include "../vm/Precompiled.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//storage/Table.h>
 
 namespace bcos::precompiled
 {
@@ -41,8 +41,8 @@ public:
     virtual ~KVTablePrecompiled(){};
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
     void get(const std::string& tableName,
@@ -51,10 +51,6 @@ private:
         const PrecompiledGas::Ptr& gasPricer);
     void set(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
-        const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
-    void desc(const std::string& tableName,
-        const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
 };

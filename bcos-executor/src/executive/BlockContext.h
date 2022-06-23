@@ -24,11 +24,11 @@
 #include "../Common.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//protocol/Block.h"
+#include "bcos-framework//protocol/ProtocolTypeDef.h"
+#include "bcos-framework//protocol/Transaction.h"
+#include "bcos-framework//storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
@@ -49,11 +49,12 @@ class BlockContext : public std::enable_shared_from_this<BlockContext>
 public:
     typedef std::shared_ptr<BlockContext> Ptr;
 
-    BlockContext(std::shared_ptr<storage::StateStorage> storage, crypto::Hash::Ptr _hashImpl,
-        bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+    BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
+        crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
+        uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
+        bool _isAuthCheck);
 
-    BlockContext(std::shared_ptr<storage::StateStorage> storage,
+    BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
         protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
         bool _isAuthCheck);
@@ -62,7 +63,7 @@ public:
         const protocol::Transaction::ConstPtr& _tx)>;
     virtual ~BlockContext(){};
 
-    std::shared_ptr<storage::StateStorage> storage() { return m_storage; }
+    std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
 
     bcos::storage::StorageInterface::Ptr lastStorage() { return m_lastStorage; }
 
@@ -87,9 +88,14 @@ public:
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
 
-    void clear() { m_executiveFlows.clear(); }
+    void clear()
+    {
+        bcos::WriteGuard l(x_executiveFlows);
+        m_executiveFlows.clear();
+    }
 
 private:
+    mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
 
 
@@ -104,7 +110,7 @@ private:
     bool m_isAuthCheck = false;
 
     uint64_t m_txGasLimit = 3000000000;
-    std::shared_ptr<storage::StateStorage> m_storage;
+    std::shared_ptr<storage::StateStorageInterface> m_storage;
     bcos::storage::StorageInterface::Ptr m_lastStorage = nullptr;
     crypto::Hash::Ptr m_hashImpl;
 };

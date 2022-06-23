@@ -34,13 +34,14 @@ public:
     using Ptr = std::shared_ptr<EvmTransactionExecutor>;
     using ConstPtr = std::shared_ptr<const EvmTransactionExecutor>;
 
-    EvmTransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
-        storage::MergeableStorageInterface::Ptr cachedStorage,
+    EvmTransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
-      : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
-            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize, std::string name)
+      : TransactionExecutor(std::move(ledger), std::move(txpool), std::move(cachedStorage),
+            std::move(backendStorage), std::move(executionMessageFactory), std::move(hashImpl),
+            isAuthCheck, keyPageSize, std::move(name))
     {
         m_isWasm = false;
         m_schedule = FiscoBcosScheduleV4;
@@ -54,16 +55,6 @@ public:
 
 private:
     void initPrecompiled();
-
-#if 0
-    std::shared_ptr<std::vector<bytes>> extractConflictFields(const FunctionAbi& functionAbi,
-        const CallParameters& params, std::shared_ptr<BlockContext> _blockContext) override;
-
-    void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) override;
-#endif
 };
 
 }  // namespace executor

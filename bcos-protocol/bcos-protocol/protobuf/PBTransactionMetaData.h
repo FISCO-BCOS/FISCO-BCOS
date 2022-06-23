@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-protocol/protobuf/proto/Block.pb.h"
-#include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
+#include <bcos-framework//protocol/TransactionMetaData.h>
 namespace bcos
 {
 namespace protocol
@@ -49,10 +49,10 @@ public:
             return m_hash;
         }
         auto const& hash = m_pbTxMetaData->hash();
-        if (hash.size() >= bcos::crypto::HashType::size)
+        if (hash.size() >= bcos::crypto::HashType::SIZE)
         {
             m_hash =
-                bcos::crypto::HashType((byte const*)hash.c_str(), bcos::crypto::HashType::size);
+                bcos::crypto::HashType((byte const*)hash.c_str(), bcos::crypto::HashType::SIZE);
         }
         return m_hash;
     }
@@ -61,7 +61,7 @@ public:
     void setHash(bcos::crypto::HashType _hash) override
     {
         m_hash = _hash;
-        m_pbTxMetaData->set_hash(_hash.data(), bcos::crypto::HashType::size);
+        m_pbTxMetaData->set_hash(_hash.data(), bcos::crypto::HashType::SIZE);
     }
     void setTo(std::string _to) override { m_pbTxMetaData->mutable_to()->swap(_to); }
 

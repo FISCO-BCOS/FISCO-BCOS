@@ -21,9 +21,9 @@
 #pragma once
 #include "Common/TarsUtils.h"
 #include "libinitializer/PBFTInitializer.h"
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//front/FrontServiceInterface.h>
+#include <bcos-framework//gateway/GatewayInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 #include <bcos-utilities/Timer.h>
 
 namespace bcos
@@ -34,7 +34,7 @@ class ProPBFTInitializer : public PBFTInitializer
 {
 public:
     using Ptr = std::shared_ptr<ProPBFTInitializer>;
-    ProPBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
+    ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
         bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,

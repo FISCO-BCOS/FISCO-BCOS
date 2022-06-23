@@ -21,12 +21,21 @@
 #pragma once
 
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
-#include "../Utilities.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
 
 namespace bcos::precompiled
 {
+/// func => (address, access)
+using MethodAuthMap = std::map<bytes, std::map<std::string, bool>>;
+
+enum AuthType : int
+{
+    WHITE_LIST_MODE = 1,
+    BLACK_LIST_MODE = 2
+};
+
 class ContractAuthMgrPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
@@ -34,53 +43,50 @@ public:
     ~ContractAuthMgrPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
     bool checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& path, bytesRef func, const std::string& account);
 
-    bool checkContractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    int32_t getContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path);
 
 private:
     void getAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void resetAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void setMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+
+    void getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void setMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        bool _isClose, const PrecompiledGas::Ptr& gasPricer);
+        bool _isClose, const PrecompiledGas::Ptr& gasPricer,
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void setContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void contractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
-    s256 getMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    int32_t getMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path, bytesConstRef _func);
 
-    std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& _path);
+    MethodAuthMap getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& path, int32_t authType) const;
 
     inline std::string getAuthTableName(const std::string& _name)
     {
-        return "/apps/" + _name + executor::CONTRACT_SUFFIX;
+        return executor::USER_APPS_PREFIX + _name + executor::CONTRACT_SUFFIX;
     }
 };
 }  // namespace bcos::precompiled

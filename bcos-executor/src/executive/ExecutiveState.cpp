@@ -73,10 +73,6 @@ CallParameters::UniquePtr ExecutiveState::go()
     // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;
     output->seq = m_seq;
-
-    // std::cout << "[EXECUTOR] <<<< " << m_contextID << " | "
-    //<< (output ? output->toString() : "null") << std::endl;
-
     return output;
 }
 
@@ -84,4 +80,21 @@ void ExecutiveState::setResumeParam(CallParameters::UniquePtr pullParam)
 {
     m_status = NEED_RESUME;
     m_executive->setExchangeMessage(std::move(pullParam));
+}
+
+
+void ExecutiveState::appendKeyLocks(std::vector<std::string> keyLocks)
+{
+    switch (getStatus())
+    {
+    case NEED_RUN:
+        std::copy(keyLocks.begin(), keyLocks.end(), std::back_inserter(m_input->keyLocks));
+        break;
+    case PAUSED:
+    case NEED_RESUME:
+        m_executive->appendResumeKeyLocks(std::move(keyLocks));
+        break;
+    case FINISHED:
+        break;
+    }
 }

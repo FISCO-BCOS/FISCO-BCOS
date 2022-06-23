@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../src/Common.h"
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework//storage/StorageInterface.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>

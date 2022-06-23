@@ -20,8 +20,8 @@
 #pragma once
 #include "Common.h"
 #include "SealerConfig.h"
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
+#include "bcos-framework//protocol/BlockFactory.h"
+#include "bcos-framework//protocol/TransactionMetaData.h"
 #include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-utilities/ThreadPool.h>
 namespace bcos

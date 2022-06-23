@@ -27,6 +27,7 @@
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -38,6 +39,7 @@ using namespace bcostars::protocol;
 using namespace bcos::initializer;
 using namespace bcos::crypto;
 using namespace bcos::tool;
+using namespace bcos::security;
 
 ProtocolInitializer::ProtocolInitializer()
   : m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>())
@@ -54,6 +56,15 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
         createCryptoSuite();
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
+
+    if (true == _nodeConfig->storageSecurityEnable())
+    {
+        m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
+        m_dataEncryption->init();
+
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "storage_security.enable = true, init data encryption success");
+    }
 
     // create the block factory
     // TODO: pb/tars option
@@ -82,7 +93,8 @@ void ProtocolInitializer::createCryptoSuite()
 void ProtocolInitializer::createSMCryptoSuite()
 {
     auto hashImpl = std::make_shared<SM3>();
-    auto signatureImpl = std::make_shared<FastSM2Crypto>();
+    // auto signatureImpl = std::make_shared<FastSM2Crypto>(); //TODO: fix fastsm2
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto encryptImpl = std::make_shared<SM4Crypto>();
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }

@@ -21,9 +21,9 @@
 #pragma once
 #include "../interfaces/PBFTMessageFactory.h"
 #include "../interfaces/PBFTStorage.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-framework//dispatcher/SchedulerInterface.h>
+#include <bcos-framework//protocol/BlockFactory.h>
+#include <bcos-framework//storage/KVStorageHelper.h>
 #include <bcos-utilities/ThreadPool.h>
 
 namespace bcos
@@ -59,6 +59,12 @@ public:
     {
         m_finalizeHandler = _finalizeHandler;
     }
+    void registerOnStableCheckPointCommitFailed(
+        std::function<void(bcos::protocol::BlockNumber)> _onStableCheckPointCommitFailed) override
+    {
+        m_onStableCheckPointCommitFailed = _onStableCheckPointCommitFailed;
+    }
+
     void asyncGetCommittedProposals(bcos::protocol::BlockNumber _start, size_t _offset,
         std::function<void(PBFTProposalListPtr)> _onSuccess) override;
 
@@ -102,7 +108,7 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> m_finalizeHandler;
-
+    std::function<void(bcos::protocol::BlockNumber)> m_onStableCheckPointCommitFailed;
     std::shared_ptr<ThreadPool> m_commitBlockWorker;
 };
 }  // namespace consensus

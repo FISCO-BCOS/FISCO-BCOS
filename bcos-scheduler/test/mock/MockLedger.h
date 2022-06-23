@@ -1,7 +1,7 @@
 #pragma once
 
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework//ledger/LedgerInterface.h"
+#include "bcos-framework//protocol/Protocol.h"
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test
@@ -76,7 +76,7 @@ public:
         }
         else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
-            _onGetConfig(nullptr, bcos::protocol::RC3_VERSION_STR, 100);
+            _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, 100);
         }
         else
         {

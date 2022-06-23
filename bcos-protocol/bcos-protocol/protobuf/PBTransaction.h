@@ -21,7 +21,7 @@
 #pragma once
 #include "bcos-protocol/protobuf/proto/Transaction.pb.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
+#include <bcos-framework//protocol/Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/RefDataContainer.h>
@@ -55,10 +55,10 @@ public:
     }
 
     void decode(bytesConstRef _txData) override;
-    bytesConstRef encode(bool _onlyHashFields = false) const override;
+    bytesConstRef encode() const override;
     bytes takeEncoded() override { return bytes(); };  // FIXME: no impl!
 
-    bcos::crypto::HashType hash() const override;
+    bcos::crypto::HashType hash(bool _useCache = true) const override;
 
     u256 nonce() const override { return m_nonce; }
     int32_t version() const override { return m_transactionHashFields->version(); }

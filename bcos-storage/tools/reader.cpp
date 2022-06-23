@@ -7,11 +7,13 @@
  * @date 2021-11-05
  */
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework//storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -42,7 +44,11 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         "path,p", po::value<string>()->default_value(""), "[RocksDB path]")("name,n",
         po::value<string>()->default_value(""), "[RocksDB name]")("table,t", po::value<string>(),
         "table name ")("key,k", po::value<string>()->default_value(""), "table key")(
-        "iterate,i", po::value<bool>()->default_value(false), "traverse table");
+        "iterate,i", po::value<bool>()->default_value(false), "traverse table")("config,c",
+        boost::program_options::value<std::string>()->default_value("./config.ini"),
+        "config file path, eg. config.ini")("genesis,g",
+        boost::program_options::value<std::string>()->default_value("./config.genesis"),
+        "genesis config file path, eg. genesis.ini");
     po::variables_map vm;
     try
     {
@@ -88,7 +94,44 @@ int main(int argc, const char* argv[])
     options.create_if_missing = false;
     rocksdb::Status s = rocksdb::DB::Open(options, storagePath, &db);
 
-    auto adapter = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+    std::string configPath("./config.ini");
+    if (params.count("config"))
+    {
+        configPath = params["config"].as<std::string>();
+    }
+    if (params.count("c"))
+    {
+        configPath = params["c"].as<std::string>();
+    }
+
+    std::string genesisFilePath("./config.genesis");
+    if (params.count("genesis"))
+    {
+        genesisFilePath = params["genesis"].as<std::string>();
+    }
+    if (params.count("g"))
+    {
+        genesisFilePath = params["g"].as<std::string>();
+    }
+
+    if (!boost::filesystem::exists(configPath))
+    {
+        std::cout << "config \'" << configPath << "\' not found!";
+        exit(0);
+    }
+
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
+    nodeConfig->loadConfig(configPath);
+    if (true == boost::filesystem::exists(genesisFilePath))
+        nodeConfig->loadGenesisConfig(genesisFilePath);
+
+    bcos::security::DataEncryption::Ptr dataEncryption =
+        std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+    dataEncryption->init();
+
+    auto adapter =
+        std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
 
     if (iterate)
     {

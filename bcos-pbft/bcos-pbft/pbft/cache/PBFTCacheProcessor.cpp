@@ -19,8 +19,8 @@
  * @date 2021-04-21
  */
 #include "PBFTCacheProcessor.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework//protocol/Protocol.h>
 #include <boost/bind/bind.hpp>
 
 using namespace bcos;
@@ -264,6 +264,8 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
                               "Receive valid system prePrepare proposal, stop to notify sealing")
                        << LOG_KV("waitSealUntil", proposalIndex);
     }
+    tryToPreApplyProposal(_committedProposal);  // will query scheduler to encode message and fill
+                                                // txbytes in blocks
     tryToApplyCommitQueue();
 }
 
@@ -302,8 +304,16 @@ ProposalInterface::ConstPtr PBFTCacheProcessor::getAppliedCheckPointProposal(
     return (m_caches[_index])->checkPointProposal();
 }
 
+bool PBFTCacheProcessor::tryToPreApplyProposal(ProposalInterface::Ptr _proposal)
+{
+    m_config->stateMachine()->asyncPreApply(_proposal, [](bool success) { (void)success; });
+
+    return true;
+}
+
 bool PBFTCacheProcessor::tryToApplyCommitQueue()
 {
+    notifyToSealNextBlock();
     while (!m_committedQueue.empty() &&
            m_committedQueue.top()->index() < m_config->expectedCheckPoint())
     {
@@ -586,8 +596,9 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
         else
         {
             // empty prePrepare
-            prePrepareProposal = m_config->validator()->generateEmptyProposal(
-                m_config->pbftMessageFactory(), i, m_config->nodeIndex());
+            prePrepareProposal =
+                m_config->validator()->generateEmptyProposal(m_config->compatibilityVersion(),
+                    m_config->pbftMessageFactory(), i, m_config->nodeIndex());
             empty = true;
         }
         auto prePrepareMsg = m_config->pbftMessageFactory()->populateFrom(
@@ -1171,4 +1182,42 @@ void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
         m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
             _pbftCache->setPrecommitCache(_precommit);
         });
+}
+
+PBFTMessageList PBFTCacheProcessor::preCommitCachesWithoutData()
+{
+    PBFTMessageList precommitCacheList;
+    auto waitSealUntil = m_config->waitSealUntil();
+    auto committedIndex = m_config->committedProposal()->index();
+    for (auto it = m_caches.begin(); it != m_caches.end();)
+    {
+        auto precommitCache = it->second->preCommitWithoutData();
+        if (precommitCache != nullptr)
+        {
+            // should not handle the proposal future than the system proposal
+            if (waitSealUntil > committedIndex && precommitCache->index() > waitSealUntil)
+            {
+                it = m_caches.erase(it);
+                continue;
+            }
+            precommitCacheList.push_back(precommitCache);
+        }
+        it++;
+    }
+    return precommitCacheList;
+}
+
+void PBFTCacheProcessor::resetUnCommittedCacheState(bcos::protocol::BlockNumber _number)
+{
+    PBFT_LOG(INFO) << LOG_DESC("resetUnCommittedCacheState") << LOG_KV("number", _number)
+                   << m_config->printCurrentState();
+    for (auto const& it : m_caches)
+    {
+        if (it.second->index() >= _number)
+        {
+            it.second->resetState();
+        }
+    }
+    m_committedProposalList.clear();
+    m_executingProposals.clear();
 }

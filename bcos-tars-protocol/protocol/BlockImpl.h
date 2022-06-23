@@ -28,12 +28,12 @@
 #include "TransactionMetaDataImpl.h"
 #include "TransactionReceiptImpl.h"
 #include "bcos-codec/scale/ScaleEncoderStream.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework//protocol/Transaction.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/Block.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/BlockHeader.h>
+#include <bcos-framework//protocol/Block.h>
+#include <bcos-framework//protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
 #include <gsl/span>

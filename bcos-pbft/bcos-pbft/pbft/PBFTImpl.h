@@ -21,7 +21,7 @@
 #pragma once
 #include "engine/BlockValidator.h"
 #include "engine/PBFTEngine.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework//consensus/ConsensusInterface.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 namespace bcos
 {
@@ -131,6 +131,20 @@ public:
     virtual void enableAsMaterNode(bool _isMasterNode);
 
     virtual bool masterNode() const { return m_masterNode.load(); }
+
+    virtual void registerVersionInfoNotification(
+        std::function<void(uint32_t _version)> _versionNotification)
+    {
+        m_pbftEngine->pbftConfig()->registerVersionInfoNotification(_versionNotification);
+    }
+
+    uint32_t compatibilityVersion() const override
+    {
+        return m_pbftEngine->pbftConfig()->compatibilityVersion();
+    }
+
+protected:
+    virtual void recoverState();
 
 protected:
     PBFTEngine::Ptr m_pbftEngine;

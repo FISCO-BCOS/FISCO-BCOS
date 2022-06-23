@@ -22,8 +22,8 @@
 #include "../TransactionStatus.h"
 #include "bcos-protocol/protobuf/proto/TransactionReceipt.pb.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/TransactionReceipt.h>
 namespace bcos
 {
 namespace protocol
@@ -48,7 +48,7 @@ public:
 
     void decode(bytesConstRef _receiptData) override;
     void encode(bytes& _encodeReceiptData) const override;
-    bytesConstRef encode(bool _onlyHashFieldData = false) const override;
+    bytesConstRef encode(bool _onlyHashFieldData = false) const;
 
     int32_t version() const override { return m_receipt->version(); }
     int32_t status() const override { return m_status; }
@@ -69,6 +69,11 @@ public:
     void setMessage(std::string&& _message) override
     {
         m_receipt->set_message(std::move(_message));
+    }
+    bcos::crypto::HashType hash() const override
+    {
+        auto hashData = encode(true);
+        return m_cryptoSuite->hash(hashData);
     }
 
 private:

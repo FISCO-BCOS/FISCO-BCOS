@@ -2,8 +2,8 @@
 
 #include "Common.h"
 #include "MockExecutor.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
 #include <boost/lexical_cast.hpp>
 #include <tuple>
 
@@ -18,7 +18,8 @@ public:
 
     ~MockParallelExecutorForCall() override {}
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
         BOOST_FAIL("Unexpected nextBlockHeader!");

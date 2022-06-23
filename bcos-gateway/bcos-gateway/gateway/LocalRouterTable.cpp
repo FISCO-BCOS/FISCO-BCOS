@@ -18,7 +18,7 @@
  * @date 2021-12-29
  */
 #include "LocalRouterTable.h"
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-gateway/Common.h>
 using namespace bcos;
 using namespace bcos::protocol;

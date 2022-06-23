@@ -13,5 +13,7 @@ module bcostars
         5 optional long blockTxCountLimit;
         6 optional long leaderSwitchPeriod;
         7 optional long sealerId;
+        8 optional long gasLimit;
+        9 optional int compatibilityVersion;
     };
 };

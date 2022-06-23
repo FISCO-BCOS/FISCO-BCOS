@@ -3,13 +3,16 @@ set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
 listen_ip="0.0.0.0"
-port_start=(30300 20200)
+port_start=(30300 20200 3901)
 p2p_listen_port=port_start[0]
 rpc_listen_port=port_start[1]
+mtail_listen_port=3901
 use_ip_param=
+mtail_ip_param=""
 ip_array=
 output_dir="./nodes"
 binary_name="fisco-bcos"
+mtail_binary_name="mtail"
 
 # for cert generation
 ca_cert_dir="${dirpath}"
@@ -28,13 +31,18 @@ file_dir="./"
 nodes_json_file_name="nodes.json"
 command="deploy"
 ca_dir=""
+prometheus_dir=""
 config_path=""
 docker_mode=
 default_version="v3.0.0-rc4"
 compatibility_version=${default_version}
+default_mtail_version="3.0.0-rc48"
+compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
+monitor_mode="false"
 auth_admin_account=
 binary_path=""
+mtail_binary_path=""
 wasm_mode="false"
 download_timeout=240
 
@@ -348,6 +356,29 @@ download_bin()
     chmod a+x ${binary_path}
 }
 
+download_monitor_bin()
+{
+    if [ ! -z "${mtail_binary_path}" ];then
+        LOG_INFO "Use binary ${mtail_binary_path}"
+        return
+    fi
+    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
+    mtail_binary_path="bin/${mtail_binary_name}"
+    package_name="${mtail_binary_name}_${compatibility_mtail_version}_Linux_x86_64.tar.gz"
+    if [ -n "${macOS}" ];then
+        package_name="${mtail_binary_name}_${compatibility_mtail_version}_Darwin_x86_64.tar.gz"
+    fi
+    
+    local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
+    # the binary can obtained from the cos
+    LOG_INFO "Downloading mtail binary from ${github_link} ..."
+    curl -#LO "${github_link}"
+    mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd .. 
+
+    chmod a+x ${mtail_binary_path}
+}
+
+
 gen_sm_chain_cert() {
     local chaindir="${1}"
     name=$(basename "$chaindir")
@@ -421,6 +452,7 @@ Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -o <output dir>                     [Optional] output directory, default ./nodes
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
+    -t <mtail exec>                     [Required] mtail binary exec
     -p <Start Port>                     Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
@@ -429,20 +461,25 @@ Usage:
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
+    -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
+    -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
+    -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -h Help
 
 deploy nodes e.g
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos
+    bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -m
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -s
 expand node e.g
-    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos 
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:p:d:v:wDshAa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:v:i:M:wDshmAa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -455,6 +492,10 @@ parse_params() {
             binary_path="$OPTARG"
             file_must_exists "${binary_path}"
             ;;
+        t)
+            mtail_binary_path="$OPTARG"
+            file_must_exists "${mtail_binary_path}"
+            ;;    
         C) command="${OPTARG}"
             ;;
         d) ca_dir="${OPTARG}"
@@ -466,13 +507,20 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
+        m) 
+           monitor_mode="true" 
+           ;;
+        i) 
+           mtail_ip_param="${OPTARG}"
+           ;;   
+        M) prometheus_dir="${OPTARG}" ;;   
         D) docker_mode="true"
            if [ -n "${macOS}" ];then
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
         A) auth_mode="true" ;;
-        w) wasm_mode="true";;
+        w) wasm_mode="true";; 
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -589,6 +637,18 @@ export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
+
+#start monitor
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for dir in \${dirs[*]}
+do
+    if [[ -f "\${SHELL_FOLDER}/\${dir}/node.mtail" && -f "\${SHELL_FOLDER}/\${dir}/start_mtail_monitor.sh" ]];then
+        echo "try to start \${dir}"
+        bash \${SHELL_FOLDER}/\${dir}/start_mtail_monitor.sh &
+    fi
+done
+
+
 if [ ! -z \${node_pid} ];then
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
@@ -624,6 +684,17 @@ if [ -z \${node_pid} ];then
     echo " \${node} isn't running."
     exit 0
 fi
+
+#Stop monitor here
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for dir in \${dirs[*]}
+do
+    if [[ -f "\${SHELL_FOLDER}/\${dir}/node.mtail" && -f "\${SHELL_FOLDER}/\${dir}/stop_mtail_monitor.sh" ]];then
+        echo "try to start \${dir}"
+        bash \${SHELL_FOLDER}/\${dir}/stop_mtail_monitor.sh &
+    fi
+done
+
 [ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
 while [ \$i -lt \${try_times} ]
 do
@@ -640,6 +711,259 @@ exit 1
 EOF
     chmod u+x "${output}/stop.sh"
 }
+
+generate_mtail_scripts() {
+    local output=${1}
+    local ip="${2}"
+    local port="${3}"
+    local node="${4}"
+    local ps_cmd="\$(ps aux|grep \${mtail}|grep -v grep|awk '{print \$2}')"
+    local start_cmd="nohup \${mtail} -logtostderr -progs \${mtailScript} -logs '../log/*.log' -port ${port} >>nohup.out 2>&1 &"
+    local stop_cmd="kill \${node_pid}"
+    local pid="pid"
+    local log_cmd="tail -n20  nohup.out"
+    local check_success="\$(${log_cmd} | grep Listening)"
+
+    mkdir -p $(dirname $output/mtail/node.mtail)
+    cat <<EOF >> "${output}/mtail/node.mtail"
+hidden text host
+host = "${ip}"
+
+#node
+hidden text node
+node = "${node}" 
+
+#chain id
+hidden text chain
+chain = "chain0"
+
+
+
+#group id
+hidden text group
+group = "group0"
+
+
+gauge p2p_session_actived by host , node
+/\[P2PService\]\[Service\]\[METRIC\]heartBeat,connected count=(?P<count>\d+)/ {
+  p2p_session_actived[host][node] = \$count
+}
+
+gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
+}
+
+histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
+}
+
+gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
+} 
+
+
+histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
+}
+
+gauge ledger_block_height by chain , group , host , node
+/\[LEDGER\]\[METRIC\]asyncPrewriteBlock,number=(?P<number>\d+)/ {
+  ledger_block_height[chain][group][host][node] = \$number
+}
+
+gauge txpool_pending_tx_size by chain , group , host , node
+/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+  txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
+}
+EOF
+
+    generate_script_template "$output/mtail/start_mtail_monitor.sh"
+    cat <<EOF >> "${output}/mtail/start_mtail_monitor.sh"
+mtail=\${SHELL_FOLDER}/../../mtail
+mtailScript=\${SHELL_FOLDER}/node.mtail
+export RUST_LOG=bcos_wasm=error
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is Listening, ${pid} is \$node_pid."
+    exit 0
+else
+    ${start_cmd}
+    sleep 1.5
+fi
+
+try_times=4
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    node_pid=${ps_cmd}
+    success_flag=${check_success}
+    if [[ ! -z \${node_pid} && ! -z "\${success_flag}" ]];then
+        echo -e "\033[32m \${node} start successfully\033[0m"
+        exit 0
+    fi
+    sleep 0.5
+    ((i=i+1))
+done
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
+${log_cmd}
+EOF
+    chmod u+x "${output}/mtail/start_mtail_monitor.sh"
+
+
+    generate_script_template "$output/mtail/stop_mtail_monitor.sh"
+    cat <<EOF >> "${output}/mtail/stop_mtail_monitor.sh"
+mtail=\${SHELL_FOLDER}/../../mtail
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+try_times=10
+i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
+
+while [ \$i -lt \${try_times} ]
+do
+    sleep 1
+    node_pid=${ps_cmd}
+    if [ -z \${node_pid} ];then
+        echo -e "\033[32m stop \${node} success.\033[0m"
+        exit 0
+    fi
+    ((i=i+1))
+done
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
+exit 1
+EOF
+    chmod u+x "${output}/mtail/stop_mtail_monitor.sh"
+}
+
+
+generate_monitor_scripts() {
+    local output=${1}
+    local mtail_host_list=""
+    local ip_params="${2}"
+    local monitor_ip="${3}"
+    local ip_array=(${ip_params//,/ })
+    local ip_length=${#ip_array[@]}
+    local i=0
+    for (( ; i < ip_length; i++)); do
+        local ip=${ip_array[i]}
+        local delim=""
+        if [[ $i == $((ip_length - 1)) ]]; then
+            delim=""
+        else
+            delim=","
+        fi
+        mtail_host_list="${mtail_host_list}'${ip}'${delim}"
+    done
+    
+
+    mkdir -p $(dirname $output/compose.yaml)
+    cat <<EOF >> "${output}/compose.yaml"
+version: '2'
+
+services:
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /etc/localtime:/etc/localtime
+    network_mode: host
+   # ports:
+   #   - \${PROMETHEUS_PORT}:9090
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-oss:7.3.3
+    restart: unless-stopped
+    user: '0'
+    network_mode: host
+   # ports:
+   #   - \${GRAFANA_PORT}:3000
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/logs:/var/log/grafana
+      - /etc/localtime:/etc/localtime
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+EOF
+
+    mkdir -p $(dirname $output/prometheus/prometheus.yml)
+    cat <<EOF >> "${output}/prometheus/prometheus.yml"
+global:
+  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+
+  # Attach these labels to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager).
+  external_labels:
+    monitor: 'bcos'
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label job=<job_name> to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+
+    static_configs:
+      - targets: [${mtail_host_list}]
+EOF
+
+    mkdir -p $(dirname $output/grafana/grafana.ini)
+    cat <<EOF >> "${output}/grafana/grafana.ini"
+[server]
+# The http port  to use
+http_port = 3001
+
+[security]
+# disable creation of admin user on first start of grafana
+;disable_initial_admin_creation = false
+;
+;# default admin user, created on startup
+admin_user = admin
+;
+;# default admin password, can be changed before first start of grafana,  or in profile settings
+admin_password = admin
+
+EOF
+
+    generate_script_template "$output/start_monitor.sh"
+    cat <<EOF >> "${output}/start_monitor.sh"
+
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
+echo "graphna web address: http://${monitor_ip}:3001/"
+echo "prometheus web address: http://${monitor_ip}:9090/"
+EOF
+    chmod u+x "${output}/start_monitor.sh"
+
+
+    generate_script_template "$output/stop_monitor.sh"
+    cat <<EOF >> "${output}/stop_monitor.sh"
+
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} stop
+echo -e "\033[32m stop monitor successfully\033[0m"
+EOF
+    chmod u+x "${output}/stop_monitor.sh"
+}
+
 
 generate_sdk_cert() {
     local sm_mode="$1"
@@ -730,19 +1054,22 @@ generate_common_ini() {
 [security]
     private_key_path=conf/node.pem
 
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
 
-[executor]
-    ; use the wasm virtual machine or not
-    is_wasm=${wasm_mode}
-    is_auth_check=${auth_mode}
-    auth_admin_account=${auth_admin_account}
-
 [storage]
     data_path=data
     enable_cache=true
+    key_page_size=0
+    ; type can be RocksDB/TiKV
     type=RocksDB
     pd_addrs=
 
@@ -909,6 +1236,11 @@ generate_genesis_config() {
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
+[executor]
+    ; use the wasm virtual machine or not
+    is_wasm=${wasm_mode}
+    is_auth_check=${auth_mode}
+    auth_admin_account=${auth_admin_account}
 EOF
 }
 
@@ -1001,9 +1333,28 @@ expand_node()
     local ca_dir="${2}"
     local node_dir="${3}"
     local config_path="${4}"
+    local mtail_ip_param="${5}"
+    local prometheus_dir="${6}"
     if [ -d "${node_dir}" ];then
         LOG_FATAL "expand node failed for ${node_dir} already exists!"
     fi
+
+    if "${monitor_mode}" ; then
+       LOG_INFO "start generate monitor scripts"
+       ip=`echo $mtail_ip_param | awk '{split($0,a,":");print a[1]}'`
+       if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
+            LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
+        fi
+       num=`echo $mtail_ip_param | awk '{split($0,a,":");print a[2]}'`
+       local port=$((mtail_listen_port + num))
+       connected_mtail_nodes="${ip}:${port}"
+       generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${num}"
+       if [ -n "${prometheus_dir}" ];then
+           sed -i  "s/]/,\'${connected_mtail_nodes}\']/g" ${prometheus_dir}
+       fi
+       LOG_INFO "generate monitor scripts success"
+    fi
+
     file_must_exists "${config_path}/config.ini"
     file_must_exists "${config_path}/config.genesis"
     file_must_exists "${config_path}/nodes.json"
@@ -1077,17 +1428,26 @@ deploy_nodes()
     else
         help
     fi
-    # check the binary
+    #check the binary 
     if [ -z "${docker_mode}" ];then
         download_bin
         if [[ ! -f "$binary_path" ]]; then
             LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
+    if "${monitor_mode}" ;then
+        download_monitor_bin 
+        if [[ ! -f "$mtail_binary_path" ]]; then
+            LOG_FATAL "mtail binary exec ${mtail_binary_path} not exist, Must copy binary file ${mtail_binary_name} to ${mtail_binary_path}"
+        fi  
+    fi
+
     local i=0
     node_count=0
     local count=0
     connected_nodes=""
+    connected_mtail_nodes=""
+    local monitor_ip=""
     # Note: must generate the node account firstly
     ca_dir="${output_dir}"/ca
     generate_chain_cert "${sm_mode}" "${ca_dir}"
@@ -1098,15 +1458,19 @@ deploy_nodes()
         if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
             LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
         fi
+        echo $num
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
         echo "Processing IP:${ip} Total:${num}"
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
 
         nodes_dir="${output_dir}/${ip}"
-        # start_all.sh and stop_all.sh
+        # start_all.sh and stop_all.sh 
         generate_all_node_scripts "${nodes_dir}"
         if [ -z "${docker_mode}" ];then
             cp "${binary_path}" "${nodes_dir}"
+        fi
+        if "${monitor_mode}" ;then 
+            cp $mtail_binary_path "${nodes_dir}"   
         fi
         ca_cert_dir="${nodes_dir}"/ca
         mkdir -p ${ca_cert_dir}
@@ -1120,6 +1484,14 @@ deploy_nodes()
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
             generate_node_scripts "${node_dir}" "${docker_mode}"
+            if "${monitor_mode}" ;then 
+                local port=$((mtail_listen_port + node_count))
+                connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
+                if [[ $count == 0 ]]; then
+                    monitor_ip="${ip}"
+                fi  
+                generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
+            fi
             local port=$((p2p_listen_port + node_count))
             connected_nodes=${connected_nodes}"${ip}:${port}, "
             account_dir="${node_dir}/conf"
@@ -1129,6 +1501,11 @@ deploy_nodes()
             ((++node_count))
         done
     done
+
+    if "${monitor_mode}" ;then 
+        monitor_dir="${output_dir}/monitor"
+        generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}" ${monitor_ip}
+    fi
 
     local i=0
     local count=0
@@ -1188,7 +1565,7 @@ main() {
         deploy_nodes
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
-        expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}"
+        expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi

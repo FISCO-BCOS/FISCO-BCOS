@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
+#include <bcos-framework//protocol/ProtocolInfo.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
@@ -52,7 +52,7 @@ public:
     virtual void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
     {
         WriteGuard l(x_protocolInfo);
-        m_protocolInfo = _protocolInfo;
+        *m_protocolInfo = *_protocolInfo;
     }
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
@@ -70,7 +70,7 @@ private:
     bool m_run = false;
     const static uint32_t HEARTBEAT_INTERVEL = 5000;
 
-    bcos::protocol::ProtocolInfo::ConstPtr m_protocolInfo = nullptr;
+    bcos::protocol::ProtocolInfo::Ptr m_protocolInfo = nullptr;
     mutable bcos::SharedMutex x_protocolInfo;
 };
 

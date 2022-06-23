@@ -10,8 +10,8 @@
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"
 #include "bcos-tars-protocol/tars/TxPoolService.h"
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework//protocol/BlockFactory.h>
+#include <bcos-framework//txpool/TxPoolInterface.h>
 #include <bcos-utilities/Common.h>
 #include <memory>
 

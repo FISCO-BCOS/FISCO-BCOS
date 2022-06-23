@@ -19,7 +19,7 @@
  */
 
 #include "CpuHeavyPrecompiled.h"
-#include "../Utilities.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -80,30 +80,25 @@ void sort(int size)
 
 
 std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&, int64_t)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CpuHeavyPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHexString(_param));
+                           << LOG_KV("param", toHexString(_callParameters->input()));
 
     // parse function name
     // uint32_t func = getParamFunc(_param);
-    bytesConstRef data = getParamData(_param);
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     u256 size, signature;
-    codec->decode(data, size, signature);
+    codec.decode(_callParameters->params(), size, signature);
 
-    auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
-    gasPricer->setMemUsed(_param.size());
+    gasPricer->setMemUsed(_callParameters->input().size());
 
     sort(size.convert_to<int>());
 
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    callResult->setExecResult(bytes());
-    return callResult;
+    _callParameters->setExecResult(bytes());
+    return _callParameters;
 }

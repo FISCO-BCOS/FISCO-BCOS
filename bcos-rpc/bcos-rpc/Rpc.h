@@ -21,7 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 #include <bcos-rpc/amop/AMOPClient.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
@@ -90,10 +90,10 @@ public:
 protected:
     virtual void notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
-    virtual void onRecvHandshakeRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void onRecvHandshakeRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
-    virtual bool negotiatedVersion(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual bool negotiatedVersion(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
 private:

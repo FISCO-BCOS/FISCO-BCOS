@@ -23,8 +23,7 @@ set(TEST_BINARY_NAME test-bcos-pbft)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-find_package(Boost CONFIG REQUIRED unit_test_framework)
-find_package(wedpr-crypto CONFIG REQUIRED)
+find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} ${TABLE_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} ${TABLE_TARGET} bcos-crypto ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
 add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

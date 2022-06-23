@@ -20,19 +20,12 @@
 
 #pragma once
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
-#include "../Utilities.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include <bcos-framework//executor/PrecompiledTypeDef.h>
 
 namespace bcos::precompiled
 {
-using MethodAuthMap = std::map<bytes, std::map<std::string, bool>>;
-
-enum AuthType : int
-{
-    WHITE_LIST_MODE = 1,
-    BLACK_LIST_MODE = 2
-};
 
 class AuthManagerPrecompiled : public bcos::precompiled::Precompiled
 {
@@ -42,59 +35,49 @@ public:
     ~AuthManagerPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
     void getAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void resetAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const std::string& _origin, const std::string& _sender,
-        const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void setMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const std::string& _origin, const std::string& _sender,
-        const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+
+    void getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void setMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const std::string& _origin, const std::string& _sender,
-        const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void setContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const std::string& _origin, const std::string& _sender,
-        const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void contractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const std::string& _origin, const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void getDeployType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void setDeployType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const std::string& _sender, const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 
     void hasDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult);
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void setDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        bool _isClose, const std::string& _sender, const PrecompiledGas::Ptr& gasPricer);
+        bool _isClose, const PrecompiledGas::Ptr& gasPricer,
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& _origin, const std::string& _to, int64_t _gasLeft);
+        const std::string& _address, PrecompiledExecResult::Ptr const& _callParameters);
 
     u256 getDeployAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 

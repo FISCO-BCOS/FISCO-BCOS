@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "BlockHeaderImpl.h"
-#include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
+#include <bcos-framework//protocol/BlockHeaderFactory.h>
 
 
 namespace bcostars

@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework//storage/StorageInterface.h>
 
 namespace bcos::storage
 {
@@ -40,9 +40,9 @@ inline bool isValid(const std::string_view& tableName)
     return !tableName.empty();
 }
 
-inline bool isValid(const std::string_view& tableName, const std::string_view& key)
+inline bool isValid(const std::string_view& tableName, const std::string_view& )
 {
-    return !tableName.empty() && !key.empty();
+    return !tableName.empty();
 }
 
 }  // namespace bcos::storage

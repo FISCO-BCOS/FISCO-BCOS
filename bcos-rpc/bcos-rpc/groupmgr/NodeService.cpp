@@ -21,12 +21,12 @@
 #include "NodeService.h"
 #include "Common.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-tars-protocol/client/PBFTServiceClient.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;

@@ -20,11 +20,11 @@
  */
 #pragma once
 #include "Exceptions.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
-#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
+#include "bcos-framework//consensus/ConsensusNodeInterface.h"
+#include "bcos-framework//ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework//Common.h>
+#include <bcos-framework//protocol/Protocol.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -57,7 +57,7 @@ public:
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadNodeServiceConfig(
-        std::string const& _nodeID, boost::property_tree::ptree const& _pt);
+        std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
 
     virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
     {
@@ -103,6 +103,7 @@ public:
 
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageType() const { return m_storageType; }
+    size_t keyPageSize() const { return m_keyPageSize; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
@@ -124,6 +125,7 @@ public:
 
     std::string const& schedulerServiceName() const { return m_schedulerServiceName; }
     std::string const& executorServiceName() const { return m_executorServiceName; }
+    std::string const& txpoolServiceName() const { return m_txpoolServiceName; }
 
     std::string const& nodeName() const { return m_nodeName; }
 
@@ -178,12 +180,17 @@ public:
     ssize_t cacheSize() const { return m_cacheSize; }
 
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
-    std::string const& version() const { return m_version; }
+    std::string const& compatibilityVersionStr() const { return m_compatibilityVersionStr; }
 
     std::string const& memberID() const { return m_memberID; }
     unsigned leaseTTL() const { return m_leaseTTL; }
     bool enableFailOver() const { return m_enableFailOver; }
     std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
+
+    bool storageSecurityEnable() const { return m_storageSecurityEnable; }
+    std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
+    unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
+    std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
@@ -193,6 +200,7 @@ protected:
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
@@ -217,6 +225,8 @@ private:
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
+    bool isValidPort(int port);
+
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
@@ -239,6 +249,12 @@ private:
     // for security
     std::string m_privateKeyPath;
 
+    // storage security configuration
+    bool m_storageSecurityEnable;
+    std::string m_storageSecurityKeyCenterIp;
+    unsigned short m_storageSecurityKeyCenterPort;
+    std::string m_storageSecurityCipherDataKey;
+
     // ledger configuration
     std::string m_consensusType;
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
@@ -248,6 +264,7 @@ private:
     // storage configuration
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
+    size_t m_keyPageSize = 8192;
     std::vector<std::string> m_pd_addrs;
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
@@ -263,6 +280,7 @@ private:
     // the serviceName of other modules
     std::string m_schedulerServiceName;
     std::string m_executorServiceName;
+    std::string m_txpoolServiceName;
     std::string m_nodeName;
 
     // config for rpc
@@ -295,7 +313,7 @@ private:
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
     uint32_t m_compatibilityVersion;
-    std::string m_version;
+    std::string m_compatibilityVersionStr;
 
     // failover config
     std::string m_memberID;

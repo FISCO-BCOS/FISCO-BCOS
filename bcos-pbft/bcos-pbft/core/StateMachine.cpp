@@ -38,6 +38,15 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
         });
 }
 
+void StateMachine::asyncPreApply(
+    ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
+{
+    // Note: async here to increase performance, trigger preExecuteBlock
+    m_schedulerWorker->enqueue([this, _proposal, _onPreApplyFinished]() {
+        this->preApply(_proposal, _onPreApplyFinished);
+    });
+}
+
 void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedProposal,
     ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
     std::function<void(bool)> _onExecuteFinished)
@@ -133,4 +142,33 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             _onExecuteFinished(true);
         });
     return;
+}
+
+void StateMachine::preApply(
+    ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
+{
+    auto block = m_blockFactory->createBlock(_proposal->data());
+
+    auto startT = utcTime();
+    m_scheduler->preExecuteBlock(block, false,
+        [block, startT, _onPreApplyFinished = std::move(_onPreApplyFinished)](Error::Ptr&& error) {
+            if (!error)
+            {
+                CONSENSUS_LOG(DEBUG)
+                    << LOG_BADGE("prepareBlockExecutive") << LOG_DESC("preApply")
+                    << LOG_KV("blockNumber", block->blockHeaderConst()->number())
+                    << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
+                    << LOG_KV("timeCost", (utcTime() - startT));
+                _onPreApplyFinished(true);
+            }
+            else
+            {
+                CONSENSUS_LOG(ERROR)
+                    << LOG_BADGE("prepareBlockExecutive") << LOG_DESC("preApply failed!")
+                    << LOG_KV("blockNumber", block->blockHeaderConst()->number())
+                    << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
+                    << LOG_KV("timeCost", (utcTime() - startT));
+                _onPreApplyFinished(false);
+            }
+        });
 }

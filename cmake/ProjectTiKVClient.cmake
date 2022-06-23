@@ -6,14 +6,10 @@ else()
     set(SED_CMMAND sed -i)
 endif()
 
-hunter_add_package(Protobuf)
-hunter_add_package(gRPC)
-hunter_add_package(PocoCpp)
-
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git
-  GIT_TAG        951e5f70f10d9695537ce7b6ef255e17a7da3630
+  GIT_TAG        3f83cdf23106734baf9a0620c9513de608456f33
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  git submodule foreach --recursive git reset --hard COMMAND export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version
   # LOG_BUILD true
@@ -23,6 +19,7 @@ if(NOT tikv_client_project_POPULATED)
   FetchContent_Populate(tikv_client_project)
   list(APPEND CMAKE_MODULE_PATH ${tikv_client_project_SOURCE_DIR}/cmake/)
   set(BUILD_SHARED_LIBS OFF)
+  set(ENABLE_TESTS OFF)
   add_subdirectory(${tikv_client_project_SOURCE_DIR} ${tikv_client_project_BINARY_DIR})
   target_include_directories(kvproto PUBLIC ${GRPC_ROOT}/include)
   target_compile_options(fiu PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)

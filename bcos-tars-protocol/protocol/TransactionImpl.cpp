@@ -19,6 +19,8 @@
  * @date 2021-04-20
  */
 #include "TransactionImpl.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -33,44 +35,46 @@ void TransactionImpl::decode(bcos::bytesConstRef _txData)
     m_inner()->readFrom(input);
 }
 
-bcos::bytesConstRef TransactionImpl::encode(bool _onlyHashFields) const
+bcos::bytesConstRef TransactionImpl::encode() const
 {
-    if (m_dataBuffer.empty())
+    if (m_buffer.empty())
     {
         tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-        m_inner()->data.writeTo(output);
-        output.getByteBuffer().swap(m_dataBuffer);
+        m_inner()->writeTo(output);
+        output.getByteBuffer().swap(m_buffer);
     }
-
-    if (_onlyHashFields)
-    {
-        return bcos::ref(m_dataBuffer);
-    }
-    else
-    {
-        if (m_buffer.empty())
-        {
-            tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-
-            auto hash = m_cryptoSuite->hash(m_dataBuffer);
-            m_inner()->dataHash.assign(hash.begin(), hash.end());
-            m_inner()->writeTo(output);
-            output.getByteBuffer().swap(m_buffer);
-        }
-        return bcos::ref(m_buffer);
-    }
+    return bcos::ref(m_buffer);
 }
 
-bcos::crypto::HashType TransactionImpl::hash() const
+bcos::crypto::HashType TransactionImpl::hash(bool _useCache) const
 {
-    if (m_inner()->dataHash.empty())
+    bcos::UpgradableGuard l(x_hash);
+    if (!m_inner()->dataHash.empty() && _useCache)
     {
-        auto buffer = encode(true);
-        auto hash = m_cryptoSuite->hash(buffer);
-        m_inner()->dataHash.assign(hash.begin(), hash.end());
+        return *(reinterpret_cast<bcos::crypto::HashType*>(m_inner()->dataHash.data()));
     }
+    auto hashImpl = m_cryptoSuite->hashImpl();
+    auto hasher = hashImpl->hasher();
 
-    return *(reinterpret_cast<bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+    auto const& hashFields = m_inner()->data;
+    // encode version
+    long version =
+        boost::asio::detail::socket_ops::host_to_network_long((int32_t)hashFields.version);
+    hasher.update(version);
+    hasher.update(hashFields.chainID);
+    hasher.update(hashFields.groupID);
+    long blockLimit = boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockLimit);
+    hasher.update(blockLimit);
+    hasher.update(hashFields.nonce);
+    hasher.update(hashFields.to);
+    hasher.update(hashFields.input);
+    hasher.update(hashFields.abi);
+
+    bcos::crypto::HashType hashResult;
+    hasher.final(hashResult);
+    bcos::UpgradeGuard ul(l);
+    m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+    return hashResult;
 }
 
 bcos::u256 TransactionImpl::nonce() const

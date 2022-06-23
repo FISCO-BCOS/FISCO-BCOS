@@ -20,15 +20,15 @@
  */
 
 #include "BlockContext.h"
-#include "../precompiled/Common.h"
-#include "../precompiled/Utilities.h"
 #include "../vm/Precompiled.h"
 #include "ExecutiveStackFlow.h"
 #include "TransactionExecutive.h"
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-framework/interfaces/protocol/Exceptions.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework//protocol/Exceptions.h"
+#include "bcos-framework//storage/StorageInterface.h"
+#include "bcos-framework//storage/Table.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
@@ -40,7 +40,7 @@ using namespace bcos::protocol;
 using namespace bcos::precompiled;
 using namespace std;
 
-BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
+BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
     uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
@@ -55,7 +55,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     m_hashImpl(_hashImpl)
 {}
 
-BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
+BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
     protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
@@ -68,6 +68,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
 
 ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)
 {
+    bcos::ReadGuard l(x_executiveFlows);
     auto it = m_executiveFlows.find(codeAddress);
     if (it == m_executiveFlows.end())
     {
@@ -85,5 +86,6 @@ ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddre
 void BlockContext::setExecutiveFlow(
     std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow)
 {
+    bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
 }

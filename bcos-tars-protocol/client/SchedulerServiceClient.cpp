@@ -192,3 +192,55 @@ void SchedulerServiceClient::commitBlock(bcos::protocol::BlockHeader::Ptr _block
     m_prx->async_commitBlock(
         new Callback(std::move(_callback), m_cryptoSuite), tarsBlockHeader->inner());
 }
+
+void SchedulerServiceClient::registerExecutor(std::string _name,
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr,
+    std::function<void(bcos::Error::Ptr&&)> _callback)
+{
+    class Callback : public SchedulerServicePrxCallback
+    {
+    public:
+        Callback(std::function<void(bcos::Error::Ptr&&)> _callback) : m_callback(_callback) {}
+        ~Callback() override {}
+
+        void callback_registerExecutor(const bcostars::Error& ret) override
+        {
+            m_callback(toBcosError(ret));
+        }
+
+        void callback_registerExecutor_exception(tars::Int32 ret) override
+        {
+            m_callback(toBcosError(ret));
+        }
+
+    private:
+        std::function<void(bcos::Error::Ptr&&)> m_callback;
+    };
+    m_prx->async_registerExecutor(new Callback(_callback), _name);
+}
+
+void SchedulerServiceClient::preExecuteBlock(
+    bcos::protocol::Block::Ptr block, bool verify, std::function<void(bcos::Error::Ptr&&)> callback)
+{
+    class Callback : public SchedulerServicePrxCallback
+    {
+    public:
+        Callback(std::function<void(bcos::Error::Ptr&&)> _callback) : m_callback(_callback) {}
+        ~Callback() override {}
+
+        void callback_registerExecutor(const bcostars::Error& ret) override
+        {
+            m_callback(toBcosError(ret));
+        }
+
+        void callback_registerExecutor_exception(tars::Int32 ret) override
+        {
+            m_callback(toBcosError(ret));
+        }
+
+    private:
+        std::function<void(bcos::Error::Ptr&&)> m_callback;
+    };
+    auto tarsBlock = std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(block);
+    m_prx->async_preExecuteBlock(new Callback(callback), tarsBlock->inner(), verify);
+}

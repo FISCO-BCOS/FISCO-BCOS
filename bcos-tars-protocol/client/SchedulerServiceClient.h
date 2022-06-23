@@ -23,7 +23,7 @@
 
 #include "bcos-tars-protocol/tars/SchedulerService.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
+#include <bcos-framework//dispatcher/SchedulerInterface.h>
 #include <bcos-utilities/Common.h>
 namespace bcostars
 {
@@ -53,6 +53,9 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(bcos::Error::Ptr&&)> callback) override;
+
     void status(
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) override
     {
@@ -61,10 +64,7 @@ public:
 
 
     void registerExecutor(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr,
-        std::function<void(bcos::Error::Ptr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method registerExecutor");
-    }
+        std::function<void(bcos::Error::Ptr&&)>) override;
 
     void unregisterExecutor(const std::string&, std::function<void(bcos::Error::Ptr&&)>) override
     {

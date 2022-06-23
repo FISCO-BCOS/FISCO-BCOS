@@ -23,8 +23,8 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-tars-protocol/tars/LedgerService.h"
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-framework//ledger/LedgerInterface.h>
+#include <bcos-framework//protocol/BlockFactory.h>
 #include <bcos-utilities/Common.h>
 namespace bcostars
 {

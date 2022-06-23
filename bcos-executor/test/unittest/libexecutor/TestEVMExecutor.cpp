@@ -19,12 +19,13 @@
  * @date: 2021-09-14
  */
 
+#include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "Common.h"
+// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -34,7 +35,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
+#include <bcos-framework//executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <tbb/task_group.h>
@@ -65,7 +66,7 @@ struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()
     {
-        // boost::log::core::get()->set_logging_enabled(false);
+        boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -74,12 +75,14 @@ struct TransactionExecutorFixture
 
         txpool = std::make_shared<MockTxPool>();
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
+        ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
 
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            txpool, lruStorage, backend, executionResultFactory, hashImpl, false, false);
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+            backend, executionResultFactory, hashImpl, false, false, false);
+
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
@@ -95,11 +98,13 @@ struct TransactionExecutorFixture
 
         codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
     }
+    ~TransactionExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }
 
     TransactionExecutor::Ptr executor;
     CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<MockTxPool> txpool;
     std::shared_ptr<MockTransactionalStorage> backend;
+    std::shared_ptr<MockLedger> ledger;
     std::shared_ptr<Keccak256> hashImpl;
 
     KeyPairInterface::Ptr keyPair;
@@ -179,9 +184,9 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader->setNumber(1);
-
+    ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -250,9 +255,9 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     // start new block
     auto blockHeader2 = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader2->setNumber(2);
-
+    ledger->setBlockNumber(blockHeader2->number() - 1);
     std::promise<void> nextPromise2;
-    executor->nextBlockHeader(std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
 
         nextPromise2.set_value();
@@ -406,9 +411,9 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader->setNumber(1);
-
+    ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -785,9 +790,9 @@ BOOST_AUTO_TEST_CASE(performance)
 
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(blockNumber);
-
+        ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -894,6 +899,8 @@ BOOST_AUTO_TEST_CASE(performance)
 
         now = std::chrono::system_clock::now();
         // Check the result
+        std::vector<u256> values = {};
+        values.reserve(count);
         for (size_t i = 0; i < count; ++i)
         {
             params = std::make_unique<NativeExecutionMessage>();
@@ -929,16 +936,20 @@ BOOST_AUTO_TEST_CASE(performance)
 
             bcos::u256 value(0);
             codec->decode(balanceResult->data(), value);
-
-            if (i < count - 1)
-            {
-                BOOST_CHECK_EQUAL(value, u256(1000000 - 10));
-            }
-            else
-            {
-                BOOST_CHECK_EQUAL(value, u256(1000000 + 10 * (count - 1)));
-            }
+            values.push_back(value);
+//
+//            if (i < count - 1)
+//            {
+//                BOOST_CHECK_EQUAL(value, u256(1000000 - 10));
+//            }
+//            else
+//            {
+//                BOOST_CHECK_EQUAL(value, u256(1000000 + 10 * (count - 1)));
+//            }
         }
+        size_t c = std::count(values.begin(), values.end(), u256(1000000 - 10));
+        BOOST_CHECK(c == count - 1);
+        BOOST_CHECK_EQUAL(values.at(values.size() - 1), u256(1000000 + 10 * (count - 1)));
 
         std::cout << "Check elapsed: "
                   << (std::chrono::system_clock::now() - now).count() / 1000 / 1000 << std::endl;
@@ -947,15 +958,7 @@ BOOST_AUTO_TEST_CASE(performance)
             blockNumber, [&hash](bcos::Error::UniquePtr error, crypto::HashType resultHash) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK_NE(resultHash, h256());
-
-                if (hash == h256())
-                {
-                    hash = resultHash;
-                }
-                else
-                {
-                    hash = resultHash;
-                }
+                hash = resultHash;
             });
     }
 }
@@ -1000,9 +1003,9 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
 
     auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
     blockHeader->setNumber(1);
-
+    ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -1118,9 +1121,9 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(1);
-
+        ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });
@@ -1298,8 +1301,10 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(2);
 
+        ledger->setBlockNumber(blockHeader->number() - 1);
+
         std::promise<void> nextPromise;
-        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
             nextPromise.set_value();
         });

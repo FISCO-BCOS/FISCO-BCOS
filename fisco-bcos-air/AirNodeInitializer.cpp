@@ -20,7 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework//protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
@@ -41,6 +41,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
+
     m_logInitializer = std::make_shared<BoostLogInitializer>();
     m_logInitializer->initLog(pt);
 
@@ -51,27 +52,40 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeConfig->loadConfig(_configFilePath);
     nodeConfig->loadGenesisConfig(_genesisFile);
 
+    m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
+    m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
+
     // create gateway
-    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
+    // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
+    // otherwise dataEncryption() will return nullptr
+    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
+        m_nodeInitializer->protocolInitializer()->dataEncryption());
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
     // create the node
-    initAirNode(_configFilePath, _genesisFile, m_gateway);
+    m_nodeInitializer->init(
+        bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, m_gateway, true, m_logInitializer->logPath());
+
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
     auto nodeService =
         std::make_shared<NodeService>(m_nodeInitializer->ledger(), m_nodeInitializer->scheduler(),
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
+
     // create rpc
-    RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory);
+    RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
+        m_nodeInitializer->protocolInitializer()->dataEncryption());
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     auto topicManager =
         std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(gateway->amop()->topicManager());
     topicManager->setLocalClient(m_rpc);
     m_nodeInitializer->initNotificationHandlers(m_rpc);
+
+    // NOTE: this should be last called
+    m_nodeInitializer->initSysContract();
 }
 
 void AirNodeInitializer::start()

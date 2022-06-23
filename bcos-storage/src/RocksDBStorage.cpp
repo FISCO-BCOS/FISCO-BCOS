@@ -20,8 +20,8 @@
  */
 #include "RocksDBStorage.h"
 #include "Common.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework//protocol/ProtocolTypeDef.h"
+#include "bcos-framework//storage/Table.h"
 #include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
@@ -40,7 +40,9 @@ using namespace std;
 
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
-RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db))
+RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
+    const bcos::security::DataEncryptInterface::Ptr dataEncryption)
+  : m_db(std::move(db)), m_dataEncryption(dataEncryption)
 {
     m_writeBatch = std::make_shared<WriteBatch>();
 }
@@ -98,10 +100,18 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
+        if (false == value.empty() && nullptr != m_dataEncryption)
+            value = m_dataEncryption->decrypt(value);
+
         if (!status.ok())
         {
             if (status.IsNotFound())
             {
+                if (c_fileLogLevel >= TRACE)
+                {
+                    STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("not found") << LOG_KV("table", _table)
+                                               << LOG_KV("key", toHex(_key));
+                }
                 _callback(nullptr, {});
                 return;
             }
@@ -120,8 +130,11 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto end2 = utcTime();
 
         std::optional<Entry> entry((Entry()));
+
         entry->set(std::move(value));
+
         _callback(nullptr, entry);
+
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
             << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
@@ -179,7 +192,14 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             if (status.ok())
                             {
                                 entries[i] = std::make_optional(Entry());
-                                entries[i]->set(value.ToString());
+
+                                std::string v(value.data(), value.size());
+
+                                // Storage Security
+                                if (false == v.empty() && nullptr != m_dataEncryption)
+                                    v = m_dataEncryption->decrypt(v);
+
+                                entries[i]->set(std::move(v));
                             }
                             else
                             {
@@ -243,7 +263,14 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
             STORAGE_ROCKSDB_LOG(TRACE)
                 << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
                 << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
-            status = m_db->Put(options, dbKey, _entry.get());
+
+            std::string value(_entry.get().data(), _entry.get().size());
+
+            // Storage Security
+            if (false == value.empty() && nullptr != m_dataEncryption)
+                value = m_dataEncryption->encrypt(value);
+
+            status = m_db->Put(options, dbKey, std::move(value));
         }
 
         if (!status.ok())
@@ -291,13 +318,31 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
 
                 if (entry.status() == Entry::DELETED)
                 {
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
+                                                   << LOG_KV("key", toHex(key));
+                    }
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
                     m_writeBatch->Delete(dbKey);
                 }
                 else
                 {
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_ROCKSDB_LOG(TRACE)
+                            << LOG_DESC("write") << LOG_KV("table", table)
+                            << LOG_KV("key", toHex(key)) << LOG_KV("size", entry.size());
+                    }
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-                    auto status = m_writeBatch->Put(dbKey, entry.get());
+
+                    std::string value(entry.get().data(), entry.get().size());
+
+                    // Storage security
+                    if (false == value.empty() && nullptr != m_dataEncryption)
+                        value = m_dataEncryption->encrypt(value);
+
+                    auto status = m_writeBatch->Put(dbKey, std::move(value));
                 }
                 return true;
             });
@@ -337,6 +382,7 @@ void RocksDBStorage::asyncCommit(
             options.sync = true;
             count = m_writeBatch->Count();
             m_db->Write(options, m_writeBatch.get());
+
             m_writeBatch = nullptr;
         }
     }

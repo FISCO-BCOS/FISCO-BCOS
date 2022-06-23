@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MockExecutor.h"
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
 #include <tbb/task_group.h>
 
 namespace bcos::test
@@ -14,11 +14,12 @@ public:
     MockMultiParallelExecutor(const std::string& name) : MockParallelExecutor(name) {}
     ~MockMultiParallelExecutor() noexcept override { m_taskGroup.wait(); }
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
         m_taskGroup.run([this, blockHeader = blockHeader, callback = std::move(callback)]() {
-            MockParallelExecutor::nextBlockHeader(blockHeader, std::move(callback));
+            MockParallelExecutor::nextBlockHeader(0, blockHeader, std::move(callback));
         });
     }
 

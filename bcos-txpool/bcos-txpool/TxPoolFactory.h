@@ -22,7 +22,7 @@
 #include "bcos-txpool/TxPool.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/sync/TransactionSyncConfig.h"
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework//txpool/TxPoolInterface.h>
 namespace bcos
 {
 namespace txpool

@@ -18,7 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework//protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/bind/bind.hpp>
@@ -383,6 +383,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     bcos::Error::Ptr error = nullptr;
                     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
                     {
+                        // zero copy overhead
                         auto amopMsg = self->m_messageFactory->buildMessage(ref(*_responseData));
                         auto errorMessage =
                             std::string(amopMsg->data().begin(), amopMsg->data().end());
@@ -429,6 +430,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
     bcos::Error::Ptr error = nullptr;
     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
     {
+        // zero copy overhead
         auto amopMsg = m_messageFactory->buildMessage(ref(*_responseData));
         auto errorMessage = std::string(amopMsg->data().begin(), amopMsg->data().end());
         auto errorCode = amopMsg->status();
@@ -475,10 +477,16 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
 void AMOPImpl::onAMOPMessage(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
 {
-    m_threadPool->enqueue([this, _e, _session, _message]() {
+    auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
+    m_threadPool->enqueue([self, _e, _session, _message]() {
+        auto amop = self.lock();
+        if (!amop)
+        {
+            return;
+        }
         try
         {
-            dispatcherAMOPMessage(_e, _session, _message);
+            amop->dispatcherAMOPMessage(_e, _session, _message);
         }
         catch (std::exception const& e)
         {
@@ -501,9 +509,11 @@ void AMOPImpl::dispatcherAMOPMessage(
     {
         return;
     }
+    // zero copy overhead
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _session->p2pID();
+    auto fromNodeID =
+        _message->srcP2PNodeID().empty() ? _session->p2pID() : _message->srcP2PNodeID();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:
@@ -522,11 +532,14 @@ void AMOPImpl::dispatcherAMOPMessage(
                     m_network->messageFactory()->buildMessage());
                 AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
                                << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
+                responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
+                responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());
                 responseP2PMsg->setRespPacket();
                 responseP2PMsg->setPayload(_responseData);
                 responseP2PMsg->setPacketType(_type);
-                _session->session()->asyncSendMessage(responseP2PMsg);
+                m_network->asyncSendMessageByNodeID(
+                    responseP2PMsg->dstP2PNodeID(), responseP2PMsg, nullptr);
             });
         break;
     case AMOPMessage::Type::AMOPBroadcast:

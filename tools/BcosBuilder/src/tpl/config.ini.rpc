@@ -1,0 +1,46 @@
+[rpc]
+    listen_ip=0.0.0.0
+    listen_port=20200
+    thread_count=4
+    sm_ssl=false
+    ; ssl connection switch, if disable the ssl connection, default: false
+    ;disable_ssl=true
+
+[service]
+    ;gateway=chain0
+
+[chain]
+    ; use SM crypto or not, should nerver be changed
+    sm_crypto=false
+    chain_id=chain0
+
+[cert]
+    ; directory the certificates located in
+    ca_path=./conf
+    ; the ca certificate file
+    ca_cert=ca.crt
+    ; the node private key file
+    node_key=ssl.key
+    ; the node certificate file
+    node_cert=ssl.crt
+
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
+[failover]
+    ; enable failover or not, default disable
+    enable = false
+    ; the address of etcd, can configure multiple comma-separated
+    cluster_url= "127.0.0.1:2379"
+
+[log]
+    enable=true
+    log_path=./log
+    ; info debug trace
+    level=DEBUG
+    ; MB
+    max_log_file_size=200

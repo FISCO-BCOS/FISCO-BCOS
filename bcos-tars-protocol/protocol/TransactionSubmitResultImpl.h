@@ -29,7 +29,7 @@
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/TransactionSubmitResult.h>
+#include <bcos-framework//protocol/TransactionSubmitResult.h>
 #include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
@@ -55,7 +55,7 @@ public:
 
     bcos::crypto::HashType txHash() const override
     {
-        if (m_inner()->txHash.size() == bcos::crypto::HashType::size)
+        if (m_inner()->txHash.size() == bcos::crypto::HashType::SIZE)
         {
             return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->txHash.data()));
         }
@@ -68,7 +68,7 @@ public:
 
     bcos::crypto::HashType blockHash() const override
     {
-        if (m_inner()->blockHash.size() == bcos::crypto::HashType::size)
+        if (m_inner()->blockHash.size() == bcos::crypto::HashType::SIZE)
         {
             return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->blockHash.data()));
         }

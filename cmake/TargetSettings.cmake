@@ -1,11 +1,11 @@
 # bcos-utilities
-set(UTILITIES_TARGET "bcos-utilities::bcos-utilities")
+set(UTILITIES_TARGET "bcos-utilities")
 
 # bcos-table
 set(TABLE_TARGET "table")
 
 # bcos-crypto
-set(CRYPTO_TARGET "bcos-crypto::bcos-crypto")
+set(CRYPTO_TARGET "bcos-crypto")
 set(WEDPR_CRYPTO_TARGET "wedpr-crypto::crypto")
 set(WEDPR_EXTEND_LIB "wedpr-crypto::extend-crypto")
 
@@ -24,6 +24,9 @@ set(TXPOOL_TARGET "txpool")
 
 # bcos-sealer
 set(SEALER_TARGET "sealer")
+
+#bcos-security
+set(SECURITY_TARGET "security")
 
 # bcos-sync
 set(SYNC_TARGET "sync")

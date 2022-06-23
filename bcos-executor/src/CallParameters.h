@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
+#include <bcos-framework//protocol/LogEntry.h>
 #include <bcos-utilities/Common.h>
 #include <memory>
 #include <string>

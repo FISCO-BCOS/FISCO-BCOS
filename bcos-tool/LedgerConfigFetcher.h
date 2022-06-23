@@ -19,9 +19,9 @@
  * @date 2021-05-19
  */
 #pragma once
-#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include <bcos-framework/interfaces/Common.h>
+#include "bcos-framework//ledger/LedgerConfig.h"
+#include "bcos-framework//ledger/LedgerInterface.h"
+#include <bcos-framework//Common.h>
 
 #define TOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TOOL")
 
@@ -55,7 +55,7 @@ public:
     }
     virtual bcos::crypto::HashType const& genesisHash() const { return m_genesisHash; }
 
-    virtual void fetchAndSetCompatibilityVersion();
+    virtual void fetchCompatibilityVersion();
 
 protected:
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);

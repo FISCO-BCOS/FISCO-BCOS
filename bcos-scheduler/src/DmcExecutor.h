@@ -21,21 +21,20 @@
 
 
 #pragma once
+#include "DmcStepRecorder.h"
 #include "Executive.h"
 #include "ExecutivePool.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
-#include <bcos-framework/interfaces/protocol/Block.h>
+#include <bcos-framework//protocol/Block.h>
 #include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
-#define DMC_TRACE_LOG_ENABLE
 #define DMC_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("DMC")
 //#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
-
 class DmcExecutor
 {
 public:
@@ -51,14 +50,17 @@ public:
 
     using Ptr = std::shared_ptr<DmcExecutor>;
 
-    DmcExecutor(std::string contractAddress, bcos::protocol::Block::Ptr block,
+    DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl)
-      : m_contractAddress(contractAddress),
+        GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
+        DmcStepRecorder::Ptr dmcRecorder)
+      : m_name(name),
+        m_contractAddress(contractAddress),
         m_block(block),
         m_executor(executor),
         m_keyLocks(keyLocks),
-        m_hashImpl(hashImpl)
+        m_hashImpl(hashImpl),
+        m_dmcRecorder(dmcRecorder)
     {}
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
@@ -104,17 +106,20 @@ private:
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
 private:
+    std::string m_name;
     std::string m_contractAddress;
     bcos::protocol::Block::Ptr m_block;
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     GraphKeyLocks::Ptr m_keyLocks;
     bcos::crypto::Hash::Ptr m_hashImpl;
+    DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
-    // TODO: optimize here, remove these pools
+
 
     mutable SharedMutex x_concurrentLock;
 
     std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> f_onTxFinished;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
 };
+
 }  // namespace bcos::scheduler

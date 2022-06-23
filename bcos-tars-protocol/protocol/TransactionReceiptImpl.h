@@ -28,9 +28,9 @@
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
+#include <bcos-framework//protocol/Block.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -53,7 +53,6 @@ public:
     ~TransactionReceiptImpl() override {}
     void decode(bcos::bytesConstRef _receiptData) override;
     void encode(bcos::bytes& _encodedData) const override;
-    bcos::bytesConstRef encode(bool _onlyHashFieldData = false) const override;
     bcos::crypto::HashType hash() const override;
 
     int32_t version() const override { return m_inner()->data.version; }

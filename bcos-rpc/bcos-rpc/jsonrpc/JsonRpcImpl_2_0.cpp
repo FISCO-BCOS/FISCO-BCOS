@@ -20,10 +20,10 @@
  */
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
+#include <bcos-framework//Common.h>
+#include <bcos-framework//protocol/LogEntry.h>
+#include <bcos-framework//protocol/Transaction.h>
+#include <bcos-framework//protocol/TransactionReceipt.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
@@ -56,28 +56,27 @@ JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     initMethod();
 }
 
-void JsonRpcImpl_2_0::handleRpcRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
-    std::shared_ptr<boostssl::ws::WsSession> _session)
+void JsonRpcImpl_2_0::handleRpcRequest(
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    std::string req = std::string(_msg->data()->begin(), _msg->data()->end());
+    std::string req = std::string(_msg->payload()->begin(), _msg->payload()->end());
     // Note: Clean up request data to prevent taking up too much memory
     bytes emptyBuffer;
-    _msg->data()->swap(emptyBuffer);
+    _msg->payload()->swap(emptyBuffer);
     onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
         if (_session && _session->isConnected())
         {
             auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
-            _msg->setData(buffer);
+            _msg->setPayload(buffer);
             _session->asyncSendMessage(_msg);
         }
         else
         {
-            auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
             // remove the callback
-            _session->getAndRemoveRespCallback(seq);
             BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
                               << LOG_DESC("unable to send response for session has been inactive")
-                              << LOG_KV("req", req) << LOG_KV("resp", _resp) << LOG_KV("seq", seq)
+                              << LOG_KV("req", req) << LOG_KV("resp", _resp)
+                              << LOG_KV("seq", _msg->seq())
                               << LOG_KV(
                                      "endpoint", _session ? _session->endPoint() : std::string(""));
         }

@@ -21,9 +21,9 @@
 #pragma once
 
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include <bcos-framework//ledger/LedgerTypeDef.h>
+#include <bcos-framework//storage/Table.h>
 
 namespace bcos
 {
@@ -39,15 +39,15 @@ public:
     virtual ~SmallBankPrecompiled(){};
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 public:
     // is this precompiled need parallel processing, default false.
     bool isParallelPrecompiled() override { return true; }
     std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
 
-    static std::string getAddress(unsigned int id)
+    static inline std::string getAddress(unsigned int id)
     {
         u160 address = u160(SMALLBANK_START_ADDRESS);
         address += id;
@@ -65,12 +65,14 @@ public:
             std::string _tableName = std::to_string(id);
             std::string path = bcos::ledger::SMALLBANK_TRANSFER;
             _tableName = path + _tableName;
-            std::string address = getAddress(id);
-            BCOS_LOG(INFO) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled "
-                           << LOG_KV("address", address) << LOG_KV("tableName", _tableName);
+            std::string&& address = getAddress(id);
             registeredMap->insert({std::move(address),
                 std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl, _tableName)});
         }
+        BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled complete"
+                        << LOG_KV("addressFrom", getAddress(0))
+                        << LOG_KV("addressTo", getAddress(SMALLBANK_CONTRACT_NUM - 1))
+                        << LOG_KV("tableNameBase", bcos::ledger::SMALLBANK_TRANSFER);
     }
 
 public:

@@ -21,24 +21,25 @@
 
 #include "../liquid/hello_world.h"
 #include "../liquid/transfer.h"
+#include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "Common.h"
+// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework//protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
-#include "precompiled/Utilities.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
+#include <bcos-framework//executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <unistd.h>
@@ -72,7 +73,7 @@ struct DagExecutorFixture
 {
     DagExecutorFixture()
     {
-        // boost::log::core::get()->set_logging_enabled(false);
+        boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -81,6 +82,7 @@ struct DagExecutorFixture
 
         txpool = std::make_shared<MockTxPool>();
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
+        ledger = std::make_shared<MockLedger>();
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
@@ -94,6 +96,9 @@ struct DagExecutorFixture
                 ->data(),
             64);
         createSysTable();
+    }
+    ~DagExecutorFixture(){
+        boost::log::core::get()->set_logging_enabled(true);
     }
 
     void createSysTable()
@@ -179,6 +184,7 @@ struct DagExecutorFixture
     CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<MockTxPool> txpool;
     std::shared_ptr<MockTransactionalStorage> backend;
+    std::shared_ptr<MockLedger> ledger;
     std::shared_ptr<Keccak256> hashImpl;
 
     KeyPairInterface::Ptr keyPair;
@@ -190,7 +196,9 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
+
+        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
     bytes transferBin(transfer_wasm, transfer_wasm + transfer_wasm_len);
@@ -229,7 +237,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -419,7 +427,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
     bytes helloWorldBin(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
@@ -462,7 +471,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -641,7 +650,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, false, false, false);
+
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
     std::string bin =
@@ -719,7 +729,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });
@@ -879,8 +889,10 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, false, false, false);
+
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
     std::string bin =
@@ -952,7 +964,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     blockHeader->setNumber(1);
 
     std::promise<void> nextPromise;
-    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         nextPromise.set_value();
     });

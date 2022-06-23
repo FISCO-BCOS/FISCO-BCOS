@@ -29,8 +29,8 @@ ExternalProject_Get_Property(wabt_project SOURCE_DIR)
 ExternalProject_Get_Property(wabt_project BINARY_DIR)
 add_library(wabt STATIC IMPORTED GLOBAL)
 
-set(WABT_LIBRARY ${BINARY_DIR}/libwabt.a)
 set(WABT_INCLUDE_DIR ${SOURCE_DIR}/ ${BINARY_DIR}/)
+set(WABT_LIBRARY ${BINARY_DIR}/libwabt.a)
 file(MAKE_DIRECTORY ${WABT_INCLUDE_DIR})  # Must exist.
 
 set_property(TARGET wabt PROPERTY IMPORTED_LOCATION ${WABT_LIBRARY})

@@ -60,7 +60,7 @@ public:
         PBFTBaseMessage::deserializeToObject();
     }
 
-    bool operator==(PBFTRequest const& _pbftRequest)
+    bool operator==(PBFTRequest const& _pbftRequest) const
     {
         if (!PBFTBaseMessage::operator==(_pbftRequest))
         {

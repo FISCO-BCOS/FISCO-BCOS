@@ -20,13 +20,13 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework//rpc/RPCInterface.h>
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Timer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 #include <algorithm>
 #include <shared_mutex>
 

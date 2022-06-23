@@ -27,5 +27,32 @@ namespace tool
 DERIVE_BCOS_EXCEPTION(LedgerConfigFetcherException);
 DERIVE_BCOS_EXCEPTION(InvalidConfig);
 DERIVE_BCOS_EXCEPTION(InvalidVersion);
+
+class ExceptionHolder
+{
+public:
+    auto run(std::invocable auto&& func) noexcept
+    {
+        try
+        {
+            return func();
+        }
+        catch (...)
+        {
+            m_exception = std::current_exception();
+        }
+    }
+
+    void rethrow()
+    {
+        if (m_exception)
+        {
+            std::rethrow_exception(m_exception);
+        }
+    }
+
+private:
+    std::exception_ptr m_exception;
+};
 }  // namespace tool
 }  // namespace bcos

@@ -19,7 +19,7 @@
  * @date 2021-10-11
  */
 #include "GroupManager.h"
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework//protocol/ServiceDesc.h>
 #include <cstdint>
 using namespace bcos;
 using namespace bcos::group;
@@ -103,11 +103,12 @@ bool GroupManager::shouldRebuildNodeService(
         return true;
     }
     auto nodeInfo = m_groupInfos.at(_groupID)->nodeInfo(nodeAppName);
-    // update the systemVersion(Note: the system version maybe updated in-runtime)
-    if (nodeInfo->systemVersion() != _nodeInfo->systemVersion())
+    // update the compatibilityVersion(Note: the compatibility version maybe updated in-runtime)
+    if (nodeInfo->compatibilityVersion() != _nodeInfo->compatibilityVersion())
     {
-        GROUP_LOG(INFO) << LOG_DESC("update systemVersion to ") << _nodeInfo->systemVersion();
-        nodeInfo->setSystemVersion(_nodeInfo->systemVersion());
+        GROUP_LOG(INFO) << LOG_DESC("update compatibilityVersion to ")
+                        << _nodeInfo->compatibilityVersion();
+        nodeInfo->setCompatibilityVersion(_nodeInfo->compatibilityVersion());
     }
     // check the serviceInfo
     auto const& originServiceInfo = nodeInfo->serviceInfo();

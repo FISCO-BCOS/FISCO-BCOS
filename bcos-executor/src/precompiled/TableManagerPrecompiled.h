@@ -22,10 +22,10 @@
 
 #include "../executive/TransactionExecutive.h"
 #include "../vm/Precompiled.h"
-#include "Common.h"
-#include "Utilities.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework//storage/Table.h>
 
 namespace bcos::precompiled
 {
@@ -37,21 +37,19 @@ public:
     virtual ~TableManagerPrecompiled() = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
     void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void createKVTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t gasLeft);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void appendColumns(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void openTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void desc(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
 };
 }  // namespace bcos::precompiled

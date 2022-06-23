@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include <bcos-framework/interfaces/multigroup/GroupInfo.h>
+#include <bcos-framework//multigroup/GroupInfo.h>
 #include <json/json.h>
 #include <exception>
 
@@ -127,9 +127,9 @@ inline void nodeInfoToJson(Json::Value& _response, bcos::group::ChainNodeInfo::P
     // set protocol info
     auto protocol = _nodeInfo->nodeProtocol();
     Json::Value protocolResponse;
-    protocolResponse["minVersion"] = protocol->minVersion();
-    protocolResponse["maxVersion"] = protocol->maxVersion();
-    protocolResponse["sysVersion"] = _nodeInfo->systemVersion();
+    protocolResponse["minSupportedVersion"] = protocol->minVersion();
+    protocolResponse["maxSupportedVersion"] = protocol->maxVersion();
+    protocolResponse["compatibilityVersion"] = _nodeInfo->compatibilityVersion();
     _response["protocol"] = protocolResponse;
 }
 

@@ -21,7 +21,7 @@
  */
 #pragma once
 #include "Exceptions.h"
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework//protocol/Protocol.h>
 #include <string>
 #include <vector>
 
@@ -33,20 +33,20 @@ inline uint32_t toVersionNumber(const std::string& _version)
 {
     auto version = _version;
     boost::to_lower(version);
-    if (version == bcos::protocol::RC3_VERSION_STR)
+    // 3.0.0-rc{x} version
+    if (_version.find(bcos::protocol::RC_VERSION_PREFIX) == 0)
     {
-        return (uint32_t)(bcos::protocol::Version::RC3_VERSION);
-    }
-    if (version == bcos::protocol::RC4_VERSION_STR)
-    {
-        return (uint32_t)(bcos::protocol::Version::RC4_VERSION);
+        auto versionLen = _version.length() - bcos::protocol::RC_VERSION_PREFIX.length();
+        std::string versionNumber =
+            _version.substr(bcos::protocol::RC_VERSION_PREFIX.length(), versionLen);
+        return boost::lexical_cast<uint32_t>(versionNumber);
     }
     std::vector<std::string> versionFields;
     boost::split(versionFields, version, boost::is_any_of("."));
     if (versionFields.size() < 2)
     {
         BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
-                                  "The version must be in version of major_version.middle_version, "
+                                  "The version must be in format of major_version.middle_version, "
                                   "and the minimum version is optional, current version is " +
                                   _version));
     }

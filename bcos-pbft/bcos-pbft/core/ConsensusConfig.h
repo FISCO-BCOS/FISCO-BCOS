@@ -21,6 +21,7 @@
 #pragma once
 #include "../framework/ConsensusConfigInterface.h"
 #include "Common.h"
+#include "bcos-framework//protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
 
@@ -114,7 +115,22 @@ public:
     void setObserverNodeList(ConsensusNodeList& _observerNodeList);
 
     bool asMasterNode() const { return m_asMasterNode.load(); }
-    virtual void enableAsMaterNode(bool _isMasterNode) { m_asMasterNode.store(_isMasterNode); }
+    virtual void enableAsMaterNode(bool _isMasterNode)
+    {
+        m_asMasterNode.store(_isMasterNode);
+        if (m_versionNotification)
+        {
+            m_versionNotification(m_compatibilityVersion);
+        }
+    }
+
+    virtual void registerVersionInfoNotification(
+        std::function<void(uint32_t _version)> _versionNotification)
+    {
+        m_versionNotification = _versionNotification;
+    }
+
+    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
 private:
     bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
@@ -145,6 +161,9 @@ protected:
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
 
     std::atomic_bool m_asMasterNode = {false};
+
+    std::function<void(uint32_t _version)> m_versionNotification;
+    uint32_t m_compatibilityVersion = (uint32_t)(bcos::protocol::DEFAULT_VERSION);
 };
 }  // namespace consensus
 }  // namespace bcos

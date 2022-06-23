@@ -30,9 +30,30 @@ void PBFTImpl::start()
         PBFT_LOG(WARNING) << LOG_DESC("The PBFT module has already been started!");
         return;
     }
-    m_pbftEngine->start();
     m_running = true;
+    m_pbftEngine->start();
+    recoverState();
     PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
+}
+
+void PBFTImpl::recoverState()
+{
+    // Note: only replay the PBFT state when all-modules ready
+    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
+    auto config = m_pbftEngine->pbftConfig();
+    auto stateProposals = config->storage()->loadState(config->committedProposal()->index());
+    if (stateProposals && stateProposals->size() > 0)
+    {
+        m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
+        auto lowWaterMarkIndex = stateProposals->size() - 1;
+        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
+        config->setLowWaterMark(lowWaterMark + 1);
+        PBFT_LOG(INFO) << LOG_DESC("init PBFT state")
+                       << LOG_KV("stateProposals", stateProposals->size())
+                       << LOG_KV("lowWaterMark", lowWaterMark)
+                       << LOG_KV("highWaterMark", config->highWaterMark());
+    }
+    config->timer()->start();
 }
 
 void PBFTImpl::stop()
@@ -119,6 +140,7 @@ void PBFTImpl::init()
     m_ledgerFetcher->fetchObserverNodeList();
     m_ledgerFetcher->fetchBlockTxCountLimit();
     m_ledgerFetcher->fetchConsensusLeaderPeriod();
+    m_ledgerFetcher->fetchCompatibilityVersion();
     auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
@@ -130,20 +152,6 @@ void PBFTImpl::init()
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
-    auto stateProposals = config->storage()->loadState(ledgerConfig->blockNumber());
-    if (stateProposals && stateProposals->size() > 0)
-    {
-        m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
-        auto lowWaterMarkIndex = stateProposals->size() - 1;
-        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
-        config->setLowWaterMark(lowWaterMark + 1);
-        PBFT_LOG(INFO) << LOG_DESC("init PBFT state")
-                       << LOG_KV("stateProposals", stateProposals->size())
-                       << LOG_KV("lowWaterMark", lowWaterMark)
-                       << LOG_KV("highWaterMark", config->highWaterMark());
-    }
-    config->timer()->start();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 
@@ -153,18 +161,18 @@ void PBFTImpl::asyncGetConsensusStatus(
     auto config = m_pbftEngine->pbftConfig();
     Json::Value consensusStatus;
     consensusStatus["nodeID"] = *toHexString(config->nodeID()->data());
-    consensusStatus["index"] = config->nodeIndex();
-    consensusStatus["leaderIndex"] = config->getLeader();
-    consensusStatus["consensusNodesNum"] = config->consensusNodesNum();
-    consensusStatus["maxFaultyQuorum"] = config->maxFaultyQuorum();
-    consensusStatus["minRequiredQuorum"] = config->minRequiredQuorum();
+    consensusStatus["index"] = (Json::UInt64)config->nodeIndex();
+    consensusStatus["leaderIndex"] = (Json::UInt64)config->getLeader();
+    consensusStatus["consensusNodesNum"] = (Json::UInt64)config->consensusNodesNum();
+    consensusStatus["maxFaultyQuorum"] = (Json::UInt64)config->maxFaultyQuorum();
+    consensusStatus["minRequiredQuorum"] = (Json::UInt64)config->minRequiredQuorum();
     consensusStatus["isConsensusNode"] = config->isConsensusNode();
-    consensusStatus["blockNumber"] = config->committedProposal()->index();
+    consensusStatus["blockNumber"] = (Json::UInt64)config->committedProposal()->index();
     consensusStatus["hash"] = *toHexString(config->committedProposal()->hash());
     consensusStatus["timeout"] = config->timeout();
-    consensusStatus["changeCycle"] = config->timer()->changeCycle();
-    consensusStatus["view"] = config->view();
-    consensusStatus["connectedNodeList"] = (int64_t)((config->connectedNodeList()).size());
+    consensusStatus["changeCycle"] = (Json::UInt64)config->timer()->changeCycle();
+    consensusStatus["view"] = (Json::UInt64)config->view();
+    consensusStatus["connectedNodeList"] = (Json::UInt64)((config->connectedNodeList()).size());
 
     // print the nodeIndex of all other nodes
     auto nodeList = config->consensusNodeList();
@@ -174,8 +182,8 @@ void PBFTImpl::asyncGetConsensusStatus(
     {
         Json::Value info;
         info["nodeID"] = *toHexString(node->nodeID()->data());
-        info["weight"] = node->weight();
-        info["index"] = (int64_t)(i);
+        info["weight"] = (Json::UInt64)node->weight();
+        info["index"] = (Json::Int64)(i);
         consensusNodeInfo.append(info);
         i++;
     }

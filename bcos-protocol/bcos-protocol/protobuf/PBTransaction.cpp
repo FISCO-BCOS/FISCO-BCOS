@@ -20,7 +20,7 @@
  */
 #include "PBTransaction.h"
 #include "../Common.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework//protocol/Exceptions.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -57,7 +57,7 @@ PBTransaction::PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_
     m_transaction->set_hashfieldsdata(encodedHashFieldsData->data(), encodedHashFieldsData->size());
 
     auto hash = m_cryptoSuite->hash(*encodedHashFieldsData);
-    m_transaction->set_hashfieldshash(hash.data(), hash.size);
+    m_transaction->set_hashfieldshash(hash.data(), hash.SIZE);
     // set import time
     m_transaction->set_import_time(_importTime);
 }
@@ -92,13 +92,8 @@ void PBTransaction::encode(bytes& _encodedData) const
     encodePBObject(_encodedData, m_transaction);
 }
 
-bytesConstRef PBTransaction::encode(bool _onlyHashFields) const
+bytesConstRef PBTransaction::encode() const
 {
-    if (_onlyHashFields)
-    {
-        auto const& hashFieldData = m_transaction->hashfieldsdata();
-        return bytesConstRef((byte const*)hashFieldData.data(), hashFieldData.size());
-    }
     if (m_dataCache->empty())
     {
         encode(*m_dataCache);
@@ -106,10 +101,18 @@ bytesConstRef PBTransaction::encode(bool _onlyHashFields) const
     return bytesConstRef((byte const*)m_dataCache->data(), m_dataCache->size());
 }
 
-bcos::crypto::HashType PBTransaction::hash() const
+bcos::crypto::HashType PBTransaction::hash(bool _useCache) const
 {
-    return *(
-        reinterpret_cast<const bcos::crypto::HashType*>(m_transaction->hashfieldshash().data()));
+    if (!m_transaction->hashfieldshash().empty() && _useCache)
+    {
+        return *(reinterpret_cast<const bcos::crypto::HashType*>(
+            m_transaction->hashfieldshash().data()));
+    }
+    auto data = bytesConstRef((bcos::byte*)m_transaction->hashfieldsdata().data(),
+        m_transaction->hashfieldsdata().size());
+    auto hash = m_cryptoSuite->hash(data);
+    m_transaction->set_hashfieldshash(hash.data(), HashType::SIZE);
+    return hash;
 }
 
 void PBTransaction::updateSignature(bytesConstRef _signatureData, bytes const& _sender)
