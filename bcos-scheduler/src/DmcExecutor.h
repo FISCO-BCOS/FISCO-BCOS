@@ -35,6 +35,7 @@
 //#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
+
 class DmcExecutor
 {
 public:

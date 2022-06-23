@@ -168,7 +168,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     if (blockExecutive == nullptr)
     {
         // the block has not been prepared, just make a new one here
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock ")
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock")
                              << "Not hit prepared block executive, create."
                              << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
@@ -176,7 +176,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     }
     else
     {
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock ")
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock")
                              << "Hit prepared block executive cache, use it."
                              << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive->block()->setBlockHeader(block->blockHeader());
@@ -313,6 +313,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                 commitLock](Error::UniquePtr&& error) {
         if (!m_isRunning)
         {
+            commitLock->unlock();
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
                 nullptr);
             return;
@@ -334,6 +335,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                  Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
             if (!m_isRunning)
             {
+                commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
                     nullptr);
                 return;
