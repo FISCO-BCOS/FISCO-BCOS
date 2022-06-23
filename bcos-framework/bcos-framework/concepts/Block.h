@@ -1,5 +1,6 @@
 #pragma once
 #include "Basic.h"
+#include "Serialize.h"
 #include <concepts>
 #include <ranges>
 #include <type_traits>

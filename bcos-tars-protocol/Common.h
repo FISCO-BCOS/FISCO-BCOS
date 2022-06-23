@@ -18,9 +18,10 @@
  * @date 2021-04-20
  */
 
-#pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+
+#pragma once
 #include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"

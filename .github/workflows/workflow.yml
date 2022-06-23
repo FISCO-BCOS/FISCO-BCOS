@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         # os: [ubuntu-20.04,windows-2019,macos-11]
-        os: [ubuntu-20.04]
+        os: [ubuntu-20.04,macos-11]
         buildtype: ['Debug', 'Release']
     steps:
       - uses: actions/checkout@v2
@@ -43,6 +43,7 @@ jobs:
       - name: Configure for macos
         if: runner.os == 'macOS'
         run:
+          alias ar='/usr/local/opt/llvm@12/bin/llvm-ar'
           mkdir -p build && cd build && CC="gcc-10" CXX="g++-10" cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
       - name: Configure for linux and windows
         if: runner.os != 'macOS'
@@ -50,7 +51,7 @@ jobs:
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
       - name: Compile
         run: 
-          cd build && cmake --build . --parallel 3
+          cd build && cmake --build . --parallel 4
       - name: Test
         if: runner.os != 'Windows'
         run:
