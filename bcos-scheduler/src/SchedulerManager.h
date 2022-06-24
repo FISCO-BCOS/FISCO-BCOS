@@ -66,7 +66,8 @@ public:
     class SchedulerTerm
     {
     public:
-        SchedulerTerm(int64_t schedulerSeq) : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime())
+        SchedulerTerm(int64_t schedulerSeq)
+          : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime() / 1000)
         {}
 
         SchedulerTerm next() { return SchedulerTerm(m_schedulerSeq); }
