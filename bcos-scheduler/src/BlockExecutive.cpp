@@ -131,6 +131,11 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     }
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
+    if (precompiled::c_systemTxsAddress.find(std::string(tx->to())) !=
+        precompiled::c_systemTxsAddress.end())
+    {
+        message->setGasAvailable(TRANSACTION_GAS);
+    }
     message->setData(tx->input().toBytes());
     message->setStaticCall(m_staticCall);
 
@@ -222,6 +227,11 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
             message->setDepth(0);
             message->setGasAvailable(m_gasLimit);
+            if (precompiled::c_systemTxsAddress.find(std::string(metaData->to())) !=
+                precompiled::c_systemTxsAddress.end())
+            {
+                message->setGasAvailable(TRANSACTION_GAS);
+            }
             message->setStaticCall(false);
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 

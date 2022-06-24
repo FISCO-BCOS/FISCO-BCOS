@@ -183,8 +183,10 @@ void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
     if (c_fileLogLevel >= LogLevel::TRACE)
+    {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
                              << LOG_KV("callParameters", callParameters->toFullString());
+    }
     m_storageWrapper->setRecoder(m_recoder);
 
     std::unique_ptr<HostContext> hostContext;
@@ -207,8 +209,10 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
     if (c_fileLogLevel >= LogLevel::TRACE)
+    {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute finished")
                              << LOG_KV("callResults", callResults->toFullString());
+    }
     return callResults;
 }
 
