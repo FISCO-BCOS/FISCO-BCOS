@@ -1037,63 +1037,6 @@ void PBFTCacheProcessor::eraseCommittedProposalList(bcos::protocol::BlockNumber 
     m_committedProposalList.erase(_index);
 }
 
-// Note: Since blockSync and consensus execute the same block at the same time, the hash obtained is
-// different, which will cause the parentHash of the subsequent consensus block to be incorrect, so
-// future proposals need to be cleared here
-void PBFTCacheProcessor::removeFutureProposals()
-{
-    PBFT_LOG(INFO) << LOG_DESC("removeFutureProposals for receive the sync block")
-                   << LOG_KV("committQueueSize", m_committedQueue.size())
-                   << LOG_KV("stableCheckPointSize", m_stableCheckPointQueue.size())
-                   << LOG_KV("executedBlock", m_config->expectedCheckPoint() - 1)
-                   << m_config->printCurrentState();
-    auto committedIndex = m_config->committedProposal()->index();
-    m_config->setExpectedCheckPoint(committedIndex + 1);
-
-    // clear the commitQueue
-    while (!m_committedQueue.empty())
-    {
-        auto proposal = m_committedQueue.top();
-        m_committedQueue.pop();
-        // reset the sealed txs to be unsealed
-        if (proposal->index() >= m_config->committedProposal()->index())
-        {
-            continue;
-        }
-        m_config->validator()->asyncResetTxsFlag(proposal->data(), false);
-    }
-    m_committedProposalList.clear();
-
-    // clear stable checkpoint queue
-    std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
-        PBFTProposalCmp>
-        stableCheckPointQueue;
-    m_stableCheckPointQueue = stableCheckPointQueue;
-
-    // remove the executed proposal
-    for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
-    {
-        auto cache = pcache->second;
-        // remove the cache of the future proposal
-        if (cache->index() >= committedIndex && cache->checkPointProposal())
-        {
-            auto precommitMsg = cache->preCommitCache();
-            if (precommitMsg && precommitMsg->index() < m_config->committedProposal()->index() &&
-                precommitMsg->consensusProposal())
-            {
-                m_config->validator()->asyncResetTxsFlag(
-                    precommitMsg->consensusProposal()->data(), false);
-            }
-            auto executedProposalIndex = cache->checkPointProposal()->index();
-            m_config->storage()->asyncRemoveStabledCheckPoint(executedProposalIndex);
-            pcache = m_caches.erase(pcache);
-            continue;
-        }
-        pcache++;
-    }
-    resetUnCommittedCacheState();
-}
-
 void PBFTCacheProcessor::clearExpiredExecutingProposal()
 {
     auto committedIndex = m_config->committedProposal()->index();
@@ -1226,5 +1169,4 @@ void PBFTCacheProcessor::resetUnCommittedCacheState(bcos::protocol::BlockNumber 
     }
     m_committedProposalList.clear();
     m_executingProposals.clear();
-    m_config->setLowWaterMark(_number);
 }
