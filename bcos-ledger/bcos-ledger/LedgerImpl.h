@@ -43,7 +43,7 @@ public:
             decltype(Block::blockHeader) blockHeader;
             bcos::concepts::serialize::decode(blockHeader, field);
 
-            return std::tuple_cat(std::tuple{blockHeader}, std::tuple{getBlock<Flags...>(blockNumber)});
+            return std::tuple_cat(std::tuple{std::move(blockHeader)}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> || std::is_same_v<Flag, BLOCK_RECEIPTS>)
         {
@@ -67,25 +67,9 @@ public:
             auto end = boost::make_transform_iterator(block.transactionsMetaData.cend(), GetMetaHashFunc);
             auto range = std::ranges::subrange{begin, end};
 
-            std::ranges::begin(range);
-
             constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
-            using OutputItemType =
-                std::conditional_t<isTransaction, std::ranges::range_value_t<decltype(Block::transactions)>,
-                    std::ranges::range_value_t<decltype(Block::receipts)>>;
-            auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
-            auto entries = m_storage.getRows(std::string_view{tableName}, range);
-            std::vector<OutputItemType> outputs(std::size(entries));
-
-            for (auto i = 0u; i < std::size(entries); ++i)  // TODO: can be parallel
-            {
-                if (!entries[i]) [[unlikely]]
-                    BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
-                auto field = entries[i]->getField(0);
-                bcos::concepts::serialize::decode(outputs[i], field);
-            }
-
-            return std::tuple_cat(std::tuple{outputs}, std::tuple{getBlock<Flags...>(blockNumber)});
+            auto outputs = getTransactionOrReceipts<isTransaction>(std::move(range));
+            return std::tuple_cat(std::tuple{std::move(outputs)}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else if constexpr (std::is_same_v<Flag, BLOCK>)
         {
@@ -96,13 +80,33 @@ public:
             block.transactions = std::move(transactions);
             block.receipts = std::move(receipts);
 
-            return std::tuple_cat(std::tuple{block}, std::tuple{getBlock<Flags...>(blockNumber)});
+            return std::tuple_cat(std::tuple{std::move(block)}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else { static_assert(!sizeof(blockNumber), "Wrong input flag!"); }
     }
 
 private:
     auto getBlock(bcos::concepts::block::BlockNumber auto) { return std::tuple{}; }
+
+    template <bool isTransaction>
+    auto getTransactionOrReceipts(std::ranges::range auto&& hashes)
+    {
+        using OutputItemType =
+            std::conditional_t<isTransaction, std::ranges::range_value_t<decltype(Block::transactions)>,
+                std::ranges::range_value_t<decltype(Block::receipts)>>;
+        constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+        auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
+        std::vector<OutputItemType> outputs(std::size(entries));
+
+        for (auto i = 0u; i < std::size(entries); ++i)  // TODO: can be parallel
+        {
+            if (!entries[i]) [[unlikely]]
+                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
+            auto field = entries[i]->getField(0);
+            bcos::concepts::serialize::decode(outputs[i], field);
+        }
+        return outputs;
+    }
 
     Storage m_storage;
 };

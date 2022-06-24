@@ -281,7 +281,7 @@ void LedgerServiceClient::asyncGetTotalTransactionCount(
     m_prx->async_asyncGetTotalTransactionCount(new Callback(_callback));
 }
 
-void LedgerServiceClient::asyncGetSystemConfigByKey(std::string const& _key,
+void LedgerServiceClient::asyncGetSystemConfigByKey(std::string_view const& _key,
     std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
 {
     class Callback : public LedgerServicePrxCallback
@@ -304,10 +304,10 @@ void LedgerServiceClient::asyncGetSystemConfigByKey(std::string const& _key,
     private:
         std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)> m_callback;
     };
-    m_prx->async_asyncGetSystemConfigByKey(new Callback(_onGetConfig), _key);
+    m_prx->async_asyncGetSystemConfigByKey(new Callback(_onGetConfig), std::string{_key});
 }
 
-void LedgerServiceClient::asyncGetNodeListByType(std::string const& _type,
+void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
     std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
     class Callback : public LedgerServicePrxCallback
@@ -332,5 +332,5 @@ void LedgerServiceClient::asyncGetNodeListByType(std::string const& _type,
         std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> m_callback;
         bcos::crypto::KeyFactory::Ptr m_keyFactory;
     };
-    m_prx->async_asyncGetNodeListByType(new Callback(_onGetConfig, m_keyFactory), _type);
+    m_prx->async_asyncGetNodeListByType(new Callback(_onGetConfig, m_keyFactory), std::string{_type});
 }

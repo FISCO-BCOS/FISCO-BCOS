@@ -58,7 +58,7 @@ protected:
     bcos::byte* _buf;
     std::size_t _len;
     std::size_t _buf_len;
-    std::function<bcos::byte*(BufferWriter&, size_t)> _reserve;
+    std::function<ByteType*(BufferWriter&, size_t)> _reserve;
 
 private:
     BufferWriter(const BufferWriter&);

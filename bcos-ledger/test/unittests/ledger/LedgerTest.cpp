@@ -574,7 +574,7 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
             BOOST_CHECK(entry);
 
             auto list = decodeConsensusList(entry->getField(0));
-            list.emplace_back(bcos::crypto::HashType("56789").hex(), 100, CONSENSUS_SEALER, "5");
+            list.emplace_back(bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5");
 
             entry->setField(0, encodeConsensusList(list));
             m_storage->asyncSetRow(

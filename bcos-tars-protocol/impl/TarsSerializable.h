@@ -27,12 +27,12 @@ concept TarsStruct = requires(TarsStructType tarsStruct)
 namespace bcos::concepts::serialize
 {
 // Tars struct crtp base
-std::vector<std::byte> encode(bcostars::protocol::impl::TarsStruct auto const& object)
+std::vector<bcos::byte> encode(bcostars::protocol::impl::TarsStruct auto const& object)
 {
-    tars::TarsOutputStream<bcostars::protocol::BufferWriterStdByteVector> output;
+    tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
     object.writeTo(output);
 
-    std::vector<std::byte> out;
+    std::vector<bcos::byte> out;
     output.getByteBuffer().swap(out);
 
     return out;

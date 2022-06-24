@@ -80,7 +80,7 @@ public:
         std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
         override;
 
-    void asyncGetSystemConfigByKey(const std::string& _key,
+    void asyncGetSystemConfigByKey(const std::string_view& _key,
         std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
         override;
 
@@ -89,12 +89,12 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override;
 
-    void asyncGetNodeListByType(const std::string& _type,
+    void asyncGetNodeListByType(const std::string_view& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
 
     /****** init ledger ******/
     bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
-        const std::string& _genesisData, std::string const& _compatibilityVersion);
+        const std::string_view& _genesisData, std::string const& _compatibilityVersion);
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
