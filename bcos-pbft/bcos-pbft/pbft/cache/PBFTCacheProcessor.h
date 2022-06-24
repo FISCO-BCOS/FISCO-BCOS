@@ -136,7 +136,6 @@ public:
     bool tryToPreApplyProposal(ProposalInterface::Ptr _proposal);
     bool tryToApplyCommitQueue();
 
-    void removeFutureProposals();
     // notify the consensusing proposal index to the sync module
     void notifyCommittedProposalIndex(bcos::protocol::BlockNumber _index);
 
