@@ -19,10 +19,10 @@
  */
 
 #include "RingSigPrecompiled.h"
-#include <group_sig/algorithm/RingSig.h>
 #include "../../executive/BlockContext.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include <group_sig/algorithm/RingSig.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -33,7 +33,7 @@ using namespace bcos::precompiled;
 contract RingSig
 {
     function ringSigVerify(string signature, string message, string paramInfo) public constant
-returns(bool);
+returns(int, bool);
 }
 */
 
@@ -63,7 +63,6 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
         std::string signature, message, paramInfo;
         codec->decode(data, signature, message, paramInfo);
         bool result = false;
-
         try
         {
             result = RingSigApi::LinkableRingSig::ring_verify(signature, message, paramInfo);
@@ -74,20 +73,29 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error.what())
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("paramInfo", paramInfo);
-            _callParameters->setExecResult(codec->encode(u256((int)VERIFY_RING_SIG_FAILED)));
-            getErrorCodeOut(_callParameters->mutableExecResult(), 1, *codec);
-            return _callParameters;
+            result = false;
         }
-        _callParameters->setExecResult(codec->encode(result));
+        catch (std::string& error)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error)
+                                   << LOG_KV("signature", signature) << LOG_KV("message", message)
+                                   << LOG_KV("paramInfo", paramInfo);
+            result = false;
+        }
+        int retCode = CODE_SUCCESS;
+        if (!result)
+        {
+            retCode = VERIFY_RING_SIG_FAILED;
+        }
+        _callParameters->setExecResult(codec->encode(retCode, result));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        _callParameters->setExecResult(codec->encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
-        getErrorCodeOut(_callParameters->mutableExecResult(), 1, *codec);
+        _callParameters->setExecResult(codec->encode((int)CODE_UNKNOW_FUNCTION_CALL, false));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(gasPricer->calTotalGas());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
     return _callParameters;
 }

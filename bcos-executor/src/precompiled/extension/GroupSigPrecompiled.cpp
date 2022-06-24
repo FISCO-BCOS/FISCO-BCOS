@@ -19,10 +19,10 @@
  */
 
 #include "GroupSigPrecompiled.h"
-#include <group_sig/algorithm/GroupSig.h>
 #include "../../executive/BlockContext.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include <group_sig/algorithm/GroupSig.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -33,7 +33,7 @@ using namespace bcos::precompiled;
 contract GroupSig
 {
     function groupSigVerify(string signature, string message, string gpkInfo, string paramInfo)
-public constant returns(bool);
+public constant returns(int, bool);
 }
 */
 
@@ -56,14 +56,13 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    
+
     if (func == name2Selector[GroupSig_METHOD_SET_STR])
     {
         // groupSigVerify(string)
         std::string signature, message, gpkInfo, paramInfo;
         codec->decode(data, signature, message, gpkInfo, paramInfo);
         bool result = false;
-
         try
         {
             result = GroupSigApi::group_verify(signature, message, gpkInfo, paramInfo);
@@ -74,20 +73,29 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error.what())
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
-            _callParameters->setExecResult(codec->encode(u256((int)VERIFY_GROUP_SIG_FAILED)));
-            getErrorCodeOut(_callParameters->mutableExecResult(), 1, *codec);
-            return _callParameters;
+            result = false;
         }
-        _callParameters->setExecResult(codec->encode(result));
+        catch (std::string& error)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error)
+                                   << LOG_KV("signature", signature) << LOG_KV("message", message)
+                                   << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
+            result = false;
+        }
+        int retCode = CODE_SUCCESS;
+        if (!result)
+        {
+            retCode = VERIFY_GROUP_SIG_FAILED;
+        }
+        _callParameters->setExecResult(codec->encode(retCode, result));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        _callParameters->setExecResult(codec->encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
-        getErrorCodeOut(_callParameters->mutableExecResult(), 1, *codec);
+        _callParameters->setExecResult(codec->encode((int)CODE_UNKNOW_FUNCTION_CALL, false));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(gasPricer->calTotalGas());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
     return _callParameters;
 }
