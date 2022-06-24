@@ -1091,6 +1091,7 @@ void PBFTCacheProcessor::removeFutureProposals()
         }
         pcache++;
     }
+    resetUnCommittedCacheState();
 }
 
 void PBFTCacheProcessor::clearExpiredExecutingProposal()
@@ -1225,4 +1226,5 @@ void PBFTCacheProcessor::resetUnCommittedCacheState(bcos::protocol::BlockNumber 
     }
     m_committedProposalList.clear();
     m_executingProposals.clear();
+    m_config->setLowWaterMark(_number);
 }
