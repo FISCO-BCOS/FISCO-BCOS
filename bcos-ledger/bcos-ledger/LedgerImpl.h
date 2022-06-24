@@ -68,7 +68,7 @@ public:
             auto range = std::ranges::subrange{begin, end};
 
             constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
-            auto outputs = getTransactionOrReceipts<isTransaction>(std::move(range));
+            auto outputs = getTransactionsOrReceipts<isTransaction>(std::move(range));
             return std::tuple_cat(std::tuple{std::move(outputs)}, std::tuple{getBlock<Flags...>(blockNumber)});
         }
         else if constexpr (std::is_same_v<Flag, BLOCK>)
@@ -85,11 +85,42 @@ public:
         else { static_assert(!sizeof(blockNumber), "Wrong input flag!"); }
     }
 
-private:
-    auto getBlock(bcos::concepts::block::BlockNumber auto) { return std::tuple{}; }
+    void setBlock(Storage& storage, bcos::concepts::block::Block auto&& block)
+    {
+        if (block.blockHeader.blockNumber == 0 && !std::empty(block.transactions)) return;
+
+        auto blockNumberStr = boost::lexical_cast<std::string>(block.blockNumber);
+
+        bcos::storage::Entry numberEntry;
+        numberEntry.importFields({blockNumberStr});
+        storage.setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
+
+        bcos::storage::Entry hashEntry;
+        hashEntry.importFields({block.blockHeader.dataHash});  // TODO: convert to hash
+        storage.setRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry));
+
+        bcos::storage::Entry hash2NumberEntry;
+        hash2NumberEntry.importFields({blockNumberStr});
+        storage.setRow(SYS_HASH_2_NUMBER, block.blockHeader.dataHash, std::move(hash2NumberEntry));  // TODO: convert to
+                                                                                                     // hash
+
+        bcos::storage::Entry number2HeaderEntry;
+        number2HeaderEntry.importFields({bcos::concepts::serialize::encode(block.blockHeader)});
+        storage.setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr, std::move(number2HeaderEntry));
+
+        std::remove_cvref<decltype(block)> blockNonceList;
+        blockNonceList = std::move(block.nonceList);
+        bcos::storage::Entry number2NonceEntry;
+        number2NonceEntry.importFields({bcos::concepts::serialize::encode(blockNonceList)});
+        storage.setRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry));
+
+        std::remove_cvref<decltype(block)> transactionsBlock;
+        // transactionsBlock.transactions = std::move(block.transactions);
+        // transactionsBlock.transactionsMetaData = 
+    }
 
     template <bool isTransaction>
-    auto getTransactionOrReceipts(std::ranges::range auto&& hashes)
+    auto getTransactionsOrReceipts(std::ranges::range auto const& hashes)
     {
         using OutputItemType =
             std::conditional_t<isTransaction, std::ranges::range_value_t<decltype(Block::transactions)>,
@@ -98,7 +129,8 @@ private:
         auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
         std::vector<OutputItemType> outputs(std::size(entries));
 
-        for (auto i = 0u; i < std::size(entries); ++i)  // TODO: can be parallel
+#pragma omp parallel for
+        for (auto i = 0u; i < std::size(entries); ++i)
         {
             if (!entries[i]) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
@@ -106,6 +138,12 @@ private:
             bcos::concepts::serialize::decode(outputs[i], field);
         }
         return outputs;
+    }
+
+private:
+    auto getBlock(bcos::concepts::block::BlockNumber auto)
+    {
+        return std::tuple{};
     }
 
     Storage m_storage;
