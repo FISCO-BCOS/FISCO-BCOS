@@ -192,6 +192,28 @@ void SchedulerManager::registerOnSwitchTermHandler(
     m_onSwitchTermHandlers.push_back(std::move(onSwitchTerm));
 }
 
+void SchedulerManager::handleNeedSwitchEvent(int64_t oldSchedulerTermID)
+{
+    auto currentSchedulerTermID = m_schedulerTerm.getSchedulerTermID();
+    if (currentSchedulerTermID >= oldSchedulerTermID)
+    {
+        SCHEDULER_LOG(TRACE) << LOG_BADGE("Switch")
+                             << "handleNeedSwitchEvent: Ignore outdated oldSchedulerTermID"
+                             << LOG_KV("currentSchedulerTermID", currentSchedulerTermID)
+                             << LOG_KV("oldSchedulerTermID", oldSchedulerTermID);
+        return;
+    }
+    else
+    {
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "handleNeedSwitchEvent: Trigger switch "
+                             << LOG_KV("currentSchedulerTermID", currentSchedulerTermID)
+                             << LOG_KV("oldSchedulerTermID", oldSchedulerTermID);
+
+
+        asyncSelfSwitchTerm();
+    }
+}
+
 void SchedulerManager::testTriggerSwitch()
 {
     static std::set<int64_t> blockNumberHasSwitch;
@@ -252,6 +274,12 @@ void SchedulerManager::switchTerm(int64_t schedulerSeq)
 
 void SchedulerManager::selfSwitchTerm()
 {
+    if (m_status == SWITCHING)
+    {
+        // is self-switching, just return
+        return;
+    }
+
     m_status.store(SWITCHING);
     m_schedulerTerm = m_schedulerTerm.next();
     updateScheduler(m_schedulerTerm.getSchedulerTermID());

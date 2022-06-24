@@ -84,6 +84,19 @@ public:
     void start() { m_isRunning = true; }
     void stop() { m_isRunning = false; }
 
+    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+    }
+
+    void triggerSwitch()
+    {
+        if (f_onNeedSwitchEvent)
+        {
+            f_onNeedSwitchEvent();
+        }
+    }
+
 private:
     struct CommitStatus
     {
@@ -167,6 +180,8 @@ private:
     mutable SharedMutex x_dmcExecutorLock;
 
     bool m_isRunning = false;
+
+    std::function<void()> f_onNeedSwitchEvent;
 };
 
 }  // namespace bcos::scheduler

@@ -59,6 +59,8 @@ public:
 
     void registerOnSwitchTermHandler(std::function<void(bcos::protocol::BlockNumber)> onSwitchTerm);
 
+    void handleNeedSwitchEvent(int64_t oldSchedulerTermID);
+
     void testTriggerSwitch();
 
     SchedulerFactory::Ptr getFactory() { return m_factory; }
