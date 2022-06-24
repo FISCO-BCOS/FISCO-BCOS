@@ -208,14 +208,14 @@ void TransactionExecutor::initEvmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
     m_constantPrecompiled->insert(
-        {GROUPSIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+        {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
-        {RINGSIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
+        {RING_SIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
 
-    set<string> builtIn = {CRYPTO_ADDRESS};
+    set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }
 
@@ -258,7 +258,7 @@ void TransactionExecutor::initWasmEnvironment()
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    set<string> builtIn = {CRYPTO_NAME};
+    set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }
 
@@ -2023,6 +2023,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         callParameters->abi = input.abi();
     }
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
 
     return callParameters;
 }
@@ -2047,6 +2049,10 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
+    }
     return callParameters;
 }
 
@@ -2098,7 +2104,8 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
-        return std::make_shared<bcos::storage::KeyPageStorage>(storage, m_keyPageSize, m_keyPageIgnoreTables);
+        return std::make_shared<bcos::storage::KeyPageStorage>(
+            storage, m_keyPageSize, m_keyPageIgnoreTables);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }
