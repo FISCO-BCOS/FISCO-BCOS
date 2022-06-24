@@ -618,7 +618,8 @@ void DownloadingQueue::onCommitFailed(bcos::protocol::Block::Ptr _failedBlock)
         {
             return;
         }
-        std::vector<bcos::protocol::Block::Ptr> tmpBlockCache;
+        // Note: since the applied block will be re-pushed into m_commitQueue again, no-need to
+        // write-back the poped block into commitQueue here
         while (!m_commitQueue.empty())
         {
             auto topBlock = m_commitQueue.top();
@@ -627,14 +628,8 @@ void DownloadingQueue::onCommitFailed(bcos::protocol::Block::Ptr _failedBlock)
                 break;
             }
             rePushedBlockCount++;
-            tmpBlockCache.emplace_back(topBlock);
             m_blocks.push(topBlock);
             m_commitQueue.pop();
-        }
-        // writeBack tmpBlockCache to m_commitQueue
-        for (auto block : tmpBlockCache)
-        {
-            m_commitQueue.push(block);
         }
     }
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: update commitQueue and executingQueue")
