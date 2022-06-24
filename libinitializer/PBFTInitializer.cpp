@@ -508,7 +508,10 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
             m_blockSync->enableAsMaster(_success);
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
-
+            if (!_success)
+            {
+                return;
+            }
             auto schedulerManager =
                 std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
             schedulerManager->asyncSwitchTerm(_leader->seq(), [_leader](Error::Ptr&& error) {
