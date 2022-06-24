@@ -69,7 +69,7 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
     Poco::Logger::root().setLevel((int)c_fileLogLevel < (int)Poco::Message::PRIO_WARNING ?
                                       Poco::Message::PRIO_INFORMATION :
                                       c_fileLogLevel + 3);
-    // Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);
+    // Poco::Logger::root().setLevel(Poco::Message::PRIO_DEBUG); //PRIO_TRACE
     Poco::Logger::root().setChannel(pChannel);
     return std::make_shared<Cluster>(pdAddrs, config);
 }
