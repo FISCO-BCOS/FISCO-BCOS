@@ -2,6 +2,7 @@
 
 #include "Basic.h"
 #include "Serialize.h"
+#include "Hash.h"
 #include <concepts>
 #include <ranges>
 #include <type_traits>
@@ -24,6 +25,7 @@ concept TransactionData = requires(TransactionDataType transactionData)
 template <class TransactionType>
 concept Transaction = requires(TransactionType transaction)
 {
+    bcos::concepts::hash::Hashable<TransactionType>;
     bcos::concepts::serialize::Serializable<TransactionType>;
     TransactionType{};
     TransactionData<decltype(transaction.data)>;

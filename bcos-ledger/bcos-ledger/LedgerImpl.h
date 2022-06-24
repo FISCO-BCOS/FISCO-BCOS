@@ -91,32 +91,75 @@ public:
 
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockNumber);
 
+        // number 2 entry
         bcos::storage::Entry numberEntry;
         numberEntry.importFields({blockNumberStr});
         storage.setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
 
+        // number 2 hash
         bcos::storage::Entry hashEntry;
         hashEntry.importFields({block.blockHeader.dataHash});  // TODO: convert to hash
         storage.setRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry));
 
+        // hash 2 number
         bcos::storage::Entry hash2NumberEntry;
         hash2NumberEntry.importFields({blockNumberStr});
         storage.setRow(SYS_HASH_2_NUMBER, block.blockHeader.dataHash, std::move(hash2NumberEntry));  // TODO: convert to
-                                                                                                     // hash
+                                                                                                     // hash impl
 
+        // number 2 header
         bcos::storage::Entry number2HeaderEntry;
         number2HeaderEntry.importFields({bcos::concepts::serialize::encode(block.blockHeader)});
         storage.setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr, std::move(number2HeaderEntry));
 
+        // number 2 nonce
         std::remove_cvref<decltype(block)> blockNonceList;
         blockNonceList = std::move(block.nonceList);
         bcos::storage::Entry number2NonceEntry;
         number2NonceEntry.importFields({bcos::concepts::serialize::encode(blockNonceList)});
         storage.setRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry));
 
+        // number 2 transactions
         std::remove_cvref<decltype(block)> transactionsBlock;
-        // transactionsBlock.transactions = std::move(block.transactions);
-        // transactionsBlock.transactionsMetaData = 
+        transactionsBlock.transactionsMetaData = std::move(block.transactionsMetaData);
+        if (std::empty(transactionsBlock.transactionsMetaData))
+        {
+            transactionsBlock.transactionsMetaData.resize(block.transactions.size());
+#pragma omp parallel for
+            for (auto i = 0u; i < block.transactions.size(); ++i)
+            {
+                // transactionsBlock.transactionsMetaData[i].hash = bcos::concepts::hash::Hash(block.transactions[i]);
+                // //TODO : Add hash impl
+                transactionsBlock.transactionsMetaData[i].to = std::move(block.transactions[i].to);
+            }
+        }
+        bcos::storage::Entry number2TransactionHashesEntry;
+        number2TransactionHashesEntry.importFields({bcos::concepts::serialize::encode(transactionsBlock)});
+        storage.setRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactionHashesEntry));
+
+        // hash 2 receipts
+        size_t totalTransactionCount = 0;
+        size_t failedTransactionCount = 0;
+#pragma omp parallel for
+        for (auto i = 0u; i < block.receipts.size(); ++i)
+        {
+            auto& hash = transactionsBlock.transactionsMetaData[i].hash;
+            auto& receipt = block.receipts[i];
+            if (receipt.data.status != 0)
+            {
+#pragma omp atomic
+                ++failedTransactionCount;
+            }
+#pragma omp atomic
+            ++totalTransactionCount;
+
+            bcos::storage::Entry receiptEntry;
+            receiptEntry.importFields({bcos::concepts::serialize::encode(receipt)});
+#pragma omp critical
+            storage.setRow(SYS_HASH_2_RECEIPT, hash, std::move(receiptEntry));  // TODO: use hex?
+        }
+
+        
     }
 
     template <bool isTransaction>

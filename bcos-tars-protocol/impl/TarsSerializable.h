@@ -1,28 +1,10 @@
 #pragma once
 #include "../Common.h"
+#include "TarsStruct.h"
 #include "tup/Tars.h"
 #include <bcos-framework/concepts/Serialize.h>
-#include <concepts>
 #include <ranges>
-#include <string>
 #include <vector>
-
-namespace bcostars::protocol::impl
-{
-
-template <class TarsStructType>
-concept TarsStruct = requires(TarsStructType tarsStruct)
-{
-    {
-        tarsStruct.className()
-        } -> std::same_as<std::string>;
-    {
-        tarsStruct.MD5()
-        } -> std::same_as<std::string>;
-    tarsStruct.resetDefautlt();
-};
-}  // namespace bcostars::protocol::impl
-
 
 namespace bcos::concepts::serialize
 {
