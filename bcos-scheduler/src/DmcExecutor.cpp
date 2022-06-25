@@ -203,12 +203,11 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 {
                     SCHEDULER_LOG(ERROR) << "Call error: " << boost::diagnostic_information(*error);
 
-                    callback(std::move(error), ERROR);
-
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
                         triggerSwitch();
                     }
+                    callback(std::move(error), ERROR);
                 }
                 else
                 {
@@ -244,12 +243,12 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 {
                     SCHEDULER_LOG(ERROR) << "Execute transaction error: " << error->errorMessage();
 
-                    callback(std::move(error), ERROR);
-
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
                         triggerSwitch();
                     }
+
+                    callback(std::move(error), ERROR);
                 }
                 else
                 {
