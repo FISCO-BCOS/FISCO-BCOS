@@ -1,5 +1,6 @@
 #include "DmcExecutor.h"
 #include "ChecksumAddress.h"
+#include "bcos-framework/interfaces/executor/ExecuteError.h"
 #include <boost/format.hpp>
 
 using namespace bcos::scheduler;
@@ -202,6 +203,10 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 {
                     SCHEDULER_LOG(ERROR) << "Call error: " << boost::diagnostic_information(*error);
 
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
                     callback(std::move(error), ERROR);
                 }
                 else
@@ -237,6 +242,11 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 if (error)
                 {
                     SCHEDULER_LOG(ERROR) << "Execute transaction error: " << error->errorMessage();
+
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
 
                     callback(std::move(error), ERROR);
                 }

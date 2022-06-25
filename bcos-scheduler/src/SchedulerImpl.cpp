@@ -1,5 +1,6 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
+#include "bcos-framework/interfaces/executor/ExecuteError.h"
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
@@ -173,6 +174,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                              << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+        blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
     }
     else
     {
@@ -444,6 +446,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     auto blockExecutive =
         std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID.fetch_add(1),
             m_transactionSubmitResultFactory, true, m_blockFactory, m_txPool, m_gasLimit, false);
+    blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
     blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
                                   protocol::TransactionReceipt::Ptr&& receipt) {
@@ -503,14 +506,28 @@ void SchedulerImpl::getCode(
     std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback)
 {
     auto executor = m_executorManager->dispatchExecutor(contract);
-    executor->getCode(contract, std::move(callback));
+    executor->getCode(contract, [this, callback = std::move(callback)](
+                                    Error::Ptr error, bcos::bytes code) {
+        if (error && error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+        {
+            triggerSwitch();
+        }
+        callback(std::move(error), std::move(code));
+    });
 }
 
 void SchedulerImpl::getABI(
     std::string_view contract, std::function<void(Error::Ptr, std::string)> callback)
 {
     auto executor = m_executorManager->dispatchExecutor(contract);
-    executor->getABI(contract, std::move(callback));
+    executor->getABI(contract, [this, callback = std::move(callback)](
+                                   Error::Ptr error, std::string abi) {
+        if (error && error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+        {
+            triggerSwitch();
+        }
+        callback(std::move(error), std::move(abi));
+    });
 }
 
 void SchedulerImpl::registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
@@ -599,6 +616,7 @@ void SchedulerImpl::preExecuteBlock(
 
     blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
         m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+    blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
     setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
