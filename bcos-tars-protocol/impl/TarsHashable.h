@@ -12,6 +12,9 @@ namespace bcos::concepts::hash
 template <bcos::crypto::hasher::Hasher Hasher>
 auto calculate(bcostars::Transaction const& transaction)
 {
+    if (!transaction.dataHash.empty())
+        return transaction.dataHash;
+
     Hasher hasher;
     auto const& hashFields = transaction.data;
 
@@ -27,13 +30,17 @@ auto calculate(bcostars::Transaction const& transaction)
     hasher.update(hashFields.input);
     hasher.update(hashFields.abi);
 
-    hasher.final(transaction.dataHash);
-    return transaction.dataHash;
+    decltype(transaction.dataHash) hash(Hasher::HASH_SIZE);
+    hasher.final(hash);
+    return hash;
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
 auto calculate(bcostars::BlockHeader const& blockHeader)
 {
+    if (!blockHeader.dataHash.empty())
+        return blockHeader.dataHash;
+
     Hasher hasher;
     auto const& hashFields = blockHeader.data;
 
@@ -73,8 +80,9 @@ auto calculate(bcostars::BlockHeader const& blockHeader)
         hasher.update(networkWeight);
     }
 
-    hasher.final(blockHeader.dataHash);
-    return blockHeader.dataHash;
+    decltype(blockHeader.dataHash) hash(Hasher::HASH_SIZE);
+    hasher.final(hash);
+    return hash;
 }
 
 }  // namespace bcos::concepts::hash

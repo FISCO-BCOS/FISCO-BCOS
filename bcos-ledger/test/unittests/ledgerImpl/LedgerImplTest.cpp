@@ -36,16 +36,25 @@ struct MockMemoryStorage
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
         output.reserve(std::size(keys));
-        for (auto&& it : keys)
+        for (auto&& key : keys)
         {
-            output.emplace_back(getRow(table, it));
+            output.emplace_back(getRow(table, key));
         }
         return output;
     }
 
-    void setRow([[maybe_unused]] std::string_view table, [[maybe_unused]] std::string_view key,
-        [[maybe_unused]] bcos::storage::Entry entry)
-    {}
+    void setRow(std::string_view table, std::string_view key, bcos::storage::Entry entry)
+    {
+        auto it = data.find(std::tuple{table, key});
+        if (it != data.end())
+        {
+            it->second = std::move(entry);
+        }
+        else
+        {
+            data.emplace(std::tuple{std::string{table}, std::string{key}}, std::move(entry));
+        }
+    }
 
     void createTable([[maybe_unused]] std::string_view tableName) {}
 
@@ -136,7 +145,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
         BOOST_CHECK_EQUAL(receipts[i].data.contractAddress, "contract");
     }
 
-    auto [block] = ledger.getBlock<BLOCK>(10086);
+    auto [block] = ledger.getBlock<BLOCK_ALL>(10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block.blockHeader.data.timestamp, 5000);
@@ -157,7 +166,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK_HEADER>(10087), std::runtime_error);
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK_TRANSACTIONS>(10087), std::runtime_error);
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK_RECEIPTS>(10087), std::runtime_error);
-    BOOST_CHECK_THROW(ledger.getBlock<BLOCK>(10087), std::runtime_error);
+    BOOST_CHECK_THROW(ledger.getBlock<BLOCK_ALL>(10087), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(setBlock)
@@ -177,13 +186,18 @@ BOOST_AUTO_TEST_CASE(setBlock)
 
         bcostars::TransactionReceipt receipt;
         receipt.data.contractAddress = "contract to";
+        if (i >= 70)
+        {
+            receipt.data.status = -1;
+        }
 
         block.transactions.emplace_back(std::move(transaction));
         block.receipts.emplace_back(std::move(receipt));
     }
+    ledger.setTransactionsOrReceipts(block.transactions);
 
-    BOOST_CHECK_NO_THROW(ledger.setBlock(storage, std::move(block)));
-    auto [gotBlock] = ledger.getBlock<BLOCK>(1000);
+    BOOST_CHECK_NO_THROW(ledger.setBlockWithoutTransaction(storage, std::move(block)));
+    auto [gotBlock] = ledger.getBlock<BLOCK_ALL>(100);
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
     BOOST_CHECK_EQUAL(gotBlock.transactionsMetaData.size(), block.transactions.size());
