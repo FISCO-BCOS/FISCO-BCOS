@@ -213,7 +213,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Note: ensure that there has at least one executor before pbft/sync execute block
 
         std::string executorName = "executor-local";
-        auto executorFactory = ExecutorInitializer::buildFactory(m_ledger,
+        auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(m_ledger,
             m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);

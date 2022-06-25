@@ -1,5 +1,6 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
+#include "bcos-framework/interfaces/executor/ExecuteError.h"
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
@@ -168,15 +169,16 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     if (blockExecutive == nullptr)
     {
         // the block has not been prepared, just make a new one here
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock ")
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock")
                              << "Not hit prepared block executive, create."
                              << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+        blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
     }
     else
     {
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock ")
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock")
                              << "Hit prepared block executive cache, use it."
                              << LOG_KV("block number", block->blockHeaderConst()->number());
         blockExecutive->block()->setBlockHeader(block->blockHeader());
@@ -313,6 +315,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                 commitLock](Error::UniquePtr&& error) {
         if (!m_isRunning)
         {
+            commitLock->unlock();
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
                 nullptr);
             return;
@@ -334,6 +337,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                  Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
             if (!m_isRunning)
             {
+                commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
                     nullptr);
                 return;
@@ -442,6 +446,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     auto blockExecutive =
         std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID.fetch_add(1),
             m_transactionSubmitResultFactory, true, m_blockFactory, m_txPool, m_gasLimit, false);
+    blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
     blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
                                   protocol::TransactionReceipt::Ptr&& receipt) {
@@ -501,14 +506,28 @@ void SchedulerImpl::getCode(
     std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback)
 {
     auto executor = m_executorManager->dispatchExecutor(contract);
-    executor->getCode(contract, std::move(callback));
+    executor->getCode(contract, [this, callback = std::move(callback)](
+                                    Error::Ptr error, bcos::bytes code) {
+        if (error && error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+        {
+            triggerSwitch();
+        }
+        callback(std::move(error), std::move(code));
+    });
 }
 
 void SchedulerImpl::getABI(
     std::string_view contract, std::function<void(Error::Ptr, std::string)> callback)
 {
     auto executor = m_executorManager->dispatchExecutor(contract);
-    executor->getABI(contract, std::move(callback));
+    executor->getABI(contract, [this, callback = std::move(callback)](
+                                   Error::Ptr error, std::string abi) {
+        if (error && error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+        {
+            triggerSwitch();
+        }
+        callback(std::move(error), std::move(abi));
+    });
 }
 
 void SchedulerImpl::registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
@@ -597,6 +616,7 @@ void SchedulerImpl::preExecuteBlock(
 
     blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
         m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+    blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
     setPreparedBlock(blockNumber, timestamp, blockExecutive);
 

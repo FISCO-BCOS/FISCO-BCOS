@@ -89,13 +89,22 @@ class KeyPageStorage : public virtual storage::StateStorageInterface
 public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
-    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024)
+    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024,
+        std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr)
       : storage::StateStorageInterface(_prev),
         m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
         m_splitSize(m_pageSize / 3 * 2),
         m_mergeSize(m_pageSize / 4),
-        m_buckets(std::thread::hardware_concurrency())
-    {}
+        m_buckets(std::thread::hardware_concurrency()),
+        m_ignoreTables(_ignoreTables)
+    {
+        if (!m_ignoreTables.get())
+        {
+            auto t = std::make_shared<std::set<std::string, std::less<>>>();
+            t->insert(std::string(SYS_TABLES));
+            m_ignoreTables = t;
+        }
+    }
 
     KeyPageStorage(const KeyPageStorage&) = delete;
     KeyPageStorage& operator=(const KeyPageStorage&) = delete;
@@ -1140,6 +1149,7 @@ private:
     size_t m_splitSize;
     size_t m_mergeSize;
     std::vector<Bucket> m_buckets;
+    std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
 };
 
 }  // namespace bcos::storage

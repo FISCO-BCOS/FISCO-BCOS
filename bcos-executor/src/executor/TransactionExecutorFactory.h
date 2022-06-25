@@ -20,8 +20,10 @@
  */
 #pragma once
 
-#include "EvmTransactionExecutor.h"
-#include "WasmTransactionExecutor.h"
+#include "TransactionExecutor.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-ledger/src/libledger/utilities/Common.h"
+
 
 namespace bcos
 {
@@ -39,17 +41,9 @@ public:
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
         std::string name = "executor-" + std::to_string(utcTime()))
-    {
-        if (isWasm)
-        {
-            return std::make_shared<WasmTransactionExecutor>(ledger, txpool, cachedStorage,
-                backendStorage, executionMessageFactory, hashImpl, isAuthCheck, keyPageSize, name);
-        }
-        else
-        {
-            return std::make_shared<EvmTransactionExecutor>(ledger, txpool, cachedStorage,
-                backendStorage, executionMessageFactory, hashImpl, isAuthCheck, keyPageSize, name);
-        }
+    {  // only for test
+        return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
+            executionMessageFactory, hashImpl, isWasm, isAuthCheck, keyPageSize, nullptr, name);
     }
 
     TransactionExecutorFactory(bcos::ledger::LedgerInterface::Ptr ledger,
@@ -68,17 +62,31 @@ public:
         m_hashImpl(hashImpl),
         m_isWasm(isWasm),
         m_isAuthCheck(isAuthCheck)
-    {}
+    {
+        m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            std::initializer_list<std::set<std::string, std::less<>>::value_type>{
+                ledger::SYS_CONFIG,
+                ledger::SYS_CONSENSUS,
+                ledger::FS_ROOT,
+                ledger::FS_APPS,
+                ledger::FS_USER,
+                ledger::FS_SYS_BIN,
+                ledger::FS_USER_TABLE,
+                storage::StorageInterface::SYS_TABLES,
+            });
+    }
 
     TransactionExecutor::Ptr build()
     {
-        return build(m_ledger, m_txpool, m_cache, m_storage, m_executionMessageFactory, m_hashImpl,
-            m_isWasm, m_isAuthCheck, m_keyPageSize, m_name + "-" + std::to_string(utcTime()));
+        return std::make_shared<TransactionExecutor>(m_ledger, m_txpool, m_cache, m_storage,
+            m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck, m_keyPageSize,
+            m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
     }
 
 private:
     std::string m_name;
     size_t m_keyPageSize;
+    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cache;

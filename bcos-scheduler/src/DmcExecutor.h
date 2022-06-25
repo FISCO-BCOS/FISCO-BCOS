@@ -35,6 +35,7 @@
 //#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
+
 class DmcExecutor
 {
 public:
@@ -85,6 +86,19 @@ public:
         f_onTxFinished = std::move(onTxFinished);
     }
 
+    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+    }
+
+    void triggerSwitch()
+    {
+        if (f_onNeedSwitchEvent)
+        {
+            f_onNeedSwitchEvent();
+        }
+    }
+
     void forEachExecutive(std::function<void(ContextID, ExecutiveState::Ptr)> handler)
     {
         m_executivePool.forEach(
@@ -119,6 +133,7 @@ private:
     mutable SharedMutex x_concurrentLock;
 
     std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> f_onTxFinished;
+    std::function<void()> f_onNeedSwitchEvent;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
 };
 
