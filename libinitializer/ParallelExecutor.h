@@ -12,12 +12,12 @@ namespace bcos::initializer
 class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
 {
 public:
-    const int64_t NOT_INIT_SCHEDULER_TERM_ID = -1;
+    const int64_t INIT_SCHEDULER_TERM_ID = 0;
 
     ParallelExecutor(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
     {
-        refreshExecutor(0);
+        refreshExecutor(INIT_SCHEDULER_TERM_ID);
     }
 
     ~ParallelExecutor() noexcept override {}
@@ -51,7 +51,7 @@ public:
     bool hasInited()
     {
         ReadGuard l(m_mutex);
-        return m_schedulerTermId != NOT_INIT_SCHEDULER_TERM_ID;
+        return m_schedulerTermId != INIT_SCHEDULER_TERM_ID;
     }
 
     void nextBlockHeader(int64_t schedulerTermId,
@@ -282,7 +282,7 @@ private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
     bcos::executor::TransactionExecutor::Ptr m_oldExecutor;
-    int64_t m_schedulerTermId = NOT_INIT_SCHEDULER_TERM_ID;
+    int64_t m_schedulerTermId = -1;
 
     mutable bcos::SharedMutex m_mutex;
 
