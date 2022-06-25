@@ -336,7 +336,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                                    "storage: %d") %
                                m_name % blockHeader->number() % storageBlockNumber;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
-                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, fmt.str()));
+                    // to trigger switch operation
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt.str()));
                     return;
                 }
             }
