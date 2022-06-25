@@ -63,7 +63,7 @@ public:
         for (int id = 0; id < SMALLBANK_CONTRACT_NUM; id++)
         {
             std::string _tableName = std::to_string(id);
-            std::string path = bcos::ledger::SMALLBANK_TRANSFER;
+            std::string path = std::string{bcos::ledger::SMALLBANK_TRANSFER};
             _tableName = path + _tableName;
             std::string&& address = getAddress(id);
             registeredMap->insert({std::move(address),

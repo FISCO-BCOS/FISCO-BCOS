@@ -7,7 +7,8 @@ namespace bcos::concepts
 {
 
 template <class ByteBufferType>
-concept ByteBuffer = std::ranges::range<ByteBufferType> &&(sizeof(std::ranges::range_value_t<ByteBufferType>) == 1);
+concept ByteBuffer = std::ranges::range<ByteBufferType> &&
+                     (sizeof(std::ranges::range_value_t<ByteBufferType>) == 1);
 
 template <class HashType>
 concept Hash = ByteBuffer<HashType>;

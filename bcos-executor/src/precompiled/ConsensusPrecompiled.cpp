@@ -157,7 +157,7 @@ int ConsensusPrecompiled::addSealer(
     }
     else
     {
-        consensusList.emplace_back(nodeID, weight, ledger::CONSENSUS_SEALER,
+        consensusList.emplace_back(nodeID, weight, std::string{ledger::CONSENSUS_SEALER},
             boost::lexical_cast<std::string>(blockContext->number() + 1));
     }
 
@@ -216,7 +216,7 @@ int ConsensusPrecompiled::addObserver(
     }
     else
     {
-        consensusList.emplace_back(nodeID, 0, ledger::CONSENSUS_OBSERVER,
+        consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
             boost::lexical_cast<std::string>(blockContext->number() + 1));
     }
 

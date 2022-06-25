@@ -1,12 +1,17 @@
-#include <boost/throw_exception.hpp>
+
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-ledger/bcos-ledger/LedgerImpl.h"
 #include "impl/TarsSerializable.h"
+#include "tars/Transaction.h"
+#include "tars/TransactionReceipt.h"
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-tars-protocol/tars/Block.h>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
 #include <optional>
 #include <ranges>
 
@@ -18,12 +23,16 @@ struct MockMemoryStorage
         [[maybe_unused]] std::string_view table, [[maybe_unused]] std::string_view key)
     {
         auto entryIt = data.find(std::tuple{table, key});
-        if (entryIt != data.end()) { return entryIt->second; }
+        if (entryIt != data.end())
+        {
+            return entryIt->second;
+        }
         return {};
     }
 
     std::vector<std::optional<bcos::storage::Entry>> getRows(
-        [[maybe_unused]] std::string_view table, [[maybe_unused]] std::ranges::range auto const& keys)
+        [[maybe_unused]] std::string_view table,
+        [[maybe_unused]] std::ranges::range auto const& keys)
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
         output.reserve(std::size(keys));
@@ -104,9 +113,12 @@ BOOST_FIXTURE_TEST_SUITE(LedgerImplTest, LedgerImplFixture)
 
 BOOST_AUTO_TEST_CASE(getBlock)
 {
-    LedgerImpl<MockMemoryStorage, bcostars::Block> ledger{storage};
+    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
+        bcostars::Block>
+        ledger{storage};
 
-    auto [header, transactions, receipts] = ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(10086);
+    auto [header, transactions, receipts] =
+        ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(10086);
     BOOST_CHECK_EQUAL(header.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(header.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(header.data.timestamp, 5000);
@@ -146,6 +158,42 @@ BOOST_AUTO_TEST_CASE(getBlock)
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK_TRANSACTIONS>(10087), std::runtime_error);
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK_RECEIPTS>(10087), std::runtime_error);
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK>(10087), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(setBlock)
+{
+    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
+        bcostars::Block>
+        ledger{storage};
+
+    bcostars::Block block;
+    block.blockHeader.data.blockNumber = 100;
+
+    for (auto i = 0u; i < count; ++i)
+    {
+        bcostars::Transaction transaction;
+        transaction.data.blockLimit = 1000;
+        transaction.data.to = "i am to";
+
+        bcostars::TransactionReceipt receipt;
+        receipt.data.contractAddress = "contract to";
+
+        block.transactions.emplace_back(std::move(transaction));
+        block.receipts.emplace_back(std::move(receipt));
+    }
+
+    BOOST_CHECK_NO_THROW(ledger.setBlock(storage, std::move(block)));
+    auto [gotBlock] = ledger.getBlock<BLOCK>(1000);
+
+    BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
+    BOOST_CHECK_EQUAL(gotBlock.transactionsMetaData.size(), block.transactions.size());
+    BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());
+    BOOST_CHECK_EQUAL(gotBlock.receiptsHash.size(), block.receipts.size());
+    BOOST_CHECK_EQUAL(gotBlock.receipts.size(), block.receipts.size());
+    BOOST_CHECK_EQUAL_COLLECTIONS(gotBlock.transactions.begin(), gotBlock.transactions.end(),
+        block.transactions.begin(), block.transactions.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(gotBlock.receipts.begin(), gotBlock.receipts.end(),
+        block.receipts.begin(), block.receipts.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

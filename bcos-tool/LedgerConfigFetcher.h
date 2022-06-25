@@ -59,8 +59,8 @@ public:
 
 protected:
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
-    virtual std::string fetchSystemConfig(std::string const& _key);
-    virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string const& _type);
+    virtual std::string fetchSystemConfig(std::string_view _key);
+    virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string_view _type);
 
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;

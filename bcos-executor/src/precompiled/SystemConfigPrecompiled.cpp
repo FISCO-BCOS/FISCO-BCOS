@@ -43,13 +43,13 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
 {
     name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR, _hashImpl);
     name2Selector[SYSCONFIG_METHOD_GET_STR] = getFuncSelector(SYSCONFIG_METHOD_GET_STR, _hashImpl);
-    auto defaultCmp = [](std::string const& _key, int64_t _value, int64_t _minValue) {
+    auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue) {
         if (_value >= _minValue)
         {
             return;
         }
         BOOST_THROW_EXCEPTION(
-            PrecompiledError("Invalid value " + std::to_string(_value) + " ,the value for " + _key +
+            PrecompiledError("Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
                              " must be no less than " + std::to_string(_minValue)));
     };
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT,
