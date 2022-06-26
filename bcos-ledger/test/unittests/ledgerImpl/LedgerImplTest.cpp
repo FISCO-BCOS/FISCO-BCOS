@@ -196,13 +196,11 @@ BOOST_AUTO_TEST_CASE(setBlock)
     }
     ledger.setTransactionsOrReceipts(block.transactions);
 
-    BOOST_CHECK_NO_THROW(ledger.setBlockWithoutTransaction(storage, std::move(block)));
+    BOOST_CHECK_NO_THROW(ledger.setBlockWithoutTransaction(storage, block));
     auto [gotBlock] = ledger.getBlock<BLOCK_ALL>(100);
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
-    BOOST_CHECK_EQUAL(gotBlock.transactionsMetaData.size(), block.transactions.size());
     BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());
-    BOOST_CHECK_EQUAL(gotBlock.receiptsHash.size(), block.receipts.size());
     BOOST_CHECK_EQUAL(gotBlock.receipts.size(), block.receipts.size());
     BOOST_CHECK_EQUAL_COLLECTIONS(gotBlock.transactions.begin(), gotBlock.transactions.end(),
         block.transactions.begin(), block.transactions.end());

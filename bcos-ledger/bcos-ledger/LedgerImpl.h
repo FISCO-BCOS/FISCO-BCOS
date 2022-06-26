@@ -104,7 +104,7 @@ public:
         }
     }
 
-    void setBlockWithoutTransaction(Storage& storage, bcos::concepts::block::Block auto&& block)
+    void setBlockWithoutTransaction(Storage& storage, bcos::concepts::block::Block auto block)
     {
         if (block.blockHeader.data.blockNumber == 0 && !std::empty(block.transactions))
             return;
