@@ -1,4 +1,5 @@
 
+#include "impl/TarsHashable.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -9,6 +10,7 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-tars-protocol/tars/Block.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
@@ -16,6 +18,16 @@
 #include <ranges>
 
 using namespace bcos::ledger;
+
+namespace std
+{
+ostream& operator<<(ostream& os, std::vector<tars::Char> const& buffer)
+{
+    auto hexBuffer = boost::algorithm::hex_lower(buffer);
+    os << string_view{(const char*)hexBuffer.data(), hexBuffer.size()};
+    return os;
+}
+}  // namespace std
 
 struct MockMemoryStorage
 {
@@ -183,6 +195,7 @@ BOOST_AUTO_TEST_CASE(setBlock)
         bcostars::Transaction transaction;
         transaction.data.blockLimit = 1000;
         transaction.data.to = "i am to";
+        transaction.data.version = i;
 
         bcostars::TransactionReceipt receipt;
         receipt.data.contractAddress = "contract to";

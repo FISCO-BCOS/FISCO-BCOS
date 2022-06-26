@@ -3,6 +3,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/concepts/Basic.h>
 #include <bcos-framework/concepts/Block.h>
+#include <bcos-framework/concepts/Receipt.h>
 #include <bcos-framework/concepts/Storage.h>
 #include <bcos-framework/concepts/Transaction.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -31,7 +32,8 @@ struct BLOCK_NONCES: public GETBLOCK_FLAGS {};
 // clang-format on
 
 template <class ArgType>
-concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType>;
+concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
+                               bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::storage::Storage Storage,
     bcos::concepts::block::Block Block>
@@ -242,8 +244,8 @@ public:
     TransactionCount getTotalTransactionCount()
     {
         LEDGER_LOG(INFO) << "GetTotalTransactionCount request";
-        constexpr static std::array<std::string_view, 3> keys{SYS_KEY_TOTAL_TRANSACTION_COUNT,
-            SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER};
+        constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
+            SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
         TransactionCount transactionCount;
         auto entries = m_storage.getRows(SYS_CURRENT_STATE, keys);

@@ -40,18 +40,18 @@ jobs:
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
-      - name: Configure for macos
+      - name: Build for macos
         if: runner.os == 'macOS'
-        run:
-          ln -s /usr/local/opt/llvm@12/bin/llvm-ar /usr/local/bin/ar
-          mkdir -p build && cd build && CC="gcc-10" CXX="g++-10" cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-      - name: Configure for linux and windows
-        if: runner.os != 'macOS'
-        run:
+        run: |
+          export CC='gcc-10'
+          export CXX='g++-10'
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-      - name: Compile
-        run: 
-          cd build && cmake --build . --parallel 4
+          cmake --build . --parallel 4
+      - name: Build
+        if: runner.os != 'macOS'
+        run: |
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake --build . --parallel 4
       - name: Test
         if: runner.os != 'Windows'
         run:
@@ -80,7 +80,7 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - name: Configure and build
+      - name: Build
         run: |
           alias cmake='cmake3'
           . /opt/rh/devtoolset-10/enable
@@ -90,7 +90,7 @@ jobs:
           mkdir -p build
           cd build
           cmake3 -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-          cmake3 --build . --parallel 3
+          cmake3 --build . --parallel 4
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
