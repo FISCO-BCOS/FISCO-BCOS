@@ -19,8 +19,8 @@
  * @date: 2022-01-19
  */
 
-#include "../../../src/dag/TxDAG.h"
 #include "../../../src/dag/TxDAG2.h"
+#include "TxDAG.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>

@@ -937,15 +937,15 @@ BOOST_AUTO_TEST_CASE(performance)
             bcos::u256 value(0);
             codec->decode(balanceResult->data(), value);
             values.push_back(value);
-//
-//            if (i < count - 1)
-//            {
-//                BOOST_CHECK_EQUAL(value, u256(1000000 - 10));
-//            }
-//            else
-//            {
-//                BOOST_CHECK_EQUAL(value, u256(1000000 + 10 * (count - 1)));
-//            }
+            //
+            //            if (i < count - 1)
+            //            {
+            //                BOOST_CHECK_EQUAL(value, u256(1000000 - 10));
+            //            }
+            //            else
+            //            {
+            //                BOOST_CHECK_EQUAL(value, u256(1000000 + 10 * (count - 1)));
+            //            }
         }
         size_t c = std::count(values.begin(), values.end(), u256(1000000 - 10));
         BOOST_CHECK(c == count - 1);
@@ -965,8 +965,6 @@ BOOST_AUTO_TEST_CASE(performance)
 
 BOOST_AUTO_TEST_CASE(multiDeploy)
 {
-    tbb::task_group group;
-
     size_t count = 100;
     std::vector<NativeExecutionMessage::UniquePtr> paramsList;
 
@@ -1011,24 +1009,21 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
     });
     nextPromise.get_future().get();
 
-    boost::latch latch(paramsList.size());
 
     std::vector<std::tuple<bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr>>
         responses(count);
     for (size_t i = 0; i < paramsList.size(); ++i)
     {
-        group.run([&responses, executor = executor, &paramsList, index = i, &latch]() {
-            executor->executeTransaction(std::move(std::move(paramsList[index])),
-                [&](bcos::Error::UniquePtr error,
-                    bcos::protocol::ExecutionMessage::UniquePtr result) {
-                    responses[index] = std::make_tuple(std::move(error), std::move(result));
-                    latch.count_down();
-                });
-        });
+        // not support multi-thread executeTransaction
+        boost::latch latch(1);
+        executor->executeTransaction(std::move(std::move(paramsList[i])),
+            [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr result) {
+                responses[i] = std::make_tuple(std::move(error), std::move(result));
+                latch.count_down();
+            });
+        latch.wait();
     }
 
-    latch.wait();
-    group.wait();
 
     for (auto& it : responses)
     {

@@ -25,7 +25,6 @@
 #include "../dag/ClockCache.h"
 #include "../dag/CriticalFields.h"
 #include "../dag/ScaleUtils.h"
-#include "../dag/TxDAG.h"
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
 #include "../executive/ExecutiveFactory.h"

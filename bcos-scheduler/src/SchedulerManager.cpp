@@ -260,6 +260,8 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
     }
 
     m_scheduler = m_factory->build(schedulerTermId);
+    m_scheduler->setOnNeedSwitchEventHandler(
+        [this](int64_t oldSchedulerTermID) { handleNeedSwitchEvent(oldSchedulerTermID); });
 }
 
 void SchedulerManager::switchTerm(int64_t schedulerSeq)

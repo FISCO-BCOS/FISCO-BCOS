@@ -1197,13 +1197,18 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
                 WriteGuard lock(status->x_lock);
                 if (error)
                 {
-                    SCHEDULER_LOG(ERROR)
-                        << "Rollback executor error!" << boost::diagnostic_information(*error);
-                    ++status->failed;
-
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
+                        SCHEDULER_LOG(DEBUG) << "Rollback a restarted executor. Ignore"
+                                             << boost::diagnostic_information(*error);
+                        ++status->success;
                         triggerSwitch();
+                    }
+                    else
+                    {
+                        SCHEDULER_LOG(ERROR)
+                            << "Rollback executor error!" << boost::diagnostic_information(*error);
+                        ++status->failed;
                     }
                 }
                 else
@@ -1223,14 +1228,14 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
 
 DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractAddress)
-{   
+{
     {
-    bcos::ReadGuard l(x_dmcExecutorLock);
-    auto dmcExecutorIt = m_dmcExecutors.find(contractAddress);
-    if (dmcExecutorIt != m_dmcExecutors.end())
-    {
-        return dmcExecutorIt->second;
-    }
+        bcos::ReadGuard l(x_dmcExecutorLock);
+        auto dmcExecutorIt = m_dmcExecutors.find(contractAddress);
+        if (dmcExecutorIt != m_dmcExecutors.end())
+        {
+            return dmcExecutorIt->second;
+        }
     }
     {
         bcos::WriteGuard lock(x_dmcExecutorLock);
