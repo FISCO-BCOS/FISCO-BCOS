@@ -404,8 +404,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
-    if ((m_keyPageSize > 0 && m_keyPageSize < 4096) || m_keyPageSize < 0 ||
-        m_keyPageSize > (1 << 25))
+    if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
