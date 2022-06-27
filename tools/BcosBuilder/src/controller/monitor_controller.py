@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-import re
 from config.monitor_config_generator import MonitorConfigGenerator
 
 

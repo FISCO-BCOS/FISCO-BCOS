@@ -133,10 +133,11 @@ class NodeConfig:
             self.config, "cipher_data_key", "", False, self.desc)
         self.deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True, self.desc)
+
         self.monitor_listen_port = utilities.get_item_value(
-            self.config, "monitor_listen_port", None, True, self.desc)
+            self.config, "monitor_listen_port", None, False, self.desc)
         self.monitor_log_path = utilities.get_item_value(
-            self.config, "monitor_log_path", None, True, self.desc)
+            self.config, "monitor_log_path", None, False, self.desc)
         # parse node_service_config
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
