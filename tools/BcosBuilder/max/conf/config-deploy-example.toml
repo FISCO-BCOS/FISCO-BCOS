@@ -68,7 +68,7 @@ enable_storage_security = false
         node_name = "node0"
         # the tikv storage pd-addresses
         pd_addrs="172.25.0.3:2379"
-        key_page_size=0
+        key_page_size=10240
         deploy_ip = ["172.25.0.3"]
         executor_deploy_ip=["172.25.0.3"]
         monitor_listen_port = "3901"

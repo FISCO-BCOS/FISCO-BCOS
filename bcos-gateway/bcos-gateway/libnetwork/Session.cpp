@@ -324,9 +324,8 @@ void Session::drop(DisconnectReason _reason)
             {
                 socket->close();
             }
-            auto shutdown_timer =
-                std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService(),
-                    boost::posix_time::milliseconds(m_shutDownTimeThres));
+            auto shutdown_timer = std::make_shared<boost::asio::deadline_timer>(
+                *(socket->ioService()), boost::posix_time::milliseconds(m_shutDownTimeThres));
             /// async wait for shutdown
             shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
                 /// drop operation has been aborted
