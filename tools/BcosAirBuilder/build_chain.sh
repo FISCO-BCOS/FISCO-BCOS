@@ -13,7 +13,7 @@ ip_array=
 output_dir="./nodes"
 binary_name="fisco-bcos"
 mtail_binary_name="mtail"
-key_page_size=0
+key_page_size=10240
 # for cert generation
 ca_cert_dir="${dirpath}"
 sm_cert_conf='sm_cert.cnf'
