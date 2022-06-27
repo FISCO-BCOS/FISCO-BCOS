@@ -1,19 +1,18 @@
 #pragma once
 
 #include "bcos-utilities/FixedBytes.h"
-#include <bcos-framework/concepts/Ledger.h>
 #include <bcos-framework/concepts/Serialize.h>
+#include <bcos-framework/concepts/ledger/Ledger.h>
+#include <bcos-framework/concepts/sync/SyncBlockMessages.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
-#include <bcos-framework/protocol/SyncBlockMessages.h>
-#include <bcos-framework/sync/BlockSyncer.h>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <future>
 
 namespace bcos::sync
 {
-template <bcos::concepts::ledger::Ledger LedgerType, RequestBlock RequestType,
-    ResponseBlock ResponseType>
+template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::sync::RequestBlock RequestType,
+    bcos::concepts::sync::ResponseBlock ResponseType>
 class BlockSyncerClient
 {
 public:
@@ -68,6 +67,7 @@ public:
             if (error)
                 std::rethrow_exception(error);
 
+            // TODO: Verify the signer
             for (auto& block : response.blocks)
             {
                 m_ledger.setBlock(block);
