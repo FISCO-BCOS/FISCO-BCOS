@@ -403,8 +403,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
-    m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 0);
-    if ((m_keyPageSize > 0 && m_keyPageSize < 4096) || m_keyPageSize < 0 || m_keyPageSize> (1 << 25) )
+    m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
+    if ((m_keyPageSize > 0 && m_keyPageSize < 4096) || m_keyPageSize < 0 ||
+        m_keyPageSize > (1 << 25))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
@@ -414,8 +415,8 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
-                         << LOG_KV("KeyPage", m_keyPageSize)
-                         << LOG_KV("storageType", m_storageType) << LOG_KV("pd_addrs", pd_addrs)
+                         << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
+                         << LOG_KV("pd_addrs", pd_addrs)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
