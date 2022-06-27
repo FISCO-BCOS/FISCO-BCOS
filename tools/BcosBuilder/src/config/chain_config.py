@@ -121,6 +121,9 @@ class NodeConfig:
         self.desc = "[[agency.group.node]]."
         self.node_name = utilities.get_item_value(
             self.config, "node_name", None, True, self.desc)
+        # parse key_page_size
+        self.key_page_size = utilities.get_item_value(
+            self.config, "key_page_size", 0, False, self.desc)
         # load storage_security
         self.enable_storage_security = utilities.get_item_value(
             self.config, "enable_storage_security", False, False, self.desc)
@@ -139,7 +142,6 @@ class NodeConfig:
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
         self.service_list = []
-        self.key_page_size = 0
         self.__parse_node_service_config(node_type)
 
     def __parse_node_service_config(self, node_type):

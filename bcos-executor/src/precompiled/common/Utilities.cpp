@@ -204,6 +204,12 @@ uint32_t bcos::precompiled::getFuncSelector(
 
 uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 {
+    if (_param.size() < 4)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("getParamFunc param too short")
+                               << LOG_KV("param", toHexStringWithPrefix(_param.toBytes()));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Empty param data in precompiled call"));
+    }
     auto funcBytes = _param.getCroppedData(0, 4);
     uint32_t func = *((uint32_t*)(funcBytes.data()));
 

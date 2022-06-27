@@ -146,6 +146,18 @@ public:
         }
     }
 
+    void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+    }
+
+    void triggerSwitch()
+    {
+        if (f_onNeedSwitchEvent)
+        {
+            f_onNeedSwitchEvent(m_schedulerTermId);
+        }
+    }
 
 private:
     void asyncGetLedgerConfig(
@@ -198,5 +210,7 @@ private:
     int64_t m_schedulerTermId;
 
     bool m_isRunning = false;
+
+    std::function<void(int64_t)> f_onNeedSwitchEvent;
 };
 }  // namespace bcos::scheduler
