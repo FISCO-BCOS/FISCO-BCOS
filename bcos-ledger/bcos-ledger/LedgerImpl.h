@@ -4,8 +4,9 @@
 #include <bcos-framework/concepts/Basic.h>
 #include <bcos-framework/concepts/Block.h>
 #include <bcos-framework/concepts/Receipt.h>
-#include <bcos-framework/concepts/Storage.h>
 #include <bcos-framework/concepts/Transaction.h>
+#include <bcos-framework/concepts/ledger/Ledger.h>
+#include <bcos-framework/concepts/storage/Storage.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <boost/lexical_cast.hpp>
@@ -31,82 +32,23 @@ struct BLOCK_RECEIPTS: public GETBLOCK_FLAGS {};
 struct BLOCK_NONCES: public GETBLOCK_FLAGS {};
 // clang-format on
 
-template <class ArgType>
-concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
-                               bcos::concepts::receipt::TransactionReceipt<ArgType>;
-
-template <bcos::crypto::hasher::Hasher Hasher, bcos::storage::Storage Storage,
+template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage,
     bcos::concepts::block::Block Block>
 class LedgerImpl
 {
 public:
     LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
-    template <class Flag, class... Flags>
-        requires std::derived_from<Flag, GETBLOCK_FLAGS>
+    template <class... Flags>
     auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
-        if constexpr (std::is_same_v<Flag, BLOCK_HEADER>)
-        {
-            auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
-            auto entry = m_storage.getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr);
-            if (!entry) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
-            }
-
-            auto field = entry->getField(0);
-            decltype(Block::blockHeader) blockHeader;
-            bcos::concepts::serialize::decode(blockHeader, field);
-
-            return std::tuple_cat(
-                std::tuple{std::move(blockHeader)}, std::tuple{getBlock<Flags...>(blockNumber)});
-        }
-        else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> ||
-                           std::is_same_v<Flag, BLOCK_RECEIPTS>)
-        {
-            auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
-            auto entry = m_storage.getRow(SYS_NUMBER_2_TXS, blockNumberStr);
-            if (!entry) [[unlikely]]
-                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
-
-            auto field = entry->getField(0);
-            Block block;
-            bcos::concepts::serialize::decode(block, field);
-
-            auto hashesRange =
-                block.transactionsMetaData |
-                std::views::transform(
-                    [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
-                        return std::string_view{metaData.hash.data(), metaData.hash.size()};
-                    });
-
-            constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
-            auto outputs = getTransactionsOrReceipts<isTransaction>(std::move(hashesRange));
-            return std::tuple_cat(
-                std::tuple{std::move(outputs)}, std::tuple{getBlock<Flags...>(blockNumber)});
-        }
-        else if constexpr (std::is_same_v<Flag, BLOCK_NONCES>)
-        {}
-        else if constexpr (std::is_same_v<Flag, BLOCK_ALL>)
-        {
-            auto [header, transactions, receipts] =
-                getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(blockNumber);
-            Block block;
-            block.blockHeader = std::move(header);
-            block.transactions = std::move(transactions);
-            block.receipts = std::move(receipts);
-
-            return std::tuple_cat(
-                std::tuple{std::move(block)}, std::tuple{getBlock<Flags...>(blockNumber)});
-        }
-        else
-        {
-            static_assert(!sizeof(blockNumber), "Wrong input flag!");
-        }
+        Block block;
+        auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
+        (getBlockData<Flags>(blockNumberStr, block), ...);
+        return block;
     }
 
-    void setBlockWithoutTransaction(Storage& storage, bcos::concepts::block::Block auto block)
+    void setBlock(Storage& storage, bcos::concepts::block::Block auto block)
     {
         if (block.blockHeader.data.blockNumber == 0 && !std::empty(block.transactions))
             return;
@@ -285,17 +227,15 @@ public:
     }
 
     template <std::ranges::range Inputs>
-        requires TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
+    requires bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
     void setTransactionsOrReceipts(Inputs const& inputs)
     {
-        auto hashesRange =
-            inputs | std::views::transform([](TransactionOrReceipt auto const& input) {
-                return bcos::concepts::hash::calculate<Hasher>(input);
-            });
-        auto buffersRange =
-            inputs | std::views::transform([](TransactionOrReceipt auto const& input) {
-                return bcos::concepts::serialize::encode(input);
-            });
+        auto hashesRange = inputs | std::views::transform([](auto const& input) {
+            return bcos::concepts::hash::calculate<Hasher>(input);
+        });
+        auto buffersRange = inputs | std::views::transform([](auto const& input) {
+            return bcos::concepts::serialize::encode(input);
+        });
 
         constexpr auto isTransaction =
             bcos::concepts::transaction::Transaction<std::ranges::range_value_t<Inputs>>;
@@ -325,7 +265,68 @@ public:
     }
 
 private:
-    auto getBlock(bcos::concepts::block::BlockNumber auto) { return std::tuple{}; }
+    template <class Flag>
+    requires std::derived_from<Flag, GETBLOCK_FLAGS>
+    void getBlockData(std::string_view key, Block& block)
+    {
+        if constexpr (std::is_same_v<Flag, BLOCK_HEADER>)
+        {
+            auto entry = m_storage.getRow(SYS_NUMBER_2_BLOCK_HEADER, key);
+            if (!entry) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
+            }
+
+            auto field = entry->getField(0);
+            bcos::concepts::serialize::decode(block.blockHeader, field);
+        }
+        else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> ||
+                           std::is_same_v<Flag, BLOCK_RECEIPTS>)
+        {
+            if (std::empty(block.transactionsMetaData))
+            {
+                auto entry = m_storage.getRow(SYS_NUMBER_2_TXS, key);
+                if (!entry) [[unlikely]]
+                    BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
+
+                auto field = entry->getField(0);
+                Block metadataBlock;
+                bcos::concepts::serialize::decode(metadataBlock, field);
+                block.transactionsMetaData = std::move(metadataBlock.transactionsMetaData);
+            }
+
+            auto hashesRange =
+                block.transactionsMetaData |
+                std::views::transform(
+                    [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
+                        return std::string_view{metaData.hash.data(), metaData.hash.size()};
+                    });
+
+            constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
+            auto outputs = getTransactionsOrReceipts<isTransaction>(std::move(hashesRange));
+            if constexpr (isTransaction)
+            {
+                block.transactions = std::move(outputs);
+            }
+            else
+            {
+                block.receipts = std::move(outputs);
+            }
+        }
+        else if constexpr (std::is_same_v<Flag, BLOCK_NONCES>)
+        {}
+        else if constexpr (std::is_same_v<Flag, BLOCK_ALL>)
+        {
+            getBlockData<BLOCK_HEADER>(key, block);
+            getBlockData<BLOCK_TRANSACTIONS>(key, block);
+            getBlockData<BLOCK_RECEIPTS>(key, block);
+            getBlockData<BLOCK_NONCES>(key, block);
+        }
+        else
+        {
+            static_assert(!sizeof(Block), "Wrong input flag!");
+        }
+    }
 
     Storage m_storage;
 };

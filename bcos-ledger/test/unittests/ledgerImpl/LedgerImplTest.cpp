@@ -1,14 +1,13 @@
-
-#include "impl/TarsHashable.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "bcos-ledger/bcos-ledger/LedgerImpl.h"
+#include "impl/TarsHashable.h"
 #include "impl/TarsSerializable.h"
 #include "tars/Transaction.h"
 #include "tars/TransactionReceipt.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-ledger/bcos-ledger/LedgerImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -31,8 +30,7 @@ ostream& operator<<(ostream& os, std::vector<tars::Char> const& buffer)
 
 struct MockMemoryStorage
 {
-    std::optional<bcos::storage::Entry> getRow(
-        [[maybe_unused]] std::string_view table, [[maybe_unused]] std::string_view key)
+    std::optional<bcos::storage::Entry> getRow(std::string_view table, std::string_view key)
     {
         auto entryIt = data.find(std::tuple{table, key});
         if (entryIt != data.end())
@@ -43,8 +41,7 @@ struct MockMemoryStorage
     }
 
     std::vector<std::optional<bcos::storage::Entry>> getRows(
-        [[maybe_unused]] std::string_view table,
-        [[maybe_unused]] std::ranges::range auto const& keys)
+        std::string_view table, std::ranges::range auto const& keys)
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
         output.reserve(std::size(keys));
@@ -138,26 +135,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
         bcostars::Block>
         ledger{storage};
 
-    auto [header, transactions, receipts] =
-        ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(10086);
-    BOOST_CHECK_EQUAL(header.data.blockNumber, 10086);
-    BOOST_CHECK_EQUAL(header.data.gasUsed, "1000");
-    BOOST_CHECK_EQUAL(header.data.timestamp, 5000);
-
-    BOOST_CHECK_EQUAL(transactions.size(), count);
-    BOOST_CHECK_EQUAL(receipts.size(), count);
-
-    for (auto i = 0u; i < count; ++i)
-    {
-        BOOST_CHECK_EQUAL(transactions[i].data.chainID, "chain");
-        BOOST_CHECK_EQUAL(transactions[i].data.groupID, "group");
-        BOOST_CHECK_EQUAL(transactions[i].importTime, 1000);
-
-        BOOST_CHECK_EQUAL(receipts[i].data.blockNumber, 10086);
-        BOOST_CHECK_EQUAL(receipts[i].data.contractAddress, "contract");
-    }
-
-    auto [block] = ledger.getBlock<BLOCK_ALL>(10086);
+    auto block = ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block.blockHeader.data.timestamp, 5000);
@@ -173,6 +151,24 @@ BOOST_AUTO_TEST_CASE(getBlock)
 
         BOOST_CHECK_EQUAL(block.receipts[i].data.blockNumber, 10086);
         BOOST_CHECK_EQUAL(block.receipts[i].data.contractAddress, "contract");
+    }
+
+    auto block2 = ledger.getBlock<BLOCK_ALL>(10086);
+    BOOST_CHECK_EQUAL(block2.blockHeader.data.blockNumber, 10086);
+    BOOST_CHECK_EQUAL(block2.blockHeader.data.gasUsed, "1000");
+    BOOST_CHECK_EQUAL(block2.blockHeader.data.timestamp, 5000);
+
+    BOOST_CHECK_EQUAL(block2.transactions.size(), count);
+    BOOST_CHECK_EQUAL(block2.receipts.size(), count);
+
+    for (auto i = 0u; i < count; ++i)
+    {
+        BOOST_CHECK_EQUAL(block2.transactions[i].data.chainID, "chain");
+        BOOST_CHECK_EQUAL(block2.transactions[i].data.groupID, "group");
+        BOOST_CHECK_EQUAL(block2.transactions[i].importTime, 1000);
+
+        BOOST_CHECK_EQUAL(block2.receipts[i].data.blockNumber, 10086);
+        BOOST_CHECK_EQUAL(block2.receipts[i].data.contractAddress, "contract");
     }
 
     BOOST_CHECK_THROW(ledger.getBlock<BLOCK_HEADER>(10087), std::runtime_error);
@@ -209,8 +205,8 @@ BOOST_AUTO_TEST_CASE(setBlock)
     }
     ledger.setTransactionsOrReceipts(block.transactions);
 
-    BOOST_CHECK_NO_THROW(ledger.setBlockWithoutTransaction(storage, block));
-    auto [gotBlock] = ledger.getBlock<BLOCK_ALL>(100);
+    BOOST_CHECK_NO_THROW(ledger.setBlock(storage, block));
+    auto gotBlock = ledger.getBlock<BLOCK_ALL>(100);
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
     BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());
