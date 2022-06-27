@@ -14,7 +14,8 @@ public:
       : m_factory(factory),
         m_schedulerTerm(schedulerSeq),
         m_remoteExecutorManager(remoteExecutorManager),
-        m_pool("SchedulerManager", 1)
+        m_pool("SchedulerManager", std::thread::hardware_concurrency()),
+        m_status(INITIALING)
     {
         remoteExecutorManager->setRemoteExecutorChangeHandler([this]() {
             // trigger switch
@@ -58,6 +59,8 @@ public:
 
     void registerOnSwitchTermHandler(std::function<void(bcos::protocol::BlockNumber)> onSwitchTerm);
 
+    void handleNeedSwitchEvent(int64_t oldSchedulerTermID);
+
     void testTriggerSwitch();
 
     SchedulerFactory::Ptr getFactory() { return m_factory; }
@@ -65,7 +68,8 @@ public:
     class SchedulerTerm
     {
     public:
-        SchedulerTerm(int64_t schedulerSeq) : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime())
+        SchedulerTerm(int64_t schedulerSeq)
+          : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime() / 1000)
         {}
 
         SchedulerTerm next() { return SchedulerTerm(m_schedulerSeq); }
@@ -88,6 +92,16 @@ public:
         int64_t m_executorSeq;
     };
 
+    enum Status : uint8_t
+    {
+        INITIALING = 1,
+        RUNNING = 2,
+        SWITCHING = 3,
+    };
+
+    std::pair<bool, std::string> checkAndInit();
+
+
 private:
     void updateScheduler(int64_t schedulerTermId);
     void switchTerm(int64_t schedulerSeq);
@@ -105,7 +119,7 @@ private:
 
     bcos::ThreadPool m_pool;
 
-    mutable bcos::SharedMutex x_switchTermMutex;
+    std::atomic<Status> m_status;
 };
 
 }  // namespace bcos::scheduler

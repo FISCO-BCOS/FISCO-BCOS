@@ -104,3 +104,7 @@ hunter_config(etcd-cpp-apiv3 VERSION 0.2.5-local
     URL "https://${URL_BASE}/FISCO-BCOS/etcd-cpp-apiv3/archive/704a0ea5ea4aeddc28f7d921135b6c34d00f06f1.tar.gz"
     SHA1 3f2efe0ae536997d2dcaf2b253b6d7a35f731dba
 )
+
+hunter_config(cryptopp VERSION 8.6.0
+    URL "https://${URL_BASE}/FISCO-BCOS/cryptopp/archive/1887f2f05679debf5d5b9553b8d1a686049eb8c0.tar.gz"
+    SHA1 062e044d15415151ddebe67cce63fbaeba4ba596)

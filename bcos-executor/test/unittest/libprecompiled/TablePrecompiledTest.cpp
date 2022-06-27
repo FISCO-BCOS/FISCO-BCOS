@@ -550,6 +550,12 @@ public:
 
         result2->setSeq(1001);
 
+        if (result2->status() != (int32_t)TransactionStatus::None)
+        {
+            commitBlock(_number);
+            return result2;
+        }
+
         // get desc
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->executeTransaction(std::move(result2),
@@ -754,7 +760,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
         BOOST_CHECK(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
         BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
-        BOOST_CHECK(std::get<1>(fileInfo) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(fileInfo) == executor::FS_TYPE_CONTRACT);
     }
 
     // createTable exist
@@ -867,7 +873,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
         BOOST_CHECK(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
         BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
-        BOOST_CHECK(std::get<1>(fileInfo) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(fileInfo) == executor::FS_TYPE_CONTRACT);
     }
     // simple append
     {
@@ -1092,6 +1098,16 @@ BOOST_AUTO_TEST_CASE(selectTest)
         BOOST_CHECK(r1->data().toBytes() == codec->encode(uint32_t(9)));
     }
 
+    // select by condition， empty condition
+    {
+        LimitTuple limit = {0, 10};
+        auto r1 = selectByCondition(number++, {}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        auto r2 = count(number++, {}, callAddress);
+        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
     // select by condition， condition with undefined cmp
     {
         ConditionTuple cond1 = {5, "90"};
@@ -1248,6 +1264,14 @@ BOOST_AUTO_TEST_CASE(updateTest)
         std::string index = std::to_string(j);
         insert(number++, index, {"test" + index, "test" + index}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
+    }
+
+    // update by empty condition
+    {
+        LimitTuple limit = {0, 10};
+        UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
+        auto r1 = updateByCondition(number++, {}, limit, {updateFieldTuple1}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // simple update by condition
@@ -1415,6 +1439,13 @@ BOOST_AUTO_TEST_CASE(removeTest)
         std::string index = std::to_string(j);
         insert(number++, index, {"test" + index, "test" + index}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
+    }
+
+    // remove by empty condition
+    {
+        LimitTuple limit = {0, 10};
+        auto r1 = removeByCondition(number++, {}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // simple remove by condition

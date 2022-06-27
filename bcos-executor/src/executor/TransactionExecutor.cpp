@@ -36,8 +36,14 @@
 #include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
+#include "../precompiled/TableManagerPrecompiled.h"
 #include "../precompiled/TablePrecompiled.h"
+#include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/GroupSigPrecompiled.h"
+#include "../precompiled/extension/RingSigPrecompiled.h"
+#include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "ExecuteOutputs.h"
@@ -100,9 +106,10 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize = 0,
+    bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize = 0,
+    std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
-  : m_name(name),
+  : m_name(std::move(name)),
     m_ledger(ledger),
     m_txpool(std::move(txpool)),
     m_cachedStorage(std::move(cachedStorage)),
@@ -110,16 +117,149 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_executionMessageFactory(std::move(executionMessageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
-    m_isWasm(false),
-    m_keyPageSize(keyPageSize)
+    m_isWasm(isWasm),
+    m_keyPageSize(keyPageSize),
+    m_keyPageIgnoreTables(keyPageIgnoreTables)
 {
     assert(m_backendStorage);
+
 
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
-
+    if (m_isWasm)
+    {
+        initWasmEnvironment();
+    }
+    else
+    {
+        initEvmEnvironment();
+    }
+    assert(!m_constantPrecompiled->empty());
+    assert(m_builtInPrecompiled);
     start();
+}
+
+void TransactionExecutor::initEvmEnvironment()
+{
+    m_schedule = FiscoBcosScheduleV4;
+
+    auto fillZero = [](int _num) -> std::string {
+        std::stringstream stream;
+        stream << std::setfill('0') << std::setw(40) << std::hex << _num;
+        return stream.str();
+    };
+    m_precompiledContract =
+        std::make_shared<std::map<std::string, std::shared_ptr<PrecompiledContract>>>();
+    m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
+    m_constantPrecompiled =
+        std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
+
+    m_precompiledContract->insert(std::make_pair(fillZero(1),
+        make_shared<PrecompiledContract>(3000, 0, PrecompiledRegistrar::executor("ecrecover"))));
+    m_precompiledContract->insert(std::make_pair(fillZero(2),
+        make_shared<PrecompiledContract>(60, 12, PrecompiledRegistrar::executor("sha256"))));
+    m_precompiledContract->insert(std::make_pair(fillZero(3),
+        make_shared<PrecompiledContract>(600, 120, PrecompiledRegistrar::executor("ripemd160"))));
+    m_precompiledContract->insert(std::make_pair(fillZero(4),
+        make_shared<PrecompiledContract>(15, 3, PrecompiledRegistrar::executor("identity"))));
+    m_precompiledContract->insert(
+        {fillZero(5), make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("modexp"),
+                          PrecompiledRegistrar::executor("modexp"))});
+    m_precompiledContract->insert(
+        {fillZero(6), make_shared<PrecompiledContract>(
+                          150, 0, PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
+    m_precompiledContract->insert(
+        {fillZero(7), make_shared<PrecompiledContract>(
+                          6000, 0, PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
+    m_precompiledContract->insert({fillZero(8),
+        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+            PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
+    m_precompiledContract->insert({fillZero(9),
+        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("blake2_compression"),
+            PrecompiledRegistrar::executor("blake2_compression"))});
+    assert(m_precompiledContract);
+
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
+    auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
+    auto tableManagerPrecompiled =
+        std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
+    auto kvTablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl);
+    auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
+
+    // in EVM
+    m_constantPrecompiled->insert({SYS_CONFIG_ADDRESS, sysConfig});
+    m_constantPrecompiled->insert({CONSENSUS_ADDRESS, consensusPrecompiled});
+    m_constantPrecompiled->insert({TABLE_MANAGER_ADDRESS, tableManagerPrecompiled});
+    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTablePrecompiled});
+    m_constantPrecompiled->insert({TABLE_ADDRESS, tablePrecompiled});
+    m_constantPrecompiled->insert(
+        {DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
+    /// auth precompiled
+    if (m_isAuthCheck)
+    {
+        m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+    }
+    m_constantPrecompiled->insert(
+        {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {RING_SIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
+
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+
+    set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
+    m_builtInPrecompiled = make_shared<set<string>>(builtIn);
+}
+
+void TransactionExecutor::initWasmEnvironment()
+{
+    m_schedule = BCOSWASMSchedule;
+
+    m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
+    m_constantPrecompiled =
+        std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
+
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
+    auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
+    auto tableManagerPrecompiled =
+        std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
+    auto kvTablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl);
+    auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
+
+    // in WASM
+    m_constantPrecompiled->insert({SYS_CONFIG_NAME, sysConfig});
+    m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
+    m_constantPrecompiled->insert({TABLE_MANAGER_NAME, tableManagerPrecompiled});
+    m_constantPrecompiled->insert({KV_TABLE_NAME, kvTablePrecompiled});
+    m_constantPrecompiled->insert({TABLE_NAME, tablePrecompiled});
+    m_constantPrecompiled->insert(
+        {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
+    if (m_isAuthCheck)
+    {
+        m_constantPrecompiled->insert(
+            {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+    }
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
+    m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
@@ -196,7 +336,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                                    "storage: %d") %
                                m_name % blockHeader->number() % storageBlockNumber;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
-                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, fmt.str()));
+                    // to trigger switch operation
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt.str()));
                     return;
                 }
             }
@@ -1883,6 +2025,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         callParameters->abi = input.abi();
     }
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
 
     return callParameters;
 }
@@ -1907,6 +2051,10 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
+    }
     return callParameters;
 }
 
@@ -1953,13 +2101,13 @@ void TransactionExecutor::executeTransactionsWithCriticals(
     txDag->run(m_DAGThreadNum);
 }
 
-
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
     bcos::storage::StorageInterface::Ptr storage)
 {
     if (m_keyPageSize > 0)
     {
-        return std::make_shared<bcos::storage::KeyPageStorage>(storage, m_keyPageSize);
+        return std::make_shared<bcos::storage::KeyPageStorage>(
+            storage, m_keyPageSize, m_keyPageIgnoreTables);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }
