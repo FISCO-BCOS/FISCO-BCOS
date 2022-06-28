@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
-    std::set<int> needSend;
+    std::set<int64_t> needSend;
     for (int64_t i = 0; i < 10; ++i)
     {
         needSend.insert((rand() % 100) + 1);
