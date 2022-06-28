@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
     std::set<int64_t> needSend;
-    for (int64_t i = 0; i < 10; ++i)
+    for (int64_t i = 1; i <= 10; ++i)
     {
         needSend.insert((rand() % 100) + 1);
     }
@@ -155,8 +155,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
 
-    executivePool->forEachAndClear(
-        ExecutivePool::MessageHint::NEED_SEND, [this](int64_t contextID, ExecutiveState::Ptr) {
+    executivePool->forEachAndClear(ExecutivePool::MessageHint::NEED_SEND,
+        [this, &needSend](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSend.find(contextID);
             needSend.erase(iter);
             return true;
