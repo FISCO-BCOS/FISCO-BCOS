@@ -137,8 +137,8 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     }
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
 
-    executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
-        [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr executiveState) {
+    executivePool->forEach(
+        ExecutivePool::MessageHint::NEED_PREPARE, [this, &needPrepare](int64_t contextID) {
             needPrepare.erase(contextID);
             return true;
         });
