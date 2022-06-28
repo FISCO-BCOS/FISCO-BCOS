@@ -19,9 +19,15 @@ struct ExecutivePoolFixture
 
     scheduler::ExecutivePool m_executivePool;
     scheduler::ExecutivePool::MessageHint m_messageHint;
+    SetPtr m_needPrepare = std::make_shared<tbb::concurrent_set<ContextID>>();
+    SetPtr m_hasLocked = std::make_shared<tbb::concurrent_set<ContextID>>();
+    SetPtr m_needScheduleOut = std::make_shared<tbb::concurrent_set<ContextID>>();
+    SetPtr m_needSend = std::make_shared<tbb::concurrent_set<ContextID>>();
+    SetPtr m_needRemove = std::make_shared<tbb::concurrent_set<ContextID>>();
 };
-BOOST_FIXTURE_TEST_SUITE(TestExecutivePool, ExecutivePoolFixture);
+BOOST_FIXTURE_TEST_SUITE(TestExecutivePool, ExecutivePoolFixture)
 
+BOOST_AUTO_TEST_CASE(addAndgetTest1)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
     BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
@@ -69,7 +75,7 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
         message->setFrom("eeffaabb");
         message->setTo("ccddeeff");
 
-        auto executiveState = std::make_unique<bcos::scheduler::ExecutiveState>();
+        ExecutiveState::Ptr executiveState = std::make_shared<ExecutiveState>();
         executiveState->message = message;
         executiveState->contextID = i;
         executiveState->enableDAG = false;
@@ -106,31 +112,31 @@ BOOST_AUTO_TEST_CASE(refreshTest)
     BOOST_CHECK(executivePool->empty());
     for (int64_t i = 1; i <= 30; ++i)
     {
-        executivePool->markAs(ExecutivePool::MessageHint::ALL, i);
+        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
         // executivePool->markAs(ExecutivePool::MessageHint::NEED_PREPARE, i);
         if (i % 3 == 0)
         {
-            executivePool->markAs(m_messageHint::NEED_SCHEDULE_OUT, i);
+            executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
         }
         if (i % 3 == 1)
         {
-            executivePool->markAs(m_messageHint::LOCKED, i);
-            executivePool->markAs(m_messageHint::NEED_SEND, i);
+            executivePool->markAs(i, ExecutivePool::MessageHint::LOCKED);
+            executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SEND);
         }
         if (i % 3 == 2)
         {
-            executivePool->markAs(m_messageHint::END, i);
+            executivePool->markAs(i, ExecutivePool::MessageHint::END);
         }
     }
-    BOOST_CHECK(!executivePool->empty(m_messageHint::NEED_SECHDULE_OUT));
-    BOOST_CHECK(!executivePool->empty(m_messageHint::END));
-    BOOST_CHECK(!executivePool->empty(m_messageHint::LOCKED));
-    BOOST_CHECK(!executivePool->empty(m_messageHint::NEED_SEND));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SECHDULE_OUT));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
     executivePool->refresh();
-    BOOST_CHECK(executivePool->empty(m_messageHint::NEED_SCHEDULE_OUT));
-    BOOST_CHECK(executivePool->empty(m_messageHint::END));
-    BOOST_CHECK(executivePool->empty(m_messageHint::LOCKED) &&
-                !executivePool->empty(m_messageHint::NEED_SEND))
+    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
+    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::END));
+    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::LOCKED) &&
+                !executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
 }
 
 BOOST_AUTO_TEST_CASE(forEachTest)
@@ -138,16 +144,17 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between [1,100] random number
-        m_executivePool.markAs(m_messageHint::NEED_PREPARE, (rand() % 100) + 1);
+        m_executivePool.markAs((rand() % 100) + 1, ExecutivePool::MessageHint::NEED_PREPARE);
     }
     BOOST_CHECK(m_needPrepare->empty());
     int64_t sum = 0;
-    m_executivePool.forEach(MessageHint::NEED_PREPARE,
+    auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
+    m_executivePool.forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
             m_needPrepare->unsafe_erase(contextID);
             return true;
         });
-    BOOST_CHECK(m_executivePool.empty(m_messageHint::NEED_PREPARE));
+    BOOST_CHECK(m_executivePool.empty(ExecutivePool::MessageHint::__building_module));
 }
 
 BOOST_AUTO_TEST_CASE(forEachAndClearTest)
@@ -155,14 +162,15 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         auto contextId = (rand() % 100) + 1;
-        m_executivePool.markAs(m_messageHint::NEED_SEND, contextId);
-        m_executivePool.markAs(m_messageHint::LOCKED, contextId);
+        m_executivePool.markAs(contextId, ExecutivePool::MessageHint::NEED_SEND);
+        m_executivePool.markAs(contextId, ExecutivePool::MessageHint::LOCKED);
     }
 
 
     BOOST_CHECK(!m_needSend->empty());
     BOOST_CHECK(!m_hasLocked->empty());
-    m_executivePool.forEachAndClear(MessageHint::NEED_SEND,
+    auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
+    m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_SEND,
         [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
             m_hasLocked->unsafe_erase(contextID);
             return true;
