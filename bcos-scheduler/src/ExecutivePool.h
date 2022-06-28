@@ -29,7 +29,6 @@
 
 namespace bcos::scheduler
 {
-
 class ExecutivePool
 {
 public:
@@ -47,7 +46,7 @@ public:
         END = 5
     };
 
-    void add(ContextID contextID, ExecutiveState::Ptr executiveState);
+    bool add(ContextID contextID, ExecutiveState::Ptr executiveState);  // return if add success
     ExecutiveState::Ptr get(ContextID contextID);
     void markAs(ContextID contextID, MessageHint type);
     void refresh();

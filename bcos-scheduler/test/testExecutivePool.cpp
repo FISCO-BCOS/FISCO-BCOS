@@ -73,10 +73,11 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     message->setTo("dddd");
     auto executiveState =
         std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
-    executivePool->add(9, executiveState);
+    bool success = executivePool->add(9, executiveState);
+    BOOST_CHECK(!success);
     auto state = executivePool->get(9);
     SCHEDULER_LOG(DEBUG) << state->message->to();
-    BOOST_CHECK(std::string(state->message->to()) == "dddd");
+    BOOST_CHECK(std::string(state->message->to()) == "ccddeeff");
 }
 
 

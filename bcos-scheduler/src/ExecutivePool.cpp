@@ -6,10 +6,10 @@
 
 using namespace bcos::scheduler;
 
-void ExecutivePool::add(ContextID contextID, ExecutiveState::Ptr executiveState)
+bool ExecutivePool::add(ContextID contextID, ExecutiveState::Ptr executiveState)
 {
     m_pendingExecutives.insert({contextID, executiveState});
-    m_needPrepare->insert(contextID);
+    return m_needPrepare->insert(contextID).second;  // return if insert success
 }
 
 
