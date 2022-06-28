@@ -57,7 +57,6 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
         message->setOrigin("aabbccdd");
         message->setFrom("eeffaabb");
         message->setTo("ccddeeff");
-
         ExecutiveState::Ptr executiveState =
             std::make_shared<ExecutiveState>(i, std::move(message), false);
         executivePool->add(i, executiveState);
@@ -71,9 +70,8 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     message->setSeq(1000);
     message->setOrigin("aabbccdd");
     message->setFrom("cccccccc");
-    message->setTo("dddd")
-
-        auto executiveState =
+    message->setTo("dddd");
+    auto executiveState =
         std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
     executivePool->add(9, executiveState);
     auto state = executivePool->get(9);
