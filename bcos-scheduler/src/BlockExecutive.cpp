@@ -461,13 +461,13 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
             auto status = std::make_shared<CommitStatus>();
             status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
-            status->checkAndCommit = [this, callback = std::move(callback)](
-                                         const CommitStatus& status) {
+            status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (status.failed > 0)
                 {
-                    SCHEDULER_LOG(WARNING) << "Prepare with errors! " +
-                                                  boost::lexical_cast<std::string>(status.failed);
-                    batchBlockRollback([this, callback](Error::UniquePtr&& error) {
+                    std::string errorMessage =
+                        "Prepare with errors! " + boost::lexical_cast<std::string>(status.failed);
+                    SCHEDULER_LOG(WARNING) << errorMessage;
+                    batchBlockRollback([this, callback, errorMessage](Error::UniquePtr&& error) {
                         if (error)
                         {
                             SCHEDULER_LOG(ERROR)
@@ -476,6 +476,12 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             // FATAL ERROR, NEED MANUAL FIX!
 
                             callback(std::move(error));
+                            return;
+                        }
+                        else
+                        {
+                            callback(
+                                BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, errorMessage));
                             return;
                         }
                     });
@@ -512,12 +518,15 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             params.number = number();
             params.primaryTableName = SYS_CURRENT_STATE;
             params.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
-            m_scheduler->m_storage->asyncPrepare(
-                params, *stateStorage, [status, this](Error::Ptr&& error, uint64_t startTimeStamp) {
+            m_scheduler->m_storage->asyncPrepare(params, *stateStorage,
+                [status, this, callback](Error::Ptr&& error, uint64_t startTimeStamp) {
                     if (error)
                     {
                         ++status->failed;
                         SCHEDULER_LOG(ERROR) << "asyncPrepare scheduler error: " << error->what();
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::UnknownError,
+                            "Commit block to storage(scheduler) failed!", *error));
+                        return;
                     }
                     else
                     {
