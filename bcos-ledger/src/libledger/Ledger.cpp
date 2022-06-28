@@ -743,7 +743,7 @@ void Ledger::asyncGetTotalTransactionCount(
     });
 }
 
-void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
+void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
     std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
 {
     LEDGER_LOG(INFO) << "GetSystemConfigByKey request" << LOG_KV("key", _key);
@@ -759,7 +759,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
         }
 
         asyncGetSystemTableEntry(SYS_CONFIG, _key,
-            [blockNumber, _key, callback = std::move(callback)](
+            [blockNumber, callback = std::move(callback)](
                 Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
                 try
                 {
@@ -889,7 +889,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
     });
 }
 
-void Ledger::asyncGetNodeListByType(const std::string& _type,
+void Ledger::asyncGetNodeListByType(const std::string_view& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
     LEDGER_LOG(INFO) << "GetNodeListByType request" << LOG_KV("type", _type);
@@ -1287,7 +1287,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
 
 // sync method
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
-    const std::string& _genesisData, std::string const& _compatibilityVersion)
+    const std::string_view& _genesisData, std::string const& _compatibilityVersion)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
     if (_gasLimit < TX_GAS_LIMIT_MIN)
@@ -1362,7 +1362,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
-    header->setExtraData(asBytes(_genesisData));
+    header->setExtraData(bcos::bytes(_genesisData.begin(), _genesisData.end()));
 
     auto block = m_blockFactory->createBlock();
     block->setBlockHeader(header);
@@ -1445,13 +1445,13 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     for (auto& node : _ledgerConfig->consensusNodeList())
     {
         consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), CONSENSUS_SEALER, "0");
+            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
     }
 
     for (auto& node : _ledgerConfig->observerNodeList())
     {
         consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), CONSENSUS_OBSERVER, "0");
+            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_OBSERVER}, "0");
     }
 
     Entry consensusNodeListEntry;

@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
+file(GLOB_RECURSE SOURCES "*.cpp")
 
 # cmake settings
 list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
@@ -27,6 +27,6 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${LEDGER_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${LEDGER_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework tars::util)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

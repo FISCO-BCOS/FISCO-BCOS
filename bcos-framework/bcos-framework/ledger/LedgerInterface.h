@@ -132,7 +132,7 @@ public:
      * @param _key the key of row, you can checkout all key in LedgerTypeDef.h
      * @param _onGetConfig callback when get config, <value, latest block number>
      */
-    virtual void asyncGetSystemConfigByKey(std::string const& _key,
+    virtual void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) = 0;
 
     /**
@@ -140,7 +140,7 @@ public:
      * @param _type the type of node, CONSENSUS_SEALER or CONSENSUS_OBSERVER
      * @param _onGetConfig
      */
-    virtual void asyncGetNodeListByType(std::string const& _type,
+    virtual void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) = 0;
 
     /**

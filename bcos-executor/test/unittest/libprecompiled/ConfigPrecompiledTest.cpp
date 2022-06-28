@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     };
     // simple set SYSTEM_KEY_TX_GAS_LIMIT
     {
-        simpleSetFunc(2, 100, ledger::SYSTEM_KEY_TX_GAS_LIMIT, std::string("1000000"));
+        simpleSetFunc(2, 100, std::string{ledger::SYSTEM_KEY_TX_GAS_LIMIT}, std::string("1000000"));
     }
 
     // simple get SYSTEM_KEY_TX_GAS_LIMIT
@@ -318,12 +318,12 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
 
     // simple set SYSTEM_KEY_TX_COUNT_LIMIT
     {
-        simpleSetFunc(4, 102, ledger::SYSTEM_KEY_TX_COUNT_LIMIT, std::string("1000"));
+        simpleSetFunc(4, 102, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("1000"));
     }
 
     // set SYSTEM_KEY_TX_COUNT_LIMIT error
     {
-        simpleSetFunc(5, 103, ledger::SYSTEM_KEY_TX_COUNT_LIMIT, std::string("error"),
+        simpleSetFunc(5, 103, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("error"),
             bcos::protocol::TransactionStatus::PrecompiledError);
     }
     // set error key

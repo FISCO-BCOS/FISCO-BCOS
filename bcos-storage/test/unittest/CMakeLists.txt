@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-list(APPEND SOURCES "TestRocksDBStorage.cpp" "conceptTest.cpp" "main.cpp")
+list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-storage)
 

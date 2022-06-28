@@ -222,18 +222,18 @@ public:
         _callback(nullptr, m_totalTxCount, 0, m_ledgerConfig->blockNumber());
     }
 
-    void asyncGetSystemConfigByKey(std::string const& _key,
+    void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
     {
         std::string value = "";
         if (m_systemConfig.count(_key))
         {
-            value = m_systemConfig[_key];
+            value = m_systemConfig[std::string{_key}];
         }
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());
     }
 
-    void asyncGetNodeListByType(std::string const& _type,
+    void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, ConsensusNodeListPtr)> _onGetNodeList) override
     {
         if (_type == CONSENSUS_SEALER)
@@ -274,9 +274,9 @@ public:
 
     void setStatus(bool _normal) { m_statusNormal = _normal; }
     void setTotalTxCount(size_t _totalTxCount) { m_totalTxCount = _totalTxCount; }
-    void setSystemConfig(std::string const& _key, std::string const& _value)
+    void setSystemConfig(std::string_view _key, std::string const& _value)
     {
-        m_systemConfig[_key] = _value;
+        m_systemConfig[std::string{_key}] = _value;
     }
 
     void setConsensusNodeList(ConsensusNodeListPtr _consensusNodes)
@@ -351,7 +351,7 @@ private:
     std::map<HashType, bytesConstPtr> m_txsHashToData;
     SharedMutex x_txsHashToData;
 
-    std::map<std::string, std::string> m_systemConfig;
+    std::map<std::string, std::string, std::less<>> m_systemConfig;
     std::vector<bytes> m_sealerList;
     std::shared_ptr<ThreadPool> m_worker = nullptr;
 };

@@ -83,11 +83,11 @@ public:
             int64_t _failedTxCount, bcos::protocol::BlockNumber _latestBlockNumber)>
             _callback) override;
 
-    void asyncGetSystemConfigByKey(std::string const& _key,
+    void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)>
             _onGetConfig) override;
 
-    void asyncGetNodeListByType(std::string const& _type,
+    void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> _onGetConfig)
         override;
 

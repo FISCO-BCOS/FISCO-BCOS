@@ -138,7 +138,7 @@ public:
         // create sys table
         {
             std::promise<std::optional<Table>> promise1;
-            storage->asyncCreateTable(ledger::SYS_CONFIG, "value",
+            storage->asyncCreateTable(std::string{ledger::SYS_CONFIG}, "value",
                 [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
                     BOOST_CHECK(!_error);
                     promise1.set_value(std::move(_table));
