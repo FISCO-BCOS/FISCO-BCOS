@@ -461,8 +461,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
             auto status = std::make_shared<CommitStatus>();
             status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
-            status->checkAndCommit = [this, callback = std::move(callback)](
-                                         const CommitStatus& status) {
+            status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (status.failed > 0)
                 {
                     std::string errorMessage =
