@@ -73,11 +73,8 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     message->setFrom("eeffaabb");
     message->setTo("ccddeeff");
 
-    auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>();
-    executiveState->message = std::move(message);
-    executiveState->contextID = 9;
-    executiveState->enableDAG = true;
-    executiveState->id = 9;
+    auto executiveState =
+        std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
     executivePool->add(9, executiveState);
     auto state = executivePool->get(9);
     BOOST_CHECK_EQUAL(state->message->seq(), 1000);
