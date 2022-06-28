@@ -144,6 +144,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         });
     BOOST_CHECK(needPrepare.empty());
 }
+BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 
 // BOOST_AUTO_TEST_CASE(forEachAndClearTest)
