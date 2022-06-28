@@ -481,7 +481,6 @@ void PBFTEngine::executeWorker()
     // the node is not the consensusNode
     if (!m_config->isConsensusNode())
     {
-        clearAllCache();
         waitSignal();
         return;
     }
