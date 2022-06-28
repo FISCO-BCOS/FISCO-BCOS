@@ -70,15 +70,14 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     message->setContextID(9);
     message->setSeq(1000);
     message->setOrigin("aabbccdd");
-    message->setFrom("eeffaabb");
-    message->setTo("ccddeeff");
+    message->setFrom("cccccccc");
+    message->setTo(" ");
 
     auto executiveState =
         std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
     executivePool->add(9, executiveState);
     auto state = executivePool->get(9);
-    BOOST_CHECK_EQUAL(state->message->seq(), 1000);
-    BOOST_CHECK(state->enableDAG);
+    BOOST_CHECK(state->message->to() == " ");
 }
 
 
@@ -132,33 +131,38 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
-            needPrepare.erase(contextID);
+            auto iter = needPrepare.find(contextID);
+            needPrepare.erase(iter);
             return true;
         });
     BOOST_CHECK(needPrepare.empty());
 }
+
+BOOST_AUTO_TEST_CASE(forEachAndClearTest)
+{
+    ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
+    std::set<int> needSend;
+    for (int64_t i = 0; i < 10; ++i)
+    {
+        needSend.insert((rand() % 100) + 1);
+    }
+    for (auto i : needSend)
+    {
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SEND);
+        executivePool->markAs(i, ExecutivePool::MessageHint::LOCKED);
+    }
+
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
+
+    executivePool->forEachAndClear(
+        ExecutivePool::MessageHint::NEED_SEND, [this](int64_t contextID, ExecutiveState::Ptr) {
+            auto iter = needPrepare.find(contextID);
+            needPrepare.erase(iter);
+            return true;
+        });
+    BOOST_CHECK(needSend.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
-
-// BOOST_AUTO_TEST_CASE(forEachAndClearTest)
-// {
-//     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
-//     for (int64_t i = 1; i <= 10; ++i)
-//     {
-//         auto contextId = (rand() % 100) + 1;
-//         executivePool->markAs(contextId, ExecutivePool::MessageHint::NEED_SEND);
-//         executivePool->markAs(contextId, ExecutivePool::MessageHint::LOCKED);
-//     }
-
-
-//     BOOST_CHECK(!m_needSend->empty());
-//     BOOST_CHECK(!m_hasLocked->empty());
-//     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
-//     executivePool->forEachAndClear(ExecutivePool::MessageHint::NEED_SEND,
-//         [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
-//             executivePool->m_hasLocked->unsafe_erase(contextID);
-//             return true;
-//         });
-
-//     BOOST_CHECK(executivePool->m_needSend->empty() && executivePool->m_hasLocked->empty());
-// }
