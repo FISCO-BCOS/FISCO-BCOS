@@ -33,6 +33,7 @@ namespace bcos::scheduler
 class ExecutivePool
 {
 public:
+    using Ptr = std::shared_ptr<ExecutivePool>;
     using ExecutiveStateHandler = std::function<bool(
         ContextID contextID, ExecutiveState::Ptr executiveState)>;  // return needContinue
     using SetPtr = std::shared_ptr<tbb::concurrent_set<ContextID>>;
