@@ -30,23 +30,23 @@ class KeyCenterService:
         params = []
         # read the file
         with open(file_path) as cert_obj:
-            cert_data = base64.b64encode(
-                cert_obj.read().encode(encoding='utf-8'))
-            params.append(str(cert_data))
+            cert_data = str(base64.b64encode(
+                cert_obj.read().encode("utf-8")), "utf-8")
+            params.append(cert_data)
         params.append(self.cipher_data_key)
-        payload = {"jsonrpc": "2.0", "method": method,
-                   "params": params, "id": 83}
+        payload = json.dumps({"jsonrpc": "2.0", "method": method,
+                              "params": params, "id": 83})
         headers = {'content-type': "application/json"}
         try:
             response = requests.request(
-                "POST", self.url, data=json.dumps(payload), headers=headers)
+                "POST", self.url, data=payload, headers=headers)
             response_data = response.json()
             if "result" not in response_data or "dataKey" not in response_data["result"]:
                 utilities.log_error("encrypt %s with key center %s failed for error response: %s" % (
                     file_path, self.url, response_data))
                 return False
             # backup the file_path
-            backup_file_path = "%s_%d" % (file_path, time.time())
+            backup_file_path = "%s_%d.backup" % (file_path, time.time())
             utilities.log_info("backup the original file %s to %s" %
                                (file_path, backup_file_path))
             (ret, message) = utilities.execute_command_and_getoutput(
