@@ -393,7 +393,8 @@ void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
-                   << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState();
+                   << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState()
+                   << LOG_KV("unAppliedProposals", m_committedQueue.size());
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
     auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
     auto startT = utcTime();
