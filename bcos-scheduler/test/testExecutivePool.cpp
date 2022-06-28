@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(refreshTest)
             executivePool->markAs(i, ExecutivePool::MessageHint::END);
         }
     }
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SECHDULE_OUT));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
@@ -139,11 +139,12 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr executiveState) {
-            needPrepare.earse(contextID);
+            needPrepare.erase(contextID);
             return true;
         });
     BOOST_CHECK(needPrepare.empty());
 }
+}  // namespace bcos::test
 
 // BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 // {
@@ -167,4 +168,3 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 
 //     BOOST_CHECK(executivePool->m_needSend->empty() && executivePool->m_hasLocked->empty());
 // }
-}  // namespace bcos::test
