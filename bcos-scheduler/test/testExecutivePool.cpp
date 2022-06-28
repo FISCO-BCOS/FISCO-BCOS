@@ -30,10 +30,7 @@ BOOST_AUTO_TEST_CASE(addAndgetTest1)
     BOOST_CHECK(executivePool->empty());
     for (int64_t i = 0; i < 50; ++i)
     {
-        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>();
-        executiveState->contextID = i;
-        executiveState->enableDAG = false;
-        executiveState->id = i;
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
     }
     int64_t count = 0;
@@ -61,11 +58,8 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
         message->setFrom("eeffaabb");
         message->setTo("ccddeeff");
 
-        ExecutiveState::Ptr executiveState = std::make_shared<ExecutiveState>();
-        executiveState->message = std::move(message);
-        executiveState->contextID = i;
-        executiveState->enableDAG = false;
-        executiveState->id = i;
+        ExecutiveState::Ptr executiveState =
+            std::make_shared<ExecutiveState>(i, std::move(message), false);
         executivePool->add(i, executiveState);
     }
 
