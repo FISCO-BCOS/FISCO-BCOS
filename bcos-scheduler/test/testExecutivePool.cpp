@@ -157,8 +157,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 
     executivePool->forEachAndClear(
         ExecutivePool::MessageHint::NEED_SEND, [this](int64_t contextID, ExecutiveState::Ptr) {
-            auto iter = needPrepare.find(contextID);
-            needPrepare.erase(iter);
+            auto iter = needSend.find(contextID);
+            needSend.erase(iter);
             return true;
         });
     BOOST_CHECK(needSend.empty());
