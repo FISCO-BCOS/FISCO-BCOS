@@ -1,5 +1,6 @@
 #include "Executive.h"
 #include "ExecutivePool.h"
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-utilities/Common.h>
 #include <stdlib.h>
 #include <tbb/concurrent_set.h>
@@ -51,7 +52,7 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     BOOST_CHECK(executivePool->empty());
     for (int64_t i = 0; i < 10; ++i)
     {
-        auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
+        auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
         message->setStaticCall(bool(i % 2));
         message->setType(protocol::ExecutionMessage::Type(i % 6));
         message->setContextID(i);
@@ -69,11 +70,11 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     }
 
 
-    auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
-    message->setStaticCall(true);
-    message->setType(protocol::ExecutionMessage::Type(1));
-    message->setContextID(9);
-    message->setSeq(1000);
+    auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
+    message->setStaticCall(bool(i % 2));
+    message->setType(protocol::ExecutionMessage::Type(i % 6));
+    message->setContextID(i);
+    message->setSeq(i * i * ~i % (i + 1));
     message->setOrigin("aabbccdd");
     message->setFrom("eeffaabb");
     message->setTo("ccddeeff");
