@@ -71,13 +71,14 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
 
 
     auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
-    message->setStaticCall(bool(i % 2));
-    message->setType(protocol::ExecutionMessage::Type(i % 6));
-    message->setContextID(i);
-    message->setSeq(i * i * ~i % (i + 1));
+    message->setStaticCall(true);
+    message->setType(protocol::ExecutionMessage::Type(6));
+    message->setContextID(9);
+    message->setSeq(1000);
     message->setOrigin("aabbccdd");
     message->setFrom("eeffaabb");
     message->setTo("ccddeeff");
+
     auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>();
     executiveState->message = std::move(message);
     executiveState->contextID = 9;
