@@ -41,8 +41,8 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
 void StateMachine::asyncPreApply(
     ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
 {
-    // Note: async here to increase performance
-    m_worker->enqueue([this, _proposal, _onPreApplyFinished]() {
+    // Note: async here to increase performance, trigger preExecuteBlock
+    m_schedulerWorker->enqueue([this, _proposal, _onPreApplyFinished]() {
         this->preApply(_proposal, _onPreApplyFinished);
     });
 }

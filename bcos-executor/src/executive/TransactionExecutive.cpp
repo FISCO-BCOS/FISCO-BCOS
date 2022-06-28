@@ -182,6 +182,11 @@ void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
+                             << LOG_KV("callParameters", callParameters->toFullString());
+    }
     m_storageWrapper->setRecoder(m_recoder);
 
     std::unique_ptr<HostContext> hostContext;
@@ -203,7 +208,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
-
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute finished")
+                             << LOG_KV("callResults", callResults->toFullString());
+    }
     return callResults;
 }
 
@@ -823,7 +832,18 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
     // enc([call precompiled parameters],[user call parameters])
     auto newParams = codec.encode(codeParameters, callParameters->data);
+    if (c_fileLogLevel >= TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_DESC("callDynamicPrecompiled")
+                             << LOG_KV("inputDataSize", callParameters->data.size())
+                             << LOG_KV("newParamsSize", newParams.size());
+    }
+
     callParameters->data = std::move(newParams);
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled")
+                         << LOG_KV("codeAddr", callParameters->codeAddress)
+                         << LOG_KV("recvAddr", callParameters->receiveAddress)
+                         << LOG_KV("datasize", callParameters->data.size());
     auto callResult = callPrecompiled(std::move(callParameters));
 
     callResult->receiveAddress = callResult->codeAddress;

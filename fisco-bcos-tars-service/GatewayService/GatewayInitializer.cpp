@@ -20,6 +20,7 @@
  */
 #include "GatewayInitializer.h"
 #include "Common/TarsUtils.h"
+#include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
@@ -57,8 +58,10 @@ void GatewayInitializer::init(std::string const& _configPath)
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
             nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
-
-    bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
+    auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
+    protocolInitializer->init(nodeConfig);
+    bcos::gateway::GatewayFactory factory(
+        nodeConfig->chainId(), nodeConfig->rpcServiceName(), protocolInitializer->dataEncryption());
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
                              << LOG_KV("certPath", m_gatewayConfig->certPath())

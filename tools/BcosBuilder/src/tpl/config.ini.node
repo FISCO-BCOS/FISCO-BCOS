@@ -28,7 +28,7 @@
     enable_cache=true
     type=RocksDB
     pd_addrs=
-    key_page_size=0
+    key_page_size=10240
 
 [txpool]
     ; size of the txpool, default is 15000

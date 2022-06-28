@@ -160,9 +160,14 @@ void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyC
     auto& count = std::get<1>(limit);
     if (count > USER_TABLE_MAX_LIMIT_COUNT || offset > offset + count)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("") << LOG_KV("offset", offset)
-                               << LOG_KV("count", count);
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("build key condition limit overflow")
+                               << LOG_KV("offset", offset) << LOG_KV("count", count);
         BOOST_THROW_EXCEPTION(PrecompiledError("Limit overflow."));
+    }
+    if (conditions.empty())
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("Condition is empty");
+        BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
     }
     for (const auto& condition : conditions)
     {

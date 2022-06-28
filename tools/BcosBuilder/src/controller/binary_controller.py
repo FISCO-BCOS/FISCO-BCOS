@@ -5,13 +5,17 @@ from common import utilities
 import requests
 import sys
 import os
+import tarfile
 
 
 class BinaryController:
     def __init__(self, version, binary_path, use_cdn, node_type):
         self.version = version
+        self.mtail_version = "3.0.0-rc49"
         self.binary_path = binary_path
         self.binary_postfix = "-linux-x86_64.tgz"
+        self.mtail_binary_postfix = "_Linux_x86_64.tar.gz"
+        self.mtail_binary_list = ["mtail"]
         if node_type == "pro":
             self.binary_list = ["BcosRpcService",
                                 "BcosGatewayService", "BcosNodeService"]
@@ -24,6 +28,7 @@ class BinaryController:
         self.use_cdn = use_cdn
         self.last_percent = 0
         self.download_prefix = "https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/"
+        self.mtail_download_prefix = "https://github.com/google/mtail/releases/download/"
         if self.use_cdn is True:
             self.download_prefix = "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/releases/"
 
@@ -34,13 +39,26 @@ class BinaryController:
             download_url = self.get_binary_download_url(binary)
             if self.download_binary(binary, download_url) is False:
                 return False
+        for binary in self.mtail_binary_list:
+            download_url = self.get_mtail_binary_download_url(binary)
+            if self.download_binary(binary, download_url) is False:
+                return False
+            binary_file_path = self.get_required_binary_path(binary)
+            self.un_tar_gz(binary_file_path)        
         return True
 
     def get_binary_download_url(self, binary_name):
         return ("%s%s/%s%s") % (self.download_prefix, self.version, binary_name, self.binary_postfix)
 
+    def get_mtail_binary_download_url(self, binary_name):
+        return ("%sv%s/%s_%s%s") % (self.mtail_download_prefix, self.mtail_version, binary_name, self.mtail_version, self.mtail_binary_postfix)
+
     def get_required_binary_path(self, binary_name):
-        return os.path.join(self.binary_path, binary_name + ".tgz")
+        if binary_name == "mtail":
+            return os.path.join(self.binary_path, binary_name + ".tar.gz")
+        else:
+            return os.path.join(self.binary_path, binary_name + ".tgz")            
+        
 
     def get_downloaded_binary_path(self, binary_name):
         return binary_name + self.binary_postfix
@@ -74,3 +92,8 @@ class BinaryController:
         utilities.log_info("* Download %s from %s success" %
                            (binary_name, download_url))
         return True
+
+    def un_tar_gz(self, file_name):
+        tar = tarfile.open(file_name)
+        tar.extractall(self.binary_path)
+        tar.close() 

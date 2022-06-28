@@ -45,7 +45,20 @@ public:
     ~CampaignConfig() override {}
 
     std::string const& leaderKey() const { return m_leaderKey; }
+    virtual bcos::protocol::MemberInterface::Ptr fetchLeader();
     virtual bcos::protocol::MemberInterface::Ptr getLeader();
+
+    virtual void setLeaderToSelf(int64_t _leaseID, int64_t _seq)
+    {
+        bcos::WriteGuard l(x_leader);
+        bcos::ReadGuard lock(x_self);
+        m_leader = m_memberFactory->createMember();
+        m_leader->setMemberID(m_self->memberID());
+        m_leader->setMemberConfig(m_self->memberConfig());
+        m_leader->setSeq(_seq);
+        // update the lease
+        m_leader->setLeaseID(_leaseID);
+    }
 
     std::string const& leaderValue() const
     {
@@ -80,6 +93,8 @@ protected:
         m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_leaderKey,
             boost::bind(&CampaignConfig::onLeaderKeyChanged, this, boost::placeholders::_1));
     }
+
+    void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
 
 protected:
     // the leader key that multiple workers compete for, eg: "/consensus"

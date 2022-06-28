@@ -12,6 +12,7 @@ from config.chain_config import ChainConfig
 from controller.binary_controller import BinaryController
 from command.service_command_impl import ServiceCommandImpl
 from command.node_command_impl import NodeCommandImpl
+from command.monitor_command_impl import MonitorCommandImpl
 from networkmgr.network_manager import NetworkManager
 
 
@@ -154,6 +155,14 @@ def chain_operations(args, node_type):
             command_impl = ServiceCommandImpl(
                 chain_config, args.type, node_type)
             impl_str = CommandInfo.service_command_impl[command]
+            cmd_func_attr = getattr(command_impl, impl_str)
+            cmd_func_attr()
+            return
+    if op_type == ServiceInfo.monitor_service_type:
+        if command in CommandInfo.node_command_to_impl.keys():
+            chain_config = ChainConfig(toml_config, node_type, True)
+            command_impl = MonitorCommandImpl(chain_config, node_type)
+            impl_str = CommandInfo.monitor_command_to_impl[command]
             cmd_func_attr = getattr(command_impl, impl_str)
             cmd_func_attr()
             return
