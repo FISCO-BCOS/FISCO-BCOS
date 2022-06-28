@@ -14,7 +14,7 @@ public:
       : m_factory(factory),
         m_schedulerTerm(schedulerSeq),
         m_remoteExecutorManager(remoteExecutorManager),
-        m_pool("SchedulerManager", std::thread::hardware_concurrency()),
+        m_pool("SchedulerManager", 1),  // Must set to 1 for serial execution
         m_status(INITIALING)
     {
         remoteExecutorManager->setRemoteExecutorChangeHandler([this]() {
