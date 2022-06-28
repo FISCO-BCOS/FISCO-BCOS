@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
         [this, &needSend](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSend.find(contextID);
             needSend.erase(iter);
-            std::cout << "set length is " << needPrepare.size() << std::endl;
+            std::cout << "set length is " << needSend.size() << std::endl;
             return true;
         });
     BOOST_CHECK(needSend.empty());
