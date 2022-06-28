@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -34,10 +35,15 @@ namespace bcos
 {
 namespace initializer
 {
-inline std::shared_ptr<bytes> loadPrivateKey(
-    std::string const& _keyPath, unsigned _hexedPrivateKeySize)
+inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
+    unsigned _hexedPrivateKeySize, bcos::security::DataEncryptInterface::Ptr _certEncryptionHandler)
 {
-    auto keyContent = readContents(boost::filesystem::path(_keyPath));
+    auto content = readContents(boost::filesystem::path(_keyPath));
+    auto keyContent = content;
+    if (_certEncryptionHandler)
+    {
+        keyContent = _certEncryptionHandler->decryptContents(content);
+    }
     if (keyContent->empty())
     {
         return nullptr;

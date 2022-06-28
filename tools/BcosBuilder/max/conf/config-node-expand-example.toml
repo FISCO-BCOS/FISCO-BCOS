@@ -18,7 +18,6 @@ sm_crypto=false
 name = "agencyA"
 # enable data disk encryption for rpc/gateway or not, default is false
 enable_storage_security = false
-# sm_storage_security = false
 # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
 # key_center_url =
 # cipher_data_key =
