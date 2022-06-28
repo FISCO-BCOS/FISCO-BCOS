@@ -71,13 +71,12 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     message->setSeq(1000);
     message->setOrigin("aabbccdd");
     message->setFrom("cccccccc");
-    message->setTo(" ");
 
     auto executiveState =
         std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
     executivePool->add(9, executiveState);
     auto state = executivePool->get(9);
-    BOOST_CHECK(state->message->to() == " ");
+    BOOST_CHECK(state->message->to().empty());
 }
 
 
@@ -133,6 +132,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
+            std::cout << "set length is " << needPrepare.size() << std::endl;
             return true;
         });
     BOOST_CHECK(needPrepare.empty());
@@ -159,6 +159,7 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
         [this, &needSend](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSend.find(contextID);
             needSend.erase(iter);
+            std::cout << "set length is " << needPrepare.size() << std::endl;
             return true;
         });
     BOOST_CHECK(needSend.empty());
