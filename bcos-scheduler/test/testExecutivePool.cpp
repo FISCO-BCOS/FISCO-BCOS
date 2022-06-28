@@ -19,11 +19,6 @@ struct ExecutivePoolFixture
 
     scheduler::ExecutivePool m_executivePool;
     scheduler::ExecutivePool::MessageHint m_messageHint;
-    SetPtr m_needPrepare = std::make_shared<tbb::concurrent_set<ContextID>>();
-    SetPtr m_hasLocked = std::make_shared<tbb::concurrent_set<ContextID>>();
-    SetPtr m_needScheduleOut = std::make_shared<tbb::concurrent_set<ContextID>>();
-    SetPtr m_needSend = std::make_shared<tbb::concurrent_set<ContextID>>();
-    SetPtr m_needRemove = std::make_shared<tbb::concurrent_set<ContextID>>();
 };
 BOOST_FIXTURE_TEST_SUITE(TestExecutivePool, ExecutivePoolFixture)
 
@@ -141,41 +136,43 @@ BOOST_AUTO_TEST_CASE(refreshTest)
 
 BOOST_AUTO_TEST_CASE(forEachTest)
 {
+    ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between [1,100] random number
-        m_executivePool.markAs((rand() % 100) + 1, ExecutivePool::MessageHint::NEED_PREPARE);
+        executivePool->markAs((rand() % 100) + 1, ExecutivePool::MessageHint::NEED_PREPARE);
     }
     BOOST_CHECK(m_needPrepare->empty());
     int64_t sum = 0;
     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
-    m_executivePool.forEach(ExecutivePool::MessageHint::NEED_PREPARE,
+    executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
-            m_needPrepare->unsafe_erase(contextID);
+            executivePool->m_needPrepare->unsafe_erase(contextID);
             return true;
         });
-    BOOST_CHECK(m_executivePool.empty(ExecutivePool::MessageHint::__building_module));
+    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::NEEDPREPARE));
 }
 
 BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 {
+    ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
     for (int64_t i = 1; i <= 10; ++i)
     {
         auto contextId = (rand() % 100) + 1;
-        m_executivePool.markAs(contextId, ExecutivePool::MessageHint::NEED_SEND);
-        m_executivePool.markAs(contextId, ExecutivePool::MessageHint::LOCKED);
+        executivePool->markAs(contextId, ExecutivePool::MessageHint::NEED_SEND);
+        executivePool->markAs(contextId, ExecutivePool::MessageHint::LOCKED);
     }
 
 
     BOOST_CHECK(!m_needSend->empty());
     BOOST_CHECK(!m_hasLocked->empty());
     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
-    m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_SEND,
+    executivePool->forEachAndClear(ExecutivePool::MessageHint::NEED_SEND,
         [this, messages](int64_t contextID, ExecutiveState::Ptr executiveState) {
-            m_hasLocked->unsafe_erase(contextID);
+            executivePool->m_hasLocked->unsafe_erase(contextID);
             return true;
         });
 
-    BOOST_CHECK(m_needSend->empty() && m_hasLocked->empty());
+    BOOST_CHECK(executivePool->m_needSend->empty() && executivePool->m_hasLocked->empty());
 }
 }  // namespace bcos::test
