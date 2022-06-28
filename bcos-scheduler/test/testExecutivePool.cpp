@@ -75,6 +75,7 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
         std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
     executivePool->add(9, executiveState);
     auto state = executivePool->get(9);
+    SCHEDULER_LOG(DEBUG) << state->message->to();
     BOOST_CHECK(state->message->to() == "dddd");
 }
 
@@ -131,8 +132,9 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
-            BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
-                            << LOG_KV("needPrepare", needPrepare.size());
+            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
+            //<< LOG_KV("needPrepare", needPrepare.size());
+            SCHEDULER_LOG(DEBUG) << needPrepare;
             return true;
         });
     BOOST_CHECK(needPrepare.empty());
@@ -159,8 +161,9 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
         [this, &needSend](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSend.find(contextID);
             needSend.erase(iter);
-            BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
-                            << LOG_KV("needSend", needSend.size());
+            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
+            //                 << LOG_KV("needSend", needSend.size());
+            SCHEDULER_LOG(DEBUG) << needSend;
             return true;
         });
     BOOST_CHECK(needSend.empty());
