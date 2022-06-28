@@ -364,43 +364,46 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
                       << LOG_KV("hash", blockHeader->hash().abridged());
 
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
-    m_config->consensus()->asyncCheckBlock(
-        _block, [self, _block, blockHeader](Error::Ptr _error, bool _ret) {
-            try
+    m_config->consensus()->asyncCheckBlock(_block, [self, _block, blockHeader](
+                                                       Error::Ptr _error, bool _ret) {
+        try
+        {
+            auto downloadQueue = self.lock();
+            if (!downloadQueue)
             {
-                auto downloadQueue = self.lock();
-                if (!downloadQueue)
-                {
-                    return;
-                }
-                if (_error)
-                {
-                    BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock error")
-                                         << LOG_KV("blockNumber", blockHeader->number())
-                                         << LOG_KV("hash", blockHeader->hash().abridged())
-                                         << LOG_KV("code", _error->errorCode())
-                                         << LOG_KV("msg", _error->errorMessage());
-                    downloadQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                    return;
-                }
-                if (_ret)
-                {
-                    downloadQueue->commitBlock(_block);
-                    return;
-                }
+                return;
+            }
+            if (_error)
+            {
+                BLKSYNC_LOG(WARNING)
+                    << LOG_DESC("asyncCheckBlock error")
+                    << LOG_KV("blockNumber", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
                 downloadQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock failed")
+                return;
+            }
+            if (_ret)
+            {
+                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock success, try to commit the block")
                                      << LOG_KV("blockNumber", blockHeader->number())
                                      << LOG_KV("hash", blockHeader->hash().abridged());
+                downloadQueue->commitBlock(_block);
+                return;
             }
-            catch (std::exception const& e)
-            {
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
-                                     << LOG_KV("blockNumber", blockHeader->number())
-                                     << LOG_KV("hash", blockHeader->hash().abridged())
-                                     << LOG_KV("error", boost::diagnostic_information(e));
-            }
-        });
+            downloadQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
+            BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock failed")
+                                 << LOG_KV("blockNumber", blockHeader->number())
+                                 << LOG_KV("hash", blockHeader->hash().abridged());
+        }
+        catch (std::exception const& e)
+        {
+            BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
+                                 << LOG_KV("blockNumber", blockHeader->number())
+                                 << LOG_KV("hash", blockHeader->hash().abridged())
+                                 << LOG_KV("error", boost::diagnostic_information(e));
+        }
+    });
     return true;
 }
 
