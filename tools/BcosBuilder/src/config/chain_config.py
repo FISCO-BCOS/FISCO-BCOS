@@ -67,8 +67,6 @@ class AgencyConfig:
         # load storage_security config
         self.enable_storage_security = utilities.get_item_value(
             self.config, "enable_storage_security", False, False, self.desc)
-        self.sm_storage_security = utilities.get_item_value(
-            self.config, "sm_storage_security", False, False, self.desc)
         self.key_center_url = utilities.get_item_value(
             self.config, "key_center_url", "", False, self.desc)
         self.cipher_data_key = utilities.get_item_value(
@@ -193,6 +191,8 @@ class MaxNodeConfig(NodeConfig):
         self.__parse_executor_service_config()
         # load service name(for executor)
         self.__load_service_name()
+        # enforce turnoff the storage_security
+        self.enable_storage_security = False
 
     def __parse_executor_service_config(self):
         """

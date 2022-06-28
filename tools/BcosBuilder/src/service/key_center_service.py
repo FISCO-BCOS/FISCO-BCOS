@@ -53,7 +53,7 @@ class KeyCenterService:
                 "cp %s %s" % (file_path, backup_file_path))
             if ret is False:
                 utilities.log_error("encrypt %s with key center %s failed for backup file failed, error: %s" % (
-                    base64_file_path, self.url, message))
+                    file_path, self.url, message))
                 return False
             # write the encrypted content into file_path
             cipher_file_data = response_data["result"]["dataKey"]
