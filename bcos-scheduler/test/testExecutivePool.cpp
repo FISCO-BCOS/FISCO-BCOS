@@ -136,7 +136,6 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             needPrepare.erase(iter);
             BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
                             << LOG_KV("needPrepare", needPrepare.size());
-            SCHEDULER_LOG(DEBUG) << needPrepare;
             return true;
         });
     BOOST_CHECK(needPrepare.empty());
