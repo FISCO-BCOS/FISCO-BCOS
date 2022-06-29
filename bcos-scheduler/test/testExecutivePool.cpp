@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
-        auto id = (rand() % 10000) + 1;
+        auto id = (rand() % 10000) + 10;
         needPrepare.insert(id);
         needSchedule.insert(id + 1);
         needRemove.insert(id - 1);
@@ -180,10 +180,11 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             needRemove.erase(iter);
             return true;
         });
-    executivePool->forEach(ExecutivePool::MessageHint::ALL, [this](int64_t, ExecutiveState::Ptr) {
-        // do nothing
-        return true;
-    });
+    // executivePool->forEach(ExecutivePool::MessageHint::ALL, [this](int64_t, ExecutiveState::Ptr)
+    // {
+    //     // do nothing
+    //     return true;
+    // });
     BOOST_CHECK(needPrepare.empty());
     BOOST_CHECK(needSchedule.empty());
     BOOST_CHECK(needRemove.empty());
