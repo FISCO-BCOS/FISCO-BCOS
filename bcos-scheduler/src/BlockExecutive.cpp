@@ -392,8 +392,7 @@ void BlockExecutive::asyncExecute(
 
             if (error)
             {
-                SCHEDULER_LOG(ERROR)
-                    << "Next block with error!" << boost::diagnostic_information(*error);
+                SCHEDULER_LOG(ERROR) << "Next block with error!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                              SchedulerError::NextBlockError, "Next block error!", *error),
                     nullptr, m_isSysBlock);
@@ -414,8 +413,8 @@ void BlockExecutive::asyncExecute(
 
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR) << "DAG execute block with error!"
-                                             << boost::diagnostic_information(*error);
+                        SCHEDULER_LOG(ERROR)
+                            << "DAG execute block with error!" << error->errorMessage();
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                      SchedulerError::DAGError, "DAG execute error!", *error),
                             nullptr, m_isSysBlock);
@@ -452,8 +451,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
-                SCHEDULER_LOG(ERROR)
-                    << "Prewrite block error!" << boost::diagnostic_information(*error);
+                SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                     SchedulerError::PrewriteBlockError, "Prewrite block error!", *error));
                 return;
@@ -472,7 +470,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         {
                             SCHEDULER_LOG(ERROR)
                                 << "Rollback storage failed!" << LOG_KV("number", number()) << " "
-                                << boost::diagnostic_information(*error);
+                                << error->errorMessage();
                             // FATAL ERROR, NEED MANUAL FIX!
 
                             callback(std::move(error));
@@ -492,9 +490,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 batchBlockCommit([this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << "Commit block to storage failed!" << LOG_KV("number", number())
-                            << boost::diagnostic_information(*error);
+                        SCHEDULER_LOG(ERROR) << "Commit block to storage failed!"
+                                             << LOG_KV("number", number()) << error->errorMessage();
 
                         // FATAL ERROR, NEED MANUAL FIX!
 
@@ -700,8 +697,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 if (error)
                 {
                     ++(*failed);
-                    SCHEDULER_LOG(ERROR)
-                        << "DAG execute error: " << boost::diagnostic_information(*error);
+                    SCHEDULER_LOG(ERROR) << "DAG execute error: " << error->errorMessage();
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
                         triggerSwitch();
@@ -983,7 +979,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
                     if (error)
                     {
                         SCHEDULER_LOG(ERROR)
-                            << "Nextblock executor error!" << boost::diagnostic_information(*error);
+                            << "Nextblock executor error!" << error->errorMessage();
                         ++status->failed;
 
                         if (error->errorCode() ==
@@ -1045,8 +1041,7 @@ void BlockExecutive::batchGetHashes(
                     WriteGuard lock(status->x_lock);
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << "Commit executor error!" << boost::diagnostic_information(*error);
+                        SCHEDULER_LOG(ERROR) << "Commit executor error!" << error->errorMessage();
                         ++status->failed;
                     }
                     else
@@ -1097,8 +1092,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
     m_scheduler->m_storage->asyncCommit(params, [status, this](Error::Ptr&& error) {
         if (error)
         {
-            SCHEDULER_LOG(ERROR) << "Commit storage error!"
-                                 << boost::diagnostic_information(*error);
+            SCHEDULER_LOG(ERROR) << "Commit storage error!" << error->errorMessage();
 
             ++status->failed;
             status->checkAndCommit(*status);
@@ -1120,8 +1114,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
                         WriteGuard lock(status->x_lock);
                         if (error)
                         {
-                            SCHEDULER_LOG(ERROR) << "Commit executor error!"
-                                                 << boost::diagnostic_information(*error);
+                            SCHEDULER_LOG(ERROR)
+                                << "Commit executor error!" << error->errorMessage();
                             ++status->failed;
 
                             if (error->errorCode() ==
@@ -1179,8 +1173,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
             WriteGuard lock(status->x_lock);
             if (error)
             {
-                SCHEDULER_LOG(ERROR)
-                    << "Commit storage error!" << boost::diagnostic_information(*error);
+                SCHEDULER_LOG(ERROR) << "Commit storage error!" << error->errorMessage();
 
                 ++status->failed;
             }
@@ -1208,15 +1201,14 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
                 {
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
-                        SCHEDULER_LOG(DEBUG) << "Rollback a restarted executor. Ignore"
-                                             << boost::diagnostic_information(*error);
+                        SCHEDULER_LOG(DEBUG)
+                            << "Rollback a restarted executor. Ignore" << error->errorMessage();
                         ++status->success;
                         triggerSwitch();
                     }
                     else
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << "Rollback executor error!" << boost::diagnostic_information(*error);
+                        SCHEDULER_LOG(ERROR) << "Rollback executor error!" << error->errorMessage();
                         ++status->failed;
                     }
                 }
