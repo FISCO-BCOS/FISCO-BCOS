@@ -128,30 +128,26 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 
     for (int64_t i = 1; i <= 10; ++i)
     {
-        // generate between  random number
-        auto id = (rand() % 1000) + 1;
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
-                        << LOG_KV("ID", id);
-        needPrepare.insert(id);
-        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(id, nullptr, false);
-        executivePool->add(id, executiveState);
-        executivePool->markAs(id, ExecutivePool::MessageHint::NEED_PREPARE);
+                        << LOG_KV("ID", i);
+        needPrepare.insert(i);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
     }
-    for (int64_t i = 1; i <= 10; ++i)
+    for (int64_t i = 11; i <= 20; ++i)
     {
-        auto id = (rand() % 1000) + 1001;
-        needSchedule.insert(id);
-        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(id, nullptr, false);
-        executivePool->add(id, executiveState);
-        executivePool->markAs(id, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+        needSchedule.insert(i);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
     }
-    for (int64_t i = 1; i <= 10; ++i)
+    for (int64_t i = 21; i <= 30; ++i)
     {
-        auto id = (rand() % 1000) + 2001;
-        needRemove.insert(id);
-        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(id, nullptr, false);
-        executivePool->add(id, executiveState);
-        executivePool->markAs(id, ExecutivePool::MessageHint::END);
+        needRemove.insert(i);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::END);
     }
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                     << LOG_KV("needSchedule", needSchedule.size())
