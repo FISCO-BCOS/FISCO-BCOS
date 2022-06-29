@@ -79,6 +79,7 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
     {
         NodeIPEndpoint endpoint;
         BOOST_CHECK_THROW(config->hostAndPort2Endpoint("abcdef:fff", endpoint), std::exception);
+        BOOST_CHECK_THROW(config->hostAndPort2Endpoint("127.0.0.1", endpoint), std::exception);
     }
 }
 
