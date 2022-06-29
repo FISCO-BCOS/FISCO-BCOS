@@ -271,17 +271,19 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
             auto total = txList->size();
             auto count =
                 std::make_shared<std::tuple<std::atomic<size_t>, std::atomic<size_t>>>(0, 0);
+            Error::Ptr storeError = nullptr;
             for (size_t i = 0; i < txList->size(); ++i)
             {
                 auto entry = table->newEntry();
                 entry.setField(0, *((*txList)[i]));  // copy the bytes entry
 
                 LEDGER_LOG(TRACE) << "Write transaction" << LOG_KV("hash", (*hashList)[i].hex());
-                table->asyncSetRow(
-                    (*hashList)[i].hex(), std::move(entry), [total, count, callback](auto&& error) {
+                table->asyncSetRow((*hashList)[i].hex(), std::move(entry),
+                    [total, &storeError, count, callback](auto&& error) {
                         if (error)
                         {
                             ++std::get<1>(*count);
+                            storeError = std::make_shared<Error>(*error);
                             LEDGER_LOG(ERROR) << "Set row failed!" << error->what();
                         }
                         else
@@ -292,6 +294,14 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                         if (std::get<0>(*count) + std::get<1>(*count) == total)
                         {
                             // All finished
+                            // if contains failed store
+                            if (std::get<1>(*count) > 0)
+                            {
+                                LEDGER_LOG(ERROR) << LOG_DESC("asyncStoreTransactions with error")
+                                                  << LOG_KV("e", storeError->what());
+                                callback(storeError);
+                                return;
+                            }
                             LEDGER_LOG(TRACE) << "StoreTransactions success";
                             callback(nullptr);
                         }

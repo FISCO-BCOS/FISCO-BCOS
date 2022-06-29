@@ -358,7 +358,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 }
 
                 prev.storage->setReadOnly(true);
-                lastStateStorage = prev.storage;
+                lastStateStorage = createStateStorage(prev.storage);
                 stateStorage = createStateStorage(prev.storage);
             }
             // set last commit state storage to blockContext, to auth read last block state
@@ -850,7 +850,8 @@ void TransactionExecutor::dagExecuteTransactions(
     }
 
     EXECUTOR_NAME_LOG(INFO) << LOG_DESC("dagExecuteTransactions") << LOG_KV("prepareT", prepareT)
-                            << LOG_KV("total", (utcTime() - recoredT));
+                            << LOG_KV("total", (utcTime() - recoredT))
+                            << LOG_KV("inputSize", inputs.size());
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
@@ -1492,19 +1493,20 @@ void TransactionExecutor::getCode(
         return;
     }
 
-    storage::StorageInterface::Ptr storage;
+    storage::StateStorageInterface::Ptr stateStorage;
 
+    // create temp state storage
     if (m_cachedStorage)
     {
-        storage = m_cachedStorage;
+        stateStorage = createStateStorage(m_cachedStorage);
     }
     else
     {
-        storage = m_backendStorage;
+        stateStorage = createStateStorage(m_backendStorage);
     }
 
     auto tableName = getContractTableName(contract, m_isWasm);
-    storage->asyncGetRow(tableName, "code",
+    stateStorage->asyncGetRow(tableName, "code",
         [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (!m_isRunning)
             {
@@ -1552,19 +1554,20 @@ void TransactionExecutor::getABI(
         return;
     }
 
-    storage::StorageInterface::Ptr storage;
+    storage::StateStorageInterface::Ptr stateStorage;
 
+    // create temp state storage
     if (m_cachedStorage)
     {
-        storage = m_cachedStorage;
+        stateStorage = createStateStorage(m_cachedStorage);
     }
     else
     {
-        storage = m_backendStorage;
+        stateStorage = createStateStorage(m_backendStorage);
     }
 
     auto tableName = getContractTableName(contract, m_isWasm);
-    storage->asyncGetRow(tableName, ACCOUNT_ABI,
+    stateStorage->asyncGetRow(tableName, ACCOUNT_ABI,
         [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (!m_isRunning)
             {
@@ -1940,7 +1943,7 @@ void TransactionExecutor::removeCommittedState()
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = m_stateStorages.back().storage;
+        m_lastStateStorage = createStateStorage(m_stateStorages.back().storage);
         EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
                                 << LOG_KV("storageNumber", m_stateStorages.back().number)
                                 << LOG_KV("commitNumber", number);
@@ -1956,7 +1959,7 @@ void TransactionExecutor::removeCommittedState()
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = m_stateStorages.back().storage;
+        m_lastStateStorage = createStateStorage(m_stateStorages.back().storage);
         EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("removeCommittedState")
                                  << LOG_KV("LatestStateStorage", m_stateStorages.back().number)
                                  << LOG_KV("commitNumber", number)
@@ -2024,8 +2027,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         callParameters->abi = input.abi();
     }
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
 
     return callParameters;
 }
@@ -2050,10 +2051,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-    {
-        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
-    }
     return callParameters;
 }
 
