@@ -165,6 +165,8 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasprepare before");
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
+            BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test")
+                            << LOG_KV("needPrepare", needPrepare.size());
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
             return true;
