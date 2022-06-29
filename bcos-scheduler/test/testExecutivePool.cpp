@@ -129,8 +129,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     }
     executivePool->forEach(
         ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr) {
-            auto BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE")
-                                 << LOG_DESC("test executivepool whether is null");
+            // do nothing
             return true;
         });
     for (auto i : needPrepare)
