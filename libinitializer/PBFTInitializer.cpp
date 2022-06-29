@@ -172,6 +172,13 @@ void PBFTInitializer::initChainNodeInfo(
 
 void PBFTInitializer::start()
 {
+    if (!m_nodeConfig->enableFailOver())
+    {
+        m_blockSync->enableAsMaster(true);
+        // Note: since enableAsMaterNode will recover pbftState and execute the recovered proposal,
+        // should call this after every module and handlers has been inited completed
+        m_pbft->enableAsMaterNode(true);
+    }
     m_sealer->start();
     m_blockSync->start();
     m_pbft->start();
@@ -200,11 +207,6 @@ void PBFTInitializer::init()
     if (m_nodeConfig->enableFailOver())
     {
         initConsensusFailOver(m_protocolInitializer->keyPair()->publicKey());
-    }
-    else
-    {
-        m_blockSync->enableAsMaster(true);
-        m_pbft->enableAsMaterNode(true);
     }
     syncGroupNodeInfo();
 }

@@ -26,6 +26,7 @@
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "mock/MockKeyPageStorage.h"
 #include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
@@ -71,12 +72,17 @@ public:
     virtual ~PrecompiledFixture() {}
 
     /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false)
+    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = false)
     {
         isWasm = _isWasm;
-        storage = std::make_shared<MockTransactionalStorage>(hashImpl);
-        memoryTableFactory = std::make_shared<StateStorage>(storage);
-
+        if (_isKeyPage)
+        {
+            storage = std::make_shared<MockKeyPageStorage>(hashImpl);
+        }
+        else
+        {
+            storage = std::make_shared<MockTransactionalStorage>(hashImpl);
+        }
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
@@ -107,7 +113,6 @@ public:
     {
         isWasm = _isWasm;
         storage = std::make_shared<MockTransactionalStorage>(smHashImpl);
-        memoryTableFactory = std::make_shared<StateStorage>(storage);
 
         blockFactory = createBlockFactory(smCryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
@@ -264,8 +269,7 @@ protected:
     CryptoSuite::Ptr cryptoSuite = nullptr;
     CryptoSuite::Ptr smCryptoSuite = nullptr;
 
-    std::shared_ptr<MockTransactionalStorage> storage;
-    StateStorage::Ptr memoryTableFactory;
+    TransactionalStorageInterface::Ptr storage;
     TransactionExecutor::Ptr executor;
     std::shared_ptr<MockTxPool> txpool;
     std::shared_ptr<MockLedger> ledger;

@@ -36,7 +36,7 @@ config_path=""
 docker_mode=
 default_version="v3.0.0-rc4"
 compatibility_version=${default_version}
-default_mtail_version="3.0.0-rc48"
+default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
 monitor_mode="false"
@@ -362,19 +362,42 @@ download_monitor_bin()
         LOG_INFO "Use binary ${mtail_binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
-    mtail_binary_path="bin/${mtail_binary_name}"
-    package_name="${mtail_binary_name}_${compatibility_mtail_version}_Linux_x86_64.tar.gz"
-    if [ -n "${macOS}" ];then
-        package_name="${mtail_binary_name}_${compatibility_mtail_version}_Darwin_x86_64.tar.gz"
+    local platform="$(uname -m)"
+    local mtail_postfix=""
+    if [[ -n "${macOS}" ]];then
+        if [[ "${platform}" == "arm64" ]];then
+            mtail_postfix ="Darwin_arm64"
+        elif [[ "${platform}" == "x86_64" ]];then
+            mtail_postfix="Darwin_x86_64"
+        else
+            LOG_FATAL "Unsupported platform ${platform} for mtail"
+            exit 1
+        fi
+    else
+        if [[ "${platform}" == "aarch64" ]];then
+            mtail_postfix ="Linux_arm64"
+        elif [[ "${platform}" == "x86_64" ]];then
+            mtail_postfix="Linux_x86_64"
+        else
+            LOG_FATAL "Unsupported platform ${platform} for mtail"
+            exit 1
+        fi
     fi
-
+    mtail_binary_path="bin/${mtail_binary_name}"
+    package_name="${mtail_binary_name}_${compatibility_mtail_version}_${mtail_postfix}.tar.gz"
+    
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/mtail/${package_name}"
     local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
     # the binary can obtained from the cos
-    LOG_INFO "Downloading mtail binary from ${github_link} ..."
-    curl -#LO "${github_link}"
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        LOG_INFO "Downloading monitor binary from ${Download_Link} ..."
+        curl -#LO "${Download_Link}"
+    else
+        LOG_INFO "Downloading monitor binary from ${github_link} ..."
+        curl -#LO "${github_link}"
+    fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
-
     chmod a+x ${mtail_binary_path}
 }
 
