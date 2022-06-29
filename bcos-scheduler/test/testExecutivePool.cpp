@@ -142,6 +142,8 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("before add");
     for (auto i : needPrepare)
     {
+        BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
+                        << LOG_KV("ID", i);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
