@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
                         << LOG_KV("ID", id);
         needPrepare.insert(id);
         needSchedule.insert(++id);
-        needRemove.insert(--id);
+        needRemove.insert(id + 2);
     }
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                     << LOG_KV("needSchedule", needSchedule.size())
@@ -152,12 +152,16 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     }
     for (auto i : needSchedule)
     {
+        BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needSchedule.size())
+                        << LOG_KV("ID", i);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
     }
     for (auto i : needRemove)
     {
+        BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needRemove.size())
+                        << LOG_KV("ID", i);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::END);
