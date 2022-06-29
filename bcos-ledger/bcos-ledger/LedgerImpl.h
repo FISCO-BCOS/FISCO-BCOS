@@ -224,22 +224,6 @@ public:
         return transactionCount;
     }
 
-    template <std::ranges::range Inputs>
-    requires bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
-    void impl_setTransactionsOrReceipts(Inputs const& inputs)
-    {
-        auto hashesRange = inputs | std::views::transform([](auto const& input) {
-            return bcos::concepts::hash::calculate<Hasher>(input);
-        });
-        auto buffersRange = inputs | std::views::transform([](auto const& input) {
-            return bcos::concepts::serialize::encode(input);
-        });
-
-        constexpr auto isTransaction =
-            bcos::concepts::transaction::Transaction<std::ranges::range_value_t<Inputs>>;
-        setTransactionOrReceiptBuffers<isTransaction>(hashesRange, std::move(buffersRange));
-    }
-
     template <bool isTransaction>
     void impl_setTransactionOrReceiptBuffers(
         std::ranges::range auto const& hashes, std::ranges::range auto buffers)

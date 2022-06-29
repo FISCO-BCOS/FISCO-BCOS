@@ -11,26 +11,29 @@ template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
-// clang-format off
-struct GETBLOCK_FLAGS {};
-struct BLOCK_ALL: public GETBLOCK_FLAGS {};
-struct BLOCK_HEADER: public GETBLOCK_FLAGS {};
-struct BLOCK_TRANSACTIONS: public GETBLOCK_FLAGS {};
-struct BLOCK_RECEIPTS: public GETBLOCK_FLAGS {};
-struct BLOCK_NONCES: public GETBLOCK_FLAGS {};
-// clang-format on
+enum GetBlockFlag
+{
+    BLOCK_ALL,
+    BLOCK_HEADER,
+    BLOCK_TRANSACTIONS,
+    BLOCK_RECEIPTS,
+    BLOCK_NONCES
+};
 
-template <class GetBlockFlagType>
-concept GetBlockFlag = std::derived_from<GetBlockFlagType, GETBLOCK_FLAGS>;
+enum TransactionOrReceiptFlag
+{
+    TRANSACTION,
+    RECEIPT
+};
 
 template <class Impl>
 class LedgerBase
 {
 public:
-    template <class... Flags>
+    template <GetBlockFlag... flags>
     auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
-        return impl().template impl_getBlock<Flags...>(blockNumber);
+        return impl().template impl_getBlock<flags...>(blockNumber);
     }
 
     void setBlock(
@@ -39,10 +42,10 @@ public:
         impl().impl_setBlock(storage, std::move(block));
     }
 
-    template <bool isTransaction>
+    template <TransactionOrReceiptFlag flag>
     auto getTransactionsOrReceipts(std::ranges::range auto const& hashes)
     {
-        return impl().template impl_getTransactionsOrReceipts<isTransaction>(hashes);
+        return impl().template impl_getTransactionsOrReceipts<flag>(hashes);
     }
 
     struct TransactionCount
@@ -53,11 +56,20 @@ public:
     };
     TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }
 
-    template <std::ranges::range Inputs>
+    template <std::ranges::range Inputs, bcos::crypto::hasher::Hasher Hasher>
     requires bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
     void setTransactionsOrReceipts(Inputs const& inputs)
     {
-        impl().impl_setTransactionsOrReceipts(inputs);
+        auto hashesRange = inputs | std::views::transform([](auto const& input) {
+            return bcos::concepts::hash::calculate<Hasher>(input);
+        });
+        auto buffersRange = inputs | std::views::transform([](auto const& input) {
+            return bcos::concepts::serialize::encode(input);
+        });
+
+        constexpr auto isTransaction =
+            bcos::concepts::transaction::Transaction<std::ranges::range_value_t<Inputs>>;
+        setTransactionOrReceiptBuffers<isTransaction>(hashesRange, std::move(buffersRange));
     }
 
     template <bool isTransaction>

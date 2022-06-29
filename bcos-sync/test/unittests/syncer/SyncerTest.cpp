@@ -1,7 +1,7 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "../../../bcos-syncer/BlockSyncerClient.h"
+#include "../../../bcos-syncer/BlockSyncerClientImpl.h"
 #include <bcos-framework/concepts/ledger/Ledger.h>
 #include <bcos-framework/concepts/storage/Storage.h>
 #include <bcos-tars-protocol/tars/Block.h>
@@ -9,24 +9,28 @@
 
 using namespace bcos::sync;
 
-// struct MockLedger
-// {
-//     // bcostars::Block getBlock(bcos::concepts::block::BlockNumber auto blockNumber) {}
-//     bcostars::Block getBlock(int64_t blockNumber) {}
+struct MockLedger : public bcos::concepts::ledger::LedgerBase<MockLedger>
+{
+    // bcostars::Block getBlock(bcos::concepts::block::BlockNumber auto blockNumber) {}
+    bcostars::Block getBlock(int64_t blockNumber)
+    {
+        bcostars::Block block;
+        return block;
+    }
 
-//     void setBlock(
-//         bcos::concepts::storage::Storage auto& storage, bcos::concepts::block::Block auto block)
-//     {}
+    void setBlock(
+        bcos::concepts::storage::Storage auto& storage, bcos::concepts::block::Block auto block)
+    {}
 
-//     bcostars::Transaction getTransactionsOrReceipts(std::ranges::range auto hashes) {}
+    bcostars::Transaction getTransactionsOrReceipts(std::ranges::range auto const& hashes) {}
 
-//     void getTotalTransactionCount() {}
+    void getTotalTransactionCount() {}
 
-//     void setTransactionsOrReceipts(std::ranges::range auto inputs) {}
+    void setTransactionsOrReceipts(std::ranges::range auto inputs) {}
 
-//     void setTransactionOrReceiptBuffers(
-//         std::ranges::range auto hashes, std::ranges::range auto buffers)
-//     {}
-// };
+    void setTransactionOrReceiptBuffers(
+        std::ranges::range auto hashes, std::ranges::range auto buffers)
+    {}
+};
 
 // static_assert(bcos::concepts::ledger::Ledger<MockLedger>, "");
