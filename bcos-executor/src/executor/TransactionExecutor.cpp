@@ -263,10 +263,10 @@ void TransactionExecutor::initWasmEnvironment()
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
-    storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
+    storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(
-        storage, lastStorage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
+        storage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -304,7 +304,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
-            bcos::storage::StorageInterface::Ptr lastStateStorage;
             if (m_stateStorages.empty())
             {
                 if (m_cachedStorage)
@@ -315,11 +314,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 {
                     stateStorage = createStateStorage(m_backendStorage);
                 }
-
-                lastStateStorage = m_lastStateStorage ?
-                                       m_lastStateStorage :
-                                       (m_cachedStorage ? createStateStorage(m_cachedStorage) :
-                                                          createStateStorage(m_backendStorage));
 
                 // check storage block Number
                 auto storageBlockNumber = getBlockNumberInStorage();
@@ -358,11 +352,10 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 }
 
                 prev.storage->setReadOnly(true);
-                lastStateStorage = createStateStorage(prev.storage);
                 stateStorage = createStateStorage(prev.storage);
             }
             // set last commit state storage to blockContext, to auth read last block state
-            m_blockContext = createBlockContext(blockHeader, stateStorage, lastStateStorage);
+            m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
@@ -1943,7 +1936,6 @@ void TransactionExecutor::removeCommittedState()
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = createStateStorage(m_stateStorages.back().storage);
         EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
                                 << LOG_KV("storageNumber", m_stateStorages.back().number)
                                 << LOG_KV("commitNumber", number);
@@ -1959,7 +1951,6 @@ void TransactionExecutor::removeCommittedState()
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = createStateStorage(m_stateStorages.back().storage);
         EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("removeCommittedState")
                                  << LOG_KV("LatestStateStorage", m_stateStorages.back().number)
                                  << LOG_KV("commitNumber", number)
