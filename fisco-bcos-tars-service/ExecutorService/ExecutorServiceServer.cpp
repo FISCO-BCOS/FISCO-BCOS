@@ -29,7 +29,7 @@ bcostars::ExecutionMessage toTarsMessage(const bcos::protocol::ExecutionMessage:
 {
     if (message)
     {
-        return std::move(((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)message)->inner());
+        return ((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)message)->inner();
     }
     else
     {
