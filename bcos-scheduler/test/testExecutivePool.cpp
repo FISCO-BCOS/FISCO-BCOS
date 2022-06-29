@@ -127,11 +127,10 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         needSchedule.insert((rand() % 1000) + 1);
         needRemove.insert((rand() % 1000) + 1);
     }
-    executivePool->forEach(
-        ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr) {
-            // do nothing
-            return true;
-        });
+    executivePool->forEach(ExecutivePool::MessageHint::ALL, [this](int64_t, ExecutiveState::Ptr) {
+        // do nothing
+        return true;
+    });
     for (auto i : needPrepare)
     {
         executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
@@ -164,13 +163,13 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         });
     executivePool->forEach(ExecutivePool::MessageHint::END,
         [this, &needRemove](int64_t contextID, ExecutiveState::Ptr) {
-            auto iter = needRemove.find(ContextID);
+            auto iter = needRemove.find(contextID);
             needRemove.erase(iter);
             return true;
         });
     int64_t poolsize = 0;
     executivePool->forEach(
-        ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr) {
+        ExecutivePool::MessageHint::ALL, [this, poolsize](int64_t, ExecutiveState::Ptr) {
             // do nothing
             ++poolsize;
             return true;
