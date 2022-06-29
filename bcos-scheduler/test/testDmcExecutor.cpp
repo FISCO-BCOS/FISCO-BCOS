@@ -1,5 +1,5 @@
 #pragma once
-#include "DmcStepRecorder.h"
+#include "../src/DmcStepRecorder.h"
 #include "Executive.h"
 #include "ExecutivePool.h"
 #include "ExecutorManager.h"
@@ -16,14 +16,9 @@ namespace bcos::test
 {
 struct DmcExecutorFixture
 {
-    DmcExecutorFixture()
-    {
-    }
+    DmcExecutorFixture(){};
 };
 BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
 
-BOOST_AUTO_TEST_CASE(Test)
-{
-    
-}
-}; //namespace bcos::test
+BOOST_AUTO_TEST_CASE(Test) {}
+};  // namespace bcos::test
