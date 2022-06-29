@@ -120,7 +120,6 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     std::set<int64_t> needPrepare;
     std::set<int64_t> needSchedule;
     std::set<int64_t> needRemove;
-    int64_t id;
     executivePool->forEach(ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr) {
         // do nothing
         BOOST_CHECK(false);
@@ -130,18 +129,24 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
-        id = (rand() % 10000) + 1;
+        auto id = (rand() % 1000) + 1;
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                         << LOG_KV("ID", id);
         needPrepare.insert(id);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(id, nullptr, false);
         executivePool->add(id, executiveState);
         executivePool->markAs(id, ExecutivePool::MessageHint::NEED_PREPARE);
-
-        needSchedule.insert(++id);
-        executivePool->add(++id, executiveState);
-        executivePool->markAs(++id, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
-
+    }
+    for (int64_t i = 1; i <= 10; ++i)
+    {
+        auto id = (rand() % 1000) + 1001;
+        needSchedule.insert(id);
+        executivePool->add(id, executiveState);
+        executivePool->markAs(id, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+    }
+    for (int64_t i = 1; i <= 10; ++i)
+    {
+        auto id = (rand() % 1000) + 2001;
         needRemove.insert(id + 2);
         executivePool->add(id + 2, executiveState);
         executivePool->markAs(id + 2, ExecutivePool::MessageHint::END);
