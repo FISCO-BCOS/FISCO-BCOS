@@ -2,14 +2,13 @@
 #include "../Common.h"
 #include "TarsStruct.h"
 #include "tup/Tars.h"
-#include <bcos-framework/concepts/Serialize.h>
+#include <bcos-framework/concepts/Basic.h>
 #include <ranges>
 #include <vector>
 
 namespace bcos::concepts::serialize
 {
-// Tars struct crtp base
-std::vector<bcos::byte> encode(bcostars::protocol::impl::TarsStruct auto const& object)
+std::vector<bcos::byte> impl_encode(bcostars::protocol::impl::TarsStruct auto const& object)
 {
     tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
     object.writeTo(output);
@@ -20,7 +19,8 @@ std::vector<bcos::byte> encode(bcostars::protocol::impl::TarsStruct auto const& 
     return out;
 }
 
-void decode(bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& data)
+void impl_decode(
+    bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& data)
 {
     tars::TarsInputStream<tars::BufferReader> input;
     input.setBuffer((const char*)std::data(data), std::size(data));
@@ -28,8 +28,3 @@ void decode(bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::B
     object.readFrom(input);
 }
 }  // namespace bcos::concepts::serialize
-
-namespace bcos::concepts::hash
-{
-
-}

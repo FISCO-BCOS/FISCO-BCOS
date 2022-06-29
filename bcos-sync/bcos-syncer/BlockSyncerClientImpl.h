@@ -3,20 +3,32 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/concepts/Serialize.h>
 #include <bcos-framework/concepts/ledger/Ledger.h>
+#include <bcos-framework/concepts/sync/BlockSyncerClient.h>
 #include <bcos-framework/concepts/sync/SyncBlockMessages.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 #include <exception>
 #include <future>
+#include <iterator>
+
 
 namespace bcos::sync
 {
 template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::sync::RequestBlock RequestType,
     bcos::concepts::sync::ResponseBlock ResponseType>
-class BlockSyncerClient
+class BlockSyncerClientImpl : public bcos::concepts::sync::BlockSyncerClientBase<
+                                  BlockSyncerClientImpl<LedgerType, RequestType, ResponseType>>
 {
 public:
-    void fetchNewBlocks()
+    BlockSyncerClientImpl(LedgerType ledger, bcos::front::FrontServiceInterface::Ptr front)
+      : bcos::concepts::sync::BlockSyncerClientBase<
+            BlockSyncerClientImpl<LedgerType, RequestType, ResponseType>>(),
+        m_ledger(std::move(ledger)),
+        m_front(std::move(front))
+    {}
+
+    void impl_fetchAndStoreNewBlocks()
     {
         decltype(m_nodes) nodes;
         {
@@ -75,9 +87,15 @@ public:
         }
     }
 
+    void impl_updateNodes(bcos::gateway::GroupNodeInfo::Ptr nodes)
+    {
+        auto lock = std::unique_lock{m_nodesMutex};
+        m_nodes = std::move(nodes);
+    }
+
 private:
-    bcos::front::FrontServiceInterface::Ptr m_front;
     LedgerType m_ledger;
+    bcos::front::FrontServiceInterface::Ptr m_front;
 
     bcos::gateway::GroupNodeInfo::Ptr m_nodes;
     std::mutex m_nodesMutex;

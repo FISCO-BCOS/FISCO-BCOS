@@ -1,3 +1,4 @@
+#include "bcos-framework/concepts/storage/Storage.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -10,7 +11,6 @@
 #include <bcos-ledger/bcos-ledger/LedgerImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
@@ -28,9 +28,13 @@ ostream& operator<<(ostream& os, std::vector<tars::Char> const& buffer)
 }
 }  // namespace std
 
-struct MockMemoryStorage
+struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorage>
 {
-    std::optional<bcos::storage::Entry> getRow(std::string_view table, std::string_view key)
+    MockMemoryStorage(
+        std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>>& data1)
+      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1){};
+
+    std::optional<bcos::storage::Entry> impl_getRow(std::string_view table, std::string_view key)
     {
         auto entryIt = data.find(std::tuple{table, key});
         if (entryIt != data.end())
@@ -40,7 +44,7 @@ struct MockMemoryStorage
         return {};
     }
 
-    std::vector<std::optional<bcos::storage::Entry>> getRows(
+    std::vector<std::optional<bcos::storage::Entry>> impl_getRows(
         std::string_view table, std::ranges::range auto const& keys)
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
@@ -52,7 +56,7 @@ struct MockMemoryStorage
         return output;
     }
 
-    void setRow(std::string_view table, std::string_view key, bcos::storage::Entry entry)
+    void impl_setRow(std::string_view table, std::string_view key, bcos::storage::Entry entry)
     {
         auto it = data.find(std::tuple{table, key});
         if (it != data.end())
@@ -65,14 +69,14 @@ struct MockMemoryStorage
         }
     }
 
-    void createTable([[maybe_unused]] std::string_view tableName) {}
+    void impl_createTable([[maybe_unused]] std::string_view tableName) {}
 
     std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>>& data;
 };
 
 struct LedgerImplFixture
 {
-    LedgerImplFixture() : storage{.data = data}
+    LedgerImplFixture() : storage{data}
     {
         // Put some entry into data
         bcostars::BlockHeader header;

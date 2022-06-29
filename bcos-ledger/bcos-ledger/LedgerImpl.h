@@ -1,5 +1,4 @@
 #pragma once
-#include "impl/TarsHashable.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/concepts/Basic.h>
 #include <bcos-framework/concepts/Block.h>
@@ -8,7 +7,6 @@
 #include <bcos-framework/concepts/ledger/Ledger.h>
 #include <bcos-framework/concepts/storage/Storage.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <ranges>
@@ -34,13 +32,13 @@ struct BLOCK_NONCES: public GETBLOCK_FLAGS {};
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage,
     bcos::concepts::block::Block Block>
-class LedgerImpl
+class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage, Block>>
 {
 public:
     LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
     template <class... Flags>
-    auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
+    auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
         Block block;
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
@@ -48,7 +46,7 @@ public:
         return block;
     }
 
-    void setBlock(Storage& storage, bcos::concepts::block::Block auto block)
+    void impl_setBlock(Storage& storage, bcos::concepts::block::Block auto block)
     {
         if (block.blockHeader.data.blockNumber == 0 && !std::empty(block.transactions))
             return;
@@ -132,7 +130,7 @@ public:
                           << LOG_KV("totalCount", totalTransactionCount)
                           << LOG_KV("failedCount", failedTransactionCount);
 
-        auto transactionCount = getTotalTransactionCount();
+        auto transactionCount = impl_getTotalTransactionCount();
         transactionCount.total += totalTransactionCount;
         transactionCount.failed += failedTransactionCount;
 
@@ -148,7 +146,7 @@ public:
                 SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(failedEntry));
         }
 
-        LEDGER_LOG(INFO) << METRIC << LOG_DESC("setBlock")
+        LEDGER_LOG(INFO) << LOG_DESC("setBlock")
                          << LOG_KV("number", block.blockHeader.data.blockNumber)
                          << LOG_KV("totalTxs", transactionCount.total)
                          << LOG_KV("failedTxs", transactionCount.failed)
@@ -157,7 +155,7 @@ public:
     }
 
     template <bool isTransaction>
-    auto getTransactionsOrReceipts(std::ranges::range auto const& hashes)
+    auto impl_getTransactionsOrReceipts(std::ranges::range auto const& hashes)
     {
         using OutputItemType = std::conditional_t<isTransaction,
             std::ranges::range_value_t<decltype(Block::transactions)>,
@@ -183,7 +181,7 @@ public:
         int64_t failed;
         int64_t blockNumber;
     };
-    TransactionCount getTotalTransactionCount()
+    TransactionCount impl_getTotalTransactionCount()
     {
         LEDGER_LOG(INFO) << "GetTotalTransactionCount request";
         constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
@@ -228,7 +226,7 @@ public:
 
     template <std::ranges::range Inputs>
     requires bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
-    void setTransactionsOrReceipts(Inputs const& inputs)
+    void impl_setTransactionsOrReceipts(Inputs const& inputs)
     {
         auto hashesRange = inputs | std::views::transform([](auto const& input) {
             return bcos::concepts::hash::calculate<Hasher>(input);
@@ -243,7 +241,7 @@ public:
     }
 
     template <bool isTransaction>
-    void setTransactionOrReceiptBuffers(
+    void impl_setTransactionOrReceiptBuffers(
         std::ranges::range auto const& hashes, std::ranges::range auto buffers)
     {
         auto count = std::size(buffers);
@@ -330,4 +328,5 @@ private:
 
     Storage m_storage;
 };
+
 }  // namespace bcos::ledger

@@ -11,40 +11,70 @@ template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
-template <class LedgerType>
-concept Ledger = requires(LedgerType ledger,
-    typename boost::function_traits<decltype(&LedgerType::getBlock)>::arg1_type getBlockArg1,
-    typename boost::function_traits<decltype(&LedgerType::setBlock)>::arg1_type setBlockArg1,
-    typename boost::function_traits<decltype(&LedgerType::setBlock)>::arg2_type setBlockArg2,
-    typename boost::function_traits<decltype(&LedgerType::getTransactionsOrReceipts)>::arg1_type
-        getTransactionsOrReceiptsArg1,
-    typename boost::function_traits<decltype(&LedgerType::setTransactionsOrReceipts)>::arg1_type
-        setTransactionsOrReceiptsArg1,
-    typename boost::function_traits<decltype(&LedgerType::setTransactionOrReceiptBuffers)>::
-        arg1_type setTransactionOrReceiptBuffersArg1,
-    typename boost::function_traits<decltype(&LedgerType::setTransactionOrReceiptBuffers)>::
-        arg2_type setTransactionOrReceiptBuffersArg2)
+// clang-format off
+struct GETBLOCK_FLAGS {};
+struct BLOCK_ALL: public GETBLOCK_FLAGS {};
+struct BLOCK_HEADER: public GETBLOCK_FLAGS {};
+struct BLOCK_TRANSACTIONS: public GETBLOCK_FLAGS {};
+struct BLOCK_RECEIPTS: public GETBLOCK_FLAGS {};
+struct BLOCK_NONCES: public GETBLOCK_FLAGS {};
+// clang-format on
+
+template <class GetBlockFlagType>
+concept GetBlockFlag = std::derived_from<GetBlockFlagType, GETBLOCK_FLAGS>;
+
+template <class Impl>
+class LedgerBase
 {
-    // clang-format off
-    { getBlockArg1 } -> std::integral;
-    { ledger.getBlock(getBlockArg1) } -> bcos::concepts::block::Block;
-    
-    { setBlockArg1 } -> bcos::concepts::storage::Storage;
-    { setBlockArg2 } -> bcos::concepts::block::Block;
-    ledger.setBlock(setBlockArg1, setBlockArg2);
+public:
+    template <class... Flags>
+    auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
+    {
+        return impl().template impl_getBlock<Flags...>(blockNumber);
+    }
 
-    { getTransactionsOrReceiptsArg1 } -> std::ranges::range;
-    { ledger.getTransactionsOrReceipts()} ->TransactionOrReceipt;
+    void setBlock(
+        bcos::concepts::storage::Storage auto& storage, bcos::concepts::block::Block auto block)
+    {
+        impl().impl_setBlock(storage, std::move(block));
+    }
 
-    ledger.getTotalTransactionCount();
+    template <bool isTransaction>
+    auto getTransactionsOrReceipts(std::ranges::range auto const& hashes)
+    {
+        return impl().template impl_getTransactionsOrReceipts<isTransaction>(hashes);
+    }
 
-    { setTransactionsOrReceiptsArg1 } -> std::ranges::range;
-    ledger.setTransactionsOrReceipts(setTransactionsOrReceiptsArg1);
+    struct TransactionCount
+    {
+        int64_t total;
+        int64_t failed;
+        int64_t blockNumber;
+    };
+    TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }
 
-    { setTransactionOrReceiptBuffersArg1 } -> std::ranges::range;
-    { setTransactionOrReceiptBuffersArg2 } -> std::ranges::range;
-    ledger.setTransactionOrReceiptBuffers(setTransactionOrReceiptBuffersArg1, setTransactionOrReceiptBuffersArg2);
-    //clang-format on
+    template <std::ranges::range Inputs>
+    requires bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
+    void setTransactionsOrReceipts(Inputs const& inputs)
+    {
+        impl().impl_setTransactionsOrReceipts(inputs);
+    }
+
+    template <bool isTransaction>
+    void setTransactionOrReceiptBuffers(
+        std::ranges::range auto const& hashes, std::ranges::range auto buffers)
+    {
+        impl().template impl_setTransactionOrReceiptBuffers<isTransaction>(
+            hashes, std::move(buffers));
+    }
+
+private:
+    friend Impl;
+    LedgerBase() = default;
+    auto& impl() { return static_cast<Impl&>(*this); }
 };
+
+template <class Impl>
+concept Ledger = std::derived_from<Impl, LedgerBase<Impl>>;
 
 }  // namespace bcos::concepts::ledger

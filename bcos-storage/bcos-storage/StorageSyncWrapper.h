@@ -7,7 +7,7 @@ namespace bcos::storage
 {
 
 template <class Storage>
-class StorageSyncWrapper
+class StorageSyncWrapper : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<Storage>>
 {
 public:
     StorageSyncWrapper(Storage storage) : m_storage(std::move(storage)) {}
@@ -17,7 +17,7 @@ public:
     StorageSyncWrapper& operator=(StorageSyncWrapper&&) = default;
     ~StorageSyncWrapper() = default;
 
-    std::optional<Entry> getRow(std::string_view table, std::string_view key)
+    std::optional<Entry> impl_getRow(std::string_view table, std::string_view key)
     {
         Error::UniquePtr error;
         std::optional<storage::Entry> entry;
@@ -34,7 +34,7 @@ public:
         return entry;
     }
 
-    std::vector<std::optional<Entry>> getRows(
+    std::vector<std::optional<Entry>> impl_getRows(
         std::string_view table, std::ranges::range auto&& keys)
     {
         Error::UniquePtr error;
@@ -53,7 +53,7 @@ public:
         return entries;
     }
 
-    void setRow(std::string_view table, std::string_view key, Entry entry)
+    void impl_setRow(std::string_view table, std::string_view key, Entry entry)
     {
         Error::UniquePtr error;
 
@@ -64,7 +64,7 @@ public:
             BOOST_THROW_EXCEPTION(*error);
     }
 
-    void createTable(std::string tableName)
+    void impl_createTable(std::string tableName)
     {
         Error::UniquePtr error;
 

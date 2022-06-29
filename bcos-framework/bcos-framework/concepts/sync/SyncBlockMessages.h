@@ -12,8 +12,8 @@ concept RequestBlock = requires(MessageType message)
 {
     bcos::concepts::serialize::Serializable<MessageType>;
     MessageType{};
-    std::unsigned_integral<decltype(message.currentBlockHeight)>;
-    std::unsigned_integral<decltype(message.requestBlockCount)>;
+    std::unsigned_integral<decltype(message.beginBlockNumber)>;
+    std::unsigned_integral<decltype(message.endBlockNumber)>;
 };
 
 template <class MessageType>
@@ -21,18 +21,9 @@ concept ResponseBlock = requires(MessageType message)
 {
     bcos::concepts::serialize::Serializable<MessageType>;
     MessageType{};
-    std::unsigned_integral<decltype(message.blockHeight)>;
+    std::unsigned_integral<decltype(message.blockNumber)>;
     requires std::ranges::range<decltype(message.blocks)> &&
         bcos::concepts::block::Block<std::ranges::range_value_t<decltype(message.blocks)>>;
 };
 
 }  // namespace bcos::concepts::sync
-
-namespace bcos::concepts::serialize
-{
-
-void decode([[maybe_unused]] bcos::concepts::sync::ResponseBlock auto const& response,
-    [[maybe_unused]] bcos::concepts::ByteBuffer auto const& buffer)
-{}
-
-}  // namespace bcos::concepts::serialize
