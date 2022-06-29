@@ -122,10 +122,10 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     std::set<int64_t> needRemove;
     for (int64_t i = 1; i <= 10; ++i)
     {
-        // generate between [1,100] random number
+        // generate between  random number
         needPrepare.insert((rand() % 1000) + 1);
-        needSchedule.insert((rand() % 1000) + 1);
-        needRemove.insert((rand() % 1000) + 1);
+        needSchedule.insert((rand() % 1000) + 1001);
+        needRemove.insert((rand() % 1000) + 2001);
     }
     executivePool->forEach(
         ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
@@ -133,15 +133,26 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
             return true;
         });
+
     for (auto i : needPrepare)
     {
-        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+    }
+    for (auto i : needSchedule)
+    {
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+    }
+    for (auto i : needRemove)
+    {
         executivePool->markAs(i, ExecutivePool::MessageHint::END);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
     }
+
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
@@ -191,13 +202,18 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         needSend.insert((rand() % 1000) + 1);
-        locked.insert((rand() % 1000) + 1);
+        locked.insert((rand() % 1000) + 1001);
     }
     for (auto i : needSend)
     {
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SEND);
+    }
+    for (auto i : locked)
+    {
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::LOCKED);
     }
 
