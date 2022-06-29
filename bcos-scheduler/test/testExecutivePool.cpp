@@ -127,13 +127,6 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         needSchedule.insert((rand() % 1000) + 1);
         needRemove.insert((rand() % 1000) + 1);
     }
-    executivePool->forEach(
-        ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr))
-    {
-        // do nothing
-        return true;
-    }
-
     for (auto i : needPrepare)
     {
         executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
@@ -152,8 +145,8 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
-            BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
-                            << LOG_KV("needPrepare", needPrepare.size());
+            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
+            //                 << LOG_KV("needPrepare", needPrepare.size());
             return true;
         });
     executivePool->forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
@@ -171,12 +164,16 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         needRemove.erase(iter);
         return true;
     }
+    int64_t poolsize = 0;
     executivePool->forEach(
         ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr))
     {
         // do nothing
+        ++poolsize;
         return true;
     }
+    BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("executivepool size")
+                    << LOG_KV("poolsize", poolsize);
     BOOST_CHECK(needPrepare.empty());
     BOOST_CHECK(needSchedule.empty());
     BOOST_CHECK(needRemove.empty());
