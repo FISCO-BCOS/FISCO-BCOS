@@ -137,21 +137,24 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 
     for (auto i : needPrepare)
     {
-        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
+        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
     }
     for (auto i : needSchedule)
     {
-        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
     }
     for (auto i : needRemove)
     {
-        executivePool->markAs(i, ExecutivePool::MessageHint::END);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::END);
+        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
     }
 
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
