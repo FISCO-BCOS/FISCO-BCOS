@@ -120,15 +120,16 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     std::set<int64_t> needPrepare;
     std::set<int64_t> needSchedule;
     std::set<int64_t> needRemove;
+    int64_t id;
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
-        auto id = (rand() % 10000) + 1;
+        id = (rand() % 10000) + 1;
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                         << LOG_KV("ID", id);
         needPrepare.insert(id);
-        needSchedule.insert(id + 10);
-        needRemove.insert(id - 10);
+        needSchedule.insert(++id);
+        needRemove.insert(--id);
     }
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                     << LOG_KV("needSchedule", needSchedule.size())
@@ -169,9 +170,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasprepare before");
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
-            BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test")
-                            << LOG_KV("needPrepare", needPrepare.size())
-                            << LOG_KV("contextID", contextID);
+            BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("contextID", contextID);
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
             return true;
