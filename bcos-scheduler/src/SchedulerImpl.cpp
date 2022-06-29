@@ -323,7 +323,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
         if (error)
         {
-            SCHEDULER_LOG(ERROR) << "CommitBlock error, " << boost::diagnostic_information(*error);
+            SCHEDULER_LOG(ERROR) << "CommitBlock error, " << error->errorMessage();
 
             commitLock->unlock();
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -344,8 +344,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             }
             if (error)
             {
-                SCHEDULER_LOG(ERROR)
-                    << "Get system config error, " << boost::diagnostic_information(*error);
+                SCHEDULER_LOG(ERROR) << "Get system config error, " << error->errorMessage();
 
                 commitLock->unlock();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -452,10 +451,9 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
                                   protocol::TransactionReceipt::Ptr&& receipt) {
         if (error)
         {
-            SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
-            callback(
-                BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
-                nullptr);
+            std::string errorMessage = "asyncCall error: " + error->errorMessage();
+            SCHEDULER_LOG(ERROR) << errorMessage;
+            callback(BCOS_ERROR_WITH_PREV_PTR(error->errorCode(), errorMessage, *error), nullptr);
             return;
         }
         SCHEDULER_LOG(INFO) << "Call success";
@@ -659,8 +657,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
 
         if (error)
         {
-            SCHEDULER_LOG(ERROR) << "Get ledger config with errors: "
-                                 << boost::diagnostic_information(*error);
+            SCHEDULER_LOG(ERROR) << "Get ledger config with errors: " << error->errorMessage();
             ++failed;
         }
         else

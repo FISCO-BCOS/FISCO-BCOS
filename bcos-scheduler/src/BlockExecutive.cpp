@@ -457,8 +457,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                    SchedulerError::PrewriteBlockError, "Prewrite block error!", *error));
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
+                    "Prewrite block error： " + error->errorMessage(), *error));
                 return;
             }
 
@@ -500,8 +500,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
                         // FATAL ERROR, NEED MANUAL FIX!
 
-                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::UnknownError,
-                            "Commit block to storage failed!", *error));
+                        callback(std::move(error));
                         return;
                     }
 
@@ -525,9 +524,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     if (error)
                     {
                         ++status->failed;
-                        SCHEDULER_LOG(ERROR) << "asyncPrepare scheduler error: " << error->what();
-                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::UnknownError,
-                            "Commit block to storage(scheduler) failed!", *error));
+                        SCHEDULER_LOG(ERROR)
+                            << "asyncPrepare scheduler error: " << error->errorMessage();
+                        callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
+                            "asyncPrepare block error： " + error->errorMessage()));
                         return;
                     }
                     else
@@ -843,9 +843,8 @@ void BlockExecutive::DMCExecute(
 
         if (batchStatus->error != 0)
         {
-            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                         SchedulerError::DMTError, "Execute with errors", *error),
-                nullptr, m_isSysBlock);
+            DMC_LOG(ERROR) << "DMCExecute with errors: " << error->errorMessage();
+            callback(std::move(error), nullptr, m_isSysBlock);
         }
         else if (batchStatus->paused != 0)  // new contract
         {
@@ -923,9 +922,8 @@ void BlockExecutive::onDmcExecuteFinish(
 
             if (error)
             {
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                             SchedulerError::UnknownError, "Unknown error", *error),
-                    nullptr, m_isSysBlock);
+                DMC_LOG(ERROR) << "batchGetHashes error: " << error->errorMessage();
+                callback(std::move(error), nullptr, m_isSysBlock);
                 return;
             }
 
@@ -967,7 +965,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(ERROR) << message;
 
-            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, std::move(message)));
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, std::move(message)));
             return;
         }
 
@@ -1026,12 +1024,12 @@ void BlockExecutive::batchGetHashes(
 
         if (status.failed > 0)
         {
-            auto message = "Commit block:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "batchGetHashes" + boost::lexical_cast<std::string>(number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << message;
 
             callback(
-                BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, std::move(message)), h256(0));
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, std::move(message)), h256(0));
             return;
         }
 
