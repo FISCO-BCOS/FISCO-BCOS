@@ -123,10 +123,12 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
-        auto id = (rand() % 10000) + 10;
+        auto id = (rand() % 10000) + 1;
+        BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
+                        << LOG_KV("ID", id);
         needPrepare.insert(id);
-        needSchedule.insert(id + 1);
-        needRemove.insert(id - 1);
+        needSchedule.insert(id + 10);
+        needRemove.insert(id - 10);
     }
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                     << LOG_KV("needSchedule", needSchedule.size())
@@ -166,7 +168,8 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test")
-                            << LOG_KV("needPrepare", needPrepare.size());
+                            << LOG_KV("needPrepare", needPrepare.size())
+                            << LOG_KV("contextID", contextID);
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
             return true;
