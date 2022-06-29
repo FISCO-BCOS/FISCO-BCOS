@@ -159,7 +159,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
 {
     SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromMetaData"
                          << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                         << LOG_KV("", m_block->transactionsMetaDataSize());
+                         << LOG_KV("tx count", m_block->transactionsMetaDataSize());
 
     auto txs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
 
@@ -179,8 +179,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
             auto contextID = i + m_startContextID;
             auto message = buildMessage(contextID, (*txs)[i]);
             std::string to = {message->to().data(), message->to().size()};
+            bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
-            registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
+            m_hasDAG = enableDAG;
+            registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
         }
     }
     else
@@ -239,7 +241,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
             m_hasDAG = enableDAG;
-            registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
+            registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
         }
     }
 }
@@ -271,8 +273,11 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
         auto contextID = i + m_startContextID;
         auto message = buildMessage(contextID, tx);
         std::string to = {message->to().data(), message->to().size()};
+        bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+
 #pragma omp critical
-        registerAndGetDmcExecutor(to)->submit(std::move(message), m_hasDAG);
+        m_hasDAG = enableDAG;
+        registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
     }
 }
 
