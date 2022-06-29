@@ -118,18 +118,35 @@ BOOST_AUTO_TEST_CASE(forEachTest)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
     std::set<int64_t> needPrepare;
+    std::set<int64_t> needSchedule;
+    std::set<int64_t> needRemove;
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between [1,100] random number
-        needPrepare.insert((rand() % 100) + 1);
+        needPrepare.insert((rand() % 1000) + 1);
+        needSchedule.insert((rand() % 1000) + 1);
+        needRemove.insert((rand() % 1000) + 1);
     }
+    executivePool->forEach(
+        ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr))
+    {
+        // do nothing
+        return true;
+    }
+
     for (auto i : needPrepare)
     {
+        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+        executivePool->markAs(i, ExecutivePool::MessageHint::END);
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
     }
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
+    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
@@ -139,16 +156,41 @@ BOOST_AUTO_TEST_CASE(forEachTest)
                             << LOG_KV("needPrepare", needPrepare.size());
             return true;
         });
+    executivePool->forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
+        [this, &needSchedule](int64_t contextID, ExecutiveState::Ptr) {
+            auto iter = needSchedule.find(contextID);
+            needSchedule.erase(iter);
+            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
+            //                 << LOG_KV("needPrepare", needPrepare.size());
+            return true;
+        });
+    executivePool->forEach(ExecutivePool::MessageHint::END,
+        [ this, &needRemove ](int64_t contextID, ExecutiveState::Ptr))
+    {
+        auto iter = needRemove.find(ContextID);
+        needRemove.erase(iter);
+        return true;
+    }
+    executivePool->forEach(
+        ExecutivePool::MessageHint::ALL, [this](int64_t contextID, ExecutiveState::Ptr))
+    {
+        // do nothing
+        return true;
+    }
     BOOST_CHECK(needPrepare.empty());
+    BOOST_CHECK(needSchedule.empty());
+    BOOST_CHECK(needRemove.empty());
 }
 
 BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
     std::set<int64_t> needSend;
+    std::set<int64_t> locked;
     for (int64_t i = 1; i <= 10; ++i)
     {
-        needSend.insert((rand() % 100) + 1);
+        needSend.insert((rand() % 1000) + 1);
+        locked.insert((rand() % 1000) + 1);
     }
     for (auto i : needSend)
     {
@@ -170,7 +212,14 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 
             return true;
         });
+    executivePool->forEachAndClear(ExecutivePool::MessageHint::LOCKED,
+        [this, &locked](int64_t contextID, ExecutiveState::Ptr) {
+            auto iter = locked.find(contextID);
+            locked.erase(iter);
+            return true;
+        });
     BOOST_CHECK(needSend.empty());
+    BOOST_CHECK(locked.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
