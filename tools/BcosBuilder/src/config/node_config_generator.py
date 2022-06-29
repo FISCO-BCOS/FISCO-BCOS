@@ -107,7 +107,7 @@ class NodeConfigGenerator:
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
         # set storage_security config
-        # TODO: access key_center to encrypt the certificates and the private keys
+        # access key_center to encrypt the certificates and the private keys
         self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
 
@@ -155,7 +155,8 @@ class NodeConfigGenerator:
             ini_config.remove_option(storage_section, "data_path")
         ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
-        ini_config[storage_section]["key_page_size"] = node_config.key_page_size
+        ini_config[storage_section]["key_page_size"] = str(
+            node_config.key_page_size)
 
     def __update_storage_security_info(self, ini_config, node_config, node_type):
         """
@@ -254,8 +255,8 @@ class NodeConfigGenerator:
             config_content = configparser.ConfigParser(
                 comment_prefixes='/', allow_no_value=True)
             config_content.read(group_config.genesis_config_path)
-            self._generate_all_node_pem(group_config)
-            return config_content
+            (ret, nodeid_list) = self._generate_all_node_pem(group_config)
+            return (ret, config_content)
         if must_genesis_exists is True:
             utilities.log_error("Please set the genesis config path firstly!")
             sys.exit(-1)
