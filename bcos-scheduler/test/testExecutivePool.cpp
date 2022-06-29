@@ -162,25 +162,28 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
-
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasprepare before");
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
             return true;
         });
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasNEED_PREPARE behind");
     executivePool->forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
         [this, &needSchedule](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSchedule.find(contextID);
             needSchedule.erase(iter);
             return true;
         });
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markaNEED_SCHEDULE_OUT behind");
     executivePool->forEach(ExecutivePool::MessageHint::END,
         [this, &needRemove](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needRemove.find(contextID);
             needRemove.erase(iter);
             return true;
         });
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasEND behind");
     executivePool->forEach(
         ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
             // do nothing
