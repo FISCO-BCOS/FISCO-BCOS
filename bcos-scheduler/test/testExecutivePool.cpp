@@ -177,11 +177,12 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             needRemove.erase(iter);
             return true;
         });
-    executivePool->forEach(ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr) {
-        // do nothing
-        BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
-        return true;
-    });
+    executivePool->forEach(
+        ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
+            // do nothing
+            BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
+            return true;
+        });
     BOOST_CHECK(needPrepare.empty());
     BOOST_CHECK(needSchedule.empty());
     BOOST_CHECK(needRemove.empty());
