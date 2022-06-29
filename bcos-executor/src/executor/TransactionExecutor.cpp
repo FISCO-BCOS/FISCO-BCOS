@@ -325,7 +325,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
                 {
                     auto fmt = boost::format(
-                                   "[%] Block number mismatch in storage! request: %d, current in "
+                                   "[%s] Block number mismatch in storage! request: %d, current in "
                                    "storage: %d") %
                                m_name % blockHeader->number() % storageBlockNumber;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
@@ -344,7 +344,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     m_stateStorages.pop_back();
                     auto fmt =
                         boost::format(
-                            "[%] Block number mismatch! request: %d, current: %d. Reverted.") %
+                            "[%s] Block number mismatch! request: %d, current: %d. Reverted.") %
                         m_name % blockHeader->number() % prev.number;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
                     callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, fmt.str()));
@@ -462,7 +462,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
             {
-                std::string errorMessage = "Call failed: " + boost::diagnostic_information(*error);
+                std::string errorMessage = "Call failed: " + error->errorMessage();
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
                 return;
@@ -533,8 +533,7 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
             {
-                std::string errorMessage =
-                    "ExecuteTransaction failed: " + boost::diagnostic_information(*error);
+                std::string errorMessage = "ExecuteTransaction failed: " + error->errorMessage();
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
                 return;
@@ -812,8 +811,7 @@ void TransactionExecutor::dagExecuteTransactions(
                 if (error)
                 {
                     auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
-                    EXECUTOR_NAME_LOG(ERROR)
-                        << errorMessage << boost::diagnostic_information(*error);
+                    EXECUTOR_NAME_LOG(ERROR) << errorMessage << error->errorMessage();
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  ExecuteError::DAG_ERROR, errorMessage, *error),
                         {});
@@ -1324,7 +1322,7 @@ void TransactionExecutor::prepare(
 
             if (error)
             {
-                auto errorMessage = "Prepare error: " + boost::diagnostic_information(*error);
+                auto errorMessage = "Prepare error: " + error->errorMessage();
 
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(
@@ -1386,7 +1384,7 @@ void TransactionExecutor::commit(
 
             if (error)
             {
-                auto errorMessage = "Commit error: " + boost::diagnostic_information(*error);
+                auto errorMessage = "Commit error: " + error->errorMessage();
 
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(
@@ -1454,7 +1452,7 @@ void TransactionExecutor::rollback(
 
             if (error)
             {
-                auto errorMessage = "Rollback error: " + boost::diagnostic_information(*error);
+                auto errorMessage = "Rollback error: " + error->errorMessage();
 
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_PTR(-1, errorMessage, *error));
@@ -1511,8 +1509,7 @@ void TransactionExecutor::getCode(
 
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR)
-                    << "Get code error: " << boost::diagnostic_information(*error);
+                EXECUTOR_NAME_LOG(ERROR) << "Get code error: " << error->errorMessage();
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
                 return;
@@ -1572,8 +1569,7 @@ void TransactionExecutor::getABI(
 
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR)
-                    << "Get ABI error: " << boost::diagnostic_information(*error);
+                EXECUTOR_NAME_LOG(ERROR) << "Get ABI error: " << error->errorMessage();
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
                 return;
