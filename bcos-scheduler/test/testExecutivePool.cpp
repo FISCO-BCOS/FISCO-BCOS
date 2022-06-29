@@ -128,13 +128,16 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         needSchedule.insert(id + 1);
         needRemove.insert(id - 1);
     }
-    // executivePool->forEach(
-    //     ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
-    //         // do nothing
-    //         BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
-    //         return true;
-    //     });
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
+                    << LOG_KV("needSchedule", needSchedule.size())
+                    << LOG_KV("needRemove", needRemove.size());
 
+    executivePool->forEach(
+        ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
+            // do nothing
+            BOOST_CHECK(false);
+        });
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("before add");
     for (auto i : needPrepare)
     {
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
@@ -154,6 +157,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::END);
     }
+    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("behind add");
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
