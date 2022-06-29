@@ -139,16 +139,16 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         executivePool->add(id, executiveState);
         executivePool->markAs(id, ExecutivePool::MessageHint::NEED_PREPARE);
 
-        auto executiveState =
+        auto executiveState2 =
             std::make_shared<bcos::scheduler::ExecutiveState>(id2, nullptr, false);
         needSchedule.insert(id2);
-        executivePool->add(id2, executiveState);
+        executivePool->add(id2, executiveState2);
         executivePool->markAs(id2, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
 
-        auto executiveState =
+        auto executiveState3 =
             std::make_shared<bcos::scheduler::ExecutiveState>(id3, nullptr, false);
         needRemove.insert(id3);
-        executivePool->add(id3, executiveState);
+        executivePool->add(id3, executiveState3);
         executivePool->markAs(id3, ExecutivePool::MessageHint::END);
     }
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
