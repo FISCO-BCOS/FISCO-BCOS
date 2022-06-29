@@ -80,7 +80,6 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     BOOST_CHECK(std::string(state->message->to()) == "ccddeeff");
 }
 
-
 BOOST_AUTO_TEST_CASE(refreshTest)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
@@ -125,79 +124,60 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         BOOST_CHECK(false);
         return true;
     });
-
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
         auto id = (rand() % 10000) + 1;
-        auto id2 = (rand() % 10000) + 2;
-        auto id3 = (rand() % 10000) + 3;
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                         << LOG_KV("ID", id);
         needPrepare.insert(id);
-        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(id, nullptr, false);
-        executivePool->add(id, executiveState);
-        executivePool->markAs(id, ExecutivePool::MessageHint::NEED_PREPARE);
 
-        auto executiveState2 =
-            std::make_shared<bcos::scheduler::ExecutiveState>(id2, nullptr, false);
-        needPrepare.insert(id2);
-        needSchedule.insert(id2);
-        executivePool->add(id2, executiveState2);
-        executivePool->markAs(id2, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+        needPrepare.insert(++id);
+        needSchedule.insert(++id);
 
-        auto executiveState3 =
-            std::make_shared<bcos::scheduler::ExecutiveState>(id3, nullptr, false);
-        needPrepare.insert(id3);
-        needRemove.insert(id3);
-        executivePool->add(id3, executiveState);
-        executivePool->markAs(id3, ExecutivePool::MessageHint::END);
+        needPrepare.insert(--id);
+        needRemove.insert(--id);
     }
-    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
-                    << LOG_KV("needSchedule", needSchedule.size())
-                    << LOG_KV("needRemove", needRemove.size());
-
 
     for (auto i : needPrepare)
     {
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needPrepare", needPrepare.size())
                         << LOG_KV("ID", i);
-        // auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr,
-        // false); executivePool->add(i, executiveState); executivePool->markAs(i,
-        // ExecutivePool::MessageHint::NEED_PREPARE); executivePool->markAs(i,
-        // ExecutivePool::MessageHint::ALL);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_PREPARE);
+        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
     }
     for (auto i : needSchedule)
     {
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needSchedule", needSchedule.size())
                         << LOG_KV("ID", i);
-        // auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr,
-        // false); executivePool->add(i, executiveState); executivePool->markAs(i,
-        // ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
     }
     for (auto i : needRemove)
     {
         BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("needRemove", needRemove.size())
                         << LOG_KV("ID", i);
-        // auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr,
-        // false); executivePool->add(i, executiveState); executivePool->markAs(i,
-        // ExecutivePool::MessageHint::END);
+        auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
+        executivePool->add(i, executiveState);
+        executivePool->markAs(i, ExecutivePool::MessageHint::END);
     }
+
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
 
-    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasprepare before");
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
-            BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("setlen", needPrepare.size())
-                            << LOG_KV("contextID", contextID);
+            // BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("setlen", needPrepare.size())
+            //                 << LOG_KV("contextID", contextID);
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
             return true;
         });
-    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasNEED_PREPARE behind");
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
         [this, &needSchedule](int64_t contextID, ExecutiveState::Ptr) {
@@ -205,14 +185,14 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             needSchedule.erase(iter);
             return true;
         });
-    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markaNEED_SCHEDULE_OUT behind");
+
     executivePool->forEach(ExecutivePool::MessageHint::END,
         [this, &needRemove](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needRemove.find(contextID);
             needRemove.erase(iter);
             return true;
         });
-    BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("markasEND behind");
+
     executivePool->forEach(
         ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
             // do nothing
@@ -255,8 +235,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
         [this, &needSend](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSend.find(contextID);
             needSend.erase(iter);
-            BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
-                            << LOG_KV("needSend", needSend.size());
+            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
+            //                 << LOG_KV("needSend", needSend.size());
 
             return true;
         });
