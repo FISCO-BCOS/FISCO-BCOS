@@ -147,16 +147,13 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::NEED_SCHEDULE_OUT);
-        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
     }
     for (auto i : needRemove)
     {
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
         executivePool->add(i, executiveState);
         executivePool->markAs(i, ExecutivePool::MessageHint::END);
-        executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
     }
-
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
@@ -180,11 +177,12 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             needRemove.erase(iter);
             return true;
         });
-    // executivePool->forEach(ExecutivePool::MessageHint::ALL, [this](int64_t, ExecutiveState::Ptr)
-    // {
-    //     // do nothing
-    //     return true;
-    // });
+    executivePool->forEach(
+        ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
+            // do nothing
+            BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
+            return true;
+        });
     BOOST_CHECK(needPrepare.empty());
     BOOST_CHECK(needSchedule.empty());
     BOOST_CHECK(needRemove.empty());
