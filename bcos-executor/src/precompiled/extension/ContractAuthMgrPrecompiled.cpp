@@ -716,7 +716,7 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
                                << LOG_KV("path", path);
         return (int)CODE_TABLE_NOT_EXIST;
     }
-    auto entry = table->getRow("status");
+    auto entry = table->getRow(STATUS_FIELD);
     if (!entry)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -724,5 +724,9 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
                                       "auth status row not found, auth pass through by default.");
         return (int)CODE_TABLE_AUTH_ROW_NOT_EXIST;
     }
-    return entry->get() == CONTRACT_NORMAL;
+    auto status = entry->get();
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                           << LOG_DESC("get contract status success") << LOG_KV("contract", path)
+                           << LOG_KV("status", status);
+    return status == CONTRACT_NORMAL;
 }

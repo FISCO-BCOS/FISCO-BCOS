@@ -954,7 +954,9 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT") << LOG_KV("gasLeft", callResults->gas);
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT")
+                               << LOG_KV("to", callResults->receiveAddress)
+                               << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
@@ -971,6 +973,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     {
         revert();
         EXECUTIVE_LOG(WARNING) << "Revert transaction: " << LOG_DESC("OutOfGas")
+                               << LOG_KV("to", callResults->receiveAddress)
                                << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
@@ -979,7 +982,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_FAILURE:
     {
         revert();
-        EXECUTIVE_LOG(WARNING) << "Revert transaction: " << LOG_DESC("WASMTrap");
+        EXECUTIVE_LOG(WARNING) << "Revert transaction: "
+                               << LOG_KV("to", callResults->receiveAddress) << LOG_DESC("WASMTrap");
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
         break;
@@ -1153,6 +1157,7 @@ bool TransactionExecutive::checkAuth(
     auto path = callParameters->codeAddress;
     EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
                          << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
+    bool result = true;
     if (_isCreate)
     {
         /// external call authMgrAddress to check deploy auth
@@ -1162,13 +1167,17 @@ bool TransactionExecutive::checkAuth(
                          codec.encodeWithSig("hasDeployAuth(address)", Address(address));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
             callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
-        bool result = true;
         codec.decode(ref(response->data), result);
-        return result;
     }
-    bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-    return contractAuthPrecompiled->checkMethodAuth(
-        shared_from_this(), std::move(path), func, address);
+    else
+    {
+        bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
+        result = contractAuthPrecompiled->checkMethodAuth(
+            shared_from_this(), std::move(path), func, address);
+    }
+    EXECUTIVE_LOG(DEBUG) << "check auth finished" << LOG_KV("codeAddress", path)
+                         << LOG_KV("result", result);
+    return result;
 }
 
 bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
