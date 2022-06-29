@@ -35,7 +35,7 @@ public:
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     TarsRemoteExecutorManager(std::string executorServiceName)
-      : Worker("TarsRemoteExecutorManager", 1000)
+      : Worker("TarsRemoteExecutorManager", 5000)
     {
         if (executorServiceName.empty())
         {
