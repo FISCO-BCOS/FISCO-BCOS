@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     executivePool->forEach(
         ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
             // do nothing
-            DMC_LOG(TRACE) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
+            BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
             return true;
         });
     for (auto i : needPrepare)
