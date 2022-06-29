@@ -123,16 +123,17 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
-        needPrepare.insert((rand() % 1000) + 1);
-        needSchedule.insert((rand() % 1000) + 1001);
-        needRemove.insert((rand() % 1000) + 2001);
+        auto id = (rand() % 10000) + 1;
+        needPrepare.insert(id);
+        needSchedule.insert(id + 1);
+        needRemove.insert(id - 1);
     }
-    executivePool->forEach(
-        ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
-            // do nothing
-            BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
-            return true;
-        });
+    // executivePool->forEach(
+    //     ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
+    //         // do nothing
+    //         BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
+    //         return true;
+    //     });
 
     for (auto i : needPrepare)
     {
@@ -162,16 +163,12 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needPrepare.find(contextID);
             needPrepare.erase(iter);
-            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
-            //                 << LOG_KV("needPrepare", needPrepare.size());
             return true;
         });
     executivePool->forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
         [this, &needSchedule](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSchedule.find(contextID);
             needSchedule.erase(iter);
-            // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
-            //                 << LOG_KV("needPrepare", needPrepare.size());
             return true;
         });
     executivePool->forEach(ExecutivePool::MessageHint::END,
@@ -180,15 +177,11 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             needRemove.erase(iter);
             return true;
         });
-    int64_t poolsize = 0;
-    executivePool->forEach(
-        ExecutivePool::MessageHint::ALL, [this, &poolsize](int64_t, ExecutiveState::Ptr) {
-            // do nothing
-            ++poolsize;
-            return true;
-        });
-    BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("executivepool size")
-                    << LOG_KV("poolsize", poolsize);
+    executivePool->forEach(ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr) {
+        // do nothing
+        BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
+        return true;
+    });
     BOOST_CHECK(needPrepare.empty());
     BOOST_CHECK(needSchedule.empty());
     BOOST_CHECK(needRemove.empty());
@@ -201,8 +194,9 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
     std::set<int64_t> locked;
     for (int64_t i = 1; i <= 10; ++i)
     {
-        needSend.insert((rand() % 1000) + 1);
-        locked.insert((rand() % 1000) + 1001);
+        auto id = (rand() % 10000) + 1;
+        needSend.insert(id);
+        locked.insert(id + 1);
     }
     for (auto i : needSend)
     {
