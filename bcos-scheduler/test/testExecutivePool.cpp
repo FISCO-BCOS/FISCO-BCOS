@@ -132,11 +132,11 @@ BOOST_AUTO_TEST_CASE(forEachTest)
                         << LOG_KV("ID", id);
         needPrepare.insert(id);
 
-        needPrepare.insert(++id);
-        needSchedule.insert(++id);
+        needPrepare.insert(id + 5);
+        needSchedule.insert(id + 5);
 
-        needPrepare.insert(--id);
-        needRemove.insert(--id);
+        needPrepare.insert(id + 10);
+        needRemove.insert(id + 10);
     }
 
     for (auto i : needPrepare)
