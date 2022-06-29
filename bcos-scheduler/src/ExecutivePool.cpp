@@ -164,11 +164,6 @@ void ExecutivePool::forEach(MessageHint type, ExecutiveStateHandler handler, boo
         break;
     }
 
-    if (pool == nullptr)
-    {
-        return;
-    }
-
     for (auto contextID : *pool)
     {
         auto executiveState = get(contextID);

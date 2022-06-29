@@ -28,8 +28,8 @@ BOOST_AUTO_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture);
 // BOOST_AUTO_TEST_CASE(goTest)
 // {
 //     ExecutiveFactory::Ptr executiveFactory = std::make_shared<ExecutiveFactory>();
-//     ExecutiveState::Ptr executiveState = std::make_shared<ExecutiveState>(executiveFactory,
-//     input); executiveState->go();
+//     ExecutiveState::Ptr executiveState = std::make_shared<ExecutiveState>(executiveFactory, input);
+//     executiveState->go();
 // }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

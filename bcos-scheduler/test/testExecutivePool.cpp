@@ -119,11 +119,6 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     std::set<int64_t> needPrepare;
     std::set<int64_t> needSchedule;
     std::set<int64_t> needRemove;
-    executivePool->forEach(ExecutivePool::MessageHint::LOCKED, [](int64_t, ExecutiveState::Ptr) {
-        // do nothing
-        // BOOST_CHECK(false);
-        return true;
-    });
     for (int64_t i = 1; i <= 10; ++i)
     {
         // generate between  random number
