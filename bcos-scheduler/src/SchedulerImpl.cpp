@@ -326,8 +326,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             SCHEDULER_LOG(ERROR) << "CommitBlock error, " << error->errorMessage();
 
             commitLock->unlock();
-            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                         SchedulerError::UnknownError, "CommitBlock error", *error),
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                         error->errorCode(), "CommitBlock error: " + error->errorMessage()),
                 nullptr);
             return;
         }
