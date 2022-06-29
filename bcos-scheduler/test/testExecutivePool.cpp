@@ -132,11 +132,11 @@ BOOST_AUTO_TEST_CASE(forEachTest)
                     << LOG_KV("needSchedule", needSchedule.size())
                     << LOG_KV("needRemove", needRemove.size());
 
-    executivePool->forEach(
-        ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
-            // do nothing
-            BOOST_CHECK(false);
-        });
+    executivePool->forEach(ExecutivePool::MessageHint::ALL, [](int64_t, ExecutiveState::Ptr) {
+        // do nothing
+        BOOST_CHECK(false);
+        return true;
+    });
     BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_DESC("before add");
     for (auto i : needPrepare)
     {
