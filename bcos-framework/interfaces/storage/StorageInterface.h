@@ -113,7 +113,7 @@ public:
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
     virtual void asyncCommit(
-        const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
+        const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
     virtual void asyncRollback(
         const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;

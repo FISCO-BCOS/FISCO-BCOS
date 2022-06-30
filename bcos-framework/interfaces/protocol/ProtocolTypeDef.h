@@ -106,7 +106,7 @@ struct TwoPCParams
     BlockNumber number = 0;
     std::string primaryTableName;
     std::string primaryTableKey;
-    uint64_t startTS = 0;
+    uint64_t timestamp = 0;
 };
 }  // namespace protocol
 }  // namespace bcos

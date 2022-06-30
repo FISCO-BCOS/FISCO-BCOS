@@ -71,7 +71,7 @@ public:
         std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,
-        std::function<void(Error::Ptr)> callback) noexcept override;
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
 
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) noexcept override;

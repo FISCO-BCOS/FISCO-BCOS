@@ -274,12 +274,15 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     {
                         entry.setObject(*page);
                         entry.setStatus(it.second->entry.status());
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
-                            << LOG_KV("validCount", page->validCount())
-                            << LOG_KV("count", page->count())
-                            << LOG_KV("status", (int)it.second->entry.status())
-                            << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
+                        if (c_fileLogLevel >= TRACE)
+                        {
+                            KeyPage_LOG(TRACE)
+                                << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
+                                << LOG_KV("validCount", page->validCount())
+                                << LOG_KV("count", page->count())
+                                << LOG_KV("status", (int)it.second->entry.status())
+                                << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
+                        }
                         assert(it.first.second == page->endKey());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }

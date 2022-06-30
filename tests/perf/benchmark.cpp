@@ -184,7 +184,7 @@ int main(int argc, const char* argv[])
         rocksDBStorage->asyncPrepare(p, *t, [](bcos::Error::Ptr, uint64_t) {
             // std::cout << "asyncPrepare finished" << std::endl;
         });
-        rocksDBStorage->asyncCommit(p, [](bcos::Error::Ptr) {
+        rocksDBStorage->asyncCommit(p, [](bcos::Error::Ptr, uint64_t) {
             // std::cout << "asyncCommit finished" << std::endl;
         });
         s.reset();
