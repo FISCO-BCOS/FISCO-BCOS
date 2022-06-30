@@ -1,6 +1,6 @@
 #pragma once
-#include "../../../src/executive/TransactionExecutive.h"
-#include "../../Common.h"
+#include "../../src/Common.h"
+#include "../../src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
@@ -17,26 +17,31 @@ public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
     MockTransactionExecutive(std::weak_ptr<BlockContext>, std::string, int64_t, int64_t,
         std::shared_ptr<wasm::GasInjector>&)
-      : TransactionExecutive(nullptr, null, 0, 0, nullptr) override
+      : TransactionExecutive(nullptr, "aabbcc", 0, 0, nullptr)
     {}
     virtual ~MockTransactionExecutive() {}
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override
+    CallParameters::UniquePtr start(CallParameters::UniquePtr input) { return std::move(input); }
+    CallParameters::UniquePtr resume()
     {
-        return std::move(input);
-    }
-    CallParameters::UniquePtr resume() override
-    {
-        auto callParameters = std::make_unique<CallParameters>();
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
         callParameters->staticCall = false;
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        callParameters->type = 0;
         return std::move(callParameters);
     }
 
-    void setExchangeMessage(CallParameters::UniquePtr) override { return nullptr; }
-    void appendResumeKeyLocks(std::vector<std::string>) override { return nullptr; }
-}
+    void setExchangeMessage(CallParameters::UniquePtr callParameters)
+    {
+        m_exchangeMessage = std::move(callParameters);
+    }
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    {
+        std::copy(keyLocks.begin(), keyLocks.end(), std::back_inserter({"key100"}));
+    }
+
+private:
+    CallParameters::UniquePtr m_exchangeMessage = nullptr;
+};
 }  // namespace bcos::test

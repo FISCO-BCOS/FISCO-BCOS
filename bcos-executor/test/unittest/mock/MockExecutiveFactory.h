@@ -1,7 +1,7 @@
 #pragma once
-#include "../../../src/Common.h"
-#include "../../../src/executive/ExecutiveFactory.h"
-#include "../../../src/executive/TransactionExecutive.h"
+#include "../../src/Common.h"
+#include "../../src/executive/ExecutiveFactory.h"
+#include "../../src/executive/TransactionExecutive.h"
 #include "MockTransactionExecutive.h"
 #include <boost/test/unit_test.hpp>
 
@@ -22,9 +22,9 @@ public:
     virtual ~MockExecutiveFactory() {}
 
     std::shared_ptr<MockTransactionExecutive> MockExecutiveFactory::build(
-        const std::string&, int64_t, int64_t) override
+        const std::string&, int64_t, int64_t)
     {
-        auto executive = std::make_shared<MockTransactionExecutive>(nullptr, null, 0, 0, nullptr);
+        auto executive = std::make_shared<MockTransactionExecutive>(nullptr, "0x12", 0, 0, nullptr);
         return executive;
     }
 };

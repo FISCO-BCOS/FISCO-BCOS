@@ -30,7 +30,7 @@ struct ExecutiveStateFixture
     shared_ptr<ExecutiveState> executiveState;
     CallParameters::UniquePtr input;
 };
-BOOST_AUTO_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture);
+BOOST_AUTO_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture)
 BOOST_AUTO_TEST_CASE(goTest)
 {
     for (int8_t i = 0; i < 4; ++i)
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(appendKeyLocks)
         callParameters->contextID = i;
         callParameters->seq = i;
         callParameters->type = i;
-        auto executiveState = std::make_shared<ExecutiveState>(executiveFactory, inputRevert);
+        auto executiveState = std::make_shared<ExecutiveState>(executiveFactory, callParameters);
         executiveState->go();
         if (i == 0)
         {
