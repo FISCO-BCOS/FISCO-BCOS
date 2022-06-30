@@ -15,9 +15,9 @@ struct CallParameters
     enum Type : int8_t
     {
         MESSAGE = 0,
-        KEY_LOCK,
-        FINISHED,
-        REVERT,
+        KEY_LOCK = 1,
+        FINISHED = 2,
+        REVERT = 3,
     };
 
     explicit CallParameters(Type _type) : type(_type) {}

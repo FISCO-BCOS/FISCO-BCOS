@@ -30,7 +30,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class BlockContext;
 class TransactionExecutive;
 
