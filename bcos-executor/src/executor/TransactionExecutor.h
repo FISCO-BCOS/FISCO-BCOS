@@ -95,7 +95,8 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
-        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
+        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables,
+        std::string name);
 
     ~TransactionExecutor() override = default;
 
@@ -163,8 +164,7 @@ protected:
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorageInterface::Ptr tableFactory,
-        storage::StorageInterface::Ptr lastStorage);
+        storage::StateStorageInterface::Ptr tableFactory);
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
@@ -242,7 +242,6 @@ protected:
         bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
-    bcos::storage::StorageInterface::Ptr m_lastStateStorage;
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
 
     struct HashCombine
