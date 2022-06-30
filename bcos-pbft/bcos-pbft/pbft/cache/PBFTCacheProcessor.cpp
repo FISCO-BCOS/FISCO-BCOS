@@ -535,7 +535,7 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     {
         maxCommittedIndex = m_maxCommittedIndex[toView];
     }
-    auto maxPrecommitIndex = m_config->progressedIndex();
+    auto maxPrecommitIndex = committedIndex;
     if (m_maxPrecommitIndex.count(toView))
     {
         maxPrecommitIndex = m_maxPrecommitIndex[toView];
