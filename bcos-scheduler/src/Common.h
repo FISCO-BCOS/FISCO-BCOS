@@ -21,7 +21,7 @@ enum SchedulerError
     RollbackError,
     UnexpectedKeyLockError,
     BatchError,
-    DMTError,
+    DMCError,
     DAGError,
     ExecutorNotEstablishedError,
     fetchGasLimitError,

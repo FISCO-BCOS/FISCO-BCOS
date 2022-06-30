@@ -65,7 +65,7 @@ public:
         std::function<void(Error::Ptr, uint64_t)> callback) override;
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,
-        std::function<void(Error::Ptr)> callback) override;
+        std::function<void(Error::Ptr,uint64_t)> callback) override;
 
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) override;

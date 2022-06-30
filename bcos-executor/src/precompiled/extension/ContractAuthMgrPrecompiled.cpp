@@ -179,9 +179,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
                            << LOG_KV("path", path);
     path = getAuthTableName(path);
 
-    auto lastStorage = _executive->lastStorage();
-    auto table =
-        (lastStorage) ? lastStorage->openTable(path) : _executive->storage().openTable(path);
+    auto table = _executive->storage().openTable(path);
     if (!table)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -338,9 +336,7 @@ bool ContractAuthMgrPrecompiled::checkMethodAuth(
 {
     auto path = _path;
     path = getAuthTableName(path);
-    auto lastStorage = _executive->lastStorage();
-    auto table =
-        (lastStorage) ? lastStorage->openTable(path) : _executive->storage().openTable(path);
+    auto table = _executive->storage().openTable(path);
     if (!table)
     {
         // only precompiled contract in /sys/, or pre-built-in contract
@@ -566,9 +562,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _path,
     bytesConstRef _func)
 {
-    auto lastStorage = _executive->lastStorage();
-    auto table =
-        (lastStorage) ? lastStorage->openTable(_path) : _executive->storage().openTable(_path);
+    auto table = _executive->storage().openTable(_path);
     // _table can't be nullopt
     auto entry = table->getRow(METHOD_AUTH_TYPE);
     if (!entry || entry->getField(SYS_VALUE).empty())
@@ -603,9 +597,7 @@ MethodAuthMap ContractAuthMgrPrecompiled::getMethodAuth(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& path,
     int32_t getMethodType) const
 {
-    auto lastStorage = _executive->lastStorage();
-    auto table =
-        (lastStorage) ? lastStorage->openTable(path) : _executive->storage().openTable(path);
+    auto table = _executive->storage().openTable(path);
     if (!table)
     {
         // only precompiled contract in /sys/, or pre-built-in contract
@@ -705,9 +697,7 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _path)
 {
     auto path = getAuthTableName(_path);
-    auto lastStorage = _executive->lastStorage();
-    auto table =
-        (lastStorage) ? lastStorage->openTable(path) : _executive->storage().openTable(path);
+    auto table = _executive->storage().openTable(path);
     if (!table)
     {
         // only precompiled contract in /sys/, or pre-built-in contract
@@ -716,7 +706,7 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
                                << LOG_KV("path", path);
         return (int)CODE_TABLE_NOT_EXIST;
     }
-    auto entry = table->getRow("status");
+    auto entry = table->getRow(STATUS_FIELD);
     if (!entry)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -724,5 +714,9 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
                                       "auth status row not found, auth pass through by default.");
         return (int)CODE_TABLE_AUTH_ROW_NOT_EXIST;
     }
-    return entry->get() == CONTRACT_NORMAL;
+    auto status = entry->get();
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                           << LOG_DESC("get contract status success") << LOG_KV("contract", path)
+                           << LOG_KV("status", status);
+    return status == CONTRACT_NORMAL;
 }

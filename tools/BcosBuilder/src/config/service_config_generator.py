@@ -3,6 +3,7 @@
 import configparser
 from common import utilities
 from common.utilities import ServiceInfo
+from service.key_center_service import KeyCenterService
 import json
 import os
 import uuid
@@ -146,7 +147,7 @@ class ServiceConfigGenerator:
         ini_config[section]["enable"] = utilities.convert_bool_to_str(
             service_config.agency_config.enable_storage_security)
         ini_config["chain"]["sm_crypto"] = utilities.convert_bool_to_str(
-            service_config.agency_config.sm_storage_security)
+            service_config.sm_ssl)
         ini_config[section]["key_center_url"] = service_config.agency_config.key_center_url
         ini_config[section]["cipher_data_key"] = service_config.agency_config.cipher_data_key
 
@@ -184,6 +185,23 @@ class ServiceConfigGenerator:
             "* generate cert, ip: %s, output path: %s" % (deploy_ip, output_dir))
         utilities.generate_node_cert(
             service_config.sm_ssl, service_config.ca_cert_path, output_dir)
+        if service_config.agency_config.enable_storage_security is True:
+            key_center = KeyCenterService(
+                service_config.agency_config.key_center_url, service_config.agency_config.cipher_data_key)
+            if service_config.sm_ssl is True:
+                ret = key_center.encrypt_file(
+                    os.path.join(output_dir, "ssl", "sm_ssl.key"))
+                if ret is False:
+                    return False
+                ret = key_center.encrypt_file(
+                    os.path.join(output_dir, "ssl", "sm_enssl.key"))
+                if ret is False:
+                    return False
+            else:
+                ret = key_center.encrypt_file(
+                    os.path.join(output_dir, "ssl", "ssl.key"))
+                if ret is False:
+                    return False
         if service_config.service_type == ServiceInfo.rpc_service_type:
             utilities.log_info(
                 "* generate sdk cert, output path: %s" % (output_dir))

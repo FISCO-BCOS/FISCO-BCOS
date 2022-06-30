@@ -13,7 +13,7 @@ ip_array=
 output_dir="./nodes"
 binary_name="fisco-bcos"
 mtail_binary_name="mtail"
-
+key_page_size=10240
 # for cert generation
 ca_cert_dir="${dirpath}"
 sm_cert_conf='sm_cert.cnf'
@@ -36,7 +36,7 @@ config_path=""
 docker_mode=
 default_version="v3.0.0-rc4"
 compatibility_version=${default_version}
-default_mtail_version="3.0.0-rc48"
+default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
 monitor_mode="false"
@@ -362,19 +362,42 @@ download_monitor_bin()
         LOG_INFO "Use binary ${mtail_binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
-    mtail_binary_path="bin/${mtail_binary_name}"
-    package_name="${mtail_binary_name}_${compatibility_mtail_version}_Linux_x86_64.tar.gz"
-    if [ -n "${macOS}" ];then
-        package_name="${mtail_binary_name}_${compatibility_mtail_version}_Darwin_x86_64.tar.gz"
+    local platform="$(uname -m)"
+    local mtail_postfix=""
+    if [[ -n "${macOS}" ]];then
+        if [[ "${platform}" == "arm64" ]];then
+            mtail_postfix ="Darwin_arm64"
+        elif [[ "${platform}" == "x86_64" ]];then
+            mtail_postfix="Darwin_x86_64"
+        else
+            LOG_FATAL "Unsupported platform ${platform} for mtail"
+            exit 1
+        fi
+    else
+        if [[ "${platform}" == "aarch64" ]];then
+            mtail_postfix ="Linux_arm64"
+        elif [[ "${platform}" == "x86_64" ]];then
+            mtail_postfix="Linux_x86_64"
+        else
+            LOG_FATAL "Unsupported platform ${platform} for mtail"
+            exit 1
+        fi
     fi
-
+    mtail_binary_path="bin/${mtail_binary_name}"
+    package_name="${mtail_binary_name}_${compatibility_mtail_version}_${mtail_postfix}.tar.gz"
+    
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/mtail/${package_name}"
     local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
     # the binary can obtained from the cos
-    LOG_INFO "Downloading mtail binary from ${github_link} ..."
-    curl -#LO "${github_link}"
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        LOG_INFO "Downloading monitor binary from ${Download_Link} ..."
+        curl -#LO "${Download_Link}"
+    else
+        LOG_INFO "Downloading monitor binary from ${github_link} ..."
+        curl -#LO "${github_link}"
+    fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
-
     chmod a+x ${mtail_binary_path}
 }
 
@@ -450,17 +473,18 @@ Usage:
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
     -v <FISCO-BCOS binary version>      Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -o <output dir>                     [Optional] output directory, default ./nodes
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
     -t <mtail exec>                     [Required] mtail binary exec
-    -p <Start Port>                     Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
+    -o <output dir>                     [Optional] output directory, default ./nodes
+    -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -d, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
-    -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
+    -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
+    -k <key page size>                  [Optional] key page size, default is 0 means not use key page
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
@@ -479,7 +503,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:v:i:M:wDshmAa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:v:i:M:k:wDshmAa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -513,6 +537,7 @@ parse_params() {
         i)
            mtail_ip_param="${OPTARG}"
            ;;
+        k) key_page_size="${OPTARG}";;
         M) prometheus_dir="${OPTARG}" ;;
         D) docker_mode="true"
            if [ -n "${macOS}" ];then
@@ -535,19 +560,19 @@ parse_params() {
 print_result() {
     echo "=============================================================="
     if [ -z "${docker_mode}" ];then
-        LOG_INFO "${binary_name} Path     : ${binary_path}"
+        LOG_INFO "${binary_name} path      : ${binary_path}"
     else
-        LOG_INFO "docker mode     : ${docker_mode}"
-        LOG_INFO "docker tag      : ${compatibility_version}"
+        LOG_INFO "docker mode      : ${docker_mode}"
+        LOG_INFO "docker tag       : ${compatibility_version}"
     fi
-    LOG_INFO "Auth Mode           : ${auth_mode}"
+    LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
-        LOG_INFO "Auth init account   : ${auth_admin_account}"
+        LOG_INFO "Auth account     : ${auth_admin_account}"
     fi
-    LOG_INFO "Start Port          : ${port_start[*]}"
-    LOG_INFO "Server IP           : ${ip_array[*]}"
-    LOG_INFO "SM Model            : ${sm_mode}"
-    LOG_INFO "output dir          : ${output_dir}"
+    LOG_INFO "Start port           : ${port_start[*]}"
+    LOG_INFO "Server IP            : ${ip_array[*]}"
+    LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "Output dir           : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
 
@@ -637,7 +662,7 @@ export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
-
+ulimit -n 1024
 #start monitor
 dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
 for dir in \${dirs[*]}
@@ -663,7 +688,7 @@ do
     node_pid=${ps_cmd}
     success_flag=${check_success}
     if [[ ! -z \${node_pid} && ! -z "\${success_flag}" ]];then
-        echo -e "\033[32m \${node} start successfully\033[0m"
+        echo -e "\033[32m \${node} start successfully pid=\${node_pid}\033[0m"
         exit 0
     fi
     sleep 0.5
@@ -1038,7 +1063,7 @@ EOF
 
 generate_common_ini() {
     local output=${1}
-    LOG_INFO "Begin generate uuid"
+    # LOG_INFO "Begin generate uuid"
     local uuid=$(uuidgen)
     LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
@@ -1068,7 +1093,7 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
-    key_page_size=0
+    key_page_size=${key_page_size}
     ; type can be RocksDB/TiKV
     type=RocksDB
     pd_addrs=
@@ -1459,7 +1484,7 @@ deploy_nodes()
         if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
             LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
         fi
-        echo $num
+        # echo $num
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
         echo "Processing IP:${ip} Total:${num}"
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
@@ -1490,7 +1515,7 @@ deploy_nodes()
                 connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
                 if [[ $count == 0 ]]; then
                     monitor_ip="${ip}"
-                fi  
+                fi
                 generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
             fi
             local port=$((p2p_listen_port + node_count))

@@ -76,7 +76,7 @@ void TarsRemoteExecutorManager::executeWorker()
         }
         else
         {
-            EXECUTOR_MANAGER_LOG(TRACE) << "No need to update endpoint map: "
+            EXECUTOR_MANAGER_LOG(DEBUG) << "Executor endpoint map: "
                                         << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
         }
     }

@@ -25,7 +25,6 @@
 #include "../dag/ClockCache.h"
 #include "../dag/CriticalFields.h"
 #include "../dag/ScaleUtils.h"
-#include "../dag/TxDAG.h"
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
 #include "../executive/ExecutiveFactory.h"
@@ -264,10 +263,10 @@ void TransactionExecutor::initWasmEnvironment()
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
-    storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
+    storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(
-        storage, lastStorage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
+        storage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -305,7 +304,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
-            bcos::storage::StorageInterface::Ptr lastStateStorage;
             if (m_stateStorages.empty())
             {
                 if (m_cachedStorage)
@@ -317,11 +315,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     stateStorage = createStateStorage(m_backendStorage);
                 }
 
-                lastStateStorage = m_lastStateStorage ?
-                                       m_lastStateStorage :
-                                       (m_cachedStorage ? createStateStorage(m_cachedStorage) :
-                                                          createStateStorage(m_backendStorage));
-
                 // check storage block Number
                 auto storageBlockNumber = getBlockNumberInStorage();
                 EXECUTOR_NAME_LOG(DEBUG)
@@ -332,7 +325,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
                 {
                     auto fmt = boost::format(
-                                   "[%] Block number mismatch in storage! request: %d, current in "
+                                   "[%s] Block number mismatch in storage! request: %d, current in "
                                    "storage: %d") %
                                m_name % blockHeader->number() % storageBlockNumber;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
@@ -351,7 +344,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     m_stateStorages.pop_back();
                     auto fmt =
                         boost::format(
-                            "[%] Block number mismatch! request: %d, current: %d. Reverted.") %
+                            "[%s] Block number mismatch! request: %d, current: %d. Reverted.") %
                         m_name % blockHeader->number() % prev.number;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
                     callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, fmt.str()));
@@ -359,11 +352,10 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 }
 
                 prev.storage->setReadOnly(true);
-                lastStateStorage = prev.storage;
                 stateStorage = createStateStorage(prev.storage);
             }
             // set last commit state storage to blockContext, to auth read last block state
-            m_blockContext = createBlockContext(blockHeader, stateStorage, lastStateStorage);
+            m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
@@ -470,7 +462,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
             {
-                std::string errorMessage = "Call failed: " + boost::diagnostic_information(*error);
+                std::string errorMessage = "Call failed: " + error->errorMessage();
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
                 return;
@@ -541,8 +533,7 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
             {
-                std::string errorMessage =
-                    "ExecuteTransaction failed: " + boost::diagnostic_information(*error);
+                std::string errorMessage = "ExecuteTransaction failed: " + error->errorMessage();
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
                 return;
@@ -725,7 +716,7 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     if (last.number != number)
     {
         auto errorMessage =
-            "GetTableHashes error: Request block number: " +
+            "GetTableHashes error: Request blockNumber: " +
             boost::lexical_cast<std::string>(number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(last.number);
 
@@ -820,8 +811,7 @@ void TransactionExecutor::dagExecuteTransactions(
                 if (error)
                 {
                     auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
-                    EXECUTOR_NAME_LOG(ERROR)
-                        << errorMessage << boost::diagnostic_information(*error);
+                    EXECUTOR_NAME_LOG(ERROR) << errorMessage << error->errorMessage();
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  ExecuteError::DAG_ERROR, errorMessage, *error),
                         {});
@@ -851,7 +841,8 @@ void TransactionExecutor::dagExecuteTransactions(
     }
 
     EXECUTOR_NAME_LOG(INFO) << LOG_DESC("dagExecuteTransactions") << LOG_KV("prepareT", prepareT)
-                            << LOG_KV("total", (utcTime() - recoredT));
+                            << LOG_KV("total", (utcTime() - recoredT))
+                            << LOG_KV("inputSize", inputs.size());
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
@@ -1307,7 +1298,7 @@ void TransactionExecutor::prepare(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Prepare error: Request block number: " +
+            "Prepare error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1318,7 +1309,7 @@ void TransactionExecutor::prepare(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
 
     m_backendStorage->asyncPrepare(storageParams, *(first->storage),
         [this, callback = std::move(callback)](auto&& error, uint64_t) {
@@ -1331,7 +1322,7 @@ void TransactionExecutor::prepare(
 
             if (error)
             {
-                auto errorMessage = "Prepare error: " + boost::diagnostic_information(*error);
+                auto errorMessage = "Prepare error: " + error->errorMessage();
 
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(
@@ -1370,7 +1361,7 @@ void TransactionExecutor::commit(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Commit error: Request block number: " +
+            "Commit error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1381,9 +1372,9 @@ void TransactionExecutor::commit(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
     m_backendStorage->asyncCommit(storageParams,
-        [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error) {
+        [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error, uint64_t) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1393,7 +1384,7 @@ void TransactionExecutor::commit(
 
             if (error)
             {
-                auto errorMessage = "Commit error: " + boost::diagnostic_information(*error);
+                auto errorMessage = "Commit error: " + error->errorMessage();
 
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(
@@ -1438,7 +1429,7 @@ void TransactionExecutor::rollback(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Rollback error: Request block number: " +
+            "Rollback error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1449,7 +1440,7 @@ void TransactionExecutor::rollback(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
     m_backendStorage->asyncRollback(
         storageParams, [this, callback = std::move(callback)](auto&& error) {
             if (!m_isRunning)
@@ -1461,7 +1452,7 @@ void TransactionExecutor::rollback(
 
             if (error)
             {
-                auto errorMessage = "Rollback error: " + boost::diagnostic_information(*error);
+                auto errorMessage = "Rollback error: " + error->errorMessage();
 
                 EXECUTOR_NAME_LOG(ERROR) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_PTR(-1, errorMessage, *error));
@@ -1493,19 +1484,20 @@ void TransactionExecutor::getCode(
         return;
     }
 
-    storage::StorageInterface::Ptr storage;
+    storage::StateStorageInterface::Ptr stateStorage;
 
+    // create temp state storage
     if (m_cachedStorage)
     {
-        storage = m_cachedStorage;
+        stateStorage = createStateStorage(m_cachedStorage);
     }
     else
     {
-        storage = m_backendStorage;
+        stateStorage = createStateStorage(m_backendStorage);
     }
 
     auto tableName = getContractTableName(contract, m_isWasm);
-    storage->asyncGetRow(tableName, "code",
+    stateStorage->asyncGetRow(tableName, "code",
         [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (!m_isRunning)
             {
@@ -1517,8 +1509,7 @@ void TransactionExecutor::getCode(
 
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR)
-                    << "Get code error: " << boost::diagnostic_information(*error);
+                EXECUTOR_NAME_LOG(ERROR) << "Get code error: " << error->errorMessage();
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
                 return;
@@ -1553,19 +1544,20 @@ void TransactionExecutor::getABI(
         return;
     }
 
-    storage::StorageInterface::Ptr storage;
+    storage::StateStorageInterface::Ptr stateStorage;
 
+    // create temp state storage
     if (m_cachedStorage)
     {
-        storage = m_cachedStorage;
+        stateStorage = createStateStorage(m_cachedStorage);
     }
     else
     {
-        storage = m_backendStorage;
+        stateStorage = createStateStorage(m_backendStorage);
     }
 
     auto tableName = getContractTableName(contract, m_isWasm);
-    storage->asyncGetRow(tableName, ACCOUNT_ABI,
+    stateStorage->asyncGetRow(tableName, ACCOUNT_ABI,
         [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (!m_isRunning)
             {
@@ -1577,8 +1569,7 @@ void TransactionExecutor::getABI(
 
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR)
-                    << "Get ABI error: " << boost::diagnostic_information(*error);
+                EXECUTOR_NAME_LOG(ERROR) << "Get ABI error: " << error->errorMessage();
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
                 return;
@@ -1941,7 +1932,6 @@ void TransactionExecutor::removeCommittedState()
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = m_stateStorages.back().storage;
         EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
                                 << LOG_KV("storageNumber", m_stateStorages.back().number)
                                 << LOG_KV("commitNumber", number);
@@ -1957,7 +1947,6 @@ void TransactionExecutor::removeCommittedState()
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = m_stateStorages.back().storage;
         EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("removeCommittedState")
                                  << LOG_KV("LatestStateStorage", m_stateStorages.back().number)
                                  << LOG_KV("commitNumber", number)
@@ -2025,8 +2014,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         callParameters->abi = input.abi();
     }
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
 
     return callParameters;
 }
@@ -2051,10 +2038,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-    {
-        EXECUTIVE_LOG(TRACE) << "[Trace callParameters]" << callParameters->toFullString();
-    }
     return callParameters;
 }
 

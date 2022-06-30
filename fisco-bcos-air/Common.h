@@ -33,7 +33,11 @@ class ExitHandler
 {
 public:
     void exit() { exitHandler(0); }
-    static void exitHandler(int) { ExitHandler::c_shouldExit.store(true); }
+    static void exitHandler(int signal)
+    {
+        std::cout << "exit because receive signal " << signal << std::endl;
+        ExitHandler::c_shouldExit.store(true);
+    }
     bool shouldExit() const { return ExitHandler::c_shouldExit.load(); }
 
     static std::atomic_bool c_shouldExit;

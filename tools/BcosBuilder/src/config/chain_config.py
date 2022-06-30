@@ -67,8 +67,6 @@ class AgencyConfig:
         # load storage_security config
         self.enable_storage_security = utilities.get_item_value(
             self.config, "enable_storage_security", False, False, self.desc)
-        self.sm_storage_security = utilities.get_item_value(
-            self.config, "sm_storage_security", False, False, self.desc)
         self.key_center_url = utilities.get_item_value(
             self.config, "key_center_url", "", False, self.desc)
         self.cipher_data_key = utilities.get_item_value(
@@ -121,6 +119,9 @@ class NodeConfig:
         self.desc = "[[agency.group.node]]."
         self.node_name = utilities.get_item_value(
             self.config, "node_name", None, True, self.desc)
+        # parse key_page_size
+        self.key_page_size = utilities.get_item_value(
+            self.config, "key_page_size", 10240, False, self.desc)
         # load storage_security
         self.enable_storage_security = utilities.get_item_value(
             self.config, "enable_storage_security", False, False, self.desc)
@@ -130,16 +131,16 @@ class NodeConfig:
             self.config, "cipher_data_key", "", False, self.desc)
         self.deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True, self.desc)
+
         self.monitor_listen_port = utilities.get_item_value(
-            self.config, "monitor_listen_port", None, True, self.desc)
+            self.config, "monitor_listen_port", None, False, self.desc)
         self.monitor_log_path = utilities.get_item_value(
-            self.config, "monitor_log_path", None, True, self.desc)
+            self.config, "monitor_log_path", None, False, self.desc)
         # parse node_service_config
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
         self.service_list = []
-        self.key_page_size = 0
         self.__parse_node_service_config(node_type)
 
     def __parse_node_service_config(self, node_type):
@@ -190,6 +191,8 @@ class MaxNodeConfig(NodeConfig):
         self.__parse_executor_service_config()
         # load service name(for executor)
         self.__load_service_name()
+        # enforce turnoff the storage_security
+        self.enable_storage_security = False
 
     def __parse_executor_service_config(self):
         """
