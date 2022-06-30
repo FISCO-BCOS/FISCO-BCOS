@@ -69,7 +69,7 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
     Poco::Logger::root().setLevel((int)c_fileLogLevel < (int)Poco::Message::PRIO_WARNING ?
                                       Poco::Message::PRIO_INFORMATION :
                                       c_fileLogLevel + 3);
-    // Poco::Logger::root().setLevel(Poco::Message::PRIO_DEBUG); //PRIO_TRACE
+    // Poco::Logger::root().setLevel(Poco::Message::PRIO_DEBUG);  // PRIO_TRACE
     Poco::Logger::root().setChannel(pChannel);
     return std::make_shared<Cluster>(pdAddrs, config);
 }
@@ -311,7 +311,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
             return;
         }
         auto encode = utcTime();
-        if (mutations.empty() && param.startTS == 0)
+        if (mutations.empty() && param.timestamp == 0)
         {
             STORAGE_TIKV_LOG(WARNING)
                 << LOG_DESC("asyncPrepare empty storage") << LOG_KV("number", param.number);
@@ -322,7 +322,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
         auto primaryLock = toDBKey(param.primaryTableName, param.primaryTableKey);
         m_committer = std::make_shared<BCOSTwoPhaseCommitter>(
             m_cluster.get(), primaryLock, std::move(mutations));
-        if (param.startTS == 0)
+        if (param.timestamp == 0)
         {
             auto result = m_committer->prewriteKeys();
             auto write = utcTime();
@@ -339,10 +339,10 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
             STORAGE_TIKV_LOG(INFO)
                 << "asyncPrepare secondary" << LOG_KV("blockNumber", param.number)
                 << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                << LOG_KV("startTS", param.startTS) << LOG_KV("encode time(ms)", encode - start);
-            m_committer->prewriteKeys(param.startTS);
+                << LOG_KV("startTS", param.timestamp) << LOG_KV("encode time(ms)", encode - start);
+            m_committer->prewriteKeys(param.timestamp);
             auto write = utcTime();
-            m_committer = nullptr;
+            // m_committer = nullptr;
             STORAGE_TIKV_LOG(INFO)
                 << "asyncPrepare secondary finished" << LOG_KV("prewrite time(ms)", write - encode);
             callback(nullptr, 0);
@@ -350,46 +350,59 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed") << LOG_KV("message", e.message())
-                                << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed") << LOG_KV("number", param.number)
+                                << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
+                                << LOG_KV("what", e.what());
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncPrepare failed! ", e), 0);
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed") << LOG_KV("message", e.what());
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed") << LOG_KV("number", param.number)
+                                << LOG_KV("message", e.what());
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncPrepare failed! ", e), 0);
     }
 }
 
 void TiKVStorage::asyncCommit(
-    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) noexcept
 {
     auto start = utcTime();
     std::ignore = params;
     try
     {
+        uint64_t ts = 0;
         if (m_committer)
         {
-            m_committer->commitKeys();
-            auto end = utcTime();
-            STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
-                                << LOG_KV("startTS", params.startTS)
-                                << LOG_KV("time(ms)", end - start)
-                                << LOG_KV("callback time(ms)", utcTime() - end);
-            m_committer = nullptr;
+            if (params.timestamp > 0)
+            {
+                m_committer->commitKeys(params.timestamp);
+            }
+            else
+            {
+                ts = m_committer->commitKeys();
+            }
+            // m_committer = nullptr;
         }
-        callback(nullptr);
+        auto end = utcTime();
+        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
+                               << LOG_KV("startTS", params.timestamp)
+                               << LOG_KV("time(ms)", end - start);
+        callback(nullptr, ts);
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncCommit failed") << LOG_KV("message", e.message())
-                                << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
-        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncCommit failed! ", e));
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncCommit Exception") << LOG_KV("number", params.number)
+                                << LOG_KV("commitTS", params.timestamp)
+                                << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
+                                << LOG_KV("what", e.what());
+        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncCommit failed! ", e), 0);
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncCommit failed") << LOG_KV("message", e.what());
-        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncCommit failed! ", e));
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncCommit failed") << LOG_KV("number", params.number)
+                                << LOG_KV("commitTS", params.timestamp)
+                                << LOG_KV("message", e.what());
+        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncCommit failed! ", e), 0);
     }
 }
 
@@ -408,7 +421,7 @@ void TiKVStorage::asyncRollback(
         auto end = utcTime();
         callback(nullptr);
         STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
-                               << LOG_KV("startTS", params.startTS)
+                               << LOG_KV("startTS", params.timestamp)
                                << LOG_KV("time(ms)", end - start)
                                << LOG_KV("callback time(ms)", utcTime() - end);
     }

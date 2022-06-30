@@ -716,7 +716,7 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     if (last.number != number)
     {
         auto errorMessage =
-            "GetTableHashes error: Request block number: " +
+            "GetTableHashes error: Request blockNumber: " +
             boost::lexical_cast<std::string>(number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(last.number);
 
@@ -1298,7 +1298,7 @@ void TransactionExecutor::prepare(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Prepare error: Request block number: " +
+            "Prepare error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1309,7 +1309,7 @@ void TransactionExecutor::prepare(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
 
     m_backendStorage->asyncPrepare(storageParams, *(first->storage),
         [this, callback = std::move(callback)](auto&& error, uint64_t) {
@@ -1361,7 +1361,7 @@ void TransactionExecutor::commit(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Commit error: Request block number: " +
+            "Commit error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1372,9 +1372,9 @@ void TransactionExecutor::commit(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
     m_backendStorage->asyncCommit(storageParams,
-        [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error) {
+        [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error, uint64_t) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1429,7 +1429,7 @@ void TransactionExecutor::rollback(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Rollback error: Request block number: " +
+            "Rollback error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1440,7 +1440,7 @@ void TransactionExecutor::rollback(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
     m_backendStorage->asyncRollback(
         storageParams, [this, callback = std::move(callback)](auto&& error) {
             if (!m_isRunning)

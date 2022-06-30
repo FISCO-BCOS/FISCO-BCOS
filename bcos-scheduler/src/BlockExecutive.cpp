@@ -544,7 +544,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     executorParams.number = number();
                     executorParams.primaryTableName = SYS_CURRENT_STATE;
                     executorParams.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
-                    executorParams.startTS = startTimeStamp;
+                    executorParams.timestamp = startTimeStamp;
                     for (auto& executorIt : *(m_scheduler->m_executorManager))
                     {
                         executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
@@ -1092,57 +1092,59 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 
     bcos::protocol::TwoPCParams params;
     params.number = number();
-    m_scheduler->m_storage->asyncCommit(params, [status, this](Error::Ptr&& error) {
-        if (error)
-        {
-            SCHEDULER_LOG(ERROR) << "Commit storage error!" << error->errorMessage();
+    m_scheduler->m_storage->asyncCommit(
+        params, [status, this](Error::Ptr&& error, uint64_t commitTS) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR) << "Commit storage error!" << error->errorMessage();
 
-            ++status->failed;
-            status->checkAndCommit(*status);
-            return;
-        }
-        else
-        {
-            ++status->success;
-        }
+                ++status->failed;
+                status->checkAndCommit(*status);
+                return;
+            }
+            else
+            {
+                ++status->success;
+            }
 
-        bcos::protocol::TwoPCParams executorParams;
-        executorParams.number = number();
-        tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
-            m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
-                SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
+            bcos::protocol::TwoPCParams executorParams;
+            executorParams.number = number();
+            executorParams.timestamp = commitTS;
+            tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
+                m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
+                    SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
 
-                executorIt->commit(executorParams, [this, status](bcos::Error::Ptr&& error) {
-                    {
-                        WriteGuard lock(status->x_lock);
-                        if (error)
+                    executorIt->commit(executorParams, [this, status](bcos::Error::Ptr&& error) {
                         {
-                            SCHEDULER_LOG(ERROR)
-                                << "Commit executor error!" << error->errorMessage();
-                            ++status->failed;
-
-                            if (error->errorCode() ==
-                                bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                            WriteGuard lock(status->x_lock);
+                            if (error)
                             {
-                                triggerSwitch();
+                                SCHEDULER_LOG(ERROR)
+                                    << "Commit executor error!" << error->errorMessage();
+                                ++status->failed;
+
+                                if (error->errorCode() ==
+                                    bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                                {
+                                    triggerSwitch();
+                                }
+                            }
+                            else
+                            {
+                                ++status->success;
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Commit executor success, success: " << status->success;
+                            }
+
+                            if (status->success + status->failed < status->total)
+                            {
+                                return;
                             }
                         }
-                        else
-                        {
-                            ++status->success;
-                            SCHEDULER_LOG(DEBUG)
-                                << "Commit executor success, success: " << status->success;
-                        }
-
-                        if (status->success + status->failed < status->total)
-                        {
-                            return;
-                        }
-                    }
-                    status->checkAndCommit(*status);
+                        status->checkAndCommit(*status);
+                    });
                 });
-            });
-    });
+        });
 }
 
 void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> callback)

@@ -358,7 +358,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         auto end = utcTime();
         callback(nullptr, 0);
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
-                                  << LOG_KV("startTS", param.startTS)
+                                  << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("time(ms)", end - start)
                                   << LOG_KV("callback time(ms)", utcTime() - end);
     }
@@ -369,7 +369,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
 }
 
 void RocksDBStorage::asyncCommit(
-    const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
+    const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback)
 {
     size_t count = 0;
     auto start = utcTime();
@@ -387,9 +387,9 @@ void RocksDBStorage::asyncCommit(
         }
     }
     auto end = utcTime();
-    callback(nullptr);
+    callback(nullptr, 0);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS)
+                              << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end)
                               << LOG_KV("count", count);
@@ -408,7 +408,7 @@ void RocksDBStorage::asyncRollback(
     auto end = utcTime();
     callback(nullptr);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS)
+                              << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end);
 }

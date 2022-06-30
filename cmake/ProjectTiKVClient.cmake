@@ -13,7 +13,7 @@ hunter_add_package(PocoCpp)
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git
-  GIT_TAG        dc6a9adcacaae8730ae0dc4534ae41f143afb981
+  GIT_TAG        83e48cd31630ed9e0962e1a039860531a9db4346
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  git submodule foreach --recursive git reset --hard COMMAND export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version
   # LOG_BUILD true

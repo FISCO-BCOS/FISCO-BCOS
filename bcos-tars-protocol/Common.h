@@ -394,7 +394,7 @@ inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const
     bcosTwoPCParams.number = _param.blockNumber;
     bcosTwoPCParams.primaryTableName = _param.primaryTableName;
     bcosTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    bcosTwoPCParams.startTS = _param.startTS;
+    bcosTwoPCParams.timestamp = _param.startTS;
     return bcosTwoPCParams;
 }
 
@@ -404,7 +404,7 @@ inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _para
     tarsTwoPCParams.blockNumber = _param.number;
     tarsTwoPCParams.primaryTableName = _param.primaryTableName;
     tarsTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    tarsTwoPCParams.startTS = _param.startTS;
+    tarsTwoPCParams.startTS = _param.timestamp;
     return tarsTwoPCParams;
 }
 }  // namespace bcostars
