@@ -43,12 +43,12 @@ if (TARS_INPUT)
 endif()
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${OUT_TARS_H_LIST}")
-include_directories(${TARSCPP_ROOT}/include)
 
 aux_source_directory(./protocol SRC_LIST)
 aux_source_directory(./client SRC_LIST)
 
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
+target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC ${TARSCPP_ROOT}/include)
 target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tars::servant tars::util)
 

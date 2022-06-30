@@ -1,4 +1,4 @@
-#include "bcos-framework/concepts/storage/Storage.h"
+
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -7,6 +7,7 @@
 #include "tars/Transaction.h"
 #include "tars/TransactionReceipt.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/concepts/storage/Storage.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-ledger/bcos-ledger/LedgerImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>

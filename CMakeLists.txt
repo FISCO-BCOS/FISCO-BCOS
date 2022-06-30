@@ -41,7 +41,6 @@ if(FRAMEWORK)
 endif()
 
 if(CRYPTO)
-    find_package(WeDPRCrypto REQUIRED MODULE)
     add_subdirectory(bcos-crypto)
 endif()
 

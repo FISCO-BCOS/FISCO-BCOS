@@ -11,26 +11,20 @@ template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
-enum GetBlockFlag
+enum LedgerDataFlag
 {
-    BLOCK_ALL,
-    BLOCK_HEADER,
-    BLOCK_TRANSACTIONS,
-    BLOCK_RECEIPTS,
-    BLOCK_NONCES
-};
-
-enum TransactionOrReceiptFlag
-{
-    TRANSACTION,
-    RECEIPT
+    ALL,
+    HEADER,
+    TRANSACTIONS,
+    RECEIPTS,
+    NONCES
 };
 
 template <class Impl>
 class LedgerBase
 {
 public:
-    template <GetBlockFlag... flags>
+    template <LedgerDataFlag... flags>
     auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
         return impl().template impl_getBlock<flags...>(blockNumber);

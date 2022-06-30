@@ -20,16 +20,6 @@
 namespace bcos::ledger
 {
 
-// All get block flags
-// clang-format off
-struct GETBLOCK_FLAGS {};
-struct BLOCK_ALL: public GETBLOCK_FLAGS {};
-struct BLOCK_HEADER: public GETBLOCK_FLAGS {};
-struct BLOCK_TRANSACTIONS: public GETBLOCK_FLAGS {};
-struct BLOCK_RECEIPTS: public GETBLOCK_FLAGS {};
-struct BLOCK_NONCES: public GETBLOCK_FLAGS {};
-// clang-format on
-
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage,
     bcos::concepts::block::Block Block>
 class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage, Block>>
@@ -37,7 +27,7 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 public:
     LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
-    template <class... Flags>
+    template <bcos::concepts::ledger::GetBlockFlag... Flags>
     auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
         Block block;
@@ -247,11 +237,10 @@ public:
     }
 
 private:
-    template <class Flag>
-    requires std::derived_from<Flag, GETBLOCK_FLAGS>
+    template <bcos::concepts::ledger::GetBlockFlag flag>
     void getBlockData(std::string_view key, Block& block)
     {
-        if constexpr (std::is_same_v<Flag, BLOCK_HEADER>)
+        if constexpr (flag == bcos::concepts::ledger::BLOCK_HEADER)
         {
             auto entry = m_storage.getRow(SYS_NUMBER_2_BLOCK_HEADER, key);
             if (!entry) [[unlikely]]
@@ -262,8 +251,8 @@ private:
             auto field = entry->getField(0);
             bcos::concepts::serialize::decode(block.blockHeader, field);
         }
-        else if constexpr (std::is_same_v<Flag, BLOCK_TRANSACTIONS> ||
-                           std::is_same_v<Flag, BLOCK_RECEIPTS>)
+        else if constexpr (flag == bcos::concepts::ledger::BLOCK_TRANSACTIONS ||
+                           flag == bcos::concepts::ledger::BLOCK_RECEIPTS)
         {
             if (std::empty(block.transactionsMetaData))
             {
@@ -284,9 +273,8 @@ private:
                         return std::string_view{metaData.hash.data(), metaData.hash.size()};
                     });
 
-            constexpr auto isTransaction = std::is_same_v<Flag, BLOCK_TRANSACTIONS>;
             auto outputs = getTransactionsOrReceipts<isTransaction>(std::move(hashesRange));
-            if constexpr (isTransaction)
+            if constexpr (flag == bcos::concepts::ledger::BLOCK_TRANSACTIONS)
             {
                 block.transactions = std::move(outputs);
             }
