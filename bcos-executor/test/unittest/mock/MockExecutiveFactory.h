@@ -13,18 +13,16 @@ class MockExecutiveFactory : public bcos::executor::ExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<MockExecutiveFactory>;
-    MockExecutiveFactory(std::shared_ptr<BlockContext>,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>,
-        std::shared_ptr<const std::set<std::string>>, std::shared_ptr<wasm::GasInjector>)
-      : ExecutiveFactory(nullptr, nullptr, nullptr, nullptr, nullptr)
-    {}
+    MockExecutiveFactory() : ExecutiveFactory(nullptr, nullptr, nullptr, nullptr, nullptr) {}
     virtual ~MockExecutiveFactory() {}
 
     std::shared_ptr<MockTransactionExecutive> MockExecutiveFactory::build(
         const std::string&, int64_t, int64_t)
     {
-        auto executive = std::make_shared<MockTransactionExecutive>(nullptr, "0x12", 0, 0, nullptr);
+        auto executive = std::make_shared<MockTransactionExecutive>(nullptr, "0x00", 0, 0, nullptr);
+        executive->setConstantPrecompiled(nullptr);
+        executive->setEVMPrecompiled(nullptr);
+        executive->setBuiltInPrecompiled(nullptr);
         return executive;
     }
 };

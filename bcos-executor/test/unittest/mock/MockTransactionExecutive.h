@@ -19,6 +19,7 @@ public:
         std::shared_ptr<wasm::GasInjector>&)
       : TransactionExecutive(nullptr, "aabbcc", 0, 0, nullptr)
     {}
+
     virtual ~MockTransactionExecutive() {}
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) { return std::move(input); }
@@ -38,7 +39,8 @@ public:
     }
     void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {
-        std::copy(keyLocks.begin(), keyLocks.end(), std::back_inserter({"key100"}));
+        std::copy(
+            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
     }
 
 private:

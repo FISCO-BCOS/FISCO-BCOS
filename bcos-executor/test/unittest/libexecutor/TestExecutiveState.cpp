@@ -25,12 +25,13 @@ struct ExecutiveStateFixture
         executive = std::make_shared<MockTransactionExecutive>();
         executiveFactory = std::make_shared<MockExecutiveFactory>();
     };
-    shared_ptr<MockTransactionExecutive> executive;
-    shared_ptr<MockExecutiveFactory> executiveFactory;
-    shared_ptr<ExecutiveState> executiveState;
-    CallParameters::UniquePtr input;
+    std::shared_ptr<MockTransactionExecutive> executive;
+    std::shared_ptr<MockExecutiveFactory> executiveFactory;
+    std::shared_ptr<ExecutiveState> executiveState;
+    std::CallParameters::UniquePtr input;
 };
 BOOST_AUTO_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture)
+
 BOOST_AUTO_TEST_CASE(goTest)
 {
     for (int8_t i = 0; i < 4; ++i)
