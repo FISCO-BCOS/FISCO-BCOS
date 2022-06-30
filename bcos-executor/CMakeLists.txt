@@ -18,7 +18,7 @@ find_package(jsoncpp REQUIRED)
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
 target_link_libraries(${EXECUTOR_TARGET} PUBLIC ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET}
-    bcos-framework Boost::context evmone-standalone evmc::evmc fbwasm wabt wedpr::fisco-bcos jsoncpp_static)
+    bcos-framework Boost::context evmone-standalone evmc::evmc fbwasm wabt ffi_c_fisco_bcos jsoncpp_static)
 
 # add_subdirectory(test/trie-test)
 # add_subdirectory(test/flow-graph)

@@ -11,7 +11,7 @@ find_package(OpenSSL REQUIRED)
 
 add_library(bcos-crypto ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
-target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto bcos-utilities wedpr::crypto)
+target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto bcos-utilities ffi_c_crypto_binary)
 
 if(TESTS)
     enable_testing()
