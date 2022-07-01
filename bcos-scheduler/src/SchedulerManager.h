@@ -83,6 +83,10 @@ public:
                                 << LOG_KV("m_executorSeq", m_executorSeq)
                                 << LOG_KV("SchedulerTermID", id);
             }
+            BCOS_LOG(DEBUG) << "Build SchedulerTermID" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
+                            << LOG_KV("m_executorSeq", m_executorSeq)
+                            << LOG_KV("SchedulerTermID", id);
+
             return id;
         }
 

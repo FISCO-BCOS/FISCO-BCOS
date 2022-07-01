@@ -141,7 +141,7 @@ std::pair<bool, std::string> SchedulerManager::checkAndInit()
 
     if (m_remoteExecutorManager->empty())
     {
-        return {false, "No executor started!"};
+        return {false, "Waiting to connect some executors..."};
     }
 
     if (m_status == INITIALING)

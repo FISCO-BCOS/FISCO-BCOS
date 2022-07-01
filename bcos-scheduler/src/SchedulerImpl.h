@@ -172,6 +172,8 @@ private:
     // remove prepared all block <= oldBlockNumber
     void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
 
+    bcos::protocol::BlockNumber getBlockNumberInStorage();
+
     std::shared_ptr<std::list<BlockExecutive::Ptr>> m_blocks =
         std::make_shared<std::list<BlockExecutive::Ptr>>();
 

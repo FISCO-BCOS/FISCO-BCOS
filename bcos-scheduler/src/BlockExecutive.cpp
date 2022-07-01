@@ -650,7 +650,6 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
             });
     }
 
-
     std::multimap<std::string, decltype(m_executiveStates)::iterator> requests;
 
     for (auto it = m_executiveStates.begin(); it != m_executiveStates.end(); ++it)
@@ -670,13 +669,15 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
     auto totalCount = std::make_shared<std::atomic_size_t>(requests.size());
     auto failed = std::make_shared<std::atomic_size_t>(0);
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
+    SCHEDULER_LOG(DEBUG) << LOG_BADGE("DAG") << LOG_BADGE("Stat")
+                         << "DAGExecute.0:\t>>> Start send to executor";
 
     for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
     {
-        SCHEDULER_LOG(TRACE) << "DAG contract: " << it->first;
+        auto contractAddress = it->first;
         auto startT = utcTime();
 
-        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->first);
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(contractAddress);
         auto count = requests.count(it->first);
         auto range = requests.equal_range(it->first);
 
@@ -693,16 +694,29 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
             ++i;
         }
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("DAG") << LOG_BADGE("Stat")
+                             << "DAGExecute.1:\t--> Send to executor\t"
+                             << LOG_KV("contract", contractAddress)
+                             << LOG_KV("txNum", messages->size());
         auto prepareT = utcTime() - startT;
         startT = utcTime();
         executor->dagExecuteTransactions(*messages,
-            [this, messages, startT, prepareT, iterators = std::move(iterators), totalCount, failed,
-                callbackPtr](bcos::Error::UniquePtr error,
+            [this, contractAddress, messages, startT, prepareT, iterators = std::move(iterators),
+                totalCount, failed, callbackPtr](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
+                SCHEDULER_LOG(DEBUG)
+                    << LOG_BADGE("DAG") << LOG_BADGE("Stat")
+                    << "DAGExecute.2:\t<-- Receive from executor\t"
+                    << LOG_KV("contract", contractAddress) << LOG_KV("txNum", messages->size())
+                    << LOG_KV("costT", utcTime() - startT) << LOG_KV("failed", *failed)
+                    << LOG_KV("totalCount", *totalCount) << LOG_KV("blockNumber", number());
                 if (error)
                 {
                     ++(*failed);
-                    SCHEDULER_LOG(ERROR) << "DAG execute error: " << error->errorMessage();
+                    SCHEDULER_LOG(ERROR)
+                        << "DAG execute error: " << error->errorMessage()
+                        << LOG_KV("failed", *failed) << LOG_KV("totalCount", *totalCount)
+                        << LOG_KV("blockNumber", number());
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
                         triggerSwitch();
@@ -727,12 +741,19 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 // TODO: must wait more response
                 if (*totalCount == 0)
                 {
+                    SCHEDULER_LOG(DEBUG)
+                        << LOG_BADGE("DAG") << LOG_BADGE("Stat")
+                        << "DAGExecute.3:\t<<< Joint all contract result\t"
+                        << LOG_KV("costT", utcTime() - startT) << LOG_KV("failed", *failed)
+                        << LOG_KV("totalCount", *totalCount) << LOG_KV("blockNumber", number());
+
                     if (*failed > 0)
                     {
                         (*callbackPtr)(BCOS_ERROR_UNIQUE_PTR(
                             SchedulerError::DAGError, "Execute dag with errors"));
                         return;
                     }
+
                     SCHEDULER_LOG(INFO)
                         << LOG_DESC("DAGExecute finish") << LOG_KV("prepareT", prepareT)
                         << LOG_KV("execT", (utcTime() - startT));
@@ -1207,7 +1228,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
                         SCHEDULER_LOG(DEBUG)
-                            << "Rollback a restarted executor. Ignore" << error->errorMessage();
+                            << "Rollback a restarted executor. Ignore." << error->errorMessage();
                         ++status->success;
                         triggerSwitch();
                     }
