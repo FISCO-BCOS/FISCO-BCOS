@@ -25,14 +25,14 @@ struct ExecutiveStateFixture
         executive = std::make_shared<MockTransactionExecutive>(nullptr, "0x00", 0, 0, nullptr);
         executiveFactory =
             std::make_shared<MockExecutiveFactory>(nullptr, nullptr, nullptr, nullptr, nullptr);
-    };
+    }
     std::shared_ptr<MockTransactionExecutive> executive;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
     std::shared_ptr<ExecutiveState> executiveState;
     CallParameters::UniquePtr input;
 };
 
-BOOST_AUTO_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture)
+BOOST_FIXTURE_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture)
 
 BOOST_AUTO_TEST_CASE(goTest)
 {
@@ -45,8 +45,10 @@ BOOST_AUTO_TEST_CASE(goTest)
             callParameters->codeAddress = "aabbccddee";
             callParameters->contextID = i;
             callParameters->seq = i;
+            auto executiveFactory =
+                std::make_shared<MockExecutiveFactory>(nullptr, nullptr, nullptr, nullptr, nullptr);
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
         }
@@ -57,8 +59,10 @@ BOOST_AUTO_TEST_CASE(goTest)
             callParameters->codeAddress = "aabbccddee";
             callParameters->contextID = i;
             callParameters->seq = i;
+            auto executiveFactory =
+                std::make_shared<MockExecutiveFactory>(nullptr, nullptr, nullptr, nullptr, nullptr);
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::PAUSED);
         }
@@ -70,9 +74,9 @@ BOOST_AUTO_TEST_CASE(goTest)
             callParameters->contextID = i;
             callParameters->seq = i;
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
-            executiveState->setResumeParam(callParameters);
+            executiveState->setResumeParam(std::move(callParameters));
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
         }
         else
@@ -82,8 +86,10 @@ BOOST_AUTO_TEST_CASE(goTest)
             callParameters->codeAddress = "aabbccddee";
             callParameters->contextID = i;
             callParameters->seq = i;
+            auto executiveFactory =
+                std::make_shared<MockExecutiveFactory>(nullptr, nullptr, nullptr, nullptr, nullptr);
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
         }
@@ -93,9 +99,10 @@ BOOST_AUTO_TEST_CASE(goTest)
 
 BOOST_AUTO_TEST_CASE(setResumeParamTest)
 {
-    ExecutiveState::Ptr executiveState = std::make_shared<ExecutiveState>(executiveFactory, input);
+    ExecutiveState::Ptr executiveState =
+        std::make_shared<ExecutiveState>(executiveFactory, std::move(input));
     BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
-    executiveState->setResumeParam(input);
+    executiveState->setResumeParam(std::move(input));
     BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
 }
 
@@ -112,7 +119,7 @@ BOOST_AUTO_TEST_CASE(appendKeyLocks)
             callParameters->contextID = i;
             callParameters->seq = i;
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
         }
@@ -124,7 +131,7 @@ BOOST_AUTO_TEST_CASE(appendKeyLocks)
             callParameters->contextID = i;
             callParameters->seq = i;
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::PAUSED);
         }
@@ -136,9 +143,9 @@ BOOST_AUTO_TEST_CASE(appendKeyLocks)
             callParameters->contextID = i;
             callParameters->seq = i;
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
-            executiveState->setResumeParam(callParameters);
+            executiveState->setResumeParam(std::move(callParameters));
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
         }
         else
@@ -149,7 +156,7 @@ BOOST_AUTO_TEST_CASE(appendKeyLocks)
             callParameters->contextID = i;
             callParameters->seq = i;
             auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, callParameters);
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
         }
