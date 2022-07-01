@@ -14,8 +14,7 @@
 #pragma once
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
-#include <memory>
-
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 #include <boost/asio.hpp>
 
 namespace bcos
@@ -54,6 +53,8 @@ public:
             messageHandler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
+
+    virtual ratelimit::BWRateLimiterInterface::Ptr rateLimitInterface() = 0;
 
     virtual bool actived() const = 0;
 };

@@ -14,6 +14,9 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>  // for Respon...
 #include <bcos-gateway/libnetwork/SocketFace.h>   // for Socket...
 #include <chrono>
+#include <cstddef>
+#include <fstream>
+#include <iterator>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -76,6 +79,37 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         }
         return;
     }
+
+    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
+    message->encode(*p_buffer);
+
+    // limit bandwidth of the connection
+    if (m_rateLimitInterface)
+    {
+        if (m_rateLimitInterface->tryAcquire(p_buffer->size()))
+        {
+            // TODO: update bandwidth of the connection
+        }
+        else
+        {
+            // revert token of the previous limiters
+            auto& rateLimiters = message->rateLimiters();
+            for (auto& rateLimit : rateLimiters)
+            {
+                rateLimit->rollback(p_buffer->size());
+            }
+
+            if (callback)
+            {
+                server->threadPool()->enqueue([callback] {
+                    callback(
+                        NetworkException(BandwidthOverFlow, "the connection bandwidth overflow"),
+                        Message::Ptr());
+                });
+            }
+        }
+    }
+
     if (callback)
     {
         auto handler = std::make_shared<ResponseCallback>();
@@ -111,8 +145,6 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
                        << LOG_KV("seq2Callback.size", m_seq2Callback->size())
                        << LOG_KV("endpoint", nodeIPEndpoint());
-    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
-    message->encode(*p_buffer);
     send(p_buffer);
 }
 
@@ -372,8 +404,7 @@ void Session::drop(DisconnectReason _reason)
                 });
         }
         catch (...)
-        {
-        }
+        {}
     }
 }
 

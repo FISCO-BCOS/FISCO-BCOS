@@ -9,7 +9,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <memory>
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 
 namespace bcos
 {
@@ -56,6 +56,7 @@ public:
     virtual bool isReachable(P2pID const& _nodeID) const = 0;
     virtual std::shared_ptr<Host> host() = 0;
 
+    virtual std::shared_ptr<ratelimit::BWRateLimiterInterface> rateLimiter() const = 0;
     virtual std::shared_ptr<MessageFactory> messageFactory() = 0;
 
     virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) = 0;

@@ -55,6 +55,16 @@ public:
         m_messageFactory = _messageFactory;
     }
 
+    ratelimit::BWRateLimiterInterface::Ptr rateLimitInterface() override
+    {
+        return m_rateLimitInterface;
+    }
+
+    void setRateLimitInterface(ratelimit::BWRateLimiterInterface::Ptr _rateLimiterInterface)
+    {
+        m_rateLimitInterface = _rateLimiterInterface;
+    }
+
     virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler()
     {
         return m_messageHandler;
@@ -165,6 +175,9 @@ private:
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
 
     std::string m_hostNodeID;
+
+    // rate limiter
+    ratelimit::BWRateLimiterInterface::Ptr m_rateLimitInterface = nullptr;
 };
 
 class SessionFactory

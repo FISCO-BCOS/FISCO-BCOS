@@ -20,10 +20,11 @@
 
 #pragma once
 
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
+#include <vector>
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
@@ -169,6 +170,20 @@ public:
     std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
+    void appendRateLimiter(ratelimit::BWRateLimiterInterface::Ptr _rateLimiterInterface)
+    {
+        m_rateLimiters.push_back(_rateLimiterInterface);
+    }
+
+    // For ratelimit token revert
+    virtual const std::vector<ratelimit::BWRateLimiterInterface::Ptr>& rateLimiters() const override
+    {
+        return m_rateLimiters;
+    }
+
+    bool countForBWLimit() const { return m_countForBWLimit; }
+    void setCountForBWLimit(bool _countForBWLimit) { m_countForBWLimit = _countForBWLimit; }
+
 protected:
     virtual ssize_t decodeHeader(bytesConstRef _buffer);
     virtual bool encodeHeader(bytes& _buffer);
@@ -188,6 +203,12 @@ protected:
     P2PMessageOptions::Ptr m_options;  ///< options fields
 
     std::shared_ptr<bytes> m_payload;  ///< payload data
+
+private:
+    bool m_countForBWLimit =
+        false;  // For bandwidth limits, if this message count for bandwidth limits
+    //  For ratelimit token revert
+    std::vector<ratelimit::BWRateLimiterInterface::Ptr> m_rateLimiters{4};
 };
 
 class P2PMessageFactory : public MessageFactory

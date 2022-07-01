@@ -3,7 +3,7 @@
  *  @date 20180910
  */
 
-#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
 #include <bcos-gateway/libnetwork/SocketFace.h>     // for SocketFace
@@ -257,6 +257,12 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
     Options _options, CallbackFuncWithSession _callback)
 {
+    // p2p network bandwidth limitation
+    if (m_rateLimiter && !_msg->countForBWLimit())
+    {
+        m_rateLimiter->acquireWithoutWait(_msg->length());
+    }
+
     auto protocolVersion = _p2pSession->protocolInfo()->version();
     _msg->setVersion(protocolVersion);
     if (!_callback)

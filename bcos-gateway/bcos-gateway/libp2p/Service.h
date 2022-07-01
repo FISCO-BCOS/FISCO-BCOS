@@ -9,8 +9,8 @@
 
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework//protocol/GlobalConfig.h>
-#include <bcos-framework//protocol/ProtocolInfoCodec.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/ProtocolInfoCodec.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
@@ -84,6 +84,12 @@ public:
     virtual void setMessageFactory(std::shared_ptr<MessageFactory> _messageFactory)
     {
         m_messageFactory = _messageFactory;
+    }
+
+    ratelimit::BWRateLimiterInterface::Ptr rateLimiter() const override { return m_rateLimiter; }
+    void setRateLimiter(ratelimit::BWRateLimiterInterface::Ptr _rateLimiter)
+    {
+        m_rateLimiter = _rateLimiter;
     }
 
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
@@ -239,6 +245,8 @@ protected:
     std::vector<std::function<void(P2PSession::Ptr)>> m_newSessionHandlers;
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
+
+    ratelimit::BWRateLimiterInterface::Ptr m_rateLimiter;
 };
 
 }  // namespace gateway

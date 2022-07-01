@@ -18,7 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
-#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/bind/bind.hpp>
@@ -39,6 +39,8 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
     m_timer = std::make_shared<Timer>(TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
+
+    // TODO: rate limit
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
         boost::bind(&AMOPImpl::onAMOPMessage, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
@@ -455,7 +457,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
     }
 }
 
-void AMOPImpl::asyncSendBroadbastMessageByTopic(
+void AMOPImpl::asyncSendBroadcastMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)
 {
     std::vector<std::string> nodeIDs;

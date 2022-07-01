@@ -18,7 +18,8 @@
  * @date 2021-04-19
  */
 
-#include <bcos-framework//protocol/CommonError.h>
+#include "bcos-utilities/BoostLog.h"
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-utilities/Common.h>
@@ -148,6 +149,44 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
         return;
     }
 
+    // p2p network rate limit check
+    if (m_p2pNetworkRateLimiter && !m_p2pNetworkRateLimiter->tryAcquire(_payload.size()))
+    {
+        GATEWAY_LOG(TRACE) << LOG_DESC("the network bandwidth exceeded the limit")
+                           << LOG_KV("group", _groupID) << LOG_KV("src", _srcNodeID->hex())
+                           << LOG_KV("dst", _dstNodeID->hex())
+                           << LOG_KV("msg size", _payload.size());
+
+        auto errorPtr = std::make_shared<Error>(
+            CommonError::NetworkBandwidthOverFlow, "The network bandwidth exceeded the limit");
+        if (_errorRespFunc)
+        {
+            _errorRespFunc(errorPtr);
+        }
+        return;
+    }
+
+    auto frontMsg = m_frontMessageFactory->buildMessage();
+    frontMsg->decode(_payload);
+
+    // group rate limit check
+    if (m_groupRateLimiter &&
+        !m_groupRateLimiter->tryAcquire(_groupID, frontMsg->moduleID(), _payload.size()))
+    {
+        GATEWAY_LOG(TRACE) << LOG_DESC("the group bandwidth exceeded the limit")
+                           << LOG_KV("group", _groupID) << LOG_KV("src", _srcNodeID->hex())
+                           << LOG_KV("dst", _dstNodeID->hex())
+                           << LOG_KV("msg size", _payload.size());
+
+        auto errorPtr = std::make_shared<Error>(
+            CommonError::GroupBandwidthOverFlow, "The group bandwidth exceeded the limit");
+        if (_errorRespFunc)
+        {
+            _errorRespFunc(errorPtr);
+        }
+        return;
+    }
+
     class Retry : public std::enable_shared_from_this<Retry>
     {
     public:
@@ -267,6 +306,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->options()->dstNodeIDs().push_back(_dstNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    message->setCountForBWLimit(true);
 
     retry->m_p2pMessage = message;
     retry->m_p2pIDs.insert(retry->m_p2pIDs.begin(), p2pIDs.begin(), p2pIDs.end());
@@ -427,15 +467,41 @@ void Gateway::onReceiveP2PMessage(
     }
 
     auto options = _msg->options();
+    auto msgPayload = _msg->payload();
+    auto payload = bytesConstRef(msgPayload->data(), msgPayload->size());
+
+    auto frontMsg = m_frontMessageFactory->buildMessage();
+    frontMsg->decode(payload);
+
+    bool isOutGoingBWOverflow = false;
+
+    // TODO: if outgoing bandwidth exceeds the upper limit
+    // the request of the module that restricts network traffic should not be forwarded to front
+    // other modules, discard the request directly ???
+
+    // groupID
     auto groupID = options->groupID();
+    // moduleID
+    auto moduleID = frontMsg->moduleID();
+
+    if (isOutGoingBWOverflow)
+    {
+        GATEWAY_LOG(WARNING)
+            << LOG_BADGE("onReceiveP2PMessage")
+            << LOG_DESC("stop forward the message to the front for outgoing bandwidth overflow")
+            << LOG_KV("group", groupID) << LOG_KV("moduleID", moduleID);
+
+        // TODO: Add statistics about discarded messages
+
+        return;
+    }
+
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
-    auto payload = _msg->payload();
-    auto bytesConstRefPayload = bytesConstRef(payload->data(), payload->size());
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
-    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
+    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
         [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
             if (!gatewayPtr)
@@ -467,11 +533,42 @@ void Gateway::onReceiveBroadcastMessage(
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
+
+    auto options = _msg->options();
+    auto msgPayload = _msg->payload();
+    auto payload = bytesConstRef(msgPayload->data(), msgPayload->size());
+
+    auto frontMsg = m_frontMessageFactory->buildMessage();
+    frontMsg->decode(payload);
+
+    bool isOutGoingBWOverflow = false;
+    // TODO:
+    // if outgoing bandwidth exceeds the upper limit
+    // the request of the module that restricts network traffic should not be forwarded to front
+    // other modules, discard the request directly ???
+
+    // groupID
+    auto groupID = options->groupID();
+    // moduleID
+    auto moduleID = frontMsg->moduleID();
+
+    if (isOutGoingBWOverflow)
+    {
+        GATEWAY_LOG(WARNING)
+            << LOG_BADGE("onReceiveBroadcastMessage")
+            << LOG_DESC("stop forward the message to the front for outgoing bandwidth overflow")
+            << LOG_KV("group", groupID) << LOG_KV("moduleID", moduleID);
+
+        // TODO: Add statistics about discarded messages
+
+        return;
+    }
+
     auto srcNodeIDPtr =
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
-    auto groupID = _msg->options()->groupID();
+
     auto type = _msg->ext();
-    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage")
+    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage") << LOG_KV("groupID", groupID)
                        << LOG_KV("src", _msg->srcP2PNodeID())
                        << LOG_KV("dst", _msg->dstP2PNodeID());
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, srcNodeIDPtr,

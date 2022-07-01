@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 #include <set>
 #include <string>
@@ -48,6 +49,9 @@ public:
 
     virtual std::string const& srcP2PNodeID() const = 0;
     virtual std::string const& dstP2PNodeID() const = 0;
+
+    // For ratelimit token revert
+    virtual const std::vector<ratelimit::BWRateLimiterInterface::Ptr>& rateLimiters() const = 0;
 };
 
 class MessageFactory

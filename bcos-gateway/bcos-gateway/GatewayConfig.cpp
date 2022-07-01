@@ -9,6 +9,7 @@
 #include <bcos-utilities/FileUtility.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace security;
@@ -19,6 +20,15 @@ bool GatewayConfig::isValidPort(int port)
     if (port <= 1024 || port > 65535)
         return false;
     return true;
+}
+
+// check if the ip valid
+bool GatewayConfig::isValidIP(const std::string& _ip)
+{
+    boost::system::error_code ec;
+    boost::asio::ip::address ip_address = boost::asio::ip::make_address(_ip, ec);
+    std::ignore = ip_address;
+    return ec.value() == 0;
 }
 
 void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
@@ -132,6 +142,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
+        initRatelimitConfig(pt);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -328,6 +339,190 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("sm_node_key", smCertConfig.nodeKey)
                              << LOG_KV("sm_ennode_cert", smCertConfig.enNodeCert)
                              << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey);
+}
+
+//
+protocol::ModuleID GatewayConfig::stringToModuleID(const std::string& _module)
+{
+    /*
+       enum ModuleID
+       {
+           PBFT = 1000,
+           Raft = 1001,
+           BlockSync = 2000,
+           TxsSync = 2001,
+           AMOP = 3000,
+       };
+       */
+    if (boost::iequals(_module, "raft"))
+    {
+        return bcos::protocol::ModuleID::Raft;
+    }
+    else if (boost::iequals(_module, "pbft"))
+    {
+        return bcos::protocol::ModuleID::PBFT;
+    }
+    else if (boost::iequals(_module, "amop"))
+    {
+        return bcos::protocol::ModuleID::AMOP;
+    }
+    else if (boost::iequals(_module, "block_sync"))
+    {
+        return bcos::protocol::ModuleID::BlockSync;
+    }
+    else if (boost::iequals(_module, "txs_sync"))
+    {
+        return bcos::protocol::ModuleID::TxsSync;
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "unrecognized module string: " + _module +
+                " ,list of available modules: raft,pbft,amop,block_sync,txs_sync"));
+    }
+}
+
+// loads rate limit configuration items from the configuration file
+void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
+{
+    /*
+    [flow_control]
+    ; the module that does not limit bandwidth, default: raft,pbft
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync
+    ;
+    ; modules_without_bw_limit=raft,pbft
+
+    ; restrict the outgoing bandwidth of the node
+    ; both integer and decimal is support, unit: Mb
+    ;
+    ; total_outgoing_bw_limit=2
+
+    ; restrict the outgoing bandwidth of the the connection
+    ; both integer and decimal is support, unit: Mb
+    ;
+    ; conn_outgoing_bw_limit=2
+    ;
+    ; specify IP to limit bandwidth
+    ;   ip_x.x.x.x=2
+    ;   ip_x.x.x.x=2
+    ;   ip_x.x.x.x=2
+    ;
+    ; default bandwidth limit for the group
+    ; group_outgoing_bw_limit=2
+    ;
+    ; specify group to limit bandwidth
+    ;   group_xxxx1=2
+    ;   group_xxxx2=2
+    ;   group_xxxx2=2
+    */
+
+    // modules_without_bw_limit=raft,pbft
+    std::string strNoLimitModules =
+        _pt.get<std::string>("flow_control.modules_without_bw_limit", "raft,pbft");
+
+    std::vector<std::string> modules;
+    boost::split(modules, strNoLimitModules, boost::is_any_of(","), boost::token_compress_on);
+
+    std::vector<uint16_t> moduleIDs;
+    for (auto module : modules)
+    {
+        boost::trim(module);
+        moduleIDs.push_back(stringToModuleID(module));
+    }
+
+    // total_outgoing_bw_limit
+    double totalOutgoingBwLimit =
+        _pt.get<double>("flow_control.total_outgoing_bw_limit", INT64_MAX);
+    if (totalOutgoingBwLimit == (double)INT64_MAX)
+    {
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the total_outgoing_bw_limit is not initialized");
+    }
+    else
+    {
+        totalOutgoingBwLimit *= 1024 * 1024 / 8;
+    }
+
+    // conn_outgoing_bw_limit
+    double connOutgoingBwLimit = _pt.get<double>("flow_control.conn_outgoing_bw_limit", INT64_MAX);
+    if (connOutgoingBwLimit == (double)INT64_MAX)
+    {
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the conn_outgoing_bw_limit is not initialized");
+    }
+    else
+    {
+        connOutgoingBwLimit *= 1024 * 1024 / 8;
+    }
+
+    // group_outgoing_bw_limit
+    double groupOutgoingBwLimit =
+        _pt.get<double>("flow_control.group_outgoing_bw_limit", INT64_MAX);
+    if (groupOutgoingBwLimit == (double)INT64_MAX)
+    {
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the group_outgoing_bw_limit is not initialized");
+    }
+    else
+    {
+        groupOutgoingBwLimit *= 1024 * 1024 / 8;
+    }
+
+    // ip => bw && group => bw
+    if (_pt.get_child_optional("flow_control"))
+    {
+        for (auto const& it : _pt.get_child("flow_control"))
+        {
+            auto key = it.first;
+            auto value = it.second.data();
+
+            boost::trim(key);
+            boost::trim(value);
+
+            if (boost::starts_with(key, "ip_"))
+            {
+                // ip_x.x.x.x =
+                std::string ip = key.substr(3);
+                if (!isValidIP(ip))
+                {
+                    BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                              "initRatelimitConfig: invalid ip format, ip: " + ip));
+                }
+                double bw = boost::lexical_cast<double>(value);
+                bw *= 1024 * 1024 / 8;
+
+                m_rateLimitConfig.ip2BwLimit[ip] = (int64_t)bw;
+
+                GATEWAY_CONFIG_LOG(INFO)
+                    << LOG_BADGE("initRateLimitConfig") << LOG_DESC("add ip bandwidth limit")
+                    << LOG_KV("ip", ip) << LOG_KV("bandwidth", bw);
+            }
+            else if (boost::starts_with(key, "group_") &&
+                     !boost::starts_with(key, "group_outgoing"))
+            {
+                // group_xxxx =
+                std::string group = key.substr(6);
+                double bw = boost::lexical_cast<double>(value);
+                bw *= 1024 * 1024 / 8;
+                m_rateLimitConfig.group2BwLimit[group] = (int64_t)bw;
+
+                GATEWAY_CONFIG_LOG(INFO)
+                    << LOG_BADGE("initRateLimitConfig") << LOG_DESC("add group bandwidth limit")
+                    << LOG_KV("group", group) << LOG_KV("bandwidth", bw);
+            }
+        }
+    }
+
+    m_rateLimitConfig.modulesWithNoBwLimit = moduleIDs;
+    m_rateLimitConfig.totalOutgoingBwLimit = (int64_t)totalOutgoingBwLimit;
+    m_rateLimitConfig.connOutgoingBwLimit = (int64_t)connOutgoingBwLimit;
+    m_rateLimitConfig.groupOutgoingBwLimit = (int64_t)groupOutgoingBwLimit;
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimitConfig")
+                             << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
+                             << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
+                             << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
+                             << LOG_KV("moduleIDs", boost::join(modules, ","))
+                             << LOG_KV("ips size", m_rateLimitConfig.ip2BwLimit.size())
+                             << LOG_KV("groups size", m_rateLimitConfig.group2BwLimit.size());
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)

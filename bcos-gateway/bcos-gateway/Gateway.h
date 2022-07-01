@@ -20,12 +20,15 @@
 
 #pragma once
 
-#include <bcos-framework//front/FrontServiceInterface.h>
-#include <bcos-framework//gateway/GatewayInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-front/FrontMessage.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-gateway/libratelimit/GroupBWRateLimiterInterface.h>
+#include <cstddef>
 
 namespace bcos
 {
@@ -37,12 +40,18 @@ public:
     using Ptr = std::shared_ptr<Gateway>;
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
+        ratelimit::BWRateLimiterInterface::Ptr _p2pNetworkRateLimiter,
+        ratelimit::GroupBWRateLimiterInterface::Ptr _groupRateLimiter,
+        bcos::front::FrontMessageFactory::Ptr _frontMessageFactory,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
         m_chainID(_chainID),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
-        m_amop(_amop)
+        m_amop(_amop),
+        m_p2pNetworkRateLimiter(_p2pNetworkRateLimiter),
+        m_groupRateLimiter(_groupRateLimiter),
+        m_frontMessageFactory(_frontMessageFactory)
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -136,10 +145,10 @@ public:
     {
         m_amop->asyncSendMessageByTopic(_topic, _data, _respFunc);
     }
-    void asyncSendBroadbastMessageByTopic(
+    void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
     {
-        m_amop->asyncSendBroadbastMessageByTopic(_topic, _data);
+        m_amop->asyncSendBroadcastMessageByTopic(_topic, _data);
     }
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
@@ -195,6 +204,13 @@ private:
     // GatewayNodeManager
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
+
+    // For network bandwidth limitation
+    ratelimit::BWRateLimiterInterface::Ptr m_p2pNetworkRateLimiter;
+    // For group bandwidth limitation
+    ratelimit::GroupBWRateLimiterInterface::Ptr m_groupRateLimiter;
+
+    bcos::front::FrontMessageFactory::Ptr m_frontMessageFactory;
 };
 }  // namespace gateway
 }  // namespace bcos
