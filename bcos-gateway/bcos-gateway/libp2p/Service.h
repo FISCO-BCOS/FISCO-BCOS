@@ -47,6 +47,9 @@ public:
     virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
+    virtual bool onBeforeMessage(
+        SessionFace::Ptr _session, Message::Ptr _message, SessionCallbackFunc _callback);
+
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
 
@@ -114,7 +117,7 @@ public:
         Options options = Options(), P2PResponseCallback _callback = nullptr) override;
 
     void asyncBroadcastMessageToP2PNodes(
-        int16_t _type, bytesConstRef _payload, Options _options) override;
+        int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
 
     void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, Options _options) override;
@@ -155,6 +158,14 @@ public:
     void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, Options options = Options());
 
+    // handle before sending message, if the check fails, meaning false is returned, the message is
+    // not sent, and the SessionCallbackFunc will be performed
+    void setBeforeMessageHandler(
+        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> handler)
+    {
+        m_beforeMessageHandler = handler;
+    }
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
@@ -175,6 +186,7 @@ protected:
     {
         m_deleteSessionHandlers.emplace_back(_handler);
     }
+
 
     virtual void callNewSessionHandlers(P2PSession::Ptr _session)
     {
@@ -239,6 +251,8 @@ protected:
     std::vector<std::function<void(P2PSession::Ptr)>> m_newSessionHandlers;
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
+
+    std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> m_beforeMessageHandler;
 };
 
 }  // namespace gateway

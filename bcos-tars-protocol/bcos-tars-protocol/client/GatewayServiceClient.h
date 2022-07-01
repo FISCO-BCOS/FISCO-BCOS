@@ -51,9 +51,9 @@ public:
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory) { m_keyFactory = keyFactory; }
 
-    void asyncSendMessageByNodeID(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bcos::crypto::NodeIDPtr _dstNodeID, bcos::bytesConstRef _payload,
-        bcos::gateway::ErrorRespFunc _errorRespFunc) override
+    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        bcos::bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override
     {
         class Callback : public bcostars::GatewayServicePrxCallback
         {
@@ -91,7 +91,7 @@ public:
         auto srcNodeID = _srcNodeID->data();
         auto destNodeID = _dstNodeID->data();
         m_prx->tars_set_timeout(c_networkTimeout)
-            ->async_asyncSendMessageByNodeID(new Callback(_errorRespFunc), _groupID,
+            ->async_asyncSendMessageByNodeID(new Callback(_errorRespFunc), _groupID, _moduleID,
                 std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
                 std::vector<char>(destNodeID.begin(), destNodeID.end()),
                 std::vector<char>(_payload.begin(), _payload.end()));
@@ -151,8 +151,9 @@ public:
         m_prx->async_asyncGetPeers(new Callback(_callback));
     }
 
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        const bcos::crypto::NodeIDs& _dstNodeIDs, bcos::bytesConstRef _payload) override
+    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
+        bcos::bytesConstRef _payload) override
     {
         std::vector<std::vector<char>> tarsNodeIDs;
         for (auto const& it : _dstNodeIDs)
@@ -168,12 +169,12 @@ public:
             return;
         }
         auto srcNodeID = _srcNodeID->data();
-        m_prx->async_asyncSendMessageByNodeIDs(nullptr, _groupID,
+        m_prx->async_asyncSendMessageByNodeIDs(nullptr, _groupID, _moduleID,
             std::vector<char>(srcNodeID.begin(), srcNodeID.end()), tarsNodeIDs,
             std::vector<char>(_payload.begin(), _payload.end()));
     }
 
-    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
+    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override
     {
         auto shouldBlockCall = shouldStopCall();
@@ -184,7 +185,7 @@ public:
             return;
         }
         auto srcNodeID = _srcNodeID->data();
-        m_prx->async_asyncSendBroadcastMessage(nullptr, _type, _groupID,
+        m_prx->async_asyncSendBroadcastMessage(nullptr, _type, _groupID, _moduleID,
             std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
             std::vector<char>(_payload.begin(), _payload.end()));
     }

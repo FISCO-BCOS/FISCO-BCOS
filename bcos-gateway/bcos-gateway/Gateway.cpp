@@ -21,10 +21,11 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
+#include <bcos-gateway/gateway/GatewayMessageExtAttributes.h>
+#include <bcos-gateway/libp2p/P2PMessage.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <json/json.h>
-#include <boost/core/ignore_unused.hpp>
 #include <algorithm>
 #include <random>
 
@@ -115,14 +116,16 @@ void Gateway::asyncGetGroupNodeInfo(
 /**
  * @brief: send message
  * @param _groupID: groupID
+ * @param _moduleID: moduleID
  * @param _srcNodeID: the sender nodeID
  * @param _dstNodeID: the receiver nodeID
  * @param _payload: message payload
  * @param _errorRespFunc: error func
  * @return void
  */
-void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
+void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
+    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload,
+    ErrorRespFunc _errorRespFunc)
 {
     auto p2pIDs =
         m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());
@@ -189,8 +192,10 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
             auto callback = [self, startT, p2pID](NetworkException e,
                                 std::shared_ptr<P2PSession> session,
                                 std::shared_ptr<P2PMessage> message) {
-                boost::ignore_unused(session);
-                // network error
+                std::ignore = session;
+
+                // TODO: adjusting retry policy, eg: bandwidth overflow
+
                 if (e.errorCode() != P2PExceptionType::Success)
                 {
                     GATEWAY_LOG(ERROR)
@@ -261,12 +266,17 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
 
+    auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
+    msgExtAttr->setGroupID(_groupID);
+    msgExtAttr->setModuleID(_moduleID);
+
     message->setPacketType(GatewayMessageType::PeerToPeerMessage);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
     message->options()->setGroupID(_groupID);
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->options()->dstNodeIDs().push_back(_dstNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    message->setExtAttributes(msgExtAttr);
 
     retry->m_p2pMessage = message;
     retry->m_p2pIDs.insert(retry->m_p2pIDs.begin(), p2pIDs.begin(), p2pIDs.end());
@@ -274,23 +284,25 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     retry->m_srcNodeID = _srcNodeID;
     retry->m_dstNodeID = _dstNodeID;
     retry->m_p2pInterface = m_p2pInterface;
+
     retry->trySendMessage();
 }
 
 /**
  * @brief: send message to multiple nodes
  * @param _groupID: groupID
+ * @param _moduleID: moduleID
  * @param _srcNodeID: the sender nodeID
  * @param _nodeIDs: the receiver nodeIDs
  * @param _payload: message content
  * @return void
  */
-void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    const NodeIDs& _dstNodeIDs, bytesConstRef _payload)
+void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
+    NodeIDPtr _srcNodeID, const NodeIDs& _dstNodeIDs, bytesConstRef _payload)
 {
     for (auto dstNodeID : _dstNodeIDs)
     {
-        asyncSendMessageByNodeID(_groupID, _srcNodeID, dstNodeID, _payload,
+        asyncSendMessageByNodeID(_groupID, _moduleID, _srcNodeID, dstNodeID, _payload,
             [_groupID, _srcNodeID, dstNodeID](Error::Ptr _error) {
                 if (!_error)
                 {
@@ -307,12 +319,13 @@ void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, NodeIDPtr _
 /**
  * @brief: send message to all nodes
  * @param _groupID: groupID
+ * @param _moduleID: moduleID
  * @param _srcNodeID: the sender nodeID
  * @param _payload: message content
  * @return void
  */
-void Gateway::asyncSendBroadcastMessage(
-    uint16_t _type, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
+    NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     // broadcast message to the local nodes
     auto ret = m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(
@@ -325,6 +338,12 @@ void Gateway::asyncSendBroadcastMessage(
     message->options()->setGroupID(_groupID);
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+
+    auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
+    msgExtAttr->setGroupID(_groupID);
+    msgExtAttr->setModuleID(_moduleID);
+    message->setExtAttributes(msgExtAttr);
+
     // broadcast message to the peers
     m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(
         _type, _groupID, _moduleID, message);
@@ -399,6 +418,160 @@ bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     return true;
 }
 
+bool Gateway::checkBWRateLimit(ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
+    const std::string& _endPoint, const std::string& _groupID, uint16_t _moduleID,
+    int64_t _msgLength, SessionCallbackFunc _callback)
+{
+    // endpoint of the p2p connection
+    const std::string& endPoint = _endPoint;
+    // group of the message, empty string means the message is p2p's own message
+    const std::string& groupID = _groupID;
+    // moduleID of the message, zero means the message is p2p's own message
+    uint16_t moduleID = _moduleID;
+    // the length of the message
+    int64_t msgLength = _msgLength;
+
+    GATEWAY_LOG(DEBUG) << LOG_BADGE("checkBWRateLimit") << LOG_KV("endpoint", endPoint)
+                       << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
+                       << LOG_KV("msgLength", msgLength);
+
+    std::string errorMsg;
+    do
+    {
+        // total outgoing bandwidth
+        ratelimit::BWRateLimiterInterface::Ptr totalOutGoingBWLimit =
+            _rateLimiterManager->getRateLimiter(ratelimit::RateLimiterManager::TOTAL_OUTGOING_KEY);
+
+        // connection outgoing bandwidth
+        ratelimit::BWRateLimiterInterface::Ptr connOutGoingBWLimit =
+            _rateLimiterManager->getConnRateLimiter(endPoint);
+
+        // group outgoing bandwidth
+        ratelimit::BWRateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
+        if (!groupID.empty())
+        {
+            groupOutGoingBWLimit = _rateLimiterManager->getGroupRateLimiter(groupID);
+        }
+
+        auto modulesWithNoBwLimit = _rateLimiterManager->modulesWithNoBwLimit();
+
+        // if moduleID is zero, the P2P network itself's message, the ratelimiter does not limit
+        // P2P own's messages
+        if (moduleID == 0)
+        {
+            if (totalOutGoingBWLimit)
+            {
+                totalOutGoingBWLimit->tryAcquire(msgLength);
+            }
+
+            if (connOutGoingBWLimit)
+            {
+                connOutGoingBWLimit->tryAcquire(msgLength);
+            }
+        }
+        // if moduleID is not zero, the message comes from the front
+        // There are two scenarios:
+        //  1. ulimit module message rate or
+        //  2. limit module message rate
+        else if (modulesWithNoBwLimit.count(moduleID))
+        {  // case 1: ulimit module message rate or, just for statistic
+
+            if (totalOutGoingBWLimit)
+            {
+                totalOutGoingBWLimit->tryAcquire(msgLength);
+            }
+
+            if (connOutGoingBWLimit)
+            {
+                connOutGoingBWLimit->tryAcquire(msgLength);
+            }
+
+            if (groupOutGoingBWLimit)
+            {
+                groupOutGoingBWLimit->tryAcquire(msgLength);
+            }
+        }
+        else
+        {  // case 2: limit module message rate
+
+            if (totalOutGoingBWLimit && !totalOutGoingBWLimit->tryAcquire(msgLength))
+            {
+                // total outgoing bandwidth overflow
+                errorMsg = "the network total outgoing bandwidth overflow";
+                break;
+            }
+
+            if (connOutGoingBWLimit && !connOutGoingBWLimit->tryAcquire(msgLength))
+            {
+                // connection outgoing bandwidth overflow
+                errorMsg =
+                    "the network connection outgoing bandwidth overflow, endpoint: " + endPoint;
+                if (totalOutGoingBWLimit)
+                {
+                    totalOutGoingBWLimit->rollback(msgLength);
+                }
+
+                break;
+            }
+
+            if (groupOutGoingBWLimit && !groupOutGoingBWLimit->tryAcquire(msgLength))
+            {
+                // group outgoing bandwidth overflow
+                errorMsg = "the group outgoing bandwidth overflow, groupID: " + groupID;
+                if (totalOutGoingBWLimit)
+                {
+                    totalOutGoingBWLimit->rollback(msgLength);
+                }
+
+                if (connOutGoingBWLimit)
+                {
+                    connOutGoingBWLimit->rollback(msgLength);
+                }
+
+                break;
+            }
+        }
+
+        m_rateStatistics->updateOutGoing(endPoint, msgLength);
+        m_rateStatistics->updateOutGoing(groupID, moduleID, msgLength);
+
+        return true;
+    } while (0);
+
+    GATEWAY_LOG(TRACE) << LOG_BADGE("checkBWRateLimit") << LOG_DESC(errorMsg)
+                       << LOG_KV("endpoint", endPoint) << LOG_KV("groupID", groupID)
+                       << LOG_KV("moduleID", moduleID) << LOG_KV("msgLength", msgLength);
+
+    if (_callback)
+    {
+        _callback(NetworkException(BandwidthOverFlow, errorMsg), Message::Ptr());
+    }
+
+    return false;
+}
+
+// gateway bw check
+bool Gateway::checkBWRateLimit(
+    SessionFace::Ptr _session, Message::Ptr _msg, SessionCallbackFunc _callback)
+{
+    auto p2pSession = std::dynamic_pointer_cast<P2PSession>(_session);
+    auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
+
+    GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
+    if (_msg->extAttributes())
+    {
+        msgExtAttributes =
+            std::dynamic_pointer_cast<GatewayMessageExtAttributes>(_msg->extAttributes());
+    }
+
+    std::string groupID = msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+    uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+    std::string endPoint = p2pSession->session()->nodeIPEndpoint().address();
+
+    return checkBWRateLimit(
+        m_rateLimiterManager, endPoint, groupID, moduleID, p2pMessage->length(), _callback);
+}
+
 void Gateway::asyncNotifyGroupInfo(
     bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> _callback)
 {
@@ -428,15 +601,38 @@ void Gateway::onReceiveP2PMessage(
     }
 
     auto options = _msg->options();
+    auto msgPayload = _msg->payload();
+    auto payload = bytesConstRef(msgPayload->data(), msgPayload->size());
+    // groupID
     auto groupID = options->groupID();
+    // moduleID
+    auto moduleID = options->moduleID();
+
+    /*
+    // TODO: if outgoing bandwidth exceeds the upper limit
+    // the request of the module that restricts network traffic should not be forwarded to front
+    // other modules, discard the request directly ???
+
+   bool isOutGoingBWOverflow = false;
+    if (isOutGoingBWOverflow)
+    {
+        GATEWAY_LOG(WARNING)
+            << LOG_BADGE("onReceiveP2PMessage")
+            << LOG_DESC("stop forward the message to the front for outgoing bandwidth overflow")
+            << LOG_KV("group", groupID) << LOG_KV("moduleID", moduleID);
+
+        // TODO: Add statistics about discarded messages
+
+        return;
+    }
+    */
+
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
-    auto payload = _msg->payload();
-    auto bytesConstRefPayload = bytesConstRef(payload->data(), payload->size());
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
-    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
+    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
         [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
             if (!gatewayPtr)
@@ -499,9 +695,9 @@ void Gateway::onReceiveBroadcastMessage(
 
     auto srcNodeIDPtr =
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
-    auto groupID = _msg->options()->groupID();
+
     auto type = _msg->ext();
-    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage")
+    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage") << LOG_KV("groupID", groupID)
                        << LOG_KV("src", _msg->srcP2PNodeID())
                        << LOG_KV("dst", _msg->dstP2PNodeID());
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,

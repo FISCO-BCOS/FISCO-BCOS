@@ -53,6 +53,9 @@ public:
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
         const GatewayConfig::SMCertConfig& _smCertConfig);
+    //
+    std::shared_ptr<ratelimit::RateLimiterManager> buildRateLimitManager(
+        const GatewayConfig::RateLimitConfig& _rateLimitConfig);
 
     /**
      * @brief: construct Gateway

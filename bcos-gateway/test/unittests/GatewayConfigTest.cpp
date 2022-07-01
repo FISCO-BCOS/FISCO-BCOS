@@ -39,6 +39,65 @@ BOOST_AUTO_TEST_CASE(test_validPort)
     BOOST_CHECK(config->isValidPort(30300));
 }
 
+BOOST_AUTO_TEST_CASE(test_validIP)
+{
+    auto config = std::make_shared<GatewayConfig>();
+
+    BOOST_CHECK(!config->isValidIP("a"));
+    BOOST_CHECK(!config->isValidIP("127"));
+    BOOST_CHECK(!config->isValidIP("127.0"));
+    BOOST_CHECK(!config->isValidIP("127.0.0"));
+    BOOST_CHECK(!config->isValidIP("127.0.0.1.0"));
+
+    // ipv4
+    BOOST_CHECK(config->isValidIP("127.0.0.1"));
+    BOOST_CHECK(config->isValidIP("192.168.0.1"));
+    BOOST_CHECK(config->isValidIP("64.120.121.206"));
+
+    // ipv6
+    BOOST_CHECK(config->isValidIP("::1"));
+    BOOST_CHECK(config->isValidIP("fe80::58da:28ff:fe08:5d91"));
+    BOOST_CHECK(config->isValidIP("1111::1111:1111:1111:1111"));
+}
+
+BOOST_AUTO_TEST_CASE(test_stringToModuleID)
+{
+    auto config = std::make_shared<GatewayConfig>();
+
+    /*
+    enum ModuleID
+           {
+               PBFT = 1000,
+               Raft = 1001,
+               BlockSync = 2000,
+               TxsSync = 2001,
+               AMOP = 3000,
+           };*/
+
+    BOOST_CHECK(bcos::protocol::ModuleID::Raft == config->stringToModuleID("raft"));
+    BOOST_CHECK(bcos::protocol::ModuleID::Raft == config->stringToModuleID("Raft"));
+    BOOST_CHECK(bcos::protocol::ModuleID::Raft == config->stringToModuleID("RAFT"));
+
+    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == config->stringToModuleID("pbft"));
+    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == config->stringToModuleID("Pbft"));
+    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == config->stringToModuleID("PBFT"));
+
+    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == config->stringToModuleID("amop"));
+    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == config->stringToModuleID("Amop"));
+    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == config->stringToModuleID("AMOP"));
+
+    BOOST_CHECK(bcos::protocol::ModuleID::BlockSync == config->stringToModuleID("block_sync"));
+    BOOST_CHECK(bcos::protocol::ModuleID::BlockSync == config->stringToModuleID("Block_sync"));
+    BOOST_CHECK(bcos::protocol::ModuleID::BlockSync == config->stringToModuleID("BLOCK_SYNC"));
+
+    BOOST_CHECK(bcos::protocol::ModuleID::TxsSync == config->stringToModuleID("txs_sync"));
+    BOOST_CHECK(bcos::protocol::ModuleID::TxsSync == config->stringToModuleID("Txs_sync"));
+    BOOST_CHECK(bcos::protocol::ModuleID::TxsSync == config->stringToModuleID("TXS_SYNC"));
+
+
+    BOOST_CHECK_THROW(config->stringToModuleID("aa"), bcos::InvalidParameter);
+}
+
 BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
 {
     auto config = std::make_shared<GatewayConfig>();
@@ -137,6 +196,62 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
         BOOST_CHECK(!certConfig.caCert.empty());
         BOOST_CHECK(!certConfig.nodeCert.empty());
         BOOST_CHECK(!certConfig.nodeKey.empty());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(test_initRateLimitConfig)
+{
+    {
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
+
+        boost::property_tree::ptree pt;
+        boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initRatelimitConfig(pt);
+
+        auto rateLimitConfig = config->rateLimitConfig();
+        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.ip2BwLimit.find("192.108.0.1")->second, 1 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.ip2BwLimit.find("192.108.0.2")->second, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.ip2BwLimit.find("192.108.0.3")->second, 3 * 1024 * 1024 / 8);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.group2BwLimit.find("group0")->second, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.group2BwLimit.find("group1")->second, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.group2BwLimit.find("group2")->second, 2 * 1024 * 1024 / 8);
+    }
+
+    {
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
+
+        boost::property_tree::ptree pt;
+        boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initRatelimitConfig(pt);
+
+        auto rateLimitConfig = config->rateLimitConfig();
+        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 1 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 3 * 1024 * 1024 / 8);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 0);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 0);
+        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 0);
     }
 }
 

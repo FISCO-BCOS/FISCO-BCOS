@@ -5,7 +5,6 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/gateway/ProGatewayNodeManager.h>
@@ -17,10 +16,13 @@
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
+#include <bcos-gateway/libratelimit/BWRateLimiter.h>
+#include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <memory>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -312,6 +314,52 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
+std::shared_ptr<ratelimit::RateLimiterManager> GatewayFactory::buildRateLimitManager(
+    const GatewayConfig::RateLimitConfig& _rateLimitConfig)
+{
+    // rate limiter factory
+    auto rateLimiterFactory = std::make_shared<ratelimit::BWRateLimiterFactory>();
+    // rate limiter manager
+    auto rateLimiterManager = std::make_shared<ratelimit::RateLimiterManager>(_rateLimitConfig);
+
+    // total outgoing bandwidth Limit for p2p network
+    ratelimit::BWRateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
+    if (_rateLimitConfig.totalOutgoingBwLimit > 0)
+    {
+        totalOutgoingRateLimiter =
+            rateLimiterFactory->buildRateLimiter(_rateLimitConfig.totalOutgoingBwLimit);
+
+        rateLimiterManager->registerRateLimiter(
+            ratelimit::RateLimiterManager::TOTAL_OUTGOING_KEY, totalOutgoingRateLimiter);
+    }
+
+    // ip connection => rate limit
+    if (!_rateLimitConfig.ip2BwLimit.empty())
+    {
+        for (const auto& [ip, bandWidth] : _rateLimitConfig.ip2BwLimit)
+        {
+            auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
+            rateLimiterManager->registerConnRateLimiter(ip, rateLimiterInterface);
+        }
+    }
+
+    // group => rate limit
+    if (!_rateLimitConfig.group2BwLimit.empty())
+    {
+        for (const auto& [group, bandWidth] : _rateLimitConfig.group2BwLimit)
+        {
+            auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
+            rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
+        }
+    }
+
+    // modules without bandwidth limit
+    rateLimiterManager->setModulesWithNoBwLimit(_rateLimitConfig.modulesWithNoBwLimit);
+    rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
+
+    return rateLimiterManager;
+}
+
 /**
  * @brief: construct Gateway
  * @param _config: config parameter object
@@ -350,7 +398,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
         // KeyFactory
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-
         // init Host
         auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
 
@@ -370,6 +417,12 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
         service->setMessageFactory(messageFactory);
         service->setKeyFactory(keyFactory);
+
+        // init rate limit
+        const auto& rateLimitConfig = _config->rateLimitConfig();
+        auto rateLimiterManager = buildRateLimitManager(_config->rateLimitConfig());
+
+        auto rateStatistics = std::make_shared<ratelimit::BWRateStatistics>();
 
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
@@ -396,8 +449,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(
-            m_chainID, service, gatewayNodeManager, amop, _gatewayServiceName);
+        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop,
+            rateLimiterManager, rateStatistics, _gatewayServiceName);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
@@ -418,6 +471,20 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 }
                 nodeMgr->onRemoveNodeIDs(_unreachableNode);
             });
+
+        auto gatewayWeakPtr = std::weak_ptr<Gateway>(gateway);
+
+        service->setBeforeMessageHandler([gatewayWeakPtr](SessionFace::Ptr _session,
+                                             Message::Ptr _msg, SessionCallbackFunc _callback) {
+            auto gateway = gatewayWeakPtr.lock();
+            if (!gateway)
+            {
+                return true;
+            }
+
+            // bandwidth limit check
+            return gateway->checkBWRateLimit(_session, _msg, _callback);
+        });
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
         if (!_entryPoint)
