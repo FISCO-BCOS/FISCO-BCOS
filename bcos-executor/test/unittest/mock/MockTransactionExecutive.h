@@ -15,9 +15,9 @@ class MockTransactionExecutive : public bcos::executor::TransactionExecutive
 {
 public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
-    MockTransactionExecutive(std::weak_ptr<BlockContext>, std::string, int64_t, int64_t,
-        std::shared_ptr<wasm::GasInjector>&)
-      : TransactionExecutive(nullptr, "aabbcc", 0, 0, nullptr)
+    MockTransactionExecutive(std::weak_ptr<BlockContext> blockContext, std::string contractAddress,
+        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
+      : TransactionExecutive(blockContext, contractAddress, contextID, seq, gasInjector)
     {}
 
     virtual ~MockTransactionExecutive() {}
