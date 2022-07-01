@@ -26,6 +26,9 @@
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-gateway/libratelimit/BWRateStatistics.h>
+#include <bcos-gateway/libratelimit/RateLimiterManager.h>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos
 {
@@ -37,12 +40,16 @@ public:
     using Ptr = std::shared_ptr<Gateway>;
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
+        ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
+        ratelimit::BWRateStatistics::Ptr _rateStatistics,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
         m_chainID(_chainID),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
-        m_amop(_amop)
+        m_amop(_amop),
+        m_rateLimiterManager(_rateLimiterManager),
+        m_rateStatistics(_rateStatistics)
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -51,6 +58,18 @@ public:
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
+
+        m_rateStatisticsTimer = std::make_shared<Timer>(m_rateStatisticsPeriodMS, "rate_reporter");
+        auto rateStatisticsTimer = m_rateStatisticsTimer;
+        auto _rateStatisticsPeriodMS = m_rateStatisticsPeriodMS;
+        m_rateStatisticsTimer->registerTimeoutHandler(
+            [rateStatisticsTimer, _rateStatisticsPeriodMS, _rateStatistics, _rateLimiterManager]() {
+                auto io = _rateStatistics->inAndOutStat(_rateStatisticsPeriodMS);
+                GATEWAY_LOG(INFO) << LOG_BADGE("\n rate reporter") << LOG_DESC(io.first);
+                GATEWAY_LOG(INFO) << LOG_BADGE("\n rate reporter") << LOG_DESC(io.second);
+                _rateStatistics->flushStat();
+                rateStatisticsTimer->restart();
+            });
     }
     virtual ~Gateway() { stop(); }
 
@@ -75,35 +94,39 @@ public:
     /**
      * @brief: send message
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
      * @param _payload: message payload
      * @param _errorRespFunc: error func
      * @return void
      */
-    void asyncSendMessageByNodeID(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload,
-        ErrorRespFunc _errorRespFunc) override;
+    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        bytesConstRef _payload, ErrorRespFunc _errorRespFunc) override;
 
     /**
      * @brief: send message to multiple nodes
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _nodeIDs: the receiver nodeIDs
      * @param _payload: message payload
      * @return void
      */
-    void asyncSendMessageByNodeIDs(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        const bcos::crypto::NodeIDs& _nodeIDs, bytesConstRef _payload) override;
+    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _nodeIDs,
+        bytesConstRef _payload) override;
 
     /**
      * @brief: send broadcast message
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _payload: message payload
      * @return void
      */
-    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
+    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
     /**
@@ -169,6 +192,19 @@ public:
         return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
+    // gateway traffic limiting policy impl
+    bool checkBWRateLimit(ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
+        const std::string& _endPoint, const std::string& _groupID, uint16_t _moduleID,
+        uint64_t _msgLength, SessionCallbackFunc _callback);
+    bool checkBWRateLimit(
+        SessionFace::Ptr _session, Message::Ptr _msg, SessionCallbackFunc _callback);
+
+    uint32_t rateStatisticsPeriodMS() const { return m_rateStatisticsPeriodMS; }
+    void setRateStatisticsPeriodMS(uint32_t _rateStatisticsPeriodMS)
+    {
+        m_rateStatisticsPeriodMS = _rateStatisticsPeriodMS;
+    }
+
 protected:
     // for UT
     Gateway() {}
@@ -185,6 +221,7 @@ protected:
     virtual void onReceiveBroadcastMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
+
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
 private:
@@ -195,6 +232,16 @@ private:
     // GatewayNodeManager
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
+
+    // For bandwidth limitation
+    ratelimit::RateLimiterManager::Ptr m_rateLimiterManager;
+    // For bandwidth statistics
+    ratelimit::BWRateStatistics::Ptr m_rateStatistics;
+
+    //
+    uint32_t m_rateStatisticsPeriodMS = 5000;  // ms
+    // the timer that periodically prints the rate
+    std::shared_ptr<Timer> m_rateStatisticsTimer;
 };
 }  // namespace gateway
 }  // namespace bcos

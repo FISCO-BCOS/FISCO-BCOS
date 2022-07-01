@@ -19,8 +19,10 @@
  * @date 2021-04-21
  */
 #pragma once
+#include <boost/algorithm/string.hpp>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 
@@ -136,5 +138,60 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
     }
     return _out;
 }
+
+inline std::optional<ModuleID> stringToModuleID(const std::string& _moduleName)
+{
+    if (boost::iequals(_moduleName, "raft"))
+    {
+        return bcos::protocol::ModuleID::Raft;
+    }
+    else if (boost::iequals(_moduleName, "pbft"))
+    {
+        return bcos::protocol::ModuleID::PBFT;
+    }
+    else if (boost::iequals(_moduleName, "amop"))
+    {
+        return bcos::protocol::ModuleID::AMOP;
+    }
+    else if (boost::iequals(_moduleName, "block_sync"))
+    {
+        return bcos::protocol::ModuleID::BlockSync;
+    }
+    else if (boost::iequals(_moduleName, "txs_sync"))
+    {
+        return bcos::protocol::ModuleID::TxsSync;
+    }
+    else if (boost::iequals(_moduleName, "light_node"))
+    {
+        return bcos::protocol::ModuleID::LIGHTNODE;
+    }
+    else
+    {
+        return std::nullopt;
+    }
+}
+
+inline std::string moduleIDToString(ModuleID _moduleID)
+{
+    switch (_moduleID)
+    {
+    case ModuleID::PBFT:
+        return "pbft";
+    case ModuleID::Raft:
+        return "raft";
+    case ModuleID::BlockSync:
+        return "block_sync";
+    case ModuleID::TxsSync:
+        return "txs_sync";
+    case ModuleID::AMOP:
+        return "amop";
+    case ModuleID::LIGHTNODE:
+        return "light_node";
+    default:
+        return "unrecognized module";
+    };
+}
+
+
 }  // namespace protocol
 }  // namespace bcos

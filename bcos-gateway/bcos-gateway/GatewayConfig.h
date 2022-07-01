@@ -4,6 +4,8 @@
  */
 
 #pragma once
+
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/algorithm/string.hpp>
@@ -41,6 +43,42 @@ public:
         std::string enNodeKey;
     };
 
+    // config for rate limit
+    struct RateLimitConfig
+    {
+        // total outgoing bandwidth limit
+        int64_t totalOutgoingBwLimit = -1;
+
+        // per connection outgoing bandwidth limit
+        int64_t connOutgoingBwLimit = -1;
+        // specify IP bandwidth limiting
+        std::unordered_map<std::string, int64_t> ip2BwLimit;
+
+        // per connection outgoing bandwidth limit
+        int64_t groupOutgoingBwLimit = -1;
+        // specify group bandwidth limiting
+        std::unordered_map<std::string, int64_t> group2BwLimit;
+
+        // the message of modules that do not limit bandwidth
+        std::set<uint16_t> modulesWithNoBwLimit;
+
+        // whether any configuration takes effect
+        bool isConfigEffect() const
+        {
+            if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
+            {
+                return true;
+            }
+
+            if (!group2BwLimit.empty() || !ip2BwLimit.empty())
+            {
+                return true;
+            }
+
+            return false;
+        }
+    };
+
     /**
      * @brief: loads configuration items from the config.ini
      * @param _configPath: config.ini path
@@ -58,6 +96,8 @@ public:
 
     // check if the port valid
     bool isValidPort(int port);
+    // check if the ip valid
+    bool isValidIP(const std::string& _ip);
     void hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
     void parseConnectedJson(const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file
@@ -66,6 +106,8 @@ public:
     void initCertConfig(const boost::property_tree::ptree& _pt);
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
+    // loads ratelimit config
+    void initRatelimitConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
     void checkFileExist(const std::string& _path);
     // load p2p connected peers
@@ -78,6 +120,8 @@ public:
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
+    RateLimitConfig rateLimitConfig() const { return m_rateLimitConfig; }
+
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
     std::string const& uuid() const { return m_uuid; }
@@ -98,6 +142,8 @@ private:
     // cert config for ssl connection
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
+
+    RateLimitConfig m_rateLimitConfig;
 
     std::string m_certPath;
     std::string m_nodePath;
