@@ -1111,6 +1111,10 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     {
         return false;
     }
+    if (!m_config->timeout() && _viewChangeMsg->from())
+    {
+        sendRecoverResponse(_viewChangeMsg->from());
+    }
     m_cacheProcessor->addViewChangeReq(_viewChangeMsg);
     // try to trigger fast view change if receive more than (f+1) valid view
     // change messages whose view is greater than the current view: sends a
