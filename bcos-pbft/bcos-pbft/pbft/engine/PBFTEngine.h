@@ -183,6 +183,9 @@ protected:
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
 
+    virtual void onStableCheckPointCommitFailed(
+        Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
+
 private:
     // utility functions
     void waitSignal()
