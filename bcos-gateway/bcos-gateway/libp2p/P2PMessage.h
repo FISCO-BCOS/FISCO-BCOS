@@ -24,6 +24,7 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
+#include <vector>
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
@@ -52,8 +53,8 @@ class P2PMessageOptions
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageOptions>;
-    /// groupID length(1) + nodeID length(2) + dst nodeID count(1)
-    const static size_t OPTIONS_MIN_LENGTH = 5;
+    /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
+    const static size_t OPTIONS_MIN_LENGTH = 7;
 
 public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
@@ -126,10 +127,27 @@ public:
         m_options = std::make_shared<P2PMessageOptions>();
     }
 
-    virtual ~P2PMessage() {}
+    ~P2PMessage() override {}
 
 public:
-    uint32_t length() const override { return m_length; }
+    uint32_t length() const override
+    {
+        // The length value has been set
+        if (m_length > 0)
+        {
+            return m_length;
+        }
+
+        // estimate the length of msg to be encoded
+        int64_t length = (int64_t)payload()->size() + (int64_t)P2PMessage::MESSAGE_HEADER_LENGTH;
+        if (hasOptions() && options() && options()->srcNodeID())
+        {
+            length += P2PMessageOptions::OPTIONS_MIN_LENGTH;
+            length +=
+                (int64_t)(options()->srcNodeID()->size() * (1 + options()->dstNodeIDs().size()));
+        }
+        return length;
+    }
     virtual void setLength(uint32_t length) { m_length = length; }
 
     uint16_t version() const override { return m_version; }
@@ -172,15 +190,19 @@ public:
         m_dstP2PNodeID = _dstP2PNodeID;
     }
 
+
     std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
+
+    virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr) { m_extAttr = _extAttr; }
+    MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
 protected:
     virtual ssize_t decodeHeader(bytesConstRef _buffer);
     virtual bool encodeHeader(bytes& _buffer);
 
 protected:
-    uint32_t m_length;
+    uint32_t m_length = 0;
     uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
     uint16_t m_packetType = 0;
     uint32_t m_seq = 0;
@@ -194,6 +216,8 @@ protected:
     P2PMessageOptions::Ptr m_options;  ///< options fields
 
     std::shared_ptr<bytes> m_payload;  ///< payload data
+
+    MessageExtAttributes::Ptr m_extAttr = nullptr;  ///< message additional attributes
 };
 
 class P2PMessageFactory : public MessageFactory

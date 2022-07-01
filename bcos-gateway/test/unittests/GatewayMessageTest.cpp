@@ -19,6 +19,8 @@
  * @date 2021-04-26
  */
 
+#include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
+#include <boost/test/tools/old/interface.hpp>
 #define BOOST_TEST_MAIN
 
 #include <bcos-gateway/Common.h>
@@ -54,6 +56,8 @@ void testP2PMessageHasOptions(std::shared_ptr<MessageFactory> factory, uint32_t 
     BOOST_CHECK_EQUAL(msg->hasOptions(), true);
     msg->setPacketType(0x1111);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
+
+    BOOST_CHECK_EQUAL(msg->length(), 14);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_hasOptions)
@@ -415,6 +419,18 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageV2_codec)
 {
     auto factory = std::make_shared<P2PMessageFactoryV2>();
     testP2PMessageCodec(factory, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_P2PMessage_attr)
+{
+    auto attr = std::make_shared<GatewayMessageExtAttributes>();
+    std::string group = "group0";
+    uint16_t moduleID = 1001;
+    attr->setGroupID(group);
+    attr->setModuleID(moduleID);
+
+    BOOST_CHECK_EQUAL(attr->groupID(), group);
+    BOOST_CHECK_EQUAL(attr->moduleID(), moduleID);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

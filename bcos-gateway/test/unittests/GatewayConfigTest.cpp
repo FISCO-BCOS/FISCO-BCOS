@@ -23,6 +23,7 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/filesystem.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -37,6 +38,27 @@ BOOST_AUTO_TEST_CASE(test_validPort)
     BOOST_CHECK(!config->isValidPort(1024));
     BOOST_CHECK(!config->isValidPort(65536));
     BOOST_CHECK(config->isValidPort(30300));
+}
+
+BOOST_AUTO_TEST_CASE(test_validIP)
+{
+    auto config = std::make_shared<GatewayConfig>();
+
+    BOOST_CHECK(!config->isValidIP("a"));
+    BOOST_CHECK(!config->isValidIP("127"));
+    BOOST_CHECK(!config->isValidIP("127.0"));
+    BOOST_CHECK(!config->isValidIP("127.0.0"));
+    BOOST_CHECK(!config->isValidIP("127.0.0.1.0"));
+
+    // ipv4
+    BOOST_CHECK(config->isValidIP("127.0.0.1"));
+    BOOST_CHECK(config->isValidIP("192.168.0.1"));
+    BOOST_CHECK(config->isValidIP("64.120.121.206"));
+
+    // ipv6
+    BOOST_CHECK(config->isValidIP("::1"));
+    BOOST_CHECK(config->isValidIP("fe80::58da:28ff:fe08:5d91"));
+    BOOST_CHECK(config->isValidIP("1111::1111:1111:1111:1111"));
 }
 
 BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
@@ -140,6 +162,73 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
     }
 }
 
+BOOST_AUTO_TEST_CASE(test_initRateLimitConfig)
+{
+    {
+        bcos::gateway::GatewayConfig::RateLimitConfig rateLimitConfig;
+        BOOST_CHECK(!rateLimitConfig.isConfigEffect());
+    }
+
+    {
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
+
+        boost::property_tree::ptree pt;
+        boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initRatelimitConfig(pt);
+
+        auto rateLimitConfig = config->rateLimitConfig();
+
+        BOOST_CHECK(rateLimitConfig.isConfigEffect());
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.ip2BwLimit.find("192.108.0.1")->second, 1 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.ip2BwLimit.find("192.108.0.2")->second, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.ip2BwLimit.find("192.108.0.3")->second, 3 * 1024 * 1024 / 8);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.group2BwLimit.find("group0")->second, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.group2BwLimit.find("group1")->second, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(
+            rateLimitConfig.group2BwLimit.find("group2")->second, 2 * 1024 * 1024 / 8);
+    }
+
+    {
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
+
+        boost::property_tree::ptree pt;
+        boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initRatelimitConfig(pt);
+
+        auto rateLimitConfig = config->rateLimitConfig();
+
+        BOOST_CHECK(rateLimitConfig.isConfigEffect());
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
+
+        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 0);
+        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 0);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(test_initSMConfig)
 {
     {
@@ -163,6 +252,20 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
         BOOST_CHECK(!smCertConfig.enNodeCert.empty());
         BOOST_CHECK(!smCertConfig.enNodeKey.empty());
     }
+}
+
+BOOST_AUTO_TEST_CASE(test_doubleMBToBit)
+{
+    auto config = std::make_shared<GatewayConfig>();
+    BOOST_CHECK_EQUAL(config->doubleMBToBit(1.0), 1024 * 1024 / 8);
+
+    BOOST_CHECK_EQUAL(config->doubleMBToBit(2.5), 25 * 1024 * 1024 / 8 / 10);
+
+    // BOOST_CHECK_EQUAL(config->doubleMBToBit(10.0), 10 * 1024 * 1024 / 8 / 10);
+
+    BOOST_CHECK_EQUAL(config->doubleMBToBit(25.5), 255 * 1024 * 1024 / 8 / 10);
+
+    BOOST_CHECK_EQUAL(config->doubleMBToBit(100), 100 * 1024 * 1024 / 8);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -39,6 +39,7 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
     m_timer = std::make_shared<Timer>(TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
+
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
         boost::bind(&AMOPImpl::onAMOPMessage, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
@@ -62,7 +63,7 @@ void AMOPImpl::broadcastTopicSeq()
     auto buffer = buildAndEncodeMessage(
         AMOPMessage::Type::TopicSeq, bytesConstRef((byte*)topicSeq.data(), topicSeq.size()));
     m_network->asyncBroadcastMessageToP2PNodes(
-        GatewayMessageType::AMOPMessageType, ref(*buffer), Options(0));
+        GatewayMessageType::AMOPMessageType, protocol::ModuleID::AMOP, ref(*buffer), Options(0));
     AMOP_LOG(TRACE) << LOG_BADGE("broadcastTopicSeq") << LOG_KV("topicSeq", topicSeq);
     m_timer->restart();
 }

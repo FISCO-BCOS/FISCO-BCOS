@@ -202,6 +202,8 @@ void Service::onConnect(
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSessionWeakPtr));
+    p2pSession->session()->setBeforeMessageHandler(std::bind(&Service::onBeforeMessage,
+        shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     p2pSession->start();
     asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
@@ -295,6 +297,17 @@ void Service::sendRespMessageBySession(
                        << LOG_KV("payload size", _payload.size());
 }
 
+bool Service::onBeforeMessage(
+    SessionFace::Ptr _session, Message::Ptr _message, SessionCallbackFunc _callback)
+{
+    if (m_beforeMessageHandler)
+    {
+        return m_beforeMessageHandler(_session, _message, _callback);
+    }
+
+    return true;
+}
+
 void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
     std::weak_ptr<P2PSession> p2pSessionWeakPtr)
 {
@@ -329,6 +342,12 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             return;
         }
 
+        // on message handler
+        if (m_onMessageHandler)
+        {
+            m_onMessageHandler(session, message);
+        }
+
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
         SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message") << LOG_KV("p2pid", p2pID)
@@ -340,7 +359,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         auto handler = getMessageHandlerByMsgType(packetType);
         if (handler)
         {
-            // TODO: use threadpool here
+            // TODO: use thread pool here
             handler(e, p2pSession, p2pMessage);
             return;
         }
@@ -585,7 +604,7 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(
-    int16_t _type, bytesConstRef _payload, Options _options)
+    int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
 {
     auto p2pMessage = newP2PMessage(_type, _payload);
     asyncBroadcastMessage(p2pMessage, _options);
