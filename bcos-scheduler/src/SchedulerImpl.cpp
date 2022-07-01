@@ -68,7 +68,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock response"
                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok")
-                            << LOG_KV("block number", blockHeader->number());
+                            << LOG_KV("block number",
+                                   blockHeader ? std::to_string(blockHeader->number()) : "null");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
 
