@@ -171,11 +171,6 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         blockExecutive->block()->setBlockHeader(block->blockHeader());
     }
 
-
-    m_blocks->emplace_back(blockExecutive);
-
-    blockExecutive = m_blocks->back();
-
     auto executeLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
     if (!executeLock->owns_lock())
@@ -186,6 +181,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr, false);
         return;
     }
+
+    m_blocks->emplace_back(blockExecutive);
+
+    blockExecutive = m_blocks->back();
 
     blocksLock.unlock();
     blockExecutive->asyncExecute(
