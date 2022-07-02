@@ -1434,6 +1434,13 @@ void PBFTEngine::onReceivePrecommitRequest(
 void PBFTEngine::onStableCheckPointCommitFailed(
     Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal)
 {
+    if (_stableProposal->index() <= m_config->committedProposal()->index())
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "onStableCheckPointCommitFailed: drop the expired stable proposal")
+                       << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
+        return;
+    }
     if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
     {
         PBFT_LOG(WARNING) << LOG_DESC(

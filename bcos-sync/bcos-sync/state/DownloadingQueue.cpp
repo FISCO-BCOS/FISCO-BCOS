@@ -537,6 +537,9 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             }
             _ledgerConfig->setTxsSize(_block->transactionsSize());
             _ledgerConfig->setSealerId(blockHeader->sealer());
+            // reset the blockNumber
+            _ledgerConfig->setBlockNumber(blockHeader->number());
+            _ledgerConfig->setHash(blockHeader->hash());
             // notify the txpool the transaction result
             // reset the config for the consensus and the blockSync module
             // broadcast the status to all the peers
@@ -553,7 +556,9 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
                               << LOG_KV(
                                      "executedBlock", downloadingQueue->m_config->executedBlock())
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
-                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex());
+                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex())
+                              << LOG_KV("txsSize", _block->transactionsSize())
+                              << LOG_KV("sealer", blockHeader->sealer());
         }
         catch (std::exception const& e)
         {
@@ -595,6 +600,14 @@ void DownloadingQueue::onCommitFailed(
     bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _failedBlock)
 {
     auto blockHeader = _failedBlock->blockHeader();
+    if (blockHeader->number() <= m_config->blockNumber())
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: drop the expired block")
+                          << LOG_KV("number", blockHeader->number())
+                          << LOG_KV("hash", blockHeader->hash().abridged())
+                          << LOG_KV("executedBlock", m_config->executedBlock());
+        return;
+    }
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed") << LOG_KV("number", blockHeader->number())
                       << LOG_KV("hash", blockHeader->hash().abridged())
                       << LOG_KV("executedBlock", m_config->executedBlock());
