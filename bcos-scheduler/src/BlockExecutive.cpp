@@ -737,7 +737,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                     }
                 }
 
-                totalCount->fetch_sub(responseMessages.size());
+                totalCount->fetch_sub(messages->size());
                 // TODO: must wait more response
                 if (*totalCount == 0)
                 {
