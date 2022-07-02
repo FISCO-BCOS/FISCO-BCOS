@@ -336,6 +336,9 @@ void LedgerStorage::onStableCheckPointCommitted(
 {
     _ledgerConfig->setSealerId(_blockHeader->sealer());
     _ledgerConfig->setTxsSize(_txsSize);
+    // reset the blockNumber
+    _ledgerConfig->setBlockNumber(_blockHeader->number());
+    _ledgerConfig->setHash(_blockHeader->hash());
     // finalize consensus
     if (m_finalizeHandler)
     {

@@ -537,6 +537,9 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             }
             _ledgerConfig->setTxsSize(_block->transactionsSize());
             _ledgerConfig->setSealerId(blockHeader->sealer());
+            // reset the blockNumber
+            _ledgerConfig->setBlockNumber(blockHeader->number());
+            _ledgerConfig->setHash(blockHeader->hash());
             // notify the txpool the transaction result
             // reset the config for the consensus and the blockSync module
             // broadcast the status to all the peers
@@ -553,7 +556,9 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
                               << LOG_KV(
                                      "executedBlock", downloadingQueue->m_config->executedBlock())
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
-                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex());
+                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex())
+                              << LOG_KV("txsSize", _block->transactionsSize())
+                              << LOG_KV("sealer", blockHeader->sealer());
         }
         catch (std::exception const& e)
         {
