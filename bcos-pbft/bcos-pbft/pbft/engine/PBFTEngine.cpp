@@ -1434,10 +1434,10 @@ void PBFTEngine::onReceivePrecommitRequest(
 void PBFTEngine::onStableCheckPointCommitFailed(
     Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal)
 {
-    if (_error->errorCode() == bcos::scheduler::SchedulerError::AnotherBlockIsCommitting)
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
     {
         PBFT_LOG(WARNING) << LOG_DESC(
-                                 "onStableCheckPointCommitFailed for AnotherBlockIsCommitting: "
+                                 "onStableCheckPointCommitFailed for BlockIsCommitting: "
                                  "retry to commit again")
                           << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
         // retry after 20ms

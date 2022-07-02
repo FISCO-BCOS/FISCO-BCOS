@@ -287,7 +287,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             else
             {
                 auto& frontBlock = m_blocks->front();
-                errorStatus = SchedulerError::AnotherBlockIsCommitting;
+                errorStatus = SchedulerError::BlockIsCommitting;
                 message =
                     (boost::format(
                          "commitBlock: Another block is committing! Block number: %ld, hash: %s") %
@@ -318,7 +318,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
         commitLock->unlock();
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BlockIsCommitting, message), nullptr);
         return;
     }
 

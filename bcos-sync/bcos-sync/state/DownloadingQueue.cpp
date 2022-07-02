@@ -604,10 +604,10 @@ void DownloadingQueue::onCommitFailed(
         WriteGuard l(x_commitQueue);
         m_commitQueue.push(_failedBlock);
     }
-    if (_error->errorCode() == bcos::scheduler::SchedulerError::AnotherBlockIsCommitting)
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
     {
         BLKSYNC_LOG(INFO) << LOG_DESC(
-                                 "onCommitFailed for AnotherBlockIsCommitting: re-push failed "
+                                 "onCommitFailed for BlockIsCommitting: re-push failed "
                                  "block to commitQueue")
                           << LOG_KV("hash", blockHeader->hash().abridged())
                           << LOG_KV("executedBlock", m_config->executedBlock());
