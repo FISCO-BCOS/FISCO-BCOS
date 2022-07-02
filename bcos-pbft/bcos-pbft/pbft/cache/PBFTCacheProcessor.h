@@ -196,6 +196,7 @@ public:
     }
 
     void resetUnCommittedCacheState(bcos::protocol::BlockNumber _number);
+    virtual void updateStableCheckPointQueue(PBFTProposalInterface::Ptr _stableCheckPoint);
 
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
@@ -204,7 +205,6 @@ protected:
     virtual bool checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg);
     virtual void applyStateMachine(
         ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal);
-    virtual void updateStableCheckPointQueue(PBFTProposalInterface::Ptr _stableCheckPoint);
 
     virtual ProposalInterface::ConstPtr getAppliedCheckPointProposal(
         bcos::protocol::BlockNumber _index);

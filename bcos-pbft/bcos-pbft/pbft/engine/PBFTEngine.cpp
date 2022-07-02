@@ -21,6 +21,7 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
+#include <bcos-framework/interfaces/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -47,7 +48,9 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
         &PBFTEngine::finalizeConsensus, this, boost::placeholders::_1, boost::placeholders::_2));
 
     m_config->storage()->registerOnStableCheckPointCommitFailed(
-        boost::bind(&PBFTEngine::clearExceptionProposalState, this, boost::placeholders::_1));
+        [this](Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal) {
+            onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
+        });
 
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
     m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
@@ -1426,6 +1429,25 @@ void PBFTEngine::onReceivePrecommitRequest(
     PBFT_LOG(INFO) << LOG_DESC("Receive precommitRequest and send response")
                    << LOG_KV("hash", pbftRequest->hash().abridged())
                    << LOG_KV("index", pbftRequest->index());
+}
+
+void PBFTEngine::onStableCheckPointCommitFailed(
+    Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal)
+{
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::AnotherBlockIsCommitting)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "onStableCheckPointCommitFailed for AnotherBlockIsCommitting: "
+                                 "retry to commit again")
+                          << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        RecursiveGuard l(m_mutex);
+        m_cacheProcessor->updateStableCheckPointQueue(_stableProposal);
+        return;
+    }
+
+    clearExceptionProposalState(_stableProposal->index());
 }
 
 void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number)
