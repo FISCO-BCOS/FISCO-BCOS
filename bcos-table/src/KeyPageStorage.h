@@ -370,6 +370,11 @@ public:
                                            << LOG_KV("count", count) << LOG_KV("size", size);
                     }
                 }
+                if (c_fileLogLevel >= TRACE)
+                {
+                    KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo") << LOG_KV("count", count)
+                                       << LOG_KV("size", size);
+                }
                 p->setCount(count);
                 p->setSize(size);
             };
@@ -460,11 +465,34 @@ public:
         {
             std::ignore = version;
             // auto len = (uint32_t)pages->size();
-            // ar & len;
+            // ar& len;
             // for (size_t i = 0; i < pages->size(); ++i)
             // {
+            //     if (pages->at(i).getCount() == 0)
+            //     {
+            //         continue;
+            //     }
             //     ar & pages->at(i);
             // }
+
+            for (auto it = pages->begin(); it < pages->end();)
+            {
+                if (it->getCount() == 0)
+                {
+                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    {  // FIXME: this log is only for debug, comment it when release
+                        KeyPage_LOG(TRACE)
+                            << LOG_DESC("TableMeta empty page")
+                            << LOG_KV("pageKey", toHex(it->getPageKey()))
+                            << LOG_KV("count", it->getCount()) << LOG_KV("size", it->getSize());
+                    }
+                    it = pages->erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
             ar << *pages;
         }
         template <class Archive>
@@ -472,7 +500,7 @@ public:
         {
             std::ignore = version;
             // uint32_t s = 0;
-            // ar & s;
+            // ar& s;
             // pages = std::make_unique<std::vector<PageInfo>>(s, PageInfo());
             // for (size_t i = 0; i < pages->size(); ++i)
             // {
@@ -611,10 +639,10 @@ public:
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("setEntry update")
-                //         << LOG_KV("pageKey", toHex(entries.begin()->first))
+                //         << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //         << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size())
-                //         << LOG_KV("key", toHex(key)) << LOG_KV("status",
-                //         (int)it->second.status());
+                //         << LOG_KV("key", toHex(key)) << LOG_KV("status", (int)it->second.status())
+                //         << LOG_KV("pageInfoChanged", pageInfoChanged);
                 // }
             }
             else
@@ -637,12 +665,11 @@ public:
                 // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
-                //                        << LOG_KV("startKey", toHex(entries.begin()->first))
+                //                        << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //                        << LOG_KV("key", toHex(key)) << LOG_KV("valid",
                 //                        m_validCount)
                 //                        << LOG_KV("count", entries.size())
-                //                        << LOG_KV("pageInfoChanged", pageInfoChanged)
-                //                        << LOG_KV("status", (int)entry.status());
+                //                        << LOG_KV("pageInfoChanged", pageInfoChanged);
                 // }
             }
             return std::make_tuple(std::move(ret), pageInfoChanged);
@@ -948,9 +975,9 @@ public:
                 auto meta = KeyPageStorage::TableMeta(entry.get());
                 if (c_fileLogLevel >= TRACE)
                 {
-                    KeyPage_LOG(TRACE)
-                        << LOG_DESC("Data TableMeta") << LOG_KV("table", table)
-                        << LOG_KV("len", entry.size()) << LOG_KV("size", meta.size());
+                    KeyPage_LOG(TRACE) << LOG_DESC("Data TableMeta") << LOG_KV("table", table)
+                                       << LOG_KV("len", entry.size()) << LOG_KV("size", meta.size())
+                                       << LOG_KV("meta", meta);
                 }
                 data = std::move(meta);
             }

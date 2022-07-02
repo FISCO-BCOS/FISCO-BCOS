@@ -77,6 +77,7 @@ public:
         std::function<void(Error::Ptr)> callback) noexcept override;
 
 private:
+    int32_t m_maxRetry = 50;
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
 };
