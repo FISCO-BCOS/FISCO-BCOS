@@ -600,6 +600,14 @@ void DownloadingQueue::onCommitFailed(
     bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _failedBlock)
 {
     auto blockHeader = _failedBlock->blockHeader();
+    if (blockHeader->number() <= m_config->blockNumber())
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: drop the expired block")
+                          << LOG_KV("number", blockHeader->number())
+                          << LOG_KV("hash", blockHeader->hash().abridged())
+                          << LOG_KV("executedBlock", m_config->executedBlock());
+        return;
+    }
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed") << LOG_KV("number", blockHeader->number())
                       << LOG_KV("hash", blockHeader->hash().abridged())
                       << LOG_KV("executedBlock", m_config->executedBlock());
