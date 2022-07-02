@@ -42,7 +42,7 @@ enum SchedulerError
     fetchGasLimitError,
     Stopped,
     InvalidBlockVersion,
-    AnotherBlockIsCommitting,
+    BlockIsCommitting,
 };
 }  // namespace scheduler
 }  // namespace bcos
