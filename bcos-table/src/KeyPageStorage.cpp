@@ -243,7 +243,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     {  // FIXME: this log is only for debug, comment it when release
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
-                            << LOG_KV("key", toHex(it.first.second));
+                            << LOG_KV("key", toHex(it.first.second)) << LOG_KV("meta", *meta);
                     }
 
                     KeyPage_LOG(DEBUG)
@@ -522,7 +522,7 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
                     {
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("import TableMeta") << LOG_KV("table", tableView)
-                            << LOG_KV("size", meta->size());
+                            << LOG_KV("size", meta->size()) << LOG_KV("meta", *meta);
                     }
                 }
                 d->entry.setStatus(Entry::Status::NORMAL);
@@ -713,7 +713,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     {
         auto ret = page->setEntry(key, std::move(entry));
         entryOld = std::move(std::get<0>(ret));
-        auto pageInfoChanged = std::move(std::get<1>(ret));
+        auto pageInfoChanged = std::get<1>(ret);
 
         if (pageInfoChanged)
         {
