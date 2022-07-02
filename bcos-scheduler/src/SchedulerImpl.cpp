@@ -163,12 +163,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("version", (bcos::protocol::Version)(block->version()))
                         << LOG_KV("waitT", waitT);
 
-    auto callback = [_callback = std::move(_callback)](bcos::Error::Ptr&& error,
+    auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(INFO) << METRIC << "ExecuteBlock response"
                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok")
-                            << LOG_KV("block number",
-                                   blockHeader ? std::to_string(blockHeader->number()) : "null");
+                            << LOG_KV("block number", requestBlockNumber);
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
 
@@ -296,6 +295,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 {
                     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                     m_blocks->pop_back();
+                    blocksLock.unlock();
                 }
                 executeLock->unlock();
                 callback(BCOS_ERROR_WITH_PREV_PTR(
@@ -393,7 +393,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         }
 
         auto currentBlockNumber = getCurrentBlockNumber();
-        if (currentBlockNumber != requestBlockNumber)
+        if (currentBlockNumber + 1 != requestBlockNumber)
         {
             // happens in some multi-thread scenario, the block has been commiteed
             auto message = (boost::format("commit an committed block %d, current number is %d") %
@@ -1358,6 +1358,6 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
     }
     else
     {
-        return m_blocks->front()->number();
+        return m_blocks->front()->number() - 1;
     }
 }
