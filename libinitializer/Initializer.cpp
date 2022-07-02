@@ -33,6 +33,7 @@
 #include "StorageInitializer.h"
 #include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/GlobalConfig.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
@@ -306,13 +307,15 @@ void Initializer::initSysContract()
             getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
         });
         auto getNumberTuple = getNumberPromise.get_future().get();
-        if (std::get<0>(getNumberTuple) != nullptr || std::get<1>(getNumberTuple) > 0)
+        if (std::get<0>(getNumberTuple) != nullptr ||
+            std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
         {
             return;
         }
 
         // add auth deploy func here
-        AuthInitializer::init(0, m_protocolInitializer, m_nodeConfig, m_scheduler);
+        AuthInitializer::init(
+            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, m_scheduler);
     }
 }
 

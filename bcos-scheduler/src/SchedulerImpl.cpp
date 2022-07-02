@@ -766,8 +766,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
     };
 
-    bcos::protocol::BlockNumber currentBlockNumber = getBlockNumberFromStorage();
-    if (header->number() <= currentBlockNumber)
+    bcos::protocol::BlockNumber currentBlockNumber = getBlockNumberInStorage();
+    // Note: skip check for sys contract deploy
+    if (!isSysContractDeploy(header->number()) && header->number() <= currentBlockNumber)
     {
         SCHEDULER_LOG(DEBUG) << "Block has committed, just return"
                              << LOG_KV("toCommitNumber", header->number())
@@ -922,7 +923,7 @@ running"), nullptr); return;
 
             // Note: blockNumber = 0, means system deploy, and tx is not existed in txpool.
             // So it should not exec tx notifier
-            if (m_txNotifier && blockNumber != 0)
+            if (m_txNotifier && !isSysContractDeploy(blockNumber))
             {
                 SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
                 frontBlock->asyncNotify(m_txNotifier,
