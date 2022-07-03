@@ -151,6 +151,9 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     auto hash = tableFactory->hash(hashImpl);
 
+#ifdef __APPLE__
+#undef __APPLE__
+#endif
     // delete not exist entry will cause hash mismatch
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
