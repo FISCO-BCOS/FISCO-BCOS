@@ -1126,6 +1126,11 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                         << "Batch get transaction error, transactions size not match hashesSize"
                         << LOG_KV("txsSize", transactions.size())
                         << LOG_KV("hashesSize", hashes->size());
+                    callback(
+                        BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError,
+                            "Batch get transaction error, transactions size not match hashesSize"),
+                        std::move(transactions));
+                    return;
                 }
 
                 callback(nullptr, std::move(transactions));
