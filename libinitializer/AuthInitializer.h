@@ -91,23 +91,26 @@ public:
             });
         auto header = executedHeader.get_future().get();
 
-        std::promise<bcos::ledger::LedgerConfig::Ptr> committedConfig;
+        std::promise<std::tuple<Error::Ptr, bcos::ledger::LedgerConfig::Ptr>> committedConfig;
         _scheduler->commitBlock(
             header, [&](Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _config) {
                 if (_error)
                 {
                     INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer")
                                            << LOG_KV("errorMsg", _error->errorMessage());
-                    BOOST_THROW_EXCEPTION(
-                        BCOS_ERROR(-1, "AuthInitializer: scheduler commitBlock error"));
+                    committedConfig.set_value(std::make_tuple(std::move(_error), nullptr));
+                    return;
                 }
-                committedConfig.set_value(_config);
+                committedConfig.set_value(std::make_tuple(nullptr, std::move(_config)));
             });
-        auto newConfig = committedConfig.get_future().get();
-        if (newConfig->blockNumber() != _number)
+        auto [error, newConfig] = committedConfig.get_future().get();
+        if (error != nullptr && newConfig->blockNumber() != _number)
         {
-            INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer") << LOG_DESC("");
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "AuthInitializer: blockNumber mismatch"));
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("AuthInitializer") << LOG_DESC("Error in commitBlock")
+                << (error ? "errorMsg" + error->errorMessage() : "")
+                << LOG_KV("configNumber", newConfig->blockNumber());
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "AuthInitializer commitBlock error"));
         }
     }
 };
