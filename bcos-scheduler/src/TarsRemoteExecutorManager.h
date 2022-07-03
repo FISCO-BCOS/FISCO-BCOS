@@ -75,6 +75,8 @@ public:
 
     bool empty() { return size() == 0; }
 
+    bool checkAllExecutorSeq();
+
 private:
     std::string buildEndPointUrl(std::string host, uint16_t port)
     {
@@ -92,5 +94,6 @@ private:
     uint8_t m_waitingExecutorMaxRetryTimes = 20;
 
     EndPointSet m_endPointSet = std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
+    std::map<std::string, int64_t> m_executor2Seq;
 };
 }  // namespace bcos::scheduler
