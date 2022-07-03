@@ -1,5 +1,3 @@
-#ifndef A951B365_3BCB_4438_BF5F_D0DD49CE52B7
-#define A951B365_3BCB_4438_BF5F_D0DD49CE52B7
 #include "../../src/Common.h"
 #include "../../src/executive/ExecutiveFactory.h"
 #include "../../src/executive/TransactionExecutive.h"
@@ -43,6 +41,3 @@ public:
         std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 };
 }  // namespace bcos::test
-
-
-#endif /* A951B365_3BCB_4438_BF5F_D0DD49CE52B7 */

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef D981D8C4_0A43_401F_8BEA_890AE515B9F8
+#define D981D8C4_0A43_401F_8BEA_890AE515B9F8
 #include "../../src/Common.h"
 #include "../../src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/executive/BlockContext.h"
@@ -15,9 +16,10 @@ class MockTransactionExecutive : public bcos::executor::TransactionExecutive
 {
 public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
-    MockTransactionExecutive(std::weak_ptr<BlockContext> blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
-      : TransactionExecutive(blockContext, contractAddress, contextID, seq, gasInjector)
+    MockTransactionExecutive(std::weak_ptr<bcos::executor::BlockContext> blockContext,
+        std::string contractAddress, int64_t contextID, int64_t seq,
+        std::shared_ptr<wasm::GasInjector>& gasInjector)
+      : TransactionExecutive(std::move(blockContext), contractAddress, contextID, seq, gasInjector)
     {}
 
     virtual ~MockTransactionExecutive() {}
@@ -47,3 +49,6 @@ private:
     CallParameters::UniquePtr m_exchangeMessage = nullptr;
 };
 }  // namespace bcos::test
+
+
+#endif /* D981D8C4_0A43_401F_8BEA_890AE515B9F8 */
