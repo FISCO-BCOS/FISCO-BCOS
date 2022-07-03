@@ -121,7 +121,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         else
         {
             if (m_scheduler->m_isAuthCheck && !m_staticCall &&
-                m_block->blockHeaderConst()->number() == 0 &&
+                isSysContractDeploy(m_block->blockHeaderConst()->number()) &&
                 tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
             {
                 // if enable auth check, and first deploy auth contract
