@@ -284,8 +284,6 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
 {
     try
     {
-        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
-                                << LOG_KV("primary", params.timestamp > 0 ? "true" : "false");
         auto start = utcTime();
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
@@ -323,14 +321,16 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         auto size = mutations.size();
         auto primaryLock = toDBKey(params.primaryTableName, params.primaryTableKey);
         m_committer = std::make_shared<BCOSTwoPhaseCommitter>(
-            m_cluster.get(), primaryLock, std::move(mutations), m_maxRetry);
+            m_cluster.get(), primaryLock, std::move(mutations), m_coroutineStackSize, m_maxRetry);
         if (params.timestamp == 0)
         {
+            STORAGE_TIKV_LOG(DEBUG)
+                << LOG_DESC("asyncPrepare primary") << LOG_KV("blockNumber", params.number);
             auto result = m_committer->prewriteKeys();
             auto write = utcTime();
             callback(nullptr, result.start_ts);
             STORAGE_TIKV_LOG(INFO)
-                << "asyncPrepare primary" << LOG_KV("blockNumber", params.number)
+                << "asyncPrepare primary finished" << LOG_KV("blockNumber", params.number)
                 << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
                 << LOG_KV("startTS", result.start_ts) << LOG_KV("encode time(ms)", encode - start)
                 << LOG_KV("prewrite time(ms)", write - encode)
@@ -353,7 +353,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed")
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare Exception")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
                                 << LOG_KV("what", e.what());
@@ -422,6 +422,7 @@ void TiKVStorage::asyncRollback(
     std::ignore = params;
     try
     {
+        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number);
         if (m_committer)
         {
             m_committer->rollback();
@@ -429,7 +430,8 @@ void TiKVStorage::asyncRollback(
         }
         auto end = utcTime();
         callback(nullptr);
-        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number)
+        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback finished")
+                               << LOG_KV("blockNumber", params.number)
                                << LOG_KV("startTS", params.timestamp)
                                << LOG_KV("time(ms)", end - start)
                                << LOG_KV("callback time(ms)", utcTime() - end);
