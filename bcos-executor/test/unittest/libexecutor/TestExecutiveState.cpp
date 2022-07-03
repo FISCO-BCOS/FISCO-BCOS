@@ -97,72 +97,72 @@ BOOST_AUTO_TEST_CASE(goTest)
     }
 }
 
-BOOST_AUTO_TEST_CASE(setResumeParamTest)
-{
-    ExecutiveState::Ptr executiveState =
-        std::make_shared<ExecutiveState>(executiveFactory, std::move(input));
-    BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
-    executiveState->setResumeParam(std::move(input));
-    BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
-}
+// BOOST_AUTO_TEST_CASE(setResumeParamTest)
+// {
+//     ExecutiveState::Ptr executiveState =
+//         std::make_shared<ExecutiveState>(executiveFactory, std::move(input));
+//     BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
+//     executiveState->setResumeParam(std::move(input));
+//     BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
+// }
 
-BOOST_AUTO_TEST_CASE(appendKeyLocks)
-{
-    std::vector<std::string> keyLocks{"123", "134", "125"};
-    for (int8_t i = 0; i < 4; ++i)
-    {
-        if (i == 0)
-        {
-            auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-            callParameters->staticCall = false;
-            callParameters->codeAddress = "aabbccddee";
-            callParameters->contextID = i;
-            callParameters->seq = i;
-            auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            executiveState->go();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
-        }
-        else if (i == 1)
-        {
-            auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
-            callParameters->staticCall = false;
-            callParameters->codeAddress = "aabbccddee";
-            callParameters->contextID = i;
-            callParameters->seq = i;
-            auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            executiveState->go();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::PAUSED);
-        }
-        else if (i == 2)
-        {
-            auto callParameters = std::make_unique<CallParameters>(CallParameters::FINISHED);
-            callParameters->staticCall = false;
-            callParameters->codeAddress = "aabbccddee";
-            callParameters->contextID = i;
-            callParameters->seq = i;
-            auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            executiveState->go();
-            executiveState->setResumeParam(std::move(callParameters));
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
-        }
-        else
-        {
-            auto callParameters = std::make_unique<CallParameters>(CallParameters::REVERT);
-            callParameters->staticCall = false;
-            callParameters->codeAddress = "aabbccddee";
-            callParameters->contextID = i;
-            callParameters->seq = i;
-            auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            executiveState->go();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
-        }
-        executiveState->appendKeyLocks(keyLocks);
-    }
-}
+// BOOST_AUTO_TEST_CASE(appendKeyLocks)
+// {
+//     std::vector<std::string> keyLocks{"123", "134", "125"};
+//     for (int8_t i = 0; i < 4; ++i)
+//     {
+//         if (i == 0)
+//         {
+//             auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+//             callParameters->staticCall = false;
+//             callParameters->codeAddress = "aabbccddee";
+//             callParameters->contextID = i;
+//             callParameters->seq = i;
+//             auto executiveState =
+//                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
+//             executiveState->go();
+//             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RUN);
+//         }
+//         else if (i == 1)
+//         {
+//             auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
+//             callParameters->staticCall = false;
+//             callParameters->codeAddress = "aabbccddee";
+//             callParameters->contextID = i;
+//             callParameters->seq = i;
+//             auto executiveState =
+//                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
+//             executiveState->go();
+//             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::PAUSED);
+//         }
+//         else if (i == 2)
+//         {
+//             auto callParameters = std::make_unique<CallParameters>(CallParameters::FINISHED);
+//             callParameters->staticCall = false;
+//             callParameters->codeAddress = "aabbccddee";
+//             callParameters->contextID = i;
+//             callParameters->seq = i;
+//             auto executiveState =
+//                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
+//             executiveState->go();
+//             executiveState->setResumeParam(std::move(callParameters));
+//             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
+//         }
+//         else
+//         {
+//             auto callParameters = std::make_unique<CallParameters>(CallParameters::REVERT);
+//             callParameters->staticCall = false;
+//             callParameters->codeAddress = "aabbccddee";
+//             callParameters->contextID = i;
+//             callParameters->seq = i;
+//             auto executiveState =
+//                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
+//             executiveState->go();
+//             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
+//         }
+//         executiveState->appendKeyLocks(keyLocks);
+//     }
+// }
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

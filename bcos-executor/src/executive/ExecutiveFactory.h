@@ -53,7 +53,7 @@ public:
         m_gasInjector(gasInjector)
     {}
 
-    std::shared_ptr<TransactionExecutive> build(
+    virtual std::shared_ptr<TransactionExecutive> build(
         const std::string& _contractAddress, int64_t contextID, int64_t seq);
 
 

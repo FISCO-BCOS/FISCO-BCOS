@@ -28,7 +28,7 @@ public:
 
     std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t) override
     {
-        auto executive = std::make_shared<MockTransactionExecutive>(nullptr, "0x00", 0, 0, nullptr);
+        auto executive = std::make_shared<MockTransactionExecutive>({}, "0x00", 0, 0, nullptr);
         return executive;
     }
 };
