@@ -45,6 +45,10 @@ using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 
+#if defined(__APPLE__)
+#undef __APPLE__
+#endif
+
 namespace std
 {
 inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
