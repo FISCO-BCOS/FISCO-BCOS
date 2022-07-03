@@ -87,7 +87,7 @@ static std::tuple<bool, vector<EndpointF>, vector<EndpointF>> getActiveEndpoints
     }
 }
 
-void TarsRemoteExecutorManager::refresh()
+void TarsRemoteExecutorManager::refresh(bool needNotifyChange)
 {
     try
     {
@@ -107,7 +107,7 @@ void TarsRemoteExecutorManager::refresh()
         {
             EXECUTOR_MANAGER_LOG(DEBUG) << "Update current endpoint map: "
                                         << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
-            update(currentEndPointMap);
+            update(currentEndPointMap, needNotifyChange);
         }
         else
         {
@@ -125,13 +125,42 @@ void TarsRemoteExecutorManager::refresh()
     }
 }
 
+void TarsRemoteExecutorManager::waitForExecutorConnection()
+{
+    int retryTimes = 1;
+    do
+    {
+        refresh(false);
+
+        if (size() > 0)
+        {
+            break;
+        }
+        std::string message =
+            "Waiting for connecting some executors, try times: " + std::to_string(retryTimes) +
+            " max retry times: " + std::to_string(m_waitingExecutorMaxRetryTimes);
+
+        std::cout << message << std::endl;
+        EXECUTOR_MANAGER_LOG(INFO) << message;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));  // wait for 1s
+
+    } while (size() == 0 && ++retryTimes <= m_waitingExecutorMaxRetryTimes);
+
+
+    if (retryTimes > m_waitingExecutorMaxRetryTimes)
+    {
+        // throw error
+        throw std::runtime_error("Error: Could not connect any executor after " +
+                                 std::to_string(m_waitingExecutorMaxRetryTimes) + " times retry");
+    }
+}
 
 void TarsRemoteExecutorManager::executeWorker()
 {
     refresh();
 }
 
-void TarsRemoteExecutorManager::update(EndPointSet endPointSet)
+void TarsRemoteExecutorManager::update(EndPointSet endPointSet, bool needNotifyChange)
 {
     // update
     clear();
@@ -153,7 +182,7 @@ void TarsRemoteExecutorManager::update(EndPointSet endPointSet)
     }
 
     // trigger handler to notify scheduler
-    if (m_onRemoteExecutorChange != nullptr)
+    if (needNotifyChange && m_onRemoteExecutorChange != nullptr)
     {
         m_onRemoteExecutorChange();
     }
