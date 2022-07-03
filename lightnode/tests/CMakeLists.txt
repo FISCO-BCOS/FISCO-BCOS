@@ -24,6 +24,6 @@ add_executable(test-lightnode ${SOURCES})
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(test-lightnode ${TARS_PROTOCOL_TARGET} bcos-framework Boost::unit_test_framework tars::util)
+target_link_libraries(test-lightnode ${TARS_PROTOCOL_TARGET} bcos-framework Boost::unit_test_framework tarscpp::tarsutil)
 # target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-lightnode)

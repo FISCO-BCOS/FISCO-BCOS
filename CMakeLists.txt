@@ -49,8 +49,6 @@ if(UTILITIES)
 endif()
 
 if(ALL_COMPONENTS)
-    find_package(TARS REQUIRED MODULE)
-
     # import dependencies
     include(ProjectWABT)
     include(ProjectBCOSWASM)
