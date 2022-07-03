@@ -752,12 +752,10 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(errorHashList, true,
         [=, &p3](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_txList != nullptr);
-            BOOST_CHECK(_txList->empty());
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_txList == nullptr);
 
-            BOOST_CHECK(_proof != nullptr);
-            BOOST_CHECK(_proof->empty());
+            BOOST_CHECK(_proof == nullptr);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
