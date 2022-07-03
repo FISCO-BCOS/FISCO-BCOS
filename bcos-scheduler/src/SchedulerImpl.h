@@ -160,6 +160,16 @@ public:
     }
 
 private:
+    void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
+        std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
+        std::function<void(BlockExecutive::Ptr)> whenQueueFront, std::function<void()> afterFront,
+        std::function<void(BlockExecutive::Ptr)> whenNotFrontInQueue,
+        std::function<void()> beforeBack, std::function<void()> whenQueueBack,
+        std::function<void(bcos::protocol::BlockNumber)> whenNewer,  // whenNewer(backNumber)
+        std::function<void(std::exception const&)> whenException);
+
+    bcos::protocol::BlockNumber getCurrentBlockNumber();
+
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
@@ -172,7 +182,7 @@ private:
     // remove prepared all block <= oldBlockNumber
     void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
 
-    bcos::protocol::BlockNumber getBlockNumberInStorage();
+    bcos::protocol::BlockNumber getBlockNumberFromStorage();
 
     std::shared_ptr<std::list<BlockExecutive::Ptr>> m_blocks =
         std::make_shared<std::list<BlockExecutive::Ptr>>();

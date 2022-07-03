@@ -37,7 +37,7 @@ public:
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     TarsRemoteExecutorManager(std::string executorServiceName)
-      : Worker("TarsRemoteExecutorManager", 10000)  // ms
+      : Worker("TarsRemoteExecutorManager", 5000)  // ms
     {
         if (executorServiceName.empty())
         {
@@ -54,7 +54,7 @@ public:
     {
         EXECUTOR_MANAGER_LOG(INFO) << "Start" << threadName() << " "
                                    << LOG_KV("executorServiceName", m_executorServiceName);
-        refresh();
+        // refresh();
         startWorking();
     }
 

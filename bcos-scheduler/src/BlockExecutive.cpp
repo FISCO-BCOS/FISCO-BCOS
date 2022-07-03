@@ -860,6 +860,8 @@ void BlockExecutive::DMCExecute(
                        << LOG_KV("round", m_dmcRecorder->getRound())
                        << LOG_KV("blockNumber", number())
                        << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                       << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
+                       << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
                        << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
 
         if (batchStatus->error != 0)
