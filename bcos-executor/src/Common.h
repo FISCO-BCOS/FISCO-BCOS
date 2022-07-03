@@ -26,8 +26,8 @@
 #pragma once
 
 #include "CallParameters.h"
-#include "bcos-framework//executor/ExecutionMessage.h"
-#include "bcos-framework//protocol/BlockHeader.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework//protocol/LogEntry.h>
 #include <bcos-utilities/Exceptions.h>
@@ -52,21 +52,6 @@ namespace executor
     BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << "[" << contextID << "," << seq << "]"
 #define PARA_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 
-enum ExecuteError : int32_t
-{
-    SUCCESS = -80000,
-    INVALID_BLOCKNUMBER,
-    GETHASH_ERROR,
-    CALL_ERROR,
-    EXECUTE_ERROR,
-    PREPARE_ERROR,
-    COMMIT_ERROR,
-    ROLLBACK_ERROR,
-    DAG_ERROR,
-    DEAD_LOCK,
-    TABLE_NOT_FOUND,
-    STOPPED
-};
 
 static const char* const USER_TABLE_PREFIX = "/tables/";
 static const char* const USER_APPS_PREFIX = "/apps/";

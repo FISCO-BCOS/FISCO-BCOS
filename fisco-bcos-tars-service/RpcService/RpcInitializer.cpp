@@ -99,8 +99,8 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     auto gateway = std::make_shared<GatewayServiceClient>(
         gatewayPrx, _nodeConfig->gatewayServiceName(), protocolInitializer->keyFactory());
 
-    auto factory = std::make_shared<bcos::rpc::RpcFactory>(
-        _nodeConfig->chainId(), gateway, protocolInitializer->keyFactory());
+    auto factory = std::make_shared<bcos::rpc::RpcFactory>(_nodeConfig->chainId(), gateway,
+        protocolInitializer->keyFactory(), protocolInitializer->dataEncryption());
     factory->setNodeConfig(_nodeConfig);
     RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success");
     return factory;

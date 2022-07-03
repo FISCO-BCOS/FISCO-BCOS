@@ -20,19 +20,19 @@
  */
 
 #pragma once
-#include "../CallParameters.h"
-#include "../Common.h"
-#include "../executive/BlockContext.h"
-#include "../executive/TransactionExecutive.h"
-#include "DAG.h"
-#include "../executor/TransactionExecutor.h"
-#include "bcos-framework//protocol/Block.h"
-#include "bcos-framework//protocol/Transaction.h"
+#include <bcos-executor/src/CallParameters.h>
+#include <bcos-executor/src/Common.h>
+#include <bcos-executor/src/dag/DAG.h>
+#include "bcos-executor/src/dag/TxDAGInterface.h"
+#include "bcos-executor/src/executive/BlockContext.h"
+#include "bcos-executor/src/executive/TransactionExecutive.h"
+#include "bcos-executor/src/executor/TransactionExecutor.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include <map>
 #include <memory>
 #include <queue>
 #include <vector>
-#include "./TxDAGInterface.h"
 
 namespace bcos
 {
@@ -47,7 +47,8 @@ public:
     virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
-    void init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f) override;
+    void init(
+        critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f) override;
 
     void run(unsigned int threadNum) override;
 

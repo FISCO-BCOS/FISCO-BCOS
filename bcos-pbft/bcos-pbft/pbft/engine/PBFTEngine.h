@@ -91,6 +91,8 @@ public:
 
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
+    void clearAllCache();
+
 protected:
     virtual void initSendResponseHandler();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -181,6 +183,9 @@ protected:
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
 
+    virtual void onStableCheckPointCommitFailed(
+        Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
+
 private:
     // utility functions
     void waitSignal()
@@ -188,7 +193,6 @@ private:
         boost::unique_lock<boost::mutex> l(x_signalled);
         m_signalled.wait_for(l, boost::chrono::milliseconds(5));
     }
-    void clearAllCache();
 
 protected:
     // PBFT configuration class

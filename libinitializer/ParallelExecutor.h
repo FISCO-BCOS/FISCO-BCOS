@@ -2,6 +2,7 @@
 
 #include "bcos-executor/src/executor/TransactionExecutor.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <thread>
@@ -11,10 +12,12 @@ namespace bcos::initializer
 class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
 {
 public:
+    const int64_t INIT_SCHEDULER_TERM_ID = 0;
+
     ParallelExecutor(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
     {
-        refreshExecutor(0);
+        refreshExecutor(INIT_SCHEDULER_TERM_ID);
     }
 
     ~ParallelExecutor() noexcept override {}
@@ -24,8 +27,7 @@ public:
         // refresh when receive larger schedulerTermId
         if (schedulerTermId > m_schedulerTermId)
         {
-            static bcos::SharedMutex mutex;
-            WriteGuard l(mutex);
+            WriteGuard l(m_mutex);
             if (m_schedulerTermId != schedulerTermId)
             {
                 // remove old executor and build new
@@ -46,6 +48,12 @@ public:
         }
     }
 
+    bool hasNextBlockHeaderDone()
+    {
+        ReadGuard l(m_mutex);
+        return m_schedulerTermId != INIT_SCHEDULER_TERM_ID;
+    }
+
     void nextBlockHeader(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
@@ -63,6 +71,14 @@ public:
             callback) override
     {
         m_pool.enqueue([this, inputRaw = input.release(), callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"),
+                    nullptr);
+                return;
+            }
             m_executor->executeTransaction(
                 bcos::protocol::ExecutionMessage::UniquePtr(inputRaw), std::move(callback));
         });
@@ -83,6 +99,15 @@ public:
         }
         m_pool.enqueue([this, contractAddress = std::move(contractAddress), inputsVec,
                            callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"),
+                    {});
+                return;
+            }
+
             m_executor->dmcExecuteTransactions(contractAddress, *inputsVec, std::move(callback));
         });
     }
@@ -99,6 +124,15 @@ public:
             inputsVec->emplace_back(std::move(inputs[i]));
         }
         m_pool.enqueue([this, inputsVec, callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"),
+                    {});
+                return;
+            }
+
             m_executor->dagExecuteTransactions(*inputsVec, std::move(callback));
         });
     }
@@ -129,6 +163,14 @@ public:
     {
         m_pool.enqueue(
             [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
+                if (!hasNextBlockHeaderDone())
+                {
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                            "Executor has just inited, need to switch"));
+                    return;
+                }
+
                 m_executor->prepare(params, std::move(callback));
             });
     }
@@ -139,6 +181,14 @@ public:
     {
         m_pool.enqueue(
             [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
+                if (!hasNextBlockHeaderDone())
+                {
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                            "Executor has just inited, need to switch"));
+                    return;
+                }
+
                 m_executor->commit(params, std::move(callback));
             });
     }
@@ -149,6 +199,14 @@ public:
     {
         m_pool.enqueue(
             [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
+                if (!hasNextBlockHeaderDone())
+                {
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                            "Executor has just inited, need to switch"));
+                    return;
+                }
+
                 m_executor->rollback(params, std::move(callback));
             });
     }
@@ -182,6 +240,8 @@ private:
     bcos::executor::TransactionExecutor::Ptr m_executor;
     bcos::executor::TransactionExecutor::Ptr m_oldExecutor;
     int64_t m_schedulerTermId = -1;
+
+    mutable bcos::SharedMutex m_mutex;
 
     bcos::executor::TransactionExecutorFactory::Ptr m_factory;
 };

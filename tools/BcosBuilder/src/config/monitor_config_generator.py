@@ -51,9 +51,18 @@ class MonitorConfigGenerator:
                 "generate mtail config for group %s success" % group_config.group_id)
         return True
 
+    def __check_monitor_config(self, node_config):
+        if node_config.monitor_listen_port is None:
+            raise Exception(
+                "the monitor_listen_port for node %s must be set" % node_config.node_service_name)
+        if node_config.monitor_log_path is None:
+            raise Exception(
+                "the monitor_log_path for node %s must be set" % node_config.node_service_name)
+
     def start_monitor_config(self):
         for group_config in self.config.group_list.values():
             for node_config in group_config.node_list:
+                self.__check_monitor_config(node_config)
                 node_path = self.__get_and_generate_node_log_base_path(
                     node_config)
                 mtail_start_scripts_path = os.path.join(
@@ -95,6 +104,7 @@ class MonitorConfigGenerator:
         targets = ""
         for group_config in self.config.group_list.values():
             for node_config in group_config.node_list:
+                self.__check_monitor_config(node_config)
                 if self.node_type == "pro":
                     if targets == "":
                         targets = '"' + node_config.deploy_ip + ':' + \

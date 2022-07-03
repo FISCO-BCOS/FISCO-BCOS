@@ -59,6 +59,10 @@ public:
 
     bcos::crypto::HashType transactionHash() const override
     {
+        if (m_inner()->transactionHash.size() < bcos::crypto::HashType::SIZE)
+        {
+            return bcos::crypto::HashType();
+        }
         return *(reinterpret_cast<bcos::crypto::HashType*>(m_inner()->transactionHash.data()));
     }
     void setTransactionHash(bcos::crypto::HashType hash) override

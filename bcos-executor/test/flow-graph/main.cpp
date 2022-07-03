@@ -1,6 +1,5 @@
-#include "../../src/dag/TxDAG.h"
-#include "../../src/dag/TxDAG2.h"
 #include "../../src/dag/CriticalFields.h"
+#include "../../src/dag/TxDAG2.h"
 #include <vector>
 
 using namespace std;
@@ -11,15 +10,17 @@ using namespace tbb::flow;
 
 using Critical = vector<vector<string>>;
 
-CriticalFieldsInterface::Ptr makeCriticals(int _totalTx) {
+CriticalFieldsInterface::Ptr makeCriticals(int _totalTx)
+{
     Critical originMap = {{"111"}, {"222"}, {"333"}, {"444"}, {"555"}, {"666"}, {"777"}, {"888"},
-                          {"999"}, {"101"}, {"102"}, {"103"}, {"104"}, {"105"}, {"106"}, {"107"},
-                          {"108"}, {"109"}, {"120"}, {"121"}, {"122"}, {"123"}, {"124"}, {"125"}};
+        {"999"}, {"101"}, {"102"}, {"103"}, {"104"}, {"105"}, {"106"}, {"107"}, {"108"}, {"109"},
+        {"120"}, {"121"}, {"122"}, {"123"}, {"124"}, {"125"}};
     CriticalFields<string>::Ptr criticals = make_shared<CriticalFields<string>>(_totalTx);
-    for(int i = 0; i < _totalTx; i++){
+    for (int i = 0; i < _totalTx; i++)
+    {
         int rand1 = random() % originMap.size();
         int rand2 = random() % originMap.size();
-        vector<vector<string>> critical = { {originMap[rand1]} , {originMap[rand2]} };
+        vector<vector<string>> critical = {{originMap[rand1]}, {originMap[rand2]}};
         criticals->put(i, make_shared<CriticalFields<string>::CriticalField>(std::move(critical)));
         /*
         stringstream ss;
@@ -30,17 +31,17 @@ CriticalFieldsInterface::Ptr makeCriticals(int _totalTx) {
     return criticals;
 }
 
-void testTxDAG(CriticalFieldsInterface::Ptr criticals, shared_ptr<TxDAGInterface> _txDag, string name) {
-
+void testTxDAG(
+    CriticalFieldsInterface::Ptr criticals, shared_ptr<TxDAGInterface> _txDag, string name)
+{
     auto startTime = utcSteadyTime();
-    cout << endl <<  name << " test start" << endl;
-    _txDag->init(criticals,
-        [&](ID id) {
-            if (id % 100000 == 0)
-            {
-                std::cout << " [" << id << "] ";
-            }
-        });
+    cout << endl << name << " test start" << endl;
+    _txDag->init(criticals, [&](ID id) {
+        if (id % 100000 == 0)
+        {
+            std::cout << " [" << id << "] ";
+        }
+    });
     auto initTime = utcSteadyTime();
     try
     {
@@ -51,7 +52,9 @@ void testTxDAG(CriticalFieldsInterface::Ptr criticals, shared_ptr<TxDAGInterface
         std::cout << "Exception" << boost::diagnostic_information(e) << std::endl;
     }
     auto endTime = utcSteadyTime();
-    cout << endl << name << " cost(ms): initDAG=" << initTime - startTime << " run=" << endTime - initTime << " total=" << endTime - startTime <<  endl;
+    cout << endl
+         << name << " cost(ms): initDAG=" << initTime - startTime << " run=" << endTime - initTime
+         << " total=" << endTime - startTime << endl;
 }
 
 int main(int argc, const char* argv[])

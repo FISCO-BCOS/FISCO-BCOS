@@ -20,7 +20,7 @@
  */
 
 #include "TxDAG.h"
-#include "CriticalFields.h"
+#include "bcos-executor/src/dag/CriticalFields.h"
 #include <tbb/parallel_for.h>
 #include <map>
 

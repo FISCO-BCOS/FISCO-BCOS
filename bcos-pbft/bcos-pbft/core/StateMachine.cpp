@@ -165,6 +165,9 @@ void StateMachine::preApply(
             {
                 CONSENSUS_LOG(ERROR)
                     << LOG_BADGE("prepareBlockExecutive") << LOG_DESC("preApply failed!")
+                    << LOG_KV("errorCode", error->errorCode())
+                    << LOG_KV("errorMessage", error->errorMessage())
+                    << LOG_KV("message", error->errorMessage())
                     << LOG_KV("blockNumber", block->blockHeaderConst()->number())
                     << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
                     << LOG_KV("timeCost", (utcTime() - startT));

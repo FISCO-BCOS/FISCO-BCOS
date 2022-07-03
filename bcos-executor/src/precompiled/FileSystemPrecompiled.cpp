@@ -557,7 +557,7 @@ bool FileSystemPrecompiled::recursiveBuildDir(
         else
         {
             EXECUTIVE_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                                 << LOG_DESC("file had already existed, and not directory type")
+                                 << LOG_DESC("parent type not found")
                                  << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
             return false;
         }

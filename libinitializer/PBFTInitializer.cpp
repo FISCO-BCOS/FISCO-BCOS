@@ -176,6 +176,13 @@ void PBFTInitializer::initChainNodeInfo(
 
 void PBFTInitializer::start()
 {
+    if (!m_nodeConfig->enableFailOver())
+    {
+        m_blockSync->enableAsMaster(true);
+        // Note: since enableAsMaterNode will recover pbftState and execute the recovered proposal,
+        // should call this after every module and handlers has been inited completed
+        m_pbft->enableAsMaterNode(true);
+    }
     m_sealer->start();
     m_blockSync->start();
     m_pbft->start();
@@ -204,11 +211,6 @@ void PBFTInitializer::init()
     if (m_nodeConfig->enableFailOver())
     {
         initConsensusFailOver(m_protocolInitializer->keyPair()->publicKey());
-    }
-    else
-    {
-        m_blockSync->enableAsMaster(true);
-        m_pbft->enableAsMaterNode(true);
     }
     syncGroupNodeInfo();
 }
@@ -519,7 +521,10 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
             m_blockSync->enableAsMaster(_success);
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
-
+            if (!_success)
+            {
+                return;
+            }
             auto schedulerManager =
                 std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
             schedulerManager->asyncSwitchTerm(_leader->seq(), [_leader](Error::Ptr&& error) {

@@ -55,17 +55,14 @@ public:
         bool _isAuthCheck);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-        storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-        bool _isAuthCheck);
+        crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
+        const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
         const protocol::Transaction::ConstPtr& _tx)>;
     virtual ~BlockContext(){};
 
     std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
-
-    bcos::storage::StorageInterface::Ptr lastStorage() { return m_lastStorage; }
 
     uint64_t txGasLimit() const { return m_txGasLimit; }
     void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
@@ -111,7 +108,6 @@ private:
 
     uint64_t m_txGasLimit = 3000000000;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
-    bcos::storage::StorageInterface::Ptr m_lastStorage = nullptr;
     crypto::Hash::Ptr m_hashImpl;
 };
 

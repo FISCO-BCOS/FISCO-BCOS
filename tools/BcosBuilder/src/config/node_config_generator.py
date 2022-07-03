@@ -3,6 +3,7 @@
 import configparser
 from common import utilities
 from common.utilities import ConfigInfo
+from service.key_center_service import KeyCenterService
 import uuid
 import os
 import sys
@@ -106,7 +107,7 @@ class NodeConfigGenerator:
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
         # set storage_security config
-        # TODO: access key_center to encrypt the certificates and the private keys
+        # access key_center to encrypt the certificates and the private keys
         self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
 
@@ -154,7 +155,8 @@ class NodeConfigGenerator:
             ini_config.remove_option(storage_section, "data_path")
         ini_config[storage_section]["type"] = "tikv"
         ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
-        ini_config[storage_section]["key_page_size"] = node_config.key_page_size
+        ini_config[storage_section]["key_page_size"] = str(
+            node_config.key_page_size)
 
     def __update_storage_security_info(self, ini_config, node_config, node_type):
         """
@@ -182,10 +184,17 @@ class NodeConfigGenerator:
         if os.path.exists(pem_path) is False or os.path.exists(node_id_path) is False:
             utilities.generate_private_key(
                 node_config.sm_crypto, outputdir)
+        # encrypt the node.pem with key_center
+        if node_config.enable_storage_security is True:
+            key_center = KeyCenterService(
+                node_config.key_center_url, node_config.cipher_data_key)
+            ret = key_center.encrypt_file(pem_path)
+            if ret is False:
+                return (False, "", pem_path, node_id_path)
         node_id = ""
         with open(node_id_path, 'r', encoding='utf-8') as f:
             node_id = f.read()
-        return (node_id, pem_path, node_id_path)
+        return (True, node_id, pem_path, node_id_path)
 
     def get_config_file_path_list(self, node_service_config, node_config):
         """
@@ -227,12 +236,14 @@ class NodeConfigGenerator:
         """
         nodeid_list = []
         for node_config in group_config.node_list:
-            (node_id, node_pem_path, node_id_path) = self.generate_node_pem(
+            (ret, node_id, node_pem_path, node_id_path) = self.generate_node_pem(
                 node_config)
+            if ret is False:
+                return (False, nodeid_list)
             utilities.log_info(
                 "* generate pem file for %s\n\t- pem_path: %s\n\t- node_id_path: %s\n\t- node_id: %s\n\t- sm_crypto: %d" % (node_config.node_service.service_name, node_pem_path, node_id_path, node_id, group_config.sm_crypto))
             nodeid_list.append(node_id)
-        return nodeid_list
+        return (True, nodeid_list)
 
     def __genesis_config_generated(self, group_config):
         if os.path.exists(group_config.genesis_config_path):
@@ -244,13 +255,17 @@ class NodeConfigGenerator:
             config_content = configparser.ConfigParser(
                 comment_prefixes='/', allow_no_value=True)
             config_content.read(group_config.genesis_config_path)
-            self._generate_all_node_pem(group_config)
-            return config_content
+            (ret, nodeid_list) = self._generate_all_node_pem(group_config)
+            return (ret, config_content)
         if must_genesis_exists is True:
             utilities.log_error("Please set the genesis config path firstly!")
             sys.exit(-1)
-        nodeid_list = self._generate_all_node_pem(group_config)
-        return self.generate_genesis_config_nodeid(nodeid_list, group_config)
+        (ret, nodeid_list) = self._generate_all_node_pem(group_config)
+        if ret is False:
+            return (False, None)
+        config_content = self.generate_genesis_config_nodeid(
+            nodeid_list, group_config)
+        return (True, config_content)
 
     def generate_all_config(self, enforce_genesis_exists):
         """
@@ -275,8 +290,10 @@ class NodeConfigGenerator:
         """
         generate the genesis config for all max_nodes
         """
-        genesis_config_content = self.generate_genesis_config(
+        (ret, genesis_config_content) = self.generate_genesis_config(
             group_config, enforce_genesis_exists)
+        if ret is False:
+            return False
         if os.path.exists(group_config.genesis_config_path) is False:
             desc = group_config.chain_id + "." + group_config.group_id
             self.store_config(genesis_config_content, "genesis",

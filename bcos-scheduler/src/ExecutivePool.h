@@ -31,10 +31,10 @@
 
 namespace bcos::scheduler
 {
-
 class ExecutivePool
 {
 public:
+    using Ptr = std::shared_ptr<ExecutivePool>;
     using ExecutiveStateHandler = std::function<bool(
         ContextID contextID, ExecutiveState::Ptr executiveState)>;  // return needContinue
     using SetPtr = std::shared_ptr<tbb::concurrent_set<ContextID>>;
@@ -48,7 +48,7 @@ public:
         END = 5
     };
 
-    void add(ContextID contextID, ExecutiveState::Ptr executiveState);
+    bool add(ContextID contextID, ExecutiveState::Ptr executiveState);  // return if add success
     ExecutiveState::Ptr get(ContextID contextID);
     void markAs(ContextID contextID, MessageHint type);
     void refresh();

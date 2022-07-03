@@ -1,3 +1,3 @@
-add_executable(storage_bench benchmark.cpp)
+add_executable(storage-bench benchmark.cpp)
 find_package(Boost REQUIRED program_options)
-target_link_libraries(storage_bench PUBLIC ${CRYPTO_TARGET} ${STORAGE_TARGET} Boost::program_options)
+target_link_libraries(storage-bench ${CRYPTO_TARGET} ${TABLE_TARGET} ${STORAGE_TARGET} Boost::program_options)

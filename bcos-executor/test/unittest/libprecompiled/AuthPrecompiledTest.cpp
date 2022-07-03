@@ -2033,5 +2033,54 @@ BOOST_AUTO_TEST_CASE(testContractStatus)
     }
 }
 
+BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
+{
+    setIsWasm(false, true, true);
+
+    deployHello();
+    BlockNumber _number = 3;
+    // frozen
+    {
+        auto r1 = setContractStatus(_number++, Address(helloAddress), true);
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+
+        auto r2 = contractAvailable(_number++, Address(helloAddress));
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+    }
+    // frozen, revert
+    {
+        auto result = helloGet(_number++, 1000);
+        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractFrozen);
+
+        auto result2 = helloSet(_number++, 1000, "");
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
+    }
+    // switch normal
+    {
+        auto r1 = setContractStatus(_number++, Address(helloAddress), false);
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        auto r2 = contractAvailable(_number++, Address(helloAddress));
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(true));
+    }
+    // normal
+    {
+        auto result = helloGet(_number++, 1000);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+
+        auto result2 = helloSet(_number++, 1000, "test");
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::None);
+
+        auto result3 = helloGet(_number++, 1000);
+        BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string("test")));
+    }
+
+    // contract address not found
+    {
+        auto errorAddress = "123456";
+        auto result2 = contractAvailable(_number++, Address(errorAddress));
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

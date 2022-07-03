@@ -144,12 +144,12 @@ struct TestRocksDBStorageFixture
         storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
-            params1.startTS = ts;
+            params1.timestamp = ts;
         });
 
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
-            [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+            [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto commitEnd = std::chrono::system_clock::now();
         // check commit success
         storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
@@ -175,15 +175,15 @@ struct TestRocksDBStorageFixture
             entry.setStatus(Entry::DELETED);
             testTable->setRow(key, std::move(entry));
         }
-        params1.startTS = 0;
+        params1.timestamp = 0;
         storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
-            params1.startTS = ts;
+            params1.timestamp = ts;
         });
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
-            [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+            [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto deleteEnd = std::chrono::system_clock::now();
         // check if the data is deleted
         storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
@@ -452,7 +452,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         });
     // TODO: asyncPrepare can't be query
     rocksDBStorage->asyncCommit(bcos::protocol::TwoPCParams(),
-        [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
 
     rocksDBStorage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
@@ -638,7 +638,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
     params.number = 1;
     rocksDBStorage->asyncPrepare(
         params, *initState, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
-    rocksDBStorage->asyncCommit(params, [](Error::Ptr error) { BOOST_CHECK(!error); });
+    rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
 
     STORAGE_LOG(INFO) << "Init state finished";
 
@@ -695,7 +695,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         params.number = i;
         rocksDBStorage->asyncPrepare(
             params, *state, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
-        rocksDBStorage->asyncCommit(params, [](Error::Ptr error) { BOOST_CHECK(!error); });
+        rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

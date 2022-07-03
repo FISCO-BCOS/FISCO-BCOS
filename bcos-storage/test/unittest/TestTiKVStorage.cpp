@@ -121,12 +121,12 @@ struct TestTiKVStorageFixture
         storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
-            params1.startTS = ts;
+            params1.timestamp = ts;
         });
 
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
-            [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+            [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto commitEnd = std::chrono::system_clock::now();
         // check commit success
         storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
@@ -154,15 +154,15 @@ struct TestTiKVStorageFixture
             entry.setStatus(Entry::DELETED);
             testTable->setRow(key, std::move(entry));
         }
-        params1.startTS = 0;
+        params1.timestamp = 0;
         storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
-            params1.startTS = ts;
+            params1.timestamp = ts;
         });
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
-            [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+            [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
         auto deleteEnd = std::chrono::system_clock::now();
         // check if the data is deleted
         storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
@@ -431,7 +431,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
             BOOST_CHECK_NE(ts, 0);
         });
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
-        [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
 
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
@@ -553,7 +553,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
-        params1.startTS = ts;
+        params1.timestamp = ts;
         storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
@@ -565,7 +565,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     });
     // only storage call asyncCommit
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
-        [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
@@ -752,7 +752,7 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
-        params1.startTS = ts;
+        params1.timestamp = ts;
         storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
@@ -846,7 +846,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
-        params1.startTS = ts;
+        params1.timestamp = ts;
         storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
@@ -876,11 +876,11 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
         });
 
     // recall prewrite
-    params1.startTS = 0;
+    params1.timestamp = 0;
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
-        params1.startTS = ts;
+        params1.timestamp = ts;
         storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
@@ -892,7 +892,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     });
     // only storage call asyncCommit
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
-        [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
@@ -1059,7 +1059,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
-        params1.startTS = ts;
+        params1.timestamp = ts;
         storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
@@ -1069,11 +1069,11 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     storage = std::make_shared<TiKVStorage>(m_cluster);
     auto storage4 = std::make_shared<TiKVStorage>(m_cluster);
     auto stateStorage4 = std::make_shared<bcos::storage::StateStorage>(storage3);
-    params1.startTS = 0;
+    params1.timestamp = 0;
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
-        params1.startTS = ts;
+        params1.timestamp = ts;
         storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
@@ -1090,7 +1090,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     });
     // only storage call asyncCommit
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
-        [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),

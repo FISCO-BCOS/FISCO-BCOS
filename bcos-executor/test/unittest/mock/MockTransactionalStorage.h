@@ -87,10 +87,10 @@ public:
     }
 
     void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override
+        const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
-        callback(nullptr);
+        callback(nullptr, 0);
     }
 
     void asyncRollback(

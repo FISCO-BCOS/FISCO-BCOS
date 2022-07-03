@@ -737,7 +737,7 @@ void BlockSync::maintainPeersConnection()
         auto newPeerStatus = m_config->msgFactory()->createBlockSyncStatusMsg(
             m_config->blockNumber(), m_config->hash(), m_config->genesisHash());
         m_syncStatus->updatePeerStatus(m_config->nodeID(), newPeerStatus);
-        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
+        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to peer")
                            << LOG_KV("number", newPeerStatus->number())
                            << LOG_KV("genesisHash", newPeerStatus->genesisHash().abridged())
                            << LOG_KV("currentHash", newPeerStatus->hash().abridged())

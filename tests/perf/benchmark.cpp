@@ -29,7 +29,7 @@ int main(int argc, const char* argv[])
         boost::program_options::value<int>()->default_value(100000),
         "data set size")("onlyWrite,o", boost::program_options::value<bool>()->default_value(false),
         "only test write performance")("sorted,s",
-        boost::program_options::value<bool>()->default_value(true), "use sorted data set")(
+        boost::program_options::value<bool>()->default_value(false), "use sorted data set")(
         "db,d", boost::program_options::value<int>()->default_value(0), "init db keys count");
     boost::program_options::variables_map vm;
     try
@@ -184,7 +184,7 @@ int main(int argc, const char* argv[])
         rocksDBStorage->asyncPrepare(p, *t, [](bcos::Error::Ptr, uint64_t) {
             // std::cout << "asyncPrepare finished" << std::endl;
         });
-        rocksDBStorage->asyncCommit(p, [](bcos::Error::Ptr) {
+        rocksDBStorage->asyncCommit(p, [](bcos::Error::Ptr, uint64_t) {
             // std::cout << "asyncCommit finished" << std::endl;
         });
         s.reset();

@@ -94,8 +94,9 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, size_t keyPageSize, std::string name);
-
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables,
+        std::string name);
 
     ~TransactionExecutor() override = default;
 
@@ -163,8 +164,7 @@ protected:
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorageInterface::Ptr tableFactory,
-        storage::StorageInterface::Ptr lastStorage);
+        storage::StateStorageInterface::Ptr tableFactory);
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
@@ -242,7 +242,6 @@ protected:
         bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
-    bcos::storage::StorageInterface::Ptr m_lastStateStorage;
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
 
     struct HashCombine
@@ -285,9 +284,11 @@ protected:
     bool m_isWasm = false;
     size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
-
+    std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
+    void initEvmEnvironment();
+    void initWasmEnvironment();
 };
 
 }  // namespace executor

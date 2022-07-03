@@ -14,7 +14,8 @@ public:
       : m_factory(factory),
         m_schedulerTerm(schedulerSeq),
         m_remoteExecutorManager(remoteExecutorManager),
-        m_pool("SchedulerManager", 1)
+        m_pool("SchedulerManager", 1),  // Must set to 1 for serial execution
+        m_status(INITIALING)
     {
         remoteExecutorManager->setRemoteExecutorChangeHandler([this]() {
             // trigger switch
@@ -58,6 +59,8 @@ public:
 
     void registerOnSwitchTermHandler(std::function<void(bcos::protocol::BlockNumber)> onSwitchTerm);
 
+    void handleNeedSwitchEvent(int64_t oldSchedulerTermID);
+
     void testTriggerSwitch();
 
     SchedulerFactory::Ptr getFactory() { return m_factory; }
@@ -65,7 +68,8 @@ public:
     class SchedulerTerm
     {
     public:
-        SchedulerTerm(int64_t schedulerSeq) : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime())
+        SchedulerTerm(int64_t schedulerSeq)
+          : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime() / 1000)
         {}
 
         SchedulerTerm next() { return SchedulerTerm(m_schedulerSeq); }
@@ -79,6 +83,10 @@ public:
                                 << LOG_KV("m_executorSeq", m_executorSeq)
                                 << LOG_KV("SchedulerTermID", id);
             }
+            BCOS_LOG(DEBUG) << "Build SchedulerTermID" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
+                            << LOG_KV("m_executorSeq", m_executorSeq)
+                            << LOG_KV("SchedulerTermID", id);
+
             return id;
         }
 
@@ -87,6 +95,16 @@ public:
         int64_t m_schedulerSeq;
         int64_t m_executorSeq;
     };
+
+    enum Status : uint8_t
+    {
+        INITIALING = 1,
+        RUNNING = 2,
+        SWITCHING = 3,
+    };
+
+    std::pair<bool, std::string> checkAndInit();
+
 
 private:
     void updateScheduler(int64_t schedulerTermId);
@@ -105,7 +123,7 @@ private:
 
     bcos::ThreadPool m_pool;
 
-    mutable bcos::SharedMutex x_switchTermMutex;
+    std::atomic<Status> m_status;
 };
 
 }  // namespace bcos::scheduler

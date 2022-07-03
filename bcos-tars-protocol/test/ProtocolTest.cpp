@@ -616,6 +616,8 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     auto executionMsg = std::make_shared<bcostars::protocol::ExecutionMessageImpl>();
     int8_t type = 2;
     executionMsg->setType((bcos::protocol::ExecutionMessage::Type)type);
+    executionMsg->transactionHash();
+
     auto txsHash = cryptoSuite->hash("###abc");
     executionMsg->setTransactionHash(txsHash);
     int64_t contextID = 10000;

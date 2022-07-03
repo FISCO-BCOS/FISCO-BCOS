@@ -38,7 +38,7 @@ endif()
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
 # for boost-ssl enable/disable native
 set(ARCH_NATIVE OFF)
-if ("${ARCHITECTURE}" MATCHES "aarch64")
+if ("${ARCHITECTURE}" MATCHES "aarch64" OR "${ARCHITECTURE}" MATCHES "arm64")
     set(ARCH_NATIVE ON)
 endif()
 
@@ -55,7 +55,7 @@ macro(configure_project)
 
     #ARCH TYPE
     default_option(NATIVE OFF)
-    if ("${ARCHITECTURE}" MATCHES "aarch64")
+    if ("${ARCHITECTURE}" MATCHES "aarch64" OR "${ARCHITECTURE}" MATCHES "arm64")
         default_option(NATIVE ON)
     endif()
     if(NATIVE)

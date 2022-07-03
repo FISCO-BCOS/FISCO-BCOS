@@ -101,7 +101,7 @@ void ProtocolInitializer::createSMCryptoSuite()
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
-    auto privateKeyData = loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize);
+    auto privateKeyData = loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_dataEncryption);
     if (!privateKeyData)
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair failed")
@@ -109,7 +109,8 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
         throw std::runtime_error("loadKeyPair failed, keyPair path: " + _privateKeyPath);
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
-                          << LOG_KV("privateKeySize", privateKeyData->size());
+                          << LOG_KV("privateKeySize", privateKeyData->size())
+                          << LOG_KV("enableStorageSecurity", m_dataEncryption ? true : false);
     auto privateKey = m_keyFactory->createKey(*privateKeyData);
     m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
 
