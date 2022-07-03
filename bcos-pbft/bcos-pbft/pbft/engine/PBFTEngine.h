@@ -92,6 +92,7 @@ public:
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
     void clearAllCache();
+    void recoverState();
 
 protected:
     virtual void initSendResponseHandler();

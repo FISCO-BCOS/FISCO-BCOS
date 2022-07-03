@@ -1457,6 +1457,25 @@ void PBFTEngine::onStableCheckPointCommitFailed(
     clearExceptionProposalState(_stableProposal->index());
 }
 
+void PBFTEngine::recoverState()
+{
+    // Note: only replay the PBFT state when all-modules ready
+    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
+    auto stateProposals = m_config->storage()->loadState(m_config->committedProposal()->index());
+    if (stateProposals && stateProposals->size() > 0)
+    {
+        initState(*stateProposals, m_config->keyPair()->publicKey());
+        auto lowWaterMarkIndex = stateProposals->size() - 1;
+        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
+        m_config->setLowWaterMark(lowWaterMark + 1);
+        PBFT_LOG(INFO) << LOG_DESC("recoverState")
+                       << LOG_KV("stateProposals", stateProposals->size())
+                       << LOG_KV("lowWaterMark", lowWaterMark)
+                       << LOG_KV("highWaterMark", m_config->highWaterMark());
+    }
+    m_config->timer()->start();
+}
+
 void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number)
 {
     RecursiveGuard l(m_mutex);
@@ -1472,4 +1491,5 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
     m_cacheProcessor->checkAndPreCommit();
     m_cacheProcessor->checkAndCommit();
     m_cacheProcessor->tryToApplyCommitQueue();
+    recoverState();
 }
