@@ -1155,7 +1155,7 @@ void SchedulerImpl::preExecuteBlock(
     auto callback = [startT, _callback = std::move(_callback),
                         number = block->blockHeaderConst()->number()](bcos::Error::Ptr&& error) {
         SCHEDULER_LOG(INFO) << METRIC << "preExecuteBlock response"
-                            << LOG_KV("error", error ? error->what() : "ok")
+                            << LOG_KV("message", error ? error->what() : "ok")
                             << LOG_KV("blockNumber", number)
                             << LOG_KV("cost(ms)", utcTime() - startT);
         _callback(error == nullptr ? nullptr : std::move(error));

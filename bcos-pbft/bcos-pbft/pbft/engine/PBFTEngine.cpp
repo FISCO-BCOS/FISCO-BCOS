@@ -1460,6 +1460,12 @@ void PBFTEngine::onStableCheckPointCommitFailed(
 void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number)
 {
     RecursiveGuard l(m_mutex);
+    if (!m_config->committedProposal())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+            "clearExceptionProposalState return directly for the pbft module has not been inited");
+        return;
+    }
     m_config->timer()->restart();
     m_cacheProcessor->resetUnCommittedCacheState(_number);
     m_config->setExpectedCheckPoint(_number);
