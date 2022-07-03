@@ -37,7 +37,8 @@ namespace bcos
 {
 namespace storage
 {
-std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::string>& pdAddrs, const std::string& logPath);
+std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
+    const std::vector<std::string>& pdAddrs, const std::string& logPath);
 
 class TiKVStorage : public TransactionalStorageInterface
 {
@@ -78,6 +79,8 @@ public:
 
 private:
     int32_t m_maxRetry = 50;
+    size_t m_coroutineStackSize =
+        32768;  // macOS default is 128K, linux is 8K, here set macOS min 32K
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
 };
