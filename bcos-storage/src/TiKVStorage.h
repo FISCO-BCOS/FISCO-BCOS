@@ -80,7 +80,7 @@ public:
 private:
     int32_t m_maxRetry = 50;
     size_t m_coroutineStackSize =
-        32768;  // macOS default is 128K, linux is 8K, here set macOS min 32K
+        65536;  // macOS default is 128K, linux is 8K, here set 64K
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
 };
