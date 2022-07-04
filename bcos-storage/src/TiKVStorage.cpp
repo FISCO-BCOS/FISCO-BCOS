@@ -168,7 +168,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
         if (!isValid(_table))
         {
             STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("asyncGetRow empty tableName") << LOG_KV("table", _table);
+                << LOG_DESC("asyncGetRows empty tableName") << LOG_KV("table", _table);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
             return;
         }
@@ -195,7 +195,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                     if (nh.empty() || nh.mapped().empty())
                     {
                         entries[i] = std::nullopt;
-                        STORAGE_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
+                        STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
                     }
                     else
                     {
