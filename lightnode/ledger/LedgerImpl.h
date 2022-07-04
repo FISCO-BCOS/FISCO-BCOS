@@ -1,11 +1,12 @@
 #pragma once
+
+#include <bcos-concepts/Basic.h>
+#include <bcos-concepts/Block.h>
+#include <bcos-concepts/Receipt.h>
+#include <bcos-concepts/Transaction.h>
+#include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-framework/concepts/Basic.h>
-#include <bcos-framework/concepts/Block.h>
-#include <bcos-framework/concepts/Receipt.h>
-#include <bcos-framework/concepts/Transaction.h>
-#include <bcos-framework/concepts/ledger/Ledger.h>
-#include <bcos-framework/concepts/storage/Storage.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -27,7 +28,7 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 public:
     LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
-    template <bcos::concepts::ledger::GetBlockFlag... Flags>
+    template <bcos::concepts::ledger::DataFlag... Flags>
     auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
         Block block;
@@ -144,13 +145,22 @@ public:
                          << LOG_KV("incFailedTxs", failedTransactionCount);
     }
 
-    template <bool isTransaction>
+    template <concepts::ledger::DataFlag Flag>
     auto impl_getTransactionsOrReceipts(std::ranges::range auto const& hashes)
     {
-        using OutputItemType = std::conditional_t<isTransaction,
-            std::ranges::range_value_t<decltype(Block::transactions)>,
-            std::ranges::range_value_t<decltype(Block::receipts)>>;
-        constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+        if constexpr (!std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> &&
+                      !std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
+        {
+            static_assert(!sizeof(hashes), "Unspported data flag!");
+        }
+
+        using OutputItemType =
+            std::conditional_t<std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>,
+                std::ranges::range_value_t<decltype(Block::transactions)>,
+                std::ranges::range_value_t<decltype(Block::receipts)>>;
+        constexpr auto tableName = std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ?
+                                       SYS_HASH_2_TX :
+                                       SYS_HASH_2_RECEIPT;
         auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
         std::vector<OutputItemType> outputs(std::size(entries));
 
@@ -237,10 +247,10 @@ public:
     }
 
 private:
-    template <bcos::concepts::ledger::GetBlockFlag flag>
+    template <bcos::concepts::ledger::DataFlag Flag>
     void getBlockData(std::string_view key, Block& block)
     {
-        if constexpr (flag == bcos::concepts::ledger::BLOCK_HEADER)
+        if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
         {
             auto entry = m_storage.getRow(SYS_NUMBER_2_BLOCK_HEADER, key);
             if (!entry) [[unlikely]]
@@ -251,8 +261,8 @@ private:
             auto field = entry->getField(0);
             bcos::concepts::serialize::decode(block.blockHeader, field);
         }
-        else if constexpr (flag == bcos::concepts::ledger::BLOCK_TRANSACTIONS ||
-                           flag == bcos::concepts::ledger::BLOCK_RECEIPTS)
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
+                           std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
             if (std::empty(block.transactionsMetaData))
             {
@@ -273,8 +283,8 @@ private:
                         return std::string_view{metaData.hash.data(), metaData.hash.size()};
                     });
 
-            auto outputs = getTransactionsOrReceipts<isTransaction>(std::move(hashesRange));
-            if constexpr (flag == bcos::concepts::ledger::BLOCK_TRANSACTIONS)
+            auto outputs = getTransactionsOrReceipts<Flag>(std::move(hashesRange));
+            if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 block.transactions = std::move(outputs);
             }
@@ -283,14 +293,14 @@ private:
                 block.receipts = std::move(outputs);
             }
         }
-        else if constexpr (std::is_same_v<Flag, BLOCK_NONCES>)
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
         {}
-        else if constexpr (std::is_same_v<Flag, BLOCK_ALL>)
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {
-            getBlockData<BLOCK_HEADER>(key, block);
-            getBlockData<BLOCK_TRANSACTIONS>(key, block);
-            getBlockData<BLOCK_RECEIPTS>(key, block);
-            getBlockData<BLOCK_NONCES>(key, block);
+            getBlockData<concepts::ledger::HEADER>(key, block);
+            getBlockData<concepts::ledger::TRANSACTIONS>(key, block);
+            getBlockData<concepts::ledger::RECEIPTS>(key, block);
+            getBlockData<concepts::ledger::NONCES>(key, block);
         }
         else
         {

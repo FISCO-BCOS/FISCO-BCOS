@@ -1,8 +1,7 @@
 #pragma once
-#include <bcos-framework/concepts/Block.h>
-#include <bcos-framework/concepts/storage/Storage.h>
-#include <boost/type_traits.hpp>
-#include <boost/type_traits/function_traits.hpp>
+#include "../Block.h"
+#include "../storage/Storage.h"
+#include <concepts>
 
 namespace bcos::concepts::ledger
 {
@@ -11,20 +10,32 @@ template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
-enum LedgerDataFlag
-{
-    ALL,
-    HEADER,
-    TRANSACTIONS,
-    RECEIPTS,
-    NONCES
-};
+// enum LedgerDataFlag
+// {
+//     ALL,
+//     HEADER,
+//     TRANSACTIONS,
+//     RECEIPTS,
+//     NONCES
+// };
+
+// clang-format off
+struct DataFlagBase {};
+struct ALL: public DataFlagBase {};
+struct HEADER: public DataFlagBase {};
+struct TRANSACTIONS: public DataFlagBase {};
+struct RECEIPTS: public DataFlagBase {};
+struct NONCES: public DataFlagBase {};
+// clang-format on
+
+template <class FlagType>
+concept DataFlag = std::derived_from<FlagType, DataFlagBase>;
 
 template <class Impl>
 class LedgerBase
 {
 public:
-    template <LedgerDataFlag... flags>
+    template <DataFlag... flags>
     auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
     {
         return impl().template impl_getBlock<flags...>(blockNumber);
@@ -36,7 +47,7 @@ public:
         impl().impl_setBlock(storage, std::move(block));
     }
 
-    template <TransactionOrReceiptFlag flag>
+    template <DataFlag flag>
     auto getTransactionsOrReceipts(std::ranges::range auto const& hashes)
     {
         return impl().template impl_getTransactionsOrReceipts<flag>(hashes);
@@ -50,9 +61,9 @@ public:
     };
     TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }
 
-    template <std::ranges::range Inputs, bcos::crypto::hasher::Hasher Hasher>
-    requires bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<Inputs>>
-    void setTransactionsOrReceipts(Inputs const& inputs)
+    template <bcos::crypto::hasher::Hasher Hasher>
+    void setTransactionsOrReceipts(std::ranges::range auto const& inputs) requires
+        bcos::concepts::ledger::TransactionOrReceipt<std::ranges::range_value_t<decltype(inputs)>>
     {
         auto hashesRange = inputs | std::views::transform([](auto const& input) {
             return bcos::concepts::hash::calculate<Hasher>(input);
@@ -62,7 +73,7 @@ public:
         });
 
         constexpr auto isTransaction =
-            bcos::concepts::transaction::Transaction<std::ranges::range_value_t<Inputs>>;
+            bcos::concepts::transaction::Transaction<std::ranges::range_value_t<decltype(inputs)>>;
         setTransactionOrReceiptBuffers<isTransaction>(hashesRange, std::move(buffersRange));
     }
 

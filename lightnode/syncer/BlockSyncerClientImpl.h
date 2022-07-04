@@ -1,10 +1,10 @@
 #pragma once
 
 #include "bcos-utilities/FixedBytes.h"
-#include <bcos-framework/concepts/Serialize.h>
-#include <bcos-framework/concepts/ledger/Ledger.h>
-#include <bcos-framework/concepts/sync/BlockSyncerClient.h>
-#include <bcos-framework/concepts/sync/SyncBlockMessages.h>
+#include <bcos-concepts/Serialize.h>
+#include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-concepts/sync/BlockSyncerClient.h>
+#include <bcos-concepts/sync/SyncBlockMessages.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <boost/throw_exception.hpp>
 #include <atomic>

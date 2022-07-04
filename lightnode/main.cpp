@@ -13,61 +13,19 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief main for the fisco-bcos
- * @file main.cpp
- * @author: yujiechen
- * @date 2021-07-26
+
  * @brief main for the fisco-bcos
  * @file main.cpp
  * @author: ancelmo
- * @date 2021-10-14
+ * @date 2022-07-04
  */
-#include "Common.h"
-#include "LightNodeInitializer.h"
-#include "libinitializer/CommandHelper.h"
-#include <thread>
 
-using namespace bcos::node;
-using namespace bcos::initializer;
-using namespace bcos::node;
+#include "ledger/LedgerImpl.h"
+#include "storage/StorageSyncWrapper.h"
+#include "syncer/BlockSyncerClientImpl.h"
+#include "syncer/BlockSyncerServerImpl.h"
 
-int main(int argc, const char* argv[])
+int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 {
-    /// set LC_ALL
-    setDefaultOrCLocale();
-    std::set_terminate([]() {
-        std::cerr << "terminate handler called" << std::endl;
-        abort();
-    });
-    // get datetime and output welcome info
-    ExitHandler exitHandler;
-    signal(SIGTERM, &ExitHandler::exitHandler);
-    signal(SIGABRT, &ExitHandler::exitHandler);
-    signal(SIGINT, &ExitHandler::exitHandler);
-    // Note: the initializer must exist in the life time of the whole program
-    auto initializer = std::make_shared<LightNodeInitializer>();
-    try
-    {
-        auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
-        initializer->init(param.configFilePath, param.genesisFilePath);
-        bcos::initializer::showNodeVersionMetric();
-        initializer->start();
-    }
-    catch (std::exception const& e)
-    {
-        bcos::initializer::printVersion();
-        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-        std::cout << "start fisco-bcos failed, error:" << boost::diagnostic_information(e) << std::endl;
-        return -1;
-    }
-    bcos::initializer::printVersion();
-    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-    std::cout << "The fisco-bcos is running..." << std::endl;
-    while (!exitHandler.shouldExit())
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    initializer.reset();
-    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-    std::cout << "fisco-bcos program exit normally." << std::endl;
+    return 0;
 }

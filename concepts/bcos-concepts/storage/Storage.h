@@ -8,20 +8,22 @@
 namespace bcos::concepts::storage
 {
 
-template <class KeyType>
-concept Key = bcos::concepts::ByteBuffer<KeyType> ||
-    (std::ranges::range<KeyType>&& bcos::concepts::ByteBuffer<std::ranges::range_value_t<KeyType>>);
-
-template <class ValueType>
-concept Value = Key<ValueType>;
-
 template <class Impl>
 class StorageBase
 {
 public:
-    auto getRows(std::ranges::range auto const& keys) { impl().impl_getRows(keys); }
+    std::optional<bcos::storage::Entry> getRow(std::string_view table, std::string_view key)
+    {
+        return impl().impl_getRow(table, key);
+    }
 
-    void setRows(std::string_view table, std::string_view key, bcos::storage::Entry entry)
+    std::vector<std::optional<bcos::storage::Entry>> getRows(
+        std::string_view table, std::ranges::range auto&& keys)
+    {
+        return impl().impl_getRows(table, std::forward<decltype(keys)>(keys));
+    }
+
+    void setRow(std::string_view table, std::string_view key, bcos::storage::Entry entry)
     {
         impl().impl_setRow(table, key, std::move(entry));
     }

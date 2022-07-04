@@ -1,16 +1,20 @@
-
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "impl/TarsHashable.h"
-#include "impl/TarsSerializable.h"
-#include "tars/Transaction.h"
-#include "tars/TransactionReceipt.h"
+// clang-format off
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
+#include <bcos-tars-protocol/impl/TarsHashable.h>
+// clang-format on
+#include "../ledger/LedgerImpl.h"
+#include "bcos-concepts/ledger/Ledger.h"
+#include <bcos-concepts/Serialize.h>
+#include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-framework/concepts/storage/Storage.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-ledger/bcos-ledger/LedgerImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
+#include <bcos-tars-protocol/tars/Transaction.h>
+#include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
@@ -136,11 +140,12 @@ BOOST_FIXTURE_TEST_SUITE(LedgerImplTest, LedgerImplFixture)
 
 BOOST_AUTO_TEST_CASE(getBlock)
 {
-    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
+    bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
         bcostars::Block>
         ledger{storage};
 
-    auto block = ledger.getBlock<BLOCK_HEADER, BLOCK_TRANSACTIONS, BLOCK_RECEIPTS>(10086);
+    auto block = ledger.getBlock<bcos::concepts::ledger::HEADER,
+        bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block.blockHeader.data.timestamp, 5000);
@@ -158,7 +163,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
         BOOST_CHECK_EQUAL(block.receipts[i].data.contractAddress, "contract");
     }
 
-    auto block2 = ledger.getBlock<BLOCK_ALL>(10086);
+    auto block2 = ledger.getBlock<bcos::concepts::ledger::ALL>(10086);
     BOOST_CHECK_EQUAL(block2.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block2.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block2.blockHeader.data.timestamp, 5000);
@@ -176,10 +181,11 @@ BOOST_AUTO_TEST_CASE(getBlock)
         BOOST_CHECK_EQUAL(block2.receipts[i].data.contractAddress, "contract");
     }
 
-    BOOST_CHECK_THROW(ledger.getBlock<BLOCK_HEADER>(10087), std::runtime_error);
-    BOOST_CHECK_THROW(ledger.getBlock<BLOCK_TRANSACTIONS>(10087), std::runtime_error);
-    BOOST_CHECK_THROW(ledger.getBlock<BLOCK_RECEIPTS>(10087), std::runtime_error);
-    BOOST_CHECK_THROW(ledger.getBlock<BLOCK_ALL>(10087), std::runtime_error);
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087), std::runtime_error);
+    BOOST_CHECK_THROW(
+        ledger.getBlock<bcos::concepts::ledger::TRANSACTIONS>(10087), std::runtime_error);
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::RECEIPTS>(10087), std::runtime_error);
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(setBlock)
@@ -208,10 +214,11 @@ BOOST_AUTO_TEST_CASE(setBlock)
         block.transactions.emplace_back(std::move(transaction));
         block.receipts.emplace_back(std::move(receipt));
     }
-    ledger.setTransactionsOrReceipts(block.transactions);
+    ledger.setTransactionsOrReceipts<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
+        block.transactions);
 
     BOOST_CHECK_NO_THROW(ledger.setBlock(storage, block));
-    auto gotBlock = ledger.getBlock<BLOCK_ALL>(100);
+    auto gotBlock = ledger.getBlock<bcos::concepts::ledger::ALL>(100);
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
     BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());

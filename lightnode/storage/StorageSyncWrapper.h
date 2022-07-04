@@ -1,6 +1,7 @@
 #pragma once
 
-#include <bcos-framework/concepts/storage/Storage.h>
+#include <bcos-concepts/storage/Storage.h>
+#include <bcos-framework/storage/Entry.h>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::storage

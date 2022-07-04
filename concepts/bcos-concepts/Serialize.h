@@ -1,5 +1,6 @@
 #pragma once
 #include "Basic.h"
+#include <vector>
 
 namespace bcos::concepts::serialize
 {

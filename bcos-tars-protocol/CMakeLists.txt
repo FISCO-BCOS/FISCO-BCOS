@@ -53,10 +53,9 @@ find_package(tarscpp REQUIRED)
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
 target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC ${TARSCPP_ROOT}/include)
 target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil)
 
 if (TESTS)
-    # fetch bcos-test
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)

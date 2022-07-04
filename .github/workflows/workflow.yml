@@ -38,6 +38,7 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
+        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |

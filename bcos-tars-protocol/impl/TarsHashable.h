@@ -1,7 +1,7 @@
 #pragma once
 #include "../Common.h"
 #include "tars/Block.h"
-#include <bcos-framework/concepts/Hash.h>
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <string>
 #include <vector>

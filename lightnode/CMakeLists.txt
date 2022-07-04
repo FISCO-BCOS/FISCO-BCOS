@@ -1,5 +1,10 @@
-aux_source_directory(. SRC_LIST)
+cmake_minimum_required(VERSION 3.20)
+project(lightnode VERSION ${VERSION})
 
-add_executable(lightnode ${SRC_LIST})
-target_compile_options(lightnode PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(lightnode PUBLIC ${INIT_LIB} ${PBFT_INIT_LIB} ${TOOL_TARGET} ${COMMAND_HELPER_LIB} ${RPC_TARGET} ${GATEWAY_TARGET})
+add_executable(lightnode main.cpp)
+target_link_libraries(lightnode PUBLIC bcos-concepts bcos-framework bcos-crypto)
+
+if(TESTS)
+        enable_testing()
+        add_subdirectory(tests)
+    endif()

@@ -1,9 +1,8 @@
 #pragma once
 
-#include "bcos-ledger/bcos-ledger/LedgerImpl.h"
-#include <bcos-framework/concepts/Block.h>
-#include <bcos-framework/concepts/ledger/Ledger.h>
-#include <bcos-framework/concepts/sync/SyncBlockMessages.h>
+#include <bcos-concepts/Block.h>
+#include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-concepts/sync/SyncBlockMessages.h>
 
 namespace bcos::sync
 {
@@ -29,7 +28,7 @@ public:
                  request.beginBlockNumber, std::min(blockNumber, request.endBlockNumber)})
         {
             response.blocks.emplace_back(
-                m_ledger.template getBlock<ledger::BLOCK_HEADER>(currentBlockNumber));
+                m_ledger.template getBlock<concepts::ledger::HEADER>(currentBlockNumber));
         }
 
         return response;
