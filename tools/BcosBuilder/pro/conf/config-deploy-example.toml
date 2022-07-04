@@ -70,7 +70,7 @@ enable_storage_security = false
         # key_center_url = 
         # cipher_data_key =
         monitor_listen_port = "3902"
-        # monitor log path example:"/root/app/tars/framework/app_log/" 
+        # monitor log path example:"/home/fisco/tars/framework/app_log/" 
         monitor_log_path = "" 
 
 [[agency]]
@@ -105,5 +105,5 @@ enable_storage_security = false
         # key_center_url = 
         # cipher_data_key =
         monitor_listen_port = "3901"
-        # monitor log path example:"/root/app/tars/framework/app_log/" 
+        # monitor log path example:"/home/fisco/tars/framework/app_log/" 
         monitor_log_path = "" 
