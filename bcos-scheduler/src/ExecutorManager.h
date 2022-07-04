@@ -64,6 +64,10 @@ public:
     };
 
     ExecutorInfo::Ptr getExecutorInfo(const std::string_view& contract);
+    ExecutorInfo::Ptr getExecutorInfoByName(const std::string_view& name)
+    {
+        return m_name2Executors[name];
+    };
 
 private:
     struct ExecutorInfoComp
