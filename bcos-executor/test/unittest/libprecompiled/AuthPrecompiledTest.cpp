@@ -470,7 +470,7 @@ public:
 
         result->setSeq(1001);
 
-        /// internal call get admin
+        /// internal call set contract auth type
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(result),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -479,9 +479,9 @@ public:
             });
         auto result2 = executePromise2.get_future().get();
 
-        /// callback to precompiled
         result2->setSeq(1000);
 
+        /// callback to precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->executeTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -490,35 +490,13 @@ public:
             });
         auto result3 = executePromise3.get_future().get();
 
-        result3->setSeq(1002);
-
-        /// internal call set contract auth type
-        std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->executeTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise4.set_value(std::move(result));
-            });
-        auto result4 = executePromise4.get_future().get();
-
-        result4->setSeq(1000);
-
-        /// callback to precompiled
-        std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->executeTransaction(std::move(result4),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise5.set_value(std::move(result));
-            });
-        auto result5 = executePromise5.get_future().get();
-
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result5->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result5;
+        return result3;
     };
 
     ExecutionMessage::UniquePtr modifyMethodAuth(protocol::BlockNumber _number, int _contextId,
@@ -557,7 +535,7 @@ public:
 
         result->setSeq(1001);
 
-        /// internal call get admin
+        /// internal call set contract auth type
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(result),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -566,9 +544,9 @@ public:
             });
         auto result2 = executePromise2.get_future().get();
 
-        /// callback to precompiled
         result2->setSeq(1000);
 
+        /// callback to precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->executeTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -577,36 +555,14 @@ public:
             });
         auto result3 = executePromise3.get_future().get();
 
-        result3->setSeq(1002);
-
-        /// internal call set contract auth type
-        std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->executeTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise4.set_value(std::move(result));
-            });
-        auto result4 = executePromise4.get_future().get();
-
-        result4->setSeq(1000);
-
-        /// callback to precompiled
-        std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->executeTransaction(std::move(result4),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise5.set_value(std::move(result));
-            });
-        auto result5 = executePromise5.get_future().get();
-
         // call precompiled
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result5->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
 
-        return result5;
+        return result3;
     };
 
     ExecutionMessage::UniquePtr getMethodAuth(protocol::BlockNumber _number, Address const& _path,
@@ -767,7 +723,7 @@ public:
 
         result->setSeq(1001);
 
-        /// internal call get admin
+        /// internal call set contract status
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(result),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -776,9 +732,9 @@ public:
             });
         auto result2 = executePromise2.get_future().get();
 
-        /// callback to precompiled
         result2->setSeq(1000);
 
+        /// callback to precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->executeTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -787,35 +743,13 @@ public:
             });
         auto result3 = executePromise3.get_future().get();
 
-        result3->setSeq(1002);
-
-        /// internal call set contract status
-        std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->executeTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise4.set_value(std::move(result));
-            });
-        auto result4 = executePromise4.get_future().get();
-
-        result4->setSeq(1000);
-
-        /// callback to precompiled
-        std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->executeTransaction(std::move(result4),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise5.set_value(std::move(result));
-            });
-        auto result5 = executePromise5.get_future().get();
-
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result5->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result5;
+        return result3;
     };
 
     ExecutionMessage::UniquePtr contractAvailable(
@@ -1181,8 +1115,6 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
     // add method acl type
     {
-        BlockNumber _number = 3;
-
         // not found
         auto r1 = getMethodAuth(number++, Address(helloAddress), "set(string)");
         BOOST_CHECK(r1->status() == (int)TransactionStatus::PrecompiledError);
@@ -1193,7 +1125,7 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
         // set method acl type
         {
             auto result = setMethodType(
-                _number++, 1000, Address(helloAddress), "get()", AuthType::WHITE_LIST_MODE);
+                number++, 1000, Address(helloAddress), "get()", AuthType::WHITE_LIST_MODE);
             BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
 
             // row not found
@@ -1203,67 +1135,69 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
         // can't get now, even if not set any acl
         {
-            auto result = helloGet(_number++, 1000, 0);
+            auto result = helloGet(number++, 1000, 0);
             BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
             BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
         }
 
         // can still set
         {
-            auto result = helloSet(_number++, 1000, "test1");
+            auto result = helloSet(number++, 1000, "test1");
             BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
         }
 
         // open white list, only 0x1234567890123456789012345678901234567890 address can use
         {
-            auto result4 = modifyMethodAuth(_number++, 1000,
+            auto result4 = modifyMethodAuth(number++, 1000,
                 "openMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"}),
-                                                         std::vector<std::string>({})));
+            BOOST_CHECK(result2->data().toBytes() ==
+                        codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
+                            std::vector<std::string>({"1234567890123456789012345678901234567890"}),
+                            std::vector<std::string>({})));
         }
 
         // get permission denied
         {
-            auto result5 = helloGet(_number++, 1000);
+            auto result5 = helloGet(number++, 1000);
             BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
             BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
         }
 
         // can still set
         {
-            auto result6 = helloSet(_number++, 1000, "test2");
+            auto result6 = helloSet(number++, 1000, "test2");
             BOOST_CHECK(result6->status() == (int32_t)TransactionStatus::None);
         }
 
         // use address 0x1234567890123456789012345678901234567890, success get
         {
             auto result7 =
-                helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
+                helloGet(number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result7->data().toBytes() == codec->encode(std::string("test2")));
         }
 
         // close white list, 0x1234567890123456789012345678901234567890 address can not use
         {
-            auto result4 = modifyMethodAuth(_number++, 1000,
+            auto result4 = modifyMethodAuth(number++, 1000,
                 "closeMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
-                                                         std::vector<std::string>({}),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"})));
+            BOOST_CHECK(
+                result2->data().toBytes() ==
+                codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE), std::vector<std::string>({}),
+                    std::vector<std::string>({"1234567890123456789012345678901234567890"})));
         }
 
         // use address 0x1234567890123456789012345678901234567890 get permission denied
         {
             auto result5 =
-                helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
+                helloGet(number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
             BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
         }
@@ -1271,8 +1205,37 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
         // use address 0x1234567890123456789012345678901234567890 still can set
         {
             auto result = helloSet(
-                _number++, 1000, "test2", 0, Address("0x1234567890123456789012345678901234567890"));
+                number++, 1000, "test2", 0, Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+        }
+    }
+
+    // use error admin set acl
+    {
+        Address admin = Address("0x4a37eba43c66df4b8394abdf8b239e3381ea4221");
+        std::string newHelloAddress = "272D69CFdB321D147F63FDfa9126c4aD1969265A";
+        deployHelloInAuthCheck(newHelloAddress, number++, admin);
+        // set method acl type
+        {
+            // use error admin
+            auto result = setMethodType(
+                number++, 1000, Address(newHelloAddress), "set(string)", AuthType::WHITE_LIST_MODE);
+            BOOST_CHECK(result->data().toBytes() == codec->encode(int(CODE_NO_AUTHORIZED)));
+
+            // row not found
+            auto result2 = getMethodAuth(number++, Address(newHelloAddress), "set(string)");
+            BOOST_CHECK(result2->status() == (int)TransactionStatus::PrecompiledError);
+
+            auto result3 =
+                modifyMethodAuth(number++, 1000, "openMethodAuth(address,bytes4,address)",
+                    Address(newHelloAddress), "set(string)", admin);
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(int(CODE_NO_AUTHORIZED)));
+
+            auto result4 = setContractStatus(number++, Address(newHelloAddress), false);
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(int(CODE_NO_AUTHORIZED)));
+
+            auto r2 = contractAvailable(number++, Address(newHelloAddress));
+            BOOST_CHECK(r2->data().toBytes() == codec->encode(true));
         }
     }
 }
@@ -1332,9 +1295,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"}),
-                                                         std::vector<std::string>({})));
+            BOOST_CHECK(result2->data().toBytes() ==
+                        codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
+                            std::vector<std::string>({"1234567890123456789012345678901234567890"}),
+                            std::vector<std::string>({})));
         }
 
         // can still set
@@ -1364,9 +1328,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
-                                                         std::vector<std::string>({}),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"})));
+            BOOST_CHECK(
+                result2->data().toBytes() ==
+                codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE), std::vector<std::string>({}),
+                    std::vector<std::string>({"1234567890123456789012345678901234567890"})));
         }
 
         // use address 0x1234567890123456789012345678901234567890, get success
@@ -1822,7 +1787,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise11;
         executor->executeTransaction(
             std::move(result10), [&](bcos::Error::UniquePtr&& error,
-                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise11.set_value(std::move(result));
             });
@@ -1842,7 +1807,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
 
         auto result12 = executePromise12.get_future().get();
 
-        result12 ->setSeq(1006);
+        result12->setSeq(1006);
 
         /// callback get deploy committee context
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise13;
@@ -1882,7 +1847,8 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         BOOST_CHECK_EQUAL(result14->seq(), 1004);
         BOOST_CHECK_EQUAL(result14->create(), false);
         BOOST_CHECK_EQUAL(result14->origin(), sender);
-        BOOST_CHECK_EQUAL(result14->newEVMContractAddress(), "2222222222222222222222222222222222222222");
+        BOOST_CHECK_EQUAL(
+            result14->newEVMContractAddress(), "2222222222222222222222222222222222222222");
         BOOST_CHECK_EQUAL(result14->to(), AUTH_COMMITTEE_ADDRESS);
 
         result14->setSeq(1000);

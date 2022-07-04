@@ -75,9 +75,6 @@ private:
     void setDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bool _isClose, PrecompiledExecResult::Ptr const& _callParameters);
 
-    std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& _address, PrecompiledExecResult::Ptr const& _callParameters);
-
     u256 getDeployAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 
     bool checkDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,

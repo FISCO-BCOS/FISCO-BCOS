@@ -212,7 +212,24 @@ void AuthManagerPrecompiled::getAdmin(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin")
                            << LOG_KV("path", path);
 
-    std::string adminStr = getContractAdmin(_executive, path, _callParameters);
+    std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+
+    auto newParams =
+        codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+        authMgrAddress, path, _callParameters->m_staticCall, false, _callParameters->m_gas, true);
+
+    if (response->status != (int32_t)protocol::TransactionStatus::None)
+    {
+        PRECOMPILED_LOG(ERROR) << "Can't get contract admin, check the contract existence."
+                               << LOG_KV("address", path);
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("Please check the existence of contract."));
+    }
+    std::string adminStr = "";
+
+    codec.decode(ref(response->data), adminStr);
+
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
                            << LOG_KV("admin", adminStr);
     _callParameters->setExecResult(
@@ -282,22 +299,12 @@ void AuthManagerPrecompiled::setMethodAuthType(
     {
         codec.decode(data, path, _func, _type);
     }
-    auto admin = getContractAdmin(_executive, path, _callParameters);
-    if (_callParameters->m_sender != admin)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("Permission denied, only admin can set contract access.")
-                               << LOG_KV("address", path)
-                               << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        return;
-    }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
     auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
+        externalRequest(_executive, ref(newParams), _callParameters->m_sender, authMgrAddress, path,
             _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
     _callParameters->setExternalResult(std::move(response));
 }
@@ -389,21 +396,11 @@ void AuthManagerPrecompiled::setMethodAuth(
     {
         codec.decode(data, path, _func, account);
     }
-    auto admin = getContractAdmin(_executive, path, _callParameters);
-    if (_callParameters->m_sender != admin)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("Permission denied, only admin can set contract access.")
-                               << LOG_KV("address", path)
-                               << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        return;
-    }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
     auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
+        externalRequest(_executive, ref(newParams), _callParameters->m_sender, authMgrAddress, path,
             _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
     _callParameters->setExternalResult(std::move(response));
 }
@@ -431,22 +428,11 @@ void AuthManagerPrecompiled::setContractStatus(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
                            << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
 
-    /// check sender is contract admin
-    auto admin = getContractAdmin(_executive, address, _callParameters);
-    if (_callParameters->m_sender != admin)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("Permission denied, only admin can set contract access.")
-                               << LOG_KV("address", address)
-                               << LOG_KV("sender", _callParameters->m_sender);
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        return;
-    }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
-    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_sender,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
         _callParameters->m_gas, true);
 
@@ -484,36 +470,6 @@ void AuthManagerPrecompiled::contractAvailable(
         _callParameters->m_gas, true);
 
     _callParameters->setExternalResult(std::move(response));
-}
-
-std::string AuthManagerPrecompiled::getContractAdmin(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _to,
-    PrecompiledExecResult::Ptr const& _callParameters)
-{
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-
-    std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-
-    bytes selector = blockContext->isWasm() ?
-                         codec.encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
-                         codec.encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
-    auto data = codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), selector);
-    auto response = externalRequest(_executive, ref(data), _callParameters->m_origin,
-        authMgrAddress, _to, _callParameters->m_staticCall, false, _callParameters->m_gas, true);
-
-    if (response->status != (int32_t)protocol::TransactionStatus::None)
-    {
-        PRECOMPILED_LOG(ERROR) << "Can't get contract admin, check the contract existence."
-                               << LOG_KV("address", _to);
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Please check the existence of contract."));
-    }
-    std::string admin = "";
-
-    codec.decode(ref(response->data), admin);
-
-    return admin;
 }
 
 u256 AuthManagerPrecompiled::getDeployAuthType(

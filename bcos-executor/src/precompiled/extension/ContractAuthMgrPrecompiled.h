@@ -83,6 +83,9 @@ private:
     MethodAuthMap getMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& path, int32_t authType) const;
 
+    std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& path) const;
+
     inline std::string getAuthTableName(const std::string& _name)
     {
         return executor::USER_APPS_PREFIX + _name + executor::CONTRACT_SUFFIX;

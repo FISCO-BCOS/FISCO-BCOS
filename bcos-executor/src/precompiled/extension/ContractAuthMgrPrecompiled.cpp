@@ -91,7 +91,6 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
 
     auto blockContext = _executive->blockContext().lock();
     auto authAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     if (_callParameters->m_sender != authAddress)
     {
@@ -275,6 +274,18 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
+
+    auto admin = getContractAdmin(_executive, path);
+    if (_callParameters->m_origin != admin)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("Permission denied, only admin can set contract access.")
+                               << LOG_KV("address", path)
+                               << LOG_KV("sender", _callParameters->m_origin);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        return;
+    }
+
     auto entry = table->getRow(METHOD_AUTH_TYPE);
     if (!entry)
     {
@@ -494,6 +505,16 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
+    auto admin = getContractAdmin(_executive, path);
+    if (_callParameters->m_origin != admin)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("Permission denied, only admin can set contract access.")
+                               << LOG_KV("address", path)
+                               << LOG_KV("sender", _callParameters->m_origin);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        return;
+    }
     s256 authType = getMethodAuthType(_executive, path, ref(func));
     std::string getTypeStr;
     if (authType == (int)AuthType::WHITE_LIST_MODE)
@@ -655,6 +676,16 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
+    auto admin = getContractAdmin(_executive, path);
+    if (_callParameters->m_origin != admin)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("Permission denied, only admin can set contract access.")
+                               << LOG_KV("address", path)
+                               << LOG_KV("sender", _callParameters->m_origin);
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        return;
+    }
     auto status = isFreeze ? CONTRACT_FROZEN : CONTRACT_NORMAL;
     Entry entry = {};
     entry.importFields({status});
@@ -719,4 +750,18 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
                            << LOG_DESC("get contract status success") << LOG_KV("contract", path)
                            << LOG_KV("status", status);
     return status == CONTRACT_NORMAL;
+}
+
+std::string ContractAuthMgrPrecompiled::getContractAdmin(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const std::string& path) const
+{
+    auto entry = _executive->storage().getRow(path, ADMIN_FIELD);
+    if (!entry)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("entry not found") << LOG_KV("path", path);
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract Admin row not found."));
+    }
+    return std::string(entry->getField(0));
 }
