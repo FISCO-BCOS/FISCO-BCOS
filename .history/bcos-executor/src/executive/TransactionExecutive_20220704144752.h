@@ -178,7 +178,7 @@ public:
         m_exchangeMessage = std::move(callParameters);
     }
 
-    virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {
         std::copy(
             keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));

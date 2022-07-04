@@ -64,7 +64,7 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     case CallParameters::FINISHED:
     case CallParameters::REVERT:
-        m_status = FINISHED:;
+        m_status = FINISHED;
         break;
     }
 

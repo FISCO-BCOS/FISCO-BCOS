@@ -31,8 +31,9 @@ public:
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        
-        return std::move(callParameters);
+        auto executiveState =
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
+        return ExecutiveState;
     }
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters) override

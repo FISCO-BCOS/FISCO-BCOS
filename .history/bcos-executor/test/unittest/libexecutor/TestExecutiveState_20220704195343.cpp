@@ -10,7 +10,6 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
-
 namespace bcos
 {
 namespace test

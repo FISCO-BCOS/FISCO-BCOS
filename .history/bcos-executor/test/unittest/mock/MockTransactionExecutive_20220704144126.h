@@ -24,22 +24,21 @@ public:
     virtual ~MockTransactionExecutive() {}
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override{ return std::move(input); }
-    CallParameters::UniquePtr resume ()override
-    {
+    CallParameters::UniquePtr resume()
+    override{
         auto callParameters = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
         callParameters->staticCall = false;
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        
         return std::move(callParameters);
     }
 
-    void setExchangeMessage(CallParameters::UniquePtr callParameters) override
+    void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
         m_exchangeMessage = std::move(callParameters);
     }
-    void appendResumeKeyLocks(std::vector<std::string> keyLocks) override
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {
         std::copy(
             keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));

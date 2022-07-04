@@ -1,9 +1,8 @@
 #pragma once
-#include "../../../src/Common.h"
-#include "../../../src/vm/gas_meter/GasInjector.h"
-#include "../../../src/executive/ExecutiveFactory.h"
-#include "../../../src/executive/TransactionExecutive.h"
-#include "../../../src/executive/BlockContext.h"
+#include "../../src/Common.h"
+#include "../../src/vm/gas_meter/GasInjector.h"
+#include "../../src/executive/ExecutiveFactory.h"
+#include "../../src/executive/TransactionExecutive.h"
 #include "MockTransactionExecutive.h"
 #include <boost/test/unit_test.hpp>
 
@@ -35,6 +34,8 @@ public:
         auto executive = std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
         return executive;
     }
+
+
     std::shared_ptr<wasm::GasInjector> instruction = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 };
 }  // namespace bcos::test

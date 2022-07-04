@@ -31,7 +31,6 @@ public:
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        
         return std::move(callParameters);
     }
 

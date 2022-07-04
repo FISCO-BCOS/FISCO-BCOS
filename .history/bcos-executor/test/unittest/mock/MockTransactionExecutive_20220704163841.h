@@ -31,7 +31,8 @@ public:
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        
+        auto executiveState =
+                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
         return std::move(callParameters);
     }
 

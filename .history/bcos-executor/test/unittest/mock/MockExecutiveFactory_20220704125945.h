@@ -1,9 +1,9 @@
-#pragma once
-#include "../../../src/Common.h"
-#include "../../../src/vm/gas_meter/GasInjector.h"
-#include "../../../src/executive/ExecutiveFactory.h"
-#include "../../../src/executive/TransactionExecutive.h"
-#include "../../../src/executive/BlockContext.h"
+#ifndef A951B365_3BCB_4438_BF5F_D0DD49CE52B7
+#define A951B365_3BCB_4438_BF5F_D0DD49CE52B7
+#include "../../src/Common.h"
+#include "../../src/executive/ExecutiveFactory.h"
+#include "../../src/executive/TransactionExecutive.h"
+#include "../../src/vm/gas_meter/GasInjector.h"
 #include "MockTransactionExecutive.h"
 #include <boost/test/unit_test.hpp>
 
@@ -24,17 +24,25 @@ public:
         std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
         std::shared_ptr<wasm::GasInjector> gasInjector)
       : ExecutiveFactory(
-           std::move(blockContext), precompiledContract, constantPrecompiled, builtInPrecompiled, gasInjector)
+            blockContext, precompiledContract, constantPrecompiled, builtInPrecompiled, gasInjector)
     {}
     virtual ~MockExecutiveFactory() {}
 
 
     std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t) override
     {
-	std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
-        auto executive = std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
+        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+        auto executive =
+            std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
         return executive;
     }
-    std::shared_ptr<wasm::GasInjector> instruction = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+
+
+    std::shared_ptr<wasm::GasInjector> instruction =
+        std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 };
 }  // namespace bcos::test
+
+
+#endif /* A951B365_3BCB_4438_BF5F_D0DD49CE52B7 */
