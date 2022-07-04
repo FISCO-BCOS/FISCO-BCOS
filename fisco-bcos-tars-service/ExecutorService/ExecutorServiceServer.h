@@ -39,7 +39,8 @@ public:
 
     void initialize() override {}
     void destroy() override {}
-
+    bcostars::Error status(
+        bcostars::ExecutorStatus& _output, tars::TarsCurrentPtr current) override;
     bcostars::Error nextBlockHeader(tars::Int64 schedulerTermId,
         bcostars::BlockHeader const& _blockHeader, tars::TarsCurrentPtr _current) override;
     bcostars::Error executeTransaction(bcostars::ExecutionMessage const& _input,

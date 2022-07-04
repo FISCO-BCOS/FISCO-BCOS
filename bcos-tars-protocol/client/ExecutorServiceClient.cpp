@@ -25,6 +25,42 @@
 
 using namespace bcostars;
 
+void ExecutorServiceClient::status(
+    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)> callback)
+{
+    class Callback : public ExecutorServicePrxCallback
+    {
+    public:
+        Callback(
+            std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>&&
+                _callback)
+          : m_callback(std::move(_callback))
+        {}
+        ~Callback() override {}
+
+        void callback_status(const bcostars::Error& ret, const bcostars::ExecutorStatus& _output)
+        {
+            auto error = toUniqueBcosError(ret);
+            auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
+            if (!error)
+            {
+                status->setSeq(_output.seq);
+            }
+            m_callback(std::move(error), std::move(status));
+        }
+
+        void callback_status_exception(tars::Int32 ret)
+        {
+            m_callback(toUniqueBcosError(ret), std::make_unique<bcos::protocol::ExecutorStatus>());
+        }
+
+    private:
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
+            m_callback;
+    };
+    m_prx->async_status(new Callback(std::move(callback)));
+}
+
 void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
     const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
     std::function<void(bcos::Error::UniquePtr)> callback)
