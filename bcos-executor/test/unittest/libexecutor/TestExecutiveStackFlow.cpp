@@ -52,14 +52,15 @@ struct ExecutiveStackFlowFixture
                 auto input = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
                 input->contextID = i;
                 input->seq = 0;
+                txInputs.push_back(std::move(input));
             }
             else
             {
                 auto input = std::make_unique<CallParameters>(CallParameters::Type::REVERT);
                 input->contextID = i;
                 input->seq = 1;
+                txInputs.push_back(std::move(input));
             }
-            txInputs.push_back(std::move(input));
         }
 
         std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
@@ -68,7 +69,7 @@ struct ExecutiveStackFlowFixture
         executiveFactory = std::make_shared<MockExecutiveFactory>(
             blockContext, nullptr, nullptr, nullptr, nullptr);
 
-        std::shared_prt<ExecutiveStackFlow> executiveStackFlow =
+        ExecutiveStackFlow::Ptr executiveStackFlow =
             std::make_shared<ExecutiveStackFlow>(executiveFactory);
     }
     std::shared_ptr<ExecutiveStackFlow> executiveStackFlow;
