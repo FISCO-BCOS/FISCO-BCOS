@@ -36,7 +36,7 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     BOOST_CHECK_EQUAL(blockContext->number(), 0);
     BOOST_CHECK_EQUAL(blockContext->timestamp(), 0);
     BOOST_CHECK_EQUAL(blockContext->blockVersion(), 0);
-    BOOST_CHECK_EQUAL(blockContext->gasLimit(), 0);
+    BOOST_CHECK_EQUAL(blockContext->gasLimit(), 3000000000);
 
     for (int i = 0; i < 10; ++i)
     {
