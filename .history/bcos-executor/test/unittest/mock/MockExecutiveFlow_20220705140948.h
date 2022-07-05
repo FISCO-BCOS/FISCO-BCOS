@@ -2,9 +2,9 @@
 
 #include "../../../src/CallParameters.h"
 #include <bcos-utilities/ThreadPool.h>
-using bcos;
-using std;
-using bcos::executor;
+using namespace bcos;
+using namespace std;
+using namespace bcos::executor;
 
 namespace bcos::test
 {
@@ -23,7 +23,7 @@ public:
 
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
-    string getName() { return m_name; }
+    std::string getName() { return m_name; }
 
 private:
     std::string m_name;

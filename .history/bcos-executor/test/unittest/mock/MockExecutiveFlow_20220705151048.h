@@ -1,6 +1,5 @@
 #pragma once
 #include "../../../src/CallParameters.h"
-#include "../../../src/executive/ExecutiveFlowInterface.h"
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/test/unit_test.hpp>
 
@@ -15,7 +14,7 @@ class MockExecutiveFlow : public bcos::executor::ExecutiveFlowInterface
 public:
     using Ptr = std::shared_ptr<MockExecutiveFlow>;
     MockExecutiveFlow(std::string& name) : m_name(name) {}
-    virtual ~MockExecutiveFlow() {}
+    ~MockExecutiveFlow() {}
 
 
     void submit(CallParameters::UniquePtr txInput) override {}
@@ -25,7 +24,7 @@ public:
         std::function<void(CallParameters::UniquePtr)> onTxReturn,
 
         // onFinished(success, errorMessage)
-        std::function<void(bcos::Error::UniquePtr)> onFinished) override{};
+        std::function<void(bcos::Error::UniquePtr)> onFinished) override;
     std::string& name() const { return m_name; }
 
 private:

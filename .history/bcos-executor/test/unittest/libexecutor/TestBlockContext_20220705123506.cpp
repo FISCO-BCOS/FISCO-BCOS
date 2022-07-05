@@ -16,6 +16,16 @@ namespace bcos
 namespace test
 {
 
+// struct BlockContextFixture
+// {
+//     BlockContextFixture()
+//     {
+//         blockContext = std::make_shared<BlockContext>(
+//             nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+//     }
+//     std::make_shared<bcos::executor::BlockContext> blockContext;
+// };
+
 BOOST_AUTO_TEST_SUITE(TestBlockContext)
 
 BOOST_AUTO_TEST_CASE(BlockContextTest)
@@ -24,7 +34,6 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
         "addr0", "addr1", "addr2", "addr3", "addr4", "addr5", "addr6", "addr7", "addr8", "addr9"};
     auto executiveFlowName = std::vector<std::string>{
         "flow0", "flow1", "flow2", "flow3", "flow4", "flow5", "flow6", "flow7", "flow8", "flow9"};
-
     BlockContext::Ptr blockContext = std::make_shared<bcos::executor::BlockContext>(
         nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
@@ -40,16 +49,15 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
 
     for (int i = 0; i < 10; ++i)
     {
-        MockExecutiveFlow::Ptr executiveFlow =
+        MockExecutiveFlow::Ptr Executiveflow =
             std::make_shared<MockExecutiveFlow>(executiveFlowName[i]);
-        blockContext->setExecutiveFlow(codeAddressArr[i], executiveFlow);
+        blockContext->setExecutiveFlow(codeAddressArr[i], ExecutiveFlow);
     }
     int count = 0;
     for (int i = 0; i < 10; ++i)
     {
-        auto executiveFlow = std::dynamic_pointer_cast<MockExecutiveFlow>(
-            blockContext->getExecutiveFlow(codeAddressArr[i]));
-        if (executiveFlow->name() == executiveFlowName[i])
+        auto executiveFlow = blockContext->getExecutiveFlow(codeAddressArr[i]);
+        if (executiveFlow->getname() == executiveFlowName[i])
             ++count;
     }
     BOOST_CHECK_EQUAL(count, 10);

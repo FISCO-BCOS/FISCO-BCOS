@@ -1,19 +1,19 @@
 #pragma once
-
-#include "../CallParameters.h"
+#include "../../../src/CallParameters.h"
 #include <bcos-utilities/ThreadPool.h>
+#include <boost/test/unit_test.hpp>
 
-using bcos;
-using std;
-using bcos::executor;
+using namespace bcos;
+using namespace std;
+using namespace bcos::executor;
 
 namespace bcos::test
 {
-class MockExecutiveFactory : public bcos::executor::ExecutiveFlowInterface
+class MockExecutiveFlow : public bcos::executor::ExecutiveFlowInterface
 {
 public:
     using Ptr = std::shared_ptr<MockExecutiveFlow>;
-    MockExecutiveFactory(std::string name) m_name(name);
+    MockExecutiveFlow(std::string& name) : m_name(name){};
 
 
     void submit(CallParameters::UniquePtr txInput) override {}
@@ -24,10 +24,10 @@ public:
 
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
-    string getName() { return m_name; }
+    std::string name() const { return m_name; }
 
 private:
-    std::string m_name;
-}
+    std::string& m_name;
+};
 
 }  // namespace bcos::test

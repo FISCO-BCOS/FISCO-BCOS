@@ -46,10 +46,9 @@ public:
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
 
-    void asyncRun(cd
-                      // onTxReturn(output)
-                      std::function<void(CallParameters::UniquePtr)>
-                          onTxReturn,
+    void asyncRun(
+        // onTxReturn(output)
+        std::function<void(CallParameters::UniquePtr)> onTxReturn,
 
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;

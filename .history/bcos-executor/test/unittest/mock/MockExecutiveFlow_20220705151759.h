@@ -1,6 +1,5 @@
 #pragma once
 #include "../../../src/CallParameters.h"
-#include "../../../src/executive/ExecutiveFlowInterface.h"
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/test/unit_test.hpp>
 
@@ -25,7 +24,7 @@ public:
         std::function<void(CallParameters::UniquePtr)> onTxReturn,
 
         // onFinished(success, errorMessage)
-        std::function<void(bcos::Error::UniquePtr)> onFinished) override{};
+        std::function<void(bcos::Error::UniquePtr)> onFinished) override;
     std::string& name() const { return m_name; }
 
 private:

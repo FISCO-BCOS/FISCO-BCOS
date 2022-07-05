@@ -1,5 +1,4 @@
 #pragma once
-#include "../../../Common.h"
 #include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveFactory.h"
 #include "../../../src/executive/ExecutiveFlowInterface.h"
@@ -26,7 +25,18 @@ namespace bcos
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(TestBlockContext)
+
+// struct BlockContextFixture
+// {
+//     BlockContextFixture()
+//     {
+//         blockContext = std::make_shared<BlockContext>(
+//             nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+//     }
+//     std::make_shared<bcos::executor::BlockContext> blockContext;
+// };
+
+BOOST_AUTO_TEST_SUITE(TestBlockContext)
 
 BOOST_AUTO_TEST_CASE(BlockContextTest)
 {
