@@ -265,7 +265,8 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     uint8_t type = _type[_type.size() - 1];
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
-                           << LOG_KV("func", toHexStringWithPrefix(func)) << LOG_KV("type", type);
+                           << LOG_KV("func", toHexStringWithPrefix(func))
+                           << LOG_KV("type", (uint32_t)type);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)

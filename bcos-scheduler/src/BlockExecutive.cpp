@@ -132,8 +132,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     }
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
-    if (precompiled::c_systemTxsAddress.find(std::string(tx->to())) !=
-        precompiled::c_systemTxsAddress.end())
+    if (precompiled::c_systemTxsAddress.count({tx->to().data(), tx->to().size()}))
     {
         message->setGasAvailable(TRANSACTION_GAS);
     }
@@ -230,8 +229,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
             message->setDepth(0);
             message->setGasAvailable(m_gasLimit);
-            if (precompiled::c_systemTxsAddress.find(std::string(metaData->to())) !=
-                precompiled::c_systemTxsAddress.end())
+            if (precompiled::c_systemTxsAddress.count(
+                    {metaData->to().data(), metaData->to().size()}))
             {
                 message->setGasAvailable(TRANSACTION_GAS);
             }
@@ -1312,6 +1311,10 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
+    if (bcos::precompiled::c_systemTxsAddress.count({output->from().data(), output->from().size()}))
+    {
+        txGasUsed = 0;
+    }
     m_gasUsed += txGasUsed;
     DMC_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                    << " -> contextID:" << output->contextID() - m_startContextID;
