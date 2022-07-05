@@ -2,9 +2,9 @@
 
 #include "../../../src/CallParameters.h"
 #include <bcos-utilities/ThreadPool.h>
-using namespace bcos;
-using namespace std;
-using namespace bcos::executor;
+using bcos;
+using std;
+using bcos::executor;
 
 namespace bcos::test
 {
