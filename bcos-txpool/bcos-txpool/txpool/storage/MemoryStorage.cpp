@@ -269,6 +269,11 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             {
                 return;
             }
+            // the transaction has already been stored to backend
+            if (_tx->storeToBackend())
+            {
+                return;
+            }
             auto encodedData = _tx->encode();
             auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
             txsToStore->emplace_back(

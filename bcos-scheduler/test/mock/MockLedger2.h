@@ -10,7 +10,8 @@ class MockLedger2 : public bcos::ledger::LedgerInterface
 {
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback)
+        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback)
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
         auto header = mutableBlock->blockHeader();

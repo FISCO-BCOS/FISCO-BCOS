@@ -160,10 +160,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
                          << LOG_KV("block number", m_block->blockHeaderConst()->number())
                          << LOG_KV("tx count", m_block->transactionsMetaDataSize());
 
-    auto txs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
+    m_blockTxs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
 
     m_executiveResults.resize(m_block->transactionsMetaDataSize());
-    if (txs)
+    if (m_blockTxs)
     {
         // can fetch tx from txpool, build message which type is MESSAGE
 #pragma omp parallel for
@@ -176,7 +176,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
                 m_executiveResults[i].source = metaData->source();
             }
             auto contextID = i + m_startContextID;
-            auto message = buildMessage(contextID, (*txs)[i]);
+            auto message = buildMessage(contextID, (*m_blockTxs)[i]);
             std::string to = {message->to().data(), message->to().size()};
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
@@ -451,7 +451,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
     m_currentTimePoint = std::chrono::system_clock::now();
 
-    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_block,
+    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_blockTxs, m_block,
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
