@@ -4,10 +4,10 @@
 // clang-format off
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
+#include <bcos-concepts/Serialize.h>
 // clang-format on
 #include "../ledger/LedgerImpl.h"
 #include "bcos-concepts/ledger/Ledger.h"
-#include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -90,8 +90,9 @@ struct LedgerImplFixture
         header.data.timestamp = 5000;
 
         bcos::storage::Entry headerEntry;
-        auto buffer = bcos::concepts::serialize::encode(header);
-        headerEntry.setField(0, std::move(buffer));
+        std::vector<bcos::byte> headerBuffer;
+        bcos::concepts::serialize::encode(header, headerBuffer);
+        headerEntry.setField(0, std::move(headerBuffer));
         data.emplace(std::tuple{SYS_NUMBER_2_BLOCK_HEADER, "10086"}, std::move(headerEntry));
 
         bcostars::Block transactionsBlock;
@@ -107,7 +108,8 @@ struct LedgerImplFixture
             transaction.data.groupID = "group";
             transaction.importTime = 1000;
 
-            auto txBuffer = bcos::concepts::serialize::encode(transaction);
+            std::vector<bcos::byte> txBuffer;
+            bcos::concepts::serialize::encode(transaction, txBuffer);
             bcos::storage::Entry txEntry;
             txEntry.setField(0, std::move(txBuffer));
 
@@ -118,13 +120,15 @@ struct LedgerImplFixture
             receipt.data.blockNumber = 10086;
             receipt.data.contractAddress = "contract";
 
-            auto receiptBuffer = bcos::concepts::serialize::encode(receipt);
+            std::vector<bcos::byte> receiptBuffer;
+            bcos::concepts::serialize::encode(receipt, receiptBuffer);
             bcos::storage::Entry receiptEntry;
             receiptEntry.setField(0, std::move(receiptBuffer));
             data.emplace(std::tuple{SYS_HASH_2_RECEIPT, hashStr}, std::move(receiptEntry));
         }
 
-        auto txsBuffer = bcos::concepts::serialize::encode(transactionsBlock);
+        std::vector<bcos::byte> txsBuffer;
+        bcos::concepts::serialize::encode(transactionsBlock, txsBuffer);
         bcos::storage::Entry txsEntry;
         txsEntry.setField(0, std::move(txsBuffer));
         data.emplace(std::tuple{SYS_NUMBER_2_TXS, "10086"}, std::move(txsEntry));
@@ -217,7 +221,7 @@ BOOST_AUTO_TEST_CASE(setBlock)
     ledger.setTransactionsOrReceipts<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         block.transactions);
 
-    BOOST_CHECK_NO_THROW(ledger.setBlock(storage, block));
+    BOOST_CHECK_NO_THROW(ledger.setBlock(block));
     auto gotBlock = ledger.getBlock<bcos::concepts::ledger::ALL>(100);
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);

@@ -14,6 +14,7 @@ concept RequestBlock = requires(MessageType message)
     MessageType{};
     std::unsigned_integral<decltype(message.beginBlockNumber)>;
     std::unsigned_integral<decltype(message.endBlockNumber)>;
+    std::integral<decltype(message.onlyHeader)>;
 };
 
 template <class MessageType>

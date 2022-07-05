@@ -7,11 +7,12 @@
 namespace bcos::storage
 {
 
-template <class Storage>
-class StorageSyncWrapper : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<Storage>>
+template <class StoragePtr>
+class StorageSyncWrapper
+  : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<StoragePtr>>
 {
 public:
-    StorageSyncWrapper(Storage storage) : m_storage(std::move(storage)) {}
+    StorageSyncWrapper(StoragePtr storage) : m_storage(std::move(storage)) {}
     StorageSyncWrapper(const StorageSyncWrapper&) = default;
     StorageSyncWrapper(StorageSyncWrapper&&) = default;
     StorageSyncWrapper& operator=(const StorageSyncWrapper&) = default;
@@ -23,7 +24,7 @@ public:
         Error::UniquePtr error;
         std::optional<storage::Entry> entry;
 
-        m_storage.asyncGetRow(
+        storage().asyncGetRow(
             table, key, [&error, &entry](Error::UniquePtr errorOut, std::optional<Entry> entryOut) {
                 error = std::move(errorOut);
                 entry = std::move(entryOut);
@@ -41,7 +42,7 @@ public:
         Error::UniquePtr error;
         std::vector<std::optional<Entry>> entries;
 
-        m_storage.asyncGetRows(table, std::forward<decltype(keys)>,
+        storage().asyncGetRows(table, std::forward<decltype(keys)>,
             [&error, &entries](
                 Error::UniquePtr errorOut, std::vector<std::optional<Entry>> entriesOut) {
                 error = std::move(errorOut);
@@ -58,7 +59,7 @@ public:
     {
         Error::UniquePtr error;
 
-        m_storage.asyncSetRow(table, key, std::move(entry),
+        storage().asyncSetRow(table, key, std::move(entry),
             [&error](Error::UniquePtr errorOut) { error = std::move(errorOut); });
 
         if (error)
@@ -69,7 +70,7 @@ public:
     {
         Error::UniquePtr error;
 
-        m_storage->asyncCreateTable(std::move(tableName), std::string{},
+        storage()->asyncCreateTable(std::move(tableName), std::string{},
             [&error](Error::UniquePtr errorOut, [[maybe_unused]] auto&& table) {
                 error = std::move(errorOut);
             });
@@ -78,7 +79,9 @@ public:
     };
 
 private:
-    Storage m_storage;
+    constexpr auto& storage() { return *m_storage; }
+
+    StoragePtr m_storage;
 };
 
 static_assert(bcos::concepts::storage::Storage<StorageSyncWrapper<int>>, "fail!");

@@ -6,28 +6,30 @@
 #include "tup/Tars.h"
 #include <bcos-concepts/Basic.h>
 #include <ranges>
+#include <type_traits>
 #include <vector>
 
 namespace bcos::concepts::serialize
 {
 
-std::vector<bcos::byte> impl_encode(bcostars::protocol::impl::TarsStruct auto const& object)
+void impl_encode(
+    bcostars::protocol::impl::TarsStruct auto const& object, bcos::concepts::ByteBuffer auto& out)
 {
-    tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
+    using StreamType = std::conditional_t<
+        std::is_signed_v<std::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>,
+        tars::BufferWriter, bcostars::protocol::BufferWriterByteVector>;
+
+    tars::TarsOutputStream<StreamType> output;
     object.writeTo(output);
 
-    std::vector<bcos::byte> out;
     output.getByteBuffer().swap(out);
-
-    return out;
 }
 
 void impl_decode(
-    bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const&
-    data)
+    bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& in)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)std::data(data), std::size(data));
+    input.setBuffer((const char*)std::data(in), std::size(in));
 
     object.readFrom(input);
 }

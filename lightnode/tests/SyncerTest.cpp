@@ -1,36 +1,223 @@
+#include <boost/test/tools/old/interface.hpp>
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "../../../bcos-syncer/BlockSyncerClientImpl.h"
-#include <bcos-framework/concepts/ledger/Ledger.h>
-#include <bcos-framework/concepts/storage/Storage.h>
+// clang-format off
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
+// clang-format on
+
+#include "../syncer/BlockSyncerClientImpl.h"
+#include "../syncer/BlockSyncerServerImpl.h"
+#include "tars/Transaction.h"
+#include "tars/TransactionReceipt.h"
+#include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-concepts/storage/Storage.h>
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
+#include <bcos-tars-protocol/tars/SyncBlockMessage.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <stdexcept>
+#include <type_traits>
 
 using namespace bcos::sync;
 
-struct MockLedger : public bcos::concepts::ledger::LedgerBase<MockLedger>
+using Hash = std::array<std::byte, 32>;
+
+class MockFront : public bcos::front::FrontServiceInterface
 {
-    // bcostars::Block getBlock(bcos::concepts::block::BlockNumber auto blockNumber) {}
-    bcostars::Block getBlock(int64_t blockNumber)
+    void start() override {}
+    void stop() override {}
+
+    void asyncGetGroupNodeInfo(bcos::front::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
     {
-        bcostars::Block block;
-        return block;
+        auto nodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+        nodeInfo->setNodeIDList({"id1", "id2"});
+
+        _onGetGroupNodeInfo(nullptr, std::move(nodeInfo));
     }
 
-    void setBlock(
-        bcos::concepts::storage::Storage auto& storage, bcos::concepts::block::Block auto block)
-    {}
+    void onReceiveGroupNodeInfo(const std::string& _groupID,
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
+        bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unspported method"});
+    }
 
-    bcostars::Transaction getTransactionsOrReceipts(std::ranges::range auto const& hashes) {}
+    void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+        bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unspported method"});
+    }
 
-    void getTotalTransactionCount() {}
+    void onReceiveBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+        bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unspported method"});
+    }
 
-    void setTransactionsOrReceipts(std::ranges::range auto inputs) {}
+    void asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        bcos::bytesConstRef _data, uint32_t _timeout, bcos::front::CallbackFunc _callback) override
+    {
+        BOOST_CHECK_EQUAL(_moduleID, 0);
+        auto& byteData = _nodeID->data();
+        std::string_view view((const char*)byteData.data(), byteData.size());
 
-    void setTransactionOrReceiptBuffers(
-        std::ranges::range auto hashes, std::ranges::range auto buffers)
-    {}
+        BOOST_CHECK(view == "id1" || view == "id2");
+        BOOST_CHECK_EQUAL(_timeout, 0);
+
+        bcostars::RequestBlock request;
+        bcos::concepts::serialize::decode(request, _data);
+        BOOST_CHECK_EQUAL(request.beginBlockNumber, 100);
+        BOOST_CHECK_EQUAL(request.endBlockNumber, 110);
+        BOOST_CHECK_EQUAL(request.onlyHeader, true);
+
+        bcostars::ResponseBlock response;
+        response.blockNumber = 500;
+
+        bcostars::Block block;
+        block.blockHeader.data.blockNumber = 201;
+        block.blockHeader.data.gasUsed = "1000";
+        block.transactions.resize(100);
+        block.transactions[10].importTime = 500;
+        response.blocks.emplace_back(std::move(block));
+
+        std::vector<bcos::byte> outBuffer;
+        bcos::concepts::serialize::encode(response, outBuffer);
+
+        _callback(nullptr, std::move(_nodeID), bcos::ref(outBuffer), "", {});
+    }
+
+    void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
+        bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unspported method"});
+    }
+
+    void asyncSendMessageByNodeIDs(int _moduleID,
+        const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bcos::bytesConstRef _data) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unspported method"});
+    }
+
+    void asyncSendBroadcastMessage(
+        uint16_t _type, int _moduleID, bcos::bytesConstRef _data) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unspported method"});
+    }
 };
+
+struct SyncerFixture
+{
+    SyncerFixture() {}
+};
+
+BOOST_FIXTURE_TEST_SUITE(SyncerTest, SyncerFixture)
+
+BOOST_AUTO_TEST_CASE(testClient)
+{
+    struct MockLedger : public bcos::concepts::ledger::LedgerBase<MockLedger>
+    {
+        void impl_setBlock(bcostars::Block block)
+        {
+            auto blockNumber = block.blockHeader.data.blockNumber;
+            m_blocks.emplace(std::make_pair(blockNumber, std::move(block)));
+        }
+
+        bcos::concepts::ledger::TransactionCount impl_getTotalTransactionCount()
+        {
+            bcos::concepts::ledger::TransactionCount status;
+            status.blockNumber = 100;
+            status.total = 10000;
+            status.failed = 500;
+
+            return status;
+        }
+
+        std::map<int64_t, bcostars::Block>& m_blocks;
+    };
+
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+
+    std::map<int64_t, bcostars::Block> blocks;
+
+    MockLedger clientLedger{.m_blocks = blocks};
+
+    auto mockFront = std::make_shared<MockFront>();
+    bcos::sync::BlockSyncerClientImpl<MockLedger, bcostars::RequestBlock, bcostars::ResponseBlock>
+        syncerClient(std::move(clientLedger), mockFront, keyFactory);
+
+    syncerClient.fetchAndStoreNewBlocks();
+
+    // Check the block is store in the ledger
+    BOOST_CHECK_EQUAL(clientLedger.m_blocks.size(), 1);
+
+    auto it = clientLedger.m_blocks.find(201);
+    BOOST_CHECK(it != clientLedger.m_blocks.end());
+
+    auto& block = it->second;
+    BOOST_CHECK_EQUAL(block.blockHeader.data.blockNumber, 201);
+    BOOST_CHECK_EQUAL(block.blockHeader.data.gasUsed, "1000");
+}
+
+struct MockLedgerForTestServer : public bcos::concepts::ledger::LedgerBase<MockLedgerForTestServer>
+{
+    bcos::concepts::ledger::TransactionCount impl_getTotalTransactionCount()
+    {
+        bcos::concepts::ledger::TransactionCount status;
+        status.blockNumber = 204;
+        status.total = 10000;
+        status.failed = 500;
+
+        return status;
+    }
+
+    template <bcos::concepts::ledger::DataFlag... flags>
+    auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
+    {
+        BOOST_CHECK(blockNumber >= 200 && blockNumber < 220);
+        if (blockNumber < 205)
+        {
+            bcostars::Block block;
+            block.blockHeader.data.blockNumber = blockNumber;
+
+            return block;
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Block out of range!"});
+        }
+    }
+};
+
+BOOST_AUTO_TEST_CASE(testServer)
+{
+    MockLedgerForTestServer serverLedger;
+
+    bcos::sync::BlockSyncerServerImpl<MockLedgerForTestServer, bcostars::RequestBlock,
+        bcostars::ResponseBlock>
+        syncerServer(std::move(serverLedger));
+
+    bcostars::RequestBlock request;
+    request.beginBlockNumber = 200;
+    request.endBlockNumber = 220;
+    request.onlyHeader = true;
+
+    auto response = syncerServer.getBlock(request);
+    BOOST_CHECK_EQUAL(response.blockNumber, 204);
+    BOOST_CHECK_EQUAL(response.blocks.size(), 5);
+
+    for (auto i = 200u; i < 205; ++i)
+    {
+        BOOST_CHECK_EQUAL(response.blocks[i - 200].blockHeader.data.blockNumber, i);
+    }
+
+    request.endBlockNumber = 200;
+    BOOST_CHECK_THROW(syncerServer.getBlock(request), std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
 
 // static_assert(bcos::concepts::ledger::Ledger<MockLedger>, "");

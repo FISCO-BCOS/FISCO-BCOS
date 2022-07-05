@@ -7,12 +7,12 @@ module bcostars {
 
     struct TransactionReceiptData {
         1 require int version;
-        2 require string gasUsed;
+        2 optional string gasUsed;
         3 optional string contractAddress;
-        4 require int status;
+        4 optional int status;
         5 optional vector<byte> output;
         6 optional vector<LogEntry> logEntries;
-        7 require long blockNumber;
+        7 optional long blockNumber;
     };
 
     struct TransactionReceipt {

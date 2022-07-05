@@ -2,6 +2,7 @@
 #include "../Block.h"
 #include "../storage/Storage.h"
 #include <concepts>
+#include <ranges>
 
 namespace bcos::concepts::ledger
 {
@@ -9,15 +10,6 @@ namespace bcos::concepts::ledger
 template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
-
-// enum LedgerDataFlag
-// {
-//     ALL,
-//     HEADER,
-//     TRANSACTIONS,
-//     RECEIPTS,
-//     NONCES
-// };
 
 // clang-format off
 struct DataFlagBase {};
@@ -31,6 +23,13 @@ struct NONCES: public DataFlagBase {};
 template <class FlagType>
 concept DataFlag = std::derived_from<FlagType, DataFlagBase>;
 
+struct TransactionCount
+{
+    uint64_t total = 0;
+    uint64_t failed = 0;
+    uint64_t blockNumber = 0;
+};
+
 template <class Impl>
 class LedgerBase
 {
@@ -41,10 +40,9 @@ public:
         return impl().template impl_getBlock<flags...>(blockNumber);
     }
 
-    void setBlock(
-        bcos::concepts::storage::Storage auto& storage, bcos::concepts::block::Block auto block)
+    void setBlock(bcos::concepts::block::Block auto block)
     {
-        impl().impl_setBlock(storage, std::move(block));
+        impl().impl_setBlock(std::move(block));
     }
 
     template <DataFlag flag>
@@ -53,12 +51,6 @@ public:
         return impl().template impl_getTransactionsOrReceipts<flag>(hashes);
     }
 
-    struct TransactionCount
-    {
-        int64_t total;
-        int64_t failed;
-        int64_t blockNumber;
-    };
     TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
@@ -69,7 +61,9 @@ public:
             return bcos::concepts::hash::calculate<Hasher>(input);
         });
         auto buffersRange = inputs | std::views::transform([](auto const& input) {
-            return bcos::concepts::serialize::encode(input);
+            std::vector<bcos::byte> buffer;
+            bcos::concepts::serialize::encode(input, buffer);
+            return buffer;
         });
 
         constexpr auto isTransaction =
@@ -87,11 +81,11 @@ public:
 
 private:
     friend Impl;
-    LedgerBase() = default;
     auto& impl() { return static_cast<Impl&>(*this); }
 };
 
 template <class Impl>
-concept Ledger = std::derived_from<Impl, LedgerBase<Impl>>;
+concept Ledger = std::derived_from<Impl, LedgerBase<Impl>> ||
+    std::derived_from<typename Impl::element_type, LedgerBase<typename Impl::element_type>>;
 
 }  // namespace bcos::concepts::ledger

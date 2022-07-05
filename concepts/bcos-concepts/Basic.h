@@ -11,13 +11,11 @@ concept ByteBuffer = std::ranges::range<ByteBufferType> &&
 template <class HashType>
 concept Hash = ByteBuffer<HashType>;
 
-template <class Pointer, class Type>
+template <class Pointer>
 concept PointerLike = requires(Pointer p)
 {
-    std::is_pointer_v<Type>;
-    // clang-format off
-    { *p } -> std::same_as<Type&>;
-    // clang-format on
+    *p;
+    p.operator->();
 };
 
 }  // namespace bcos::concepts

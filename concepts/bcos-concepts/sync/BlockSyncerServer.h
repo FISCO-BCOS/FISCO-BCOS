@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SyncBlockMessages.h"
 #include <concepts>
 
 namespace bcos::concepts::sync
@@ -9,7 +10,10 @@ template <class Impl>
 class SyncBlockServerBase
 {
 public:
-    auto onRequestBlock(auto const& request) { return impl().impl_onRequestBlock(request); }
+    auto getBlock(RequestBlock auto const& request) -> ResponseBlock auto
+    {
+        return impl().impl_getBlock(request);
+    }
 
 private:
     friend Impl;
