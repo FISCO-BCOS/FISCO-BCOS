@@ -1,10 +1,11 @@
 #include "../../../src/CallParameters.h"
+#include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveFactory.h"
 #include "../../../src/executive/ExecutiveState.h"
 #include "../../../src/executive/TransactionExecutive.h"
-#include "../../../src/executive/BlockContext.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockTransactionExecutive.h"
+
 
 using namespace std;
 using namespace bcos;
@@ -24,10 +25,11 @@ struct ExecutiveStateFixture
         input->codeAddress = "aabbccddee";
         input->contextID = 1;
         input->seq = 1;
-	    std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
-        executiveFactory =
-            std::make_shared<MockExecutiveFactory>(blockContext, nullptr, nullptr, nullptr, nullptr);
+        executiveFactory = std::make_shared<MockExecutiveFactory>(
+            blockContext, nullptr, nullptr, nullptr, nullptr);
     }
     std::shared_ptr<MockTransactionExecutive> executive;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
@@ -42,7 +44,6 @@ BOOST_AUTO_TEST_CASE(goTest)
     CallParameters::UniquePtr output;
     for (int8_t i = 0; i < 2; ++i)
     {
-
         EXECUTOR_LOG(DEBUG) << "goTest begin";
         if (i == 0)
         {
@@ -54,11 +55,11 @@ BOOST_AUTO_TEST_CASE(goTest)
             callParameters->seq = i;
             auto executiveState =
                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            //EXECUTOR_LOG(DEBUG) << executiveState->getStatus();
+            // EXECUTOR_LOG(DEBUG) << executiveState->getStatus();
             auto output = executiveState->go();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::PAUSED);
             executiveState->setResumeParam(std::move(input));
-            EXECUTOR_LOG(DEBUG) << "goTest: " <<executiveState->getStatus();
+            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
             executiveState->go();
             EXECUTOR_LOG(DEBUG) << "i == 0  end!";
@@ -73,19 +74,20 @@ BOOST_AUTO_TEST_CASE(goTest)
             callParameters->seq = i;
             auto executiveState =
                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            EXECUTOR_LOG(DEBUG) << "goTest: " <<executiveState->getStatus();
+            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             executiveState->go();
-            EXECUTOR_LOG(DEBUG) << "goTest: " <<executiveState->getStatus();
+            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
-            //executiveState->go();
-            EXECUTOR_LOG(DEBUG) << "goTest: " <<executiveState->getStatus();
+            // executiveState->go();
+            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             EXECUTOR_LOG(DEBUG) << "i == 1  end!";
         }
     }
 }
 
 BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
-{   EXECUTOR_LOG(DEBUG) << "appendKeyLocks begin";
+{
+    EXECUTOR_LOG(DEBUG) << "appendKeyLocks begin";
     std::vector<std::string> keyLocks{"123", "134", "125"};
     for (int i = 0; i < 3; ++i)
     {
@@ -104,7 +106,8 @@ BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
             EXECUTOR_LOG(DEBUG) << "i == 1 end ! status is :" << executiveState->getStatus();
         }
         else if (i == 1)
-        {   EXECUTOR_LOG(DEBUG) << "i == 2 begin";
+        {
+            EXECUTOR_LOG(DEBUG) << "i == 2 begin";
             auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
             callParameters->staticCall = false;
             callParameters->codeAddress = "aabbccddee";
@@ -124,7 +127,8 @@ BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
             EXECUTOR_LOG(DEBUG) << "i == 2 end ! status is :" << executiveState->getStatus();
         }
         else
-        {   EXECUTOR_LOG(DEBUG) << "i == 3 begin";
+        {
+            EXECUTOR_LOG(DEBUG) << "i == 3 begin";
             auto callParameters = std::make_unique<CallParameters>(CallParameters::REVERT);
             callParameters->staticCall = false;
             callParameters->codeAddress = "aabbccddee";
@@ -139,7 +143,6 @@ BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
         }
     }
 }
-
 
 
 BOOST_AUTO_TEST_SUITE_END()

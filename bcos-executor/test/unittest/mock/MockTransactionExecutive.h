@@ -1,7 +1,7 @@
 #pragma once
+#include "../../../src/executive/BlockContext.h"
 #include "../../src/Common.h"
 #include "../../src/executive/TransactionExecutive.h"
-#include "../../../src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
@@ -16,22 +16,26 @@ class MockTransactionExecutive : public bcos::executor::TransactionExecutive
 {
 public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
-    MockTransactionExecutive(std::weak_ptr<bcos::executor::BlockContext> blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
+    MockTransactionExecutive(std::weak_ptr<bcos::executor::BlockContext> blockContext,
+        std::string contractAddress, int64_t contextID, int64_t seq,
+        std::shared_ptr<wasm::GasInjector>& gasInjector)
       : TransactionExecutive(std::move(blockContext), contractAddress, contextID, seq, gasInjector)
     {}
 
     virtual ~MockTransactionExecutive() {}
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override{ return std::move(input); }
-    CallParameters::UniquePtr resume ()override
+    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override
+    {
+        return std::move(input);
+    }
+    CallParameters::UniquePtr resume() override
     {
         auto callParameters = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
         callParameters->staticCall = false;
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        
+
         return std::move(callParameters);
     }
 

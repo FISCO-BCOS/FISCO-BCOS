@@ -99,8 +99,9 @@ public:
 
     virtual ~TransactionExecutive() = default;
 
-    virtual CallParameters::UniquePtr start(CallParameters::UniquePtr input);  // start a new coroutine to
-                                                                       // execute
+    virtual CallParameters::UniquePtr start(CallParameters::UniquePtr input);  // start a new
+                                                                               // coroutine to
+                                                                               // execute
 
     // External call request
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input);  // call by
