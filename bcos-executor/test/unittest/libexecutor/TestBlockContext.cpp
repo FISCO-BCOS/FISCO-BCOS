@@ -28,15 +28,17 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     BlockContext::Ptr blockContext = std::make_shared<bcos::executor::BlockContext>(
         nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
+    blockContext->setTxGasLimit(10000);
     BOOST_CHECK(blockContext->storage() == nullptr);
     BOOST_CHECK(blockContext->lastStorage() == nullptr);
     BOOST_CHECK(!blockContext->isWasm());
     BOOST_CHECK(!blockContext->isAuthCheck());
-    // BOOST_CHECK(blockContext->hash() != nullptr);
+    BOOST_CHECK(blockContext->hash() != nullptr);
     BOOST_CHECK_EQUAL(blockContext->number(), 0);
     BOOST_CHECK_EQUAL(blockContext->timestamp(), 0);
     BOOST_CHECK_EQUAL(blockContext->blockVersion(), 0);
     BOOST_CHECK_EQUAL(blockContext->gasLimit(), 0);
+    BOOST_CHECK(blockContext->txGasLimit(), 10000);
 
     for (int i = 0; i < 10; ++i)
     {
@@ -53,6 +55,7 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
             ++count;
     }
     BOOST_CHECK_EQUAL(count, 10);
+    blockContext->clear();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

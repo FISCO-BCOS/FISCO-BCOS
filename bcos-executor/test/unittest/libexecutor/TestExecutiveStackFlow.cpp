@@ -21,7 +21,10 @@
 
 #pragma once
 
+#include "../../../src/CallParameters.h"
+#include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveFlowInterface.h"
+#include "../../../src/executive/ExecutiveStackFlow.h"
 #include "../../../src/executive/ExecutiveState.h"
 #include "../mock/MockExecutiveFactory.h"
 #include <tbb/concurrent_unordered_map.h>
@@ -40,7 +43,38 @@ namespace test
 {
 struct ExecutiveStackFlowFixture
 {
-    ExecutiveStackFlowFixture() {}
+    ExecutiveStackFlowFixture()
+    {
+        for (int i = 0; i < 20; ++i)
+        {
+            if (i % 2 == 0)
+            {
+                auto input = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
+                input->contextID = i;
+                input->seq = 0;
+            }
+            else
+            {
+                auto input = std::make_unique<CallParameters>(CallParameters::Type::REVERT);
+                input->contextID = i;
+                input->seq = 1;
+            }
+            txInputs.push_back(std::move(input));
+        }
+
+        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+
+        executiveFactory = std::make_shared<MockExecutiveFactory>(
+            blockContext, nullptr, nullptr, nullptr, nullptr);
+
+        std::shared_prt<ExecutiveStackFlow> executiveStackFlow =
+            std::make_shared<ExecutiveStackFlow>(executiveFactory);
+    }
+    std::shared_ptr<ExecutiveStackFlow> executiveStackFlow;
+    std::shared_ptr<MockExecutiveFactory> executiveFactory;
+    std::shared_ptr<ExecutiveState> executiveState;
+    std::vector<CallParameters::UniquePtr> txInputs;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
