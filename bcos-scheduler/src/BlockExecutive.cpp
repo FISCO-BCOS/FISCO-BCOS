@@ -101,6 +101,15 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setOrigin(toHex(tx->sender()));
     message->setFrom(std::string(message->origin()));
 
+    if (!m_isSysBlock)
+    {
+        auto toAddress = tx->to();
+        if (bcos::precompiled::c_systemTxsAddress.count(
+                std::string(toAddress.begin(), toAddress.end())))
+        {
+            m_isSysBlock.store(true);
+        }
+    }
 
     if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
     {
@@ -257,15 +266,6 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     for (size_t i = 0; i < m_block->transactionsSize(); ++i)
     {
         auto tx = m_block->transaction(i);
-        if (!m_isSysBlock)
-        {
-            auto toAddress = tx->to();
-            if (bcos::precompiled::c_systemTxsAddress.count(
-                    std::string(toAddress.begin(), toAddress.end())))
-            {
-                m_isSysBlock.store(true);
-            }
-        }
         m_executiveResults[i].transactionHash = tx->hash();
         m_executiveResults[i].source = tx->source();
 

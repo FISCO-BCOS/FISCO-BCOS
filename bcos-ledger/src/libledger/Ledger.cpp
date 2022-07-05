@@ -271,6 +271,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                              << LOG_KV("msg", _error ? _error->errorMessage() : "success")
                              << LOG_KV("code", _error ? _error->errorCode() : 0)
                              << LOG_KV("timecost", (utcTime() - startT));
+            // TODO: retry when asyncStoreTransactions failed
+            if (!_error)
+            {
+                setRowCallback(nullptr);
+                return;
+            }
             setRowCallback(std::make_unique<Error>(*_error));
         });
 }
@@ -279,6 +285,7 @@ std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesCon
 Ledger::needStoreUnsavedTxs(
     bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block)
 {
+    // Note: in the case of block-sync, no-need to save transactions when prewriteBlock
     if (!_blockTxs || _blockTxs->size() == 0)
     {
         LEDGER_LOG(INFO) << LOG_DESC("needStoreUnsavedTxs: empty txs")
@@ -289,14 +296,16 @@ Ledger::needStoreUnsavedTxs(
     auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
     size_t unstoredTxs = 0;
     auto txsHash = std::make_shared<HashList>();
-    for (auto const& tx : *_blockTxs)
+    for (auto const& tx : (*_blockTxs))
     {
         if (tx->storeToBackend())
         {
             continue;
         }
-        unstoredTxs++;
         auto encodedData = tx->encode();
+        // in case of the tx been re-committed
+        tx->setStoreToBackend(true);
+        unstoredTxs++;
         txsHash->emplace_back(tx->hash());
         txsToStore->emplace_back(std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
     }
@@ -473,6 +482,12 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                     asyncBatchGetTransactions(
                         hashesPtr, [block, finally](Error::Ptr&& error,
                                        std::vector<protocol::Transaction::Ptr>&& transactions) {
+                            if (error)
+                            {
+                                LEDGER_LOG(ERROR) << LOG_DESC("asyncGetBlockDataByNumber error")
+                                                  << LOG_KV("code", error->errorCode())
+                                                  << LOG_KV("msg", error->errorMessage());
+                            }
                             for (auto& it : transactions)
                             {
                                 block->appendTransaction(it);
