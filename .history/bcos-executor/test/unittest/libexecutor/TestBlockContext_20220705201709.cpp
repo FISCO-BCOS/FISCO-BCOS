@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     BOOST_CHECK(blockContext->lastStorage() == nullptr);
     BOOST_CHECK(!blockContext->isWasm());
     BOOST_CHECK(!blockContext->isAuthCheck());
-    // BOOST_CHECK(blockContext->hash() != nullptr);
+    BOOST_CHECK(blockContext->hash() != nullptr);
     BOOST_CHECK_EQUAL(blockContext->number(), 0);
     BOOST_CHECK_EQUAL(blockContext->timestamp(), 0);
     BOOST_CHECK_EQUAL(blockContext->blockVersion(), 0);

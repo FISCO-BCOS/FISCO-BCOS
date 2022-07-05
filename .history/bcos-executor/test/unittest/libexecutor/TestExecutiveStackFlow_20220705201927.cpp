@@ -79,7 +79,7 @@ struct ExecutiveStackFlowFixture
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
-BOOST_AUTO_TEST_CASE(Test) {}
+BOOST_AUTO_TEST_CASE() {}
 BOOST_AUTO_TEST_SUITE_END()
 
 
