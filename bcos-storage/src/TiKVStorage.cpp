@@ -449,3 +449,45 @@ void TiKVStorage::asyncRollback(
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncRollback failed! ", e));
     }
 }
+
+bcos::Error::Ptr TiKVStorage::setRows(
+    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+{
+    try
+    {
+        if (table.empty())
+        {
+            STORAGE_TIKV_LOG(WARNING)
+                << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+            return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+        }
+        if (keys.size() != values.size())
+        {
+            STORAGE_TIKV_LOG(WARNING)
+                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
+                << LOG_KV("values", values.size());
+            return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+        }
+        std::vector<std::string> realKeys(keys.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i)
+                {
+                    realKeys[i] = toDBKey(table, keys[i]);
+                }
+            });
+        Txn txn(m_cluster.get());
+        for (size_t i = 0; i < values.size(); ++i)
+        {
+            txn.set(std::move(realKeys[i]), std::move(values[i]));
+        }
+        txn.commit();
+    }
+    catch (const pingcap::Exception& e)
+    {
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("setRows failed") << LOG_KV("message", e.message())
+                                << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
+        return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
+    }
+    return nullptr;
+}
