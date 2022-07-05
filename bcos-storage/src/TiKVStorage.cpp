@@ -52,9 +52,6 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
     const std::vector<std::string>& pdAddrs, const std::string& logPath)
 {
     pingcap::ClusterConfig config;
-    // TODO: why config this?
-    config.tiflash_engine_key = "engine";
-    config.tiflash_engine_value = "tikv";
     // auto pChannel = Poco::AutoPtr<Poco::StreamChannel>(new Poco::StreamChannel(std::cerr));
     auto fileChannel =
         Poco::AutoPtr<Poco::FileChannel>(new Poco::FileChannel(logPath + "/tikv-client.log"));
