@@ -76,7 +76,7 @@ struct ExecutiveStackFlowFixture
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
 BOOST_AUTO_TEST_CASE(RunTest)
 {
-    std::vector<int64_t> sequence;
+    std::shared_ptr<std::vector<int64_t>> sequence;
     executiveStackFlow->submit(txInputs);
     EXECUTOR_LOG(DEBUG) << "submit 20 transaction success!";
     auto input1 = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
             }
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
                                 << ",the conntextID is:" << output->contextID;
-            sequence.push_back(output->contextID);
+            sequence->push_back(output->contextID);
         },
         // onFinished
         [this, sequence](bcos::Error::UniquePtr error) {
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
                 EXECUTOR_LOG(ERROR)
                     << "ExecutiveFlow asyncRun error: " << LOG_KV("errorCode", error->errorCode())
                     << LOG_KV("errorMessage", error->errorMessage());
-                sequence.clear();
+                sequence->clear();
                 // callback(std::move(error), std::vector<protocol::ExecutionMessage::UniquePtr>());
             }
             else
@@ -120,13 +120,13 @@ BOOST_AUTO_TEST_CASE(RunTest)
     EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence.size())
                         << LOG_KV("  the sequence is ", sequence);
 
-    BOOST_CHECK(sequence.size() != 0);
+    BOOST_CHECK(sequence->size() != 0);
     bool flag = true;
-    for (int i = 0; i < sequence.size() - 1; ++i)
+    for (int i = 0; i < sequence->size() - 1; ++i)
     {
         if (i <= 10)
         {
-            if (sequence[i] != 11 + i)
+            if (sequence->at[i] != 11 + i)
             {
                 flag = false;
                 break;
@@ -134,14 +134,14 @@ BOOST_AUTO_TEST_CASE(RunTest)
         }
         else
         {
-            if (sequence[i] != i - 9)
+            if (sequence->at[i] != i - 9)
             {
                 flag = false;
                 break;
             }
         }
     }
-    if (sequence[20] != 21)
+    if (sequence->at[20] != 21)
         flag = false;
 
     BOOST_CHECK(flag);
