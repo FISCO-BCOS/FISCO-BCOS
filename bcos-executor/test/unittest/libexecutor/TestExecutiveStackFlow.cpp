@@ -63,21 +63,23 @@ struct ExecutiveStackFlowFixture
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
             blockContext, nullptr, nullptr, nullptr, nullptr);
-
-        ExecutiveStackFlow::Ptr executiveStackFlow =
-            std::make_shared<ExecutiveStackFlow>(executiveFactory);
     }
     std::shared_ptr<ExecutiveStackFlow> executiveStackFlow;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
     std::shared_ptr<ExecutiveState> executiveState;
-    std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs;
+    std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs =
+        make_shared<std::vector<CallParameters::UniquePtr>>();
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
+
 BOOST_AUTO_TEST_CASE(RunTest)
 {
     EXECUTOR_LOG(DEBUG) << "RunTest begin";
-    std::shared_ptr<std::vector<int64_t>> sequence;
+    std::shared_ptr<std::vector<int64_t>> sequence = make_shared<std::vector<int64_t>>();
+    ExecutiveStackFlow::Ptr executiveStackFlow =
+        std::make_shared<ExecutiveStackFlow>(executiveFactory);
+    BOOST_CHECK(executiveStackFlow != nullptr);
     executiveStackFlow->submit(txInputs);
     EXECUTOR_LOG(DEBUG) << "submit 20 transaction success!";
     auto input1 = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
@@ -121,7 +123,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
     EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size())
                         << LOG_KV("  the sequence is ", sequence);
 
-    BOOST_CHECK(sequence->size() != 0);
+    BOOST_CHECK_EQUAL(sequence->size(), 21);
     bool flag = true;
     for (int i = 0; i < sequence->size(); ++i)
     {
