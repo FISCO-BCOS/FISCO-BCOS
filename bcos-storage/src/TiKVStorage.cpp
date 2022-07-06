@@ -37,6 +37,7 @@
 #include <tbb/spin_mutex.h>
 #include <exception>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 
@@ -279,6 +280,7 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
+    std::lock_guard l(x_committer);
     try
     {
         auto start = utcTime();
@@ -370,7 +372,8 @@ void TiKVStorage::asyncCommit(
 {
     auto start = utcTime();
     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
-                            << LOG_KV("primary", params.timestamp > 0 ? "true" : "false");
+                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
+    std::lock_guard l(x_committer);
     try
     {
         uint64_t ts = 0;
@@ -417,6 +420,7 @@ void TiKVStorage::asyncRollback(
 {
     auto start = utcTime();
     std::ignore = params;
+    std::lock_guard l(x_committer);
     try
     {
         STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number);
