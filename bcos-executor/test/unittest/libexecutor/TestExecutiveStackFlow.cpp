@@ -88,6 +88,12 @@ BOOST_AUTO_TEST_CASE(RunTest)
     executiveStackFlow->submit(std::move(input1));
     EXECUTOR_LOG(DEBUG) << "submit 1 transaction success!";
 
+    // auto input2 = std::make_unique<CallParameters>(CallParameters::Type::REVERT);
+    // input2->contextID = -1;
+    // input2->seq = -1;
+    // executiveStackFlow->submit(std::move(input2));
+    // EXECUTOR_LOG(DEBUG) << "submit 1 error transaction success!";
+
     executiveStackFlow->asyncRun(
         // onTxReturn
         [this, sequence](CallParameters::UniquePtr output) {
