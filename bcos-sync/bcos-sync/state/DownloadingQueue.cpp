@@ -20,6 +20,7 @@
  */
 #include "DownloadingQueue.h"
 #include "bcos-sync/utilities/Common.h"
+#include <bcos-framework/interfaces/dispatcher/SchedulerTypeDef.h>
 #include <future>
 
 using namespace std;
@@ -483,8 +484,7 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
                 // store transaction failed
                 if (_error)
                 {
-                    downloadingQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                    downloadingQueue->onCommitFailed(_block);
+                    downloadingQueue->onCommitFailed(_error, _block);
                     BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock: store transactions failed")
                                          << LOG_KV("number", blockHeader->number())
                                          << LOG_KV("hash", blockHeader->hash().abridged())
@@ -525,8 +525,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             }
             if (_error != nullptr)
             {
-                downloadingQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                downloadingQueue->onCommitFailed(_block);
+                downloadingQueue->onCommitFailed(_error, _block);
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("commitBlockState failed")
                     << LOG_KV("executedBlock", downloadingQueue->m_config->executedBlock())
@@ -538,6 +537,9 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             }
             _ledgerConfig->setTxsSize(_block->transactionsSize());
             _ledgerConfig->setSealerId(blockHeader->sealer());
+            // reset the blockNumber
+            _ledgerConfig->setBlockNumber(blockHeader->number());
+            _ledgerConfig->setHash(blockHeader->hash());
             // notify the txpool the transaction result
             // reset the config for the consensus and the blockSync module
             // broadcast the status to all the peers
@@ -554,7 +556,9 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
                               << LOG_KV(
                                      "executedBlock", downloadingQueue->m_config->executedBlock())
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
-                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex());
+                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex())
+                              << LOG_KV("txsSize", _block->transactionsSize())
+                              << LOG_KV("sealer", blockHeader->sealer());
         }
         catch (std::exception const& e)
         {
@@ -592,9 +596,18 @@ void DownloadingQueue::clearExpiredCache(BlockQueue& _queue, SharedMutex& _lock)
     }
 }
 
-void DownloadingQueue::onCommitFailed(bcos::protocol::Block::Ptr _failedBlock)
+void DownloadingQueue::onCommitFailed(
+    bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _failedBlock)
 {
     auto blockHeader = _failedBlock->blockHeader();
+    if (blockHeader->number() <= m_config->blockNumber())
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: drop the expired block")
+                          << LOG_KV("number", blockHeader->number())
+                          << LOG_KV("hash", blockHeader->hash().abridged())
+                          << LOG_KV("executedBlock", m_config->executedBlock());
+        return;
+    }
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed") << LOG_KV("number", blockHeader->number())
                       << LOG_KV("hash", blockHeader->hash().abridged())
                       << LOG_KV("executedBlock", m_config->executedBlock());
@@ -604,7 +617,19 @@ void DownloadingQueue::onCommitFailed(bcos::protocol::Block::Ptr _failedBlock)
         WriteGuard l(x_commitQueue);
         m_commitQueue.push(_failedBlock);
     }
-
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC(
+                                 "onCommitFailed for BlockIsCommitting: re-push failed "
+                                 "block to commitQueue")
+                          << LOG_KV("hash", blockHeader->hash().abridged())
+                          << LOG_KV("executedBlock", m_config->executedBlock());
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        tryToCommitBlockToLedger();
+        return;
+    }
+    m_config->setExecutedBlock(blockHeader->number() - 1);
     auto topBlock = top();
     bcos::protocol::BlockNumber topNumber = std::numeric_limits<bcos::protocol::BlockNumber>::max();
     if (topBlock)
@@ -639,5 +664,6 @@ void DownloadingQueue::onCommitFailed(bcos::protocol::Block::Ptr _failedBlock)
                       << LOG_KV("commitQueueSize", m_commitQueue.size())
                       << LOG_KV("blocksQueueSize", m_blocks.size())
                       << LOG_KV("topNumber", topNumber)
-                      << LOG_KV("rePushedBlockCount", rePushedBlockCount);
+                      << LOG_KV("rePushedBlockCount", rePushedBlockCount)
+                      << LOG_KV("executedBlock", m_config->executedBlock());
 }

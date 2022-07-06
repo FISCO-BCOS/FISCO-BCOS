@@ -1093,10 +1093,8 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
+    ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
     key_page_size=${key_page_size}
-    ; type can be RocksDB/TiKV
-    type=RocksDB
-    pd_addrs=
 
 [txpool]
     ; size of the txpool, default is 15000
@@ -1107,15 +1105,7 @@ generate_common_ini() {
     ;verify_worker_num=2
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
-[failover]
-    ; enable failover or not, default disable
-    enable = false
-    ; the uuid that uniquely identifies the node
-    member_id=${uuid}
-    ; failover time, in seconds, default is 3s
-    lease_ttl=3
-    ; the address of etcd, can configure multiple comma-separated
-    cluster_url=127.0.0.1:2379
+
 [log]
     enable=true
     log_path=./log
@@ -1310,17 +1300,18 @@ check_and_install_tassl(){
     if [ -f "${OPENSSL_CMD}" ];then
         return
     fi
+    # https://en.wikipedia.org/wiki/Uname#Examples
     local x86_64_name="x86_64"
     local arm_name="aarch64"
     local tassl_mid_name="linux"
     if [[ -n "${macOS}" ]];then
-        x86_64_name="i386"
-        arm_name="arm"
+        x86_64_name="x86_64"
+        arm_name="arm64"
         tassl_mid_name="macOS"
     fi
 
     local tassl_post_fix="x86_64"
-    local platform="$(uname -p)"
+    local platform="$(uname -m)"
     if [[ "${platform}" == "${arm_name}" ]];then
         tassl_post_fix="aarch64"
     elif [[ "${platform}" == "${x86_64_name}" ]];then

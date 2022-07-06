@@ -22,8 +22,10 @@
 #include "bcos-scheduler/src/ExecutorManager.h"
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
 #include <bcos-utilities/Worker.h>
+#include <atomic>
 
-#define EXECUTOR_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER")
+#define EXECUTOR_MANAGER_LOG(LEVEL) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
 
 
 namespace bcos::scheduler
@@ -35,7 +37,7 @@ public:
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     TarsRemoteExecutorManager(std::string executorServiceName)
-      : Worker("TarsRemoteExecutorManager", 5000)
+      : Worker("TarsRemoteExecutorManager", 5000)  // ms
     {
         if (executorServiceName.empty())
         {
@@ -48,14 +50,17 @@ public:
                                    << LOG_KV("executorServiceName", m_executorServiceName);
     }
 
+    virtual ~TarsRemoteExecutorManager() { stopWorking(); };
+
     void start()
     {
         EXECUTOR_MANAGER_LOG(INFO) << "Start" << threadName() << " "
                                    << LOG_KV("executorServiceName", m_executorServiceName);
+        waitForExecutorConnection();
         startWorking();
     }
 
-    virtual ~TarsRemoteExecutorManager() { stopWorking(); };
+    void waitForExecutorConnection();
 
     void setRemoteExecutorChangeHandler(std::function<void()> handler)
     {
@@ -64,10 +69,13 @@ public:
 
     void executeWorker() override;
 
-    void update(EndPointSet endPointMap);
+    void refresh(bool needNotifyChange = true);
+
+    void update(EndPointSet endPointMap, bool needNotifyChange = true);
 
     bool empty() { return size() == 0; }
 
+    bool checkAllExecutorSeq();
 
 private:
     std::string buildEndPointUrl(std::string host, uint16_t port)
@@ -83,7 +91,9 @@ private:
 
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
+    uint8_t m_waitingExecutorMaxRetryTimes = 20;
 
     EndPointSet m_endPointSet = std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
+    std::map<std::string, int64_t> m_executor2Seq;
 };
 }  // namespace bcos::scheduler

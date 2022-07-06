@@ -42,5 +42,5 @@ enable_storage_security = false
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.5"]
         monitor_listen_port = "3901"
-        # monitor log path example:"/root/app/tars/framework/app_log/"
+        # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""

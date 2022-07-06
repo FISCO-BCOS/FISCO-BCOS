@@ -73,6 +73,25 @@ inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
 
 namespace bcos::test
 {
+
+class MockStorage : public virtual StateStorage
+{
+public:
+    MockStorage(std::shared_ptr<StorageInterface> prev)
+      : storage::StateStorageInterface(prev), StateStorage(prev)
+    {}
+    bcos::Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
+        std::vector<std::string> values) override
+    {
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            Entry e;
+            e.set(values[i]);
+            asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
+        }
+        return nullptr;
+    }
+};
 class LedgerFixture : public TestPromptFixture
 {
 public:
@@ -94,7 +113,7 @@ public:
         auto hashImpl = std::make_shared<Keccak256>();
         auto memoryStorage = std::make_shared<StateStorage>(nullptr);
         memoryStorage->setEnableTraverse(true);
-        auto storage = std::make_shared<StateStorage>(memoryStorage);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
         storage->setEnableTraverse(true);
         m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
@@ -752,12 +771,10 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(errorHashList, true,
         [=, &p3](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_txList != nullptr);
-            BOOST_CHECK(_txList->empty());
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_txList == nullptr);
 
-            BOOST_CHECK(_proof != nullptr);
-            BOOST_CHECK(_proof->empty());
+            BOOST_CHECK(_proof == nullptr);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);

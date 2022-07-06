@@ -37,6 +37,11 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     {  // ipv4
         std::vector<std::string> v;
         boost::split(v, _host, boost::is_any_of(":"), boost::token_compress_on);
+        if (v.size() < 2)
+        {
+            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                      "GatewayConfig: invalid host , host=" + _host));
+        }
         ip = v[0];
         port = boost::lexical_cast<int>(v[1]);
     }

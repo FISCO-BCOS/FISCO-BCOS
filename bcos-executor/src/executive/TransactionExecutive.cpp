@@ -73,15 +73,6 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
         m_storageWrapper = std::make_unique<SyncStorageWrapper>(blockContext->storage(),
             std::bind(&TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
             m_recoder);
-        if (blockContext->lastStorage())
-        {
-            m_lastStorageWrapper = std::make_shared<SyncStorageWrapper>(
-                std::dynamic_pointer_cast<bcos::storage::StateStorageInterface>(
-                    blockContext->lastStorage()),
-                std::bind(
-                    &TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
-                m_recoder);
-        }
 
         if (!callParameters->keyLocks.empty())
         {

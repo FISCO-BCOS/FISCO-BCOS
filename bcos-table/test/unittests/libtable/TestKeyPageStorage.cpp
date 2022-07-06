@@ -1871,6 +1871,22 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     auto keys5 = table->getPrimaryKeys(c5);
     BCOS_LOG(TRACE) << "NE 250:" << printVector(keys5);
     BOOST_REQUIRE(keys5.size() == 499);
+
+    auto fruitTable = "table_fruit";
+    BOOST_REQUIRE(tableStorage->createTable(fruitTable, valueFields));
+
+    table = tableStorage->openTable(fruitTable);
+    BOOST_REQUIRE(table);
+    auto entry = std::make_optional(table->newEntry());
+    auto key = "fruit";
+    entry->setField(0, "a");
+    BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    Condition c6;
+    c6.limit(0, 0);
+    c6.GE("fruit");
+    auto keys6 = table->getPrimaryKeys(c6);
+    // the default limit is 0
+    BOOST_REQUIRE(keys6.size() == 0);
 }
 
 

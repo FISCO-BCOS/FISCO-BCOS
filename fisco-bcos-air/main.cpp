@@ -26,6 +26,8 @@
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
 #include <thread>
+#include <stdexcept>
+#include <execinfo.h>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -36,7 +38,16 @@ int main(int argc, const char* argv[])
     /// set LC_ALL
     setDefaultOrCLocale();
     std::set_terminate([]() {
-        std::cerr << "terminate handler called" << std::endl;
+        std::cerr << "terminate handler called, print stacks" << std::endl;
+        void* trace_elems[20];
+        int trace_elem_count(backtrace(trace_elems, 20));
+        char** stack_syms(backtrace_symbols(trace_elems, trace_elem_count));
+        for (int i = 0; i < trace_elem_count; ++i)
+        {
+            std::cout << stack_syms[i] << "\n";
+        }
+        free(stack_syms);
+        std::cerr << "terminate handler called, print stack end" << std::endl;
         abort();
     });
     // get datetime and output welcome info

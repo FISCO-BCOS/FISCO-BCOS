@@ -358,7 +358,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         auto end = utcTime();
         callback(nullptr, 0);
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
-                                  << LOG_KV("startTS", param.startTS)
+                                  << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("time(ms)", end - start)
                                   << LOG_KV("callback time(ms)", utcTime() - end);
     }
@@ -369,7 +369,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
 }
 
 void RocksDBStorage::asyncCommit(
-    const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
+    const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback)
 {
     size_t count = 0;
     auto start = utcTime();
@@ -387,9 +387,9 @@ void RocksDBStorage::asyncCommit(
         }
     }
     auto end = utcTime();
-    callback(nullptr);
+    callback(nullptr, 0);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS)
+                              << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end)
                               << LOG_KV("count", count);
@@ -408,7 +408,42 @@ void RocksDBStorage::asyncRollback(
     auto end = utcTime();
     callback(nullptr);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS)
+                              << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end);
+}
+
+bcos::Error::Ptr RocksDBStorage::setRows(
+    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+{
+    if (table.empty())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+        return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+    }
+    if (keys.size() != values.size())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
+            << LOG_KV("values", values.size());
+        return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+    }
+    std::vector<std::string> realKeys(keys.size());
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i)
+            {
+                realKeys[i] = toDBKey(table, keys[i]);
+            }
+        });
+    auto writeBatch = WriteBatch();
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+    }
+    WriteOptions options;
+    options.sync = true;
+    m_db->Write(options, &writeBatch);
+    return nullptr;
 }

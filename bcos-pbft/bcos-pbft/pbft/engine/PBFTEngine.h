@@ -92,6 +92,7 @@ public:
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
     void clearAllCache();
+    void recoverState();
 
 protected:
     virtual void initSendResponseHandler();
@@ -182,6 +183,9 @@ protected:
         std::shared_ptr<PBFTBaseMessageInterface> _pbftMessage, SendResponseCallback _sendResponse);
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
+
+    virtual void onStableCheckPointCommitFailed(
+        Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
 
 private:
     // utility functions

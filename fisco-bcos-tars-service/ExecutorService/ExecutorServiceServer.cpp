@@ -29,13 +29,27 @@ bcostars::ExecutionMessage toTarsMessage(const bcos::protocol::ExecutionMessage:
 {
     if (message)
     {
-        return std::move(((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)message)->inner());
+        return ((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)message)->inner();
     }
     else
     {
         return bcostars::ExecutionMessage();
     }
 }
+
+bcostars::Error ExecutorServiceServer::status(
+    bcostars::ExecutorStatus& _output, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    m_executor->status(
+        [_current](bcos::Error::Ptr _error, bcos::protocol::ExecutorStatus::UniquePtr _status) {
+            bcostars::ExecutorStatus status;
+            status.seq = _status->seq();
+            async_response_status(_current, toTarsError(_error), std::move(status));
+        });
+    return bcostars::Error();
+}
+
 
 bcostars::Error ExecutorServiceServer::nextBlockHeader(tars::Int64 schedulerTermId,
     bcostars::BlockHeader const& _blockHeader, tars::TarsCurrentPtr _current)

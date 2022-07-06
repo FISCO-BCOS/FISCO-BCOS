@@ -264,10 +264,10 @@ void TransactionExecutor::initWasmEnvironment()
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
-    storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
+    storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(
-        storage, lastStorage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
+        storage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -305,7 +305,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
-            bcos::storage::StorageInterface::Ptr lastStateStorage;
             if (m_stateStorages.empty())
             {
                 if (m_cachedStorage)
@@ -317,11 +316,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     stateStorage = createStateStorage(m_backendStorage);
                 }
 
-                lastStateStorage = m_lastStateStorage ?
-                                       m_lastStateStorage :
-                                       (m_cachedStorage ? createStateStorage(m_cachedStorage) :
-                                                          createStateStorage(m_backendStorage));
-
                 // check storage block Number
                 auto storageBlockNumber = getBlockNumberInStorage();
                 EXECUTOR_NAME_LOG(DEBUG)
@@ -329,7 +323,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     << "Executor load from backend storage, check storage blockNumber"
                     << LOG_KV("storageBlockNumber", storageBlockNumber)
                     << LOG_KV("requestBlockNumber", blockHeader->number());
-                if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
+                // Note: skip check for sys contract deploy
+                if (blockHeader->number() - storageBlockNumber != 1 &&
+                    !isSysContractDeploy(blockHeader->number()))
                 {
                     auto fmt = boost::format(
                                    "[%s] Block number mismatch in storage! request: %d, current in "
@@ -359,11 +355,10 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 }
 
                 prev.storage->setReadOnly(true);
-                lastStateStorage = createStateStorage(prev.storage);
                 stateStorage = createStateStorage(prev.storage);
             }
             // set last commit state storage to blockContext, to auth read last block state
-            m_blockContext = createBlockContext(blockHeader, stateStorage, lastStateStorage);
+            m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
@@ -724,7 +719,7 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     if (last.number != number)
     {
         auto errorMessage =
-            "GetTableHashes error: Request block number: " +
+            "GetTableHashes error: Request blockNumber: " +
             boost::lexical_cast<std::string>(number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(last.number);
 
@@ -1306,7 +1301,7 @@ void TransactionExecutor::prepare(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Prepare error: Request block number: " +
+            "Prepare error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1317,7 +1312,7 @@ void TransactionExecutor::prepare(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
 
     m_backendStorage->asyncPrepare(storageParams, *(first->storage),
         [this, callback = std::move(callback)](auto&& error, uint64_t) {
@@ -1369,7 +1364,7 @@ void TransactionExecutor::commit(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Commit error: Request block number: " +
+            "Commit error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1380,34 +1375,34 @@ void TransactionExecutor::commit(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
-    m_backendStorage->asyncCommit(storageParams,
-        [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                    ExecuteError::STOPPED, "TransactionExecutor is not running"));
-                return;
-            }
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    m_backendStorage->asyncCommit(storageParams, [this, callback = std::move(callback),
+                                                     blockNumber = params.number](
+                                                     Error::Ptr&& error, uint64_t) {
+        if (!m_isRunning)
+        {
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(ExecuteError::STOPPED, "TransactionExecutor is not running"));
+            return;
+        }
 
-            if (error)
-            {
-                auto errorMessage = "Commit error: " + error->errorMessage();
+        if (error)
+        {
+            auto errorMessage = "Commit error: " + error->errorMessage();
 
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-                callback(
-                    BCOS_ERROR_WITH_PREV_PTR(ExecuteError::COMMIT_ERROR, errorMessage, *error));
-                return;
-            }
+            EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+            callback(BCOS_ERROR_WITH_PREV_PTR(ExecuteError::COMMIT_ERROR, errorMessage, *error));
+            return;
+        }
 
-            EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << LOG_KV("number", blockNumber);
+        EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << LOG_KV("number", blockNumber);
 
-            m_lastCommittedBlockNumber = blockNumber;
+        m_lastCommittedBlockNumber = blockNumber;
 
-            removeCommittedState();
+        removeCommittedState();
 
-            callback(nullptr);
-        });
+        callback(nullptr);
+    });
 }
 
 void TransactionExecutor::rollback(
@@ -1437,7 +1432,7 @@ void TransactionExecutor::rollback(
     if (first->number != params.number)
     {
         auto errorMessage =
-            "Rollback error: Request block number: " +
+            "Rollback error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
             " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
 
@@ -1448,7 +1443,7 @@ void TransactionExecutor::rollback(
     }
 
     bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
+        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
     m_backendStorage->asyncRollback(
         storageParams, [this, callback = std::move(callback)](auto&& error) {
             if (!m_isRunning)
@@ -1940,7 +1935,6 @@ void TransactionExecutor::removeCommittedState()
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = createStateStorage(m_stateStorages.back().storage);
         EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
                                 << LOG_KV("storageNumber", m_stateStorages.back().number)
                                 << LOG_KV("commitNumber", number);
@@ -1956,7 +1950,6 @@ void TransactionExecutor::removeCommittedState()
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        m_lastStateStorage = createStateStorage(m_stateStorages.back().storage);
         EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("removeCommittedState")
                                  << LOG_KV("LatestStateStorage", m_stateStorages.back().number)
                                  << LOG_KV("commitNumber", number)
