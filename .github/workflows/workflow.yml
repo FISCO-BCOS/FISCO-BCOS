@@ -19,7 +19,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-20.04]
-        buildtype: ['Debug', 'Release']
     steps:
       - uses: actions/checkout@v2
         with:
@@ -39,28 +38,16 @@ jobs:
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
-      - name: Build for macos
-        if: runner.os == 'macOS'
-        run: |
-          export CC='gcc-10'
-          export CXX='g++-10'
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-          cmake --build . --parallel 4
       - name: Build
-        if: runner.os != 'macOS'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 4
       - name: Test
-        if: runner.os != 'Windows'
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
   build_centos:
     name: build_centos
     runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        buildtype: ['Debug', 'Release']
     container: docker.io/centos:7
     steps:
       - uses: actions/checkout@v2
@@ -88,7 +75,7 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 4
       - name: Test
         run:
