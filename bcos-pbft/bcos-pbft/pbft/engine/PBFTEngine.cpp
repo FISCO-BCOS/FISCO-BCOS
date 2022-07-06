@@ -1485,6 +1485,8 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
             "clearExceptionProposalState return directly for the pbft module has not been inited");
         return;
     }
+    // update the ledgerConfig when switch
+    fetchAndUpdatesLedgerConfig();
     m_config->timer()->restart();
     m_cacheProcessor->resetUnCommittedCacheState(_number);
     m_config->setExpectedCheckPoint(_number);
@@ -1492,4 +1494,23 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
     m_cacheProcessor->checkAndCommit();
     m_cacheProcessor->tryToApplyCommitQueue();
     recoverState();
+}
+
+void PBFTEngine::fetchAndUpdatesLedgerConfig()
+{
+    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig");
+    m_ledgerFetcher->fetchBlockNumberAndHash();
+    m_ledgerFetcher->fetchConsensusNodeList();
+    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
+    m_ledgerFetcher->fetchObserverNodeList();
+    m_ledgerFetcher->fetchBlockTxCountLimit();
+    m_ledgerFetcher->fetchConsensusLeaderPeriod();
+    m_ledgerFetcher->fetchCompatibilityVersion();
+    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig success")
+                   << LOG_KV("blockNumber", ledgerConfig->blockNumber())
+                   << LOG_KV("hash", ledgerConfig->hash().abridged())
+                   << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
+                   << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
+    m_config->resetConfig(ledgerConfig);
 }

@@ -40,7 +40,7 @@ public:
 
     virtual ~TxPoolFactory() {}
     TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 1,
-        int64_t _txsExpirationTime = 10 * 60 * 1000);
+        int64_t _txsExpirationTime = 10 * 60 * 1000, bool _preStoreTxs = true);
 
 private:
     bcos::crypto::NodeIDPtr m_nodeId;
