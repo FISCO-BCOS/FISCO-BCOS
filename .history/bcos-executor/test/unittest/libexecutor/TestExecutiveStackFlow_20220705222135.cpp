@@ -130,11 +130,11 @@ BOOST_AUTO_TEST_CASE(RunTest)
     }
     if (sequence[20] != 21)
         flag = false;
-
     CHECK_OUT(flag);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
 
 }  // namespace test
 }  // namespace bcos

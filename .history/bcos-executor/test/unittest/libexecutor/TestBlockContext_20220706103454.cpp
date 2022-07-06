@@ -28,8 +28,8 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     BlockContext::Ptr blockContext = std::make_shared<bcos::executor::BlockContext>(
         nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
-    h256 blockhash = blcokContext->hash();
-    EXECUTOR_LOG(DEBUG) << blockhash;
+    h256 bhash = blcokContext->hash();
+
     blockContext->setTxGasLimit(10000);
     BOOST_CHECK(blockContext->storage() == nullptr);
     BOOST_CHECK(blockContext->lastStorage() == nullptr);

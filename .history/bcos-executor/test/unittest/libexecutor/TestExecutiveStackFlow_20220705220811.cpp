@@ -105,36 +105,10 @@ BOOST_AUTO_TEST_CASE(RunTest)
             callback(std::move(error);
             // callback(std::move(error), std::vector<protocol::ExecutionMessage::UniquePtr>());
             }
-        });
-
-    CHECK_OUT(sequence.size() != 0);
-    bool flag = true;
-    for (i = 0; i < sequence.size() - 1; ++i)
-    {
-        if (i <= 10)
-        {
-            if (sequence[i] != 11 + i)
-            {
-                flag = false;
-                break;
-            }
-        }
-        else
-        {
-            if (sequence[i] != i - 9)
-            {
-                flag = false;
-                break;
-            }
-        }
-    }
-    if (sequence[20] != 21)
-        flag = false;
-
-    CHECK_OUT(flag);
+        })
 }
-
 BOOST_AUTO_TEST_SUITE_END()
+
 
 }  // namespace test
 }  // namespace bcos

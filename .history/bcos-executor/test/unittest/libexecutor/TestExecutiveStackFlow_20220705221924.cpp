@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
 
     CHECK_OUT(sequence.size() != 0);
     bool flag = true;
-    for (i = 0; i < sequence.size() - 1; ++i)
+    for (i = 0; i < sequence.size(); ++i)
     {
         if (i <= 10)
         {
@@ -121,20 +121,13 @@ BOOST_AUTO_TEST_CASE(RunTest)
         }
         else
         {
-            if (sequence[i] != i - 9)
-            {
-                flag = false;
-                break;
-            }
+            if (sequence[i])
         }
     }
-    if (sequence[20] != 21)
-        flag = false;
-
-    CHECK_OUT(flag);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
 
 }  // namespace test
 }  // namespace bcos
