@@ -15,7 +15,6 @@ namespace bcos
 {
 namespace test
 {
-
 BOOST_AUTO_TEST_SUITE(TestBlockContext)
 
 BOOST_AUTO_TEST_CASE(BlockContextTest)
