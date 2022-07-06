@@ -197,7 +197,7 @@ void TarsRemoteExecutorManager::waitForExecutorConnection()
         }
         std::string message =
             "Waiting for connecting some executors, try times: " + std::to_string(retryTimes) +
-            " max retry times: " + std::to_string(m_waitingExecutorMaxRetryTimes);
+            ", max retry times: " + std::to_string(m_waitingExecutorMaxRetryTimes);
 
         std::cout << message << std::endl;
         EXECUTOR_MANAGER_LOG(INFO) << message;

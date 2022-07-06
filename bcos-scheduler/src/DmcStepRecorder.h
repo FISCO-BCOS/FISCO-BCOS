@@ -42,7 +42,10 @@ public:
         return ss.str();
     }
 
-    std::string getChecksum() { return toHex(m_checksum); }
+    std::string getChecksum()
+    {
+        return toHex(m_checksum) + ":" + getSendChecksum() + ":" + getReceiveChecksum();
+    }
 
     std::string getSendChecksum() { return toHex(m_sendChecksum); }
 
