@@ -44,7 +44,7 @@ struct ExecutiveStackFlowFixture
         {
             if (i <= 10)
             {
-                auto input = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
+                auto input = std::make_unique<CallParameters>(CallParameters::Type::REVERT);
                 input->contextID = i;
                 input->seq = 0;
                 txInputs->push_back(std::move(input));
@@ -91,15 +91,15 @@ BOOST_AUTO_TEST_CASE(RunTest)
     executiveStackFlow->asyncRun(
         // onTxReturn
         [this, sequence](CallParameters::UniquePtr output) {
-            if (output->seq == 0)
-            {
-                // callback(BCOS_ERROR_UNIQUE_PTR(
-                //              ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                //     {});
-                EXECUTOR_LOG(DEBUG) << "one transaction perform failed! the seq is :" << output->seq
-                                    << ",the conntextID is:" << output->contextID;
-                return;
-            }
+            // if (output->seq == 0)
+            //{
+            // callback(BCOS_ERROR_UNIQUE_PTR(
+            //              ExecuteError::STOPPED, "TransactionExecutor is not running"),
+            //     {});
+            // EXECUTOR_LOG(DEBUG) << "one transaction perform failed! the seq is :" << output->seq
+            //<< ",the conntextID is:" << output->contextID;
+            // return;
+            //}
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
                                 << ",the conntextID is:" << output->contextID;
             sequence->push_back(output->contextID);
@@ -111,19 +111,17 @@ BOOST_AUTO_TEST_CASE(RunTest)
                 EXECUTOR_LOG(ERROR)
                     << "ExecutiveFlow asyncRun error: " << LOG_KV("errorCode", error->errorCode())
                     << LOG_KV("errorMessage", error->errorMessage());
+                EXECUTOR_LOG(ERROR) << "all transaction perform error, sequence clear!";
                 sequence->clear();
                 // callback(std::move(error), std::vector<protocol::ExecutionMessage::UniquePtr>());
             }
             else
             {
                 EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
-                // do nothing
+                BOOST_CHECK_EQUAL(sequence->size(), 21);
             }
         });
-    EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size())
-                        << LOG_KV("  the sequence is ", sequence);
-
-    BOOST_CHECK_EQUAL(sequence->size(), 21);
+    EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size());
     bool flag = true;
     for (int i = 0; i < sequence->size(); ++i)
     {
@@ -148,6 +146,5 @@ BOOST_AUTO_TEST_CASE(RunTest)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
 }  // namespace test
 }  // namespace bcos
