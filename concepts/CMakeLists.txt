@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.17)
 project(bcos-concepts VERSION ${VERSION})
 
 add_library(bcos-concepts INTERFACE)
