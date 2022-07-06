@@ -28,9 +28,9 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(
-    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, int64_t _txsExpirationTime)
-  : m_config(_config), m_txsExpirationTime(_txsExpirationTime)
+MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
+    int64_t _txsExpirationTime, bool _preStoreTxs)
+  : m_config(_config), m_txsExpirationTime(_txsExpirationTime), m_preStoreTxs(_preStoreTxs)
 {
     m_notifier = std::make_shared<ThreadPool>("txNotifier", _notifyWorkerNum);
     m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
@@ -41,7 +41,8 @@ MemoryStorage::MemoryStorage(
         boost::bind(&MemoryStorage::cleanUpExpiredTransactions, this));
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
-                     << LOG_KV("txsExpriationTime", m_txsExpirationTime);
+                     << LOG_KV("txsExpriationTime", m_txsExpirationTime)
+                     << LOG_KV("preStoreTxs", m_preStoreTxs);
 }
 
 void MemoryStorage::start()
@@ -248,7 +249,10 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
-    preCommitTransaction(_tx);
+    if (m_preStoreTxs)
+    {
+        preCommitTransaction(_tx);
+    }
     notifyUnsealedTxsSize();
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
@@ -266,6 +270,11 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
         {
             auto txpoolStorage = self.lock();
             if (!txpoolStorage)
+            {
+                return;
+            }
+            // the transaction has already been stored to backend
+            if (_tx->storeToBackend())
             {
                 return;
             }
@@ -558,7 +567,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             continue;
         }
         // only seal the txs have been stored to the backend
-        if (!tx->storeToBackend())
+        if (m_preStoreTxs && !tx->storeToBackend())
         {
             continue;
         }

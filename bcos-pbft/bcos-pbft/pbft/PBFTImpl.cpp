@@ -112,26 +112,7 @@ void PBFTImpl::init()
 {
     auto config = m_pbftEngine->pbftConfig();
     config->validator()->init();
-    PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
-
-    m_ledgerFetcher->fetchBlockNumberAndHash();
-    m_ledgerFetcher->fetchConsensusNodeList();
-    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
-    m_ledgerFetcher->fetchObserverNodeList();
-    m_ledgerFetcher->fetchBlockTxCountLimit();
-    m_ledgerFetcher->fetchConsensusLeaderPeriod();
-    m_ledgerFetcher->fetchCompatibilityVersion();
-    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
-    PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information success")
-                   << LOG_KV("blockNumber", ledgerConfig->blockNumber())
-                   << LOG_KV("hash", ledgerConfig->hash().abridged())
-                   << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
-                   << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
-    config->resetConfig(ledgerConfig);
-    if (!m_masterNode)
-    {
-        return;
-    }
+    m_pbftEngine->fetchAndUpdatesLedgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 

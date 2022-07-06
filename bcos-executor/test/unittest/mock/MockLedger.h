@@ -9,7 +9,8 @@ class MockLedger : public bcos::ledger::LedgerInterface
 {
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override
+        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) override
     {
         BOOST_CHECK(false);  // Need implementations
     };

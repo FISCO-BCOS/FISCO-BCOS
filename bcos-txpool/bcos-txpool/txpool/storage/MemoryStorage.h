@@ -35,7 +35,7 @@ class MemoryStorage : public TxPoolStorageInterface,
 public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
-        int64_t _txsExpirationTime = 10 * 60 * 1000);
+        int64_t _txsExpirationTime = 10 * 60 * 1000, bool _preStoreTxs = false);
     ~MemoryStorage() override {}
 
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
@@ -122,7 +122,7 @@ protected:
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
 
-private:
+protected:
     TxPoolConfig::Ptr m_config;
     ThreadPool::Ptr m_notifier;
     ThreadPool::Ptr m_worker;
@@ -157,6 +157,8 @@ private:
     // for tps stat
     std::atomic<int64_t> m_tpsStatstartTime = {0};
     std::atomic<int64_t> m_onChainTxsCount = {0};
+
+    bool m_preStoreTxs = {true};
 };
 }  // namespace txpool
 }  // namespace bcos
