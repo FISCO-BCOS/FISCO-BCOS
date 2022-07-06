@@ -123,11 +123,11 @@ BOOST_AUTO_TEST_CASE(RunTest)
 
     BOOST_CHECK(sequence->size() != 0);
     bool flag = true;
-    for (int i = 0; i < sequence->size() - 1; ++i)
+    for (int i = 0; i < sequence->size(); ++i)
     {
         if (i <= 10)
         {
-            if (sequence->pop_back() != 11 + i)
+            if (sequence->at(i) != 11 + i)
             {
                 flag = false;
                 break;
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
         }
         else
         {
-            if (sequence->pop_back() != i - 9)
+            if (sequence->at(i) != i - 9)
             {
                 flag = false;
                 break;
