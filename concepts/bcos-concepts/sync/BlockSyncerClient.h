@@ -19,4 +19,4 @@ private:
 template <class Impl>
 concept BlockSyncerClient = std::derived_from<Impl, BlockSyncerClientBase<Impl>>;
 
-};  // namespace bcos::concepts::sync
+}  // namespace bcos::concepts::sync

@@ -30,12 +30,14 @@ struct TransactionCount
     uint64_t blockNumber = 0;
 };
 
+// All method in ledger is uncacheed
 template <class Impl>
 class LedgerBase
 {
 public:
     template <DataFlag... flags>
     auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
+        -> bcos::concepts::block::Block auto
     {
         return impl().template impl_getBlock<flags...>(blockNumber);
     }
@@ -46,7 +48,7 @@ public:
     }
 
     template <DataFlag flag>
-    auto getTransactionsOrReceipts(std::ranges::range auto const& hashes)
+    auto getTransactionsOrReceipts(std::ranges::range auto const& hashes) -> std::ranges::range auto
     {
         return impl().template impl_getTransactionsOrReceipts<flag>(hashes);
     }

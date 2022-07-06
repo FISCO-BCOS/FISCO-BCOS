@@ -15,6 +15,12 @@ public:
         return impl().impl_getBlock(request);
     }
 
+    auto getTransactionWithProof(bcos::concepts::ByteBuffer auto const& hash)
+        -> bcos::concepts::transaction::Transaction auto
+    {
+        return impl().impl_getTransactionWithProof(hash);
+    }
+
 private:
     friend Impl;
     SyncBlockServerBase() = default;
