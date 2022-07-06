@@ -16,8 +16,8 @@
  */
 
 #pragma once
-
 #include "../../../src/CallParameters.h"
+#include "../../../src/Common.h"
 #include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../../../src/executive/ExecutiveStackFlow.h"
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
     auto input1 = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
     input1->contextID = 21;
     input1->seq = 0;
-    executiveStackFlow->submit(input1);
+    executiveStackFlow->submit(std::move(input1));
     EXECUTOR_LOG(DEBUG) << "submit 1 transaction success!";
 
     executiveStackFlow->asyncRun(
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
             if (output->seq == 0)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
-                             ExecuteError ::STOPED, "TransactionExecutor is not running"),
+                             ExecuteError::STOPPED, "TransactionExecutor is not running"),
                     {});
                 return;
             }
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
 
     BOOST_CHECK(sequence.size() != 0);
     bool flag = true;
-    for (i = 0; i < sequence.size() - 1; ++i)
+    for (int i = 0; i < sequence.size() - 1; ++i)
     {
         if (i <= 10)
         {
