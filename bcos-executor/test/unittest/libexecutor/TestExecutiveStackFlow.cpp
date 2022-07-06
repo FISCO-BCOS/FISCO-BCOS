@@ -76,11 +76,12 @@ struct ExecutiveStackFlowFixture
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
 BOOST_AUTO_TEST_CASE(RunTest)
 {
+    EXECUTOR_LOG(DEBUG) << "RunTest begin";
     std::shared_ptr<std::vector<int64_t>> sequence;
     executiveStackFlow->submit(txInputs);
     EXECUTOR_LOG(DEBUG) << "submit 20 transaction success!";
     auto input1 = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
-    input1->contextID = 21;
+    input1->contextID = 11;
     input1->seq = 0;
     executiveStackFlow->submit(std::move(input1));
     EXECUTOR_LOG(DEBUG) << "submit 1 transaction success!";
@@ -117,7 +118,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
                 // do nothing
             }
         });
-    EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence.size())
+    EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size())
                         << LOG_KV("  the sequence is ", sequence);
 
     BOOST_CHECK(sequence->size() != 0);
@@ -126,7 +127,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
     {
         if (i <= 10)
         {
-            if (sequence->at[i] != 11 + i)
+            if (sequence->pop_back() != 11 + i)
             {
                 flag = false;
                 break;
@@ -134,16 +135,13 @@ BOOST_AUTO_TEST_CASE(RunTest)
         }
         else
         {
-            if (sequence->at[i] != i - 9)
+            if (sequence->pop_back() != i - 9)
             {
                 flag = false;
                 break;
             }
         }
     }
-    if (sequence->at[20] != 21)
-        flag = false;
-
     BOOST_CHECK(flag);
 }
 
