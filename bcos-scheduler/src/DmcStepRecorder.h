@@ -35,12 +35,18 @@ public:
 
     uint32_t getRound() { return m_round; }
 
-    std::string getChecksum()
+    std::string toHex(uint32_t x)
     {
         std::stringstream ss;
-        ss << std::setbase(16) << m_checksum;  // to hex
+        ss << std::setbase(16) << x;  // to hex
         return ss.str();
     }
+
+    std::string getChecksum() { return toHex(m_checksum); }
+
+    std::string getSendChecksum() { return toHex(m_sendChecksum); }
+
+    std::string getReceiveChecksum() { return toHex(m_receiveChecksum); }
 
     void clear()
     {

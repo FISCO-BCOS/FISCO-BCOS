@@ -5,6 +5,7 @@
 #include "GraphKeyLocks.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
@@ -161,6 +162,8 @@ private:
     std::chrono::milliseconds m_commitElapsed;
 
     bcos::protocol::Block::Ptr m_block;
+    bcos::protocol::TransactionsPtr m_blockTxs;
+
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
     int64_t m_schedulerTermId;

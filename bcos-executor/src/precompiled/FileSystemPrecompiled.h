@@ -35,16 +35,16 @@ public:
 
 private:
     void listDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void makeDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
     void link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
     void readLink(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
     void touch(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);

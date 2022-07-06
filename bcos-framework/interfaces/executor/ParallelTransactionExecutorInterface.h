@@ -26,6 +26,7 @@
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "ExecutionMessage.h"
+#include "ExecutorStatus.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -43,6 +44,16 @@ public:
     using Ptr = std::shared_ptr<ParallelTransactionExecutorInterface>;
     ParallelTransactionExecutorInterface() = default;
     virtual ~ParallelTransactionExecutorInterface() = default;
+
+    virtual void status(
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
+            callback)
+    {
+        // TODO: use pure virtual function
+        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
+        status->setSeq(m_seq);
+        callback(nullptr, std::move(status));
+    };
 
     virtual void nextBlockHeader(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
@@ -101,6 +112,9 @@ public:
     virtual void start(){};
 
     virtual void stop(){};
+
+private:
+    int64_t m_seq = utcTime();
 };
 }  // namespace executor
 }  // namespace bcos

@@ -21,6 +21,7 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
+#include <bcos-framework/interfaces/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -47,7 +48,9 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
         &PBFTEngine::finalizeConsensus, this, boost::placeholders::_1, boost::placeholders::_2));
 
     m_config->storage()->registerOnStableCheckPointCommitFailed(
-        boost::bind(&PBFTEngine::clearExceptionProposalState, this, boost::placeholders::_1));
+        [this](Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal) {
+            onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
+        });
 
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
     m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
@@ -501,11 +504,13 @@ void PBFTEngine::executeWorker()
         // proposal
         if ((c_consensusPacket.count(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
         {
+#if 0
             PBFT_LOG(TRACE) << LOG_DESC(
                                    "receive consensus packet, re-push it to the msgQueue for "
                                    "canHandleNewProposal")
                             << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
                             << m_config->printCurrentState();
+#endif
             m_msgQueue->push(pbftMsg);
             if (empty)
             {
@@ -1432,13 +1437,86 @@ void PBFTEngine::onReceivePrecommitRequest(
                    << LOG_KV("index", pbftRequest->index());
 }
 
+void PBFTEngine::onStableCheckPointCommitFailed(
+    Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal)
+{
+    if (_stableProposal->index() <= m_config->committedProposal()->index())
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "onStableCheckPointCommitFailed: drop the expired stable proposal")
+                       << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
+        return;
+    }
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "onStableCheckPointCommitFailed for BlockIsCommitting: "
+                                 "retry to commit again")
+                          << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        RecursiveGuard l(m_mutex);
+        m_cacheProcessor->updateStableCheckPointQueue(_stableProposal);
+        return;
+    }
+
+    clearExceptionProposalState(_stableProposal->index());
+}
+
+void PBFTEngine::recoverState()
+{
+    // Note: only replay the PBFT state when all-modules ready
+    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
+    auto stateProposals = m_config->storage()->loadState(m_config->committedProposal()->index());
+    if (stateProposals && stateProposals->size() > 0)
+    {
+        initState(*stateProposals, m_config->keyPair()->publicKey());
+        auto lowWaterMarkIndex = stateProposals->size() - 1;
+        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
+        m_config->setLowWaterMark(lowWaterMark + 1);
+        PBFT_LOG(INFO) << LOG_DESC("recoverState")
+                       << LOG_KV("stateProposals", stateProposals->size())
+                       << LOG_KV("lowWaterMark", lowWaterMark)
+                       << LOG_KV("highWaterMark", m_config->highWaterMark());
+    }
+    m_config->timer()->start();
+}
+
 void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number)
 {
     RecursiveGuard l(m_mutex);
+    if (!m_config->committedProposal())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+            "clearExceptionProposalState return directly for the pbft module has not been inited");
+        return;
+    }
+    // update the ledgerConfig when switch
+    fetchAndUpdatesLedgerConfig();
     m_config->timer()->restart();
     m_cacheProcessor->resetUnCommittedCacheState(_number);
     m_config->setExpectedCheckPoint(_number);
     m_cacheProcessor->checkAndPreCommit();
     m_cacheProcessor->checkAndCommit();
     m_cacheProcessor->tryToApplyCommitQueue();
+    recoverState();
+}
+
+void PBFTEngine::fetchAndUpdatesLedgerConfig()
+{
+    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig");
+    m_ledgerFetcher->fetchBlockNumberAndHash();
+    m_ledgerFetcher->fetchConsensusNodeList();
+    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
+    m_ledgerFetcher->fetchObserverNodeList();
+    m_ledgerFetcher->fetchBlockTxCountLimit();
+    m_ledgerFetcher->fetchConsensusLeaderPeriod();
+    m_ledgerFetcher->fetchCompatibilityVersion();
+    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig success")
+                   << LOG_KV("blockNumber", ledgerConfig->blockNumber())
+                   << LOG_KV("hash", ledgerConfig->hash().abridged())
+                   << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
+                   << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
+    m_config->resetConfig(ledgerConfig);
 }

@@ -329,6 +329,10 @@ void PBFTCache::resetCache(ViewType _curView)
     if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
         m_prePrepare->view() < _curView)
     {
+        PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag")
+                       << printPBFTProposal(m_prePrepare->consensusProposal());
+        // reset the sealingManager, in case of the same block has been sealed twice
+        m_config->notifyResetSealing(m_prePrepare->consensusProposal()->index());
         // reset the exceptioned txs to unsealed
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
     }

@@ -412,3 +412,38 @@ void RocksDBStorage::asyncRollback(
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end);
 }
+
+bcos::Error::Ptr RocksDBStorage::setRows(
+    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+{
+    if (table.empty())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+        return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+    }
+    if (keys.size() != values.size())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
+            << LOG_KV("values", values.size());
+        return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+    }
+    std::vector<std::string> realKeys(keys.size());
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i)
+            {
+                realKeys[i] = toDBKey(table, keys[i]);
+            }
+        });
+    auto writeBatch = WriteBatch();
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+    }
+    WriteOptions options;
+    options.sync = true;
+    m_db->Write(options, &writeBatch);
+    return nullptr;
+}

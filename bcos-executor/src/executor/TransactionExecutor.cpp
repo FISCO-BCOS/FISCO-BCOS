@@ -322,7 +322,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                     << "Executor load from backend storage, check storage blockNumber"
                     << LOG_KV("storageBlockNumber", storageBlockNumber)
                     << LOG_KV("requestBlockNumber", blockHeader->number());
-                if (blockHeader->number() - storageBlockNumber != 1 && blockHeader->number() != 0)
+                // Note: skip check for sys contract deploy
+                if (blockHeader->number() - storageBlockNumber != 1 &&
+                    !isSysContractDeploy(blockHeader->number()))
                 {
                     auto fmt = boost::format(
                                    "[%s] Block number mismatch in storage! request: %d, current in "
@@ -1373,33 +1375,33 @@ void TransactionExecutor::commit(
 
     bcos::protocol::TwoPCParams storageParams{
         params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
-    m_backendStorage->asyncCommit(storageParams,
-        [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error, uint64_t) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                    ExecuteError::STOPPED, "TransactionExecutor is not running"));
-                return;
-            }
+    m_backendStorage->asyncCommit(storageParams, [this, callback = std::move(callback),
+                                                     blockNumber = params.number](
+                                                     Error::Ptr&& error, uint64_t) {
+        if (!m_isRunning)
+        {
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(ExecuteError::STOPPED, "TransactionExecutor is not running"));
+            return;
+        }
 
-            if (error)
-            {
-                auto errorMessage = "Commit error: " + error->errorMessage();
+        if (error)
+        {
+            auto errorMessage = "Commit error: " + error->errorMessage();
 
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-                callback(
-                    BCOS_ERROR_WITH_PREV_PTR(ExecuteError::COMMIT_ERROR, errorMessage, *error));
-                return;
-            }
+            EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+            callback(BCOS_ERROR_WITH_PREV_PTR(ExecuteError::COMMIT_ERROR, errorMessage, *error));
+            return;
+        }
 
-            EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << LOG_KV("number", blockNumber);
+        EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << LOG_KV("number", blockNumber);
 
-            m_lastCommittedBlockNumber = blockNumber;
+        m_lastCommittedBlockNumber = blockNumber;
 
-            removeCommittedState();
+        removeCommittedState();
 
-            callback(nullptr);
-        });
+        callback(nullptr);
+    });
 }
 
 void TransactionExecutor::rollback(

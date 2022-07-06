@@ -2,9 +2,12 @@
 #include "CommonProtocol.tars"
 #include "TwoPCParams.tars"
 #include "ExecutionMessage.tars"
+#include "ExecutorStatus.tars"
 module bcostars {
     interface ExecutorService
     {
+        Error status(out ExecutorStatus _output);
+
         Error nextBlockHeader(long schedulerTermID, BlockHeader _blockHeader);
         Error executeTransaction(ExecutionMessage _input, out ExecutionMessage _output);
 

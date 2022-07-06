@@ -461,7 +461,9 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
+    std::cout << "#### testAsyncFillBlock" << std::endl;
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
+    std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit);
 }
 

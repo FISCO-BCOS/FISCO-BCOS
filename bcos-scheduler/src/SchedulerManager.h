@@ -54,7 +54,6 @@ public:
 
     void asyncSwitchTerm(int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback);
 
-
     void initSchedulerIfNotExist();
 
     void registerOnSwitchTermHandler(std::function<void(bcos::protocol::BlockNumber)> onSwitchTerm);
@@ -83,6 +82,10 @@ public:
                                 << LOG_KV("m_executorSeq", m_executorSeq)
                                 << LOG_KV("SchedulerTermID", id);
             }
+            BCOS_LOG(DEBUG) << "Build SchedulerTermID" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
+                            << LOG_KV("m_executorSeq", m_executorSeq)
+                            << LOG_KV("SchedulerTermID", id);
+
             return id;
         }
 

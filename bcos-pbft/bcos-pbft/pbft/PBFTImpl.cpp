@@ -32,28 +32,8 @@ void PBFTImpl::start()
     }
     m_running = true;
     m_pbftEngine->start();
-    recoverState();
+    m_pbftEngine->recoverState();
     PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
-}
-
-void PBFTImpl::recoverState()
-{
-    // Note: only replay the PBFT state when all-modules ready
-    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
-    auto config = m_pbftEngine->pbftConfig();
-    auto stateProposals = config->storage()->loadState(config->committedProposal()->index());
-    if (stateProposals && stateProposals->size() > 0)
-    {
-        m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
-        auto lowWaterMarkIndex = stateProposals->size() - 1;
-        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
-        config->setLowWaterMark(lowWaterMark + 1);
-        PBFT_LOG(INFO) << LOG_DESC("init PBFT state")
-                       << LOG_KV("stateProposals", stateProposals->size())
-                       << LOG_KV("lowWaterMark", lowWaterMark)
-                       << LOG_KV("highWaterMark", config->highWaterMark());
-    }
-    config->timer()->start();
 }
 
 void PBFTImpl::stop()
@@ -132,26 +112,7 @@ void PBFTImpl::init()
 {
     auto config = m_pbftEngine->pbftConfig();
     config->validator()->init();
-    PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
-
-    m_ledgerFetcher->fetchBlockNumberAndHash();
-    m_ledgerFetcher->fetchConsensusNodeList();
-    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
-    m_ledgerFetcher->fetchObserverNodeList();
-    m_ledgerFetcher->fetchBlockTxCountLimit();
-    m_ledgerFetcher->fetchConsensusLeaderPeriod();
-    m_ledgerFetcher->fetchCompatibilityVersion();
-    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
-    PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information success")
-                   << LOG_KV("blockNumber", ledgerConfig->blockNumber())
-                   << LOG_KV("hash", ledgerConfig->hash().abridged())
-                   << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
-                   << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
-    config->resetConfig(ledgerConfig);
-    if (!m_masterNode)
-    {
-        return;
-    }
+    m_pbftEngine->fetchAndUpdatesLedgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 
@@ -216,6 +177,6 @@ void PBFTImpl::enableAsMaterNode(bool _isMasterNode)
     }
     PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: init and start the consensus module");
     init();
-    recoverState();
+    m_pbftEngine->recoverState();
     m_pbftEngine->restart();
 }
