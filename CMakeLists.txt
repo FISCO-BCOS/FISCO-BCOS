@@ -73,7 +73,10 @@ if(ALL_COMPONENTS)
     add_subdirectory(bcos-leader-election)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
-    add_subdirectory(fisco-bcos-tars-service)
+
+    if(TARSSERVICES)
+        add_subdirectory(fisco-bcos-tars-service)
+    endif()
 
     add_subdirectory(concepts)
     add_subdirectory(lightnode)

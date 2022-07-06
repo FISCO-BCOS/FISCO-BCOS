@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-20.04, macos-11]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -30,17 +30,14 @@ jobs:
       - name: Prepare windows msbuild
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v1.1
-      - name: Prepare linux gcc-10
-        if: runner.os == 'Linux'
-        run: |
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - name: Build
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          export CC='gcc-10'
+          export CXX='g++-10'
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 4
       - name: Test
         run:
