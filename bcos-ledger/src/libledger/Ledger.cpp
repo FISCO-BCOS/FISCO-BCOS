@@ -262,6 +262,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
     LEDGER_LOG(TRACE) << "StoreTransactions request" << LOG_KV("tx count", _txToStore->size())
                       << LOG_KV("hash count", _txHashList->size());
 
+#if 0
     m_storage->asyncOpenTable(SYS_HASH_2_TX,
         [this, storage = m_storage, hashList = std::move(_txHashList),
             txList = std::move(_txToStore),
@@ -315,6 +316,21 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                     });
             }
         });
+#endif
+    auto total = _txToStore->size();
+    std::vector<std::string> keys(total);
+    std::vector<std::string> values(total);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                keys[i] = _txHashList->at(i).hex();
+                values[i] =
+                    std::string((char*)(_txToStore->at(i)->data()), _txToStore->at(i)->size());
+            }
+        });
+    auto error = m_storage->setRows(SYS_HASH_2_TX, std::move(keys), std::move(values));
+    _onTxStored(error);
 }
 
 void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,

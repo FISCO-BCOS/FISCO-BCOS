@@ -445,7 +445,6 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 if (page->count() == 0)
                 {  // page is empty because of rollback, means it it first created
                     pageData->entry.setStatus(Entry::Status::EMPTY);
-                    continue;
                 }
                 // revert also need update pageInfo
                 auto oldStartKey = meta->updatePageInfoNoLock(
