@@ -1222,9 +1222,10 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
             BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"}),
-                                                         std::vector<std::string>({})));
+            BOOST_CHECK(result2->data().toBytes() ==
+                        codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
+                            std::vector<std::string>({"1234567890123456789012345678901234567890"}),
+                            std::vector<std::string>({})));
         }
 
         // get permission denied
@@ -1255,9 +1256,10 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
             BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
-                                                         std::vector<std::string>({}),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"})));
+            BOOST_CHECK(
+                result2->data().toBytes() ==
+                codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE), std::vector<std::string>({}),
+                    std::vector<std::string>({"1234567890123456789012345678901234567890"})));
         }
 
         // use address 0x1234567890123456789012345678901234567890 get permission denied
@@ -1332,9 +1334,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"}),
-                                                         std::vector<std::string>({})));
+            BOOST_CHECK(result2->data().toBytes() ==
+                        codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
+                            std::vector<std::string>({"1234567890123456789012345678901234567890"}),
+                            std::vector<std::string>({})));
         }
 
         // can still set
@@ -1364,9 +1367,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
-                                                         std::vector<std::string>({}),
-                                                         std::vector<std::string>({"1234567890123456789012345678901234567890"})));
+            BOOST_CHECK(
+                result2->data().toBytes() ==
+                codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE), std::vector<std::string>({}),
+                    std::vector<std::string>({"1234567890123456789012345678901234567890"})));
         }
 
         // use address 0x1234567890123456789012345678901234567890, get success
@@ -1822,7 +1826,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise11;
         executor->executeTransaction(
             std::move(result10), [&](bcos::Error::UniquePtr&& error,
-                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise11.set_value(std::move(result));
             });
@@ -1842,7 +1846,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
 
         auto result12 = executePromise12.get_future().get();
 
-        result12 ->setSeq(1006);
+        result12->setSeq(1006);
 
         /// callback get deploy committee context
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise13;
@@ -1882,7 +1886,8 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         BOOST_CHECK_EQUAL(result14->seq(), 1004);
         BOOST_CHECK_EQUAL(result14->create(), false);
         BOOST_CHECK_EQUAL(result14->origin(), sender);
-        BOOST_CHECK_EQUAL(result14->newEVMContractAddress(), "2222222222222222222222222222222222222222");
+        BOOST_CHECK_EQUAL(
+            result14->newEVMContractAddress(), "2222222222222222222222222222222222222222");
         BOOST_CHECK_EQUAL(result14->to(), AUTH_COMMITTEE_ADDRESS);
 
         result14->setSeq(1000);
