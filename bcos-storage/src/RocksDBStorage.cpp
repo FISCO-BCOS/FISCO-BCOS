@@ -448,7 +448,6 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
     }
     WriteOptions options;
-    options.sync = true;
     m_db->Write(options, &writeBatch);
     return nullptr;
 }
