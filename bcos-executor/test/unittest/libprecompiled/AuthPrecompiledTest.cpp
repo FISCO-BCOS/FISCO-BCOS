@@ -1185,10 +1185,14 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
         // not found
         auto r1 = getMethodAuth(number++, Address(helloAddress), "set(string)");
-        BOOST_CHECK(r1->status() == (int)TransactionStatus::PrecompiledError);
+        BOOST_CHECK(
+            r1->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
+                                        std::vector<std::string>({})));
 
         auto r2 = getMethodAuth(number++, Address(helloAddress), "get()");
-        BOOST_CHECK(r2->status() == (int)TransactionStatus::PrecompiledError);
+        BOOST_CHECK(
+            r2->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
+                                        std::vector<std::string>({})));
 
         // set method acl type
         {
@@ -1198,7 +1202,9 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
             // row not found
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->status() == (int)TransactionStatus::PrecompiledError);
+            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(0),
+                                                          std::vector<std::string>({}),
+                                                          std::vector<std::string>({})));
         }
 
         // can't get now, even if not set any acl
@@ -1293,10 +1299,14 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
         BlockNumber _number = 4;
         // not found
         auto r1 = getMethodAuth(_number++, Address(helloAddress), "set(string)");
-        BOOST_CHECK(r1->status() == (int)TransactionStatus::PrecompiledError);
+        BOOST_CHECK(
+            r1->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
+                                        std::vector<std::string>({})));
 
         auto r2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-        BOOST_CHECK(r2->status() == (int)TransactionStatus::PrecompiledError);
+        BOOST_CHECK(
+            r2->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
+                                        std::vector<std::string>({})));
 
         // set method acl type
         {
@@ -1305,7 +1315,9 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->status() == (int)TransactionStatus::PrecompiledError);
+            BOOST_CHECK(
+                result2->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
+                                            std::vector<std::string>({})));
         }
 
         // still can get now, even if not set any acl
