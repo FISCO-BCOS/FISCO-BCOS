@@ -759,11 +759,24 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
 void MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
+    if (_sealFlag)
+    {
+        ReadGuard l(x_txpoolMutex);
+        batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
+        return;
+    }
+    // Note: setting flag to false is pessimistic, use writeLock here in case of the same txs has
+    // been sealed twice
+    WriteGuard l(x_txpoolMutex);
+    batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
+    return;
+}
+
+void MemoryStorage::batchMarkTxsWithoutLock(
+    HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
+{
     auto recordT = utcTime();
     auto startT = utcTime();
-    ReadGuard l(x_txpoolMutex);
-    auto lockT = utcTime() - startT;
-    startT = utcTime();
     ssize_t successCount = 0;
     for (auto txHash : _txsHashList)
     {
@@ -809,7 +822,7 @@ void MemoryStorage::batchMarkTxs(
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
                       << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
                       << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount)
-                      << LOG_KV("timecost", utcTime() - recordT) << LOG_KV("lockT", lockT)
+                      << LOG_KV("timecost", utcTime() - recordT)
                       << LOG_KV("markT", (utcTime() - startT));
     notifyUnsealedTxsSize();
 }
