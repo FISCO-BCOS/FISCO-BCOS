@@ -212,7 +212,12 @@ void TransactionExecutor::initEvmEnvironment()
         {RING_SIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    storage::StorageInterface::Ptr storage = m_backendStorage;
+    if (m_cachedStorage)
+    {
+        storage = m_cachedStorage;
+    }
+    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
 
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
@@ -256,7 +261,12 @@ void TransactionExecutor::initWasmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    storage::StorageInterface::Ptr storage = m_backendStorage;
+    if (m_cachedStorage)
+    {
+        storage = m_cachedStorage;
+    }
+    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }

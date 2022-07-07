@@ -391,8 +391,7 @@ public:
                 }
                 else
                 {
-                    assert(false);
-                    KeyPage_LOG(ERROR)
+                    KeyPage_LOG(FATAL)
                         << LOG_DESC("updatePageInfo not found")
                         << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
                         << LOG_KV("valid", count) << LOG_KV("size", size);

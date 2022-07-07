@@ -176,7 +176,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     if (c_fileLogLevel >= LogLevel::TRACE)
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
-                             << LOG_KV("callParameters", callParameters->toFullString());
+                             << LOG_KV("callParameters", callParameters->toFullString())
+                             << LOG_KV("blockNumber", blockContext().lock()->number());
     }
     m_storageWrapper->setRecoder(m_recoder);
 
@@ -202,7 +203,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     if (c_fileLogLevel >= LogLevel::TRACE)
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute finished")
-                             << LOG_KV("callResults", callResults->toFullString());
+                             << LOG_KV("callResults", callResults->toFullString())
+                             << LOG_KV("blockNumber", blockContext().lock()->number());
     }
     return callResults;
 }
