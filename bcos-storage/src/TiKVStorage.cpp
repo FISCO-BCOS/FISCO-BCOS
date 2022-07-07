@@ -321,6 +321,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         }
         auto size = mutations.size();
         auto primaryLock = toDBKey(params.primaryTableName, params.primaryTableKey);
+        // TODO: if m_committer is not null, return error code
         m_committer = std::make_shared<BCOSTwoPhaseCommitter>(
             m_cluster.get(), primaryLock, std::move(mutations), m_coroutineStackSize, m_maxRetry);
         if (params.timestamp == 0)
@@ -470,9 +471,14 @@ bcos::Error::Ptr TiKVStorage::setRows(
         if (keys.size() != values.size())
         {
             STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
-                << LOG_KV("values", values.size());
+                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("table", table)
+                << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
             return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+        }
+        if (keys.empty())
+        {
+            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+            return nullptr;
         }
         std::vector<std::string> realKeys(keys.size());
         tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),

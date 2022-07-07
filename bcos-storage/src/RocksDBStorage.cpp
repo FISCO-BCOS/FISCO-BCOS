@@ -429,6 +429,11 @@ bcos::Error::Ptr RocksDBStorage::setRows(
             << LOG_KV("values", values.size());
         return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
     }
+    if (keys.empty())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+        return nullptr;
+    }
     std::vector<std::string> realKeys(keys.size());
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, keys.size()), [&](const tbb::blocked_range<size_t>& range) {

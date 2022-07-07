@@ -281,7 +281,7 @@ public:
         }
         inline std::optional<PageInfo*> getPageInfoNoLock(std::string_view key)
         {
-            count += 1;
+            ++getPageInfoCount;
             if (pages->empty())
             {  // if pages is empty
                 return std::nullopt;
@@ -450,10 +450,10 @@ public:
             os << "]";
             return os;
         }
-        double hitRate() { return hit / (double)count; }
+        double hitRate() { return hit / (double)getPageInfoCount; }
 
     private:
-        uint32_t count = 0;
+        uint32_t getPageInfoCount = 0;
         uint32_t hit = 0;
         mutable std::shared_mutex mutex;
         std::unique_ptr<std::vector<PageInfo>> pages = nullptr;

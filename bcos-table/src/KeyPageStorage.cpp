@@ -283,7 +283,14 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                                 << LOG_KV("status", (int)it.second->entry.status())
                                 << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
                         }
-                        assert(it.first.second == page->endKey());
+                        if (it.first.second != page->endKey())
+                        {
+                            KeyPage_LOG(FATAL)
+                                << LOG_DESC("Traverse Page pageKey not equal to map key")
+                                << LOG_KV("table", it.first.first)
+                                << LOG_KV("pageKey", page->endKey())
+                                << LOG_KV("mapKey", it.first.second);
+                        }
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
                     auto invalidKeys = page->invalidKeySet();
@@ -476,7 +483,7 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
     decltype(bucket->container)::iterator it = bucket->container.find(keyPair);
     if (it != bucket->container.end())
     {
-        assert(it->first.second == key);
+        // assert(it->first.second == key);
         auto data = it->second.get();
         lock.unlock();
         return std::make_tuple(std::unique_ptr<Error>(nullptr), std::make_optional(data));
@@ -641,7 +648,13 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
         auto page = &std::get<0>(pageData->data);
         if (m_readOnly)
         {  // TODO: check condition, if key is pageKey, return page
-            assert(pageInfoOp.value()->getPageKey() == key);
+            if (pageInfoOp.value()->getPageKey() != key)
+            {
+                KeyPage_LOG(FATAL)
+                    << LOG_DESC("getEntryFromPage readonly try to read entry(should read page)")
+                    << LOG_KV("pageKey", toHex(pageInfoOp.value()->getPageKey()))
+                    << LOG_KV("key", toHex(key));
+            }
             if (page->size() > 0)
             {
                 auto pageReadLock = page->rLock();
@@ -791,7 +804,12 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         {
             auto [error, nextPageData] = getData(table, nextPageKey.value());
             boost::ignore_unused(error);
-            assert(!error);
+            if (error)
+            {
+                KeyPage_LOG(FATAL)
+                    << LOG_DESC("merge page getData error") << LOG_KV("table", table)
+                    << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey));
+            }
             auto nextPage = &std::get<0>(nextPageData.value()->data);
             if (nextPage->size() < m_splitSize)
             {
