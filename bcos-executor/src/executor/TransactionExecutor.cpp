@@ -371,7 +371,8 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
-        EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader success";
+        EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader success"
+                                << LOG_KV("number", blockHeader->number());
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -560,8 +561,26 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-        callback)
+        _callback)
 {
+    auto requestTimestamp = utcTime();
+    auto txNum = inputs.size();
+    EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions request" << LOG_KV("txNum", txNum)
+                             << LOG_KV("contractAddress", contractAddress)
+                             << LOG_KV("requestTimestamp", requestTimestamp);
+
+    auto callback = [this, _callback = _callback, requestTimestamp, txNum, contractAddress](
+                        bcos::Error::UniquePtr error,
+                        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+        EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions response" << LOG_KV("txNum", txNum)
+                                 << LOG_KV("outputNum", outputs.size())
+                                 << LOG_KV("contractAddress", contractAddress)
+                                 << LOG_KV("requestTimestamp", requestTimestamp)
+                                 << LOG_KV("errorMessage", error ? error->errorMessage() : "ok")
+                                 << LOG_KV("timeCost", utcTime() - requestTimestamp);
+        _callback(std::move(error), std::move(outputs));
+    };
+
     if (!m_isRunning)
     {
         EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
@@ -750,8 +769,25 @@ void TransactionExecutor::dagExecuteTransactions(
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-        callback)
+        _callback)
 {
+    auto requestTimestamp = utcTime();
+    auto txNum = inputs.size();
+    EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions request" << LOG_KV("txNum", txNum)
+                             << LOG_KV("requestTimestamp", requestTimestamp);
+
+    auto callback = [this, _callback = _callback, requestTimestamp, txNum](
+                        bcos::Error::UniquePtr error,
+                        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+        EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions response" << LOG_KV("txNum", txNum)
+                                 << LOG_KV("outputNum", outputs.size())
+                                 << LOG_KV("requestTimestamp", requestTimestamp)
+                                 << LOG_KV("errorMessage", error ? error->errorMessage() : "ok")
+                                 << LOG_KV("timeCost", utcTime() - requestTimestamp);
+        _callback(std::move(error), std::move(outputs));
+    };
+
+
     if (!m_isRunning)
     {
         EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
