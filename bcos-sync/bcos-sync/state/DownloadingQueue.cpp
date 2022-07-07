@@ -450,7 +450,11 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
     // empty block
     if (_block->transactionsSize() == 0)
     {
+        BLKSYNC_LOG(INFO) << LOG_DESC("commitBlock: receive empty block, commitBlockState directly")
+                          << LOG_KV("number", blockHeader->number())
+                          << LOG_KV("hash", blockHeader->hash().abridged());
         commitBlockState(_block);
+        return;
     }
     // commit transaction firstly
     auto txsData = std::make_shared<std::vector<bytesConstPtr>>();
