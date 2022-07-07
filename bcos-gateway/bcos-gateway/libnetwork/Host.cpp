@@ -136,7 +136,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
 
