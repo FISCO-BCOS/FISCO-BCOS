@@ -280,10 +280,12 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
-    std::lock_guard l(x_committer);
+    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
+                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {
         auto start = utcTime();
+        RecursiveGuard l(x_committer);
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
         atomic_bool isTableValid = true;
@@ -373,9 +375,9 @@ void TiKVStorage::asyncCommit(
     auto start = utcTime();
     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
                             << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
-    std::lock_guard l(x_committer);
     try
     {
+        RecursiveGuard l(x_committer);
         uint64_t ts = 0;
         if (m_committer)
         {
@@ -420,10 +422,10 @@ void TiKVStorage::asyncRollback(
 {
     auto start = utcTime();
     std::ignore = params;
-    std::lock_guard l(x_committer);
     try
     {
         STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number);
+        RecursiveGuard l(x_committer);
         if (m_committer)
         {
             m_committer->rollback();

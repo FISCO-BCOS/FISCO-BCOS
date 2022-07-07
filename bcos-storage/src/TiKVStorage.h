@@ -22,6 +22,7 @@
 #pragma once
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-utilities/Common.h>
 
 namespace pingcap
 {
@@ -83,9 +84,10 @@ public:
 private:
     int32_t m_maxRetry = 10;
     size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
-    std::mutex x_committer;
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
+
+    mutable RecursiveMutex x_committer;
 };
 }  // namespace storage
 }  // namespace bcos

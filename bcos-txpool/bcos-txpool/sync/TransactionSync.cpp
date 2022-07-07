@@ -248,9 +248,9 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
 {
     if (_error != nullptr)
     {
-        SYNC_LOG(WARNING) << LOG_DESC("onGetMissedTxsFromLedger: get error response")
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMsg", _error->errorMessage());
+        SYNC_LOG(TRACE) << LOG_DESC("onGetMissedTxsFromLedger: get error response")
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("msg", _error->errorMessage());
         return _missedTxs.size();
     }
     // import and verify the transactions
@@ -360,8 +360,16 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         SYNC_LOG(INFO) << LOG_DESC("asyncVerifyBlock: fetch missed txs failed")
                        << LOG_KV("peer", _nodeID ? _nodeID->shortHex() : "unknown")
                        << LOG_KV("missedTxsSize", _missedTxs->size())
-                       << LOG_KV("errorCode", _error->errorCode())
-                       << LOG_KV("errorMsg", _error->errorMessage());
+                       << LOG_KV("code", _error->errorCode())
+                       << LOG_KV("msg", _error->errorMessage())
+                       << LOG_KV(
+                              "propHash", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                              _verifiedProposal->blockHeader()->hash().abridged() :
+                                              "unknown")
+                       << LOG_KV(
+                              "propIndex", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                               _verifiedProposal->blockHeader()->number() :
+                                               -1);
         _onVerifyFinished(_error, false);
         return;
     }
