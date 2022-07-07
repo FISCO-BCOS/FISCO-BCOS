@@ -18,10 +18,9 @@ sm_crypto=false
 name = "agencyA"
 # enable data disk encryption for rpc/gateway or not, default is false
 enable_storage_security = false
-# sm_storage_security = false
 # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
-# key_center_url = 
-# cipher_data_key = 
+# key_center_url =
+# cipher_data_key =
 
     [[agency.group]]
         group_id = "group0"
@@ -31,9 +30,10 @@ enable_storage_security = false
         node_name = "node0"
         # the tikv storage pd-addresses
         pd_addrs="172.25.0.3:2379"
+        key_page_size=10240
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.3"]
-        
+
         [[agency.group.node]]
         # expand a new max node
         node_name = "node1"
@@ -42,5 +42,5 @@ enable_storage_security = false
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.5"]
         monitor_listen_port = "3901"
-        # monitor log path example:"/root/app/tars/framework/app_log/" 
-        monitor_log_path = "" 
+        # monitor log path example:"/root/app/tars/framework/app_log/"
+        monitor_log_path = ""

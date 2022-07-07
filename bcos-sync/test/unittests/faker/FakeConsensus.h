@@ -19,8 +19,9 @@
  * @date 2021-06-08
  */
 #pragma once
-#include <bcos-framework//consensus/ConsensusInterface.h>
-#include <bcos-framework//ledger/LedgerConfig.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-utilities/ThreadPool.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::crypto;
@@ -35,7 +36,7 @@ class FakeConsensus : public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeConsensus>;
-    FakeConsensus() = default;
+    FakeConsensus() { m_taskPool = std::make_shared<ThreadPool>("task", 1); }
     ~FakeConsensus() override {}
 
 
@@ -53,7 +54,8 @@ public:
     // the sync module calls this interface to check block
     void asyncCheckBlock(Block::Ptr, std::function<void(Error::Ptr, bool)> _onVerifyFinish) override
     {
-        _onVerifyFinish(nullptr, m_checkBlockResult);
+        m_taskPool->enqueue(
+            [_onVerifyFinish, this]() { _onVerifyFinish(nullptr, m_checkBlockResult); });
     }
 
     // the sync module calls this interface to notify new block
@@ -61,7 +63,7 @@ public:
         LedgerConfig::Ptr _ledgerConfig, std::function<void(Error::Ptr)> _onRecv) override
     {
         m_ledgerConfig = _ledgerConfig;
-        _onRecv(nullptr);
+        m_taskPool->enqueue([_onRecv]() { _onRecv(nullptr); });
     }
 
     // useless for the sync module
@@ -86,6 +88,7 @@ public:
 private:
     std::atomic_bool m_checkBlockResult = {true};
     LedgerConfig::Ptr m_ledgerConfig;
+    ThreadPool::Ptr m_taskPool;
 };
 }  // namespace test
 }  // namespace bcos

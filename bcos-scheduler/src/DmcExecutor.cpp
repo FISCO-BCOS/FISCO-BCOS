@@ -1,5 +1,6 @@
 #include "DmcExecutor.h"
 #include "ChecksumAddress.h"
+#include "bcos-framework/executor/ExecuteError.h"
 #include <boost/format.hpp>
 
 using namespace bcos::scheduler;
@@ -202,6 +203,10 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 {
                     SCHEDULER_LOG(ERROR) << "Call error: " << boost::diagnostic_information(*error);
 
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
                     callback(std::move(error), ERROR);
                 }
                 else
@@ -217,22 +222,31 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     {
         // is transaction
         auto lastT = utcTime();
-        DMC_LOG(TRACE) << LOG_DESC("dmcExecuteTransactions") << LOG_KV("executor", m_name)
-                       << LOG_KV("address", m_contractAddress) << LOG_KV("size", messages->size())
-                       << LOG_KV("number", m_block->blockHeader()->number());
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.3:\t --> Send to executor\t\t"
+                       << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("name", m_name)
+                       << LOG_KV("contract", m_contractAddress) << LOG_KV("txNum", messages->size())
+                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                       << LOG_KV("cost", utcTime() - lastT);
+
         m_executor->dmcExecuteTransactions(m_contractAddress, *messages,
             [this, lastT, messages, callback = std::move(callback)](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 // update batch
-                DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute:\t Executor execute finish"
+                DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.4:\t <-- Receive from executor\t"
+                               << LOG_KV("round", m_dmcRecorder->getRound())
                                << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
                                << LOG_KV("txNum", messages->size())
-                               << LOG_KV("round", m_dmcRecorder->getRound())
+                               << LOG_KV("blockNumber", m_block->blockHeader()->number())
                                << LOG_KV("cost", utcTime() - lastT);
 
                 if (error)
                 {
                     SCHEDULER_LOG(ERROR) << "Execute transaction error: " << error->errorMessage();
+
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
 
                     callback(std::move(error), ERROR);
                 }

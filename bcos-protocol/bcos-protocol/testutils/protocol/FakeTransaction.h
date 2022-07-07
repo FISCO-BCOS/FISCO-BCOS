@@ -107,7 +107,7 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, u256 nonc
     }
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
-    return testTransaction(_cryptoSuite, keyPair, std::string_view((char*)to.data(), to.size()),
+    return fakeTransaction(_cryptoSuite, keyPair, std::string_view((char*)_to.data(), _to.size()),
         input, nonce, blockLimit, chainId, groupId);
 }
 }  // namespace test

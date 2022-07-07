@@ -48,7 +48,8 @@ public:
     virtual void registerFinalizeHandler(
         std::function<void(bcos::ledger::LedgerConfig::Ptr, bool)> _finalizeHandler) = 0;
     virtual void registerOnStableCheckPointCommitFailed(
-        std::function<void(bcos::protocol::BlockNumber)> _onStableCheckPointCommitFailed) = 0;
+        std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
+            _onStableCheckPointCommitFailed) = 0;
 };
 }  // namespace consensus
 }  // namespace bcos

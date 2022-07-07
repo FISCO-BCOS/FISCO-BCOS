@@ -24,6 +24,7 @@ project(bcos-tars-protocol VERSION ${VERSION})
 
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/bcos-tars-protocol/tars)
+find_program(TARS_TARS2CPP tars2cpp REQUIRED)
 
 file(GLOB_RECURSE TARS_INPUT "*.tars")
 # generate tars
@@ -43,17 +44,18 @@ if (TARS_INPUT)
 endif()
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${OUT_TARS_H_LIST}")
-include_directories(${TARSCPP_ROOT}/include)
 
 aux_source_directory(./protocol SRC_LIST)
 aux_source_directory(./client SRC_LIST)
 
+find_package(tarscpp REQUIRED)
+
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
+target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC ${TARSCPP_ROOT}/include)
 target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tars::servant tars::util)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil)
 
 if (TESTS)
-    # fetch bcos-test
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)

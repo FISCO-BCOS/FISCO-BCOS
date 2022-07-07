@@ -34,6 +34,7 @@
 #include "bcos-framework//executor/ExecutionMessage.h"
 #include "bcos-framework//protocol/Exceptions.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -73,15 +74,6 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
         m_storageWrapper = std::make_unique<SyncStorageWrapper>(blockContext->storage(),
             std::bind(&TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
             m_recoder);
-        if (blockContext->lastStorage())
-        {
-            m_lastStorageWrapper = std::make_shared<SyncStorageWrapper>(
-                std::dynamic_pointer_cast<bcos::storage::StateStorageInterface>(
-                    blockContext->lastStorage()),
-                std::bind(
-                    &TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
-                m_recoder);
-        }
 
         if (!callParameters->keyLocks.empty())
         {
@@ -182,6 +174,11 @@ void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
+                             << LOG_KV("callParameters", callParameters->toFullString());
+    }
     m_storageWrapper->setRecoder(m_recoder);
 
     std::unique_ptr<HostContext> hostContext;
@@ -203,7 +200,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
-
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute finished")
+                             << LOG_KV("callResults", callResults->toFullString());
+    }
     return callResults;
 }
 
@@ -823,6 +824,13 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
     // enc([call precompiled parameters],[user call parameters])
     auto newParams = codec.encode(codeParameters, callParameters->data);
+    if (c_fileLogLevel >= TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_DESC("callDynamicPrecompiled")
+                             << LOG_KV("inputDataSize", callParameters->data.size())
+                             << LOG_KV("newParamsSize", newParams.size());
+    }
+
     callParameters->data = std::move(newParams);
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled")
                          << LOG_KV("codeAddr", callParameters->codeAddress)
@@ -938,7 +946,9 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT") << LOG_KV("gasLeft", callResults->gas);
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT")
+                               << LOG_KV("to", callResults->receiveAddress)
+                               << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
@@ -955,6 +965,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     {
         revert();
         EXECUTIVE_LOG(WARNING) << "Revert transaction: " << LOG_DESC("OutOfGas")
+                               << LOG_KV("to", callResults->receiveAddress)
                                << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
@@ -963,7 +974,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_FAILURE:
     {
         revert();
-        EXECUTIVE_LOG(WARNING) << "Revert transaction: " << LOG_DESC("WASMTrap");
+        EXECUTIVE_LOG(WARNING) << "Revert transaction: "
+                               << LOG_KV("to", callResults->receiveAddress) << LOG_DESC("WASMTrap");
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
         break;
@@ -1137,6 +1149,7 @@ bool TransactionExecutive::checkAuth(
     auto path = callParameters->codeAddress;
     EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
                          << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
+    bool result = true;
     if (_isCreate)
     {
         /// external call authMgrAddress to check deploy auth
@@ -1146,13 +1159,17 @@ bool TransactionExecutive::checkAuth(
                          codec.encodeWithSig("hasDeployAuth(address)", Address(address));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
             callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
-        bool result = true;
         codec.decode(ref(response->data), result);
-        return result;
     }
-    bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-    return contractAuthPrecompiled->checkMethodAuth(
-        shared_from_this(), std::move(path), func, address);
+    else
+    {
+        bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
+        result = contractAuthPrecompiled->checkMethodAuth(
+            shared_from_this(), std::move(path), func, address);
+    }
+    EXECUTIVE_LOG(DEBUG) << "check auth finished" << LOG_KV("codeAddress", path)
+                         << LOG_KV("result", result);
+    return result;
 }
 
 bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)

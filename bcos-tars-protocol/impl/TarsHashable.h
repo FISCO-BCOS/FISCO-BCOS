@@ -1,7 +1,7 @@
 #pragma once
 #include "../Common.h"
 #include "tars/Block.h"
-#include <bcos-framework/concepts/Hash.h>
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <string>
 #include <vector>
@@ -10,7 +10,7 @@ namespace bcos::concepts::hash
 {
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto calculate(bcostars::Transaction const& transaction)
+auto impl_calculate(bcostars::Transaction const& transaction)
 {
     if (!transaction.dataHash.empty())
         return transaction.dataHash;
@@ -36,7 +36,7 @@ auto calculate(bcostars::Transaction const& transaction)
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto calculate(bcostars::BlockHeader const& blockHeader)
+auto impl_calculate(bcostars::BlockHeader const& blockHeader)
 {
     if (!blockHeader.dataHash.empty())
         return blockHeader.dataHash;

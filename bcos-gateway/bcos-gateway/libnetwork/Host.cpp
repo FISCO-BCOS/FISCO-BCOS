@@ -397,7 +397,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
     auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
-        *(m_asioInterface->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
+        *(socket->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
     connect_timer->async_wait([=, this](const boost::system::error_code& error) {
         /// return when cancel has been called
         if (error == boost::asio::error::operation_aborted)

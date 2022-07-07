@@ -27,8 +27,10 @@ find_package(Boost REQUIRED COMPONENTS filesystem)
 
 file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
+find_package(tarscpp REQUIRED)
+
 add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static Boost::filesystem bcos-boostssl ${TARS_PROTOCOL_TARGET} tars::servant tars::util)
+target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static Boost::filesystem bcos-boostssl ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
 target_compile_options(${GATEWAY_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 if (APPLE)

@@ -26,6 +26,7 @@
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "mock/MockKeyPageStorage.h"
 #include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
@@ -71,12 +72,17 @@ public:
     virtual ~PrecompiledFixture() {}
 
     /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false)
+    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = false)
     {
         isWasm = _isWasm;
-        storage = std::make_shared<MockTransactionalStorage>(hashImpl);
-        memoryTableFactory = std::make_shared<StateStorage>(storage);
-
+        if (_isKeyPage)
+        {
+            storage = std::make_shared<MockKeyPageStorage>(hashImpl);
+        }
+        else
+        {
+            storage = std::make_shared<MockTransactionalStorage>(hashImpl);
+        }
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
@@ -107,7 +113,6 @@ public:
     {
         isWasm = _isWasm;
         storage = std::make_shared<MockTransactionalStorage>(smHashImpl);
-        memoryTableFactory = std::make_shared<StateStorage>(storage);
 
         blockFactory = createBlockFactory(smCryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
@@ -162,21 +167,21 @@ public:
             auto rootTable = promise2.get_future().get();
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
-            newSubMap.insert(std::make_pair("apps", FS_TYPE_DIR));
-            newSubMap.insert(std::make_pair("/", FS_TYPE_DIR));
-            newSubMap.insert(std::make_pair("tables", FS_TYPE_DIR));
-            tEntry.importFields({FS_TYPE_DIR});
+            newSubMap.insert(std::make_pair("apps", executor::FS_TYPE_DIR));
+            newSubMap.insert(std::make_pair("/", executor::FS_TYPE_DIR));
+            newSubMap.insert(std::make_pair("tables", executor::FS_TYPE_DIR));
+            tEntry.importFields({executor::FS_TYPE_DIR});
             newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
             aclTypeEntry.importFields({"0"});
             aclWEntry.importFields({""});
             aclBEntry.importFields({""});
             extraEntry.importFields({""});
-            rootTable->setRow(FS_KEY_TYPE, std::move(tEntry));
-            rootTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
-            rootTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
-            rootTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
-            rootTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
-            rootTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
+            rootTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+            rootTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+            rootTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+            rootTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+            rootTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+            rootTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
         }
 
         // create /tables table
@@ -190,18 +195,18 @@ public:
             auto tablesTable = promise3.get_future().get();
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
+            tEntry.importFields({executor::FS_TYPE_DIR});
             newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
             aclTypeEntry.importFields({"0"});
             aclWEntry.importFields({""});
             aclBEntry.importFields({""});
             extraEntry.importFields({""});
-            tablesTable->setRow(FS_KEY_TYPE, std::move(tEntry));
-            tablesTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
-            tablesTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
-            tablesTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
-            tablesTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
-            tablesTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
+            tablesTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+            tablesTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+            tablesTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+            tablesTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+            tablesTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+            tablesTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
         }
 
         // create /apps table
@@ -215,18 +220,18 @@ public:
             auto appsTable = promise4.get_future().get();
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
+            tEntry.importFields({executor::FS_TYPE_DIR});
             newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
             aclTypeEntry.importFields({"0"});
             aclWEntry.importFields({""});
             aclBEntry.importFields({""});
             extraEntry.importFields({""});
-            appsTable->setRow(FS_KEY_TYPE, std::move(tEntry));
-            appsTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
-            appsTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
-            appsTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
-            appsTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
-            appsTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
+            appsTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+            appsTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+            appsTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+            appsTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+            appsTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+            appsTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
         }
     }
 
@@ -264,8 +269,7 @@ protected:
     CryptoSuite::Ptr cryptoSuite = nullptr;
     CryptoSuite::Ptr smCryptoSuite = nullptr;
 
-    std::shared_ptr<MockTransactionalStorage> storage;
-    StateStorage::Ptr memoryTableFactory;
+    TransactionalStorageInterface::Ptr storage;
     TransactionExecutor::Ptr executor;
     std::shared_ptr<MockTxPool> txpool;
     std::shared_ptr<MockLedger> ledger;

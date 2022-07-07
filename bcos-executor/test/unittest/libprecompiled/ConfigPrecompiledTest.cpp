@@ -436,7 +436,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
-        if(_errorCode!=0)
+        if (_errorCode != 0)
         {
             BOOST_CHECK(result3->data().toBytes() == codec->encode(int32_t(_errorCode)));
             if (result3->data().toBytes() != codec->encode(int32_t(_errorCode)))
@@ -473,8 +473,8 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
     // set weigh to observer
     {
-       auto r = callFunc(number++, "setWeightTest(string,uint256)", node2, 123, 0);
-       BOOST_CHECK(r->status() == 15);
+        auto r = callFunc(number++, "setWeightTest(string,uint256)", node2, 123, 0);
+        BOOST_CHECK(r->status() == 15);
     }
 
     // add errorNode

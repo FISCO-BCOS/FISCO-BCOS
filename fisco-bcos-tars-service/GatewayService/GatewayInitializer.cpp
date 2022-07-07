@@ -20,8 +20,9 @@
  */
 #include "GatewayInitializer.h"
 #include "Common/TarsUtils.h"
-#include <bcos-framework//election/FailOverTypeDef.h>
-#include <bcos-framework//protocol/GlobalConfig.h>
+#include "libinitializer/ProtocolInitializer.h"
+#include <bcos-framework/election/FailOverTypeDef.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -64,7 +65,11 @@ void GatewayInitializer::init(std::string const& _configPath)
     }
 #endif
 
-    bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
+    auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
+    protocolInitializer->init(nodeConfig);
+
+    bcos::gateway::GatewayFactory factory(
+        nodeConfig->chainId(), nodeConfig->rpcServiceName(), protocolInitializer->dataEncryption());
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
                              << LOG_KV("certPath", m_gatewayConfig->certPath())

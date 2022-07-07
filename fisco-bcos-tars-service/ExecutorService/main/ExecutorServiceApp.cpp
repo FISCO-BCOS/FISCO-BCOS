@@ -128,9 +128,9 @@ void ExecutorServiceApp::createAndInitExecutor()
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
-    auto executorFactory = ExecutorInitializer::buildFactory(ledger, m_txpool, cache, storage,
+    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger, m_txpool, cache, storage,
         executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize());
+        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
 
     m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
 

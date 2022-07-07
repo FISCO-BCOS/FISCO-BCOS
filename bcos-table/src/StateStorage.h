@@ -94,7 +94,7 @@ public:
     BaseStorage(BaseStorage&&) = delete;
     BaseStorage& operator=(BaseStorage&&) = delete;
 
-    virtual ~BaseStorage()
+    ~BaseStorage() override
     {
         m_recoder.clear();
     }

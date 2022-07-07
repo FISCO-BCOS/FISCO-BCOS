@@ -1,12 +1,12 @@
 module bcostars {
     struct TransactionData {
-        1 require int version;
-        2 require string chainID;
-        3 require string groupID;
-        4 require long blockLimit;
-        5 require string nonce;
+        1 optional int version;
+        2 optional string chainID;
+        3 optional string groupID;
+        4 optional long blockLimit;
+        5 optional string nonce;
         6 optional string to;
-        7 require vector<byte> input;
+        7 optional vector<byte> input;
         8 optional string abi;
     };
 

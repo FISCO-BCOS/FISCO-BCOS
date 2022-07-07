@@ -45,6 +45,10 @@ using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 
+#if defined(__APPLE__)
+#undef __APPLE__
+#endif
+
 namespace std
 {
 inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
@@ -612,6 +616,8 @@ BOOST_AUTO_TEST_CASE(chainLink)
         std::atomic<size_t> totalCount = 0;
         storage->parallelTraverse(false, [&](auto&&, auto&&, auto&&) {
             ++totalCount;
+            // std::string message = std::string("table=") + std::string(table) + ",key=" +
+            // std::string(key); cout << message << endl;
             return true;
         });
         BOOST_REQUIRE_EQUAL(totalCount, (9 + 1 + 1) * 10 + 10);  // 10 for s_tables, every table has
@@ -1329,6 +1335,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
     auto entryCount = 1000;
     auto tableCount = 100;
+
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
@@ -1360,6 +1367,11 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
             // }
         }
     }
+    auto hash = tableStorage->hash(hashImpl);
+    // BOOST_TEST(
+    //     hash.hex() ==
+    //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
+
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
@@ -1383,6 +1395,12 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
             }
         }
     }
+
+    hash = tableStorage->hash(hashImpl);
+    // BOOST_TEST(
+    //     hash.hex() ==
+    //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
+
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
@@ -1410,6 +1428,12 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
             }
         }
     }
+
+    hash = tableStorage->hash(hashImpl);
+    // BOOST_TEST(
+    //     hash.hex() ==
+    //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
+
     std::atomic<size_t> totalCount = 0;
     tableStorage->parallelTraverse(false, [&](auto&&, auto&&, auto&&) {
         ++totalCount;

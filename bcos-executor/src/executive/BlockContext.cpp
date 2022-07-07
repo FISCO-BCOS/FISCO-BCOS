@@ -56,14 +56,11 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
 {}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-    storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
-    protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-    bool _isAuthCheck)
+    crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
+    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
   : BlockContext(storage, _hashImpl, _current->number(), _current->hash(), _current->timestamp(),
         _current->version(), _schedule, _isWasm, _isAuthCheck)
-{
-    m_lastStorage = std::move(_lastStorage);
-}
+{}
 
 
 ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)

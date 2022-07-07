@@ -1,4 +1,4 @@
-file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp)
+file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp)
 
 # cmake settings
 set(TEST_BINARY_NAME bcos-dispatcher-test)
@@ -9,5 +9,5 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variab
 
 find_package(Boost REQUIRED unit_test_framework serialization)
 
-target_link_libraries(${TEST_BINARY_NAME} ${SCHEDULER_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework ${TARS_PROTOCOL_TARGET} tars::servant tars::util)
+target_link_libraries(${TEST_BINARY_NAME} ${SCHEDULER_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework ${TARS_PROTOCOL_TARGET})
 add_test(NAME test-scheduler WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

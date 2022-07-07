@@ -29,7 +29,7 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback)
 {
     // if SYS_TABLES is not supported
-    if (tableView == SYS_TABLES)
+    if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
     {
         _callback(BCOS_ERROR_UNIQUE_PTR(StorageError::ReadError, "scan s_tables is not supported"),
             std::vector<std::string>());
@@ -90,7 +90,7 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
     std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback)
 {
     // if sys table, read cache and read from prev, return
-    if (tableView == SYS_TABLES)
+    if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
     {
         auto [error, entry] = getSysTableRawEntry(tableView, keyView);
         if (error)
@@ -124,7 +124,7 @@ void KeyPageStorage::asyncGetRows(std::string_view tableView,
         [this, &tableView, &_callback](auto&& _keys) {
             std::vector<std::optional<Entry>> results(_keys.size());
 
-            if (tableView == SYS_TABLES)
+            if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
             {
                 Error::UniquePtr err;
                 // #pragma omp parallel for
@@ -179,7 +179,7 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
     }
 
     // if sys table, write cache and write to prev, return
-    if (tableView == SYS_TABLES)
+    if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
     {
         std::optional<Entry> entryOld;
 
@@ -243,7 +243,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     {  // FIXME: this log is only for debug, comment it when release
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
-                            << LOG_KV("key", toHex(it.first.second));
+                            << LOG_KV("key", toHex(it.first.second)) << LOG_KV("meta", *meta);
                     }
 
                     KeyPage_LOG(DEBUG)
@@ -274,12 +274,15 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     {
                         entry.setObject(*page);
                         entry.setStatus(it.second->entry.status());
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
-                            << LOG_KV("validCount", page->validCount())
-                            << LOG_KV("count", page->count())
-                            << LOG_KV("status", (int)it.second->entry.status())
-                            << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
+                        if (c_fileLogLevel >= TRACE)
+                        {
+                            KeyPage_LOG(TRACE)
+                                << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
+                                << LOG_KV("validCount", page->validCount())
+                                << LOG_KV("count", page->count())
+                                << LOG_KV("status", (int)it.second->entry.status())
+                                << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
+                        }
                         assert(it.first.second == page->endKey());
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
@@ -303,7 +306,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                 if (!onlyDirty || it.second->entry.dirty())
                 {
                     auto& entry = it.second->entry;
-                    assert(it.first.first == SYS_TABLES);
+                    // assert(it.first.first == SYS_TABLES);
                     callback(it.first.first, it.first.second, entry);
                 }
             }
@@ -359,7 +362,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
 
     for (auto& change : recoder)
     {
-        if (change.table == SYS_TABLES)
+        if (m_ignoreTables->find(change.table) != m_ignoreTables->end())
         {
             auto [bucket, lock] = getMutBucket(change.table, change.key);
             boost::ignore_unused(lock);
@@ -519,7 +522,7 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
                     {
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("import TableMeta") << LOG_KV("table", tableView)
-                            << LOG_KV("size", meta->size());
+                            << LOG_KV("size", meta->size()) << LOG_KV("meta", *meta);
                     }
                 }
                 d->entry.setStatus(Entry::Status::NORMAL);
@@ -710,7 +713,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     {
         auto ret = page->setEntry(key, std::move(entry));
         entryOld = std::move(std::get<0>(ret));
-        auto pageInfoChanged = std::move(std::get<1>(ret));
+        auto pageInfoChanged = std::get<1>(ret);
 
         if (pageInfoChanged)
         {

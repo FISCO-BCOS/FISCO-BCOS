@@ -3,14 +3,14 @@
 #include "Executive.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
-#include "bcos-framework//executor/ExecutionMessage.h"
-#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework//protocol/Block.h"
-#include "bcos-framework//protocol/BlockHeader.h"
-#include "bcos-framework//protocol/BlockHeaderFactory.h"
-#include "bcos-framework//protocol/ProtocolTypeDef.h"
-#include "bcos-framework//protocol/TransactionMetaData.h"
-#include "bcos-framework//protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/TransactionMetaData.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -83,6 +83,19 @@ public:
 
     void start() { m_isRunning = true; }
     void stop() { m_isRunning = false; }
+
+    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+    }
+
+    void triggerSwitch()
+    {
+        if (f_onNeedSwitchEvent)
+        {
+            f_onNeedSwitchEvent();
+        }
+    }
 
 private:
     struct CommitStatus
@@ -167,6 +180,8 @@ private:
     mutable SharedMutex x_dmcExecutorLock;
 
     bool m_isRunning = false;
+
+    std::function<void()> f_onNeedSwitchEvent;
 };
 
 }  // namespace bcos::scheduler

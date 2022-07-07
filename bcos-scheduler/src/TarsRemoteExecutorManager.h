@@ -22,8 +22,10 @@
 #include "bcos-scheduler/src/ExecutorManager.h"
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-utilities/Worker.h>
+#include <atomic>
 
-#define EXECUTOR_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER")
+#define EXECUTOR_MANAGER_LOG(LEVEL) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
 
 
 namespace bcos::scheduler
@@ -35,7 +37,7 @@ public:
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     TarsRemoteExecutorManager(std::string executorServiceName)
-      : Worker("TarsRemoteExecutorManager", 1000)
+      : Worker("TarsRemoteExecutorManager", 5000)  // ms
     {
         if (executorServiceName.empty())
         {
@@ -52,6 +54,7 @@ public:
     {
         EXECUTOR_MANAGER_LOG(INFO) << "Start" << threadName() << " "
                                    << LOG_KV("executorServiceName", m_executorServiceName);
+        // refresh();
         startWorking();
     }
 
@@ -64,10 +67,11 @@ public:
 
     void executeWorker() override;
 
+    void refresh();
+
     void update(EndPointSet endPointMap);
 
     bool empty() { return size() == 0; }
-
 
 private:
     std::string buildEndPointUrl(std::string host, uint16_t port)

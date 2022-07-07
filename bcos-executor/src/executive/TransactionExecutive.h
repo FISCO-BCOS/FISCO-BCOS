@@ -114,8 +114,6 @@ public:
         return *m_storageWrapper;
     }
 
-    std::shared_ptr<SyncStorageWrapper> lastStorage() { return m_lastStorageWrapper; }
-
     std::weak_ptr<BlockContext> blockContext() { return m_blockContext; }
 
     int64_t contextID() const { return m_contextID; }
@@ -275,7 +273,6 @@ private:
 
     bcos::storage::Recoder::Ptr m_recoder;
     std::unique_ptr<SyncStorageWrapper> m_storageWrapper;
-    std::shared_ptr<SyncStorageWrapper> m_lastStorageWrapper;
     CallParameters::UniquePtr m_exchangeMessage = nullptr;
 
     std::optional<Coroutine::pull_type> m_pullMessage;

@@ -1,35 +1,37 @@
 #pragma once
 #include "../Common.h"
 #include "TarsStruct.h"
+#include "tars/Block.h"
+#include "tars/Transaction.h"
 #include "tup/Tars.h"
-#include <bcos-framework/concepts/Serialize.h>
+#include <bcos-concepts/Basic.h>
 #include <ranges>
+#include <type_traits>
 #include <vector>
 
 namespace bcos::concepts::serialize
 {
-// Tars struct crtp base
-std::vector<bcos::byte> encode(bcostars::protocol::impl::TarsStruct auto const& object)
+
+void impl_encode(
+    bcostars::protocol::impl::TarsStruct auto const& object, bcos::concepts::ByteBuffer auto& out)
 {
-    tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
+    using StreamType = std::conditional_t<
+        std::is_signed_v<std::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>,
+        tars::BufferWriter, bcostars::protocol::BufferWriterByteVector>;
+
+    tars::TarsOutputStream<StreamType> output;
     object.writeTo(output);
 
-    std::vector<bcos::byte> out;
     output.getByteBuffer().swap(out);
-
-    return out;
 }
 
-void decode(bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& data)
+void impl_decode(
+    bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& in)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)std::data(data), std::size(data));
+    input.setBuffer((const char*)std::data(in), std::size(in));
 
     object.readFrom(input);
 }
+
 }  // namespace bcos::concepts::serialize
-
-namespace bcos::concepts::hash
-{
-
-}

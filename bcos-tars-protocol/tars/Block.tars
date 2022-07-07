@@ -4,28 +4,28 @@
 
 module bcostars {
     struct ParentInfo {
-        1 require long blockNumber;
-        2 require vector<byte> blockHash;
+        1 optional long blockNumber;
+        2 optional vector<byte> blockHash;
     };
 
     struct Signature {
-        1 require long sealerIndex;
-        2 require vector<byte> signature;
+        1 optional long sealerIndex;
+        2 optional vector<byte> signature;
     };
 
     struct BlockHeaderData {
-        2 require int version;
-        3 require vector<ParentInfo> parentInfo;
-        4 require vector<byte> txsRoot;
-        5 require vector<byte> receiptRoot;
-        6 require vector<byte> stateRoot;
-        7 require long blockNumber;
-        8 require string gasUsed;
-        9 require long timestamp;
-        10 require long sealer;
-        11 require vector<vector<byte>> sealerList;
-        12 require vector<byte> extraData; 
-        13 require vector<long> consensusWeights;
+        2 optional int version;
+        3 optional vector<ParentInfo> parentInfo;
+        4 optional vector<byte> txsRoot;
+        5 optional vector<byte> receiptRoot;
+        6 optional vector<byte> stateRoot;
+        7 optional long blockNumber;
+        8 optional string gasUsed;
+        9 optional long timestamp;
+        10 optional long sealer;
+        11 optional vector<vector<byte>> sealerList;
+        12 optional vector<byte> extraData; 
+        13 optional vector<long> consensusWeights;
     };
 
     struct BlockHeader {

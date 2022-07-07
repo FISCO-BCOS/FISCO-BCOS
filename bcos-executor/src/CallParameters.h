@@ -82,5 +82,27 @@ struct CallParameters
         ss << "]";
         return ss.str();
     }
+
+    // this method only for trace log
+    std::string toFullString()
+    {
+        std::stringstream ss;
+        // clang-format off
+        ss << toString()
+           << "senderAddress:" << senderAddress << "|"
+           << "codeAddress:" << codeAddress << "|"
+           << "receiveAddress:" << receiveAddress << "|"
+           << "origin:" << origin << "|"
+           << "gas:" << gas << "|"
+           << "dataSize:" << data.size() << "|"
+           << "abiSize:" << abi.size() << "|"
+           << "acquireKeyLock:" << acquireKeyLock << "|"
+           << "message:" << message << "|"
+           << "newEVMContractAddress:" << newEVMContractAddress << "|"
+           << "staticCall:" << staticCall << "|"
+           << "create :" << create << "|";
+        // clang-format on
+        return ss.str();
+    }
 };
 }  // namespace bcos::executor

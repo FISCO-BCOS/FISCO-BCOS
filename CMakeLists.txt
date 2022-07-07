@@ -13,6 +13,8 @@ include(cmake/Version.cmake)
 
 # vcpkg init
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    find_package(Git REQUIRED)
+    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive -- vcpkg WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} COMMAND_ERROR_IS_FATAL ANY)
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         CACHE STRING "Vcpkg toolchain file")
 endif()
@@ -39,7 +41,6 @@ if(FRAMEWORK)
 endif()
 
 if(CRYPTO)
-    find_package(WeDPRCrypto REQUIRED MODULE)
     add_subdirectory(bcos-crypto)
 endif()
 
@@ -48,8 +49,6 @@ if(UTILITIES)
 endif()
 
 if(ALL_COMPONENTS)
-    find_package(TARS REQUIRED MODULE)
-
     # import dependencies
     include(ProjectWABT)
     include(ProjectBCOSWASM)
@@ -73,9 +72,14 @@ if(ALL_COMPONENTS)
     add_subdirectory(bcos-front)
     add_subdirectory(bcos-leader-election)
     add_subdirectory(libinitializer)
-    add_subdirectory(lightnode)
     add_subdirectory(fisco-bcos-air)
-    add_subdirectory(fisco-bcos-tars-service)
+
+    if(TARSSERVICES)
+        add_subdirectory(fisco-bcos-tars-service)
+    endif()
+
+    add_subdirectory(concepts)
+    add_subdirectory(lightnode)
 
     if(TESTS)
         enable_testing()

@@ -37,7 +37,9 @@
         "zstd",
         "protobuf",
         "evmc",
-        "evmone"
+        "evmone",
+        "wedprcrypto",
+        "tarscpp"
     ],
     "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
 }

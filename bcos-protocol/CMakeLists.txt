@@ -25,6 +25,12 @@ project(bcos-protocol VERSION ${VERSION})
 add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-protocol/protobuf)
 
+find_package(protobuf REQUIRED)
+
+add_library(bcos-protocol INTERFACE)
+target_include_directories(bcos-protocol INTERFACE .)
+target_link_libraries(bcos-protocol INTERFACE protobuf::libprotobuf)
+
 if (TESTS)
     # fetch bcos-test    
     enable_testing()

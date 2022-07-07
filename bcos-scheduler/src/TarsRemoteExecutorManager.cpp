@@ -5,14 +5,14 @@
 #include "TarsRemoteExecutorManager.h"
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <servant/Application.h>
 #include <servant/ObjectProxy.h>
+#include <servant/QueryF.h>
 #include <sstream>
 
 using namespace bcos::scheduler;
 
 
-TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInfo>& endPointInfos)
+TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointF>& endPointInfos)
 {
     TarsRemoteExecutorManager::EndPointSet endPointSet =
         std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
@@ -22,57 +22,111 @@ TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointInf
         return endPointSet;
     }
 
-    for (const EndpointInfo& endPointInfo : endPointInfos)
+    for (const EndpointF& endPointInfo : endPointInfos)
     {
-        if (endPointInfo.host().empty())
+        if (endPointInfo.host.empty())
         {
             continue;  // ignore error endpoint info
         }
 
-        endPointSet->insert({endPointInfo.host(), endPointInfo.port()});
+        endPointSet->insert({endPointInfo.host, endPointInfo.port});
     }
     return endPointSet;
 }
 
-void dumpEndPointsLog(
-    const vector<EndpointInfo>& activeEndPoints, const vector<EndpointInfo>& inactiveEndPoints)
+std::string dumpEndPointsLog(
+    const vector<EndpointF>& activeEndPoints, const vector<EndpointF>& inactiveEndPoints)
 {
     // dump logs
     std::stringstream ss;
-    ss << "Detect executor endpoints. active:[";
-    for (const EndpointInfo& endpointInfo : activeEndPoints)
+    ss << "active:[";
+    for (const EndpointF& endpointInfo : activeEndPoints)
     {
-        ss << endpointInfo.host() << ":" << endpointInfo.port() << ", ";
+        ss << endpointInfo.host << ":" << endpointInfo.port << ", ";
     }
     ss << "], inactive:[";
-    for (const EndpointInfo& endpointInfo : inactiveEndPoints)
+    for (const EndpointF& endpointInfo : inactiveEndPoints)
     {
-        ss << endpointInfo.host() << ":" << endpointInfo.port() << ", ";
+        ss << endpointInfo.host << ":" << endpointInfo.port << ", ";
     }
     ss << "]";
-    EXECUTOR_MANAGER_LOG(DEBUG) << ss.str();
+    return ss.str();
 }
+
+// return success, activeEndPoints, inactiveEndPoints
+static std::tuple<bool, vector<EndpointF>, vector<EndpointF>> getActiveEndpoints(
+    const std::string& executorServiceName)
+{
+    static string locator = tars::Application::getCommunicator()->getProperty("locator");
+
+    if (locator.find_first_not_of('@') == string::npos)
+    {
+        EXECUTOR_MANAGER_LOG(ERROR) << "Tars locator is not valid:" << LOG_KV("locator", locator);
+
+        return {false, {}, {}};
+    }
+
+    static QueryFPrx locatorPrx =
+        tars::Application::getCommunicator()->stringToProxy<QueryFPrx>(locator);
+
+    vector<EndpointF> activeEndPoints;
+    vector<EndpointF> inactiveEndPoints;
+    int iRet = locatorPrx->findObjectById4Any(
+        executorServiceName, activeEndPoints, inactiveEndPoints, ServerConfig::Context);
+
+    if (iRet == 0)
+    {
+        return {true, std::move(activeEndPoints), std::move(inactiveEndPoints)};
+    }
+    {
+        EXECUTOR_MANAGER_LOG(ERROR) << "Tars getActiveEndpoints error."
+                                    << LOG_KV("executorServiceName", executorServiceName);
+        return {false, {}, {}};
+    }
+}
+
+void TarsRemoteExecutorManager::refresh()
+{
+    try
+    {
+        auto [success, activeEndPoints, inactiveEndPoints] =
+            getActiveEndpoints(m_executorServiceName);
+
+        if (!success)
+        {
+            EXECUTOR_MANAGER_LOG(DEBUG) << "getActiveEndpoints failed"
+                                        << LOG_KV("executorServiceName", m_executorServiceName);
+            return;
+        }
+
+        EndPointSet currentEndPointMap = buildEndPointSet(activeEndPoints);
+
+        if (*m_endPointSet != *currentEndPointMap)
+        {
+            EXECUTOR_MANAGER_LOG(DEBUG) << "Update current endpoint map: "
+                                        << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
+            update(currentEndPointMap);
+        }
+        else
+        {
+            EXECUTOR_MANAGER_LOG(DEBUG) << "Executor endpoint map: "
+                                        << dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        EXECUTOR_MANAGER_LOG(ERROR) << "Workloop exception: " << e.what();
+    }
+    catch (...)
+    {
+        EXECUTOR_MANAGER_LOG(ERROR) << "Workloop exception";
+    }
+}
+
 
 void TarsRemoteExecutorManager::executeWorker()
 {
-    auto proxy = tars::Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(
-        m_executorServiceName);
-
-    vector<EndpointInfo> activeEndPoints;
-    vector<EndpointInfo> inactiveEndPoints;
-    proxy->tars_endpoints(activeEndPoints, inactiveEndPoints);
-
-    EndPointSet currentEndPointMap = buildEndPointSet(activeEndPoints);
-
-    if (*m_endPointSet != *currentEndPointMap)
-    {
-        dumpEndPointsLog(activeEndPoints, inactiveEndPoints);
-        update(currentEndPointMap);
-    }
-    else
-    {
-        EXECUTOR_MANAGER_LOG(TRACE) << "No need to update";
-    }
+    refresh();
 }
 
 void TarsRemoteExecutorManager::update(EndPointSet endPointSet)
