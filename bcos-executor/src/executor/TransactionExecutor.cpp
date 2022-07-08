@@ -366,6 +366,12 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 prev.storage->setReadOnly(true);
                 stateStorage = createStateStorage(prev.storage);
             }
+
+            if (m_blockContext)
+            {
+                m_blockContext->clear();
+            }
+
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
