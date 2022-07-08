@@ -45,7 +45,7 @@ public:
     TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         ProtocolInitializer::Ptr _protocolInitializer,
         bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcos::ledger::LedgerInterface::Ptr _ledger);
+        bcos::ledger::LedgerInterface::Ptr _ledger, bool _preStoreTxs);
     virtual ~TxPoolInitializer() { stop(); }
 
     virtual void init(bcos::sealer::SealerInterface::Ptr _sealer);

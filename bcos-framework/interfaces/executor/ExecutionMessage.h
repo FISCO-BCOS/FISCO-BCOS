@@ -75,7 +75,7 @@ public:
         std::stringstream ss;
         ss << "[" << (staticCall() ? "call" : "tx") << "|" << contextID() << "|" << seq() << "|"
            << getTypeName(type()) << "|" << from() << "->" << to() << "|"
-           << toHex(keyLockAcquired()) << "|" << keyLocks().size() << ":";
+           << toHex(keyLockAcquired()) << "|" << gasAvailable() << "|" << keyLocks().size() << ":";
         for (auto& lock : keyLocks())
         {
             ss << toHex(lock) << ".";

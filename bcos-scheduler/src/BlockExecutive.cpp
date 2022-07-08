@@ -101,6 +101,15 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setOrigin(toHex(tx->sender()));
     message->setFrom(std::string(message->origin()));
 
+    if (!m_isSysBlock)
+    {
+        auto toAddress = tx->to();
+        if (bcos::precompiled::c_systemTxsAddress.count(
+                std::string(toAddress.begin(), toAddress.end())))
+        {
+            m_isSysBlock.store(true);
+        }
+    }
 
     if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
     {
@@ -160,10 +169,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
                          << LOG_KV("block number", m_block->blockHeaderConst()->number())
                          << LOG_KV("tx count", m_block->transactionsMetaDataSize());
 
-    auto txs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
+    m_blockTxs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
 
     m_executiveResults.resize(m_block->transactionsMetaDataSize());
-    if (txs)
+    if (m_blockTxs)
     {
         // can fetch tx from txpool, build message which type is MESSAGE
 #pragma omp parallel for
@@ -176,7 +185,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
                 m_executiveResults[i].source = metaData->source();
             }
             auto contextID = i + m_startContextID;
-            auto message = buildMessage(contextID, (*txs)[i]);
+            auto message = buildMessage(contextID, (*m_blockTxs)[i]);
             std::string to = {message->to().data(), message->to().size()};
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
@@ -257,15 +266,6 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     for (size_t i = 0; i < m_block->transactionsSize(); ++i)
     {
         auto tx = m_block->transaction(i);
-        if (!m_isSysBlock)
-        {
-            auto toAddress = tx->to();
-            if (bcos::precompiled::c_systemTxsAddress.count(
-                    std::string(toAddress.begin(), toAddress.end())))
-            {
-                m_isSysBlock.store(true);
-            }
-        }
         m_executiveResults[i].transactionHash = tx->hash();
         m_executiveResults[i].source = tx->source();
 
@@ -451,7 +451,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
     m_currentTimePoint = std::chrono::system_clock::now();
 
-    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_block,
+    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_blockTxs, m_block,
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
@@ -1316,14 +1316,17 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         txGasUsed = 0;
     }
     m_gasUsed += txGasUsed;
-    DMC_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                   << " -> contextID:" << output->contextID() - m_startContextID;
+    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+        output->newEVMContractAddress(),
+        std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
+        output->status(), output->takeData(), m_block->blockHeaderConst()->number());
     // write receipt in results
-    m_executiveResults[output->contextID() - m_startContextID].receipt =
-        m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-            output->newEVMContractAddress(),
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
-            output->status(), output->takeData(), m_block->blockHeaderConst()->number());
+    m_executiveResults[output->contextID() - m_startContextID].receipt = receipt;
+    SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                         << " -> contextID:" << output->contextID() - m_startContextID
+                         << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
+                         << ", version: " << receipt->version()
+                         << ", status: " << receipt->status();
 }
 
 

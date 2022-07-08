@@ -280,10 +280,12 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
-    std::lock_guard l(x_committer);
+    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
+                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {
         auto start = utcTime();
+        RecursiveGuard l(x_committer);
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
         atomic_bool isTableValid = true;
@@ -319,6 +321,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         }
         auto size = mutations.size();
         auto primaryLock = toDBKey(params.primaryTableName, params.primaryTableKey);
+        // TODO: if m_committer is not null, return error code
         m_committer = std::make_shared<BCOSTwoPhaseCommitter>(
             m_cluster.get(), primaryLock, std::move(mutations), m_coroutineStackSize, m_maxRetry);
         if (params.timestamp == 0)
@@ -373,9 +376,9 @@ void TiKVStorage::asyncCommit(
     auto start = utcTime();
     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
                             << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
-    std::lock_guard l(x_committer);
     try
     {
+        RecursiveGuard l(x_committer);
         uint64_t ts = 0;
         if (m_committer)
         {
@@ -420,10 +423,10 @@ void TiKVStorage::asyncRollback(
 {
     auto start = utcTime();
     std::ignore = params;
-    std::lock_guard l(x_committer);
     try
     {
         STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number);
+        RecursiveGuard l(x_committer);
         if (m_committer)
         {
             m_committer->rollback();
@@ -468,9 +471,14 @@ bcos::Error::Ptr TiKVStorage::setRows(
         if (keys.size() != values.size())
         {
             STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
-                << LOG_KV("values", values.size());
+                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("table", table)
+                << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
             return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+        }
+        if (keys.empty())
+        {
+            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+            return nullptr;
         }
         std::vector<std::string> realKeys(keys.size());
         tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),

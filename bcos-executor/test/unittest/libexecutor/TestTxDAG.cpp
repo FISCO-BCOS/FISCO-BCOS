@@ -220,14 +220,14 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
 
     runDagTest(txDag, total, id2CriticalFun, beforeRunCheck, afterRunCheck);
 }
-
+/*
 BOOST_AUTO_TEST_CASE(TestRun1)
 {
     // ./test-bcos-executor --run_test=TestTxDAG/TestRun1
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG>();
     txDagTest(txDag);
 }
-
+*/
 BOOST_AUTO_TEST_CASE(TestRun2)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();

@@ -44,8 +44,8 @@ public:
     ~LedgerServiceClient() override {}
 
     // TODO: implement this
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr, bcos::protocol::Block::ConstPtr,
-        std::function<void(bcos::Error::Ptr&&)>) override
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr, bcos::protocol::TransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::Ptr&&)>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncPrewriteBlock");
     }
