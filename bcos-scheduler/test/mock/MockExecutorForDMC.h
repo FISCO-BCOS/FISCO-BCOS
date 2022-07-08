@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../testDmcExecutorForDMC.h"
+#include "DmcExecutorFlag.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
@@ -7,8 +9,10 @@
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 
+
 using namespace bcos;
 using namespace bcos::executor;
+using namespace bcos::protocol;
 namespace bcos::test
 {
 #pragma GCC diagnostic push
@@ -35,39 +39,21 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        BOOST_CHECK_EQUAL(output->type(), protocol::ExecutionMessage::MESSAGE);
         if (input->to() == "0xaabbccdd")
         {
-            if (input->type() == 0)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(-1, "deploy sys contract!"), nullptr);
-                return;
-            }
-            input->setType(protocol::ExecutionMessage::FINISHED);
-            std::string data = "Hello world! response";
-            input->setData(bcos::bytes(data.begin(), data.end()));
-            input->setStatus(0);
-            input->setGasAvailable(123456);
-            callback(nullptr, std::move(input));
+            auto output = std::move(input);
+            output->setType(protocol::ExecutionMessage::FINISHED);
+            std::string str = "Call Finished!";
+            output->setData(bcos::bytes(data.begin(), data.end()));
+            callback(nullptr, std::move(output));
             return;
         }
-
-        BOOST_CHECK_EQUAL(input->type(), protocol::ExecutionMessage::MESSAGE);
-        BOOST_CHECK_EQUAL(input->to(), "address_to");
+        else
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr)
+        }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
-
-        // bytes to string
-        auto inputBytes = input->data();
-        std::string inputStr((char*)inputBytes.data(), inputBytes.size());
-
-        BOOST_CHECK_EQUAL(inputStr, "Hello world! request");
-
-        input->setType(protocol::ExecutionMessage::FINISHED);
-
-        std::string data = "Hello world! response";
-        input->setData(bcos::bytes(data.begin(), data.end()));
-        input->setStatus(0);
-        input->setGasAvailable(123456);
-        callback(nullptr, std::move(input));
     }
 
 
@@ -81,22 +67,25 @@ public:
         for (auto i = 0; i < inputs.size(); i++)
         {
             result.at(i) = std::move(inputs[i]);
-            BOOST_CHECK(input);
+            BOOST_CHECK(input->seq);
             if (result.at(i)->transactionHash() == h256(10086))
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
                 return;
             }
 
-            if (result[i]->type() == bcos::protocol::ExecutionMessage::TXHASH)
-            {
-                result[i]->setType(protocol::ExecutionMessage::FINISHED);
-                std::string str = "OK!";
-                result[i]->setData(bcos::bytes(str.begin(), str.end()));
-            }
+
             if (result[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
-                result[i]->setType(protocol::ExecutionMessage::SEND_BACK);
+                result[i]->setType(protocol::ExecutionMessage::LOCKED);
+                std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
+                result[i]->setData(bcos::bytes(str.begin(), str.end()));
+            }
+            else
+            {
+                result[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
+                std::string str = "DMCExecuteTransaction Finish!";
+                result[i]->setData(bcos::bytes(str.begin(), str.end()));
             }
         }
         callback(nullptr, std::move(results));

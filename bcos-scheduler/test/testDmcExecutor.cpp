@@ -22,11 +22,15 @@ using namespace bcos::scheduler;
 
 namespace bcos::test
 {
-struct DmcExecutor
+struct DmcFlagStruct
 {
-    schedulerOutFlag = 0;
-    callFlag = 0;
-    DmcFlag = 0;
+    using Ptr = std::shared_ptr<DmcFlagStruct>;
+    bool schedulerOutFlag = 0;
+    bool callFlag = 0;
+    bool DmcFlag = 0;
+    bool switchFlag = 0;
+    bool finishFlag = 0;
+    bool lockedFlag = 0;
 };
 
 struct DmcExecutorFixture
@@ -47,146 +51,215 @@ struct DmcExecutorFixture
     std::shared_ptr<DmcStepRecorder> dmcRecorder;
 };
 
+void createMessage(int contextID, int seq, int type, std::string toAddress, bool staticCall)
+{
+    auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
+    message->setStaticCall(staticCall);
+    message->setType(bcos::protocol::ExecutionMessage::Type(type));
+    message->contextID(contextID);
+    message->setSeq(seq);
+    message->setFrom("0xeeffaabb");
+    message->setTo(toAddress);
+    return std::move(message);
+}
+
 BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
 
 BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 {
-    struct DmcExecutor
-    {
-        schedulerOutFlag = 0;
-        callFlag = 0;
-        DmcFlag = 0;
-    };
+    DmcFlagStruct dmcFlagStruct;
+
     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor, keyLocks, h256(6666), dmcRecorder);
 
-
-    dmcExecutor->setSchedulerOutHandler(
-        [this, &DmcExecutor](struct) { DmcExecutor->schedulerOutFlag = 1; });
+    dmcExecutor->setSchedulerOutHandler([this, &dmcFlagStruct](ExecutiveState::Ptr executiveState) {
+        dmcFlagStruct.schedulerOutFlag = true;
+    });
 
     dmcExecutor->setOnTxFinishedHandler(
-        [this, &DmcExecutor](
-            bcos::protocol::ExecutionMessage::UniquePtr output) { onTxFinish(std::move(output)); });
+        [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
+            auto outputBytes = output->data();
+            std::string outputStr((char*)outputBytes.data(), outputBytes.size());
+            if (outputStr == "Call Finished!")
+            {
+                dmcFlagStruct.callFlag = true;
+                dmcFlagStruct.finishFlag = true;
+            }
+            else if (outputStr == "DMCExecuteTransaction Finish!")
+            {
+                dmcFlagStruct.dmcFlag = true;
+                dmcFlagStruct.finishFlag = true;
+            }
+            else if (outputStr == "DMCExecuteTransaction Finish, I am keyLock!")
+            {
+                dmcFlagStruct.lockedFlag = true;
+            }
+            else
+            {
+                dmcFlagStruct.finishFlag = true;
+            }
+        });
 
-    dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
+    dmcExecutor->setOnNeedSwitchEventHandler(
+        [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
+
+
+    // TXHASH = 0,  // Received an new transaction from scheduler
+    // MESSAGE,     // Send/Receive an external call to/from another contract
+    // FINISHED,    // Send a finish to another contract
+    // KEY_LOCK,    // Send a wait key lock to scheduler, or release key lock
+    // SEND_BACK,   // Send a dag refuse to scheduler
+    // REVERT,      // Send/Receive a revert to/from previous external call
 
     // TXHASH  DMCEXECUTE
-    auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
-    message->setStaticCall(bool(0));
-    message->setType(bcos::protocol::ExecutionMessage::Type(0));
-    message->contextID(0);
-    message->setSeq(0);
-    message->setFrom("0xeeffaabb");
-    message->setTo("0xaabbccdd");
+    auto message = createMessage(0, 0, 0, "0xaabbccdd", false);
     dmcExecutor->submit(std::move(message), false);
     auto need_scheduleOut = dmcExecutor->prepare();
     BOOST_CHECK(!need_scheduleOut);
     dmcExecutor->go();
+    BOOST_CHECK(dmcFlagStruct.finishFlag && dmcFlagStruct.dmcFlag);
+
+    // need scheduleOut
+    auto message1 = createMessage(1, 0, 1, "0x0000000", false);
+    dmcExecutor->submit(std::move(message1), false);
+    auto need_scheduleOut = dmcExecutor->prepare();
+    dmcExecutor->go();
+    BOOST_CHECK(!need_scheduleOut && dmcFlagStruct.schedulerOutFlag);
 
     // MESSAGE  &&  Call
-    auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
-    message->setStaticCall(bool(1));
-    message->setType(bcos::protocol::ExecutionMessage::Type(1));
-    message->contextID(0);
-    message->setSeq(0);
-    message->setFrom("0xeeffaabb");
-    message->setTo("0xaabbccdd");
-    dmcExecutor->submit(std::move(message), false);
+    auto message2 = createMessage(2, 1, 1, "0xaabbccdd", true);
+    dmcExecutor->submit(std::move(message2), false);
     auto need_scheduleOut = dmcExecutor->prepare();
     BOOST_CHECK(!need_scheduleOut);
-    dmcExecutor->go()
-}
+    dmcExecutor->go();
+    BOOST_CHEEK(dmcFlagStruct.callFlag && dmcFlagStruct.finishFlag);
 
+    // FINISHED
+    auto message3 = createMessage(3, 1, 2, "0xaabbccdd", false);
+    dmcExecutor->submit(std::move(message3), false);
+    dmcExecutor->prepare();
+    BOOST_CHEEK(dmcFlagStruct.finishFlag = true;);
 
-BOOST_AUTO_TEST_CASE(prepareTest1)
-{
-    DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor, keyLocks, h256(6666), dmcRecorder);
-    for (int i = 0; i < 50; ++i)
-    {
-        auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
-        message->setStaticCall(bool(id % 2));
-        message->setType(bcos::protocol::ExecutionMessage::Type(id % 6));
-        message->contextID(id);
-        message->setSeq(0);
-        message->setFrom("eeffaabb");
-        if (i % 10 == 0)
-        {
-            message->setCreate(true);
-            message->setTo("0xeeffgg");
-        }
-        else
-        {
-            message->setTo("0xaabbccdd");
-        }
+    // REVERT
+    auto message4 = createMessage(4, 0, 5, "0xaabbccdd", true);
+    dmcExecutor->submit(std::move(message4), false);
+    dmcExecutor->prepare();
+    BOOST_CHEEK(dmcFlagStruct.finishFlag = true;);
 
-        dmcExecutor->submit(std::move(message), false);
-    }
-    auto need_scheduleOut = dmcExecutor->prepare();
-    BOOST_CHECK(need_scheduleOut);
-}
-
-BOOST_AUTO_TEST_CASE(prepareTest2)
-{
-    DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbcc", block, executor, keyLocks, h256(6666), dmcRecorder);
-    for (int i = 0; i < 100; ++i)
-    {
-        auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
-        message->setStaticCall(bool(id % 2));
-        message->setType(bcos::protocol::ExecutionMessage::Type(id % 6));
-        message->contextID(id);
-        message->setSeq(id * id * ~id % (id + 1));
-        message->setFrom("0xeeffaabb");
-        message->setTo("0xaabbcc");
-        dmcExecutor->submit(std::move(message), false);
-    }
-    auto need_scheduleOut = dmcExecutor->prepare();
-    BOOST_CHECK(!need_scheduleOut);
-    dmcExecutor->unlockPrepare();
-}
-
-BOOST_AUTO_TEST_CASE(goTest)
-{
-    DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbcc", block, executor, keyLocks, h256(6666), dmcRecorder);
-    for (int i = 0; i < 100; ++i)
-    {
-        auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
-        message->setStaticCall(bool(id % 2));
-        message->setType(bcos::protocol::ExecutionMessage::Type(id % 6));
-        message->contextID(id);
-        message->setSeq(id * id * ~id % (id + 1));
-        message->setFrom("0xeeffaabb");
-        message->setTo("0xaabbcc");
-        dmcExecutor->submit(std::move(message), false);
-    }
+    // SEND_BACK
+    auto message5 = createMessage(5, 0, 4, "0xaabbccdd", false);
+    dmcExecutor->submit(std::move(message5), false);
     dmcExecutor->prepare();
     dmcExecutor->go();
+    BOOST_CHEEK(dmcFlagStruct.callFlag && dmcFlagStruct.finishFlag);
+
+
+    // KEY_LOCK
+    auto message6 = createMessage(6, 0, 3, "0xddccbbaa", false);
+    dmcExecutor->submit(std::move(message6), false);
+    auto need_scheduleOut = dmcExecutor->prepare();
+    dmcExecutor->go();
+    BOOST_CHEEK(dmcFlagStruct.lockedFlag);
+
+    // Error Call
+    auto message7 = createMessage(7, 0, 3, "0xddccbbaa", true);
+    dmcExecutor->submit(std::move(message6), false);
+    auto need_scheduleOut = dmcExecutor->prepare();
+    dmcExecutor->go();
+    auto message8 = createMessage(8, 0, 3, "0xddccbbaa", false);
 }
+// BOOST_AUTO_TEST_CASE(errorTest)
+// BOOST_AUTO_TEST_CASE(deadLockTest)
+BOOST_AUTO_TEST_CASE_END()
 
-BOOST_AUTO_TEST_CASE(keyLockTest) {}
+// BOOST_AUTO_TEST_CASE(prepareTest1)
+// {
+//     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
+//         "DmcExecutor1", "0xaabbccdd", block, executor, keyLocks, h256(6666), dmcRecorder);
+//     for (int i = 0; i < 50; ++i)
+//     {
+//         auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
+//         message->setStaticCall(bool(id % 2));
+//         message->setType(bcos::protocol::ExecutionMessage::Type(id % 6));
+//         message->contextID(id);
+//         message->setSeq(0);
+//         message->setFrom("eeffaabb");
+//         if (i % 10 == 0)
+//         {
+//             message->setCreate(true);
+//             message->setTo("0xeeffgg");
+//         }
+//         else
+//         {
+//             message->setTo("0xaabbccdd");
+//         }
+
+//         dmcExecutor->submit(std::move(message), false);
+//     }
+//     auto need_scheduleOut = dmcExecutor->prepare();
+//     BOOST_CHECK(need_scheduleOut);
+// }
+
+// BOOST_AUTO_TEST_CASE(prepareTest2)
+// {
+//     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
+//         "DmcExecutor1", "0xaabbcc", block, executor, keyLocks, h256(6666), dmcRecorder);
+//     for (int i = 0; i < 100; ++i)
+//     {
+//         auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
+//         message->setStaticCall(bool(id % 2));
+//         message->setType(bcos::protocol::ExecutionMessage::Type(id % 6));
+//         message->contextID(id);
+//         message->setSeq(id * id * ~id % (id + 1));
+//         message->setFrom("0xeeffaabb");
+//         message->setTo("0xaabbcc");
+//         dmcExecutor->submit(std::move(message), false);
+//     }
+//     auto need_scheduleOut = dmcExecutor->prepare();
+//     BOOST_CHECK(!need_scheduleOut);
+//     dmcExecutor->unlockPrepare();
+// }
+
+// BOOST_AUTO_TEST_CASE(goTest)
+// {
+//     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
+//         "DmcExecutor1", "0xaabbcc", block, executor, keyLocks, h256(6666), dmcRecorder);
+//     for (int i = 0; i < 100; ++i)
+//     {
+//         auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
+//         message->setStaticCall(bool(id % 2));
+//         message->setType(bcos::protocol::ExecutionMessage::Type(id % 6));
+//         message->contextID(id);
+//         message->setSeq(id * id * ~id % (id + 1));
+//         message->setFrom("0xeeffaabb");
+//         message->setTo("0xaabbcc");
+//         dmcExecutor->submit(std::move(message), false);
+//     }
+//     dmcExecutor->prepare();
+//     dmcExecutor->go();
+// }
+
+// BOOST_AUTO_TEST_CASE(keyLockTest) {}
 
 
-BOOST_AUTO_TEST_CASE(scheduleInTest)
-{
-    std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
-        nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+// BOOST_AUTO_TEST_CASE(scheduleInTest)
+// {
+//     std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+//         nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
-    auto executiveFactory =
-        std::make_shared<MockExecutiveFactory>(blockContext, nullptr, nullptr, nullptr, nullptr);
+//     auto executiveFactory =
+//         std::make_shared<MockExecutiveFactory>(blockContext, nullptr, nullptr, nullptr, nullptr);
 
-    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-    callParameters->staticCall = false;
-    callParameters->codeAddress = "aabbccddee";
-    callParameters->contextID = i;
-    callParameters->seq = i;
-    ExecutiveState::Prt executiveState =
-        std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-    DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbcc", block, executor, keyLocks, h256(6666), dmcRecorder);
-    dmcExecutor->scheduleIn(executiveState);
-}
+//     auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+//     callParameters->staticCall = false;
+//     callParameters->codeAddress = "aabbccddee";
+//     callParameters->contextID = i;
+//     callParameters->seq = i;
+//     ExecutiveState::Prt executiveState =
+//         std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
+//     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
+//         "DmcExecutor1", "0xaabbcc", block, executor, keyLocks, h256(6666), dmcRecorder);
+//     dmcExecutor->scheduleIn(executiveState);
+// }
 
-BOOST_AUTO_TEST_CASE(goTEST) {}
 };  // namespace bcos::test
