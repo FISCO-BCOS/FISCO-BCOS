@@ -149,11 +149,17 @@ void DmcExecutor::scheduleIn(ExecutiveState::Ptr executive)
 
 void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callback)
 {
+    /*
+     this code may lead to inconsistency, because in parallel for go(),
+     some message sent by other DMCExecutor will be executed in executor and return before this
+     instance go(), so some need send message will be ignore in the code below
+
     if (!m_executivePool.empty(MessageHint::NEED_PREPARE))
     {
         callback(nullptr, NEED_PREPARE);
         return;
     }
+    */
 
     if (hasFinished())
     {
