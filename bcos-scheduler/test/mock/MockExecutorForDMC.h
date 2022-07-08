@@ -1,7 +1,5 @@
 #pragma once
 
-#include "../testDmcExecutorForDMC.h"
-#include "DmcExecutorFlag.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"

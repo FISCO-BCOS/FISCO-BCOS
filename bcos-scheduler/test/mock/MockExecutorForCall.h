@@ -73,6 +73,7 @@ public:
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
     {
+        BOOST_CHECK_GT(number, 0);
         callback(nullptr, h256(255));
     }
 
