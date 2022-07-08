@@ -50,6 +50,12 @@ public:
         BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncPrewriteBlock");
     }
 
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(bcos::Error::UniquePtr&&)>) override
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncPreStoreBlockTxs");
+    }
+
     // TODO: implement this
     void asyncStoreTransactions(std::shared_ptr<std::vector<bcos::bytesConstPtr>>,
         bcos::crypto::HashListPtr, std::function<void(bcos::Error::Ptr)>) override

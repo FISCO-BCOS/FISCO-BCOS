@@ -29,6 +29,15 @@ public:
         // TODO: write receipts and tx count
     }
 
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(Error::UniquePtr&&)> _callback) override
+    {
+        if (!_callback)
+        {
+            return;
+        }
+        _callback(nullptr);
+    }
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored)
     {}

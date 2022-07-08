@@ -292,6 +292,20 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                         << LOG_KV("hash", orgBlockHeader->hash().abridged())
                         << LOG_KV("errorCode", _error->errorCode())
                         << LOG_KV("errorMessage", _error->errorMessage());
+                    {
+                        // re-push the block into blockQueue to retry later
+                        if (_block->blockHeader()->number() > config->blockNumber())
+                        {
+                            BLKSYNC_LOG(INFO)
+                                << LOG_DESC(
+                                       "applyBlock: executing the downloaded block failed, re-push "
+                                       "the block into executing queue")
+                                << LOG_KV("number", orgBlockHeader->number())
+                                << LOG_KV("hash", orgBlockHeader->hash().abridged());
+                            WriteGuard l(downloadQueue->x_blocks);
+                            downloadQueue->m_blocks.push(_block);
+                        }
+                    }
                     config->setExecutedBlock(config->blockNumber());
                     return;
                 }

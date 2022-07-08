@@ -94,6 +94,8 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
+    bool preStoreTxs() const override { return m_preStoreTxs; }
+
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(bcos::protocol::Transaction::ConstPtr _tx);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
