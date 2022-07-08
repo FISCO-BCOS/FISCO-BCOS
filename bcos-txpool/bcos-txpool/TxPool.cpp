@@ -167,7 +167,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             auto txpoolStorage = txpool->m_txpoolStorage;
             auto missedTxs = txpoolStorage->batchVerifyProposal(block);
             auto onVerifyFinishedWrapper =
-                [txpoolStorage, _onVerifyFinished, block, blockHeader, missedTxs, startT](
+                [txpool, txpoolStorage, _onVerifyFinished, block, blockHeader, missedTxs, startT](
                     Error::Ptr _error, bool _ret) {
                     auto verifyRet = _ret;
                     auto verifyError = _error;
@@ -195,6 +195,13 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                         return;
                     }
                     _onVerifyFinished(verifyError, verifyRet);
+                    // batchPreStore the proposal txs when verifySuccess in the case of not enable
+                    // txsPreStore
+                    if (!txpoolStorage->preStoreTxs() && !verifyError && verifyRet && block &&
+                        block->blockHeader())
+                    {
+                        txpool->storeVerifiedBlock(block);
+                    }
                 };
 
             if (missedTxs->size() == 0)
@@ -453,4 +460,53 @@ void TxPool::initSendResponseHandler()
                                 << LOG_KV("peer", _dstNode->shortHex());
         }
     };
+}
+
+
+void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
+{
+    auto blockHeader = _block->blockHeader();
+    TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock") << LOG_KV("consNum", blockHeader->number())
+                     << LOG_KV("hash", blockHeader->hash().abridged());
+    auto txsHashList = std::make_shared<HashList>();
+    for (size_t i = 0; i < _block->transactionsHashSize(); i++)
+    {
+        txsHashList->emplace_back(_block->transactionHash(i));
+    }
+
+    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto startT = utcTime();
+    asyncFillBlock(
+        txsHashList, [self, startT, blockHeader, _block](Error::Ptr _error, TransactionsPtr _txs) {
+            if (_error)
+            {
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("storeVerifiedBlock, fillBlock error")
+                    << LOG_KV("consNum", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("msg", _error->errorMessage()) << LOG_KV("code", _error->errorCode());
+                return;
+            }
+            auto txpool = self.lock();
+            if (!txpool)
+            {
+                return;
+            }
+            txpool->m_config->ledger()->asyncPreStoreBlockTxs(
+                _txs, _block, [startT, blockHeader](Error::UniquePtr&& _error) {
+                    if (_error)
+                    {
+                        TXPOOL_LOG(WARNING)
+                            << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs error")
+                            << LOG_KV("consNum", blockHeader->number())
+                            << LOG_KV("hash", blockHeader->hash().abridged())
+                            << LOG_KV("msg", _error->errorMessage())
+                            << LOG_KV("code", _error->errorCode());
+                    }
+                    TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock success")
+                                     << LOG_KV("consNum", blockHeader->number())
+                                     << LOG_KV("hash", blockHeader->hash().abridged())
+                                     << LOG_KV("timecost", (utcTime() - startT));
+                });
+        });
 }
