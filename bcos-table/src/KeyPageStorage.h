@@ -50,7 +50,6 @@
 #define KeyPage_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-KeyPage]"
 namespace std
 {
-
 template <>
 struct hash<std::pair<std::string_view, std::string_view>>
 {
@@ -1016,7 +1015,7 @@ public:
             }
             else if (type == Type::Page)
             {
-                auto page = KeyPageStorage::Page(entry.get(), _key);
+                auto page = KeyPageStorage::Page(entry.get(), key);
                 if (c_fileLogLevel >= TRACE)
                 {
                     KeyPage_LOG(TRACE)
