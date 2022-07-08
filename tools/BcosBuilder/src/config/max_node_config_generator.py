@@ -74,9 +74,9 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
             executor_dir, self.genesis_tmp_config_file)
 
         ini_store = self.store_config(executor_config_content, "executor ini",
-                                      executor_config_path, max_node_config.node_service.service_name, True)
+                                      executor_config_path, max_node_config.executor_service.service_name, True)
         genesis_store = self.store_config(executor_genesis_content, "executor genesis",
-                                          executor_genesis_path, max_node_config.node_service.service_name, True)
+                                          executor_genesis_path, max_node_config.executor_service.service_name, True)
         return ini_store and genesis_store
 
     def __get_and_generate_executor_base_path(self, node_config):
