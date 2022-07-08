@@ -317,7 +317,7 @@ Ledger::needStoreUnsavedTxs(
         txsHash->emplace_back(tx->hash());
         txsToStore->emplace_back(std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
     }
-    LEDGER_LOG(INFO) << LOG_DESC("needStoreUnsavedTxs: supplement unstored txs")
+    LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs")
                      << LOG_KV("txsSize", _blockTxs->size()) << LOG_KV("unstoredTxs", unstoredTxs)
                      << LOG_KV("number", _block->blockHeaderConst()->number());
     if (txsToStore->size() == 0)

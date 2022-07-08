@@ -467,7 +467,8 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
 {
     auto blockHeader = _block->blockHeader();
     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock") << LOG_KV("consNum", blockHeader->number())
-                     << LOG_KV("hash", blockHeader->hash().abridged());
+                     << LOG_KV("hash", blockHeader->hash().abridged())
+                     << LOG_KV("txsSize", _block->transactionsHashSize());
     auto txsHashList = std::make_shared<HashList>();
     for (size_t i = 0; i < _block->transactionsHashSize(); i++)
     {
