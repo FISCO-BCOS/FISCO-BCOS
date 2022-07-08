@@ -26,6 +26,7 @@
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-utilities/Error.h>
 #include <json/json.h>
+#include <util/tc_json.h>
 #include <functional>
 
 namespace bcos::rpc
@@ -124,144 +125,156 @@ private:
     static std::string toStringResponse(const JsonResponse& _jsonResponse);
     static Json::Value toJsonResponse(const JsonResponse& _jsonResponse);
 
+    std::string_view toView(const Json::Value& value)
+    {
+        const char* begin;
+        const char* end;
+        value.getString(&begin, &end);
+
+        std::string_view view{begin, end};
+        return view;
+    }
+
     void callI(const Json::Value& req, RespFunc _respFunc)
     {
-        call(req[0u].asString(), req[1u].asString(), req[2u].asString(), req[3u].asString(),
-            _respFunc);
+        call(toView(req[0u]), toView(req[1u]), toView(req[2u]), toView(req[3u]),
+            std::move(_respFunc));
     }
 
     void sendTransactionI(const Json::Value& req, RespFunc _respFunc)
     {
-        sendTransaction(req[0u].asString(), req[1u].asString(), req[2u].asString(),
-            req[3u].asBool(), _respFunc);
+        sendTransaction(toView(req[0u]), toView(req[1u]), toView(req[2u]), req[3u].asBool(),
+            std::move(_respFunc));
     }
 
     void getTransactionI(const Json::Value& req, RespFunc _respFunc)
     {
-        getTransaction(req[0u].asString(), req[1u].asString(), req[2u].asString(), req[3u].asBool(),
-            _respFunc);
+        getTransaction(toView(req[0u]), toView(req[1u]), toView(req[2u]), req[3u].asBool(),
+            std::move(_respFunc));
     }
 
     void getTransactionReceiptI(const Json::Value& req, RespFunc _respFunc)
     {
-        getTransactionReceipt(req[0u].asString(), req[1u].asString(), req[2u].asString(),
-            req[3u].asBool(), _respFunc);
+        getTransactionReceipt(toView(req[0u]), toView(req[1u]), toView(req[2u]), req[3u].asBool(),
+            std::move(_respFunc));
     }
 
     void getBlockByHashI(const Json::Value& req, RespFunc _respFunc)
     {
-        getBlockByHash(req[0u].asString(), req[1u].asString(), req[2u].asString(),
+        getBlockByHash(toView(req[0u]), toView(req[1u]), toView(req[2u]),
             (req.size() > 3 ? req[3u].asBool() : true), (req.size() > 4 ? req[4u].asBool() : true),
-            _respFunc);
+            std::move(_respFunc));
     }
 
     void getBlockByNumberI(const Json::Value& req, RespFunc _respFunc)
     {
-        getBlockByNumber(req[0u].asString(), req[1u].asString(), req[2u].asInt64(),
+        getBlockByNumber(toView(req[0u]), toView(req[1u]), req[2u].asInt64(),
             (req.size() > 3 ? req[3u].asBool() : true), (req.size() > 4 ? req[4u].asBool() : true),
-            _respFunc);
+            std::move(_respFunc));
     }
 
     void getBlockHashByNumberI(const Json::Value& req, RespFunc _respFunc)
     {
-        getBlockHashByNumber(req[0u].asString(), req[1u].asString(), req[2u].asInt64(), _respFunc);
+        getBlockHashByNumber(
+            toView(req[0u]), toView(req[1u]), req[2u].asInt64(), std::move(_respFunc));
     }
 
     void getBlockNumberI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getBlockNumber(req[0u].asString(), req[1u].asString(), _respFunc);
+        getBlockNumber(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getCodeI(const Json::Value& req, RespFunc _respFunc)
     {
-        getCode(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+        getCode(toView(req[0u]), toView(req[1u]), toView(req[2u]), std::move(_respFunc));
     }
 
     void getABII(const Json::Value& req, RespFunc _respFunc)
     {
-        getABI(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+        getABI(toView(req[0u]), toView(req[1u]), toView(req[2u]), std::move(_respFunc));
     }
 
     void getSealerListI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getSealerList(req[0u].asString(), req[1u].asString(), _respFunc);
+        getSealerList(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getObserverListI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getObserverList(req[0u].asString(), req[1u].asString(), _respFunc);
+        getObserverList(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getPbftViewI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getPbftView(req[0u].asString(), req[1u].asString(), _respFunc);
+        getPbftView(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getPendingTxSizeI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getPendingTxSize(req[0u].asString(), req[1u].asString(), _respFunc);
+        getPendingTxSize(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getSyncStatusI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getSyncStatus(req[0u].asString(), req[1u].asString(), _respFunc);
+        getSyncStatus(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getConsensusStatusI(const Json::Value& _req, RespFunc _respFunc)
     {
-        getConsensusStatus(_req[0u].asString(), _req[1u].asString(), _respFunc);
+        getConsensusStatus(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
     }
 
     void getSystemConfigByKeyI(const Json::Value& req, RespFunc _respFunc)
     {
-        getSystemConfigByKey(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+        getSystemConfigByKey(
+            toView(req[0u]), toView(req[1u]), toView(req[2u]), std::move(_respFunc));
     }
 
     void getTotalTransactionCountI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getTotalTransactionCount(req[0u].asString(), req[1u].asString(), _respFunc);
+        getTotalTransactionCount(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getPeersI(const Json::Value& req, RespFunc _respFunc)
     {
         boost::ignore_unused(req);
-        getPeers(_respFunc);
+        getPeers(std::move(_respFunc));
     }
 
     void getGroupPeersI(const Json::Value& req, RespFunc _respFunc)
     {
-        getGroupPeers(req[0u].asString(), _respFunc);
+        getGroupPeers(toView(req[0u]), std::move(_respFunc));
     }
 
     // get all the groupID list
     void getGroupListI(const Json::Value& _req, RespFunc _respFunc)
     {
         (void)_req;
-        getGroupList(_respFunc);
+        getGroupList(std::move(_respFunc));
     }
     // get the group information of the given group
     void getGroupInfoI(const Json::Value& _req, RespFunc _respFunc)
     {
         (void)_req;
-        getGroupInfo(_req[0u].asString(), _respFunc);
+        getGroupInfo(toView(_req[0u]), std::move(_respFunc));
     }
     // get the group information of the given group
     void getGroupInfoListI(const Json::Value& _req, RespFunc _respFunc)
     {
         (void)_req;
-        getGroupInfoList(_respFunc);
+        getGroupInfoList(std::move(_respFunc));
     }
     // get the information of a given node
     void getGroupNodeInfoI(const Json::Value& _req, RespFunc _respFunc)
     {
-        getGroupNodeInfo(_req[0u].asString(), _req[1u].asString(), _respFunc);
+        getGroupNodeInfo(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
     }
 };
 

@@ -122,7 +122,7 @@ public:
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
 protected:
-    static std::shared_ptr<bcos::bytes> decodeData(std::string_view _data);
+    static bcos::bytes decodeData(std::string_view _data);
 
     static void parseRpcResponseJson(std::string_view _responseBody, JsonResponse& _jsonResponse);
 
