@@ -314,9 +314,9 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
     auto transaction =
         transactionFactory->createTransaction(0, _to, decodeData(_data), u256(0), 0, "", "", 0);
 
-    nodeService->scheduler()->call(
-        std::move(transaction), [_to, _respFunc](Error::Ptr&& _error,
-                                    protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
+    nodeService->scheduler()->call(std::move(transaction),
+        [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
+            Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
             Json::Value jResp;
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
@@ -327,12 +327,12 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
             else
             {
                 RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("call") << LOG_KV("to", _to)
+                    << LOG_BADGE("call") << LOG_KV("to", m_to)
                     << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
             }
 
-            _respFunc(_error, jResp);
+            m_respFunc(_error, jResp);
         });
 }
 
