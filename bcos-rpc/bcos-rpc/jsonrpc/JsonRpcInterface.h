@@ -38,10 +38,11 @@ class JsonRpcInterface
 public:
     using Ptr = std::shared_ptr<JsonRpcInterface>;
     JsonRpcInterface() { initMethod(); }
+    JsonRpcInterface(const JsonRpcInterface&) = default;
+    JsonRpcInterface(JsonRpcInterface&&) = default;
+    JsonRpcInterface& operator=(const JsonRpcInterface&) = default;
+    JsonRpcInterface& operator=(JsonRpcInterface&&) = default;
     virtual ~JsonRpcInterface() {}
-
-public:
-    void onRPCRequest(const std::string& _requestBody, Sender _sender);
 
 public:
     virtual void call(std::string const& _groupID, std::string const& _nodeName,
@@ -111,11 +112,13 @@ public:
 
     virtual void getGroupBlockNumber(RespFunc _respFunc) = 0;
 
+public:
+    void onRPCRequest(const std::string& _requestBody, Sender _sender);
+
 private:
     void initMethod();
 
-    std::unordered_map<std::string, std::function<void(Json::Value, RespFunc _respFunc)>>
-        m_methodToFunc;
+    std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>> m_methodToFunc;
 
     static void parseRpcRequestJson(const std::string& _requestBody, JsonRequest& _jsonRequest);
     static std::string toStringResponse(const JsonResponse& _jsonResponse);
