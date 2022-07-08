@@ -22,8 +22,8 @@
 #include "GatewayStatus.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework//gateway/GroupNodeInfo.h>
-#include <bcos-framework//protocol/ProtocolInfo.h>
+#include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
@@ -53,7 +53,7 @@ public:
 
     void updatePeerStatus(P2pID const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
 
-    using Group2NodeIDListType = std::map<std::string, std::set<std::string>>;
+    using Group2NodeIDListType = std::map<std::string, std::set<std::string>, std::less<>>;
     Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
 
     void asyncBroadcastMsg(uint16_t _type, std::string const& _group, P2PMessage::Ptr _msg);
@@ -76,7 +76,8 @@ private:
     P2PInterface::Ptr m_p2pInterface;
     // used for peer-to-peer router
     // groupID => NodeID => set<P2pID>
-    std::map<std::string, std::map<std::string, std::set<P2pID>>> m_groupNodeList;
+    std::map<std::string, std::map<std::string, std::set<P2pID>, std::less<>>, std::less<>>
+        m_groupNodeList;
     std::map<std::string, bcos::protocol::ProtocolInfo::ConstPtr> m_nodeProtocolInfo;
     mutable SharedMutex x_groupNodeList;
 

@@ -20,8 +20,8 @@ public:
     {}
 
     // duplicate many tx to txpool
-    void sendTransaction(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _data, bool _requireProof, RespFunc _respFunc) override
+    void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _data, bool _requireProof, RespFunc _respFunc) override
     {
         // send directly
         JsonRpcImpl_2_0::sendTransaction(

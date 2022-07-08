@@ -62,7 +62,7 @@ void JsonRpcInterface::initMethod()
     RPC_IMPL_LOG(INFO) << LOG_BADGE("initMethod") << LOG_KV("size", m_methodToFunc.size());
 }
 
-void JsonRpcInterface::onRPCRequest(const std::string& _requestBody, Sender _sender)
+void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sender)
 {
     JsonRequest request;
     JsonResponse response;
@@ -122,8 +122,7 @@ void JsonRpcInterface::onRPCRequest(const std::string& _requestBody, Sender _sen
     //                     << LOG_KV("response", strResp);
 }
 
-void JsonRpcInterface::parseRpcRequestJson(
-    const std::string& _requestBody, JsonRequest& _jsonRequest)
+void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)
 {
     Json::Value root;
     Json::Reader jsonReader;
@@ -136,7 +135,7 @@ void JsonRpcInterface::parseRpcRequestJson(
         int64_t id = 0;
         do
         {
-            if (!jsonReader.parse(_requestBody, root))
+            if (!jsonReader.parse(_requestBody.begin(), _requestBody.end(), root))
             {
                 errorMessage = "invalid request json object";
                 break;

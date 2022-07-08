@@ -30,7 +30,7 @@
 
 namespace bcos::rpc
 {
-using Sender = std::function<void(const std::string&)>;
+using Sender = std::function<void(std::string_view)>;
 using RespFunc = std::function<void(bcos::Error::Ptr, Json::Value&)>;
 
 class JsonRpcInterface
@@ -45,82 +45,82 @@ public:
     virtual ~JsonRpcInterface() {}
 
 public:
-    virtual void call(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _to, const std::string& _data, RespFunc _respFunc) = 0;
+    virtual void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
+        std::string_view _data, RespFunc _respFunc) = 0;
 
-    virtual void sendTransaction(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _data, bool _requireProof, RespFunc _respFunc) = 0;
+    virtual void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _data, bool _requireProof, RespFunc _respFunc) = 0;
 
-    virtual void getTransaction(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _txHash, bool _requireProof, RespFunc _respFunc) = 0;
+    virtual void getTransaction(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _txHash, bool _requireProof, RespFunc _respFunc) = 0;
 
-    virtual void getTransactionReceipt(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _txHash, bool _requireProof, RespFunc _respFunc) = 0;
+    virtual void getTransactionReceipt(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _txHash, bool _requireProof, RespFunc _respFunc) = 0;
 
-    virtual void getBlockByHash(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _blockHash, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) = 0;
+    virtual void getBlockByHash(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _blockHash, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) = 0;
 
-    virtual void getBlockByNumber(std::string const& _groupID, std::string const& _nodeName,
+    virtual void getBlockByNumber(std::string_view _groupID, std::string_view _nodeName,
         int64_t _blockNumber, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) = 0;
 
-    virtual void getBlockHashByNumber(std::string const& _groupID, std::string const& _nodeName,
+    virtual void getBlockHashByNumber(std::string_view _groupID, std::string_view _nodeName,
         int64_t _blockNumber, RespFunc _respFunc) = 0;
 
     virtual void getBlockNumber(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
-    virtual void getCode(std::string const& _groupID, std::string const& _nodeName,
-        const std::string _contractAddress, RespFunc _respFunc) = 0;
+    virtual void getCode(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _contractAddress, RespFunc _respFunc) = 0;
 
-    virtual void getABI(std::string const& _groupID, std::string const& _nodeName,
-        const std::string _contractAddress, RespFunc _respFunc) = 0;
+    virtual void getABI(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _contractAddress, RespFunc _respFunc) = 0;
 
     virtual void getSealerList(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getObserverList(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getPbftView(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getPendingTxSize(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getSyncStatus(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
     virtual void getConsensusStatus(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
-    virtual void getSystemConfigByKey(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _keyValue, RespFunc _respFunc) = 0;
+    virtual void getSystemConfigByKey(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _keyValue, RespFunc _respFunc) = 0;
 
     virtual void getTotalTransactionCount(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
-    virtual void getGroupPeers(std::string const& _groupID, RespFunc _respFunc) = 0;
+    virtual void getGroupPeers(std::string_view _groupID, RespFunc _respFunc) = 0;
     virtual void getPeers(RespFunc _respFunc) = 0;
     // get all the groupID list
     virtual void getGroupList(RespFunc _respFunc) = 0;
     // get the group information of the given group
-    virtual void getGroupInfo(std::string const& _groupID, RespFunc _respFunc) = 0;
+    virtual void getGroupInfo(std::string_view _groupID, RespFunc _respFunc) = 0;
     // get all the group info list
     virtual void getGroupInfoList(RespFunc _respFunc) = 0;
     // get the information of a given node
     virtual void getGroupNodeInfo(
-        std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
+        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getGroupBlockNumber(RespFunc _respFunc) = 0;
 
 public:
-    void onRPCRequest(const std::string& _requestBody, Sender _sender);
+    void onRPCRequest(std::string_view _requestBody, Sender _sender);
 
 private:
     void initMethod();
 
     std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>> m_methodToFunc;
 
-    static void parseRpcRequestJson(const std::string& _requestBody, JsonRequest& _jsonRequest);
+    static void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
     static std::string toStringResponse(const JsonResponse& _jsonResponse);
     static Json::Value toJsonResponse(const JsonResponse& _jsonResponse);
 

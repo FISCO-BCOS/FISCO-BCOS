@@ -37,14 +37,15 @@ public:
 
     virtual std::string const& genesisConfig() const { return m_genesisConfig; }
     virtual std::string const& iniConfig() const { return m_iniConfig; }
-    virtual ChainNodeInfo::Ptr nodeInfo(std::string const& _nodeName) const
+    virtual ChainNodeInfo::Ptr nodeInfo(std::string_view _nodeName) const
     {
         ReadGuard l(x_nodeInfos);
-        if (!m_nodeInfos.count(_nodeName))
+        auto it = m_nodeInfos.find(_nodeName);
+        if (it == m_nodeInfos.end())
         {
             return nullptr;
         }
-        return m_nodeInfos.at(_nodeName);
+        return it->second;
     }
 
     std::string const& groupID() const { return m_groupID; }
@@ -101,7 +102,7 @@ public:
     }
 
     // return copied nodeInfos to ensure thread-safe
-    std::map<std::string, ChainNodeInfo::Ptr> nodeInfos() { return m_nodeInfos; }
+    auto nodeInfos() { return m_nodeInfos; }
 
     bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory() const
     {
@@ -131,7 +132,7 @@ protected:
     // the iniConfig for the group
     std::string m_iniConfig;
     // node name to node deployment information mapping
-    std::map<std::string, ChainNodeInfo::Ptr> m_nodeInfos;
+    std::map<std::string, ChainNodeInfo::Ptr, std::less<>> m_nodeInfos;
     mutable SharedMutex x_nodeInfos;
 };
 

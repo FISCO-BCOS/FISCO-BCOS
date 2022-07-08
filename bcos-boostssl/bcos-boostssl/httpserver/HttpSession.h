@@ -188,11 +188,13 @@ public:
         if (m_httpReqHandler)
         {
             std::string request = _httpRequest.body();
-            m_httpReqHandler(request, [this, self, version, start](const std::string& _content) {
+            m_httpReqHandler(request, [this, self, version, start](
+                                          const std::string_view _content) {
                 std::chrono::high_resolution_clock::time_point end =
                     std::chrono::high_resolution_clock::now();
 
-                auto resp = buildHttpResp(boost::beast::http::status::ok, version, _content);
+                auto resp = buildHttpResp(boost::beast::http::status::ok, version,
+                    boost::beast::string_view(_content.data(), _content.size()));
                 auto session = self.lock();
                 if (!session)
                 {
