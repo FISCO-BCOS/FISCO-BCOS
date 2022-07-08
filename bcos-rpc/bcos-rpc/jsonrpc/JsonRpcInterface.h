@@ -28,9 +28,7 @@
 #include <json/json.h>
 #include <functional>
 
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 using Sender = std::function<void(const std::string&)>;
 using RespFunc = std::function<void(bcos::Error::Ptr, Json::Value&)>;
@@ -39,10 +37,11 @@ class JsonRpcInterface
 {
 public:
     using Ptr = std::shared_ptr<JsonRpcInterface>;
+    JsonRpcInterface() { initMethod(); }
     virtual ~JsonRpcInterface() {}
 
 public:
-    virtual void onRPCRequest(const std::string& _requestBody, Sender _sender) = 0;
+    void onRPCRequest(const std::string& _requestBody, Sender _sender);
 
 public:
     virtual void call(std::string const& _groupID, std::string const& _nodeName,
@@ -111,7 +110,156 @@ public:
         std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getGroupBlockNumber(RespFunc _respFunc) = 0;
+
+private:
+    void initMethod();
+
+    std::unordered_map<std::string, std::function<void(Json::Value, RespFunc _respFunc)>>
+        m_methodToFunc;
+
+    static void parseRpcRequestJson(const std::string& _requestBody, JsonRequest& _jsonRequest);
+    static std::string toStringResponse(const JsonResponse& _jsonResponse);
+    static Json::Value toJsonResponse(const JsonResponse& _jsonResponse);
+
+    void callI(const Json::Value& req, RespFunc _respFunc)
+    {
+        call(req[0u].asString(), req[1u].asString(), req[2u].asString(), req[3u].asString(),
+            _respFunc);
+    }
+
+    void sendTransactionI(const Json::Value& req, RespFunc _respFunc)
+    {
+        sendTransaction(req[0u].asString(), req[1u].asString(), req[2u].asString(),
+            req[3u].asBool(), _respFunc);
+    }
+
+    void getTransactionI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getTransaction(req[0u].asString(), req[1u].asString(), req[2u].asString(), req[3u].asBool(),
+            _respFunc);
+    }
+
+    void getTransactionReceiptI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getTransactionReceipt(req[0u].asString(), req[1u].asString(), req[2u].asString(),
+            req[3u].asBool(), _respFunc);
+    }
+
+    void getBlockByHashI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getBlockByHash(req[0u].asString(), req[1u].asString(), req[2u].asString(),
+            (req.size() > 3 ? req[3u].asBool() : true), (req.size() > 4 ? req[4u].asBool() : true),
+            _respFunc);
+    }
+
+    void getBlockByNumberI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getBlockByNumber(req[0u].asString(), req[1u].asString(), req[2u].asInt64(),
+            (req.size() > 3 ? req[3u].asBool() : true), (req.size() > 4 ? req[4u].asBool() : true),
+            _respFunc);
+    }
+
+    void getBlockHashByNumberI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getBlockHashByNumber(req[0u].asString(), req[1u].asString(), req[2u].asInt64(), _respFunc);
+    }
+
+    void getBlockNumberI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getBlockNumber(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getCodeI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getCode(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+    }
+
+    void getABII(const Json::Value& req, RespFunc _respFunc)
+    {
+        getABI(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+    }
+
+    void getSealerListI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getSealerList(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getObserverListI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getObserverList(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getPbftViewI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getPbftView(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getPendingTxSizeI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getPendingTxSize(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getSyncStatusI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getSyncStatus(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getConsensusStatusI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        getConsensusStatus(_req[0u].asString(), _req[1u].asString(), _respFunc);
+    }
+
+    void getSystemConfigByKeyI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getSystemConfigByKey(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+    }
+
+    void getTotalTransactionCountI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getTotalTransactionCount(req[0u].asString(), req[1u].asString(), _respFunc);
+    }
+
+    void getPeersI(const Json::Value& req, RespFunc _respFunc)
+    {
+        boost::ignore_unused(req);
+        getPeers(_respFunc);
+    }
+
+    void getGroupPeersI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getGroupPeers(req[0u].asString(), _respFunc);
+    }
+
+    // get all the groupID list
+    void getGroupListI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        (void)_req;
+        getGroupList(_respFunc);
+    }
+    // get the group information of the given group
+    void getGroupInfoI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        (void)_req;
+        getGroupInfo(_req[0u].asString(), _respFunc);
+    }
+    // get the group information of the given group
+    void getGroupInfoListI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        (void)_req;
+        getGroupInfoList(_respFunc);
+    }
+    // get the information of a given node
+    void getGroupNodeInfoI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        getGroupNodeInfo(_req[0u].asString(), _req[1u].asString(), _respFunc);
+    }
 };
 
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc
