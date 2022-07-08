@@ -247,8 +247,9 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     }
 
                     KeyPage_LOG(DEBUG)
-                        << LOG_DESC("Traverse TableMeta") << LOG_KV("count", meta->size())
-                        << LOG_KV("size", entry.size()) << LOG_KV("count", meta->size())
+                        << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
+                        << LOG_KV("count", meta->size()) << LOG_KV("size", entry.size())
+                        << LOG_KV("count", meta->size())
                         << LOG_KV("payloadRate",
                                sizeof(PageInfo) * meta->size() / (double)entry.size())
                         << LOG_KV("predictHit", meta->hitRate());
@@ -278,6 +279,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         {
                             KeyPage_LOG(TRACE)
                                 << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
+                                << LOG_KV("pageKey", toHex(it.first.second))
                                 << LOG_KV("validCount", page->validCount())
                                 << LOG_KV("count", page->count())
                                 << LOG_KV("status", (int)it.second->entry.status())
@@ -285,7 +287,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         }
                         if (it.first.second != page->endKey())
                         {
-                            KeyPage_LOG(FATAL)
+                            KeyPage_LOG(WARNING)
                                 << LOG_DESC("Traverse Page pageKey not equal to map key")
                                 << LOG_KV("table", it.first.first)
                                 << LOG_KV("pageKey", page->endKey())
@@ -511,7 +513,7 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
                 if (!d->key.empty())
                 {  // set entry to clean
                     auto page = &std::get<0>(d->data);
-                    page->clean();
+                    page->clean(d->key);
                     if (c_fileLogLevel >= TRACE)
                     {
                         KeyPage_LOG(TRACE)
@@ -811,18 +813,15 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
                     << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey));
             }
             auto nextPage = &std::get<0>(nextPageData.value()->data);
-            if (nextPage->size() < m_splitSize)
+            if (nextPage->size() < m_splitSize && nextPage != page)
             {
                 auto endKey = page->endKey();
                 auto nextEndKey = nextPage->endKey();
                 KeyPage_LOG(DEBUG)
-                    << LOG_DESC("merge page") << LOG_KV("table", table) << LOG_KV("key", toHex(key))
-                    << LOG_KV("pageKey", toHex(pageKey))
-                    << LOG_KV("pageStart", toHex(page->startKey()))
+                    << LOG_DESC("merge current page into next") << LOG_KV("table", table)
+                    << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey))
                     << LOG_KV("pageEnd", toHex(endKey)) << LOG_KV("pageCount", page->validCount())
-                    << LOG_KV("pageSize", page->size())
-                    << LOG_KV("nextPageStart", toHex(nextPage->startKey()))
-                    << LOG_KV("nextPageEnd", toHex(nextEndKey))
+                    << LOG_KV("pageSize", page->size()) << LOG_KV("nextPageKey", toHex(nextEndKey))
                     << LOG_KV("nextPageCount", nextPage->validCount())
                     << LOG_KV("nextPageSize", nextPage->size());
                 nextPage->merge(*page);
