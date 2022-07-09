@@ -36,7 +36,6 @@
         "jsoncpp",
         "zstd",
         "protobuf",
-        "evmc",
         "evmone",
         "wedprcrypto",
         "tarscpp"
