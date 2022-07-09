@@ -26,26 +26,29 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
             callback) override
     {
-        callback(nullptr, std::move());
+        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
+        status->setSeq(m_seq);
+        callback(nullptr, std::move(status));
     }
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
+        output = std::move(input);
         BOOST_CHECK_EQUAL(output->type(), bcos::protocol::ExecutionMessage::MESSAGE);
-        if (input->to() == "0xaabbccdd")
+        if (output->to() == "0xaabbccdd")
         {
-            auto output = std::move(input);
             output->setType(bcos::protocol::ExecutionMessage::FINISHED);
             std::string str = "Call Finished!";
-            output->setData(bcos::bytes(data.begin(), data.end()));
-            callback(nullptr, std::move(output));
+            output->setData(bcos::bytes(str.begin(), str.end()));
+            callback(nullptr, PAUSED);
             return;
         }
         else
         {
-            callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr)
+            callback(nullptr, ERROR);
         }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
     }
@@ -60,26 +63,25 @@ public:
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (auto i = 0; i < inputs.size(); i++)
         {
-            result.at(i) = std::move(inputs[i]);
-            BOOST_CHECK(input->seq);
-            if (result.at(i)->transactionHash() == h256(10086))
+            results.at(i) = std::move(inputs[i]);
+            if (results.at(i)->transactionHash() == h256(10086))
             {
-                callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
+                callback(nullptr, ERROR);
                 return;
             }
 
 
-            if (result[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
+            if (results[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
-                result[i]->setType(bcos::protocol::ExecutionMessage::LOCKED);
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
-                result[i]->setData(bcos::bytes(str.begin(), str.end()));
+                results[i]->setData(bcos::bytes(str.begin(), str.end()));
+                callback(nullptr, PAUSE);
             }
             else
             {
-                result[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
+                results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
-                result[i]->setData(bcos::bytes(str.begin(), str.end()));
+                results[i]->setData(bcos::bytes(str.begin(), str.end()));
             }
         }
         callback(nullptr, std::move(results));
@@ -143,8 +145,8 @@ public:
         callback(nullptr, {});
     }
     void reset(std::function<void(bcos::Error::Ptr)> callback) override { callback(nullptr); }
-    void start() override() {}
-    void stop() override() {}
+    // void start() override() {}
+    // void stop() override() {}
 
 
     std::string m_name;
