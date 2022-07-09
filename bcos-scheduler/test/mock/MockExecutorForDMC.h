@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-scheduler/src/DmcExecutor.h"
 #include <boost/test/unit_test.hpp>
 
 
@@ -27,7 +28,7 @@ public:
             callback) override
     {
         auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
-        status->setSeq(m_seq);
+        status->setSeq(0);
         callback(nullptr, std::move(status));
     }
 
@@ -37,18 +38,17 @@ public:
     {
         auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
         output = std::move(input);
-        BOOST_CHECK_EQUAL(output->type(), bcos::protocol::ExecutionMessage::MESSAGE);
         if (output->to() == "0xaabbccdd")
         {
             output->setType(bcos::protocol::ExecutionMessage::FINISHED);
             std::string str = "Call Finished!";
             output->setData(bcos::bytes(str.begin(), str.end()));
-            callback(nullptr, PAUSED);
+            callback(nullptr, DmcExecutor::Status::PAUSED);
             return;
         }
         else
         {
-            callback(nullptr, ERROR);
+            callback(nullptr, DmcExecutor::Status::ERROR);
         }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
     }
@@ -66,7 +66,7 @@ public:
             results.at(i) = std::move(inputs[i]);
             if (results.at(i)->transactionHash() == h256(10086))
             {
-                callback(nullptr, ERROR);
+                callback(nullptr, DmcExecutor::Status::ERROR);
                 return;
             }
 
@@ -75,13 +75,14 @@ public:
             {
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
-                callback(nullptr, PAUSE);
+                callback(nullptr, DmcExecutor::Status::PAUSE);
             }
             else
             {
                 results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
+                callback(nullptr, DmcExecutor::Status::FINISHED);
             }
         }
         callback(nullptr, std::move(results));
