@@ -73,10 +73,9 @@ public:
     std::string toString()
     {
         std::stringstream ss;
-        ss << "[" << (staticCall() ? "call" : "tx") << "|" << transactionHash().hex().substr(0, 8)
-           << "|" << contextID() << "|" << seq() << "|" << getTypeName(type()) << "|" << from()
-           << "->" << to() << "|" << gasAvailable() << "|" << toHex(keyLockAcquired()) << "|"
-           << keyLocks().size() << ":";
+        ss << "[" << (staticCall() ? "call" : "tx") << "|" << contextID() << "|" << seq() << "|"
+           << getTypeName(type()) << "|" << from() << "->" << to() << "|" << gasAvailable() << "|"
+           << toHex(keyLockAcquired()) << "|" << keyLocks().size() << ":";
         for (auto& lock : keyLocks())
         {
             ss << toHex(lock) << ".";
