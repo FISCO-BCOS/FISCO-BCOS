@@ -1202,7 +1202,7 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
             // row not found
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(0),
+            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(1),
                                                           std::vector<std::string>({}),
                                                           std::vector<std::string>({})));
         }
@@ -1316,7 +1316,7 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
             BOOST_CHECK(
-                result2->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
+                result2->data().toBytes() == codec->encode((uint8_t)(2), std::vector<std::string>({}),
                                             std::vector<std::string>({})));
         }
 
