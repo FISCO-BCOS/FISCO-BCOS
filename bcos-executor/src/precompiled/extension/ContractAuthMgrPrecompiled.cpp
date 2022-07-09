@@ -415,32 +415,34 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
         codec.decode(_callParameters->params(), path, _func);
     }
     funcBytes = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
+    std::vector<std::string> accessList = {};
+    std::vector<std::string> blockList = {};
     path = getAuthTableName(path);
     auto getMethodType = getMethodAuthType(_executive, path, ref(funcBytes));
-    if (getMethodType == (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST)
+    if (getMethodType < 0)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth ACL type not found"));
+        // no acl strategy
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("no acl strategy") << LOG_KV("path", path);
+        _callParameters->setExecResult(
+            codec.encode(uint8_t(0), std::move(accessList), std::move(blockList)));
+        return;
     }
     auto&& authMap = getMethodAuth(_executive, path, getMethodType);
 
-    if (authMap.empty())
+    auto it = authMap.find(funcBytes);
+    if (it == authMap.end())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth row not found, no method set acl")
                                << LOG_KV("path", path);
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth ACL row not found"));
-    }
-    std::vector<std::string> accessList = {};
-    std::vector<std::string> blockList = {};
-    if (authMap.find(funcBytes) == authMap.end())
-    {
         // func not set acl, return empty
         _callParameters->setExecResult(
-            codec.encode(uint8_t(0), std::move(accessList), std::move(blockList)));
+            codec.encode(uint8_t(getMethodType), std::move(accessList), std::move(blockList)));
     }
     else
     {
-        for (const auto& addressPair : authMap.at(funcBytes))
+        for (const auto& addressPair : it->second)
         {
             bool access = addressPair.second ? (getMethodType == (int)AuthType::WHITE_LIST_MODE) :
                                                (getMethodType == (int)AuthType::BLACK_LIST_MODE);
@@ -580,11 +582,12 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     {
         auto&& out = asBytes(authTypeStr);
         codec::scale::decode(authTypeMap, gsl::make_span(out));
-        if (authTypeMap.find(_func.toBytes()) == authTypeMap.end())
+        auto it = authTypeMap.find(_func.toBytes());
+        if (it == authTypeMap.end())
         {
             return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
         }
-        return authTypeMap.at(_func.toBytes());
+        return it->second;
     }
     catch (...)
     {

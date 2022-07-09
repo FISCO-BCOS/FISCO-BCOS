@@ -248,7 +248,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
             std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
-            m_hasDAG = enableDAG;
+            m_hasDAG = m_hasDAG || enableDAG;
             registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
         }
     }
@@ -275,7 +275,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
         bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
 #pragma omp critical
-        m_hasDAG = enableDAG;
+        m_hasDAG = m_hasDAG || enableDAG;
         registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
     }
 }
@@ -1316,14 +1316,17 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         txGasUsed = 0;
     }
     m_gasUsed += txGasUsed;
-    DMC_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                   << " -> contextID:" << output->contextID() - m_startContextID;
+    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+        output->newEVMContractAddress(),
+        std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
+        output->status(), output->takeData(), m_block->blockHeaderConst()->number());
     // write receipt in results
-    m_executiveResults[output->contextID() - m_startContextID].receipt =
-        m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-            output->newEVMContractAddress(),
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
-            output->status(), output->takeData(), m_block->blockHeaderConst()->number());
+    m_executiveResults[output->contextID() - m_startContextID].receipt = receipt;
+    SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                         << " -> contextID:" << output->contextID() - m_startContextID
+                         << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
+                         << ", version: " << receipt->version()
+                         << ", status: " << receipt->status();
 }
 
 

@@ -12,7 +12,7 @@ gateway_sm_ssl=false
 # the existed rpc service ca path, will generate new ca if not configurated
 #rpc_ca_cert_path=""
 # the existed gateway service ca path, will generate new ca if not configurated
-#gateway_ca_cert_path="
+#gateway_ca_cert_path=""
 
 [[group]]
 group_id="group0"

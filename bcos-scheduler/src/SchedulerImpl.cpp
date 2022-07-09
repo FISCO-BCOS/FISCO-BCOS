@@ -445,6 +445,19 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 return;
             }
 
+            {
+                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                bcos::protocol::BlockNumber number = m_blocks->front()->number();
+                if (number != block->blockHeaderConst()->number())
+                {
+                    SCHEDULER_LOG(FATAL)
+                        << "The committed block is not equal to blockQueue front block";
+                }
+                removeAllOldPreparedBlock(number);
+                m_blocks->pop_front();
+                SCHEDULER_LOG(DEBUG) << "Remove committed block: " << number << " success";
+            }
+
             asyncGetLedgerConfig([this, commitLock = std::move(commitLock), blockExecutive,
                                      callback = std::move(callback)](
                                      Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
@@ -503,13 +516,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
                             SCHEDULER_LOG(INFO) << "End notify block result: " << blockNumber;
 
-                            {
-                                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                                m_blocks->pop_front();
-                                SCHEDULER_LOG(DEBUG)
-                                    << "Remove committed block: " << blockNumber << " success";
-                                blocksLock.unlock();
-                            }
 
                             commitLock->unlock();
                             // Note: only after the block notify finished can call the callback
@@ -518,15 +524,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 }
                 else
                 {
-                    {
-                        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                        bcos::protocol::BlockNumber number = m_blocks->front()->number();
-                        removeAllOldPreparedBlock(number);
-                        m_blocks->pop_front();
-                        SCHEDULER_LOG(DEBUG)
-                            << "Remove committed block: " << blockNumber << " success";
-                    }
-
                     commitLock->unlock();
                     callback(nullptr, std::move(ledgerConfig));
                 }

@@ -149,11 +149,17 @@ void DmcExecutor::scheduleIn(ExecutiveState::Ptr executive)
 
 void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callback)
 {
+    /*
+     this code may lead to inconsistency, because in parallel for go(),
+     some message sent by other DMCExecutor will be executed in executor and return before this
+     instance go(), so some need send messages will be ignored in the code below
+
     if (!m_executivePool.empty(MessageHint::NEED_PREPARE))
     {
         callback(nullptr, NEED_PREPARE);
         return;
     }
+    */
 
     if (hasFinished())
     {
@@ -233,10 +239,12 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 // update batch
                 DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.4:\t <-- Receive from executor\t"
-                               << LOG_KV("round", m_dmcRecorder->getRound())
+                               << LOG_KV("round", m_dmcRecorder ? m_dmcRecorder->getRound() : 0)
                                << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
                                << LOG_KV("txNum", messages->size())
-                               << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                               << LOG_KV("blockNumber", m_block && m_block->blockHeader() ?
+                                                            m_block->blockHeader()->number() :
+                                                            0)
                                << LOG_KV("cost", utcTime() - lastT);
 
                 if (error)

@@ -73,9 +73,6 @@ public:
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
     bcos::crypto::HashListPtr getAllTxsHash() override;
-    void batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
-        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
-        bool _sealFlag) override;
     void batchMarkAllTxs(bool _sealFlag) override;
 
     size_t unSealedTxsSize() override;
@@ -92,6 +89,12 @@ public:
     bool batchVerifyAndSubmitTransaction(
         bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) override;
     void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
+
+    void batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
+        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
+        bool _sealFlag) override;
+
+    bool preStoreTxs() const override { return m_preStoreTxs; }
 
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(bcos::protocol::Transaction::ConstPtr _tx);
@@ -121,6 +124,10 @@ protected:
 
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
+
+    virtual void batchMarkTxsWithoutLock(bcos::crypto::HashList const& _txsHashList,
+        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
+        bool _sealFlag);
 
 protected:
     TxPoolConfig::Ptr m_config;

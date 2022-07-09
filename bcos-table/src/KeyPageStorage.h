@@ -50,7 +50,6 @@
 #define KeyPage_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-KeyPage]"
 namespace std
 {
-
 template <>
 struct hash<std::pair<std::string_view, std::string_view>>
 {
@@ -281,7 +280,7 @@ public:
         }
         inline std::optional<PageInfo*> getPageInfoNoLock(std::string_view key)
         {
-            count += 1;
+            ++getPageInfoCount;
             if (pages->empty())
             {  // if pages is empty
                 return std::nullopt;
@@ -372,8 +371,9 @@ public:
                 }
                 if (c_fileLogLevel >= TRACE)
                 {
-                    KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo") << LOG_KV("count", count)
-                                       << LOG_KV("size", size);
+                    KeyPage_LOG(TRACE)
+                        << LOG_DESC("updatePageInfo") << LOG_KV("pageKey", toHex(pageKey))
+                        << LOG_KV("count", count) << LOG_KV("size", size);
                 }
                 p->setCount(count);
                 p->setSize(size);
@@ -391,8 +391,7 @@ public:
                 }
                 else
                 {
-                    assert(false);
-                    KeyPage_LOG(ERROR)
+                    KeyPage_LOG(FATAL)
                         << LOG_DESC("updatePageInfo not found")
                         << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
                         << LOG_KV("valid", count) << LOG_KV("size", size);
@@ -451,10 +450,10 @@ public:
             os << "]";
             return os;
         }
-        double hitRate() { return hit / (double)count; }
+        double hitRate() { return hit / (double)getPageInfoCount; }
 
     private:
-        uint32_t count = 0;
+        uint32_t getPageInfoCount = 0;
         uint32_t hit = 0;
         mutable std::shared_mutex mutex;
         std::unique_ptr<std::vector<PageInfo>> pages = nullptr;
@@ -516,7 +515,7 @@ public:
     {
         Page() : m_size(0) {}
         ~Page() = default;
-        Page(const std::string_view value)
+        Page(const std::string_view& value, const std::string_view& pageKey)
         {
             if (value.empty())
             {
@@ -526,6 +525,15 @@ public:
                 value.data(), value.size());
             boost::archive::binary_iarchive archive(inputStream, ARCHIVE_FLAG);
             archive >> *this;
+            if (pageKey != entries.rbegin()->first)
+            {
+                KeyPage_LOG(WARNING)
+                    << LOG_DESC("load page with invalid pageKey")
+                    << LOG_KV("pageKey", toHex(pageKey))
+                    << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                    << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size());
+                m_invalidPageKeys.insert(std::string(pageKey));
+            }
         }
         Page(const Page& p)
         {
@@ -559,6 +567,7 @@ public:
                 entries = std::move(p.entries);
                 m_size = p.m_size;
                 m_validCount = p.m_validCount;
+                m_invalidPageKeys = std::move(p.m_invalidPageKeys);
             }
             return *this;
         }
@@ -633,6 +642,10 @@ public:
                         pageInfoChanged = true;
                     }
                 }
+                if (m_invalidPageKeys.size() == 1)
+                {
+                    pageInfoChanged = true;
+                }
                 ret = std::move(it->second);
                 it->second = std::move(entry);
                 // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
@@ -641,7 +654,8 @@ public:
                 //         << LOG_DESC("setEntry update")
                 //         << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //         << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size())
-                //         << LOG_KV("key", toHex(key)) << LOG_KV("status", (int)it->second.status())
+                //         << LOG_KV("key", toHex(key)) << LOG_KV("status",
+                //         (int)it->second.status())
                 //         << LOG_KV("pageInfoChanged", pageInfoChanged);
                 // }
             }
@@ -658,7 +672,14 @@ public:
                     pageInfoChanged = true;
                     if (!entries.empty())
                     {  // means key > entries.rbegin()->first is true
-                        m_invalidPageKeys.emplace_back(entries.rbegin()->first);
+                        m_invalidPageKeys.insert(entries.rbegin()->first);
+                    }
+                    auto it = m_invalidPageKeys.find(std::string(key));
+                    if (it != m_invalidPageKeys.end())
+                    {
+                        m_invalidPageKeys.erase(it);
+                        KeyPage_LOG(WARNING) << LOG_DESC("invalid pageKey become valid")
+                                             << LOG_KV("pageKey", toHex(key));
                     }
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
@@ -689,11 +710,12 @@ public:
             std::shared_lock lock(mutex);
             return entries.size();
         }
-        std::list<std::string> invalidKeySet() const
+        const std::set<std::string>& invalidKeySet() const
         {
             std::shared_lock lock(mutex);
             return m_invalidPageKeys;
         }
+        size_t invalidKeyCount() const { return m_invalidPageKeys.size(); }
         std::string startKey() const
         {
             std::shared_lock lock(mutex);
@@ -731,8 +753,8 @@ public:
                 }
                 if (!m_invalidPageKeys.empty() && iter->first == *m_invalidPageKeys.begin())
                 {
-                    page.m_invalidPageKeys.splice(
-                        page.m_invalidPageKeys.end(), m_invalidPageKeys, m_invalidPageKeys.begin());
+                    page.m_invalidPageKeys.insert(
+                        m_invalidPageKeys.extract(m_invalidPageKeys.begin()));
                 }
                 auto ret = page.entries.insert(entries.extract(iter));
                 assert(ret.inserted);
@@ -745,14 +767,13 @@ public:
             if (!page.m_invalidPageKeys.empty() &&
                 page.entries.rbegin()->first == *page.m_invalidPageKeys.rbegin())
             {  // if new pageKey has been pageKey, remove it from m_invalidPageKeys
-                page.m_invalidPageKeys.pop_back();
+                page.m_invalidPageKeys.erase(std::prev(page.m_invalidPageKeys.end()));
             }
             return page;
         }
 
         void merge(Page& p)
         {
-            assert(this != &p);
             if (this != &p)
             {
                 std::unique_lock lock(mutex);
@@ -770,16 +791,18 @@ public:
                     entries.insert(p.entries.extract(iter));
                     iter = p.entries.begin();
                 }
+                // Merges two sorted lists into one
                 m_invalidPageKeys.merge(p.m_invalidPageKeys);
             }
             else
             {
-                KeyPage_LOG(FATAL)
-                    << LOG_DESC("merge slef") << LOG_KV("startKey", toHex(entries.begin()->first))
+                KeyPage_LOG(ERROR)
+                    << LOG_DESC("merge self") << LOG_KV("startKey", toHex(entries.begin()->first))
+                    << LOG_KV("endKey", toHex(entries.rbegin()->first))
                     << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size());
             }
         }
-        void clean()
+        void clean(const std::string_view& pageKey)
         {
             std::unique_lock lock(mutex);
             for (auto iter = entries.begin(); iter != entries.end();)
@@ -795,6 +818,15 @@ public:
                 }
             }
             m_invalidPageKeys.clear();
+            if (pageKey != entries.rbegin()->first)
+            {
+                KeyPage_LOG(WARNING)
+                    << LOG_DESC("import page with invalid pageKey")
+                    << LOG_KV("pageKey", toHex(pageKey))
+                    << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                    << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size());
+                m_invalidPageKeys.insert(std::string(pageKey));
+            }
         }
         crypto::HashType hash(
             const std::string& table, const bcos::crypto::Hash::Ptr& hashImpl) const
@@ -884,7 +916,7 @@ public:
                     if (!m_invalidPageKeys.empty() && !entries.empty() &&
                         entries.rbegin()->first == *m_invalidPageKeys.rbegin())
                     {  // if new pageKey has been pageKey, remove it from m_invalidPageKeys
-                        m_invalidPageKeys.pop_back();
+                        m_invalidPageKeys.erase(std::prev(m_invalidPageKeys.end()));
                     }
                 }
                 else
@@ -909,7 +941,7 @@ public:
         uint32_t m_validCount = 0;  // valid entry count
         friend class boost::serialization::access;
         // if startKey changed the old startKey need keep to delete old page
-        std::list<std::string> m_invalidPageKeys;
+        std::set<std::string> m_invalidPageKeys;
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
@@ -983,7 +1015,7 @@ public:
             }
             else if (type == Type::Page)
             {
-                auto page = KeyPageStorage::Page(entry.get());
+                auto page = KeyPageStorage::Page(entry.get(), key);
                 if (c_fileLogLevel >= TRACE)
                 {
                     KeyPage_LOG(TRACE)
