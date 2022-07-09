@@ -37,21 +37,21 @@ struct DmcExecutorFixture
 {
     DmcExecutorFixture()
     {
-        auto receiptFactory = std::make_shared<TransactionReceiptFactory>();
-        auto transactionFactory = std::make_shared<TransactionFactory>();
-        auto block = std::make_shared<Block>(transactionFactory, receiptFactory);
-        auto executor = std::make_shared<MockExecutorForDMC>("executor1");
-        auto keyLocks = std::make_shared<GraphKeyLocks>();
-        auto dmcRecorder = std::make_shared<DmcStepRecorder>();
+        auto receiptFactory = std::make_shared<bcos::protocol::TransactionReceiptFactory>();
+        auto transactionFactory = std::make_shared<bcos::protocol::TransactionFactory>();
+        block = std::make_shared<bcos::protocol::Block>(transactionFactory, receiptFactory);
+        executor = std::make_shared<MockExecutorForDMC>("executor1");
+        keyLocks = std::make_shared<GraphKeyLocks>();
+        dmcRecorder = std::make_shared<DmcStepRecorder>();
     };
-    std::shared_ptr<DmcExecutor> dmcExecutor;
-    std::shared_ptr<bcos::protocol::Block::Ptr> block;
-    std::shared_ptr<MockExecutorForDMC> executor;
-    std::shared_ptr<GraphKeyLocks> keyLocks;
-    std::shared_ptr<DmcStepRecorder> dmcRecorder;
+    bcos::scheduler::shared_ptr<DmcExecutor> dmcExecutor;
+    bcos::protocol::shared_ptr<Block> block;
+    bcos::test::shared_ptr<MockExecutorForDMC> executor;
+    bcos::scheduler::shared_ptr<GraphKeyLocks> keyLocks;
+    bcos::scheduler::shared_ptr<DmcStepRecorder> dmcRecorder;
 };
 
-CallParameters::UniquePtr createMessage(
+bcos::protocol::ExecutionMessage::UniquePtr createMessage(
     int contextID, int seq, int type, std::string toAddress, bool staticCall)
 {
     auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     dmcExecutor->setOnNeedSwitchEventHandler(
         [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
 
-    auto executorCallback = [this, &dmcFlagStruct, callback = std::move(callback)](
+    auto executorCallback = [this, &dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
@@ -154,16 +154,16 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 }
 BOOST_AUTO_TEST_CASE_END()
 };  // namespace bcos::test
-// // need scheduleOut
-// auto message1 = createMessage(1, 0, 1, "0x0000000", false);
-// dmcExecutor->submit(std::move(message1), false);
-// auto need_scheduleOut = dmcExecutor->prepare();
-// dmcExecutor->go(executorCallback);
-// BOOST_CHECK(!need_scheduleOut && dmcFlagStruct.schedulerOutFlag);
-// SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
-//                      << LOG_KV("finished is ", dmcFlagStruct.finished)
-//                      << LOG_KV("paused is ", dmcFlagStruct.paused)
-//                      << LOG_KV("error is ", dmcFlagStruct.error);
+    // // need scheduleOut
+    // auto message1 = createMessage(1, 0, 1, "0x0000000", false);
+    // dmcExecutor->submit(std::move(message1), false);
+    // auto need_scheduleOut = dmcExecutor->prepare();
+    // dmcExecutor->go(executorCallback);
+    // BOOST_CHECK(!need_scheduleOut && dmcFlagStruct.schedulerOutFlag);
+    // SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
+    //                      << LOG_KV("finished is ", dmcFlagStruct.finished)
+    //                      << LOG_KV("paused is ", dmcFlagStruct.paused)
+    //                      << LOG_KV("error is ", dmcFlagStruct.error);
 
 // // MESSAGE  &&  Call
 // auto message2 = createMessage(2, 1, 1, "0xaabbccdd", true);

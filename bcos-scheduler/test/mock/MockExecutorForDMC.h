@@ -18,11 +18,7 @@ public:
     void status(
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
             callback) override
-    {
-        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
-        status->setSeq(0);
-        callback(nullptr, std::move(status));
-    }
+    {}
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
@@ -32,15 +28,21 @@ public:
         output = std::move(input);
         if (output->to() == "0xaabbccdd")
         {
-            output->setType(bcos::protocol::ExecutionMessage::FINISHED);
             std::string str = "Call Finished!";
+            output->setType(protocol::ExecutionMessage::FINISHED);
             output->setData(bcos::bytes(str.begin(), str.end()));
-            callback(nullptr, executorStatus::PAUSED);
-            return;
+            output->setStatus(0);
+            output->setGasAvailable(123456);
+            callback(nullptr, std::move(output));
         }
         else
         {
-            callback(nullptr, executorStatus::ERROR);
+            std::string str = "Call error!";
+            output->setType(protocol::ExecutionMessage::FINISHED);
+            output->setData(bcos::bytes(str.begin(), str.end()));
+            output->setStatus(-1);
+            callback(nullptr, std::move(output));
+            return;
         }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
     }
@@ -58,7 +60,7 @@ public:
             results.at(i) = std::move(inputs[i]);
             if (results.at(i)->transactionHash() == h256(10086))
             {
-                callback(nullptr, executorStatus::ERROR);
+                callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
                 return;
             }
 
@@ -66,14 +68,14 @@ public:
             {
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
-                callback(nullptr, executorStatus::PAUSE);
+                // callback(nullptr, executorStatus::PAUSE);
             }
             else
             {
                 results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
-                callback(nullptr, executorStatus::FINISHED);
+                // callback(nullptr, executorStatus::FINISHED);
             }
         }
         callback(nullptr, std::move(results));
@@ -81,32 +83,23 @@ public:
 
     void nextBlockHeader(int64_t schedulerTermId, const bcos::protocol::BlockHeader::ConstPtr&,
         std::function<void(bcos::Error::UniquePtr)> callback) override
-    {
-        callback(nullptr);
-    }
+    {}
 
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
-    {
-        // Always success
-        callback(nullptr, std::move(input));
-    }
+    {}
 
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
-    {
-        callback(nullptr, std::move(inputs));
-    }
+    {}
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
-    {
-        callback(nullptr, h256(12345));
-    }
+    {}
 
     void prepare(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
