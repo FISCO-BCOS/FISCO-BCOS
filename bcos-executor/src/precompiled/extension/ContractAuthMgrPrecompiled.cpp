@@ -438,7 +438,7 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
                                << LOG_KV("path", path);
         // func not set acl, return empty
         _callParameters->setExecResult(
-            codec.encode(uint8_t(0), std::move(accessList), std::move(blockList)));
+            codec.encode(uint8_t(getMethodType), std::move(accessList), std::move(blockList)));
     }
     else
     {
