@@ -5,7 +5,7 @@
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
-#include "mock/MockExecutorForDMC.h"
+#include "mock/MockDmcExecutor.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
@@ -46,7 +46,7 @@ struct DmcExecutorFixture
     };
     bcos::scheduler::DmcExecutor::Ptr dmcExecutor;
     bcos::protocol::Block::Ptr block;
-    std::shared_ptr<bcos::scheduler::MockDmcExecutor> executor1;
+    std::shared_ptr<MockDmcExecutor> executor1;
     bcos::scheduler::GraphKeyLocks::Ptr keyLocks;
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
 };

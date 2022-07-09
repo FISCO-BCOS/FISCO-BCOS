@@ -16,7 +16,7 @@ class MockDmcExecutor : public bcos::executor::ParallelTransactionExecutorInterf
 {
 public:
     using executorStatus = bcos::scheduler::DmcExecutor::Status;
-    using Ptr = std::shared_ptr<bcos::test::MockDmcExecutor>();
+    using Ptr = std::shared_ptr<MockDmcExecutor>();
     MockDmcExecutor(const std::string& name) : m_name(name) {}
 
     virtual ~MockDmcExecutor() {}
