@@ -37,7 +37,7 @@ jobs:
         run: |
           export CC='gcc-10'
           export CXX='g++-10'
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../ -G Ninja
           cmake --build . --parallel 4
       - name: Test
         run:
@@ -72,7 +72,7 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../ -G Ninja
           cmake3 --build . --parallel 4
       - name: Test
         run:
