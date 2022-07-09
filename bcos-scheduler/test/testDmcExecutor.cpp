@@ -6,7 +6,6 @@
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
-#include "mock/MockExecutorForDMC.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
