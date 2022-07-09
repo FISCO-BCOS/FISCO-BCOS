@@ -40,13 +40,13 @@ struct DmcExecutorFixture
         auto receiptFactory = std::make_shared<bcos::protocol::TransactionReceiptFactory>();
         auto transactionFactory = std::make_shared<bcos::protocol::TransactionFactory>();
         block = std::make_shared<bcos::protocol::Block>(transactionFactory, receiptFactory);
-        executor = std::make_shared<MockExecutorForDMC>("executor1");
+        executor1 = std::make_shared<MockExecutorForDMC>("executor1");
         keyLocks = std::make_shared<GraphKeyLocks>();
         dmcRecorder = std::make_shared<DmcStepRecorder>();
     };
     bcos::scheduler::DmcExecutor::Ptr dmcExecutor;
     bcos::protocol::Block::Ptr block;
-    bcos::test::MockExecutorForDMC::Ptr executor;
+    std::shared_ptr<MockExecutorForDMC> executor1;
     bcos::scheduler::GraphKeyLocks::Ptr keyLocks;
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
 };
@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     DmcFlagStruct dmcFlagStruct;
 
     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor, keyLocks, h256(6666), dmcRecorder);
+        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, h256(6666), dmcRecorder);
 
     dmcExecutor->setSchedulerOutHandler(
         [this, &dmcFlagStruct]() { dmcFlagStruct.schedulerOutFlag = true; });
@@ -100,9 +100,8 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
             }
         });
 
-
-    dmcExecutor->setOnNeedSwitchEventHandler(
-        [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
+    // dmcExecutor->setOnNeedSwitchEventHandler(
+    //     [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
 
     auto executorCallback = [this, &dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
@@ -154,6 +153,8 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 }
 BOOST_AUTO_TEST_CASE_END()
 };  // namespace bcos::test
+
+
 // // need scheduleOut
 // auto message1 = createMessage(1, 0, 1, "0x0000000", false);
 // dmcExecutor->submit(std::move(message1), false);
