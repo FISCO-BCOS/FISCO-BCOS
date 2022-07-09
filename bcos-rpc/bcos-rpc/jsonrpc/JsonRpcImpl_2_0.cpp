@@ -64,24 +64,24 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto buffer = _msg->payload();
     auto req = std::string_view((const char*)buffer->data(), buffer->size());
 
-    onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session](std::string_view _resp) {
+    onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session](bcos::bytes resp) {
         if (_session && _session->isConnected())
         {
             // TODO: no need to cppy resp
-            auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
+            auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
             _msg->setPayload(buffer);
             _session->asyncSendMessage(_msg);
         }
         else
         {
             // remove the callback
-            BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                              << LOG_DESC("unable to send response for session has been inactive")
-                              << LOG_KV("req", std::string_view(
-                                                   (const char*)m_buffer->data(), m_buffer->size()))
-                              << LOG_KV("resp", _resp) << LOG_KV("seq", _msg->seq())
-                              << LOG_KV(
-                                     "endpoint", _session ? _session->endPoint() : std::string(""));
+            BCOS_LOG(WARNING)
+                << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                << LOG_DESC("unable to send response for session has been inactive")
+                << LOG_KV("req", std::string_view((const char*)m_buffer->data(), m_buffer->size()))
+                << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
+                << LOG_KV("seq", _msg->seq())
+                << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
         }
     });
 }

@@ -1,4 +1,13 @@
 #include "JsonRpcInterface.h"
+#include <json/forwards.h>
+#include <boost/beast/core/ostream.hpp>
+#include <boost/iostreams/device/array.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <iterator>
+#include <ostream>
+#include <sstream>
 
 using namespace bcos::rpc;
 
@@ -93,10 +102,12 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                 {
                     response.result.swap(_result);
                 }
-                auto strResp = toStringResponse(response);
-                _sender(strResp);
-                RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
-                                    << LOG_KV("response", strResp);
+                auto strResp = toStringResponse(std::move(response));
+                _sender(std::move(strResp));
+                RPC_IMPL_LOG(TRACE)
+                    << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+                    << LOG_KV("response",
+                           std::string_view((const char*)strResp.data(), strResp.size()));
             });
 
         // success response
@@ -201,30 +212,53 @@ void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRe
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Request object."));
 }
 
-std::string JsonRpcInterface::toStringResponse(const JsonResponse& _jsonResponse)
+
+bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
 {
-    auto jResp = toJsonResponse(_jsonResponse);
-    Json::FastWriter writer;
-    std::string resp = writer.write(jResp);
-    return resp;
+    auto jResp = toJsonResponse(std::move(_jsonResponse));
+    auto writer = Json::StreamWriterBuilder().newStreamWriter();
+
+    class JsonSink
+    {
+    public:
+        typedef char char_type;
+        typedef boost::iostreams::sink_tag category;
+
+        JsonSink(bcos::bytes& buffer) : m_buffer(buffer) {}
+
+        std::streamsize write(const char* s, std::streamsize n)
+        {
+            m_buffer.insert(m_buffer.end(), (bcos::byte*)s, (bcos::byte*)s + n);
+            return n;
+        }
+
+        bcos::bytes& m_buffer;
+        /* Other members */
+    };
+
+    bcos::bytes out;
+    boost::iostreams::stream<JsonSink> outputStream(out);
+
+    writer->write(jResp, &outputStream);
+    return out;
 }
 
-Json::Value JsonRpcInterface::toJsonResponse(const JsonResponse& _jsonResponse)
+Json::Value JsonRpcInterface::toJsonResponse(JsonResponse _jsonResponse)
 {
     Json::Value jResp;
-    jResp["jsonrpc"] = _jsonResponse.jsonrpc;
-    jResp["id"] = _jsonResponse.id;
+    jResp["jsonrpc"] = std::move(_jsonResponse.jsonrpc);
+    jResp["id"] = std::move(_jsonResponse.id);
 
     if (_jsonResponse.error.code == 0)
     {  // success
-        jResp["result"] = _jsonResponse.result;
+        jResp["result"] = std::move(_jsonResponse.result);
     }
     else
     {  // error
         Json::Value jError;
-        jError["code"] = _jsonResponse.error.code;
-        jError["message"] = _jsonResponse.error.message;
-        jResp["error"] = jError;
+        jError["code"] = std::move(_jsonResponse.error.code);
+        jError["message"] = std::move(_jsonResponse.error.message);
+        jResp["error"] = std::move(jError);
     }
 
     return jResp;

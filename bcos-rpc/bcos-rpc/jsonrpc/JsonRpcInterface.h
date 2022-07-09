@@ -31,7 +31,7 @@
 
 namespace bcos::rpc
 {
-using Sender = std::function<void(std::string_view)>;
+using Sender = std::function<void(bcos::bytes)>;
 using RespFunc = std::function<void(bcos::Error::Ptr, Json::Value&)>;
 
 class JsonRpcInterface
@@ -122,8 +122,8 @@ private:
     std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>> m_methodToFunc;
 
     static void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
-    static std::string toStringResponse(const JsonResponse& _jsonResponse);
-    static Json::Value toJsonResponse(const JsonResponse& _jsonResponse);
+    static bcos::bytes toStringResponse(JsonResponse _jsonResponse);
+    static Json::Value toJsonResponse(JsonResponse _jsonResponse);
 
     std::string_view toView(const Json::Value& value)
     {
