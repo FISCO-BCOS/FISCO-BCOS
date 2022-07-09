@@ -818,14 +818,19 @@ public:
                 }
             }
             m_invalidPageKeys.clear();
-            if (pageKey != entries.rbegin()->first)
+            if (!entries.empty() && pageKey != entries.rbegin()->first)
             {
-                KeyPage_LOG(WARNING)
-                    << LOG_DESC("import page with invalid pageKey")
-                    << LOG_KV("pageKey", toHex(pageKey))
-                    << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
-                    << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size());
+                KeyPage_LOG(WARNING) << LOG_DESC("import page with invalid pageKey")
+                                     << LOG_KV("pageKey", toHex(pageKey))
+                                     << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                                     << LOG_KV("count", entries.size());
                 m_invalidPageKeys.insert(std::string(pageKey));
+            }
+            if (entries.empty())
+            {
+                KeyPage_LOG(DEBUG)
+                    << LOG_DESC("import empty page") << LOG_KV("pageKey", toHex(pageKey))
+                    << LOG_KV("count", entries.size());
             }
         }
         crypto::HashType hash(
