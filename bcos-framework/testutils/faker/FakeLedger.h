@@ -115,7 +115,7 @@ public:
         // fake blockHeader
         auto blockHeader = fakeAndTestBlockHeader(m_blockFactory->cryptoSuite(), 0, parentInfo,
             rootHash, rootHash, rootHash, _blockNumber, gasUsed, _timestamp, 0, m_sealerList,
-            bytes(), signatureList);
+            bytes(), signatureList, false);
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
         signatureList = fakeSignatureList(sigImpl, m_keyPairVec, blockHeader->hash());
         blockHeader->setSignatureList(signatureList);
@@ -137,11 +137,22 @@ public:
     }
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override
+        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) override
     {
         (void)storage;
         (void)block;
         callback(nullptr);
+    }
+
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(Error::UniquePtr&&)> _callback) override
+    {
+        if (!_callback)
+        {
+            return;
+        }
+        _callback(nullptr);
     }
 
     // the txpool module use this interface to store txs
@@ -172,7 +183,6 @@ public:
         _callback(nullptr, block);
     }
 
-    // TODO: maybe only RPC module need this interface
     void asyncGetBlockNumberByHash(
         crypto::HashType const&, std::function<void(Error::Ptr, BlockNumber)>) override
     {}
@@ -209,7 +219,6 @@ public:
         _onGetTx(nullptr, txs, nullptr);
     }
 
-    // TODO: maybe for RPC
     void asyncGetTransactionReceiptByHash(crypto::HashType const&, bool,
         std::function<void(Error::Ptr, TransactionReceipt::ConstPtr, MerkleProofPtr)> _onGetTx)
         override

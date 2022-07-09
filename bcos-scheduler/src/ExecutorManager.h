@@ -28,6 +28,7 @@ public:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchExecutor(
         const std::string_view& contract);
 
+
     void removeExecutor(const std::string_view& name);
 
     auto begin() const
@@ -44,7 +45,15 @@ public:
 
     size_t size() const { return m_name2Executors.size(); }
 
-private:
+    void clear()
+    {
+        WriteGuard lock(m_mutex);
+        m_contract2ExecutorInfo.clear();
+        m_name2Executors.clear();
+        m_executorPriorityQueue = std::priority_queue<ExecutorInfo::Ptr,
+            std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>();
+    };
+
     struct ExecutorInfo
     {
         using Ptr = std::shared_ptr<ExecutorInfo>;
@@ -54,6 +63,13 @@ private:
         std::set<std::string> contracts;
     };
 
+    ExecutorInfo::Ptr getExecutorInfo(const std::string_view& contract);
+    ExecutorInfo::Ptr getExecutorInfoByName(const std::string_view& name)
+    {
+        return m_name2Executors[name];
+    };
+
+private:
     struct ExecutorInfoComp
     {
         bool operator()(const ExecutorInfo::Ptr& lhs, const ExecutorInfo::Ptr& rhs) const
@@ -68,7 +84,7 @@ private:
         m_name2Executors;
     std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>
         m_executorPriorityQueue;
-    std::shared_mutex m_mutex;
+    mutable SharedMutex m_mutex;
 
     bcos::executor::ParallelTransactionExecutorInterface::Ptr const& executorView(
         const decltype(m_name2Executors)::value_type& value) const

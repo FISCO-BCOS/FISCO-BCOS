@@ -136,7 +136,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
 
@@ -364,29 +364,11 @@ void Host::start()
     {
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
-        m_hostThread = std::make_shared<std::thread>([&] {
-            bcos::pthread_setThreadName("io_service");
-            while (haveNetwork())
-            {
-                try
-                {
-                    if (asioInterface()->acceptor())
-                    {
-                        startAccept();
-                    }
-                    asioInterface()->run();
-                }
-                catch (std::exception& e)
-                {
-                    HOST_LOG(WARNING) << LOG_DESC("Exception in Host Thread:")
-                                      << boost::diagnostic_information(e);
-                }
-
-                asioInterface()->reset();
-            }
-
-            HOST_LOG(INFO) << "Host exit";
-        });
+        if (m_asioInterface->acceptor())
+        {
+            startAccept();
+        }
+        m_asioInterface->start();
     }
 }
 
@@ -415,7 +397,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
     auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
-        *(m_asioInterface->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
+        *(socket->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
     connect_timer->async_wait([=](const boost::system::error_code& error) {
         /// return when cancel has been called
         if (error == boost::asio::error::operation_aborted)
@@ -526,12 +508,6 @@ void Host::stop()
     {
         m_asioInterface->stop();
     }
-
-    if (m_hostThread && m_hostThread->joinable())
-    {
-        m_hostThread->join();
-    }
-
     if (m_threadPool)
     {
         m_threadPool->stop();

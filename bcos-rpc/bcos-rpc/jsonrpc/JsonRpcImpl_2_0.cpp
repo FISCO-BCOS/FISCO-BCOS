@@ -18,15 +18,17 @@
  * @author: octopus
  * @date: 2021-07-09
  */
+#include <bcos-boostssl/websocket/WsMessage.h>
+#include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
-#include <bcos-protocol/LogEntry.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-utilities/Base64.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Log.h>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
@@ -42,6 +44,44 @@ using namespace bcos::rpc;
 using namespace bcos::group;
 using namespace boost::iterators;
 using namespace boost::archive::iterators;
+
+JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
+    bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+    std::shared_ptr<boostssl::ws::WsService> _wsService)
+  : m_groupManager(_groupManager), m_gatewayInterface(_gatewayInterface), m_wsService(_wsService)
+{
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
+        boost::bind(&JsonRpcImpl_2_0::handleRpcRequest, this, boost::placeholders::_1,
+            boost::placeholders::_2));
+    initMethod();
+}
+
+void JsonRpcImpl_2_0::handleRpcRequest(
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
+{
+    std::string req = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    // Note: Clean up request data to prevent taking up too much memory
+    bytes emptyBuffer;
+    _msg->payload()->swap(emptyBuffer);
+    onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
+        if (_session && _session->isConnected())
+        {
+            auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
+            _msg->setPayload(buffer);
+            _session->asyncSendMessage(_msg);
+        }
+        else
+        {
+            // remove the callback
+            BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                              << LOG_DESC("unable to send response for session has been inactive")
+                              << LOG_KV("req", req) << LOG_KV("resp", _resp)
+                              << LOG_KV("seq", _msg->seq())
+                              << LOG_KV(
+                                     "endpoint", _session ? _session->endPoint() : std::string(""));
+        }
+    });
+}
 
 void JsonRpcImpl_2_0::initMethod()
 {

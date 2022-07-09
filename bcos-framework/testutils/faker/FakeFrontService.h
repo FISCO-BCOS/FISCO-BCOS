@@ -134,11 +134,10 @@ public:
     void start() override {}
     void stop() override {}
 
-    // TODO: for txs sync
-    void asyncGetNodeIDs(GetNodeIDsFunc) override {}
+    void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc) override {}
     // for gateway: useless here
-    void onReceiveNodeIDs(
-        const std::string&, std::shared_ptr<const NodeIDs>, ReceiveMsgFunc) override
+    void onReceiveGroupNodeInfo(
+        const std::string&, bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc) override
     {}
     // for gateway: useless here
     void onReceiveMessage(const std::string&, NodeIDPtr, bytesConstRef, ReceiveMsgFunc) override {}

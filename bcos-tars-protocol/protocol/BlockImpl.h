@@ -52,7 +52,12 @@ public:
         m_inner(std::make_shared<bcostars::Block>()),
         x_mutex(std::make_shared<std::mutex>())
     {}
-
+    BlockImpl(bcos::protocol::TransactionFactory::Ptr _transactionFactory,
+        bcos::protocol::TransactionReceiptFactory::Ptr _receiptFactory, bcostars::Block _block)
+      : BlockImpl(_transactionFactory, _receiptFactory)
+    {
+        *m_inner = std::move(_block);
+    }
     ~BlockImpl() override{};
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
@@ -69,11 +74,12 @@ public:
     bcos::protocol::BlockHeader::Ptr blockHeader() override;
     bcos::protocol::BlockHeader::ConstPtr blockHeaderConst() const override;
 
-    bcos::protocol::Transaction::ConstPtr transaction(size_t _index) const override;
-    bcos::protocol::TransactionReceipt::ConstPtr receipt(size_t _index) const override;
+    bcos::protocol::Transaction::ConstPtr transaction(uint64_t _index) const override;
+    bcos::protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override;
 
     // get transaction metaData
-    bcos::protocol::TransactionMetaData::ConstPtr transactionMetaData(size_t _index) const override;
+    bcos::protocol::TransactionMetaData::ConstPtr transactionMetaData(
+        uint64_t _index) const override;
     void setBlockType(bcos::protocol::BlockType _blockType) override
     {
         m_inner->type = (int32_t)_blockType;
@@ -82,7 +88,7 @@ public:
     // set blockHeader
     void setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader) override;
 
-    void setTransaction(size_t _index, bcos::protocol::Transaction::Ptr _transaction) override
+    void setTransaction(uint64_t _index, bcos::protocol::Transaction::Ptr _transaction) override
     {
         m_inner->transactions[_index] =
             std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(_transaction)->inner();
@@ -93,16 +99,16 @@ public:
             std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(_transaction)->inner());
     }
 
-    void setReceipt(size_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt) override;
+    void setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt) override;
     void appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt) override;
 
     void appendTransactionMetaData(bcos::protocol::TransactionMetaData::Ptr _txMetaData) override;
 
     // get transactions size
-    size_t transactionsSize() const override { return m_inner->transactions.size(); }
-    size_t transactionsMetaDataSize() const override;
+    uint64_t transactionsSize() const override { return m_inner->transactions.size(); }
+    uint64_t transactionsMetaDataSize() const override;
     // get receipts size
-    size_t receiptsSize() const override { return m_inner->receipts.size(); }
+    uint64_t receiptsSize() const override { return m_inner->receipts.size(); }
 
     void setNonceList(bcos::protocol::NonceList const& _nonceList) override;
     void setNonceList(bcos::protocol::NonceList&& _nonceList) override;
@@ -124,13 +130,13 @@ public:
         std::vector<bcos::bytes> transactionsList;
         if (transactionsSize() > 0)
         {
-            transactionsList = bcos::protocol::encodeToCalculateRoot(
-                transactionsSize(), [this](size_t _index) { return transaction(_index)->hash(); });
+            transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsSize(),
+                [this](uint64_t _index) { return transaction(_index)->hash(); });
         }
         else if (transactionsMetaDataSize() > 0)
         {
             transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsHashSize(),
-                [this](size_t _index) { return transactionMetaData(_index)->hash(); });
+                [this](uint64_t _index) { return transactionMetaData(_index)->hash(); });
         }
 
         txsRoot = bcos::protocol::calculateMerkleProofRoot(
@@ -147,7 +153,7 @@ public:
             return receiptsRoot;
         }
         auto receiptsList = bcos::protocol::encodeToCalculateRoot(
-            receiptsSize(), [this](size_t _index) { return receipt(_index)->hash(); });
+            receiptsSize(), [this](uint64_t _index) { return receipt(_index)->hash(); });
         receiptsRoot =
             bcos::protocol::calculateMerkleProofRoot(m_receiptFactory->cryptoSuite(), receiptsList);
         return receiptsRoot;

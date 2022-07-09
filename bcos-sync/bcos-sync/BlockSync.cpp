@@ -42,6 +42,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadingTimer->registerTimeoutHandler(boost::bind(&BlockSync::onDownloadTimeout, this));
     m_downloadingQueue->registerNewBlockHandler(
         boost::bind(&BlockSync::onNewBlock, this, boost::placeholders::_1));
+    initSendResponseHandler();
 }
 
 void BlockSync::start()
@@ -64,7 +65,6 @@ void BlockSync::init()
     fetcher->fetchConsensusNodeList();
     fetcher->fetchObserverNodeList();
     fetcher->fetchGenesisHash();
-    fetcher->waitFetchFinished();
     // set the syncConfig
     auto genesisHash = fetcher->genesisHash();
     BLKSYNC_LOG(INFO) << LOG_DESC("fetch the ledger config for block sync module success")
@@ -73,40 +73,19 @@ void BlockSync::init()
                       << LOG_KV("genesisHash", genesisHash);
     m_config->setGenesisHash(genesisHash);
     m_config->resetConfig(fetcher->ledgerConfig());
-    auto self = std::weak_ptr<BlockSync>(shared_from_this());
-    m_config->frontService()->asyncGetNodeIDs(
-        [self](Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
-            if (_error != nullptr)
-            {
-                BLKSYNC_LOG(WARNING)
-                    << LOG_DESC("asyncGetNodeIDs failed") << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("msg", _error->errorMessage());
-                return;
-            }
-            try
-            {
-                if (!_nodeIDs || _nodeIDs->size() == 0)
-                {
-                    return;
-                }
-                auto sync = self.lock();
-                if (!sync)
-                {
-                    return;
-                }
-                NodeIDSet nodeIdSet(_nodeIDs->begin(), _nodeIDs->end());
-                sync->config()->setConnectedNodeList(std::move(nodeIdSet));
-                BLKSYNC_LOG(INFO) << LOG_DESC("asyncGetNodeIDs")
-                                  << LOG_KV("connectedSize", _nodeIDs->size());
-            }
-            catch (std::exception const& e)
-            {
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncGetNodeIDs exception")
-                                     << LOG_KV("error", boost::diagnostic_information(e));
-            }
-        });
     BLKSYNC_LOG(INFO) << LOG_DESC("init block sync success");
-    initSendResponseHandler();
+}
+
+void BlockSync::enableAsMaster(bool _masterNode)
+{
+    BLKSYNC_LOG(INFO) << LOG_DESC("enableAsMaster:") << _masterNode;
+    m_config->setMasterNode(_masterNode);
+    m_masterNode = _masterNode;
+    if (!_masterNode)
+    {
+        return;
+    }
+    init();
 }
 
 void BlockSync::initSendResponseHandler()
@@ -195,6 +174,10 @@ void BlockSync::printSyncInfo()
 
 void BlockSync::executeWorker()
 {
+    if (!m_masterNode)
+    {
+        return;
+    }
     if (isSyncing())
     {
         printSyncInfo();
@@ -295,6 +278,10 @@ void BlockSync::maintainDownloadingBuffer()
 void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const& _uuid,
     NodeIDPtr _nodeID, bytesConstRef _data, std::function<void(Error::Ptr _error)> _onRecv)
 {
+    if (!m_masterNode)
+    {
+        return;
+    }
     auto self = std::weak_ptr<BlockSync>(shared_from_this());
     asyncNotifyBlockSyncMessage(
         _error, _nodeID, _data,
@@ -750,7 +737,7 @@ void BlockSync::maintainPeersConnection()
         auto newPeerStatus = m_config->msgFactory()->createBlockSyncStatusMsg(
             m_config->blockNumber(), m_config->hash(), m_config->genesisHash());
         m_syncStatus->updatePeerStatus(m_config->nodeID(), newPeerStatus);
-        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
+        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to peer")
                            << LOG_KV("number", newPeerStatus->number())
                            << LOG_KV("genesisHash", newPeerStatus->genesisHash().abridged())
                            << LOG_KV("currentHash", newPeerStatus->hash().abridged())

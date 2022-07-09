@@ -73,12 +73,6 @@ bool ContractABICodec::abiOutByFuncSelector(
 }
 
 // unsigned integer type uint256.
-bytes ContractABICodec::serialise(const int& _in)
-{
-    return serialise((s256)_in);
-}
-
-// unsigned integer type uint256.
 bytes ContractABICodec::serialise(const u256& _in)
 {
     return h256(_in).asBytes();

@@ -88,29 +88,7 @@ public:
         return precommitCacheList;
     }
 
-    PBFTMessageList preCommitCachesWithoutData()
-    {
-        PBFTMessageList precommitCacheList;
-        auto waitSealUntil = m_config->waitSealUntil();
-        auto committedIndex = m_config->committedProposal()->index();
-        for (auto it = m_caches.begin(); it != m_caches.end();)
-        {
-            auto precommitCache = it->second->preCommitWithoutData();
-            if (precommitCache != nullptr)
-            {
-                // should not handle the proposal future than the system proposal
-                if (waitSealUntil > committedIndex && precommitCache->index() > waitSealUntil)
-                {
-                    it = m_caches.erase(it);
-                    continue;
-                }
-                precommitCacheList.push_back(precommitCache);
-            }
-            it++;
-        }
-        return precommitCacheList;
-    }
-
+    PBFTMessageList preCommitCachesWithoutData();
     virtual void checkAndPreCommit();
     virtual void checkAndCommit();
 
@@ -154,9 +132,10 @@ public:
     {
         m_committedProposalNotifier = _committedProposalNotifier;
     }
+
+    bool tryToPreApplyProposal(ProposalInterface::Ptr _proposal);
     bool tryToApplyCommitQueue();
 
-    void removeFutureProposals();
     // notify the consensusing proposal index to the sync module
     void notifyCommittedProposalIndex(bcos::protocol::BlockNumber _index);
 
@@ -197,6 +176,28 @@ public:
 
     virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }
 
+    virtual void clearAllCache()
+    {
+        m_caches.clear();
+        m_viewChangeCache.clear();
+        std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
+            PBFTProposalCmp>
+            emptyQueue;
+        m_committedQueue.swap(emptyQueue);
+        m_executingProposals.clear();
+        m_committedProposalList.clear();
+        m_proposalsToStableConsensus.clear();
+
+        std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
+            PBFTProposalCmp>
+            emptyStableCheckPointQueue;
+        m_stableCheckPointQueue.swap(emptyStableCheckPointQueue);
+        m_recoverReqCache.clear();
+    }
+
+    void resetUnCommittedCacheState(bcos::protocol::BlockNumber _number);
+    virtual void updateStableCheckPointQueue(PBFTProposalInterface::Ptr _stableCheckPoint);
+
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
         PBFTProposalInterface::Ptr _proposal, size_t _retryTime = 0);
@@ -204,10 +205,11 @@ protected:
     virtual bool checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg);
     virtual void applyStateMachine(
         ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal);
-    virtual void updateStableCheckPointQueue(PBFTProposalInterface::Ptr _stableCheckPoint);
 
     virtual ProposalInterface::ConstPtr getAppliedCheckPointProposal(
         bcos::protocol::BlockNumber _index);
+
+    virtual void notifyToSealNextBlock();
 
 protected:
     using PBFTCachesType = std::map<bcos::protocol::BlockNumber, PBFTCache::Ptr>;
@@ -220,9 +222,6 @@ protected:
         std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache);
     void reCalculateViewChangeWeight();
     void removeInvalidRecoverCache(ViewType _view);
-
-    virtual void notifyToSealNextBlock(PBFTProposalInterface::Ptr _checkpointProposal);
-
     void notifyMaxProposalIndex(bcos::protocol::BlockNumber _proposalIndex);
 
 protected:
@@ -246,7 +245,12 @@ protected:
         m_committedQueue;
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> m_executingProposals;
 
-    std::set<bcos::protocol::BlockNumber> m_committedProposalList;
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_committedProposalList;
+
+    // ordered by the index
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_proposalsToStableConsensus;
 
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>

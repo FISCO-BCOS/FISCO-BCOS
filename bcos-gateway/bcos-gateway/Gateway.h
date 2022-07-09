@@ -36,17 +36,19 @@ class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gat
 public:
     using Ptr = std::shared_ptr<Gateway>;
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
-        GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop)
-      : m_chainID(_chainID),
+        GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
+        std::string _gatewayServiceName = "localGateway")
+      : m_gatewayServiceName(_gatewayServiceName),
+        m_chainID(_chainID),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop)
     {
-        m_p2pInterface->registerHandlerByMsgType(MessageType::PeerToPeerMessage,
+        m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
 
-        m_p2pInterface->registerHandlerByMsgType(MessageType::BroadcastMessage,
+        m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
     }
@@ -65,10 +67,11 @@ public:
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
-     * @param _getNodeIDsFunc: get nodeIDs callback
+     * @param _onGetGroupNodeInfo: get nodeIDs callback
      * @return void
      */
-    void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) override;
+    void asyncGetGroupNodeInfo(
+        const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
     /**
      * @brief: send message
      * @param _groupID: groupID
@@ -154,10 +157,16 @@ public:
     bcos::amop::AMOPImpl::Ptr amop() { return m_amop; }
 
     bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _nodeType,
-        bcos::front::FrontServiceInterface::Ptr _frontService) override
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo) override
     {
-        return m_gatewayNodeManager->registerNode(_groupID, _nodeID, _nodeType, _frontService);
+        return m_gatewayNodeManager->registerNode(
+            _groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
+    }
+
+    virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID)
+    {
+        return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
 protected:
@@ -176,7 +185,10 @@ protected:
     virtual void onReceiveBroadcastMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
+    bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
+
 private:
+    std::string m_gatewayServiceName;
     std::string m_chainID;
     // p2p service interface
     P2PInterface::Ptr m_p2pInterface;

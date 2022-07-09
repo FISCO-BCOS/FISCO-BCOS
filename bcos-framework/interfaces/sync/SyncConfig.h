@@ -46,6 +46,8 @@ public:
         ReadGuard l(x_consensusNodeList);
         return *m_consensusNodeList;
     }
+    // Note: only when the consensusNodeList or observerNodeList changed will call this interface
+    // for perf consideration
     virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList)
     {
         {
@@ -55,6 +57,8 @@ public:
         updateNodeList();
     }
 
+    // Note: only when the consensusNodeList or observerNodeList changed will call this interface
+    // for perf consideration
     virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList&& _consensusNodeList)
     {
         {
@@ -64,6 +68,8 @@ public:
         updateNodeList();
     }
 
+    // Note: only when the consensusNodeList or observerNodeList changed will call this interface
+    // for perf consideration
     virtual void setObserverList(bcos::consensus::ConsensusNodeList const& _observerNodeList)
     {
         {

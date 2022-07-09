@@ -21,7 +21,7 @@
 #pragma once
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
-#include "Common.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
 #include <bcos-framework/interfaces/storage/Common.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-tool/ConsensusNode.h>
@@ -47,21 +47,21 @@ public:
     virtual ~ConsensusPrecompiled(){};
 
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
     int addSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
     int addObserver(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
     int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
     int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
 private:
     void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);

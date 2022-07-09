@@ -21,10 +21,12 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include "bcos-tars-protocol/tars/TwoPCParams.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
@@ -32,6 +34,8 @@
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
 #include <tarscpp/servant/Application.h>
 #include <tarscpp/tup/Tars.h>
@@ -124,6 +128,15 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     {
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
     }
+    // recover the nodeProtocolVersion
+    auto& protocolInfo = _tarsNodeInfo.protocolInfo;
+    auto bcosProtocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+        (bcos::protocol::ProtocolModuleID)protocolInfo.moduleID,
+        (bcos::protocol::ProtocolVersion)protocolInfo.minVersion,
+        (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
+    nodeInfo->setNodeProtocol(std::move(*bcosProtocolInfo));
+    // recover system version(data version)
+    nodeInfo->setCompatibilityVersion(_tarsNodeInfo.compatibilityVersion);
     return nodeInfo;
 }
 
@@ -161,6 +174,13 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
     tarsNodeInfo.nodeID = _nodeInfo->nodeID();
     tarsNodeInfo.microService = _nodeInfo->microService();
     tarsNodeInfo.iniConfig = _nodeInfo->iniConfig();
+    // set the nodeProtocolVersion
+    auto const& protocol = _nodeInfo->nodeProtocol();
+    tarsNodeInfo.protocolInfo.moduleID = protocol->protocolModuleID();
+    tarsNodeInfo.protocolInfo.minVersion = protocol->minVersion();
+    tarsNodeInfo.protocolInfo.maxVersion = protocol->maxVersion();
+    // write the compatibilityVersion
+    tarsNodeInfo.compatibilityVersion = _nodeInfo->compatibilityVersion();
     return tarsNodeInfo;
 }
 
@@ -223,6 +243,8 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     ledgerConfig->setBlockTxCountLimit(_ledgerConfig.blockTxCountLimit);
     ledgerConfig->setLeaderSwitchPeriod(_ledgerConfig.leaderSwitchPeriod);
     ledgerConfig->setSealerId(_ledgerConfig.sealerId);
+    ledgerConfig->setGasLimit(std::make_tuple(_ledgerConfig.gasLimit, _ledgerConfig.blockNumber));
+    ledgerConfig->setCompatibilityVersion(_ledgerConfig.compatibilityVersion);
     return ledgerConfig;
 }
 
@@ -249,6 +271,8 @@ inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr
     ledgerConfig.blockTxCountLimit = _ledgerConfig->blockTxCountLimit();
     ledgerConfig.leaderSwitchPeriod = _ledgerConfig->leaderSwitchPeriod();
     ledgerConfig.sealerId = _ledgerConfig->sealerId();
+    ledgerConfig.gasLimit = std::get<0>(_ledgerConfig->gasLimit());
+    ledgerConfig.compatibilityVersion = _ledgerConfig->compatibilityVersion();
 
     // set consensusNodeList
     ledgerConfig.consensusNodeList = toTarsConsensusNodeList(_ledgerConfig->consensusNodeList());
@@ -323,7 +347,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 
 template <typename T>
 bool checkConnection(std::string const& _module, std::string const& _func, T prx,
-    std::function<void(bcos::Error::Ptr)> _errorCallback)
+    std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
 {
     std::vector<tars::EndpointInfo> activeEndPoints;
     std::vector<tars::EndpointInfo> nactiveEndPoints;
@@ -332,12 +356,55 @@ bool checkConnection(std::string const& _module, std::string const& _func, T prx
     {
         return true;
     }
-    if (_errorCallback)
+    if (_errorCallback && _callsErrorCallback)
     {
         std::string errorMessage =
             _module + " calls interface " + _func + " failed for empty connection";
         _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
     }
     return false;
+}
+
+inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)
+{
+    bcostars::LogEntry logEntry;
+    logEntry.address.assign(_logEntry.address().begin(), _logEntry.address().end());
+    for (auto& topicIt : _logEntry.topics())
+    {
+        logEntry.topic.push_back(std::vector<char>(topicIt.begin(), topicIt.end()));
+    }
+    logEntry.data.assign(_logEntry.data().begin(), _logEntry.data().end());
+    return logEntry;
+}
+
+inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEntry)
+{
+    std::vector<bcos::h256> topics;
+    for (auto& topicIt : _logEntry.topic)
+    {
+        topics.emplace_back((const bcos::byte*)topicIt.data(), topicIt.size());
+    }
+    return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
+        topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
+}
+
+inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
+{
+    bcos::protocol::TwoPCParams bcosTwoPCParams;
+    bcosTwoPCParams.number = _param.blockNumber;
+    bcosTwoPCParams.primaryTableName = _param.primaryTableName;
+    bcosTwoPCParams.primaryTableKey = _param.primaryTableKey;
+    bcosTwoPCParams.timestamp = _param.startTS;
+    return bcosTwoPCParams;
+}
+
+inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _param)
+{
+    bcostars::TwoPCParams tarsTwoPCParams;
+    tarsTwoPCParams.blockNumber = _param.number;
+    tarsTwoPCParams.primaryTableName = _param.primaryTableName;
+    tarsTwoPCParams.primaryTableKey = _param.primaryTableKey;
+    tarsTwoPCParams.startTS = _param.timestamp;
+    return tarsTwoPCParams;
 }
 }  // namespace bcostars

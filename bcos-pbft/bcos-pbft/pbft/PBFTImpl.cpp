@@ -30,8 +30,9 @@ void PBFTImpl::start()
         PBFT_LOG(WARNING) << LOG_DESC("The PBFT module has already been started!");
         return;
     }
-    m_pbftEngine->start();
     m_running = true;
+    m_pbftEngine->start();
+    m_pbftEngine->recoverState();
     PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
 }
 
@@ -98,7 +99,7 @@ void PBFTImpl::notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumb
 }
 
 void PBFTImpl::asyncNoteUnSealedTxsSize(
-    size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
+    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_pbftEngine->pbftConfig()->setUnSealedTxsSize(_unsealedTxsSize);
     if (_onRecvResponse)
@@ -111,37 +112,7 @@ void PBFTImpl::init()
 {
     auto config = m_pbftEngine->pbftConfig();
     config->validator()->init();
-    PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
-
-    m_ledgerFetcher->fetchBlockNumberAndHash();
-    m_ledgerFetcher->fetchConsensusNodeList();
-    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
-    m_ledgerFetcher->fetchObserverNodeList();
-    m_ledgerFetcher->fetchBlockTxCountLimit();
-    m_ledgerFetcher->fetchConsensusLeaderPeriod();
-    m_ledgerFetcher->waitFetchFinished();
-    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
-    PBFT_LOG(INFO) << LOG_DESC("fetch LedgerConfig information success")
-                   << LOG_KV("blockNumber", ledgerConfig->blockNumber())
-                   << LOG_KV("hash", ledgerConfig->hash().abridged())
-                   << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
-                   << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
-    config->resetConfig(ledgerConfig);
-
-    PBFT_LOG(INFO) << LOG_DESC("fetch PBFT state");
-    auto stateProposals = config->storage()->loadState(ledgerConfig->blockNumber());
-    if (stateProposals && stateProposals->size() > 0)
-    {
-        m_pbftEngine->initState(*stateProposals, config->keyPair()->publicKey());
-        auto lowWaterMarkIndex = stateProposals->size() - 1;
-        auto lowWaterMark = ((*stateProposals)[lowWaterMarkIndex])->index();
-        config->setLowWaterMark(lowWaterMark + 1);
-        PBFT_LOG(INFO) << LOG_DESC("init PBFT state")
-                       << LOG_KV("stateProposals", stateProposals->size())
-                       << LOG_KV("lowWaterMark", lowWaterMark)
-                       << LOG_KV("highWaterMark", config->highWaterMark());
-    }
-    config->timer()->start();
+    m_pbftEngine->fetchAndUpdatesLedgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 
@@ -181,4 +152,31 @@ void PBFTImpl::asyncGetConsensusStatus(
     Json::FastWriter fastWriter;
     std::string statusStr = fastWriter.write(consensusStatus);
     _onGetConsensusStatus(nullptr, statusStr);
+}
+
+void PBFTImpl::enableAsMaterNode(bool _isMasterNode)
+{
+    if (m_masterNode == _isMasterNode)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: The masterNodeState is not changed")
+                       << LOG_KV("master", _isMasterNode);
+        return;
+    }
+    if (!m_masterNode)
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+            "enableAsMaterNode: clearAllCache for the node switch into backup node");
+        m_pbftEngine->clearAllCache();
+    }
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: ") << _isMasterNode;
+    m_masterNode.store(_isMasterNode);
+    m_pbftEngine->pbftConfig()->enableAsMaterNode(_isMasterNode);
+    if (!_isMasterNode)
+    {
+        return;
+    }
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: init and start the consensus module");
+    init();
+    m_pbftEngine->recoverState();
+    m_pbftEngine->restart();
 }

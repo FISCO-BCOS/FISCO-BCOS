@@ -37,6 +37,8 @@ static const int32_t RECEIPTS = 0x0002;
 static const char* const SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
 static const char* const SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
 static const char* const SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = "consensus_leader_period";
+// for compatibility
+static const char* const SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
 
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;
@@ -64,4 +66,5 @@ static const char* const SYS_NUMBER_2_TXS = "s_number_2_txs";
 static const char* const SYS_HASH_2_TX = "s_hash_2_tx";
 static const char* const SYS_HASH_2_RECEIPT = "s_hash_2_receipt";
 static const char* const DAG_TRANSFER = "/tables/dag_transfer";
-}  // namespace bcos
+static const char* const SMALLBANK_TRANSFER = "/tables/smallbank_transfer";
+}  // namespace bcos::ledger

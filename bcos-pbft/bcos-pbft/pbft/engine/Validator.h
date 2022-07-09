@@ -41,7 +41,7 @@ public:
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) = 0;
 
     virtual void asyncResetTxsFlag(bytesConstRef _data, bool _flag) = 0;
-    virtual PBFTProposalInterface::Ptr generateEmptyProposal(
+    virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
     virtual void notifyTransactionsResult(
@@ -100,7 +100,7 @@ public:
         return m_resettingProposals.size();
     }
 
-    PBFTProposalInterface::Ptr generateEmptyProposal(
+    PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) override
     {
         auto proposal = _factory->createPBFTProposal();
@@ -108,6 +108,7 @@ public:
         auto block = m_blockFactory->createBlock();
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
         blockHeader->populateEmptyBlock(_index, _sealerId);
+        blockHeader->setVersion(_proposalVersion);
         block->setBlockHeader(blockHeader);
         auto encodedData = std::make_shared<bytes>();
         block->encode(*encodedData);
@@ -172,7 +173,7 @@ public:
 
     void setVerifyCompletedHook(std::function<void()> _hook) override
     {
-        WriteGuard l(x_verifyCompletedHook);
+        RecursiveGuard l(x_verifyCompletedHook);
         m_verifyCompletedHook = _hook;
     }
 
@@ -193,26 +194,25 @@ protected:
 
     void triggerVerifyCompletedHook()
     {
-        ReadGuard l(x_verifyCompletedHook);
+        RecursiveGuard l(x_verifyCompletedHook);
         if (!m_verifyCompletedHook)
         {
             return;
         }
+        auto callback = m_verifyCompletedHook;
+        m_verifyCompletedHook = nullptr;
         auto self = std::weak_ptr<TxsValidator>(shared_from_this());
-        m_worker->enqueue([self]() {
+        m_worker->enqueue([self, callback]() {
             auto validator = self.lock();
             if (!validator)
             {
                 return;
             }
-            UpgradableGuard l(validator->x_verifyCompletedHook);
-            if (!validator->m_verifyCompletedHook)
+            if (!callback)
             {
                 return;
             }
-            validator->m_verifyCompletedHook();
-            UpgradeGuard ul(l);
-            validator->m_verifyCompletedHook = nullptr;
+            callback();
         });
     }
     virtual bool insertResettingProposal(bcos::crypto::HashType const& _hash)
@@ -238,7 +238,7 @@ protected:
     mutable SharedMutex x_resettingProposals;
 
     std::function<void()> m_verifyCompletedHook = nullptr;
-    mutable SharedMutex x_verifyCompletedHook;
+    mutable RecursiveMutex x_verifyCompletedHook;
 };
 }  // namespace consensus
 }  // namespace bcos

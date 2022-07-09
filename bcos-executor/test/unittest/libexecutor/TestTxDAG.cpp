@@ -19,8 +19,8 @@
  * @date: 2022-01-19
  */
 
-#include "../../../src/dag/TxDAG.h"
 #include "../../../src/dag/TxDAG2.h"
+#include "TxDAG.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>
@@ -104,8 +104,8 @@ void runDagTest(shared_ptr<TxDAGInterface> _txDag, int _total,
 
 void txDagTest(shared_ptr<TxDAGInterface> txDag)
 {
-    int total = 1000;
-    ID criticalNum = 2;
+    int total = 100;
+    ID criticalNum = 6;
     vector<int> runnings(criticalNum, -1);
 
     auto id2CriticalFun = [&](ID id) -> vector<bytes> {
@@ -129,7 +129,7 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
 
 void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
 {
-    int total = 1000;
+    int total = 100;
     ID slotNum = 2;
     ID valueNum = 3;  // values num under a slot
     map<int, ID> runnings;
@@ -220,14 +220,14 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
 
     runDagTest(txDag, total, id2CriticalFun, beforeRunCheck, afterRunCheck);
 }
-
+/*
 BOOST_AUTO_TEST_CASE(TestRun1)
 {
     // ./test-bcos-executor --run_test=TestTxDAG/TestRun1
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG>();
     txDagTest(txDag);
 }
-
+*/
 BOOST_AUTO_TEST_CASE(TestRun2)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();

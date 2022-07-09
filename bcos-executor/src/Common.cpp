@@ -20,12 +20,18 @@
  */
 
 #include "Common.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
 #include <bcos-utilities/Common.h>
 
 using namespace bcos::protocol;
 
 namespace bcos
 {
+bool hasWasmPreamble(const std::string_view& _input)
+{
+    return hasWasmPreamble(
+        bytesConstRef(reinterpret_cast<const byte*>(_input.data()), _input.size()));
+}
 bool hasWasmPreamble(const bytesConstRef& _input)
 {
     return _input.size() >= 8 && _input[0] == 0 && _input[1] == 'a' && _input[2] == 's' &&
@@ -35,6 +41,13 @@ bool hasWasmPreamble(const bytesConstRef& _input)
 bool hasWasmPreamble(const bytes& _input)
 {
     return hasWasmPreamble(bytesConstRef(_input.data(), _input.size()));
+}
+
+bool hasPrecompiledPrefix(const std::string_view& _code)
+{
+    return _code.size() > precompiled::PRECOMPILED_CODE_FIELD_SIZE &&
+           _code.substr(0, precompiled::PRECOMPILED_CODE_FIELD_SIZE) ==
+               precompiled::PRECOMPILED_CODE_FIELD;
 }
 
 namespace executor

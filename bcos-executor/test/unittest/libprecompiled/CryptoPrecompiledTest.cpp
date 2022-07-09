@@ -41,7 +41,7 @@ class CryptoPrecompiledFixture : public PrecompiledFixture
 public:
     CryptoPrecompiledFixture()
     {
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl, false);
         setIsWasm(false);
         cryptoAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
     }

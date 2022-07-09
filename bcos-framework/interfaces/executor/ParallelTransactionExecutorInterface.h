@@ -26,6 +26,7 @@
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "ExecutionMessage.h"
+#include "ExecutorStatus.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -40,23 +41,34 @@ namespace executor
 class ParallelTransactionExecutorInterface
 {
 public:
-    struct TwoPCParams
-    {
-        bcos::protocol::BlockNumber number = 0;
-        std::string primaryTableName;
-        std::string primaryTableKey;
-        uint64_t startTS = 0;
-    };
-
     using Ptr = std::shared_ptr<ParallelTransactionExecutorInterface>;
-
+    ParallelTransactionExecutorInterface() = default;
     virtual ~ParallelTransactionExecutorInterface() = default;
 
-    virtual void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    virtual void status(
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
+            callback)
+    {
+        // TODO: use pure virtual function
+        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
+        status->setSeq(m_seq);
+        callback(nullptr, std::move(status));
+    };
+
+    virtual void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) = 0;
 
     virtual void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) = 0;
+
+    virtual void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        // called every time at all tx stop( pause or finish)
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) = 0;
 
     virtual void dagExecuteTransactions(
@@ -75,16 +87,16 @@ public:
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
-    virtual void prepare(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) = 0;
+    virtual void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) = 0;
 
     // Commit uncommitted data
-    virtual void commit(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) = 0;
+    virtual void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) = 0;
 
     // Rollback the changes
-    virtual void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) = 0;
+    virtual void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) = 0;
 
     /* ----- XA Transaction interface End ----- */
 
@@ -96,6 +108,13 @@ public:
 
     virtual void getABI(
         std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) = 0;
+
+    virtual void start(){};
+
+    virtual void stop(){};
+
+private:
+    int64_t m_seq = utcTime();
 };
 }  // namespace executor
 }  // namespace bcos

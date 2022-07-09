@@ -22,6 +22,7 @@
 #pragma once
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-utilities/Common.h>
 
 namespace pingcap
 {
@@ -37,7 +38,8 @@ namespace bcos
 {
 namespace storage
 {
-std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::string>& pdAddrs);
+std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
+    const std::vector<std::string>& pdAddrs, const std::string& logPath);
 
 class TiKVStorage : public TransactionalStorageInterface
 {
@@ -66,18 +68,26 @@ public:
     void asyncSetRow(std::string_view table, std::string_view key, Entry entry,
         std::function<void(Error::UniquePtr)> callback) noexcept override;
 
-    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
+    void asyncPrepare(const bcos::protocol::TwoPCParams& params,
+        const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
 
-    void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override;
+    void asyncCommit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
 
-    void asyncRollback(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override;
+    void asyncRollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr)> callback) noexcept override;
+
+    Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
+        std::vector<std::string> values) noexcept override;
 
 private:
+    int32_t m_maxRetry = 10;
+    size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
+
+    mutable RecursiveMutex x_committer;
 };
 }  // namespace storage
 }  // namespace bcos

@@ -19,6 +19,8 @@
  */
 #include "Sealer.h"
 #include "Common.h"
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
@@ -59,8 +61,8 @@ void Sealer::init(bcos::consensus::ConsensusInterface::Ptr _consensus)
     m_sealerConfig->setConsensusInterface(_consensus);
 }
 
-void Sealer::asyncNotifySealProposal(size_t _proposalStartIndex, size_t _proposalEndIndex,
-    size_t _maxTxsPerBlock, std::function<void(Error::Ptr)> _onRecvResponse)
+void Sealer::asyncNotifySealProposal(uint64_t _proposalStartIndex, uint64_t _proposalEndIndex,
+    uint64_t _maxTxsPerBlock, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_sealingManager->resetSealingInfo(_proposalStartIndex, _proposalEndIndex, _maxTxsPerBlock);
     if (_onRecvResponse)
@@ -80,7 +82,7 @@ void Sealer::asyncNoteLatestBlockNumber(int64_t _blockNumber)
 }
 
 void Sealer::asyncNoteUnSealedTxsSize(
-    size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
+    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_sealingManager->setUnsealedTxsSize(_unsealedTxsSize);
     if (_onRecvResponse)
@@ -135,6 +137,11 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setSealerList(std::move(sealerList));
     _block->blockHeader()->setConsensusWeights(std::move(weightList));
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
+    // set the version
+    auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
+        (uint32_t)g_BCOSConfig.maxSupportedVersion());
+    _block->blockHeader()->setVersion(version);
+
     auto encodedData = std::make_shared<bytes>();
     _block->encode(*encodedData);
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
@@ -142,7 +149,8 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("curNum", m_sealingManager->currentNumber())
                    << LOG_KV("hash", _block->blockHeader()->hash().abridged())
                    << LOG_KV("sysTxs", _containSysTxs)
-                   << LOG_KV("txsSize", _block->transactionsHashSize());
+                   << LOG_KV("txsSize", _block->transactionsHashSize())
+                   << LOG_KV("version", version);
     m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(*encodedData),
         _block->blockHeader()->number(), _block->blockHeader()->hash(),
         [_block](Error::Ptr _error) {

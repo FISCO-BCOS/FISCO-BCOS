@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <bcos-utilities/Log.h>
+#include <bcos-framework/interfaces/Common.h>
 
 // The largest number of topic in one event log
 #define EVENT_LOG_TOPICS_MAX_INDEX (4)
@@ -21,16 +21,6 @@ namespace bcos
 {
 namespace event
 {
-enum MessageType
-{
-    // ------------event begin ---------
-
-    EVENT_SUBSCRIBE = 0x120,    // 288
-    EVENT_UNSUBSCRIBE = 0x121,  // 289
-    EVENT_LOG_PUSH = 0x122      // 290
-
-    // ------------event end ---------
-};
 enum EP_STATUS_CODE
 {
     SUCCESS = 0,

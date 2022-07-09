@@ -16,6 +16,59 @@ env:
   CCACHE_DIR: ${{ github.workspace }}/ccache
 
 jobs:
+  generate_coverage:
+    name: generate_coverage
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
+            deps/src
+            ccache
+          key: hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-coverage-gcc-v8-notest-${{ runner.temp }}-
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - name: install Ubuntu dependencies
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache openssl libssl-dev wget libgmp-dev
+      - name: configure
+        # Note: must run test inner build directory, otherwise the gateway ut maybe failed
+        run: mkdir -p build && cd build && cmake .. -DTESTS=ON -DBUILD_DEMO=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: compile
+        run: cd build && make -j3
+      - name: make test
+        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: generate coverage
+        run: cd build && make cov
+      - name: upload code coverage to codecov
+        uses: codecov/codecov-action@v2
+        with:
+          file: ./build/coverage.info
+          name: bcos rc4 coverage
+          fail_ci_if_error: true
+
   build_with_clang:
     name: build_with_clang
     runs-on: ${{ matrix.os }}
@@ -37,6 +90,8 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
           key: hunter-clang-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -46,10 +101,10 @@ jobs:
             hunter-clang-v8-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install ccache libomp
+        run: brew install ccache libomp openjdk gmp
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
+        run: sudo apt install -y git curl build-essential clang cmake ccache libgmp-dev libzstd-dev default-jdk openssl libssl-dev wget
       - name: configure
         if: runner.os == 'macOS'
         run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
@@ -58,7 +113,7 @@ jobs:
       - name: run test
         run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - name: tar fisco-bcos for MacOS
-        run: cd build && mv fisco-bcos-air/ bin/ && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cd build && cp -r fisco-bcos-air/ bin/ && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-MacOS.zip
@@ -66,15 +121,26 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService-MacOS.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosMaxNodeService-MacOS.zip
+          path: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosExecutorService-MacOS.zip
+          path: build/fisco-bcos-tars-service/BcosExecutorService.tgz
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
+
   build_with_gcc:
     name: build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -96,6 +162,8 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
           key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -109,12 +177,15 @@ jobs:
           toolchain: nightly-2021-06-17
           override: true
       - name: install Ubuntu dependencies
-        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache  openssl libssl-dev wget libgmp-dev
       - name: configure
         # Note: must run test inner build directory, otherwise the gateway ut maybe failed
         run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j3
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
+
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -136,6 +207,8 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             deps/src
             ccache
           key: hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -144,12 +217,14 @@ jobs:
             hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-ubuntu-v8-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
+        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev wget libgmp-dev
       - name: configure
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j2
-        
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh
+
   build_with_arm_linux:
     name: build_with_arm_linux
     runs-on: ubuntu-20.04
@@ -167,13 +242,16 @@ jobs:
           path: |
             /home/runner/.hunter
             /Users/runner/.hunter/
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
             /home/runner/work/FISCO-BCOS/deps/src
+            deps/src
             ccache
-          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v8-notest-${{ runner.temp }}-
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-aarch64-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -196,17 +274,16 @@ jobs:
           # compile things in the container
           run: |
             apt-get update -q -y
-            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison
+            apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev zlib1g zlib1g-dev flex bison wget libgmp-dev
             /usr/sbin/update-ccache-symlinks
             echo 'export PATH="/usr/lib/ccache:$PATH"' | tee -a ~/.bashrc
             curl https://sh.rustup.rs -sSf | bash -s -- -y
             export PATH=/root/.cargo/bin:${PATH}
             mkdir -p build && cd build && cmake .. -DTESTS=OFF
             cd build && make -j2
-
-  build_with_centos:
-    name: build_with_centos
-    runs-on: ubuntu-20.04
+  build_centos_with_TiKV:
+    name: build_centos_with_TiKV
+    runs-on: ubuntu-latest
     container:
       image: docker.io/centos:7
       volumes:
@@ -216,11 +293,11 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
+          yum install -y git make gcc gcc-c++ glibc-static gmp-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison patch python-devel python3-devel java java-devel wget
           source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
-          yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum swap -y git git224-core
+          yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
+          yum install -y git
           git --version
       - uses: actions/checkout@v2
         with:
@@ -236,6 +313,73 @@ jobs:
           path: |
             /home/runner/.hunter
             /github/home/.hunter
+            /__w/.hunter
+            /Users/runner/.fisco/
+            /home/runner/.fisco/
+            /__w/.fisco
+            deps/src
+            ccache
+          key: hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-tikv-v7-notest-${{ runner.temp }}-
+      - name: configure and compile
+        run: |
+          source /opt/rh/devtoolset-7/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
+          source /opt/rh/llvm-toolset-7/enable
+          mkdir build && cd build && cmake3 .. -DTESTS=ON -DUSE_TiKV=ON
+          make -j3
+          mkdir -p /root/.tiup/bin/
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /github/home/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.4.0 --mode tikv-slim &
+          sleep 10
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
+
+  build_with_centos:
+    name: build_with_centos
+    runs-on: ubuntu-20.04
+    container:
+      image: docker.io/centos:7
+      volumes:
+        - /github/home/.hunter:/github/home/.hunter
+        - /__w/FISCO-BCOS:/__w/FISCO-BCOS
+    steps:
+      - name: install CentOS dependencies
+        run: |
+          yum install -y epel-release centos-release-scl
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 patch ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
+          source /opt/rh/devtoolset-7/enable
+          alias cmake='cmake3'
+          yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
+          yum install -y git
+          git --version
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /github/home/.hunter
+            /Users/runner/.hunter/
+            /home/runner/.fisco
+            /github/home/.fisco
+            /Users/runner/.fisco/
+            /home/runner/work/FISCO-BCOS/deps/src
+            /__w/.hunter
+            /__w/.fisco
+            ccache
             deps/src
             ccache
           key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -253,7 +397,7 @@ jobs:
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
       - name: tar fisco-bcos for CentOS
-        run: cd build && mv fisco-bcos-air bin && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cd build && cp -r fisco-bcos-air bin && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-linux.zip
@@ -261,12 +405,22 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService.zip
-          path: build/fisco-bcos-pro/BcosRpcService.tgz
+          path: build/fisco-bcos-tars-service/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService.zip
-          path: build/fisco-bcos-pro/BcosGatewayService.tgz
+          path: build/fisco-bcos-tars-service/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService.zip
-          path: build/fisco-bcos-pro/BcosNodeService.tgz
+          path: build/fisco-bcos-tars-service/BcosNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosMaxNodeService.zip
+          path: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosExecutorService.zip
+          path: build/fisco-bcos-tars-service/BcosExecutorService.tgz
+      - name: run integration test
+        run: cd tools && bash .ci/ci_check.sh

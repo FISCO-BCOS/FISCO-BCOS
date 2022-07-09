@@ -66,15 +66,14 @@ public:
 
     // clear all status
     virtual void reset(std::function<void(Error::Ptr&&)> callback) = 0;
-
-    // register a block number receiver
-    virtual void registerBlockNumberReceiver(
-        std::function<void(protocol::BlockNumber blockNumber)> callback) = 0;
-
     virtual void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) = 0;
 
     virtual void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) = 0;
+
+    // for performance, do the things before executing block in executor.
+    virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(Error::Ptr&&)> callback) = 0;
 };
 }  // namespace bcos::scheduler

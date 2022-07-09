@@ -20,10 +20,13 @@
  */
 #include "AirNodeInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
+#include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -33,8 +36,12 @@ using namespace bcos::tool;
 
 void AirNodeInitializer::init(std::string const& _configFilePath, std::string const& _genesisFile)
 {
+    INITIALIZER_LOG(INFO) << LOG_DESC("initGlobalConfig");
+    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
+
     m_logInitializer = std::make_shared<BoostLogInitializer>();
     m_logInitializer->initLog(pt);
 
@@ -45,69 +52,57 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeConfig->loadConfig(_configFilePath);
     nodeConfig->loadGenesisConfig(_genesisFile);
 
+    m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
+    m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
+
     // create gateway
-    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
-    auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
+    // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
+    // otherwise dataEncryption() will return nullptr
+    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
+        m_nodeInitializer->protocolInitializer()->dataEncryption());
+    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
     // create the node
-    initAirNode(_configFilePath, _genesisFile, m_gateway);
+    m_nodeInitializer->init(
+        bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, m_gateway, true, m_logInitializer->logPath());
+
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
     auto nodeService =
         std::make_shared<NodeService>(m_nodeInitializer->ledger(), m_nodeInitializer->scheduler(),
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
+
     // create rpc
-    RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory);
+    RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
+        m_nodeInitializer->protocolInitializer()->dataEncryption());
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     auto topicManager =
         std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(gateway->amop()->topicManager());
     topicManager->setLocalClient(m_rpc);
+    m_nodeInitializer->initNotificationHandlers(m_rpc);
 
-    // init handlers
-    auto nodeName = m_nodeInitializer->nodeConfig()->nodeName();
-    auto groupID = m_nodeInitializer->nodeConfig()->groupId();
-    auto schedulerImpl =
-        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(m_nodeInitializer->scheduler());
-    schedulerImpl->registerBlockNumberReceiver(
-        [rpc = m_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
-        });
-
-    auto txpool = m_nodeInitializer->txPoolInitializer()->txpool();
-    schedulerImpl->registerTransactionNotifier(
-        [txpool](bcos::protocol::BlockNumber _blockNumber,
-            bcos::protocol::TransactionSubmitResultsPtr _result,
-            std::function<void(bcos::Error::Ptr)> _callback) {
-            txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
-        });
+    // NOTE: this should be last called
+    m_nodeInitializer->initSysContract();
 }
 
 void AirNodeInitializer::start()
 {
-    try
+    if (m_nodeInitializer)
     {
-        if (m_nodeInitializer)
-        {
-            m_nodeInitializer->start();
-        }
-
-        if (m_gateway)
-        {
-            m_gateway->start();
-        }
-
-        if (m_rpc)
-        {
-            m_rpc->start();
-        }
+        m_nodeInitializer->start();
     }
-    catch (std::exception const& e)
+
+    if (m_gateway)
     {
-        std::cout << "start bcos-node failed for " << boost::diagnostic_information(e);
-        exit(-1);
+        m_gateway->start();
+    }
+
+    if (m_rpc)
+    {
+        m_rpc->start();
     }
 }
 

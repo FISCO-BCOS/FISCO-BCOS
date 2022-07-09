@@ -21,9 +21,9 @@
 #pragma once
 #include "GroupTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework/interfaces/protocol/ProtocolInfo.h"
 #include "bcos-framework/interfaces/protocol/ServiceDesc.h"
 #include <bcos-utilities/Common.h>
-#include <json/json.h>
 #include <memory>
 namespace bcos
 {
@@ -41,11 +41,13 @@ public:
     using Ptr = std::shared_ptr<ChainNodeInfo>;
     using ConstPtr = std::shared_ptr<const ChainNodeInfo>;
     using ServicesInfo = std::map<bcos::protocol::ServiceType, std::string>;
-    ChainNodeInfo() = default;
-    ChainNodeInfo(std::string const& _nodeName, int32_t _type)
-      : m_nodeName(_nodeName), m_nodeCryptoType((NodeCryptoType)_type)
-    {}
-    explicit ChainNodeInfo(std::string const& _jsonGroupInfoStr) { deserialize(_jsonGroupInfoStr); }
+    ChainNodeInfo() : m_nodeProtocol(std::make_shared<bcos::protocol::ProtocolInfo>()) {}
+    ChainNodeInfo(std::string const& _nodeName, int32_t _type) : ChainNodeInfo()
+    {
+        m_nodeName = _nodeName;
+        m_nodeCryptoType = (NodeCryptoType)_type;
+    }
+
     virtual ~ChainNodeInfo() {}
 
     virtual std::string const& nodeName() const { return m_nodeName; }
@@ -84,107 +86,30 @@ public:
 
     void setMicroService(bool _microService) { m_microService = _microService; }
     bool microService() const { return m_microService; }
-
-    virtual void deserialize(const std::string& _json)
-    {
-        Json::Value value;
-        Json::Reader jsonReader;
-        if (!jsonReader.parse(_json, value))
-        {
-            BOOST_THROW_EXCEPTION(InvalidChainNodeInfo() << errinfo_comment(
-                                      "The chain node information must be valid json string."));
-        }
-        // required: parse nodeName
-        if (!value.isMember("name"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidChainNodeInfo() << errinfo_comment(
-                                      "The chain node information must set the chain node name."));
-        }
-        setNodeName(value["name"].asString());
-
-        // required: parse nodeType
-        if (!value.isMember("type"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidChainNodeInfo() << errinfo_comment(
-                                      "The chain node information must set the chain node type."));
-        }
-        NodeCryptoType type = (NodeCryptoType)(value["type"].asUInt());
-        setNodeCryptoType(type);
-
-        // required: parse iniConfig
-        if (!value.isMember("iniConfig"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidChainNodeInfo() << errinfo_comment(
-                                      "The chain node information must set the init config info"));
-        }
-        setIniConfig(value["iniConfig"].asString());
-
-        // required: parse deployInfo
-        if (!value.isMember("serviceInfo"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidChainNodeInfo() << errinfo_comment(
-                                      "The chain node information must set the service info"));
-        }
-
-        if (!value["serviceInfo"].isArray())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidChainNodeInfo() << errinfo_comment("The service info must be array."));
-        }
-
-        auto const& serviceInfo = value["serviceInfo"];
-        for (Json::ArrayIndex i = 0; i < serviceInfo.size(); i++)
-        {
-            auto const& serviceInfoItem = serviceInfo[i];
-            if (!serviceInfoItem.isObject() || !serviceInfoItem.isMember("type") ||
-                !serviceInfoItem.isMember("serviceName"))
-            {
-                BOOST_THROW_EXCEPTION(
-                    InvalidChainNodeInfo() << errinfo_comment(
-                        "Invalid service info: must contain the service type and name"));
-            }
-            appendServiceInfo((bcos::protocol::ServiceType)serviceInfoItem["type"].asInt(),
-                serviceInfoItem["serviceName"].asString());
-        }
-
-        // optional: parse m_nodeID
-        if (value.isMember("nodeID"))
-        {
-            setNodeID(value["nodeID"].asString());
-        }
-
-        // optional: parse microService
-        if (value.isMember("microService"))
-        {
-            setMicroService(value["microService"].asBool());
-        }
-    }
-
-    virtual Json::Value serialize()
-    {
-        Json::Value jResp;
-        jResp["name"] = nodeName();
-        jResp["type"] = nodeCryptoType();
-        jResp["iniConfig"] = iniConfig();
-        // set deployInfo
-        jResp["serviceInfo"] = Json::Value(Json::arrayValue);
-
-        auto const& infos = serviceInfo();
-        for (auto const& innerIt : infos)
-        {
-            Json::Value item;
-            item["type"] = innerIt.first;
-            item["serviceName"] = innerIt.second;
-            jResp["serviceInfo"].append(item);
-        }
-
-        return jResp;
-    }
-
     void setNodeType(bcos::protocol::NodeType _type) { m_nodeType = _type; }
     bcos::protocol::NodeType nodeType() const { return m_nodeType; }
 
-private:
+    bcos::protocol::ProtocolInfo::ConstPtr nodeProtocol() const { return m_nodeProtocol; }
+    void setNodeProtocol(bcos::protocol::ProtocolInfo&& _protocol)
+    {
+        *m_nodeProtocol = std::move(_protocol);
+    }
+
+    void setNodeProtocol(bcos::protocol::ProtocolInfo const& _protocol)
+    {
+        *m_nodeProtocol = _protocol;
+    }
+
+    virtual void setWasm(bool _wasm) { m_wasm = _wasm; }
+    virtual void setSmCryptoType(bool _smCryptoType) { m_smCryptoType = _smCryptoType; }
+
+    bool wasm() const { return m_wasm; }
+    bool smCryptoType() const { return m_smCryptoType; }
+
+    void setCompatibilityVersion(uint32_t _version) { m_compatibilityVersion = _version; }
+    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
+
+protected:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
@@ -199,6 +124,15 @@ private:
     // the ini config maintained by the node, use the iniConfig of the node if empty
     std::string m_iniConfig = "";
     std::string c_emptyServiceName = "";
+
+    // the node protocol
+    bcos::protocol::ProtocolInfo::Ptr m_nodeProtocol;
+
+    // the system version
+    uint32_t m_compatibilityVersion;
+
+    bool m_wasm{false};
+    bool m_smCryptoType{false};
 };
 inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
 {

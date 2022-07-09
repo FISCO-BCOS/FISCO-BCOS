@@ -24,7 +24,6 @@
  */
 
 #pragma once
-#include "../../interfaces/protocol/Block.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"
@@ -44,7 +43,7 @@ class StorageInterface
 {
 public:
     static constexpr const char SYS_TABLES[] = "s_tables";
-    static constexpr const char SYS_TABLE_VALUE_FIELDS[] = "value_fields,key_field";
+    static constexpr const char SYS_TABLE_VALUE_FIELDS[] = "key_field,value_fields";
 
     static TableInfo::ConstPtr getSysTableInfo(std::string_view tableName);
 
@@ -75,6 +74,11 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
+    virtual Error::Ptr setRows(std::string_view, std::vector<std::string>, std::vector<std::string>)
+    {
+        throw std::invalid_argument("unimplement method");
+        return nullptr;
+    };
 };
 
 class TraverseStorageInterface : public virtual StorageInterface
@@ -109,22 +113,15 @@ public:
 
     virtual ~TransactionalStorageInterface() = default;
 
-    struct TwoPCParams
-    {
-        bcos::protocol::BlockNumber number = 0;
-        std::string primaryTableName;
-        std::string primaryTableKey;
-        uint64_t startTS = 0;
-    };
-
-    virtual void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
+    virtual void asyncPrepare(const bcos::protocol::TwoPCParams& params,
+        const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
-    virtual void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
+    virtual void asyncCommit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
     virtual void asyncRollback(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
+        const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
 };
 
 }  // namespace storage

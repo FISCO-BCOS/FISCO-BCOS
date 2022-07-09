@@ -68,13 +68,13 @@ public:
     virtual BlockHeader::ConstPtr blockHeaderConst() const = 0;
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transactions
-    virtual Transaction::ConstPtr transaction(size_t _index) const = 0;
+    virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
     // get receipts
-    virtual TransactionReceipt::ConstPtr receipt(size_t _index) const = 0;
+    virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
     // get transaction metaData
-    virtual TransactionMetaData::ConstPtr transactionMetaData(size_t _index) const = 0;
+    virtual TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const = 0;
     // get transaction hash
-    virtual bcos::crypto::HashType transactionHash(size_t _index) const
+    virtual bcos::crypto::HashType transactionHash(uint64_t _index) const
     {
         auto txMetaData = transactionMetaData(_index);
         if (txMetaData)
@@ -88,10 +88,10 @@ public:
     // setBlockHeader sets blockHeader
     virtual void setBlockHeader(BlockHeader::Ptr _blockHeader) = 0;
     // set transactions
-    virtual void setTransaction(size_t _index, Transaction::Ptr _transaction) = 0;
+    virtual void setTransaction(uint64_t _index, Transaction::Ptr _transaction) = 0;
     virtual void appendTransaction(Transaction::Ptr _transaction) = 0;
     // set receipts
-    virtual void setReceipt(size_t _index, TransactionReceipt::Ptr _receipt) = 0;
+    virtual void setReceipt(uint64_t _index, TransactionReceipt::Ptr _receipt) = 0;
     virtual void appendReceipt(TransactionReceipt::Ptr _receipt) = 0;
     // set transaction metaData
     virtual void appendTransactionMetaData(TransactionMetaData::Ptr _txMetaData) = 0;
@@ -103,7 +103,7 @@ public:
         {
             return nonceList;
         }
-        for (size_t i = 0; i < transactionsSize(); ++i)
+        for (uint64_t i = 0; i < transactionsSize(); ++i)
         {
             nonceList->push_back(transaction(i)->nonce());
         }
@@ -111,12 +111,12 @@ public:
     }
 
     // get transactions size
-    virtual size_t transactionsSize() const = 0;
-    virtual size_t transactionsMetaDataSize() const = 0;
-    virtual size_t transactionsHashSize() const { return transactionsMetaDataSize(); }
+    virtual uint64_t transactionsSize() const = 0;
+    virtual uint64_t transactionsMetaDataSize() const = 0;
+    virtual uint64_t transactionsHashSize() const { return transactionsMetaDataSize(); }
 
     // get receipts size
-    virtual size_t receiptsSize() const = 0;
+    virtual uint64_t receiptsSize() const = 0;
 
     // for nonceList
     virtual void setNonceList(NonceList const& _nonceList) = 0;

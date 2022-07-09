@@ -99,7 +99,8 @@ public:
         m_leaderSwitchPeriod.store(_leaderSwitchPeriod);
         // notify the sealer module to reset sealing
         notifyResetSealing(sealStartIndex());
-        PBFT_LOG(INFO) << LOG_DESC(
+        PBFT_LOG(INFO) << METRIC
+                       << LOG_DESC(
                               "updateLeaderSwitchPeriod and re-notify the sealer to seal block")
                        << LOG_KV("leader_period", m_leaderSwitchPeriod)
                        << LOG_KV("committedIndex", committedProposal()->index());
@@ -296,7 +297,7 @@ public:
     void setConsensusNodeList(ConsensusNodeList& _consensusNodeList) override
     {
         ConsensusConfig::setConsensusNodeList(_consensusNodeList);
-        if (!m_nodeUpdated)
+        if (!m_consensusNodeListUpdated)
         {
             return;
         }
@@ -392,7 +393,7 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_sealStartIndex = {0};
     std::atomic<bcos::protocol::BlockNumber> m_sealEndIndex = {0};
 
-    int64_t m_waterMarkLimit = 10;
+    int64_t m_waterMarkLimit = 50;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};

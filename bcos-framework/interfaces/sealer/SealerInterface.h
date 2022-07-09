@@ -37,11 +37,11 @@ public:
     virtual void stop() = 0;
 
     // interface for the transaction module to notify the sealer seal new proposal
-    virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
-        size_t _maxTxsToSeal, std::function<void(Error::Ptr)> onRecvResponse) = 0;
+    virtual void asyncNotifySealProposal(uint64_t _proposalIndex, uint64_t _proposalEndIndex,
+        uint64_t _maxTxsToSeal, std::function<void(Error::Ptr)> onRecvResponse) = 0;
     // interface to notify the unsealed transactions size to the consensus module
     virtual void asyncNoteUnSealedTxsSize(
-        size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) = 0;
+        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // interface for the consensus module to notify the latest block number
     virtual void asyncNoteLatestBlockNumber(int64_t _blockNumber) = 0;

@@ -36,19 +36,32 @@ class FileSystemPrecompiledFixture : public PrecompiledFixture
 public:
     FileSystemPrecompiledFixture() { init(false); }
 
-    virtual ~FileSystemPrecompiledFixture() {}
+    ~FileSystemPrecompiledFixture() override {}
 
     void init(bool _isWasm)
     {
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, _isWasm);
+        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         setIsWasm(_isWasm);
         bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
         tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
+        tableTestAddress1 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
+        tableTestAddress2 = Address("0x420f853b49838bd3e9466c85a4cc3428c9601234").hex();
 
-        auto result1 = createTable(1, "test1", "id", "item1,item2");
-        BOOST_CHECK(result1->data().toBytes() == codec->encode(s256(0)));
-        auto result2 = createTable(2, "test2", "id", "item1,item2");
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(0)));
+        if (_isWasm)
+        {
+            auto result1 = creatKVTable(1, "test1", "id", "item1", "/tables/test1");
+            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
+            auto result2 = creatKVTable(2, "test2", "id", "item1", "/tables/test2");
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
+        }
+        else
+        {
+            auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
+            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
+            auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
+        }
+
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         addressString = addressCreate.hex().substr(0, 40);
     }
@@ -140,30 +153,31 @@ public:
         BOOST_CHECK_EQUAL(result->from(), address);
     }
 
-    ExecutionMessage::UniquePtr createTable(protocol::BlockNumber _number,
-        std::string const& tableName, std::string const& key, std::string const& value,
-        int _errorCode = 0)
+    ExecutionMessage::UniquePtr creatKVTable(protocol::BlockNumber _number,
+        const std::string& tableName, const std::string& key, const std::string& value,
+        const std::string& solidityAddress, int _errorCode = 0, bool errorInTableManager = false)
     {
-        bytes in = codec->encodeWithSig("createTable(string,string,string)", tableName, key, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        nextBlock(_number);
+        bytes in =
+            codec->encodeWithSig("createKVTable(string,string,string)", tableName, key, value);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
         auto params2 = std::make_unique<NativeExecutionMessage>();
         params2->setTransactionHash(hash);
-        params2->setContextID(1000);
+        params2->setContextID(100);
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(tableAddress);
+        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
         params2->setType(NativeExecutionMessage::TXHASH);
 
-        nextBlock(_number);
-
+        // call precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -171,15 +185,68 @@ public:
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
-        // call precompiled
-        result2->setSeq(1001);
-        if (_errorCode != 0)
+
+        if (errorInTableManager)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            if (_errorCode != 0)
+            {
+                BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            }
+            commitBlock(_number);
+            return result2;
         }
 
+        // set new address
+        result2->setTo(solidityAddress);
+        // external create
+        result2->setSeq(1001);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1002);
+        // external call bfs
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
+        // call bfs success, callback to create
+        result4->setSeq(1001);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise5;
+        executor->executeTransaction(std::move(result4),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise5.set_value(std::move(result));
+            });
+        auto result5 = executePromise5.get_future().get();
+
+        // create success, callback to precompiled
+        result5->setSeq(1000);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise6;
+        executor->executeTransaction(std::move(result5),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise6.set_value(std::move(result));
+            });
+        auto result6 = executePromise6.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result6->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
         commitBlock(_number);
-        return result2;
+        return result6;
     };
 
     ExecutionMessage::UniquePtr list(
@@ -214,15 +281,15 @@ public:
         if (_errorCode != 0)
         {
             std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
         }
 
         commitBlock(_number);
         return result2;
     };
 
-    ExecutionMessage::UniquePtr mkdir(
-        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
+    ExecutionMessage::UniquePtr mkdir(protocol::BlockNumber _number, std::string const& path,
+        int _errorCode = 0, bool errorInPrecompiled = false)
     {
         bytes in = codec->encodeWithSig("mkdir(string)", path);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -250,6 +317,11 @@ public:
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
+        if (errorInPrecompiled)
+        {
+            commitBlock(_number);
+            return result2;
+        }
         // call precompiled
         result2->setSeq(1001);
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
@@ -394,6 +466,8 @@ public:
     std::string addressString;
     std::string bfsAddress;
     std::string tableAddress;
+    std::string tableTestAddress1;
+    std::string tableTestAddress2;
 };
 BOOST_FIXTURE_TEST_SUITE(precompiledFileSystemTest, FileSystemPrecompiledFixture)
 
@@ -404,7 +478,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls dir
     {
         auto result = list(_number++, "/tables");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -416,19 +490,19 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls regular
     {
         auto result = list(_number++, "/tables/test2");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 1);
         BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_LINK);
     }
 
     // ls not exist
     {
         auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
@@ -438,7 +512,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
     // ls /
     {
         auto result = list(_number++, "/");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -462,7 +536,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls dir
     {
         auto result = list(_number++, "/tables");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -474,19 +548,19 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls regular
     {
         auto result = list(_number++, "/tables/test2");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 1);
         BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_CONTRACT);
+        BOOST_CHECK(std::get<1>(ls.at(0)) == executor::FS_TYPE_CONTRACT);
     }
 
     // ls not exist
     {
         auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
@@ -496,7 +570,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
     // ls /
     {
         auto result = list(_number++, "/");
-        s256 code;
+        int32_t code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
@@ -535,7 +609,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
         codec->decode(lsResult2->data(), code, ls2);
         BOOST_CHECK(ls2.size() == 1);
         BOOST_CHECK(std::get<0>(ls2[0]) == "test");
-        BOOST_CHECK(std::get<1>(ls2[0]) == FS_TYPE_DIR);
+        BOOST_CHECK(std::get<1>(ls2[0]) == executor::FS_TYPE_DIR);
     }
 
     // mkdir /tables/test1/test
@@ -545,12 +619,14 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 
     // mkdir /tables/test1
     {
-        auto result = mkdir(_number++, "/tables/test1", CODE_FILE_ALREADY_EXIST);
+        auto result = mkdir(_number++, "/tables/test1", 0, true);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
     }
 
     // mkdir /tables
     {
-        auto result = mkdir(_number++, "/tables", CODE_FILE_INVALID_PATH);
+        auto result = mkdir(_number++, "/tables", 0, true);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
     }
 
     // mkdir in wrong path
@@ -572,7 +648,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 
 BOOST_AUTO_TEST_CASE(linkTest)
 {
-    BlockNumber number = 1;
+    BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string contractName = "Hello";
@@ -643,7 +719,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
         BOOST_CHECK_EQUAL(address.hex(), addressString);
 
         // cover write
-        auto newAddress = "420f853b49838bd3e9466c85a4cc3428c960dde2";
+        auto newAddress = "420f853b49838bd3e9466c85a4cc3428c960dde1";
         deployHelloContract(number++, newAddress);
         link(false, number++, contractName, latestVersion, newAddress, contractAbi, 0, true);
         auto result3 = list(number++, "/apps/Hello/latest");

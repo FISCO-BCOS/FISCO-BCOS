@@ -1,19 +1,19 @@
-hunter_config(bcos-utilities VERSION 1.0.0-rc2-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/55d6bf357719aa030e3898b060b4a3ff2476434b.tar.gz
-	SHA1 d0aeb11cf064a5e9793c50dd7bb8487e2d251f02
+hunter_config(bcos-utilities VERSION 1.0.0-rc3-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/632cbeb0412d6ffa3c5217630fe6039f4092f3a4.tar.gz
+	SHA1 37b46cd3174ec1b66e28f19e6e8f31f209b61e4b
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
-hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/86fdc960741bd26cea3c9f04e61f138f508c7add.tar.gz
-	SHA1 53dcac50016f5e1bd517ae8d595b586e358ad118
-    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON SM2_OPTIMIZE=ON
+hunter_config(bcos-crypto VERSION 1.0.0-rc3-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/34ca9b28f3d2f31948c118a70523df6fa4695e23.tar.gz
+	SHA1 64e7b64652ccad212a497d9247fd238fea75578a
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
 hunter_config(bcos-boostssl
-    VERSION 1.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/1c9cecf7ec9ed59d0bdaa9f390c618c8f4208cf2.tar.gz
-    SHA1 95774f3638b4bcb27a6708fca0a28389a7cfa9c3
+    VERSION 1.0.0-rc4-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/ffcdeeb3be7a91194fd8c4117936a1c5e4fd7aad.tar.gz
+    SHA1 9f071f42c9d6f3b8940a8faf5dab248976703317
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON ARCH_NATIVE=${ARCH_NATIVE} URL_BASE=${URL_BASE}
 )
 
@@ -45,9 +45,6 @@ hunter_config(evmone VERSION 8.2.0-53ff1c54
 	SHA1 e6c1a8f1acd908c770426bb5015d45b3f9138179
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
-
-hunter_config(tarscpp VERSION 3.0.3-3b65a48a)
-
 hunter_config(
     Boost VERSION "1.76.0-local"
     URL
@@ -94,11 +91,20 @@ hunter_config(abseil VERSION ${HUNTER_abseil_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS
 hunter_config(gRPC VERSION ${HUNTER_gRPC_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
 
 hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
-    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/f9d60fa510e5fbe24413b4abdf1ea3a48f9ee6aa.tar.gz
-    SHA1 e56121278bf07587d58d154b4615f96575957d6f
+    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/58c6dbd7599eae60cf547e51d6ace4cd7bff2255.tar.gz
+    SHA1 df96f97d027c6c2b2edf7e908bd23925cf061dba
 )
 
-hunter_config(tarscpp VERSION 3.0.3-local
-    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5b8982f95f9c056e664b186aecd50f376b604d04.tar.gz
-	SHA1 b1e879c9b9f0f6d7ee31753ad6bf238d8b9c137f
+hunter_config(tarscpp VERSION 3.0.4-local
+    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5ef1e21daaf1e143e81be5c7560c879f76edf447.tar.gz
+	SHA1 000a070a99d82740f2f238f2defbc2ee7ff3bf76
 )
+
+hunter_config(etcd-cpp-apiv3 VERSION 0.2.5-local
+    URL "https://${URL_BASE}/FISCO-BCOS/etcd-cpp-apiv3/archive/704a0ea5ea4aeddc28f7d921135b6c34d00f06f1.tar.gz"
+    SHA1 3f2efe0ae536997d2dcaf2b253b6d7a35f731dba
+)
+
+hunter_config(cryptopp VERSION 8.6.0
+    URL "https://${URL_BASE}/FISCO-BCOS/cryptopp/archive/1887f2f05679debf5d5b9553b8d1a686049eb8c0.tar.gz"
+    SHA1 062e044d15415151ddebe67cce63fbaeba4ba596)

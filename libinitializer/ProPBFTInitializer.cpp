@@ -24,6 +24,7 @@
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -31,7 +32,7 @@ using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::initializer;
 
-ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
+ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
@@ -41,27 +42,64 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
         _storage, _frontService)
 {
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
+    // init rpc client
+    auto rpcServiceName = m_nodeConfig->rpcServiceName();
+    auto rpcServicePrx =
+        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+    m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
+
+    // init gateway client
+    auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
+    auto gatewayServicePrx =
+        Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
+            gatewayServiceName);
+    m_gateway =
+        std::make_shared<bcostars::GatewayServiceClient>(gatewayServicePrx, gatewayServiceName);
+}
+
+void ProPBFTInitializer::scheduledTask()
+{
+    if (m_leaderElection && m_leaderElection->electionClusterOk())
+    {
+        m_timer->stop();
+        return;
+    }
+    // not enable failover, report nodeInfo to rpc/gw periodly
+    reportNodeInfo();
+    m_timer->restart();
+    return;
 }
 
 void ProPBFTInitializer::reportNodeInfo()
 {
-    asyncNotifyGroupInfo<bcostars::RpcServicePrx, bcostars::RpcServiceClient>(
-        m_nodeConfig->rpcServiceName(), m_groupInfo);
-    asyncNotifyGroupInfo<bcostars::GatewayServicePrx, bcostars::GatewayServiceClient>(
-        m_nodeConfig->gatewayServiceName(), m_groupInfo);
-    m_timer->restart();
+    // notify groupInfo to rpc
+    m_rpc->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
+        if (_error)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("reportNodeInfo to rpc error") << LOG_KV("code", _error->errorCode())
+                << LOG_KV("msg", _error->errorMessage());
+        }
+    });
+
+    // notify groupInfo to gateway
+    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
+        if (_error)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("reportNodeInfo to gateway error")
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+        }
+    });
 }
 
 void ProPBFTInitializer::start()
 {
     PBFTInitializer::start();
-    if (m_timer)
+    if (m_timer && !m_nodeConfig->enableFailOver())
     {
         m_timer->start();
     }
-    m_sealer->start();
-    m_blockSync->start();
-    m_pbft->start();
 }
 
 void ProPBFTInitializer::stop()
@@ -73,10 +111,20 @@ void ProPBFTInitializer::stop()
     PBFTInitializer::stop();
 }
 
+void ProPBFTInitializer::onGroupInfoChanged()
+{
+    if (!m_leaderElection || !m_leaderElection->electionClusterOk())
+    {
+        reportNodeInfo();
+        return;
+    }
+    PBFTInitializer::onGroupInfoChanged();
+}
+
+
 void ProPBFTInitializer::init()
 {
-    PBFTInitializer::init();
-    m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::reportNodeInfo, this));
+    m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
     m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
         INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
                               << LOG_KV("nodeName", m_nodeConfig->nodeName());
@@ -88,6 +136,30 @@ void ProPBFTInitializer::init()
             return;
         }
         nodeInfo->setNodeType(_type);
-        reportNodeInfo();
+        onGroupInfoChanged();
     });
+    PBFTInitializer::init();
+    // Note: m_leaderElection is created after PBFTInitializer::init
+    if (m_leaderElection)
+    {
+        // should report the latest nodeInfo actively to rpc/gateway when the electionCluster is
+        // down
+        m_leaderElection->registerOnElectionClusterException([this]() {
+            if (m_pbft->masterNode())
+            {
+                INITIALIZER_LOG(INFO)
+                    << LOG_DESC("OnElectionClusterException: reportNodeInfo to rpc/gateway")
+                    << LOG_KV("nodeName", m_nodeConfig->nodeName());
+                reportNodeInfo();
+                m_timer->start();
+            }
+        });
+        // stop reportNodeInfo to rpc/gateway
+        m_leaderElection->registerOnElectionClusterRecover([this]() {
+            INITIALIZER_LOG(INFO) << LOG_DESC(
+                "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
+            m_timer->stop();
+        });
+    }
+    reportNodeInfo();
 }

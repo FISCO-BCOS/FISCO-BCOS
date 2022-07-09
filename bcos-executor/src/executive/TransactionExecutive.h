@@ -23,10 +23,11 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
-#include "../precompiled/PrecompiledResult.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -87,7 +88,7 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector)
     {
-        m_recoder = m_blockContext.lock()->storage()->newRecoder();
+        m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.lock()->hashHandler();
     }
 
@@ -114,8 +115,6 @@ public:
         return *m_storageWrapper;
     }
 
-    std::shared_ptr<SyncStorageWrapper> lastStorage() { return m_lastStorageWrapper; }
-
     std::weak_ptr<BlockContext> blockContext() { return m_blockContext; }
 
     int64_t contextID() const { return m_contextID; }
@@ -139,9 +138,23 @@ public:
         m_builtInPrecompiled = std::move(_builtInPrecompiled);
     }
 
-    bool isBuiltInPrecompiled(const std::string& _a) const;
+    inline bool isBuiltInPrecompiled(const std::string& _a) const
+    {
+        std::stringstream prefix;
+        prefix << std::setfill('0') << std::setw(36) << "0";
+        if (_a.find(prefix.str()) != 0)
+            return false;
+        return m_builtInPrecompiled->find(_a) != m_builtInPrecompiled->end();
+    }
 
-    bool isEthereumPrecompiled(const std::string& _a) const;
+    inline bool isEthereumPrecompiled(const std::string& _a) const
+    {
+        std::stringstream prefix;
+        prefix << std::setfill('0') << std::setw(39) << "0";
+        if (!m_evmPrecompiled || _a.find(prefix.str()) != 0)
+            return false;
+        return m_evmPrecompiled->find(_a) != m_evmPrecompiled->end();
+    }
 
     std::pair<bool, bytes> executeOriginPrecompiled(const std::string& _a, bytesConstRef _in) const;
 
@@ -155,12 +168,18 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             _constantPrecompiled);
 
-    std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
-        bytesConstRef param, const std::string& origin, const std::string& sender, int64_t gasLeft);
+    std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
+        precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
         m_exchangeMessage = std::move(callParameters);
+    }
+
+    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    {
+        std::copy(
+            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
     }
 
     CallParameters::UniquePtr resume()
@@ -177,13 +196,14 @@ private:
 
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
-    std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> callPrecompiled(
-        CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> create(
         CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr go(
         HostContext& hostContext, CallParameters::UniquePtr extraData = nullptr);
-
+    CallParameters::UniquePtr callDynamicPrecompiled(
+        CallParameters::UniquePtr callParameters, const std::string& code);
     void spawnAndCall(std::function<void(ResumeHandler)> function);
 
     void revert();
@@ -201,34 +221,42 @@ private:
     inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
     {
         auto blockContext = m_blockContext.lock();
+
+        if (blockContext->isAuthCheck())
+        {
+            if (_address.find(precompiled::SYS_ADDRESS_PREFIX) == 0)
+            {
+                return std::string(USER_SYS_PREFIX).append(_address);
+            }
+        }
+
+
         std::string formatAddress(_address);
         if (!isWasm)
         {
             // evm address needs to be lower
             boost::algorithm::to_lower(formatAddress);
         }
-
-        std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
-
-        if (blockContext->isAuthCheck())
+        else
         {
-            std::stringstream prefix;
-            prefix << std::setfill('0') << std::setw(36) << 1;
-            if (_address.find(prefix.str()) == 0)
+            if (_address.find(USER_TABLE_PREFIX) == 0)
             {
-                return std::string("/sys/").append(address);
+                return formatAddress;
             }
+            formatAddress = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
         }
-        return std::string("/apps/").append(address);
+
+        return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
     bool checkAuth(const CallParameters::UniquePtr& callParameters, bool _isCreate);
+    bool checkContractAvailable(const CallParameters::UniquePtr& callParameters);
 
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
 
-    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
-        const std::string& _sender, int64_t gasLeft);
+    bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
+        std::string_view _sender, std::string_view _type, int64_t gasLeft);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
@@ -246,7 +274,6 @@ private:
 
     bcos::storage::Recoder::Ptr m_recoder;
     std::unique_ptr<SyncStorageWrapper> m_storageWrapper;
-    std::shared_ptr<SyncStorageWrapper> m_lastStorageWrapper;
     CallParameters::UniquePtr m_exchangeMessage = nullptr;
 
     std::optional<Coroutine::pull_type> m_pullMessage;

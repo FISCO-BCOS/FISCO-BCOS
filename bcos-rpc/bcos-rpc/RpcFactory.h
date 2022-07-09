@@ -22,12 +22,14 @@
 #pragma once
 #include "bcos-rpc/amop/AMOPClient.h"
 #include "bcos-rpc/amop/AirAMOPClient.h"
-#include "bcos-rpc/jsonrpc/groupmgr/AirGroupManager.h"
-#include "bcos-rpc/jsonrpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/groupmgr/AirGroupManager.h"
+#include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -52,14 +54,16 @@ class RpcFactory : public std::enable_shared_from_this<RpcFactory>
 public:
     using Ptr = std::shared_ptr<RpcFactory>;
     RpcFactory(std::string const& _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        bcos::crypto::KeyFactory::Ptr _keyFactory);
+        bcos::crypto::KeyFactory::Ptr _keyFactory,
+        bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr);
     virtual ~RpcFactory() {}
 
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
-    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName);
+    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName, std::string const& _rpcServiceName,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     Rpc::Ptr buildLocalRpc(bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
     /**
@@ -75,7 +79,8 @@ public:
 
 protected:
     // for groupManager builder
-    GroupManager::Ptr buildGroupManager();
+    GroupManager::Ptr buildGroupManager(std::string const& _rpcServiceName,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     AirGroupManager::Ptr buildAirGroupManager(
         bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
@@ -91,14 +96,11 @@ protected:
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
 
 private:
-    void registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        bcos::rpc::JsonRpcImpl_2_0::Ptr _jsonRpcInterface);
-
-private:
     std::string m_chainID;
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
+    bcos::security::DataEncryptInterface::Ptr m_dataEncrypt;
 };
 }  // namespace rpc
 }  // namespace bcos

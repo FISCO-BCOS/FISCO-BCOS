@@ -39,7 +39,7 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
     pbMessage->set_payload(payLoad->data(), payLoad->size());
 
     // set signature
-    if (shouldHandleSignature(packetType) && _pbftMessage->signatureData().size() == 0)
+    if (shouldHandleSignature(packetType))
     {
         // get hash of the payLoad
         auto hash = m_cryptoSuite->hashImpl()->hash(*payLoad);
@@ -91,7 +91,7 @@ PBFTBaseMessageInterface::Ptr PBFTCodec::decode(bytesConstRef _data) const
         BOOST_THROW_EXCEPTION(UnknownPBFTMsgType() << errinfo_comment(
                                   "unknow pbft packetType: " + std::to_string(packetType)));
     }
-    if (shouldHandleSignature(packetType) && decodedMsg->signatureData().size() == 0)
+    if (shouldHandleSignature(packetType))
     {
         // set signature data for the message
         auto hash = m_cryptoSuite->hashImpl()->hash(payLoadRefData);

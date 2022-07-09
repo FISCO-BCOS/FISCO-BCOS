@@ -23,7 +23,7 @@ using AcquireKeyLockResponse = std::tuple<Error::UniquePtr, std::vector<std::str
 class SyncStorageWrapper
 {
 public:
-    SyncStorageWrapper(storage::StateStorage::Ptr storage,
+    SyncStorageWrapper(storage::StateStorageInterface::Ptr storage,
         std::function<void(std::string)> externalAcquireKeyLocks,
         bcos::storage::Recoder::Ptr recoder)
       : m_storage(std::move(storage)),
@@ -198,6 +198,13 @@ public:
 private:
     void acquireKeyLock(const std::string_view& key)
     {
+        /*
+        if (!key.compare(ACCOUNT_CODE))
+        {
+            // ignore static system key
+            return;
+        }
+*/
         if (m_existsKeyLocks.find(key) != m_existsKeyLocks.end())
         {
             m_externalAcquireKeyLocks(std::string(key));
@@ -210,7 +217,7 @@ private:
         }
     }
 
-    storage::StateStorage::Ptr m_storage;
+    storage::StateStorageInterface::Ptr m_storage;
     std::function<void(std::string)> m_externalAcquireKeyLocks;
     bcos::storage::Recoder::Ptr m_recoder;
 

@@ -1,0 +1,28 @@
+#include "Block.tars"
+#include "CommonProtocol.tars"
+#include "TwoPCParams.tars"
+#include "ExecutionMessage.tars"
+#include "ExecutorStatus.tars"
+module bcostars {
+    interface ExecutorService
+    {
+        Error status(out ExecutorStatus _output);
+
+        Error nextBlockHeader(long schedulerTermID, BlockHeader _blockHeader);
+        Error executeTransaction(ExecutionMessage _input, out ExecutionMessage _output);
+
+        Error dmcExecuteTransactions(string _contractAddress, vector<ExecutionMessage> _inputs, out vector<ExecutionMessage> _outputs);
+        Error dagExecuteTransactions(vector<ExecutionMessage> _inputs, out vector<ExecutionMessage> _outputs);
+
+        Error call(ExecutionMessage _input, out ExecutionMessage _output);
+        Error getHash(long _blockNumber, out vector<byte> _hash);
+
+        Error prepare(TwoPCParams _params);
+        Error commit(TwoPCParams _params);
+        Error rollback(TwoPCParams _params);
+
+        Error getCode(string _contractAddress, out vector<byte> _code);
+        Error getABI(string _contractAddress, out string _abi);
+        Error reset();
+    };
+};

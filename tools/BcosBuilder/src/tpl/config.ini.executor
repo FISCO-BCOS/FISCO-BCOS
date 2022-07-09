@@ -1,0 +1,23 @@
+[chain]
+    ; use SM crypto or not, should nerver be changed
+    sm_crypto=false
+    ; the group id, should nerver be changed
+    group_id=group0
+    ; the chain id, should nerver be changed
+    chain_id=chain0
+[service]
+    scheduler=chain0
+
+[storage]
+    enable_cache=true
+    pd_addrs=
+    key_page_size=10240
+
+[log]
+    enable=true
+    log_path=./log
+    ; info debug trace
+    level=DEBUG
+    ; MB
+    max_log_file_size=200
+

@@ -18,8 +18,9 @@
  * @author: octopus
  * @date 2021-05-14
  */
-
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
@@ -30,16 +31,17 @@
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
+using namespace bcos::protocol;
 
 BOOST_FIXTURE_TEST_SUITE(GatewayNodeManagerTest, TestPromptFixture)
 
 class FakeGatewayNodeManager : public GatewayNodeManager
 {
 public:
-    FakeGatewayNodeManager(
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : GatewayNodeManager("", _keyFactory, _p2pInterface)
-    {}
+    FakeGatewayNodeManager() : GatewayNodeManager("", nullptr, nullptr)
+    {
+        m_keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    }
     ~FakeGatewayNodeManager() override {}
 
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
@@ -73,6 +75,12 @@ inline GroupNodeInfo::Ptr createGroupNodeInfo(
 {
     auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setGroupID(_groupID);
+    for (auto const& nodeID : _nodeIDList)
+    {
+        auto protocolInfo = std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1);
+        groupNodeInfo->appendProtocol(protocolInfo);
+    }
     groupNodeInfo->setNodeIDList(std::move(_nodeIDList));
     return groupNodeInfo;
 }
@@ -89,7 +97,7 @@ public:
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_statusSeqChanged)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     std::string p2pID = "1";
     bool changed = false;
     changed = gatewayNodeManager->statusChanged(p2pID, 1);
@@ -98,7 +106,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_statusSeqChanged)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     std::string groupID = "group";
     std::string strNodeID = "nodeID";
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -113,8 +121,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 
     bool r = false;
     auto seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(
-        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, frontService);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
+        frontService, g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -122,13 +130,13 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(
-        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
+        nullptr, g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->unregisterNode(groupID, nodeID);
+    r = gatewayNodeManager->unregisterNode(groupID, nodeID->hex());
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -136,8 +144,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK(s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(
-        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
+        nullptr, g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -145,8 +153,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(
-        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
+        nullptr, g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
     s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
@@ -155,7 +163,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     size_t loopCount = 100;
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -168,14 +176,16 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
             keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
         auto seq = gatewayNodeManager->statusSeq();
-        bool r = gatewayNodeManager->registerNode(
-            groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
+        bool r = gatewayNodeManager->registerNode(groupID, nodeID,
+            bcos::protocol::NodeType::CONSENSUS_NODE, nullptr,
+            g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
         BOOST_CHECK_EQUAL(r, true);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->registerNode(
-            groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
+        r = gatewayNodeManager->registerNode(groupID, nodeID,
+            bcos::protocol::NodeType::CONSENSUS_NODE, nullptr,
+            g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
         BOOST_CHECK_EQUAL(r, false);
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
@@ -183,12 +193,12 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
         BOOST_CHECK(!statusData->empty());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->unregisterNode(groupID, nodeID);
+        r = gatewayNodeManager->unregisterNode(groupID, nodeID->hex());
         BOOST_CHECK_EQUAL(r, true);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->unregisterNode(groupID, nodeID);
+        r = gatewayNodeManager->unregisterNode(groupID, nodeID->hex());
         BOOST_CHECK_EQUAL(r, false);
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
     }
@@ -196,7 +206,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
     for (size_t i = 0; i < 100; i++)
@@ -209,8 +219,9 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
 
         bool r = false;
         auto seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->registerNode(
-            groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
+        r = gatewayNodeManager->registerNode(groupID, nodeID,
+            bcos::protocol::NodeType::CONSENSUS_NODE, nullptr,
+            g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -226,7 +237,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_statusEncodeDecode)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     auto gatewayNodeStatus = std::make_shared<GatewayNodeStatus>();
     gatewayNodeStatus->setSeq(110);
     gatewayNodeStatus->setUUID("testuuid");
@@ -285,9 +296,9 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_statusEncodeDecode)
     BOOST_CHECK(groupInfos[2]->nodeIDList()[2] == "c2");
 }
 
-BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
+BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveGroupNodeInfo)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     auto gatewayNodeStatus =
         createGatewayNodeStatus(110, "testUUID", std::vector<GroupNodeInfo::Ptr>());
     std::string p2pID = "xxxxxxxxxxxxxxxxxxxxx";
@@ -309,8 +320,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 {
-    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(keyFactory, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
     std::vector<GroupNodeInfo::Ptr> groupInfos;
     std::string group1 = "group1";
     auto group1Info = createGroupNodeInfo(group1, {"a0", "b0", "c0"});
@@ -336,8 +346,9 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     BOOST_CHECK_EQUAL(p2pIDs1.size(), 1);
     BOOST_CHECK_EQUAL(*p2pIDs1.begin(), p2pID1);
 
-    auto nodeIDs = gatewayNodeManager->getGroupNodeIDList(group1);
-    BOOST_CHECK_EQUAL(nodeIDs->size(), 3);
+    auto groupInfo = gatewayNodeManager->getGroupNodeInfoList(group1);
+    auto const& nodeIDList = groupInfo->nodeIDList();
+    BOOST_CHECK_EQUAL(nodeIDList.size(), 3);
 
     auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
     BOOST_CHECK_EQUAL(p2pIDs2.size(), 1);
@@ -363,8 +374,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
 {
-    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>();
 
     std::vector<GroupNodeInfo::Ptr> groupInfos;
     std::string group1 = "group1";

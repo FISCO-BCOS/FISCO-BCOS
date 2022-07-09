@@ -19,11 +19,12 @@
  * @date 2021-06-10
  */
 #pragma once
+#include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/Log.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/filesystem.hpp>
@@ -34,16 +35,15 @@ namespace bcos
 {
 namespace initializer
 {
-enum NodeArchitectureType
+inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
+    unsigned _hexedPrivateKeySize, bcos::security::DataEncryptInterface::Ptr _certEncryptionHandler)
 {
-    AIR = 0,
-    PRO = 1,
-    MAX = 2,
-};
-inline std::shared_ptr<bytes> loadPrivateKey(
-    std::string const& _keyPath, unsigned _hexedPrivateKeySize)
-{
-    auto keyContent = readContents(boost::filesystem::path(_keyPath));
+    auto content = readContents(boost::filesystem::path(_keyPath));
+    auto keyContent = content;
+    if (_certEncryptionHandler)
+    {
+        keyContent = _certEncryptionHandler->decryptContents(content);
+    }
     if (keyContent->empty())
     {
         return nullptr;

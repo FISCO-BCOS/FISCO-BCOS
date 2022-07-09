@@ -27,6 +27,7 @@
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -46,7 +47,14 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext() = default;
+    ~HostContext()
+    {
+        // auto total = utcTimeUs() - m_startTime;
+        // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
+        //                      << LOG_KV("storageTimeProportion",
+        //                             (m_getTimeUsed + m_setTimeUsed) / (double)total)
+        //                      << LOG_KV("get", m_getTimeUsed) << LOG_KV("set", m_setTimeUsed);
+    };
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
@@ -118,7 +126,8 @@ public:
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
-    bytesConstRef code();
+    std::optional<storage::Entry> code();
+    bool isCodeHasPrefix(std::string_view _prefix) const;
     h256 codeHash();
     u256 salt() const { return m_salt; }
     SubState& sub() { return m_sub; }
@@ -129,6 +138,9 @@ public:
     CallParameters::UniquePtr&& takeCallParameters() { return std::move(m_callParameters); }
 
     static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
+
+    uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
+    uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
 
 private:
     void depositFungibleAsset(
@@ -144,6 +156,9 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+    std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
+    std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
+    std::atomic_uint64_t m_startTime = {0};    // microsecond
 };
 
 }  // namespace executor

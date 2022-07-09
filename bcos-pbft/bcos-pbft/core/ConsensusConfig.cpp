@@ -67,6 +67,26 @@ bool ConsensusConfig::compareConsensusNode(
     }
     return true;
 }
+
+void ConsensusConfig::setObserverNodeList(ConsensusNodeList& _observerNodeList)
+{
+    std::sort(_observerNodeList.begin(), _observerNodeList.end(), ConsensusNodeComparator());
+    // update the observer list
+    {
+        UpgradableGuard l(x_observerNodeList);
+        // consensus node list have not been changed
+        if (compareConsensusNode(_observerNodeList, *m_observerNodeList))
+        {
+            m_observerNodeListUpdated = false;
+            return;
+        }
+        UpgradeGuard ul(l);
+        // consensus node list have been changed
+        *m_observerNodeList = _observerNodeList;
+        m_observerNodeListUpdated = true;
+    }
+}
+
 void ConsensusConfig::setConsensusNodeList(ConsensusNodeList& _consensusNodeList)
 {
     if (_consensusNodeList.size() == 0)
@@ -82,13 +102,13 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList& _consensusNodeList
         // consensus node list have not been changed
         if (compareConsensusNode(_consensusNodeList, *m_consensusNodeList))
         {
-            m_nodeUpdated = false;
+            m_consensusNodeListUpdated = false;
             return;
         }
         UpgradeGuard ul(l);
         // consensus node list have been changed
         *m_consensusNodeList = _consensusNodeList;
-        m_nodeUpdated = true;
+        m_consensusNodeListUpdated = true;
     }
     {
         // update the consensusNodeNum
@@ -103,7 +123,7 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList& _consensusNodeList
     }
     // update quorum
     updateQuorum();
-    CONSENSUS_LOG(INFO) << LOG_DESC("updateConsensusNodeList")
+    CONSENSUS_LOG(INFO) << METRIC << LOG_DESC("updateConsensusNodeList")
                         << LOG_KV("nodeNum", m_consensusNodeNum) << LOG_KV("nodeIndex", nodeIndex)
                         << LOG_KV("committedIndex",
                                (committedProposal() ? committedProposal()->index() : 0))

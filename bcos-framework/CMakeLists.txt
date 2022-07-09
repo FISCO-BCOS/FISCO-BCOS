@@ -19,7 +19,8 @@
 cmake_minimum_required(VERSION 3.12)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
+set(VERSION "3.0.0")
+set(VERSION_SUFFIX "-rc4")
 project(bcos-framework VERSION ${VERSION})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})

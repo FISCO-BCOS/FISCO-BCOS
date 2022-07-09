@@ -21,6 +21,7 @@
 #include "BlockHeaderImpl.h"
 #include <bcos-utilities/Common.h>
 #include <tup/Tars.h>
+#include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -40,19 +41,85 @@ void BlockHeaderImpl::encode(bcos::bytes& _encodeData) const
     output.getByteBuffer().swap(_encodeData);
 }
 
+
 bcos::crypto::HashType BlockHeaderImpl::hash() const
 {
-    if (m_inner()->dataHash.empty())
+    bcos::UpgradableGuard l(x_inner);
+    if (!m_inner()->dataHash.empty())
     {
-        tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-        m_inner()->data.writeTo(output);
-
-        auto hash = m_cryptoSuite->hash(output.getByteBuffer());
-
-        m_inner()->dataHash.assign(hash.begin(), hash.end());
+        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
     }
+    auto hashImpl = m_cryptoSuite->hashImpl();
+    auto hashContext = hashImpl->init();
 
-    return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+    auto const& hashFields = m_inner()->data;
+    // update version to hashBuffer: 2
+    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)(&version), sizeof(version) / sizeof(uint8_t)));
+
+    // update ParentInfo to hashBuffer: 3
+    for (auto const& parent : hashFields.parentInfo)
+    {
+        // update blockNumber to hashBuffer
+        long blockNumber =
+            boost::asio::detail::socket_ops::host_to_network_long(parent.blockNumber);
+        hashImpl->update(hashContext, bcos::bytesConstRef((bcos::byte*)(&blockNumber),
+                                          sizeof(blockNumber) / sizeof(uint8_t)));
+        // update blockHash to hashBuffer
+        hashImpl->update(hashContext,
+            bcos::bytesConstRef((bcos::byte*)parent.blockHash.data(), parent.blockHash.size()));
+    }
+    // update txsRoot to hashBuffer: 4
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)hashFields.txsRoot.data(), hashFields.txsRoot.size()));
+    // update receiptRoot to hashBuffer: 5
+    hashImpl->update(hashContext, bcos::bytesConstRef((bcos::byte*)hashFields.receiptRoot.data(),
+                                      hashFields.receiptRoot.size()));
+    // update stateRoot to hashBuffer: 6
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)hashFields.stateRoot.data(), hashFields.stateRoot.size()));
+
+    // update blockNumber to hashBuffer: 7
+    long number = boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    hashImpl->update(
+        hashContext, bcos::bytesConstRef((bcos::byte*)(&number), sizeof(number) / sizeof(uint8_t)));
+
+    // update gasUsed to hashBuffer: 8
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)hashFields.gasUsed.data(), hashFields.gasUsed.size()));
+
+    // update timestamp to hashBuffer: 9
+    long timestamp = boost::asio::detail::socket_ops::host_to_network_long(hashFields.timestamp);
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)(&timestamp), sizeof(timestamp) / sizeof(uint8_t)));
+
+    // update sealer to hashBuffer: 10
+    long sealer = boost::asio::detail::socket_ops::host_to_network_long(hashFields.sealer);
+    hashImpl->update(
+        hashContext, bcos::bytesConstRef((bcos::byte*)(&sealer), sizeof(sealer) / sizeof(uint8_t)));
+
+    // update sealerList to hashBuffer: 11
+    for (auto const& nodeID : hashFields.sealerList)
+    {
+        hashImpl->update(
+            hashContext, bcos::bytesConstRef((bcos::byte*)nodeID.data(), nodeID.size()));
+    }
+    // update extraData to hashBuffer: 12
+    hashImpl->update(hashContext,
+        bcos::bytesConstRef((bcos::byte*)hashFields.extraData.data(), hashFields.extraData.size()));
+    // update consensusWeights to hashBuffer: 13
+    for (auto weight : hashFields.consensusWeights)
+    {
+        long networkWeight = boost::asio::detail::socket_ops::host_to_network_long(weight);
+        hashImpl->update(hashContext, bcos::bytesConstRef((bcos::byte*)(&networkWeight),
+                                          sizeof(networkWeight) / sizeof(uint8_t)));
+    }
+    // calculate the hash
+    auto hashResult = hashImpl->final(hashContext);
+    bcos::UpgradeGuard ul(l);
+    m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+    return hashResult;
 }
 
 void BlockHeaderImpl::clear()
@@ -128,6 +195,7 @@ void BlockHeaderImpl::setParentInfo(gsl::span<const bcos::protocol::ParentInfo> 
         parentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
         m_inner()->data.parentInfo.emplace_back(parentInfo);
     }
+    clearDataHash();
 }
 
 void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerList)
@@ -137,6 +205,7 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
     {
         m_inner()->data.sealerList.push_back(std::vector<char>(it.begin(), it.end()));
     }
+    clearDataHash();
 }
 
 void BlockHeaderImpl::setSignatureList(

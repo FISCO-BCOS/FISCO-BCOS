@@ -85,20 +85,8 @@ class FakeMemoryStorage : public MemoryStorage
 public:
     FakeMemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2)
       : MemoryStorage(_config, _notifyWorkerNum)
-    {}
-
-    bool shouldNotifyTx(bcos::protocol::Transaction::ConstPtr _tx,
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override
     {
-        if (!_txSubmitResult)
-        {
-            return false;
-        }
-        if (!_tx->submitCallback())
-        {
-            return false;
-        }
-        return true;
+        m_preStoreTxs = true;
     }
 };
 

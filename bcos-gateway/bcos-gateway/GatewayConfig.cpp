@@ -4,11 +4,14 @@
  */
 
 #include <bcos-gateway/GatewayConfig.h>
+#include <bcos-security/bcos-security/KeyCenter.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;
+using namespace security;
 using namespace gateway;
 
 bool GatewayConfig::isValidPort(int port)
@@ -34,6 +37,11 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     {  // ipv4
         std::vector<std::string> v;
         boost::split(v, _host, boost::is_any_of(":"), boost::token_compress_on);
+        if (v.size() < 2)
+        {
+            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                      "GatewayConfig: invalid host , host=" + _host));
+        }
         ip = v[0];
         port = boost::lexical_cast<int>(v[1]);
     }

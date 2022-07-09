@@ -17,8 +17,11 @@ using namespace bcos;
 using namespace bcos::gateway;
 
 P2PSession::P2PSession()
+  : m_p2pInfo(std::make_shared<P2PInfo>()),
+    m_protocolInfo(std::make_shared<bcos::protocol::ProtocolInfo>())
 {
-    m_p2pInfo = std::make_shared<P2PInfo>();
+    // init with the minVersion
+    m_protocolInfo->setVersion(m_protocolInfo->minVersion());
     P2PSESSION_LOG(INFO) << "[P2PSession::P2PSession] this=" << this;
 }
 
@@ -59,7 +62,7 @@ void P2PSession::heartBeat()
         {
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
-            message->setPacketType(MessageType::Heartbeat);
+            message->setPacketType(GatewayMessageType::Heartbeat);
             P2PSESSION_LOG(DEBUG) << LOG_DESC("P2PSession onHeartBeat")
                                   << LOG_KV("p2pid", m_p2pInfo->p2pID)
                                   << LOG_KV("endpoint", m_session->nodeIPEndpoint());

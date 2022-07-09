@@ -26,10 +26,11 @@
 #pragma once
 
 #include "CallParameters.h"
+#include "bcos-framework/interfaces/executor/ExecuteError.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -46,24 +47,16 @@ DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 namespace executor
 {
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
+#define EXECUTOR_NAME_LOG(LEVEL) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR:" + m_name + "-" + std::to_string(m_schedulerTermId))
 #define COROUTINE_TRACE_LOG(LEVEL, contextID, seq) \
     BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << "[" << contextID << "," << seq << "]"
 #define PARA_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 
-enum ExecuteError : int32_t
-{
-    SUCCESS = -80000,
-    INVALID_BLOCKNUMBER,
-    GETHASH_ERROR,
-    CALL_ERROR,
-    EXECUTE_ERROR,
-    PREPARE_ERROR,
-    COMMIT_ERROR,
-    ROLLBACK_ERROR,
-    DAG_ERROR,
-    DEAD_LOCK,
-    TABLE_NOT_FOUND,
-};
+
+static const char* const USER_TABLE_PREFIX = "/tables/";
+static const char* const USER_APPS_PREFIX = "/apps/";
+static const char* const USER_SYS_PREFIX = "/sys/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
@@ -77,9 +70,14 @@ static const char* const ACCOUNT_FROZEN = "frozen";
 /// auth
 static const char* const CONTRACT_SUFFIX = "_accessAuth";
 static const char* const ADMIN_FIELD = "admin";
+static const char* const STATUS_FIELD = "status";
 static const char* const METHOD_AUTH_TYPE = "method_auth_type";
 static const char* const METHOD_AUTH_WHITE = "method_auth_white";
 static const char* const METHOD_AUTH_BLACK = "method_auth_black";
+
+/// contract status
+static const char* const CONTRACT_FROZEN = "frozen";
+static const char* const CONTRACT_NORMAL = "normal";
 
 /// FileSystem table keys
 static const char* const FS_KEY_NAME = "name";
@@ -274,7 +272,7 @@ static const VMSchedule FiscoBcosScheduleV4 = [] {
 
 static const VMSchedule BCOSWASMSchedule = [] {
     VMSchedule schedule = FiscoBcosScheduleV4;
-    schedule.maxCodeSize = 0xF00000; // 15MB
+    schedule.maxCodeSize = 0xF00000;  // 15MB
     // Ensure that zero bytes are not subsidised and are charged the same as
     // non-zero bytes.
     schedule.txDataZeroGas = schedule.txDataNonZeroGas;
@@ -309,9 +307,10 @@ protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
 }  // namespace executor
 
+bool hasWasmPreamble(const std::string_view& _input);
 bool hasWasmPreamble(const bytesConstRef& _input);
 bool hasWasmPreamble(const bytes& _input);
-
+bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address
  * @param _addr : the string address

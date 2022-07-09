@@ -29,8 +29,8 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
-#include <bcos-protocol/LogEntry.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -53,7 +53,6 @@ public:
     ~TransactionReceiptImpl() override {}
     void decode(bcos::bytesConstRef _receiptData) override;
     void encode(bcos::bytes& _encodedData) const override;
-    bcos::bytesConstRef encode(bool _onlyHashFieldData = false) const override;
     bcos::crypto::HashType hash() const override;
 
     int32_t version() const override { return m_inner()->data.version; }
@@ -73,14 +72,8 @@ public:
             m_logEntries.reserve(m_inner()->data.logEntries.size());
             for (auto& it : m_inner()->data.logEntries)
             {
-                std::vector<bcos::h256> topics;
-                for (auto& topicIt : it.topic)
-                {
-                    topics.emplace_back((const bcos::byte*)topicIt.data(), topicIt.size());
-                }
-                bcos::protocol::LogEntry logEntry(bcos::bytes(it.address.begin(), it.address.end()),
-                    topics, bcos::bytes(it.data.begin(), it.data.end()));
-                m_logEntries.emplace_back(logEntry);
+                auto bcosLogEntry = toBcosLogEntry(it);
+                m_logEntries.emplace_back(std::move(bcosLogEntry));
             }
         }
 
@@ -103,15 +96,8 @@ public:
 
         for (auto& it : _logEntries)
         {
-            bcostars::LogEntry logEntry;
-            logEntry.address.assign(it.address().begin(), it.address().end());
-            for (auto& topicIt : it.topics())
-            {
-                logEntry.topic.push_back(std::vector<char>(topicIt.begin(), topicIt.end()));
-            }
-            logEntry.data.assign(it.data().begin(), it.data().end());
-
-            m_inner()->data.logEntries.emplace_back(logEntry);
+            auto tarsLogEntry = toTarsLogEntry(it);
+            m_inner()->data.logEntries.emplace_back(std::move(tarsLogEntry));
         }
     }
 

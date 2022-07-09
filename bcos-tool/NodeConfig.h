@@ -23,9 +23,11 @@
 #include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-framework/interfaces/Common.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos
 {
@@ -35,6 +37,8 @@ class NodeConfig
 {
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
+    constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
+    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -42,18 +46,18 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() {}
 
-    virtual void loadConfig(std::string const& _configPath)
+    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true)
     {
         boost::property_tree::ptree iniConfig;
         boost::property_tree::read_ini(_configPath, iniConfig);
-        loadConfig(iniConfig);
+        loadConfig(iniConfig, _enforceMemberID);
     }
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadNodeServiceConfig(
-        std::string const& _nodeID, boost::property_tree::ptree const& _pt);
+        std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
 
     virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
     {
@@ -78,12 +82,14 @@ public:
         loadGenesisConfig(genesisConfig);
     }
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
+    // the txpool configurations
     size_t txpoolLimit() const { return m_txpoolLimit; }
     size_t notifyWorkerNum() const { return m_notifyWorkerNum; }
     size_t verifierWorkerNum() const { return m_verifierWorkerNum; }
+    int64_t txsExpirationTime() const { return m_txsExpirationTime; }
 
     bool smCryptoType() const { return m_smCryptoType; }
     std::string const& chainId() const { return m_chainId; }
@@ -96,6 +102,9 @@ public:
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
 
     std::string const& storagePath() const { return m_storagePath; }
+    std::string const& storageType() const { return m_storageType; }
+    size_t keyPageSize() const { return m_keyPageSize; }
+    std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
 
@@ -115,10 +124,9 @@ public:
     std::string const& gatewayServiceName() const { return m_gatewayServiceName; }
 
     std::string const& schedulerServiceName() const { return m_schedulerServiceName; }
-    std::string const& txpoolServiceName() const { return m_txpoolServiceName; }
-    std::string const& consensusServiceName() const { return m_consensusServiceName; }
-    std::string const& frontServiceName() const { return m_frontServiceName; }
     std::string const& executorServiceName() const { return m_executorServiceName; }
+    std::string const& txpoolServiceName() const { return m_txpoolServiceName; }
+
     std::string const& nodeName() const { return m_nodeName; }
 
     std::string getDefaultServiceName(std::string const& _nodeName, std::string const& _serviceName)
@@ -126,14 +134,14 @@ public:
         return m_chainId + "." + _nodeName + _serviceName;
     }
 
-    // rpc
+    // the rpc configurations
     const std::string& rpcListenIP() const { return m_rpcListenIP; }
     uint16_t rpcListenPort() const { return m_rpcListenPort; }
     uint32_t rpcThreadPoolSize() const { return m_rpcThreadPoolSize; }
     bool rpcSmSsl() const { return m_rpcSmSsl; }
     bool rpcDisableSsl() const { return m_rpcDisableSsl; }
 
-    // gateway
+    // the gateway configurations
     const std::string& p2pListenIP() const { return m_p2pListenIP; }
     uint16_t p2pListenPort() const { return m_p2pListenPort; }
     bool p2pSmSsl() const { return m_p2pSmSsl; }
@@ -171,6 +179,19 @@ public:
     bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
     ssize_t cacheSize() const { return m_cacheSize; }
 
+    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
+    std::string const& compatibilityVersionStr() const { return m_compatibilityVersionStr; }
+
+    std::string const& memberID() const { return m_memberID; }
+    unsigned leaseTTL() const { return m_leaseTTL; }
+    bool enableFailOver() const { return m_enableFailOver; }
+    std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
+
+    bool storageSecurityEnable() const { return m_storageSecurityEnable; }
+    std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
+    unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
+    std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -179,9 +200,12 @@ protected:
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadFailOverConfig(
+        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -201,12 +225,15 @@ private:
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
+    bool isValidPort(int port);
+
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
     size_t m_txpoolLimit;
     size_t m_notifyWorkerNum;
     size_t m_verifierWorkerNum;
+    int64_t m_txsExpirationTime;
     // TODO: the block sync module need some configurations?
 
     // chain configuration
@@ -218,8 +245,15 @@ private:
     // sealer configuration
     size_t m_minSealTime = 0;
     size_t m_checkPointTimeoutInterval;
+
     // for security
     std::string m_privateKeyPath;
+
+    // storage security configuration
+    bool m_storageSecurityEnable;
+    std::string m_storageSecurityKeyCenterIp;
+    unsigned short m_storageSecurityKeyCenterPort;
+    std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
     std::string m_consensusType;
@@ -229,6 +263,9 @@ private:
 
     // storage configuration
     std::string m_storagePath;
+    std::string m_storageType = "RocksDB";
+    size_t m_keyPageSize = 8192;
+    std::vector<std::string> m_pd_addrs;
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
 
@@ -242,10 +279,8 @@ private:
 
     // the serviceName of other modules
     std::string m_schedulerServiceName;
-    std::string m_txpoolServiceName;
-    std::string m_consensusServiceName;
-    std::string m_frontServiceName;
     std::string m_executorServiceName;
+    std::string m_txpoolServiceName;
     std::string m_nodeName;
 
     // config for rpc
@@ -277,6 +312,15 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
+    uint32_t m_compatibilityVersion;
+    std::string m_compatibilityVersionStr;
+
+    // failover config
+    std::string m_memberID;
+    unsigned m_leaseTTL = 0;
+    bool m_enableFailOver = false;
+    // etcd/zookeeper/consual url
+    std::string m_failOverClusterUrl;
 };
 }  // namespace tool
 }  // namespace bcos

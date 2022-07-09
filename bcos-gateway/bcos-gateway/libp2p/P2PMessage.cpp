@@ -27,16 +27,6 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
 
-#define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
-    do                                                                                       \
-    {                                                                                        \
-        if ((offset) > (length))                                                             \
-        {                                                                                    \
-            throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
-                                    " ,length: " + std::to_string(length));                  \
-        }                                                                                    \
-    } while (0);
-
 bool P2PMessageOptions::encode(bytes& _buffer)
 {
     // parameters check
@@ -131,6 +121,8 @@ ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
         offset += 2;
 
         CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + nodeIDLength, length);
+        bytes emptyBuffer;
+        m_srcNodeID->swap(emptyBuffer);
         m_srcNodeID->insert(
             m_srcNodeID->begin(), (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
         offset += nodeIDLength;
@@ -162,10 +154,8 @@ ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
     return offset;
 }
 
-bool P2PMessage::encode(bytes& _buffer)
+bool P2PMessage::encodeHeader(bytes& _buffer)
 {
-    _buffer.clear();
-
     // set length to zero first
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
@@ -178,18 +168,30 @@ bool P2PMessage::encode(bytes& _buffer)
     _buffer.insert(_buffer.end(), (byte*)&packetType, (byte*)&packetType + 2);
     _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
+    return true;
+}
 
+bool P2PMessage::encode(bytes& _buffer)
+{
+    bytes emptyBuffer;
+    _buffer.swap(emptyBuffer);
+    if (!encodeHeader(_buffer))
+    {
+        return false;
+    }
     // encode options
     if (hasOptions() && !m_options->encode(_buffer))
     {
         return false;
     }
 
+    // encode payload
     _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
 
     // calc total length and modify the length value in the buffer
-    length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
+    auto length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
 
+    // update length
     std::copy((byte*)&length, (byte*)&length + 4, _buffer.data());
     // set buffer size to m_length
     m_length = _buffer.size();
@@ -258,6 +260,8 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
         offset += optionsOffset;
     }
 
+    uint32_t length = _buffer.size();
+    CHECK_OFFSET_WITH_THROW_EXCEPTION(m_length, length);
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // payload
     m_payload = std::make_shared<bytes>(data.begin(), data.end());

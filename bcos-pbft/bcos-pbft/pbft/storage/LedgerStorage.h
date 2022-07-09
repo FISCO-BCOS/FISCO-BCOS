@@ -59,6 +59,13 @@ public:
     {
         m_finalizeHandler = _finalizeHandler;
     }
+    void registerOnStableCheckPointCommitFailed(
+        std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
+            _onStableCheckPointCommitFailed) override
+    {
+        m_onStableCheckPointCommitFailed = _onStableCheckPointCommitFailed;
+    }
+
     void asyncGetCommittedProposals(bcos::protocol::BlockNumber _start, size_t _offset,
         std::function<void(PBFTProposalListPtr)> _onSuccess) override;
 
@@ -73,7 +80,7 @@ protected:
 
     virtual void asyncRemove(std::string const& _dbName, std::string const& _key);
 
-    virtual void commitStableCheckPoint(
+    virtual void commitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal,
         bcos::protocol::BlockHeader::Ptr _blockHeader, bcos::protocol::Block::Ptr _blockInfo);
     virtual void asyncGetLatestCommittedProposalIndex();
 
@@ -102,7 +109,8 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> m_finalizeHandler;
-
+    std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
+        m_onStableCheckPointCommitFailed;
     std::shared_ptr<ThreadPool> m_commitBlockWorker;
 };
 }  // namespace consensus

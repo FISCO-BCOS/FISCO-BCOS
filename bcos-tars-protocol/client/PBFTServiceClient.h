@@ -107,7 +107,7 @@ public:
 
     // the txpool notify the unsealed txsSize to the sealer module
     void asyncNoteUnSealedTxsSize(
-        size_t _unsealedTxsSize, std::function<void(bcos::Error::Ptr)> _onRecvResponse) override;
+        uint64_t _unsealedTxsSize, std::function<void(bcos::Error::Ptr)> _onRecvResponse) override;
 
     // the sealer submit proposal to the consensus module
     // Note: if the sealer module integrates with the PBFT module, no need to implement this
@@ -135,7 +135,7 @@ public:
             "PBFTServiceClient: notifyHighestSyncingNumber: unimplemented interface!");
     }
     void asyncNotifySealProposal(
-        size_t, size_t, size_t, std::function<void(bcos::Error::Ptr)>) override
+        uint64_t, uint64_t, uint64_t, std::function<void(bcos::Error::Ptr)>) override
     {
         throw std::runtime_error(
             "PBFTServiceClient: asyncNotifySealProposal: unimplemented interface!");

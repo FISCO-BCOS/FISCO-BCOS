@@ -4,9 +4,8 @@
  */
 
 #pragma once
-
-#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
+#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
+#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
@@ -20,8 +19,9 @@ class GatewayFactory
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
-    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName)
-      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName)
+    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
+        bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
+      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
         initCert2PubHexHandler();
         initSSLContextPubHexHandler();
@@ -53,16 +53,20 @@ public:
 
     /**
      * @brief: construct Gateway
-     * @param _configPath: config.ini path
+     * @param _configPath: config.ini paths
      * @return void
      */
-    Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion);
+    Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+        std::string const& _gatewayServiceName);
     /**
      * @brief: construct Gateway
      * @param _config: config parameter object
      * @return void
      */
-    Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion);
+    Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+        std::string const& _gatewayServiceName);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(
@@ -75,9 +79,14 @@ private:
 
     std::function<bool(const std::string& priKey, std::string& pubHex)> m_certPubHexHandler;
 
+    void initFailOver(std::shared_ptr<Gateway> _gateWay,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+
 private:
     std::string m_chainID;
     std::string m_rpcServiceName;
+
+    bcos::security::DataEncryptInterface::Ptr m_dataEncrypt{nullptr};
 };
 }  // namespace gateway
 }  // namespace bcos

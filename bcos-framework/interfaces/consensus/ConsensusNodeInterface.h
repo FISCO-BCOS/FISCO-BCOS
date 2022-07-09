@@ -20,7 +20,7 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-framework/interfaces/Common.h>
 namespace bcos
 {
 namespace consensus

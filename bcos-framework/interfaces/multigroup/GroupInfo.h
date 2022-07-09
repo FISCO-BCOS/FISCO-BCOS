@@ -21,7 +21,6 @@
 #pragma once
 #include "ChainNodeInfoFactory.h"
 #include "GroupTypeDef.h"
-#include <json/json.h>
 namespace bcos
 {
 namespace group
@@ -81,96 +80,24 @@ public:
         m_nodeInfos[nodeName] = _nodeInfo;
     }
 
-    virtual bool removeNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
+    virtual bool removeNodeInfo(std::string const& _nodeName)
     {
         UpgradableGuard l(x_nodeInfos);
-        auto const& nodeName = _nodeInfo->nodeName();
-        if (!m_nodeInfos.count(nodeName))
+        if (!m_nodeInfos.count(_nodeName))
         {
             return false;
         }
         UpgradeGuard ul(l);
-        m_nodeInfos.erase(nodeName);
+        m_nodeInfos.erase(_nodeName);
         return true;
     }
 
     virtual void setGroupID(std::string const& _groupID) { m_groupID = _groupID; }
     virtual void setChainID(std::string const& _chainID) { m_chainID = _chainID; }
-    virtual ssize_t nodesNum() const
+    virtual int64_t nodesNum() const
     {
         ReadGuard l(x_nodeInfos);
         return m_nodeInfos.size();
-    }
-
-    virtual void deserialize(const std::string& _json)
-    {
-        Json::Value root;
-        Json::Reader jsonReader;
-
-        if (!jsonReader.parse(_json, root))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo() << errinfo_comment(
-                                      "The group information must be valid json string."));
-        }
-
-        if (!root.isMember("chainID"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo()
-                                  << errinfo_comment("The group information must contain chainID"));
-        }
-        setChainID(root["chainID"].asString());
-
-        if (!root.isMember("groupID"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo()
-                                  << errinfo_comment("The group information must contain groupID"));
-        }
-        setGroupID(root["groupID"].asString());
-
-        if (root.isMember("genesisConfig"))
-        {
-            setGenesisConfig(root["genesisConfig"].asString());
-        }
-
-
-        if (!root.isMember("iniConfig"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo() << errinfo_comment(
-                                      "The group information must contain iniConfig"));
-        }
-        setIniConfig(root["iniConfig"].asString());
-
-        // nodeList
-        if (!root.isMember("nodeList") || !root["nodeList"].isArray())
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo() << errinfo_comment(
-                                      "The group information must contain nodeList"));
-        }
-
-        for (Json::ArrayIndex i = 0; i < root["nodeList"].size(); ++i)
-        {
-            auto& nodeInfo = root["nodeList"][i];
-            Json::FastWriter writer;
-            std::string nodeStr = writer.write(nodeInfo);
-            appendNodeInfo(m_chainNodeInfoFactory->createNodeInfo(nodeStr));
-        }
-    }
-
-    virtual Json::Value serialize()
-    {
-        Json::Value jResp;
-        jResp["chainID"] = chainID();
-        jResp["groupID"] = groupID();
-        jResp["genesisConfig"] = genesisConfig();
-        jResp["iniConfig"] = iniConfig();
-        jResp["nodeList"] = Json::Value(Json::arrayValue);
-        const auto& nodes = nodeInfos();
-        for (auto const& it : nodes)
-        {
-            jResp["nodeList"].append(it.second->serialize());
-        }
-
-        return jResp;
     }
 
     // return copied nodeInfos to ensure thread-safe
@@ -186,7 +113,15 @@ public:
         m_chainNodeInfoFactory = _chainNodeInfoFactory;
     }
 
-private:
+    bool wasm() const { return m_wasm; }
+    bool smCryptoType() const { return m_smCryptoType; }
+    virtual void setWasm(bool _wasm) { m_wasm = _wasm; }
+    virtual void setSmCryptoType(bool _smCryptoType) { m_smCryptoType = _smCryptoType; }
+
+protected:
+    bool m_wasm{false};
+    bool m_smCryptoType{false};
+
     ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
 
     std::string m_chainID;

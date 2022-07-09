@@ -1,9 +1,11 @@
 #pragma once
 
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 
+using namespace bcos::protocol;
 namespace bcos::test
 {
 #pragma GCC diagnostic push
@@ -63,20 +65,21 @@ public:
         m_storage->asyncSetRow(table, key, std::move(entry), std::move(callback));
     }
 
-    void asyncPrepare(const TwoPCParams& params, const storage::TraverseStorageInterface& storage,
+    void asyncPrepare(const bcos::protocol::TwoPCParams& params,
+        const storage::TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
         callback(nullptr, 0);
     }
 
-    void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override
+    void asyncCommit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
-        callback(nullptr);
+        callback(nullptr, 0);
     }
 
-    void asyncRollback(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override
+    void asyncRollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr)> callback) noexcept override
     {
         callback(nullptr);
     }

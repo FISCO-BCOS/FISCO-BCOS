@@ -18,8 +18,11 @@
  * @date 2021-07-02
  */
 #pragma once
+#include <bcos-framework/interfaces/Common.h>
 #include <iostream>
 #include <memory>
+
+#define RPC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("RPC")
 
 namespace bcos
 {
@@ -31,13 +34,6 @@ enum AMOPClientMessageType
     AMOP_REQUEST = 0x111,    // 273
     AMOP_BROADCAST = 0x112,  // 274
     AMOP_RESPONSE = 0x113    // 275
-};
-enum MessageType
-{
-    HANDESHAKE = 0x100,    // 256
-    BLOCK_NOTIFY = 0x101,  // 257
-    RPC_REQUEST = 0x102,   // 258
-    GROUP_NOTIFY = 0x103,  // 259
 };
 }  // namespace rpc
 }  // namespace bcos

@@ -19,20 +19,14 @@
  */
 
 #include "ConsensusPrecompiled.h"
-#include "PrecompiledResult.h"
-#include "Utilities.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/serialization/vector.hpp>
-#include <tuple>
 #include <utility>
 
 using namespace bcos;
@@ -45,6 +39,7 @@ const char* const CSS_METHOD_ADD_SEALER = "addSealer(string,uint256)";
 const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 const char* const CSS_METHOD_REMOVE = "remove(string)";
 const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
+const auto NODE_LENGTH = 128u;
 
 ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -55,20 +50,26 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
 }
 
 std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&, int64_t)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     // parse function name
-    uint32_t func = getParamFunc(_param);
-    bytesConstRef data = getParamData(_param);
-
-    auto callResult = std::make_shared<PrecompiledExecResult>();
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
+    uint32_t func = getParamFunc(_callParameters->input());
+    bytesConstRef data = _callParameters->params();
 
     showConsensusTable(_executive);
 
     auto blockContext = _executive->blockContext().lock();
-    auto codec = PrecompiledCodec(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
+    if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+                               << LOG_DESC("sender is not from sys")
+                               << LOG_KV("sender", _callParameters->m_sender);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
+        return _callParameters;
+    }
 
     int result = 0;
     if (func == name2Selector[CSS_METHOD_ADD_SEALER])
@@ -95,17 +96,17 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        BOOST_THROW_EXCEPTION(
+            bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
     }
 
-    getErrorCodeOut(callResult->mutableExecResult(), result, codec);
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    return callResult;
+    _callParameters->setExecResult(codec.encode(int32_t(result)));
+    return _callParameters;
 }
 
 int ConsensusPrecompiled::addSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // addSealer(string, uint256)
     std::string nodeID;
@@ -117,7 +118,9 @@ int ConsensusPrecompiled::addSealer(
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+    if (nodeID.size() != NODE_LENGTH ||
+        std::count_if(nodeID.begin(), nodeID.end(),
+            [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -170,7 +173,7 @@ int ConsensusPrecompiled::addSealer(
 
 int ConsensusPrecompiled::addObserver(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // addObserver(string)
     std::string nodeID;
@@ -180,7 +183,10 @@ int ConsensusPrecompiled::addObserver(
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+
+    if (nodeID.size() != NODE_LENGTH ||
+        std::count_if(nodeID.begin(), nodeID.end(),
+            [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -235,7 +241,7 @@ int ConsensusPrecompiled::addObserver(
 
 int ConsensusPrecompiled::removeNode(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // remove(string)
     std::string nodeID;
@@ -245,7 +251,7 @@ int ConsensusPrecompiled::removeNode(
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+    if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -270,10 +276,13 @@ int ConsensusPrecompiled::removeNode(
     {
         consensusList.erase(it);
     }
+    else
+    {
+        return CODE_NODE_NOT_EXIST;  // Not found
+    }
 
     auto sealerSize = std::count_if(consensusList.begin(), consensusList.end(),
         [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
-
     if (sealerSize == 0)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
@@ -291,7 +300,7 @@ int ConsensusPrecompiled::removeNode(
 
 int ConsensusPrecompiled::setWeight(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // setWeight(string,uint256)
     std::string nodeID;
@@ -302,7 +311,7 @@ int ConsensusPrecompiled::setWeight(
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+    if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -331,6 +340,10 @@ int ConsensusPrecompiled::setWeight(
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
     if (it != consensusList.end())
     {
+        if (it->type != ledger::CONSENSUS_SEALER)
+        {
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
+        }
         it->weight = weight;
         it->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
     }
@@ -362,6 +375,10 @@ void ConsensusPrecompiled::showConsensusTable(
         return;
     }
 
+    if (c_fileLogLevel < bcos::LogLevel::TRACE)
+    {
+        return;
+    }
     auto consensusList = entry->getObject<ConsensusNodeList>();
 
     std::stringstream s;

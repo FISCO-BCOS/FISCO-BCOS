@@ -22,6 +22,8 @@
 #include "Common/TarsUtils.h"
 #include "libinitializer/PBFTInitializer.h"
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
+#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-utilities/Timer.h>
 
 namespace bcos
@@ -32,7 +34,7 @@ class ProPBFTInitializer : public PBFTInitializer
 {
 public:
     using Ptr = std::shared_ptr<ProPBFTInitializer>;
-    ProPBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
+    ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
         bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
@@ -41,51 +43,24 @@ public:
 
     virtual ~ProPBFTInitializer() { stop(); }
 
-    virtual void init();
+    void init() override;
 
-    virtual void start();
-    virtual void stop();
+    void start() override;
+    void stop() override;
 
 protected:
+    // the task triggered by the timer periodically
+    virtual void scheduledTask();
     virtual void reportNodeInfo();
 
-    template <typename T, typename S>
-    void asyncNotifyGroupInfo(
-        std::string const& _serviceName, bcos::group::GroupInfo::Ptr _groupInfo)
-    {
-        auto servicePrx = Application::getCommunicator()->stringToProxy<T>(_serviceName);
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
-        servicePrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-        if (activeEndPoints.size() == 0)
-        {
-            BCOS_LOG(TRACE) << LOG_DESC("asyncNotifyGroupInfo error for empty connection")
-                            << bcos::group::printGroupInfo(_groupInfo);
-            return;
-        }
-        for (auto const& endPoint : activeEndPoints)
-        {
-            auto endPointStr = bcostars::endPointToString(_serviceName, endPoint.getEndpoint());
-            auto servicePrx = Application::getCommunicator()->stringToProxy<T>(endPointStr);
-            auto serviceClient = std::make_shared<S>(servicePrx, _serviceName);
-            serviceClient->asyncNotifyGroupInfo(
-                _groupInfo, [endPointStr, _groupInfo](Error::Ptr&& _error) {
-                    // TODO: retry when notify failed
-                    if (_error)
-                    {
-                        BCOS_LOG(ERROR) << LOG_DESC("asyncNotifyGroupInfo error")
-                                        << LOG_KV("endPoint", endPointStr)
-                                        << LOG_KV("code", _error->errorCode())
-                                        << LOG_KV("msg", _error->errorMessage());
-                        return;
-                    }
-                });
-        }
-    }
+    void onGroupInfoChanged() override;
 
 private:
     std::shared_ptr<bcos::Timer> m_timer;
     uint64_t m_timerSchedulerInterval = 3000;
+
+    bcos::gateway::GatewayInterface::Ptr m_gateway;
+    bcos::rpc::RPCInterface::Ptr m_rpc;
 };
 }  // namespace initializer
 }  // namespace bcos

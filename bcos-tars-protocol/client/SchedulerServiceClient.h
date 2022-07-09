@@ -39,18 +39,22 @@ public:
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::TransactionReceipt::Ptr&&)>)
         override;
 
-    // TODO: implement other functions
-    void executeBlock(bcos::protocol::Block::Ptr, bool,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method executeBlock");
-    }
+    void executeBlock(bcos::protocol::Block::Ptr _block, bool _verify,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)> _callback)
+        override;
 
-    void commitBlock(bcos::protocol::BlockHeader::Ptr,
-        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method commitBlock");
-    }
+    void commitBlock(bcos::protocol::BlockHeader::Ptr _blockHeader,
+        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> _callback)
+        override;
+
+    void getCode(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
+
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override;
+
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(bcos::Error::Ptr&&)> callback) override;
 
     void status(
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) override
@@ -60,10 +64,7 @@ public:
 
 
     void registerExecutor(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr,
-        std::function<void(bcos::Error::Ptr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method registerExecutor");
-    }
+        std::function<void(bcos::Error::Ptr&&)>) override;
 
     void unregisterExecutor(const std::string&, std::function<void(bcos::Error::Ptr&&)>) override
     {
@@ -74,18 +75,6 @@ public:
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method reset");
     }
-
-    void registerBlockNumberReceiver(
-        std::function<void(bcos::protocol::BlockNumber blockNumber)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method registerBlockNumberReceiver");
-    }
-
-    void getCode(std::string_view contract,
-        std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
-
-    void getABI(std::string_view contract,
-        std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
 private:
     SchedulerServicePrx m_prx;

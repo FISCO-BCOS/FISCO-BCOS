@@ -30,7 +30,7 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
 using namespace bcos::consensus;
-static unsigned const c_maxSendTransactions = 1000;
+static unsigned const c_maxSendTransactions = 10000;
 
 void TransactionSync::start()
 {
@@ -206,13 +206,17 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
             Error::Ptr _error, TransactionsPtr _fetchedTxs,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>>) {
             // hit all the txs
-            if (this->onGetMissedTxsFromLedger(
-                    *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished) == 0)
+            auto missedTxsSize = this->onGetMissedTxsFromLedger(
+                *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished);
+            if (missedTxsSize == 0)
             {
                 return;
             }
-            if (!_generatedNodeID)
+            if (!_generatedNodeID || _generatedNodeID->data() == m_config->nodeID()->data())
             {
+                SYNC_LOG(WARNING)
+                    << LOG_DESC("requestMissedTxs failed from the ledger for Transaction missing")
+                    << LOG_KV("missedTxs", missedTxsSize);
                 _onVerifyFinished(
                     std::make_shared<Error>(CommonError::TransactionsMissing,
                         "requestMissedTxs failed from the ledger for Transaction missing"),
@@ -244,9 +248,9 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
 {
     if (_error != nullptr)
     {
-        SYNC_LOG(WARNING) << LOG_DESC("onGetMissedTxsFromLedger: get error response")
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMsg", _error->errorMessage());
+        SYNC_LOG(TRACE) << LOG_DESC("onGetMissedTxsFromLedger: get error response")
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("msg", _error->errorMessage());
         return _missedTxs.size();
     }
     // import and verify the transactions
@@ -275,6 +279,8 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
         SYNC_LOG(DEBUG) << LOG_DESC("onGetMissedTxsFromLedger: hit all transactions");
         _onVerifyFinished(nullptr, true);
     }
+    SYNC_LOG(TRACE) << LOG_DESC("onGetMissedTxsFromLedger: missing txs")
+                    << LOG_KV("missCount", _missedTxs.size());
     return _missedTxs.size();
 }
 
@@ -354,8 +360,16 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         SYNC_LOG(INFO) << LOG_DESC("asyncVerifyBlock: fetch missed txs failed")
                        << LOG_KV("peer", _nodeID ? _nodeID->shortHex() : "unknown")
                        << LOG_KV("missedTxsSize", _missedTxs->size())
-                       << LOG_KV("errorCode", _error->errorCode())
-                       << LOG_KV("errorMsg", _error->errorMessage());
+                       << LOG_KV("code", _error->errorCode())
+                       << LOG_KV("msg", _error->errorMessage())
+                       << LOG_KV(
+                              "propHash", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                              _verifiedProposal->blockHeader()->hash().abridged() :
+                                              "unknown")
+                       << LOG_KV(
+                              "propIndex", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                               _verifiedProposal->blockHeader()->number() :
+                                               -1);
         _onVerifyFinished(_error, false);
         return;
     }
@@ -418,7 +432,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         }
     }
     _onVerifyFinished(error, true);
-    SYNC_LOG(DEBUG) << LOG_DESC("requestMissedTxs and verify success")
+    SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
                     << LOG_KV(
                            "hash", (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
                     << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1)
@@ -447,7 +461,10 @@ void TransactionSync::maintainDownloadingTransactions()
         auto txsBuffer = (*localBuffer)[i];
         auto transactions =
             m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
-        importDownloadedTxs(txsBuffer->from(), transactions);
+        // async here to accelerate the txs process
+        m_worker->enqueue([this, txsBuffer, transactions]() {
+            importDownloadedTxs(txsBuffer->from(), transactions);
+        });
     }
 }
 
@@ -523,39 +540,22 @@ bool TransactionSync::importDownloadedTxs(
     startT = utcTime();
     // import the transactions into txpool
     auto txpool = m_config->txpoolStorage();
-    size_t successImportTxs = 0;
-    for (size_t i = 0; i < txsSize; i++)
+    if (enforceImport)
     {
-        auto tx = (*_txs)[i];
-        if (tx->invalid())
+        if (!txpool->batchVerifyAndSubmitTransaction(proposalHeader, _txs))
         {
-            continue;
+            return false;
         }
-        // Note: when the transaction is used to reach a consensus, the transaction must be imported
-        // into the txpool even if the txpool is full
-        auto result = txpool->submitTransaction(
-            std::const_pointer_cast<Transaction>(tx), nullptr, enforceImport, false);
-        if (result != TransactionStatus::None)
-        {
-            if (enforceImport)
-            {
-                SYNC_LOG(DEBUG) << LOG_BADGE("importDownloadedTxs: verify proposal failed")
-                                << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("result", result)
-                                << LOG_KV("propIndex", proposalHeader->number())
-                                << LOG_KV("propHash", proposalHeader->hash().abridged());
-                return false;
-            }
-            SYNC_LOG(TRACE) << LOG_BADGE("importDownloadedTxs")
-                            << LOG_DESC("Import transaction into txpool failed")
-                            << LOG_KV("errorCode", result) << LOG_KV("tx", tx->hash().abridged());
-            continue;
-        }
-        successImportTxs++;
+    }
+    else
+    {
+        txpool->batchImportTxs(_txs);
     }
     SYNC_LOG(DEBUG) << LOG_DESC("importDownloadedTxs success")
-                    << LOG_KV("nodeId", m_config->nodeID()->shortHex())
-                    << LOG_KV("successImportTxs", successImportTxs) << LOG_KV("totalTxs", txsSize)
-                    << LOG_KV("verifyT", verifyT) << LOG_KV("submitT", (utcTime() - startT))
+                    << LOG_KV("hash", proposalHeader ? proposalHeader->hash().abridged() : "none")
+                    << LOG_KV("number", proposalHeader ? proposalHeader->number() : -1)
+                    << LOG_KV("totalTxs", txsSize) << LOG_KV("verifyT", verifyT)
+                    << LOG_KV("submitT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
     return true;
 }

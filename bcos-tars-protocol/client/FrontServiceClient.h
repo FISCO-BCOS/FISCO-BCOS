@@ -8,6 +8,7 @@
 #include "bcos-tars-protocol/tars/FrontService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/RefDataContainer.h>
 
@@ -23,42 +24,35 @@ public:
       : m_proxy(proxy), m_keyFactory(keyFactory)
     {}
 
-    void asyncGetNodeIDs(bcos::front::GetNodeIDsFunc _getNodeIDsFunc) override
+    void asyncGetGroupNodeInfo(bcos::front::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
     {
         class Callback : public FrontServicePrxCallback
         {
         public:
-            Callback(bcos::front::GetNodeIDsFunc callback, FrontServiceClient* self)
-              : m_callback(callback), m_self(self)
+            Callback(bcos::front::GetGroupNodeInfoFunc callback, FrontServiceClient* self)
+              : m_callback(callback)
             {}
-            void callback_asyncGetNodeIDs(
-                const bcostars::Error& ret, const vector<vector<tars::Char>>& nodeIDs) override
+            void callback_asyncGetGroupNodeInfo(
+                const bcostars::Error& ret, const GroupNodeInfo& groupNodeInfo) override
             {
-                auto bcosNodeIDs = std::make_shared<std::vector<bcos::crypto::NodeIDPtr>>();
-                bcosNodeIDs->reserve(nodeIDs.size());
-                for (auto const& it : nodeIDs)
-                {
-                    bcosNodeIDs->push_back(m_self->m_keyFactory->createKey(
-                        bcos::bytesConstRef((bcos::byte*)it.data(), it.size())));
-                }
-
-                m_callback(toBcosError(ret), bcosNodeIDs);
+                auto bcosGroupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
+                    [m_groupNodeInfo = groupNodeInfo]() mutable { return &m_groupNodeInfo; });
+                m_callback(toBcosError(ret), bcosGroupNodeInfo);
             }
-            void callback_asyncGetNodeIDs_exception(tars::Int32 ret) override
+            void callback_asyncGetGroupNodeInfo_exception(tars::Int32 ret) override
             {
                 m_callback(toBcosError(ret), nullptr);
             }
 
         private:
-            bcos::front::GetNodeIDsFunc m_callback;
-            FrontServiceClient* m_self;
+            bcos::front::GetGroupNodeInfoFunc m_callback;
         };
 
-        m_proxy->async_asyncGetNodeIDs(new Callback(_getNodeIDsFunc, this));
+        m_proxy->async_asyncGetGroupNodeInfo(new Callback(_onGetGroupNodeInfo, this));
     }
 
-    void onReceiveNodeIDs(const std::string& _groupID,
-        std::shared_ptr<const bcos::crypto::NodeIDs> _nodeIDs,
+    void onReceiveGroupNodeInfo(const std::string& _groupID,
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
         bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
     {
         class Callback : public FrontServicePrxCallback
@@ -66,7 +60,7 @@ public:
         public:
             Callback(bcos::front::ReceiveMsgFunc callback) : m_callback(callback) {}
 
-            void callback_onReceivedNodeIDs(const bcostars::Error& ret) override
+            void callback_onReceiveGroupNodeInfo(const bcostars::Error& ret) override
             {
                 if (!m_callback)
                 {
@@ -75,7 +69,7 @@ public:
                 m_callback(toBcosError(ret));
             }
 
-            void callback_onReceivedNodeIDs_exception(tars::Int32 ret) override
+            void callback_onReceiveGroupNodeInfo_exception(tars::Int32 ret) override
             {
                 if (!m_callback)
                 {
@@ -87,16 +81,11 @@ public:
         private:
             bcos::front::ReceiveMsgFunc m_callback;
         };
-
-        std::vector<std::vector<char>> tarsNodeIDs;
-        tarsNodeIDs.reserve(_nodeIDs->size());
-        for (auto const& it : *_nodeIDs)
-        {
-            auto nodeIDData = it->data();
-            tarsNodeIDs.push_back(std::vector<char>(nodeIDData.begin(), nodeIDData.end()));
-        }
-
-        m_proxy->async_onReceivedNodeIDs(new Callback(_receiveMsgCallback), _groupID, tarsNodeIDs);
+        auto groupNodeInfoImpl =
+            std::dynamic_pointer_cast<bcostars::protocol::GroupNodeInfoImpl>(_groupNodeInfo);
+        auto tarsGroupNodeInfo = groupNodeInfoImpl->inner();
+        m_proxy->async_onReceiveGroupNodeInfo(
+            new Callback(_receiveMsgCallback), _groupID, tarsGroupNodeInfo);
     }
 
     void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
@@ -128,17 +117,6 @@ public:
         private:
             bcos::front::ReceiveMsgFunc m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "onReceiveMessage", m_proxy,
-            [_receiveMsgCallback](bcos::Error::Ptr _error) {
-                if (_receiveMsgCallback)
-                {
-                    _receiveMsgCallback(_error);
-                }
-            });
-        if (!ret)
-        {
-            return;
-        }
         auto nodeIDData = _nodeID->data();
         m_proxy->async_onReceiveMessage(new Callback(_receiveMsgCallback), _groupID,
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
@@ -175,17 +153,6 @@ public:
         private:
             bcos::front::ReceiveMsgFunc m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "onReceiveBroadcastMessage", m_proxy,
-            [_receiveMsgCallback](bcos::Error::Ptr _error) {
-                if (_receiveMsgCallback)
-                {
-                    _receiveMsgCallback(_error);
-                }
-            });
-        if (!ret)
-        {
-            return;
-        }
         auto nodeIDData = _nodeID->data();
         m_proxy->async_onReceiveBroadcastMessage(new Callback(_receiveMsgCallback), _groupID,
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
@@ -242,17 +209,6 @@ public:
     void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
     {
-        auto ret = checkConnection(c_moduleName, "asyncSendResponse", m_proxy,
-            [_receiveMsgCallback](bcos::Error::Ptr _error) {
-                if (_receiveMsgCallback)
-                {
-                    _receiveMsgCallback(_error);
-                }
-            });
-        if (!ret)
-        {
-            return;
-        }
         auto nodeIDData = _nodeID->data();
         m_proxy->asyncSendResponse(_id, _moduleID,
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),

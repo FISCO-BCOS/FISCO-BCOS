@@ -28,7 +28,7 @@ namespace bcos
 namespace gateway
 {
 // Message type definition
-enum MessageType : int16_t
+enum GatewayMessageType : int16_t
 {
     Heartbeat = 0x1,
     Handshake = 0x2,
@@ -39,6 +39,10 @@ enum MessageType : int16_t
     AMOPMessageType = 0x7,
     WSMessageType = 0x8,
     SyncNodeSeq = 0x9,
+    RouterTableSyncSeq = 0xa,
+    RouterTableResponse = 0xb,
+    RouterTableRequest = 0xc,
+    ForwardMessage = 0xd,
 };
 /**
  * @brief client end endpoint. Node will connect to NodeIPEndpoint.

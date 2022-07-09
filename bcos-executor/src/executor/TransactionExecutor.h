@@ -24,9 +24,11 @@
  */
 #pragma once
 
+#include "../Common.h"
 #include "../dag/CriticalFields.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
@@ -70,6 +72,7 @@ enum ExecutorVersion : int32_t
 };
 
 class TransactionExecutive;
+class ExecutiveFlowInterface;
 class BlockContext;
 class PrecompiledContract;
 template <typename T, typename V>
@@ -87,19 +90,28 @@ public:
     using Ptr = std::shared_ptr<TransactionExecutor>;
     using ConstPtr = std::shared_ptr<const TransactionExecutor>;
 
-    TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
-        storage::MergeableStorageInterface::Ptr cachedStorage,
+    TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck);
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables,
+        std::string name);
 
     ~TransactionExecutor() override = default;
 
-    void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
+    void nextBlockHeader(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override;
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -117,15 +129,16 @@ public:
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
-    void prepare(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override;
+    void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override;
 
     // Commit uncommitted data
-    void commit(const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override;
+    void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override;
 
     // Rollback the changes
-    void rollback(
-        const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback) override;
+    void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override;
 
     /* ----- XA Transaction interface End ----- */
 
@@ -134,8 +147,11 @@ public:
 
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
-    void getABI(
-        std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) override;
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override;
+
+    void start() override { m_isRunning = true; }
+    void stop() override { m_isRunning = false; }
 
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
@@ -148,18 +164,18 @@ protected:
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage) = 0;
+        storage::StateStorageInterface::Ptr tableFactory);
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        int32_t blockVersion, storage::StateStorage::Ptr tableFactory) = 0;
+        int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
 
     std::shared_ptr<TransactionExecutive> createExecutive(
         const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
         int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
-        bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
+        bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback);
 
@@ -187,6 +203,23 @@ protected:
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
+    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+
+
+    void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
+        std::function<void(
+            bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
+            callback);
+
+
+    bcos::storage::StateStorageInterface::Ptr createStateStorage(
+        bcos::storage::StorageInterface::Ptr storage);
+
+    protocol::BlockNumber getBlockNumberInStorage();
+
+    std::string m_name;
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
     std::shared_ptr<storage::TransactionalStorageInterface> m_backendStorage;
@@ -198,17 +231,17 @@ protected:
 
     struct State
     {
-        State(bcos::protocol::BlockNumber _number, bcos::storage::StateStorage::Ptr _storage)
+        State(
+            bcos::protocol::BlockNumber _number, bcos::storage::StateStorageInterface::Ptr _storage)
           : number(_number), storage(std::move(_storage))
         {}
         State(const State&) = delete;
         State& operator=(const State&) = delete;
 
         bcos::protocol::BlockNumber number;
-        bcos::storage::StateStorage::Ptr storage;
+        bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
-    bcos::storage::StorageInterface::Ptr m_lastStateStorage;
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
 
     struct HashCombine
@@ -234,16 +267,28 @@ protected:
     {
         std::shared_ptr<BlockContext> blockContext;
     };
-    tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine> m_calledContext;
+    std::shared_ptr<tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>
+        m_calledContext = std::make_shared<
+            tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>();
     std::shared_mutex m_stateStoragesMutex;
 
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>> m_constantPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+        m_constantPrecompiled =
+            std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
+    mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
+    size_t m_keyPageSize = 0;
+    VMSchedule m_schedule = FiscoBcosScheduleV4;
+    std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
+    bool m_isRunning = false;
+    int64_t m_schedulerTermId = -1;
+    void initEvmEnvironment();
+    void initWasmEnvironment();
 };
 
 }  // namespace executor

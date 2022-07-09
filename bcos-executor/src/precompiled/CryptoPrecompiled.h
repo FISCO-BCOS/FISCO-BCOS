@@ -20,8 +20,8 @@
 
 #pragma once
 #include "../vm/Precompiled.h"
-#include "Common.h"
-#include "PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 
 namespace bcos
 {
@@ -43,12 +43,12 @@ public:
     CryptoPrecompiled(crypto::Hash::Ptr _hashImpl);
     virtual ~CryptoPrecompiled() {}
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
-    void sm2Verify(bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult,
-        PrecompiledCodec::Ptr _codec);
+    void sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult);
 };
 }  // namespace precompiled
 }  // namespace bcos

@@ -135,6 +135,7 @@ public:
         m_cacheProcessor->registerOnLoadAndVerifyProposalSucc(boost::bind(
             &FakePBFTEngine::onLoadAndVerifyProposalSucc, this, boost::placeholders::_1));
         initSendResponseHandler();
+        _config->enableAsMaterNode(true);
     }
     ~FakePBFTEngine() override {}
 
@@ -176,7 +177,17 @@ public:
 class FakePBFTImpl : public PBFTImpl
 {
 public:
-    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine) { m_running = true; }
+    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine)
+    {
+        m_running = true;
+        m_masterNode.store(true);
+    }
+    void start() override { m_pbftEngine->recoverState(); }
+    void init() override
+    {
+        PBFTImpl::init();
+        start();
+    }
     ~FakePBFTImpl() {}
 };
 
@@ -192,8 +203,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-      : PBFTFactory(_cryptoSuite, _keyPair, _frontService, _storage, _ledger, _scheduler, _txpool,
-            _blockFactory, _txResultFactory)
+      : PBFTFactory(bcos::protocol::NodeArchitectureType::AIR, _cryptoSuite, _keyPair,
+            _frontService, _storage, _ledger, _scheduler, _txpool, _blockFactory, _txResultFactory)
     {}
 
     PBFTImpl::Ptr createPBFT() override

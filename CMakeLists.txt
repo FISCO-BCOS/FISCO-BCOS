@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.14)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif ()
@@ -9,8 +9,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 include(Options)
 include(HunterGate)
 HunterGate(
-        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/2b5b25ecffaba74393740bf0b8758c4e8d9297cf.tar.gz"
-        SHA1 "5d8365a327be260cf24d2b125a71ee7069aca28f"
+        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/162ff7cde3d843e43afdab8fe3214275c35ef168.tar.gz"
+        SHA1 "0ba8099fe89beb0d44986c750fe0d44040725d99"
         FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
@@ -21,11 +21,6 @@ configure_project()
 
 include(CompilerSettings)
 include(BuildInfoGenerator)
-
-# import dependencies
-include(ProjectTCMalloc)
-include(ProjectWABT)
-include(ProjectBCOSWASM)
 
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
@@ -38,6 +33,14 @@ hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
+hunter_add_package(etcd-cpp-apiv3)
+hunter_add_package(cryptopp)
+
+# import dependencies
+include(ProjectGroupSig)
+include(ProjectTCMalloc)
+include(ProjectWABT)
+include(ProjectBCOSWASM)
 
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
@@ -58,6 +61,7 @@ include(TargetSettings)
 
 add_subdirectory(bcos-codec)
 add_subdirectory(bcos-sealer)
+add_subdirectory(bcos-security)
 add_subdirectory(bcos-tool)
 add_subdirectory(bcos-table)
 add_subdirectory(bcos-framework)
@@ -73,9 +77,14 @@ add_subdirectory(bcos-pbft)
 add_subdirectory(bcos-txpool)
 add_subdirectory(bcos-sync)
 add_subdirectory(bcos-front)
+add_subdirectory(bcos-leader-election)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
-add_subdirectory(fisco-bcos-pro)
+add_subdirectory(fisco-bcos-tars-service)
+
+if (BUILD_DEMO)
+    add_subdirectory(fisco-bcos-demo)
+endif ()
 
 if (TESTS)
     enable_testing()

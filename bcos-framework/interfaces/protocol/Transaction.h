@@ -56,9 +56,9 @@ public:
     virtual ~Transaction() {}
 
     virtual void decode(bytesConstRef _txData) = 0;
-    virtual bytesConstRef encode(bool _onlyHashFields = false) const = 0;
+    virtual bytesConstRef encode() const = 0;
     virtual bytes takeEncoded() = 0;
-    virtual bcos::crypto::HashType hash() const = 0;
+    virtual bcos::crypto::HashType hash(bool _useCache = true) const = 0;
 
     virtual void verify() const
     {
@@ -68,11 +68,9 @@ public:
             return;
         }
 
-        // check the hash
-        auto hashFields = encode(true);
-        auto hash = m_cryptoSuite->hash(hashFields);
-
-        if (hash != this->hash())
+        // check the hash when verify
+        auto hashResult = hash(false);
+        if (hashResult != this->hash())
         {
             throw bcos::Exception("Hash mismatch!");
         }
@@ -151,6 +149,9 @@ public:
     void setBatchHash(bcos::crypto::HashType const& _hash) const { m_batchHash = _hash; }
     bcos::crypto::HashType const& batchHash() const { return m_batchHash; }
 
+    bool storeToBackend() const { return m_storeToBackend; }
+    void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
+
 protected:
     mutable bcos::bytes m_sender;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
@@ -175,6 +176,8 @@ protected:
     mutable std::atomic_bool m_invalid = {false};
     // the transaction is the system transaction or not
     mutable std::atomic_bool m_systemTx = {false};
+    // the transaction has been stored to the storage or not
+    mutable std::atomic_bool m_storeToBackend = {false};
 };
 
 using Transactions = std::vector<Transaction::Ptr>;

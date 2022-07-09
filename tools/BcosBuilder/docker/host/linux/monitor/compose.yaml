@@ -1,0 +1,32 @@
+version: '2'
+
+services:
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /etc/localtime:/etc/localtime
+    network_mode: host
+   # ports:
+   #   - ${PROMETHEUS_PORT}:9090
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    user: '0'
+    network_mode: host
+   # ports:
+   #   - ${GRAFANA_PORT}:3000
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/logs:/var/log/grafana
+      - /etc/localtime:/etc/localtime
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer

@@ -7,6 +7,8 @@
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
+using namespace bcos::protocol;
+
 namespace bcos::test
 {
 class MockTransactionalStorage : public bcos::storage::TransactionalStorageInterface
@@ -85,10 +87,10 @@ public:
     }
 
     void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override
+        const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
-        callback(nullptr);
+        callback(nullptr, 0);
     }
 
     void asyncRollback(

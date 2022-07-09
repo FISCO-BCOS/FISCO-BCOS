@@ -49,7 +49,8 @@ public:
      * @param callback trigger this callback when write is finished
      */
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) = 0;
+        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify
@@ -155,5 +156,9 @@ public:
         std::function<void(
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) = 0;
+
+    virtual void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+        bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::UniquePtr&&)> _callback) = 0;
 };
 }  // namespace bcos::ledger

@@ -56,7 +56,7 @@ public:
      * @param _avoidTxs list of transactions that need to be filtered
      * @param _sealCallback after the  txpool responds to the sealed txs, the callback is triggered
      */
-    virtual void asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
+    virtual void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) = 0;
 
@@ -108,13 +108,17 @@ public:
 
     // for RPC to get pending transactions
     virtual void asyncGetPendingTransactionSize(
-        std::function<void(Error::Ptr, size_t)> _onGetTxsSize) = 0;
+        std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) = 0;
 
     // notify to reset the txpool when the consensus module startup
     virtual void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
+
+    // determine to clean up txs periodically or not
+    virtual void registerTxsCleanUpSwitch(std::function<bool()>) {}
+    virtual void clearAllTxs() {}
 };
 }  // namespace txpool
 }  // namespace bcos

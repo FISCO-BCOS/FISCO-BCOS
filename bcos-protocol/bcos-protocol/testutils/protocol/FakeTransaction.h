@@ -79,11 +79,9 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     }
     auto addr = _keyPair->address(_cryptoSuite->hashImpl());
     BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
-    // encode
-    // std::shared_ptr<bytes> encodedData = std::make_shared<bytes>();
-    auto encodedData = pbTransaction->encode(false);
-    auto encodedDataCache = pbTransaction->encode();
-    BOOST_CHECK(encodedData.toBytes() == encodedDataCache.toBytes());
+    auto encodedData = pbTransaction->encode();
+    // auto encodedDataCache = pbTransaction->encode();
+    // BOOST_CHECK(encodedData.toBytes() == encodedDataCache.toBytes());
 #if 0
     std::cout << "#### encodedData is:" << *toHexString(encodedData) << std::endl;
     std::cout << "### hash:" << pbTransaction->hash().hex() << std::endl;
@@ -109,7 +107,7 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, u256 nonc
     }
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
-    return testTransaction(_cryptoSuite, keyPair, std::string_view((char*)to.data(), to.size()),
+    return fakeTransaction(_cryptoSuite, keyPair, std::string_view((char*)_to.data(), _to.size()),
         input, nonce, blockLimit, chainId, groupId);
 }
 }  // namespace test
