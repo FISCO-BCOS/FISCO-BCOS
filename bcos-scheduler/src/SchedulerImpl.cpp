@@ -395,7 +395,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         auto currentBlockNumber = getCurrentBlockNumber();
         if (currentBlockNumber + 1 != requestBlockNumber)
         {
-            // happens in some multi-thread scenario, the block has been commiteed
+            // happens in some multi-thread scenario, the block has been commited
             auto message = (boost::format("commit an committed block %d, current number is %d") %
                             requestBlockNumber % currentBlockNumber)
                                .str();
