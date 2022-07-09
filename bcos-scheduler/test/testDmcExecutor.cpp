@@ -40,13 +40,13 @@ struct DmcExecutorFixture
         auto receiptFactory = std::make_shared<bcos::protocol::TransactionReceiptFactory>();
         auto transactionFactory = std::make_shared<bcos::protocol::TransactionFactory>();
         block = std::make_shared<bcos::protocol::Block>(transactionFactory, receiptFactory);
-        executor1 = std::make_shared<MockExecutorForDMC>("executor1");
+        executor1 = std::make_shared<MockDmcExecutor>("executor1");
         keyLocks = std::make_shared<GraphKeyLocks>();
         dmcRecorder = std::make_shared<DmcStepRecorder>();
     };
     bcos::scheduler::DmcExecutor::Ptr dmcExecutor;
     bcos::protocol::Block::Ptr block;
-    std::shared_ptr<MockExecutorForDMC> executor1;
+    std::shared_ptr<bcos::scheduler::MockDmcExecutor> executor1;
     bcos::scheduler::GraphKeyLocks::Ptr keyLocks;
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
 };

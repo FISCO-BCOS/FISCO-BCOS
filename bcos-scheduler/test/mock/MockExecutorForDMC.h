@@ -1,10 +1,17 @@
 #pragma once
+#include "Common.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include <boost/test/unit_test.hpp>
+
+using namespace std;
+using namespace bcos;
+using namespace bcos::scheduler;
 namespace bcos::test
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 class MockDmcExecutor : public bcos::executor::ParallelTransactionExecutorInterface
 {
 public:
@@ -16,8 +23,8 @@ public:
     // const std::string& name() const { return m_name; }
 
     void status(
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
-            callback) override
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>)
+        override
     {}
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -54,10 +61,9 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
-        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
+        // std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (auto i = 0; i < inputs.size(); i++)
         {
-            results.at(i) = std::move(inputs[i]);
             // if (results.at(i)->transactionHash() == h256(10086))
             // {
 
@@ -65,21 +71,21 @@ public:
             //     return;
             // }
 
-            if (results[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
+            if (inputs[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
-                results[i]->setData(bcos::bytes(str.begin(), str.end()));
+                inputs[i]->setData(bcos::bytes(str.begin(), str.end()));
                 // callback(nullptr, executorStatus::PAUSE);
             }
             else
             {
-                results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
+                inputs[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
-                results[i]->setData(bcos::bytes(str.begin(), str.end()));
+                inputs[i]->setData(bcos::bytes(str.begin(), str.end()));
                 // callback(nullptr, executorStatus::FINISHED);
             }
         }
-        callback(nullptr, std::move(results));
+        callback(nullptr, std::move(inputs));
     };
 
     void nextBlockHeader(int64_t, const bcos::protocol::BlockHeader::ConstPtr&,
@@ -117,7 +123,8 @@ public:
     // void start() override() {}
     // void stop() override() {}
 
-private:
+
     std::string m_name;
 };
+#pragma GCC diagnostic pop
 }  // namespace bcos::test
