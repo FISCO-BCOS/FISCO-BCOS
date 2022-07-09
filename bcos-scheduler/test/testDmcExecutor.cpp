@@ -44,11 +44,11 @@ struct DmcExecutorFixture
         keyLocks = std::make_shared<GraphKeyLocks>();
         dmcRecorder = std::make_shared<DmcStepRecorder>();
     };
-    bcos::scheduler::shared_ptr<DmcExecutor> dmcExecutor;
-    bcos::protocol::shared_ptr<Block> block;
-    bcos::test::shared_ptr<MockExecutorForDMC> executor;
-    bcos::scheduler::shared_ptr<GraphKeyLocks> keyLocks;
-    bcos::scheduler::shared_ptr<DmcStepRecorder> dmcRecorder;
+    bcos::scheduler::DmcExecutor::Ptr dmcExecutor;
+    bcos::protocol::Block::Ptr block;
+    bcos::test::MockExecutorForDMC::Ptr executor;
+    bcos::scheduler::GraphKeyLocks::Ptr keyLocks;
+    bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
 };
 
 bcos::protocol::ExecutionMessage::UniquePtr createMessage(
@@ -154,16 +154,16 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 }
 BOOST_AUTO_TEST_CASE_END()
 };  // namespace bcos::test
-    // // need scheduleOut
-    // auto message1 = createMessage(1, 0, 1, "0x0000000", false);
-    // dmcExecutor->submit(std::move(message1), false);
-    // auto need_scheduleOut = dmcExecutor->prepare();
-    // dmcExecutor->go(executorCallback);
-    // BOOST_CHECK(!need_scheduleOut && dmcFlagStruct.schedulerOutFlag);
-    // SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
-    //                      << LOG_KV("finished is ", dmcFlagStruct.finished)
-    //                      << LOG_KV("paused is ", dmcFlagStruct.paused)
-    //                      << LOG_KV("error is ", dmcFlagStruct.error);
+// // need scheduleOut
+// auto message1 = createMessage(1, 0, 1, "0x0000000", false);
+// dmcExecutor->submit(std::move(message1), false);
+// auto need_scheduleOut = dmcExecutor->prepare();
+// dmcExecutor->go(executorCallback);
+// BOOST_CHECK(!need_scheduleOut && dmcFlagStruct.schedulerOutFlag);
+// SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
+//                      << LOG_KV("finished is ", dmcFlagStruct.finished)
+//                      << LOG_KV("paused is ", dmcFlagStruct.paused)
+//                      << LOG_KV("error is ", dmcFlagStruct.error);
 
 // // MESSAGE  &&  Call
 // auto message2 = createMessage(2, 1, 1, "0xaabbccdd", true);

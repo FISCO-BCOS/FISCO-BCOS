@@ -58,11 +58,12 @@ public:
         for (auto i = 0; i < inputs.size(); i++)
         {
             results.at(i) = std::move(inputs[i]);
-            if (results.at(i)->transactionHash() == h256(10086))
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
-                return;
-            }
+            // if (results.at(i)->transactionHash() == h256(10086))
+            // {
+
+            //     callback(nullptr, nullptr);
+            //     return;
+            // }
 
             if (results[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
@@ -81,55 +82,38 @@ public:
         callback(nullptr, std::move(results));
     };
 
-    void nextBlockHeader(int64_t schedulerTermId, const bcos::protocol::BlockHeader::ConstPtr&,
-        std::function<void(bcos::Error::UniquePtr)> callback) override
+    void nextBlockHeader(int64_t, const bcos::protocol::BlockHeader::ConstPtr&,
+        std::function<void(bcos::Error::UniquePtr)>) override
     {}
 
 
-    void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-            callback) override
+    void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>)
+        override
     {}
 
-    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) override
+    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>,
+        std::function<void(bcos::Error::UniquePtr,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>) override
     {}
 
-    void getHash(bcos::protocol::BlockNumber number,
-        std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
+    void getHash(bcos::protocol::BlockNumber,
+        std::function<void(bcos::Error::UniquePtr, crypto::HashType)>) override
     {}
 
-    void prepare(const bcos::protocol::TwoPCParams& params,
-        std::function<void(bcos::Error::Ptr)> callback) override
-    {
-        callback(nullptr);
-    }
+    void prepare(const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
+    {}
 
-    void commit(const bcos::protocol::TwoPCParams& params,
-        std::function<void(bcos::Error::Ptr)> callback) override
-    {
-        callback(nullptr);
-    }
+    void commit(const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
+    {}
 
-    void rollback(const bcos::protocol::TwoPCParams& params,
-        std::function<void(bcos::Error::Ptr)> callback) override
-    {
-        callback(nullptr);
-    }
+    void rollback(
+        const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
+    {}
 
-    void getCode(std::string_view contract,
-        std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
-    {
-        callback(nullptr, {});
-    }
-    void getABI(std::string_view contract,
-        std::function<void(bcos::Error::Ptr, std::string)> callback) override
-    {
-        callback(nullptr, {});
-    }
-    void reset(std::function<void(bcos::Error::Ptr)> callback) override { callback(nullptr); }
+    void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)>) override {}
+    void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)>) override {}
+    void reset(std::function<void(bcos::Error::Ptr)>) override {}
     // void start() override() {}
     // void stop() override() {}
 
