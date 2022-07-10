@@ -55,7 +55,7 @@ jobs:
           yum install yum install -y epel-release centos-release-scl flex bison
           yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-          yum install -y git
+          yum install -y git ninja-build
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
