@@ -1200,7 +1200,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                                                 std::vector<std::optional<Entry>>&& entries) {
                 if (error)
                 {
-                    LEDGER_LOG(TRACE)
+                    LEDGER_LOG(DEBUG)
                         << "Batch get transaction error!" << boost::diagnostic_information(*error);
                     callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
                                  "Batch get transaction error!", *error),
