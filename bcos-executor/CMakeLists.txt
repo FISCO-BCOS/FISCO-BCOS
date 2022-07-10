@@ -11,13 +11,15 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(evmc REQUIRED)
 find_package(evmone REQUIRED)
+find_package(intx REQUIRED)
+find_package(ethash REQUIRED)
 find_package(Boost REQUIRED serialization program_options context)
 find_package(jsoncpp REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
 target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos
-    Boost::context evmone-standalone fbwasm evmc::loader evmc::instructions wabt)
+    Boost::context evmone fbwasm evmc::loader evmc::instructions wabt)
 
 # TODO: EXTEND_LIB not support now!
 
