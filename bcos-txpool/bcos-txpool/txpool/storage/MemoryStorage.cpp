@@ -792,7 +792,8 @@ void MemoryStorage::batchMarkTxsWithoutLock(
             continue;
         }
         // the tx has already been re-sealed, can not enforce unseal
-        if (tx->batchHash() != HashType() && tx->batchHash() != _batchHash && !_sealFlag)
+        if ((tx->batchId() != _batchId || tx->batchHash() != _batchHash) && tx->sealed() &&
+            !_sealFlag)
         {
             continue;
         }
