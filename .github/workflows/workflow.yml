@@ -78,7 +78,7 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../ -G Ninja
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_BUILD_TYPE=release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 4
       - name: Test
         run:
