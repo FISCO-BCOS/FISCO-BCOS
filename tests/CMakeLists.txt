@@ -4,7 +4,7 @@ project(Tars-Service-Test)
 
 file(GLOB_RECURSE SOURCES "unittest/*.cpp")
 
-find_package(OpenMP 4.5 REQUIRED)
+find_package(OpenMP 2.0 REQUIRED)
 find_package(TBB CONFIG REQUIRED)
 
 add_executable(fisco-bcos-test ${SOURCES})
