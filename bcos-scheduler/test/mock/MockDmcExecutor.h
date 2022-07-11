@@ -67,7 +67,7 @@ public:
             callback) override
     {
         std::vector<bcos::protocol::ExecutionMessage> results(inputs.size());
-        for (auto i = 0; i < inputs.size(); i++)
+        for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
         {
             results.at(i) = std::move(inputs[i]);
             if (results.at(i)->transactionHash() == h256(10086))
