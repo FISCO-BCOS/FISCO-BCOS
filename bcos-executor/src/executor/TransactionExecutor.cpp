@@ -109,17 +109,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize = 0,
     std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
-  : m_name(std::move(name)),
-    m_ledger(ledger),
-    m_txpool(std::move(txpool)),
-    m_cachedStorage(std::move(cachedStorage)),
-    m_backendStorage(std::move(backendStorage)),
-    m_executionMessageFactory(std::move(executionMessageFactory)),
-    m_hashImpl(std::move(hashImpl)),
-    m_isAuthCheck(isAuthCheck),
-    m_isWasm(isWasm),
-    m_keyPageSize(keyPageSize),
-    m_keyPageIgnoreTables(keyPageIgnoreTables)
+  : m_name(std::move(name)), m_ledger(ledger), m_txpool(std::move(txpool)), m_cachedStorage(std::move(cachedStorage)), m_backendStorage(std::move(backendStorage)), m_executionMessageFactory(std::move(executionMessageFactory)), m_hashImpl(std::move(hashImpl)), m_isAuthCheck(isAuthCheck), m_isWasm(isWasm),` m_keyPageSize(keyPageSize), m_keyPageIgnoreTables(keyPageIgnoreTables)
 {
     assert(m_backendStorage);
 

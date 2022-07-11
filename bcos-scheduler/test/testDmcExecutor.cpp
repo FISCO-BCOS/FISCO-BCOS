@@ -81,16 +81,18 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 {
     DmcFlagStruct dmcFlagStruct;
     auto block = blockFactory->createBlock();
-    DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, h256(6666), dmcRecorder);
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto dmcExecutor = std::make_shared<DmcExecutor>(
+        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
 
     dmcExecutor->setSchedulerOutHandler(
         [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
             dmcFlagStruct.schedulerOutFlag = true;
             auto to = std::string(executiveState->message->to());
+            auto hashImpl = std::make_shared<Keccak256>();
             auto block = blockFactory->createBlock();
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
-                "DmcExecutor2", to, block, executor1, keyLocks, h256(6667), dmcRecorder);
+                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
             dmcExecutor2->scheduleIn(executiveState);
         });
 
