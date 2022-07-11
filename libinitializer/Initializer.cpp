@@ -49,11 +49,12 @@
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-tool/LedgerConfigFetcher.cpp>
 
 using namespace bcos;
 using namespace bcos::tool;
+using namespace bcos::protocol;
 using namespace bcos::initializer;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
