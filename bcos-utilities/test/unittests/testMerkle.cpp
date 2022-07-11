@@ -39,7 +39,7 @@ using namespace bcos::tool::merkle;
 
 struct TestBinaryMerkleTrieFixture
 {
-    std::array<HashType, 128> hashes;
+    std::array<HashType, 64> hashes;
 
     TestBinaryMerkleTrieFixture()
     {
@@ -87,7 +87,7 @@ void testFixedWidthMerkle(bcos::tool::merkle::InputRange<HashType> auto const& i
                 BOOST_CHECK(trie.verifyProof(proof, hash, trie.root()));
                 BOOST_CHECK(!trie.verifyProof(proof, emptyHash, trie.root()));
 
-                auto dis = std::uniform_int_distribution(0lu, proof.hashes.size() - 1);
+                auto dis = std::uniform_int_distribution<size_t>(0lu, proof.hashes.size() - 1);
                 std::mt19937 prng{seed};
                 proof.hashes[dis(prng)] = emptyHash;
 
@@ -111,7 +111,7 @@ constexpr void loopWidthTest(bcos::tool::merkle::InputRange<HashType> auto const
 
 BOOST_AUTO_TEST_CASE(merkle)
 {
-    constexpr static size_t testCount = 32;
+    constexpr static size_t testCount = 16;
     loopWidthTest<testCount>(hashes);
 }
 

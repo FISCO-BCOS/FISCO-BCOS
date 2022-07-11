@@ -1,7 +1,6 @@
 #pragma once
 
 #include <bcos-crypto/hasher/Hasher.h>
-#include <bits/ranges_algo.h>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -91,7 +90,8 @@ public:
 
         auto index = indexAlign(it - std::begin(levelRange));  // Align
         auto start = levelRange.begin() + index;
-        auto end = std::min(start + width, levelRange.end());
+        auto end = (levelRange.end() - start < width) ? levelRange.end() : start + width;
+        // auto end = std::min(start + width, levelRange.end());
 
         ProofType proof;
         proof.hashes.reserve(m_levels.size() * width);
@@ -108,7 +108,8 @@ public:
             levelRange = std::ranges::subrange{levelRange.end(), levelRange.end() + length};
 
             start = levelRange.begin() + index;
-            end = std::min(start + width, levelRange.end());
+            // end = std::min(start + width, levelRange.end());
+            end = (levelRange.end() - start < width) ? levelRange.end() : start + width;
 
             assert(levelRange.end() <= m_nodes.end());
             proof.hashes.insert(proof.hashes.end(), start, end);
