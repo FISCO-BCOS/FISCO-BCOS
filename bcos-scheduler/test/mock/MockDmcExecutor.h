@@ -37,8 +37,7 @@ public:
     {
         // auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
         // output = std::move(input);
-        SCHEDULER_LOG(DEBUG) << LOG_KV("inputs size ", input.size())
-                             << LOG_KV(",input type ", input->type());
+        SCHEDULER_LOG(DEBUG) << LOG_KV(",input type ", input->type());
         if (input->to() == "0xaabbccdd")
         {
             std::string str = "Call Finished!";

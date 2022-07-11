@@ -84,6 +84,8 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 {
     DmcFlagStruct dmcFlagStruct;
     auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
+    header->setNumber(1);
     auto hashImpl = std::make_shared<Keccak256>();
     auto dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
@@ -103,6 +105,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
         [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
             std::string outputStr((char*)outputBytes.data(), outputBytes.size());
+            SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
             if (outputStr == "Call Finished!")
             {
                 dmcFlagStruct.callFlag = true;
@@ -133,7 +136,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
         {
             ++dmcFlagStruct.error;
             ++dmcFlagStruct.total;
-            SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor")
+            SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor")
                                  << LOG_KV("dmcExecutor go error", dmcFlagStruct.error)
                                  << LOG_KV("total is ", dmcFlagStruct.total);
         }
@@ -141,7 +144,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
         {
             ++dmcFlagStruct.paused;
             ++dmcFlagStruct.total;
-            SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor")
+            SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor")
                                  << LOG_KV("dmcExecutor go paused", dmcFlagStruct.paused)
                                  << LOG_KV("total is ", dmcFlagStruct.total);
         }
@@ -149,7 +152,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
         {
             ++dmcFlagStruct.finished;
             ++dmcFlagStruct.total;
-            SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor")
+            SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor")
                                  << LOG_KV("dmcExecutor go Finished", dmcFlagStruct.finished)
                                  << LOG_KV("total is ", dmcFlagStruct.total);
         }
@@ -166,13 +169,14 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     // TXHASH  DMCEXECUTE
     auto message = createMessage(0, 0, 0, "0xaabbccdd", false);
     dmcExecutor->submit(std::move(message), false);
-    SCHEDULER_LOG << "prepare begin";
+    SCHEDULER_LOG(DEBUG) << "prepare begin";
     auto need_scheduleOut = dmcExecutor->prepare();
-    SCHEDULER_LOG << "prepare begin" << LOG_KV("need_schedulerOut value is ", need_scheduleOut);
+    SCHEDULER_LOG(DEBUG) << "prepare begin"
+                         << LOG_KV("need_schedulerOut value is ", need_scheduleOut);
     BOOST_CHECK(!need_scheduleOut);
     dmcExecutor->go(executorCallback);
-    BOOST_CHECK(dmcFlagStruct.DmcFlag);
-    SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
+    BOOST_CHECK(dmcFlagStruct.callFlag);
+    SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
