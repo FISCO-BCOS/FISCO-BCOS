@@ -49,7 +49,6 @@ struct DmcExecutorFixture
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
     CryptoSuite::Ptr cryptoSuite = nullptr;
     bcos::protocol::BlockFactory::Ptr blockFactory;
-    Block::Ptr block;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
@@ -87,8 +86,9 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     DmcFlagStruct dmcFlagStruct;
 
     auto hashImpl = std::make_shared<Keccak256>();
-    auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-    blockHeader->setNumber(100);
+    auto block = blockFactory->createBlock();
+    auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
+    blockHeader->setNumber(1);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
     auto dmcExecutor = std::make_shared<DmcExecutor>(
@@ -99,7 +99,10 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
             dmcFlagStruct.schedulerOutFlag = true;
             auto to = std::string(executiveState->message->to());
             auto hashImpl = std::make_shared<Keccak256>();
-
+            auto block = blockFactory->createBlock();
+            auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
+            blockHeader->setNumber(2);
+            block->setBlockHeader(blockHeader);
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
                 "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
             dmcExecutor2->scheduleIn(executiveState);
