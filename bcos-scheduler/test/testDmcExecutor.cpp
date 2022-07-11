@@ -7,6 +7,7 @@
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
+#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
@@ -48,6 +49,7 @@ struct DmcExecutorFixture
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
     CryptoSuite::Ptr cryptoSuite = nullptr;
     bcos::protocol::BlockFactory::Ptr blockFactory;
+    Block::Ptr block;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
@@ -83,10 +85,12 @@ bcos::protocol::ExecutionMessage::UniquePtr createMessage(
 BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 {
     DmcFlagStruct dmcFlagStruct;
-    auto block = blockFactory->createBlock();
-    auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
-    header->setNumber(1);
+
     auto hashImpl = std::make_shared<Keccak256>();
+    auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    blockHeader->setNumber(100);
+    block->setBlockHeader(blockHeader);
+    // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
     auto dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
 
@@ -95,7 +99,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
             dmcFlagStruct.schedulerOutFlag = true;
             auto to = std::string(executiveState->message->to());
             auto hashImpl = std::make_shared<Keccak256>();
-            auto block = blockFactory->createBlock();
+
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
                 "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
             dmcExecutor2->scheduleIn(executiveState);
