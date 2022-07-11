@@ -139,7 +139,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-#if TIKV
+#if TIKV_MODULE
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
         schedulerStorage =
             StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);

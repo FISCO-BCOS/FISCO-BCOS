@@ -4,12 +4,11 @@ if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif()
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-include(Options)
-
 include(cmake/Version.cmake)
+include(Options)
+configure_project()
 
 # vcpkg init
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
@@ -21,35 +20,20 @@ endif()
 
 project(PROJECT_NAME VERSION ${VERSION})
 
-configure_project()
-
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
-# install dependencies
 include(IncludeDirectories)
-
-# define targets name
 include(TargetSettings)
 
-if(BOOSTSSL)
+if(BOOSTSSL_MODULE)
     add_subdirectory(bcos-boostssl)
-endif()
-
-if(FRAMEWORK)
     add_subdirectory(bcos-framework)
-endif()
-
-if(CRYPTO)
     add_subdirectory(bcos-crypto)
-endif()
-
-if(UTILITIES)
     add_subdirectory(bcos-utilities)
 endif()
 
-if(ALL_COMPONENTS)
-    # import dependencies
+if(CORE_MODULES)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
 
@@ -74,7 +58,7 @@ if(ALL_COMPONENTS)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
 
-    if(TARSSERVICES)
+    if(TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
     endif()
 
@@ -92,3 +76,5 @@ if(COVERAGE)
     include(Coverage)
     config_coverage("tars-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
 endif()
+
+print_config("FISCO BCOS")

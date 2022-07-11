@@ -19,7 +19,6 @@
     "boost-log",
     "boost-beast",
     "boost-uuid",
-    "boost-coroutine2",
     "boost-heap",
     "boost-graph",
     "boost-property-map",
@@ -37,19 +36,24 @@
     "wedprcrypto"
   ],
   "features": {
-    "evm": {
-      "description": "EVM for blockchain",
+    "executor": {
+      "description": "Executor module dependencies",
       "dependencies": [
-        "evmone"
+        "evmone",
+        "boost-coroutine2"
       ]
     },
-    "node": {
-      "description": "EVM for blockchain",
+    "rpcframework": {
+      "description": "RPC framework module dependencies",
       "dependencies": [
-        "tarscpp",
+        "tarscpp"
+      ]
+    },
+    "storage": {
+      "description": "Storage module dependencies",
+      "dependencies": [
         "rocksdb",
         "zstd"
-
       ]
     }
   },

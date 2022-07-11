@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (int i = 0u; i < decodedHeader->parentInfo().size(); ++i)
+    for (auto i = 0u; i < decodedHeader->parentInfo().size(); ++i)
     {
         BOOST_CHECK_EQUAL(bcos::toString(header->parentInfo()[i].blockHash),
             bcos::toString(decodedHeader->parentInfo()[i].blockHash));

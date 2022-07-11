@@ -58,7 +58,7 @@ public:
             std::unique_ptr<rocksdb::DB>(db), _dataEncrypt);
     }
 
-#ifdef TIKV
+#ifdef TIKV_MODULE
     static bcos::storage::TransactionalStorageInterface::Ptr build(
         const std::vector<std::string>& _pdAddrs, const std::string& _logPath)
     {

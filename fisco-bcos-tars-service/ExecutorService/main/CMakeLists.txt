@@ -1,7 +1,7 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-if(TIKV)
+if(TIKV_MODULE)
     aux_source_directory(../ SRC_LIST)
     add_executable(${EXECUTOR_BINARY_NAME} ${SRC_LIST} ${HEADERS})
 
