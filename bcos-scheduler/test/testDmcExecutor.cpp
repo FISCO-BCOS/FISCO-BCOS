@@ -2,6 +2,7 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/ExecutiveState.h"
+#include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
@@ -16,6 +17,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
+
 
 
 using namespace std;
@@ -65,7 +67,7 @@ struct DmcFlagStruct
 bcos::protocol::ExecutionMessage::UniquePtr createMessage(
     int contextID, int seq, int type, std::string toAddress, bool staticCall)
 {
-    auto message = std::make_unique<bcos::protocol::ExecutionMessage>();
+    auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
     message->setStaticCall(staticCall);
     message->setType(bcos::protocol::ExecutionMessage::Type(type));
     message->setContextID(contextID);
