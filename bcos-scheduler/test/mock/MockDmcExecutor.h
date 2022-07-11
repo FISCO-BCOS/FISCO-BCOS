@@ -37,6 +37,8 @@ public:
     {
         // auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
         // output = std::move(input);
+        SCHEDULER_LOG(DEBUG) << LOG_KV("inputs size ", inputs.size())
+                             << LOG_KV(",input type ", input.type());
         if (input->to() == "0xaabbccdd")
         {
             std::string str = "Call Finished!";
@@ -44,6 +46,7 @@ public:
             input->setData(bcos::bytes(str.begin(), str.end()));
             input->setStatus(0);
             input->setGasAvailable(123456);
+            SCHEDULER_LOG(DEBUG) << LOG_KV("call  finished, input type is ", input.type());
             callback(nullptr, std::move(input));
         }
         else
@@ -54,6 +57,7 @@ public:
             input->setStatus(-1);
             callback(
                 BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, "call is error"), std::move(input));
+            SCHEDULER_LOG(DEBUG) << LOG_KV("call  error, input type is ", input.type());
             return;
         }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
@@ -66,10 +70,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        SCHEDULER_LOG(DEBUG) << LOG_KV("inputs size ", inputs.size());
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
         {
+            SCHEDULER_LOG(DEBUG) << "begin  dmcExecute" << LOG_KV(",input type ", inputs[i].type());
             results.at(i) = std::move(inputs[i]);
+            SCHEDULER_LOG(DEBUG) << "begin  dmcExecute"
+                                 << LOG_KV(",input type ", results[i].type());
             if (results.at(i)->transactionHash() == h256(10086))
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, "execute is error"),
@@ -79,16 +87,21 @@ public:
 
             if (results[i]->type() == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
+                SCHEDULER_LOG(DEBUG) << "setData"
+                                     << "type is keyLocks";
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
             }
             else
             {
+                SCHEDULER_LOG(DEBUG) << "setData"
+                                     << "type is not keyLocks";
                 results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
             }
         }
+        SCHEDULER_LOG(DEBUG) << LOG_KV("results size ", results.size());
         callback(nullptr, std::move(results));
     };
 
