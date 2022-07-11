@@ -137,6 +137,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_compile_options(/std:c++latest)
+    add_compile_options(-bigobj)
 else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
 endif()
