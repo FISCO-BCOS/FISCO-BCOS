@@ -264,7 +264,6 @@ void AuthManagerPrecompiled::resetAdmin(
 void AuthManagerPrecompiled::setMethodAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
-
 {
     std::string path;
     string32 _func;
@@ -272,6 +271,7 @@ void AuthManagerPrecompiled::setMethodAuthType(
     bytesConstRef data = getParamData(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    auto beginT = utcTime();
     if (!blockContext->isWasm())
     {
         Address contractAddress;
@@ -295,10 +295,12 @@ void AuthManagerPrecompiled::setMethodAuthType(
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-
     auto response =
         externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
             _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    auto finishedET = utcTime() - beginT;
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << "setMethodAuthType finished"
+                           << LOG_KV("setPath", path) << LOG_KV("finishedET", finishedET);
     _callParameters->setExternalResult(std::move(response));
 }
 
@@ -377,6 +379,7 @@ void AuthManagerPrecompiled::setMethodAuth(
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     bytesConstRef data = getParamData(_callParameters->input());
+    auto recordT = utcTime();
     if (!blockContext->isWasm())
     {
         Address contractAddress;
@@ -405,6 +408,8 @@ void AuthManagerPrecompiled::setMethodAuth(
     auto response =
         externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
             _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << "setMethodAuth finished"
+                           << LOG_KV("setPath", path) << LOG_KV("execT", (utcTime() - recordT));
     _callParameters->setExternalResult(std::move(response));
 }
 

@@ -111,7 +111,7 @@ void SealingManager::clearPendingTxs()
 
 void SealingManager::notifyResetTxsFlag(HashListPtr _txsHashList, bool _flag, size_t _retryTime)
 {
-    m_config->txpool()->asyncMarkTxs(_txsHashList, _flag, 0, HashType(),
+    m_config->txpool()->asyncMarkTxs(_txsHashList, _flag, -1, HashType(),
         [this, _txsHashList, _flag, _retryTime](Error::Ptr _error) {
             if (_error == nullptr)
             {

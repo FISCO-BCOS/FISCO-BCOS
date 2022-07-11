@@ -12,7 +12,7 @@ gateway_sm_ssl=false
 # the existed rpc service ca path, will generate new ca if not configurated
 #rpc_ca_cert_path=""
 # the existed gateway service ca path, will generate new ca if not configurated
-#gateway_ca_cert_path="
+#gateway_ca_cert_path=""
 
 [[group]]
 group_id="group0"
@@ -72,5 +72,5 @@ enable_storage_security = false
         executor_deploy_ip=["172.25.0.3"]
         monitor_listen_port = "3901"
         # the tikv storage pd-addresses
-        # monitor log path example:"/root/app/tars/framework/app_log/"
+        # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""

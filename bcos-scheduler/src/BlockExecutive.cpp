@@ -101,6 +101,15 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setOrigin(toHex(tx->sender()));
     message->setFrom(std::string(message->origin()));
 
+    if (!m_isSysBlock)
+    {
+        auto toAddress = tx->to();
+        if (bcos::precompiled::c_systemTxsAddress.count(
+                std::string(toAddress.begin(), toAddress.end())))
+        {
+            m_isSysBlock.store(true);
+        }
+    }
 
     if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
     {
@@ -121,7 +130,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         else
         {
             if (m_scheduler->m_isAuthCheck && !m_staticCall &&
-                m_block->blockHeaderConst()->number() == 0 &&
+                isSysContractDeploy(m_block->blockHeaderConst()->number()) &&
                 tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
             {
                 // if enable auth check, and first deploy auth contract
@@ -132,8 +141,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     }
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
-    if (precompiled::c_systemTxsAddress.find(std::string(tx->to())) !=
-        precompiled::c_systemTxsAddress.end())
+    if (precompiled::c_systemTxsAddress.count({tx->to().data(), tx->to().size()}))
     {
         message->setGasAvailable(TRANSACTION_GAS);
     }
@@ -161,10 +169,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
                          << LOG_KV("block number", m_block->blockHeaderConst()->number())
                          << LOG_KV("tx count", m_block->transactionsMetaDataSize());
 
-    auto txs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
+    m_blockTxs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
 
     m_executiveResults.resize(m_block->transactionsMetaDataSize());
-    if (txs)
+    if (m_blockTxs)
     {
         // can fetch tx from txpool, build message which type is MESSAGE
 #pragma omp parallel for
@@ -177,7 +185,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
                 m_executiveResults[i].source = metaData->source();
             }
             auto contextID = i + m_startContextID;
-            auto message = buildMessage(contextID, (*txs)[i]);
+            auto message = buildMessage(contextID, (*m_blockTxs)[i]);
             std::string to = {message->to().data(), message->to().size()};
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
@@ -230,8 +238,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
             message->setDepth(0);
             message->setGasAvailable(m_gasLimit);
-            if (precompiled::c_systemTxsAddress.find(std::string(metaData->to())) !=
-                precompiled::c_systemTxsAddress.end())
+            if (precompiled::c_systemTxsAddress.count(
+                    {metaData->to().data(), metaData->to().size()}))
             {
                 message->setGasAvailable(TRANSACTION_GAS);
             }
@@ -240,7 +248,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
             std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
-            m_hasDAG = enableDAG;
+            m_hasDAG = m_hasDAG || enableDAG;
             registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
         }
     }
@@ -258,15 +266,6 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     for (size_t i = 0; i < m_block->transactionsSize(); ++i)
     {
         auto tx = m_block->transaction(i);
-        if (!m_isSysBlock)
-        {
-            auto toAddress = tx->to();
-            if (bcos::precompiled::c_systemTxsAddress.count(
-                    std::string(toAddress.begin(), toAddress.end())))
-            {
-                m_isSysBlock.store(true);
-            }
-        }
         m_executiveResults[i].transactionHash = tx->hash();
         m_executiveResults[i].source = tx->source();
 
@@ -276,7 +275,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
         bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
 #pragma omp critical
-        m_hasDAG = enableDAG;
+        m_hasDAG = m_hasDAG || enableDAG;
         registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
     }
 }
@@ -452,7 +451,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
     m_currentTimePoint = std::chrono::system_clock::now();
 
-    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_block,
+    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_blockTxs, m_block,
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
@@ -1312,15 +1311,22 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
+    if (bcos::precompiled::c_systemTxsAddress.count({output->from().data(), output->from().size()}))
+    {
+        txGasUsed = 0;
+    }
     m_gasUsed += txGasUsed;
-    DMC_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                   << " -> contextID:" << output->contextID() - m_startContextID;
+    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+        output->newEVMContractAddress(),
+        std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
+        output->status(), output->takeData(), m_block->blockHeaderConst()->number());
     // write receipt in results
-    m_executiveResults[output->contextID() - m_startContextID].receipt =
-        m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-            output->newEVMContractAddress(),
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
-            output->status(), output->takeData(), m_block->blockHeaderConst()->number());
+    m_executiveResults[output->contextID() - m_startContextID].receipt = receipt;
+    SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                         << " -> contextID:" << output->contextID() - m_startContextID
+                         << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
+                         << ", version: " << receipt->version()
+                         << ", status: " << receipt->status();
 }
 
 

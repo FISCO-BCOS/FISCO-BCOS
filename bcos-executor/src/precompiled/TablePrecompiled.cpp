@@ -249,6 +249,12 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limit));
 
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
+    }
+
     // merge keys from storage and eqKeys
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
@@ -284,6 +290,12 @@ void TablePrecompiled::count(const std::string& tableName,
     auto keyCondition = std::make_optional<storage::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), {});
+
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
+                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
+    }
 
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
@@ -431,6 +443,12 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
 
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
+    }
+
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
 
     TableInfoTuple tableInfo;
@@ -534,6 +552,12 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
 
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
+
+    if (c_fileLogLevel >= LogLevel::TRACE)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
+                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
+    }
 
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
 

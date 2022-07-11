@@ -182,7 +182,7 @@ public:
         m_running = true;
         m_masterNode.store(true);
     }
-    void start() override { recoverState(); }
+    void start() override { m_pbftEngine->recoverState(); }
     void init() override
     {
         PBFTImpl::init();

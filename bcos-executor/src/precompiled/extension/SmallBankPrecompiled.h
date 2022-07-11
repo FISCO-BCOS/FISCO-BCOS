@@ -22,8 +22,9 @@
 
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include <bcos-framework//ledger/LedgerTypeDef.h>
-#include <bcos-framework//storage/Table.h>
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Table.h>
 
 namespace bcos
 {
@@ -55,7 +56,7 @@ public:
         return addressBytes.hex();
     }
 
-    static void registerPrecompiled(
+    static void registerPrecompiled(std::shared_ptr<storage::StorageInterface> storageInterface,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             registeredMap,
         crypto::Hash::Ptr _hashImpl)
@@ -65,6 +66,16 @@ public:
             std::string _tableName = std::to_string(id);
             std::string path = std::string{bcos::ledger::SMALLBANK_TRANSFER};
             _tableName = path + _tableName;
+            // create table first
+            std::promise<Error::UniquePtr> createPromise;
+            storageInterface->asyncCreateTable(_tableName, SYS_VALUE_FIELDS,
+                [&createPromise](Error::UniquePtr _e, std::optional<storage::Table>) {
+                    createPromise.set_value(std::move(_e));
+                });
+            Error::UniquePtr _e = createPromise.get_future().get();
+            BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "create smallbank table"
+                            << LOG_KV("table", _tableName)
+                            << (_e == nullptr ? "" : " withError: " + _e->errorMessage());
             std::string&& address = getAddress(id);
             registeredMap->insert({std::move(address),
                 std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl, _tableName)});

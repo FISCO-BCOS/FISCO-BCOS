@@ -58,32 +58,29 @@ std::shared_ptr<PrecompiledExecResult> FileSystemPrecompiled::call(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("call")
                            << LOG_KV("func", func);
 
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
-    gasPricer->setMemUsed(_callParameters->input().size());
-
     if (func == name2Selector[FILE_SYSTEM_METHOD_LIST])
     {
         // list(string) => (int32,fileList)
-        listDir(_executive, gasPricer, _callParameters);
+        listDir(_executive, _callParameters);
     }
     else if (func == name2Selector[FILE_SYSTEM_METHOD_MKDIR])
     {
         // mkdir(string) => int32
-        makeDir(_executive, gasPricer, _callParameters);
+        makeDir(_executive, _callParameters);
     }
     else if (func == name2Selector[FILE_SYSTEM_METHOD_LINK])
     {
         // link(string name, string version, address, abi) => int32
-        link(_executive, gasPricer, _callParameters);
+        link(_executive, _callParameters);
     }
     else if (func == name2Selector[FILE_SYSTEM_METHOD_RLINK])
     {
-        readLink(_executive, gasPricer, _callParameters);
+        readLink(_executive, _callParameters);
     }
     else if (func == name2Selector[FILE_SYSTEM_METHOD_TOUCH])
     {
         // touch(string absolute,string type) => int32
-        touch(_executive, gasPricer, _callParameters);
+        touch(_executive, _callParameters);
     }
     else
     {
@@ -92,8 +89,6 @@ std::shared_ptr<PrecompiledExecResult> FileSystemPrecompiled::call(
         BOOST_THROW_EXCEPTION(PrecompiledError("FileSystemPrecompiled call undefined function!"));
     }
 
-    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -153,7 +148,7 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
 
 void FileSystemPrecompiled::makeDir(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters)
 
 {
     // mkdir(string)
@@ -163,7 +158,6 @@ void FileSystemPrecompiled::makeDir(
     codec.decode(_callParameters->params(), absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("mkdir", absolutePath);
     auto table = _executive->storage().openTable(absolutePath);
-    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
     if (table)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
@@ -176,13 +170,13 @@ void FileSystemPrecompiled::makeDir(
     auto bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        absolutePath, FS_TYPE_DIR, _callParameters->m_gas - gasPricer->calTotalGas());
+        absolutePath, FS_TYPE_DIR, _callParameters->m_gas);
     _callParameters->setExecResult(codec.encode(response));
 }
 
 void FileSystemPrecompiled::listDir(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters)
 {
     // list(string)
     std::string absolutePath;
@@ -199,7 +193,6 @@ void FileSystemPrecompiled::listDir(
         return;
     }
     auto table = _executive->storage().openTable(absolutePath);
-    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
 
     if (table)
     {
@@ -256,7 +249,7 @@ void FileSystemPrecompiled::listDir(
 }
 
 void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters)
 {
     std::string contractName, contractVersion, contractAddress, contractAbi;
     auto blockContext = _executive->blockContext().lock();
@@ -287,7 +280,6 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
             codec.encode(int32_t(validCode < 0 ? validCode : CODE_FILE_INVALID_PATH)));
         return;
     }
-    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
     auto linkTable = _executive->storage().openTable(linkTableName);
     if (linkTable)
     {
@@ -321,7 +313,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gas - gasPricer->calTotalGas());
+        linkTableName, FS_TYPE_LINK, _callParameters->m_gas);
     if (response != 0)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
@@ -332,7 +324,6 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
         return;
     }
     _executive->storage().createTable(linkTableName, STORAGE_VALUE);
-    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // set link info to link table
     Entry typeEntry, nameEntry, addressEntry, abiEntry;
     typeEntry.importFields({FS_TYPE_LINK});
@@ -348,7 +339,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
 
 void FileSystemPrecompiled::readLink(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters)
 {
     // readlink(string)
     std::string absolutePath;
@@ -367,7 +358,6 @@ void FileSystemPrecompiled::readLink(
         return;
     }
     auto table = _executive->storage().openTable(absolutePath);
-    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
 
     if (table)
     {
@@ -394,7 +384,7 @@ void FileSystemPrecompiled::readLink(
 }
 
 void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters)
 {
     // touch(string absolute, string type)
     std::string absolutePath, type;
@@ -441,7 +431,6 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
                            << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName)
                            << LOG_KV("type", type);
     auto buildResult = recursiveBuildDir(_executive, parentDir);
-    gasPricer->appendOperation(CreateTable);
     if (!buildResult)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("Recursive build bfs dir error."));
@@ -557,8 +546,8 @@ bool FileSystemPrecompiled::recursiveBuildDir(
         else
         {
             EXECUTIVE_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                                 << LOG_DESC("parent type not found")
-                                 << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+                                 << LOG_DESC("parent type not found") << LOG_KV("parentDir", root)
+                                 << LOG_KV("dir", dir);
             return false;
         }
     }

@@ -258,7 +258,6 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     m_committedQueue.push(_committedProposal);
     m_committedProposalList.insert(proposalIndex);
     m_proposalsToStableConsensus.insert(proposalIndex);
-    notifyToSealNextBlock();
     PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
@@ -269,6 +268,9 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
                               "Receive valid system prePrepare proposal, stop to notify sealing")
                        << LOG_KV("waitSealUntil", proposalIndex);
     }
+    // Note: should notify to seal nextBlock after waitSealUntil setted, in case of the system
+    // proposals are generated and committed not by serial
+    notifyToSealNextBlock();
     tryToPreApplyProposal(_committedProposal);  // will query scheduler to encode message and fill
                                                 // txbytes in blocks
     tryToApplyCommitQueue();

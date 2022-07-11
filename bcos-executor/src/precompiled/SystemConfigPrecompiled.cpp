@@ -142,7 +142,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
     }
-    _callParameters->setGas(_callParameters->m_gas);
     return _callParameters;
 }
 

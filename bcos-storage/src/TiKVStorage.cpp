@@ -42,6 +42,7 @@
 #include <tbb/spin_mutex.h>
 #include <exception>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 
@@ -57,9 +58,6 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
     const std::vector<std::string>& pdAddrs, const std::string& logPath)
 {
     pingcap::ClusterConfig config;
-    // TODO: why config this?
-    config.tiflash_engine_key = "engine";
-    config.tiflash_engine_value = "tikv";
     // auto pChannel = Poco::AutoPtr<Poco::StreamChannel>(new Poco::StreamChannel(std::cerr));
     auto fileChannel =
         Poco::AutoPtr<Poco::FileChannel>(new Poco::FileChannel(logPath + "/tikv-client.log"));
@@ -173,7 +171,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
         if (!isValid(_table))
         {
             STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("asyncGetRow empty tableName") << LOG_KV("table", _table);
+                << LOG_DESC("asyncGetRows empty tableName") << LOG_KV("table", _table);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
             return;
         }
@@ -200,7 +198,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                     if (nh.empty() || nh.mapped().empty())
                     {
                         entries[i] = std::nullopt;
-                        STORAGE_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
+                        STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
                     }
                     else
                     {
@@ -287,9 +285,12 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
+    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
+                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {
         auto start = utcTime();
+        RecursiveGuard l(x_committer);
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
         atomic_bool isTableValid = true;
@@ -325,6 +326,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         }
         auto size = mutations.size();
         auto primaryLock = toDBKey(params.primaryTableName, params.primaryTableKey);
+        // TODO: if m_committer is not null, return error code
         m_committer = std::make_shared<BCOSTwoPhaseCommitter>(
             m_cluster.get(), primaryLock, std::move(mutations), m_coroutineStackSize, m_maxRetry);
         if (params.timestamp == 0)
@@ -378,9 +380,10 @@ void TiKVStorage::asyncCommit(
 {
     auto start = utcTime();
     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
-                            << LOG_KV("primary", params.timestamp > 0 ? "true" : "false");
+                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {
+        RecursiveGuard l(x_committer);
         uint64_t ts = 0;
         if (m_committer)
         {
@@ -428,6 +431,7 @@ void TiKVStorage::asyncRollback(
     try
     {
         STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number);
+        RecursiveGuard l(x_committer);
         if (m_committer)
         {
             m_committer->rollback();
@@ -456,4 +460,51 @@ void TiKVStorage::asyncRollback(
                                 << LOG_KV("message", e.what());
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncRollback failed! ", e));
     }
+}
+
+bcos::Error::Ptr TiKVStorage::setRows(
+    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+{
+    try
+    {
+        if (table.empty())
+        {
+            STORAGE_TIKV_LOG(WARNING)
+                << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+            return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+        }
+        if (keys.size() != values.size())
+        {
+            STORAGE_TIKV_LOG(WARNING)
+                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("table", table)
+                << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
+            return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+        }
+        if (keys.empty())
+        {
+            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+            return nullptr;
+        }
+        std::vector<std::string> realKeys(keys.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i)
+                {
+                    realKeys[i] = toDBKey(table, keys[i]);
+                }
+            });
+        Txn txn(m_cluster.get());
+        for (size_t i = 0; i < values.size(); ++i)
+        {
+            txn.set(std::move(realKeys[i]), std::move(values[i]));
+        }
+        txn.commit();
+    }
+    catch (const pingcap::Exception& e)
+    {
+        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("setRows failed") << LOG_KV("message", e.message())
+                                << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
+        return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
+    }
+    return nullptr;
 }

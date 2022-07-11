@@ -74,6 +74,11 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
+    virtual Error::Ptr setRows(std::string_view, std::vector<std::string>, std::vector<std::string>)
+    {
+        throw std::invalid_argument("unimplement method");
+        return nullptr;
+    };
 };
 
 class TraverseStorageInterface : public virtual StorageInterface
@@ -112,8 +117,8 @@ public:
         const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
-    virtual void asyncCommit(
-        const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) = 0;
+    virtual void asyncCommit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) = 0;
 
     virtual void asyncRollback(
         const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;

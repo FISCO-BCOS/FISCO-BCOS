@@ -574,6 +574,53 @@ BOOST_AUTO_TEST_CASE(openAndCommit)
     }
 }
 
+BOOST_AUTO_TEST_CASE(checkInvalidKeys)
+{
+    auto hashImpl2 = make_shared<Header256Hash>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2);
+    BOOST_REQUIRE(tableFactory2 != nullptr);
+
+    std::string tableName = "testTable";
+    tableFactory2->createTable(tableName, "value");
+    auto table = tableFactory2->openTable(tableName);
+    for (int i = 0; i < 10; ++i)
+    {
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    }
+    std::atomic<size_t> invalid = 0;
+    tableFactory2->parallelTraverse(false, [&](auto&, auto&, auto& entry) {
+        if (entry.status() == Entry::Status::DELETED)
+        {
+            ++invalid;
+        }
+        return true;
+    });
+    BOOST_TEST(invalid == 9);
+    auto key = "testKey" + boost::lexical_cast<std::string>(9);
+    auto entry = table->newDeletedEntry();
+    table->setRow(key, entry);
+    tableFactory2->setReadOnly(true);
+    auto tableFactory3 = make_shared<KeyPageStorage>(tableFactory2);
+    table = tableFactory3->openTable(tableName);
+    key = "testKey" + boost::lexical_cast<std::string>(8);
+    entry = table->newEntry();
+    entry.setField(0, "hello world!sss");
+    table->setRow(key, entry);
+    invalid = 0;
+    tableFactory3->parallelTraverse(false, [&](auto&, auto&, auto& entry) {
+        if (entry.status() == Entry::Status::DELETED)
+        {
+            ++invalid;
+        }
+        return true;
+    });
+    BOOST_TEST(invalid == 1);
+}
+
 BOOST_AUTO_TEST_CASE(chainLink)
 {
     std::vector<KeyPageStorage::Ptr> storages;
@@ -1322,7 +1369,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 3290);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeRandom)
@@ -1435,11 +1482,17 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
     //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
 
     std::atomic<size_t> totalCount = 0;
-    tableStorage->parallelTraverse(false, [&](auto&&, auto&&, auto&&) {
+    std::atomic<size_t> deleted = 0;
+    tableStorage->parallelTraverse(false, [&](auto&&, auto&&, auto& e) {
         ++totalCount;
+        if (e.status() == Entry::Status::DELETED)
+        {
+            ++deleted;
+        }
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 3290);  // meta + 5page + s_table
+    BOOST_TEST(totalCount == 4190);  // meta + 5page + s_table
+    BOOST_TEST(deleted == 3300);     // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
@@ -1671,7 +1724,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 3290);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitRandom)
@@ -1727,7 +1780,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 8830);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 9730);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitParallelRandom)
@@ -1878,6 +1931,22 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     auto keys5 = table->getPrimaryKeys(c5);
     BCOS_LOG(TRACE) << "NE 250:" << printVector(keys5);
     BOOST_REQUIRE(keys5.size() == 499);
+
+    auto fruitTable = "table_fruit";
+    BOOST_REQUIRE(tableStorage->createTable(fruitTable, valueFields));
+
+    table = tableStorage->openTable(fruitTable);
+    BOOST_REQUIRE(table);
+    auto entry = std::make_optional(table->newEntry());
+    auto key = "fruit";
+    entry->setField(0, "a");
+    BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    Condition c6;
+    c6.limit(0, 0);
+    c6.GE("fruit");
+    auto keys6 = table->getPrimaryKeys(c6);
+    // the default limit is 0
+    BOOST_REQUIRE(keys6.size() == 0);
 }
 
 

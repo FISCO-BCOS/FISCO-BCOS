@@ -50,15 +50,17 @@ public:
                                    << LOG_KV("executorServiceName", m_executorServiceName);
     }
 
+    virtual ~TarsRemoteExecutorManager() { stopWorking(); };
+
     void start()
     {
         EXECUTOR_MANAGER_LOG(INFO) << "Start" << threadName() << " "
                                    << LOG_KV("executorServiceName", m_executorServiceName);
-        // refresh();
+        waitForExecutorConnection();
         startWorking();
     }
 
-    virtual ~TarsRemoteExecutorManager() { stopWorking(); };
+    void waitForExecutorConnection();
 
     void setRemoteExecutorChangeHandler(std::function<void()> handler)
     {
@@ -67,11 +69,13 @@ public:
 
     void executeWorker() override;
 
-    void refresh();
+    void refresh(bool needNotifyChange = true);
 
-    void update(EndPointSet endPointMap);
+    void update(EndPointSet endPointMap, bool needNotifyChange = true);
 
     bool empty() { return size() == 0; }
+
+    bool checkAllExecutorSeq();
 
 private:
     std::string buildEndPointUrl(std::string host, uint16_t port)
@@ -87,7 +91,9 @@ private:
 
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
+    uint8_t m_waitingExecutorMaxRetryTimes = 20;
 
     EndPointSet m_endPointSet = std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
+    std::map<std::string, int64_t> m_executor2Seq;
 };
 }  // namespace bcos::scheduler
