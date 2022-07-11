@@ -4,6 +4,8 @@
 #include "bcos-executor/src/executive/ExecutiveState.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
+#include "bcos-protocol/protobuf/PBBlock.h"
+#include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
@@ -19,7 +21,6 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-
 
 
 using namespace std;
