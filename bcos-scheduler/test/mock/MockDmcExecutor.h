@@ -2,10 +2,10 @@
 #include "Common.h"
 #include "bcos-framework/interfaces/executor/ExecuteError.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include <boost/test/unit_test.hpp>
-
 
 
 using namespace std;
@@ -66,7 +66,7 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
-        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
+        std::vector<bcos::protocol::ExecutionMessage> results(inputs.size());
         for (auto i = 0; i < inputs.size(); i++)
         {
             results.at(i) = std::move(inputs[i]);
@@ -77,7 +77,7 @@ public:
                 return;
             }
 
-            if (inputs[i]->type() == bcos::protocol::ExecutionMessage::KEY_LOCK)
+            if (results[i]->type() == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
