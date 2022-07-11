@@ -17,8 +17,9 @@
 # Function: Common cmake file for setting compilation environment variables
 # ------------------------------------------------------------------------------
 
-add_definitions(-Wno-unused-value -Wunused-parameter)
+#add_definitions(-Wno-unused-value -Wunused-parameter)
 
+set(CMAKE_CXX_STANDARD 20)
 if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
 
@@ -27,9 +28,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
 
-    set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-    add_compile_options(-Werror)
+    # add_compile_options(-Werror)
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
@@ -135,6 +135,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
         endif()
     endif()
+elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    add_compile_options(/std:c++latest)
 else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
 endif()

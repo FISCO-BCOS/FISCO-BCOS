@@ -1,11 +1,14 @@
 include(ExternalProject)
 include(GNUInstallDirs)
-find_program(CARGO_COMMAND cargo)
-find_program(RUSTUP_COMMAND rustup)
+
+find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "$ENV{USERPROFILE}\\.cargo\\bin")
+find_program(RUSTUP_COMMAND NAMES rustup REQUIRED PATHS "$ENV{USERPROFILE}\\.cargo\\bin")
+
 if(NOT CARGO_COMMAND OR NOT RUSTUP_COMMAND)
     message(FATAL_ERROR "cargo/rustup is not installed")
 endif()
-find_program(RUSTC_COMMAND rustc)
+
+find_program(RUSTC_COMMAND NAMES rustc REQUIRED PATHS "$ENV{USERPROFILE}\\.cargo\\bin")
 if(NOT CARGO_COMMAND OR NOT RUSTC_COMMAND)
     message(FATAL_ERROR "rustc is not installed")
 endif()

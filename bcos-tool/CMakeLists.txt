@@ -26,7 +26,7 @@ find_package(Boost REQUIRED COMPONENTS serialization)
 
 file(GLOB_RECURSE SRCS *.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
-target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+# target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework)
 
 # for code coverage

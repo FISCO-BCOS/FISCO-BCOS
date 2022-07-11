@@ -5,7 +5,7 @@ project(test-lightnode)
 find_package(Boost REQUIRED unit_test_framework)
 
 add_executable(test-lightnode LedgerImplTest.cpp StorageSyncWrapperTest.cpp SyncerTest.cpp main.cpp)
-target_compile_options(test-lightnode PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic -ggdb3 -O0)
+# target_compile_options(test-lightnode PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic -ggdb3 -O0)
 target_link_libraries(test-lightnode PUBLIC ${TABLE_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
 
 add_test(NAME test-lightnode COMMAND test-lightnode)
