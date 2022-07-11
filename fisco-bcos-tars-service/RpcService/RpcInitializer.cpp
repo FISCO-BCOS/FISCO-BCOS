@@ -23,7 +23,7 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework//election/FailOverTypeDef.h>
-#ifdef ETCD
+#ifdef ETCD_MODULE
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif
 #include <bcos-rpc/RpcFactory.h>
@@ -52,7 +52,7 @@ void RpcInitializer::init(std::string const& _configDir)
         m_nodeConfig->setEnSmNodeCert(_configDir + "/" + "sm_enssl.crt");
         m_nodeConfig->setEnSmNodeKey(_configDir + "/" + "sm_enssl.key");
     }
-#ifdef ETCD
+#ifdef ETCD_MODULE
     if (m_nodeConfig->enableFailOver())
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("enable failover");
@@ -115,7 +115,7 @@ void RpcInitializer::start()
     }
     m_running = true;
 
-#ifdef ETCD
+#ifdef ETCD_MODULE
     if (m_leaderEntryPoint)
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
@@ -137,7 +137,7 @@ void RpcInitializer::stop()
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
 
-#ifdef ETCD
+#ifdef ETCD_MODULE
     if (m_leaderEntryPoint)
     {
         m_leaderEntryPoint->stop();

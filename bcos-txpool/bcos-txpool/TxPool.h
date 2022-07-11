@@ -152,6 +152,8 @@ protected:
 
     void initSendResponseHandler();
 
+    virtual void storeVerifiedBlock(bcos::protocol::Block::Ptr _block);
+
 private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;

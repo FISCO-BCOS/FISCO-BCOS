@@ -395,7 +395,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         auto currentBlockNumber = getCurrentBlockNumber();
         if (currentBlockNumber + 1 != requestBlockNumber)
         {
-            // happens in some multi-thread scenario, the block has been commiteed
+            // happens in some multi-thread scenario, the block has been commited
             auto message = (boost::format("commit an committed block %d, current number is %d") %
                             requestBlockNumber % currentBlockNumber)
                                .str();
@@ -443,6 +443,19 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
                     nullptr);
                 return;
+            }
+
+            {
+                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                bcos::protocol::BlockNumber number = m_blocks->front()->number();
+                if (number != block->blockHeaderConst()->number())
+                {
+                    SCHEDULER_LOG(FATAL)
+                        << "The committed block is not equal to blockQueue front block";
+                }
+                removeAllOldPreparedBlock(number);
+                m_blocks->pop_front();
+                SCHEDULER_LOG(DEBUG) << "Remove committed block: " << number << " success";
             }
 
             asyncGetLedgerConfig([this, commitLock = std::move(commitLock), blockExecutive,
@@ -503,13 +516,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
                             SCHEDULER_LOG(INFO) << "End notify block result: " << blockNumber;
 
-                            {
-                                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                                m_blocks->pop_front();
-                                SCHEDULER_LOG(DEBUG)
-                                    << "Remove committed block: " << blockNumber << " success";
-                                blocksLock.unlock();
-                            }
 
                             commitLock->unlock();
                             // Note: only after the block notify finished can call the callback
@@ -518,15 +524,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 }
                 else
                 {
-                    {
-                        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                        bcos::protocol::BlockNumber number = m_blocks->front()->number();
-                        removeAllOldPreparedBlock(number);
-                        m_blocks->pop_front();
-                        SCHEDULER_LOG(DEBUG)
-                            << "Remove committed block: " << blockNumber << " success";
-                    }
-
                     commitLock->unlock();
                     callback(nullptr, std::move(ledgerConfig));
                 }
@@ -766,8 +763,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
     };
 
-    bcos::protocol::BlockNumber currentBlockNumber = getBlockNumberFromStorage();
-    if (header->number() <= currentBlockNumber)
+    bcos::protocol::BlockNumber currentBlockNumber = getBlockNumberInStorage();
+    // Note: skip check for sys contract deploy
+    if (!isSysContractDeploy(header->number()) && header->number() <= currentBlockNumber)
     {
         SCHEDULER_LOG(DEBUG) << "Block has committed, just return"
                              << LOG_KV("toCommitNumber", header->number())
@@ -922,7 +920,7 @@ running"), nullptr); return;
 
             // Note: blockNumber = 0, means system deploy, and tx is not existed in txpool.
             // So it should not exec tx notifier
-            if (m_txNotifier && blockNumber != 0)
+            if (m_txNotifier && !isSysContractDeploy(blockNumber))
             {
                 SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
                 frontBlock->asyncNotify(m_txNotifier,

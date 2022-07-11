@@ -10,7 +10,8 @@ class MockLedger2 : public bcos::ledger::LedgerInterface
 {
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback)
+        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback)
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
         auto header = mutableBlock->blockHeader();
@@ -28,6 +29,15 @@ public:
         // TODO: write receipts and tx count
     }
 
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(Error::UniquePtr&&)> _callback) override
+    {
+        if (!_callback)
+        {
+            return;
+        }
+        _callback(nullptr);
+    }
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored)
     {}

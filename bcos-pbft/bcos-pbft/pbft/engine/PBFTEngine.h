@@ -21,6 +21,7 @@
 #pragma once
 #include "PBFTLogSync.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
 
@@ -92,6 +93,13 @@ public:
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
     void clearAllCache();
+    void recoverState();
+
+    void fetchAndUpdatesLedgerConfig();
+    void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
+    {
+        m_ledgerFetcher = _ledgerFetcher;
+    }
 
 protected:
     virtual void initSendResponseHandler();
@@ -225,6 +233,7 @@ protected:
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
     std::atomic_bool m_stopped = {false};
+    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
 };
 }  // namespace consensus
 }  // namespace bcos

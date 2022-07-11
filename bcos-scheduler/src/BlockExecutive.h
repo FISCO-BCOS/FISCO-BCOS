@@ -161,6 +161,8 @@ private:
     std::chrono::milliseconds m_commitElapsed;
 
     bcos::protocol::Block::Ptr m_block;
+    bcos::protocol::TransactionsPtr m_blockTxs;
+
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
     int64_t m_schedulerTermId;

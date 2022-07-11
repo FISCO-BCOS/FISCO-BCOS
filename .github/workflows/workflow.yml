@@ -18,6 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # os: [ubuntu-20.04, windows-2019, macos-11]
         os: [ubuntu-20.04, macos-11]
     steps:
       - uses: actions/checkout@v2
@@ -33,7 +34,13 @@ jobs:
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
+      - name: Build for windows
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake --build . --parallel 4
       - name: Build
+        if: runner.os != 'Windows'
         run: |
           export CC='gcc-10'
           export CXX='g++-10'

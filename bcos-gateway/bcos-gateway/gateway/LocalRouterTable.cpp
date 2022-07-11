@@ -18,7 +18,7 @@
  * @date 2021-12-29
  */
 #include "LocalRouterTable.h"
-#include <bcos-framework//protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-gateway/Common.h>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -68,9 +68,9 @@ void LocalRouterTable::getGroupNodeInfoList(
     }
 }
 
-std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo() const
+std::map<std::string, std::set<std::string>, std::less<>> LocalRouterTable::nodeListInfo() const
 {
-    std::map<std::string, std::set<std::string>> nodeList;
+    std::map<std::string, std::set<std::string>, std::less<>> nodeList;
     ReadGuard l(x_nodeList);
     for (auto const& it : m_nodeList)
     {

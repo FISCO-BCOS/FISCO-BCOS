@@ -22,7 +22,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #pragma once
-#include "bcos-framework//executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
@@ -331,7 +331,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 {
     auto bcosGatewayInfo = std::make_shared<bcos::gateway::GatewayInfo>();
     auto p2pInfo = toBcosP2PNodeInfo(_tarsGatewayInfo.p2pInfo);
-    std::map<std::string, std::set<std::string>> nodeIDInfos;
+    std::map<std::string, std::set<std::string>, std::less<>> nodeIDInfos;
     for (auto const& it : _tarsGatewayInfo.nodeIDInfo)
     {
         auto const& nodeIDListInfo = it.nodeIDList;

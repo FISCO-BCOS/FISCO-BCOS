@@ -76,8 +76,7 @@ private:
     // thread pool size
     uint32_t m_threadPoolSize{4};
 
-    // thread count for ioc thread
-    uint32_t m_iocThreadCount{4};
+
 
     // time out for send message
     int32_t m_sendMsgTimeout{DEFAULT_MESSAGE_TIMEOUT_MS};
@@ -134,8 +133,7 @@ public:
     int32_t sendMsgTimeout() const { return m_sendMsgTimeout; }
     void setSendMsgTimeout(int32_t _sendMsgTimeout) { m_sendMsgTimeout = _sendMsgTimeout; }
 
-    uint32_t iocThreadCount() const { return m_iocThreadCount; }
-    void setIocThreadCount(uint32_t _iocThreadCount) { m_iocThreadCount = _iocThreadCount; }
+
 
     uint32_t threadPoolSize() const
     {
@@ -144,7 +142,7 @@ public:
     void setThreadPoolSize(uint32_t _threadPoolSize) { m_threadPoolSize = _threadPoolSize; }
 
     EndPointsPtr connectPeers() const { return m_connectPeers; }
-    void setConnectPeers(EndPointsPtr _connectedPeers) { m_connectPeers = _connectedPeers; }
+    void setConnectPeers(EndPointsPtr _connectPeers) { m_connectPeers = _connectPeers; }
     bool disableSsl() const { return m_disableSsl; }
     void setDisableSsl(bool _disableSsl) { m_disableSsl = _disableSsl; }
 

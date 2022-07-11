@@ -54,7 +54,6 @@ public:
 
     void asyncSwitchTerm(int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback);
 
-
     void initSchedulerIfNotExist();
 
     void registerOnSwitchTermHandler(std::function<void(bcos::protocol::BlockNumber)> onSwitchTerm);

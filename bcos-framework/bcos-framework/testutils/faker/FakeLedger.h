@@ -137,11 +137,22 @@ public:
     }
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override
+        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) override
     {
         (void)storage;
         (void)block;
         callback(nullptr);
+    }
+
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(Error::UniquePtr&&)> _callback) override
+    {
+        if (!_callback)
+        {
+            return;
+        }
+        _callback(nullptr);
     }
 
     // the txpool module use this interface to store txs

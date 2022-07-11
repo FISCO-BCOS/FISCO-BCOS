@@ -26,7 +26,7 @@ foreach(proto_file ${MESSAGES_PROTOS})
 endforeach()
 
 add_library(${PBPROTOCOL_TARGET} ${SRC_LIST} ${MESSAGES_SRCS} ${HEADERS})
-target_compile_options(${PBPROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+# target_compile_options(${PBPROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(Protobuf CONFIG REQUIRED)
 target_link_libraries(${PBPROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} ${UTILITIES_TARGET} ${CODEC_TARGET} protobuf::libprotobuf)

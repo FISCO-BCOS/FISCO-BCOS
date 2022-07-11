@@ -25,7 +25,7 @@ include_directories(./sync/protocol/PB)
 
 add_library(${TXPOOL_TARGET} ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS})
 
-target_compile_options(${TXPOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+# target_compile_options(${TXPOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)

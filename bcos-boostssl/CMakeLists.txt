@@ -6,6 +6,7 @@ file(GLOB_RECURSE SRCS bcos-boostssl/*.cpp)
 find_package(OpenSSL REQUIRED)
 
 add_library(bcos-boostssl ${SRCS})
+target_include_directories(bcos-boostssl PUBLIC .)
 target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities OpenSSL::SSL)
 
 if(TESTS)

@@ -22,6 +22,7 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <string>
@@ -65,7 +66,11 @@ int main(int argc, char** argv)
     {
         disableSsl = argv[3];
     }
-
+    auto logInitializer = std::make_shared<BoostLogInitializer>();
+    std::string configFilePath = "config.ini";
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(configFilePath, pt);
+    logInitializer->initLog(pt);
     MODULE_NAME = "TEST_SERVER_MODULE";
     TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_DESC("echo-server-sample") << LOG_KV("ip", host)
                                        << LOG_KV("port", port) << LOG_KV("disableSsl", disableSsl);
@@ -75,7 +80,8 @@ int main(int argc, char** argv)
 
     config->setListenIP(host);
     config->setListenPort(port);
-    config->setThreadPoolSize(1);
+    config->setThreadPoolSize(8);
+    config->setMaxMsgSize(100 * 1024 * 1024);
     config->setDisableSsl(0 == disableSsl.compare("true"));
     if (!config->disableSsl())
     {
@@ -97,18 +103,7 @@ int main(int argc, char** argv)
     if (!wsService->registerMsgHandler(999,
             [](std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
                 _msg->setRespPacket();
-                auto seq = _msg->seq();
-                auto data = std::string(_msg->payload()->begin(), _msg->payload()->end());
-                // BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_DESC(" receive
-                // requst seq ")
-                //                << LOG_KV("seq", seq);
-                // BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_DESC(" receive
-                // requst message ")
-                //                << LOG_KV("data", data);
-                BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_DESC(" receive requst msg")
-                               << LOG_KV("version", _msg->version()) << LOG_KV("seq", _msg->seq())
-                               << LOG_KV("packetType", _msg->packetType())
-                               << LOG_KV("ext", _msg->ext()) << LOG_KV("data", data);
+
                 _session->asyncSendMessage(_msg);
             }))
     {
@@ -128,8 +123,8 @@ int main(int argc, char** argv)
     int i = 0;
     while (true)
     {
-        TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_BADGE(" [Main] ===>>>> ");
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        // TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_BADGE(" [Main] ===>>>> ");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         i++;
     }
 

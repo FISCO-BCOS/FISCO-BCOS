@@ -6,7 +6,7 @@ file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
 find_package(OpenSSL REQUIRED)
 find_package(wedprcrypto REQUIRED)
 
-add_library(bcos-crypto ${SRCS})
+add_library(bcos-crypto STATIC ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
 target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto bcos-utilities)
 

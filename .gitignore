@@ -67,3 +67,4 @@ tools/BcosAirBuilder/*
 *.log
 
 test/*
+/CMakeSettings.json

@@ -13,9 +13,9 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-framework//protocol/LogEntry.h>
-#include <bcos-framework//protocol/ProtocolTypeDef.h>
-#include <bcos-framework//protocol/Transaction.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/protocol/Transaction.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
@@ -168,12 +168,12 @@ BOOST_AUTO_TEST_CASE(transactionReceipt)
     BOOST_CHECK_EQUAL(receipt->gasUsed(), gasUsed);
     BOOST_CHECK_EQUAL(receipt->contractAddress(), contractAddress);
     BOOST_CHECK_EQUAL(receipt->logEntries().size(), logEntries->size());
-    for (auto i = 0; i < receipt->logEntries().size(); ++i)
+    for (auto i = 0u; i < receipt->logEntries().size(); ++i)
     {
         BOOST_CHECK_EQUAL(receipt->logEntries()[i].address(), (*logEntries)[i].address());
         BOOST_CHECK_EQUAL(
             receipt->logEntries()[i].topics().size(), (*logEntries)[i].topics().size());
-        for (auto j = 0; j < receipt->logEntries()[i].topics().size(); ++j)
+        for (auto j = 0u; j < receipt->logEntries()[i].topics().size(); ++j)
         {
             BOOST_CHECK_EQUAL(
                 receipt->logEntries()[i].topics()[j].hex(), (*logEntries)[i].topics()[j].hex());
@@ -277,7 +277,7 @@ BOOST_AUTO_TEST_CASE(block)
     BOOST_CHECK(decodedBlock->blockHeader()->sealerList().size() == header->sealerList().size());
     // ensure the sealerlist lifetime
     auto decodedSealerList = decodedBlock->blockHeader()->sealerList();
-    for (auto i = 0; i < decodedSealerList.size(); i++)
+    for (auto i = 0u; i < decodedSealerList.size(); i++)
     {
         BOOST_CHECK(decodedSealerList[i] == sealerList[i]);
     }
@@ -285,7 +285,7 @@ BOOST_AUTO_TEST_CASE(block)
     BOOST_CHECK(decodedBlockHeader->signatureList().size() == 2);
 
     // ensure the blockheader lifetime
-    for (auto i = 0; i < decodedBlock->blockHeader()->sealerList().size(); i++)
+    for (auto i = 0u; i < decodedBlock->blockHeader()->sealerList().size(); i++)
     {
         BOOST_CHECK(decodedBlock->blockHeader()->sealerList()[i] == sealerList[i]);
         std::cout << "##### decodedSealerList size:"
@@ -368,12 +368,12 @@ BOOST_AUTO_TEST_CASE(block)
             BOOST_CHECK_EQUAL(lhs->gasUsed(), rhs->gasUsed());
             BOOST_CHECK_EQUAL(lhs->contractAddress(), rhs->contractAddress());
             BOOST_CHECK_EQUAL(lhs->logEntries().size(), rhs->logEntries().size());
-            for (auto i = 0; i < lhs->logEntries().size(); ++i)
+            for (auto i = 0u; i < lhs->logEntries().size(); ++i)
             {
                 BOOST_CHECK_EQUAL(lhs->logEntries()[i].address(), rhs->logEntries()[i].address());
                 BOOST_CHECK_EQUAL(
                     lhs->logEntries()[i].topics().size(), rhs->logEntries()[i].topics().size());
-                for (auto j = 0; j < lhs->logEntries()[i].topics().size(); ++j)
+                for (auto j = 0u; j < lhs->logEntries()[i].topics().size(); ++j)
                 {
                     BOOST_CHECK_EQUAL(lhs->logEntries()[i].topics()[j].hex(),
                         rhs->logEntries()[i].topics()[j].hex());
@@ -396,13 +396,13 @@ BOOST_AUTO_TEST_CASE(block)
                 block->receipt(i)->contractAddress(), decodedBlock->receipt(i)->contractAddress());
             BOOST_CHECK_EQUAL(block->receipt(i)->logEntries().size(),
                 decodedBlock->receipt(i)->logEntries().size());
-            for (auto i = 0; i < block->receipt(i)->logEntries().size(); ++i)
+            for (auto i = 0u; i < block->receipt(i)->logEntries().size(); ++i)
             {
                 BOOST_CHECK_EQUAL(block->receipt(i)->logEntries()[i].address(),
                     decodedBlock->receipt(i)->logEntries()[i].address());
                 BOOST_CHECK_EQUAL(block->receipt(i)->logEntries()[i].topics().size(),
                     decodedBlock->receipt(i)->logEntries()[i].topics().size());
-                for (auto j = 0; j < block->receipt(i)->logEntries()[i].topics().size(); ++j)
+                for (auto j = 0u; j < block->receipt(i)->logEntries()[i].topics().size(); ++j)
                 {
                     BOOST_CHECK_EQUAL(block->receipt(i)->logEntries()[i].topics()[j].hex(),
                         decodedBlock->receipt(i)->logEntries()[i].topics()[j].hex());
@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (int i = 0; i < decodedHeader->parentInfo().size(); ++i)
+    for (auto i = 0u; i < decodedHeader->parentInfo().size(); ++i)
     {
         BOOST_CHECK_EQUAL(bcos::toString(header->parentInfo()[i].blockHash),
             bcos::toString(decodedHeader->parentInfo()[i].blockHash));

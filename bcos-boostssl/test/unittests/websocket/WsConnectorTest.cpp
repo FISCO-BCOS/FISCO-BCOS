@@ -20,21 +20,21 @@
  */
 
 #include <bcos-boostssl/websocket/WsConnector.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
+
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>
 
 using namespace bcos;
-using namespace bcos::test;
+
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 
-BOOST_FIXTURE_TEST_SUITE(WsConnectorTest, TestPromptFixture)
+BOOST_AUTO_TEST_SUITE(WsConnectorTest)
 
 BOOST_AUTO_TEST_CASE(test_WsConnectorTest)
 {
-    auto connector = std::make_shared<WsConnector>(nullptr, nullptr);
+    auto connector = std::make_shared<WsConnector>(nullptr);
     {
         std::string host = "0.0.0.0";
         uint16_t port = 1111;

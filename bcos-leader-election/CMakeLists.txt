@@ -19,7 +19,7 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-if(ETCD)
+if(ETCD_MODULE)
     include(Version)
     project(bcos-leader-election VERSION ${VERSION})
 

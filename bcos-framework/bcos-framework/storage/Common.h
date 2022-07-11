@@ -128,9 +128,48 @@ struct Condition
         cond(Comparator _cmp, const std::string& _value) : cmp(_cmp), value(_value) {}
         Comparator cmp;
         std::string value;
+        // this method only for trace log
+        std::string toString() const
+        {
+            std::string cmpStr;
+            switch (cmp)
+            {
+            case Comparator::EQ:
+                cmpStr = "EQ";
+                break;
+            case Comparator::NE:
+                cmpStr = "NE";
+                break;
+            case Comparator::GT:
+                cmpStr = "GT";
+                break;
+            case Comparator::GE:
+                cmpStr = "GE";
+                break;
+            case Comparator::LT:
+                cmpStr = "NE";
+                break;
+            case Comparator::LE:
+                cmpStr = "LE";
+                break;
+            }
+            return cmpStr + " " + value;
+        }
     };
     std::vector<cond> m_conditions;
     std::pair<size_t, size_t> m_limit;
+    // this method only for trace log
+    std::string toString() const
+    {
+        std::stringstream ss;
+        ss << "keyCond: ";
+        for (const auto& cond : m_conditions)
+        {
+            ss << cond.toString() << ";";
+        }
+        ss << "limit start: " << m_limit.first << "limit count: " << m_limit.second;
+        return ss.str();
+    }
 };
 
 class TableInfo

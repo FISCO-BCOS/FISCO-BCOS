@@ -48,8 +48,12 @@ public:
 
     virtual ~Ledger() = default;
 
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+        bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override;
+        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) override;
 
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override;
@@ -134,6 +138,10 @@ private:
     {
         return _s.substr(_s.find_last_of('/') + 1);
     }
+
+    std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
+    needStoreUnsavedTxs(
+        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;

@@ -21,7 +21,8 @@
 
 #pragma once
 
-#include <bcos-framework//storage/StorageInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-utilities/Common.h>
 
 namespace pingcap
 {
@@ -77,12 +78,16 @@ public:
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) noexcept override;
 
+    Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
+        std::vector<std::string> values) noexcept override;
+
 private:
-    int32_t m_maxRetry = 50;
-    size_t m_coroutineStackSize =
-        32768;  // macOS default is 128K, linux is 8K, here set macOS min 32K
+    int32_t m_maxRetry = 10;
+    size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
+
+    mutable RecursiveMutex x_committer;
 };
 }  // namespace storage
 }  // namespace bcos

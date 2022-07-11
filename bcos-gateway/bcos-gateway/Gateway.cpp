@@ -152,15 +152,11 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     {
     public:
         // random choose one p2pID to send message
-        P2pID randomChooseP2pID()
+        P2pID chooseP2pID()
         {
             auto p2pId = P2pID();
             if (!m_p2pIDs.empty())
             {
-                // shuffle
-                std::random_device rd;
-                std::default_random_engine rng(rd());
-                std::shuffle(m_p2pIDs.begin(), m_p2pIDs.end(), rng);
                 p2pId = *m_p2pIDs.begin();
                 m_p2pIDs.erase(m_p2pIDs.begin());
             }
@@ -187,7 +183,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 }
                 return;
             }
-            auto p2pID = randomChooseP2pID();
+            auto p2pID = chooseP2pID();
             auto self = shared_from_this();
             auto startT = utcTime();
             auto callback = [self, startT, p2pID](NetworkException e,

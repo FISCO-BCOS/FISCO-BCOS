@@ -188,11 +188,12 @@ public:
         if (m_httpReqHandler)
         {
             std::string request = _httpRequest.body();
-            m_httpReqHandler(request, [this, self, version, start](const std::string& _content) {
+            m_httpReqHandler(request, [this, self, version, start](bcos::bytes _content) {
                 std::chrono::high_resolution_clock::time_point end =
                     std::chrono::high_resolution_clock::now();
 
-                auto resp = buildHttpResp(boost::beast::http::status::ok, version, _content);
+                auto resp =
+                    buildHttpResp(boost::beast::http::status::ok, version, std::move(_content));
                 auto session = self.lock();
                 if (!session)
                 {
@@ -203,16 +204,18 @@ public:
 
                 auto ms =
                     std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-                HTTP_SESSION(DEBUG) << LOG_BADGE("handleRequest") << LOG_DESC("response")
-                                    << LOG_KV("body", resp->body())
-                                    << LOG_KV("keep_alive", resp->keep_alive()) << LOG_KV("ms", ms);
+                HTTP_SESSION(DEBUG)
+                    << LOG_BADGE("handleRequest") << LOG_DESC("response")
+                    << LOG_KV("body",
+                           std::string_view((const char*)resp->body().data(), resp->body().size()))
+                    << LOG_KV("keep_alive", resp->keep_alive()) << LOG_KV("ms", ms);
             });
         }
         else
         {
             // unsupported http service
             auto resp =
-                buildHttpResp(boost::beast::http::status::http_version_not_supported, version, "");
+                buildHttpResp(boost::beast::http::status::http_version_not_supported, version, {});
             auto session = self.lock();
             if (!session)
             {
@@ -223,7 +226,9 @@ public:
 
             HTTP_SESSION(WARNING) << LOG_BADGE("handleRequest")
                                   << LOG_DESC("unsupported http service")
-                                  << LOG_KV("body", resp->body());
+                                  << LOG_KV(
+                                         "body", std::string_view((const char*)resp->body().data(),
+                                                     resp->body().size()));
         }
     }
 
@@ -234,13 +239,13 @@ public:
      * @return HttpResponsePtr:
      */
     HttpResponsePtr buildHttpResp(
-        boost::beast::http::status status, unsigned version, boost::beast::string_view content)
+        boost::beast::http::status status, unsigned version, bcos::bytes content)
     {
         auto msg = std::make_shared<HttpResponse>(status, version);
         msg->set(boost::beast::http::field::server, BOOST_BEAST_VERSION_STRING);
         msg->set(boost::beast::http::field::content_type, "application/json");
         msg->keep_alive(true);  // default , keep alive
-        msg->body() = std::string(content);
+        msg->body() = std::move(content);
         msg->prepare_payload();
         return msg;
     }

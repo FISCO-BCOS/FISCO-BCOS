@@ -29,23 +29,14 @@ macro(default_option O DEF)
     endif()
 endmacro()
 
-# common settings
-set(MARCH_TYPE "-mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+set(MARCH_TYPE "-march=native -mtune=generic")
 if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
     message(FATAL "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
-endif()
-
-EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
-# for boost-ssl enable/disable native
-set(ARCH_NATIVE OFF)
-if ("${ARCHITECTURE}" MATCHES "aarch64" OR "${ARCHITECTURE}" MATCHES "arm64")
-    set(ARCH_NATIVE ON)
 endif()
 
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
 
-    # Default to RelWithDebInfo configuration if no configuration is explicitly specified.
     if (NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING
             "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
@@ -53,57 +44,40 @@ macro(configure_project)
 
     default_option(BUILD_STATIC OFF)
 
-    #ARCH TYPE
     default_option(NATIVE OFF)
-    if ("${ARCHITECTURE}" MATCHES "aarch64" OR "${ARCHITECTURE}" MATCHES "arm64")
-        default_option(NATIVE ON)
-    endif()
     if(NATIVE)
-        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
+        set(MARCH_TYPE "-march=native -mtune=native")
     endif()
-    #SANITIZE
-    default_option(SANITIZE OFF)
 
-    #LTO
+    default_option(SANITIZE OFF)
     default_option(IPO OFF)
     if(IPO)
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
 
-    # unit tests
     default_option(TESTS OFF)
-    # code coverage
     default_option(COVERAGE OFF)
 
-    #debug
     default_option(DEBUG OFF)
     if (DEBUG)
         add_definitions(-DFISCO_DEBUG)
     endif()
 
-    default_option(TIKV OFF)
-    default_option(ETCD OFF)
+    default_option(TIKV_MODULE OFF)
+    default_option(ETCD_MODULE OFF)
 
-    default_option(BOOSTSSL OFF)
-    default_option(CRYPTO OFF)
-    default_option(FRAMEWORK OFF)
-    default_option(UTILITIES OFF)
-    
-    default_option(TARSSERVICES OFF)
+    default_option(BOOSTSSL_MODULE OFF)
+    default_option(TARS_SERVICES OFF)
 
-    default_option(ALL_COMPONENTS ON)
-    if(ALL_COMPONENTS)
-        set(BOOSTSSL ON)
-        set(CRYPTO ON)
-        set(FRAMEWORK ON)
-        set(UTILITIES ON)
+    default_option(CORE_MODULES ON)
+    if(CORE_MODULES)
+        list(APPEND VCPKG_MANIFEST_FEATURES "executor" "rpcframework" "storage")
+        set(BOOSTSSL_MODULE ON)
     endif()
 
-    # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
     if (NOT DEFINED VERSION_SUFFIX)
         set(VERSION_SUFFIX "")
     endif()
-    print_config(${NAME})
 endmacro()
 
 macro(print_config NAME)
@@ -122,16 +96,15 @@ macro(print_config NAME)
     message("-- IPO                Enable IPO optimization      ${IPO}")
     message("-- SANITIZE           Enable sanitize              ${SANITIZE}")
     message("-- DEBUG              Enable debug                 ${DEBUG}")
-    message("-- TIKV               Enable tikv                  ${TIKV}")
-    message("-- ETCD               Enable etcd                  ${ETCD}")
     message("-- TOOLCHAIN_FILE     CMake toolchain file         ${CMAKE_TOOLCHAIN_FILE}")
     message("------------------------------------------------------------------------")
-    message("-- ALL_COMPONENTS     Enable all components        ${ALL_COMPONENTS}")
-    message("-- BOOSTSSL           Enable boostssl              ${BOOSTSSL}")
-    message("-- CRYPTO             Enable crypto                ${CRYPTO}")
-    message("-- FRAMEWORK          Enable framework             ${FRAMEWORK}")
-    message("-- UTILITIES          Enable utilities             ${UTILITIES}")
+    message("-- Components")
     message("------------------------------------------------------------------------")
-    message("-- TARSSERVICES       Enable tars services         ${TARSSERVICES}")
+    message("-- CORE_MODULES       Enable core components       ${CORE_MODULES}")
+    message("-- BOOSTSSL_MODULE    Enable boostssl              ${BOOSTSSL_MODULE}")
+    message("-- TIKV_MODULE        Enable tikv                  ${TIKV_MODULE}")
+    message("-- ETCD_MODULE        Enable etcd                  ${ETCD_MODULE}")
+    message("-- TARS_SERVICES      Enable tars services         ${TARS_SERVICES}")
+    message("------------------------------------------------------------------------")
     message("")
 endmacro()

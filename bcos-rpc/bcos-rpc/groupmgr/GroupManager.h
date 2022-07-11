@@ -40,30 +40,34 @@ public:
     virtual void removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo);
 
     virtual NodeService::Ptr getNodeService(
-        std::string const& _groupID, std::string const& _nodeName) const;
+        std::string_view _groupID, std::string_view _nodeName) const;
 
     std::string const& chainID() const { return m_chainID; }
 
-    virtual bcos::group::GroupInfo::Ptr getGroupInfo(std::string const& _groupID)
+    virtual bcos::group::GroupInfo::Ptr getGroupInfo(std::string_view _groupID)
     {
         ReadGuard l(x_nodeServiceList);
-        if (m_groupInfos.count(_groupID))
+        auto it = m_groupInfos.find(_groupID);
+        if (it != m_groupInfos.end())
         {
-            return m_groupInfos[_groupID];
+            return it->second;
         }
         return nullptr;
     }
 
     virtual bcos::group::ChainNodeInfo::Ptr getNodeInfo(
-        std::string const& _groupID, std::string const& _nodeName)
+        std::string_view _groupID, std::string_view _nodeName)
     {
         ReadGuard l(x_nodeServiceList);
-        if (!m_groupInfos.count(_groupID))
+        auto it = m_groupInfos.find(_groupID);
+        if (it == m_groupInfos.end())
         {
             return nullptr;
         }
-        auto groupInfo = m_groupInfos[_groupID];
-        return groupInfo->nodeInfo(_nodeName);
+        auto groupInfo = it->second;
+
+        auto nodeIt = groupInfo->nodeInfos().find(_nodeName);
+        return nodeIt->second;
     }
 
     virtual std::set<std::string> groupList()
@@ -161,11 +165,11 @@ protected:
         bool _enforceUpdate);
     bool shouldRebuildNodeService(
         std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
-    virtual NodeService::Ptr selectNode(std::string const& _groupID) const;
-    virtual std::string selectNodeByBlockNumber(std::string const& _groupID) const;
-    virtual NodeService::Ptr selectNodeRandomly(std::string const& _groupID) const;
+    virtual NodeService::Ptr selectNode(std::string_view _groupID) const;
+    virtual std::string selectNodeByBlockNumber(std::string_view _groupID) const;
+    virtual NodeService::Ptr selectNodeRandomly(std::string_view _groupID) const;
     virtual NodeService::Ptr queryNodeService(
-        std::string const& _groupID, std::string const& _nodeName) const;
+        std::string_view _groupID, std::string_view _nodeName) const;
 
     virtual void initNodeInfo(
         std::string const& _groupID, std::string const& _nodeName, NodeService::Ptr _nodeService);
@@ -183,14 +187,15 @@ protected:
     NodeServiceFactory::Ptr m_nodeServiceFactory;
 
     // map between groupID to groupInfo
-    std::map<std::string, bcos::group::GroupInfo::Ptr> m_groupInfos;
+    std::map<std::string, bcos::group::GroupInfo::Ptr, std::less<>> m_groupInfos;
 
     // map between nodeName to NodeService
-    std::map<std::string, std::map<std::string, NodeService::Ptr>> m_nodeServiceList;
+    std::map<std::string, std::map<std::string, NodeService::Ptr, std::less<>>, std::less<>>
+        m_nodeServiceList;
     mutable SharedMutex x_nodeServiceList;
 
-    std::map<std::string, std::set<std::string>> m_nodesWithLatestBlockNumber;
-    std::map<std::string, bcos::protocol::BlockNumber> m_groupBlockInfos;
+    std::map<std::string, std::set<std::string>, std::less<>> m_nodesWithLatestBlockNumber;
+    std::map<std::string, bcos::protocol::BlockNumber, std::less<>> m_groupBlockInfos;
     mutable SharedMutex x_groupBlockInfos;
 
     std::function<void(bcos::group::GroupInfo::Ptr)> m_groupInfoNotifier;

@@ -31,25 +31,26 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "bcos-framework/executor/NativeExecutionMessage.h"
-#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/rpc/RPCInterface.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-protocol/TransactionSubmitResultImpl.h"
-#include "bcos-scheduler/src/TarsRemoteExecutorManager.h"
-#include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
+#include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
+
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-tool/LedgerConfigFetcher.cpp>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -59,7 +60,8 @@ void Initializer::initAirNode(std::string const& _configFilePath, std::string co
     bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, "", true);
-    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true, _logPath);
+    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true,
+        _logPath);
 }
 void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
@@ -139,12 +141,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-#if TIKV
+#if TIKV_MODULE
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        schedulerStorage =
-            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        consensusStorage =
-            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
 #endif
     }
     else
@@ -158,10 +158,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
+    bool preStoreTxs = true;
+    // Note: since tikv-storage store txs with transaction, batch writing is more efficient than
+    // writing one by one, disable preStoreTxs in max-node mode
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
             std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
+        preStoreTxs = false;
     }
     else
     {
@@ -170,11 +174,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
-    auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
+    auto transactionSubmitResultFactory = std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
+        m_frontServiceInitializer->front(), ledger, preStoreTxs);
 
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
@@ -203,9 +207,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
-        INITIALIZER_LOG(INFO) << LOG_DESC("connect executor")
+        INITIALIZER_LOG(INFO) << LOG_DESC("waiting for connect executor")
                               << LOG_KV("nodeArchType", _nodeArchType);
-        executorManager->start();
+        executorManager->start();  // will waiting for connecting some executors
+
+        // init scheduler
+        dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->initSchedulerIfNotExist();
     }
     else
     {
@@ -215,8 +222,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Note: ensure that there has at least one executor before pbft/sync execute block
 
         std::string executorName = "executor-local";
-        auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(m_ledger,
-            m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
+        auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
+            m_ledger, m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
         auto parallelExecutor =
@@ -225,7 +232,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // build and init the pbft related modules
-    if (_nodeArchType == NodeArchitectureType::AIR)
+    if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
@@ -236,7 +243,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto blockSync =
             std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
 
-        auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
+        auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(protocol::ProtocolModuleID::NodeService);
         // registerNode when air node first start-up
         _gateway->registerNode(
             groupID, nodeID, blockSync->config()->nodeType(), frontService, nodeProtocolInfo);
@@ -245,7 +252,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("type", blockSync->config()->nodeType());
         // update the frontServiceInfo when nodeType changed
         blockSync->config()->registerOnNodeTypeChanged(
-            [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](NodeType _type) {
+            [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](protocol::NodeType _type) {
                 _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
                 INITIALIZER_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
                                       << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
@@ -306,13 +313,15 @@ void Initializer::initSysContract()
             getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
         });
         auto getNumberTuple = getNumberPromise.get_future().get();
-        if (std::get<0>(getNumberTuple) != nullptr || std::get<1>(getNumberTuple) > 0)
+        if (std::get<0>(getNumberTuple) != nullptr ||
+            std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
         {
             return;
         }
 
         // add auth deploy func here
-        AuthInitializer::init(0, m_protocolInitializer, m_nodeConfig, m_scheduler);
+        AuthInitializer::init(
+            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, m_scheduler);
     }
 }
 

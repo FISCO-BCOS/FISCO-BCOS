@@ -17,8 +17,10 @@
 # Function: Common cmake file for setting compilation environment variables
 # ------------------------------------------------------------------------------
 
-add_definitions(-Wno-unused-value -Wunused-parameter)
+#add_definitions(-Wno-unused-value -Wunused-parameter)
 
+set(CMAKE_CXX_STANDARD 20)
+message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
 
@@ -27,14 +29,15 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
 
-    set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-    add_compile_options(-Werror)
+    # add_compile_options(-Werror)
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
     add_compile_options(-Wno-unknown-pragmas)
     add_compile_options(-fno-omit-frame-pointer)
+    add_compile_options(-fvisibility=hidden)
+    add_compile_options(-fvisibility-inlines-hidden)
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
@@ -85,24 +88,17 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
     endif()
 
-    # Additional GCC-specific compiler settings.
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
         # Check that we've got GCC 7.0 or newer.
         set(GCC_MIN_VERSION "10.0")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
 
-        if(NOT(GCC_VERSION VERSION_GREATER ${GCC_MIN_VERSION} OR GCC_VERSION VERSION_EQUAL ${GCC_MIN_VERSION}))
-            message(FATAL_ERROR "${PROJECT_NAME} requires g++ ${GCC_MIN_VERSION} or greater. Current is ${GCC_VERSION}")
-        endif()
-
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MARCH_TYPE}")
         set(CMAKE_C_FLAGS "-std=c99 ${CMAKE_C_FLAGS} ${MARCH_TYPE}")
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
-
-    # Additional Clang-specific compiler settings.
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
@@ -121,6 +117,15 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
     endif()
 
+    if(SANITIZE)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize=leak -fsanitize-recover=all")
+
+        if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/sanitizer-blacklist.txt")
+        endif()
+    endif()
+
+
     if(COVERAGE)
         set(TESTS ON)
 
@@ -135,16 +140,11 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
         endif()
     endif()
+elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    add_compile_options(/std:c++latest)
+    add_compile_options(-bigobj)
 else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
-endif()
-
-if(SANITIZE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize=leak -fsanitize-recover=all")
-
-    if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/sanitizer-blacklist.txt")
-    endif()
 endif()
 
 # rust static library linking requirements for macos

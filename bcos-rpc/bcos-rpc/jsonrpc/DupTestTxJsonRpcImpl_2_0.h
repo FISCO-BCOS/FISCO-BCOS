@@ -20,15 +20,15 @@ public:
     {}
 
     // duplicate many tx to txpool
-    void sendTransaction(std::string const& _groupID, std::string const& _nodeName,
-        const std::string& _data, bool _requireProof, RespFunc _respFunc) override
+    void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _data, bool _requireProof, RespFunc _respFunc) override
     {
         // send directly
         JsonRpcImpl_2_0::sendTransaction(
             _groupID, _nodeName, _data, _requireProof, std::move(_respFunc));
         // duplicate many tx into txpool
 
-        auto transactionDataPtr = decodeData(_data);
+        auto transactionData = decodeData(_data);
         auto nodeService = getNodeService(_groupID, _nodeName, "sendTransaction");
         auto txpool = nodeService->txpool();
         checkService(txpool, "txpool");
@@ -36,7 +36,7 @@ public:
         // Note: avoid call tx->sender() or tx->verify() here in case of verify the same transaction
         // more than once
         auto tx = nodeService->blockFactory()->transactionFactory()->createTransaction(
-            *transactionDataPtr, false);
+            transactionData, false);
 
 
         if (tx->to().empty())
@@ -73,7 +73,7 @@ public:
         // send many tx to txpool
         int64_t dup = 49;  // 1 tx can generate 49 + 1 tx(include original tx)
         DuplicateTransactionFactory::asyncMultiBuild(
-            nodeService->blockFactory()->transactionFactory(), *transactionDataPtr, keyPair, dup,
+            nodeService->blockFactory()->transactionFactory(), transactionData, keyPair, dup,
             [submitCallback = std::move(submitCallback), txpool](
                 bcos::protocol::Transaction::Ptr tx) {
                 // std::cout << "sendtx: " << tx->nonce() << std::endl;

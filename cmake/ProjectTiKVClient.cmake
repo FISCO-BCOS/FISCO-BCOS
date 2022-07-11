@@ -9,7 +9,7 @@ endif()
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git
-  GIT_TAG        e298ba30f711fef0c6ebd0d7a339a1a9e4133bd4
+  GIT_TAG        eb5a38c44e5a876ac3510a32fad356e22f2b9931
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  git submodule foreach --recursive git reset --hard COMMAND export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version
   # LOG_BUILD true
@@ -22,9 +22,9 @@ if(NOT tikv_client_project_POPULATED)
   set(ENABLE_TESTS OFF)
   add_subdirectory(${tikv_client_project_SOURCE_DIR} ${tikv_client_project_BINARY_DIR})
   target_include_directories(kvproto PUBLIC ${GRPC_ROOT}/include)
-  target_compile_options(fiu PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)
-  target_compile_options(kvproto PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)
-  target_compile_options(kv_client PRIVATE -Wno-all -Wno-error -Wno-unused-parameter)
+  # target_compile_options(fiu PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)
+  # target_compile_options(kvproto PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)
+  # target_compile_options(kv_client PRIVATE -Wno-all -Wno-error -Wno-unused-parameter)
 endif()
 
 # add_library(bcos::tikv_client INTERFACE IMPORTED)

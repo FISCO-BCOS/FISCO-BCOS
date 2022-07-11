@@ -40,7 +40,8 @@ public:
         PBFTProposalInterface::Ptr _proposal,
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) = 0;
 
-    virtual void asyncResetTxsFlag(bytesConstRef _data, bool _flag) = 0;
+    virtual void asyncResetTxsFlag(
+        bytesConstRef _data, bool _flag, bool _emptyTxBatchHash = false) = 0;
     virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
@@ -93,7 +94,8 @@ public:
     void verifyProposal(bcos::crypto::PublicPtr _fromNode, PBFTProposalInterface::Ptr _proposal,
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override;
 
-    void asyncResetTxsFlag(bytesConstRef _data, bool _flag) override;
+    void asyncResetTxsFlag(
+        bytesConstRef _data, bool _flag, bool _emptyTxBatchHash = false) override;
     ssize_t resettingProposalSize() const override
     {
         ReadGuard l(x_resettingProposals);
@@ -228,7 +230,7 @@ protected:
     }
 
     virtual void asyncResetTxsFlag(bcos::protocol::Block::Ptr _block,
-        bcos::crypto::HashListPtr _txsHashList, bool _flag, size_t _retryTime = 0);
+        bcos::crypto::HashListPtr _txsHashList, bool _flag, bool _emptyTxBatchHash);
 
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

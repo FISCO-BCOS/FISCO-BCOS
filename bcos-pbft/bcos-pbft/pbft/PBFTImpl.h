@@ -21,8 +21,7 @@
 #pragma once
 #include "engine/BlockValidator.h"
 #include "engine/PBFTEngine.h"
-#include <bcos-framework//consensus/ConsensusInterface.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
 namespace bcos
 {
 namespace consensus
@@ -63,7 +62,7 @@ public:
         uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
     void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
     {
-        m_ledgerFetcher = _ledgerFetcher;
+        m_pbftEngine->setLedgerFetcher(_ledgerFetcher);
     }
     PBFTEngine::Ptr pbftEngine() { return m_pbftEngine; }
 
@@ -144,12 +143,8 @@ public:
     }
 
 protected:
-    virtual void recoverState();
-
-protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
-    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
     std::atomic_bool m_running = {false};
     std::atomic_bool m_masterNode = {false};
 };

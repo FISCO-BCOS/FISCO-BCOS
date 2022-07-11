@@ -25,6 +25,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/websocket.hpp>
 
+#define BOOST_SSL_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL]"
 #define WEBSOCKET_TOOL(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[WS][TOOL]"
 #define WEBSOCKET_CONNECTOR(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[WS][CONNECTOR]"
 #define WEBSOCKET_VERSION(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[WS][VERSION]"

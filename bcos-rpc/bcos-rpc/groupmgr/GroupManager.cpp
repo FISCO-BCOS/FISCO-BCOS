@@ -19,7 +19,7 @@
  * @date 2021-10-11
  */
 #include "GroupManager.h"
-#include <bcos-framework//protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <cstdint>
 using namespace bcos;
 using namespace bcos::group;
@@ -168,7 +168,7 @@ bcos::protocol::BlockNumber GroupManager::getBlockNumberByGroup(const std::strin
     return m_groupBlockInfos.at(_groupID);
 }
 
-NodeService::Ptr GroupManager::selectNode(std::string const& _groupID) const
+NodeService::Ptr GroupManager::selectNode(std::string_view _groupID) const
 {
     auto nodeName = selectNodeByBlockNumber(_groupID);
     if (nodeName.size() == 0)
@@ -177,26 +177,30 @@ NodeService::Ptr GroupManager::selectNode(std::string const& _groupID) const
     }
     return queryNodeService(_groupID, nodeName);
 }
-std::string GroupManager::selectNodeByBlockNumber(std::string const& _groupID) const
+
+std::string GroupManager::selectNodeByBlockNumber(std::string_view _groupID) const
 {
     ReadGuard l(x_groupBlockInfos);
-    if (!m_nodesWithLatestBlockNumber.count(_groupID) ||
-        m_nodesWithLatestBlockNumber.at(_groupID).size() == 0)
+
+    auto it = m_nodesWithLatestBlockNumber.find(_groupID);
+    if (it == m_nodesWithLatestBlockNumber.end() || it->second.size() == 0)
     {
         return "";
     }
     srand(utcTime());
-    auto const& nodesList = m_nodesWithLatestBlockNumber.at(_groupID);
+
+    auto nodeListIt = m_nodesWithLatestBlockNumber.find(_groupID);
+    auto const& nodesList = nodeListIt->second;
     auto selectNodeIndex = rand() % nodesList.size();
-    auto it = nodesList.begin();
+    auto nodeIt = nodesList.begin();
     if (selectNodeIndex > 0)
     {
-        std::advance(it, selectNodeIndex);
+        std::advance(nodeIt, selectNodeIndex);
     }
-    return *it;
+    return *nodeIt;
 }
 
-NodeService::Ptr GroupManager::selectNodeRandomly(std::string const& _groupID) const
+NodeService::Ptr GroupManager::selectNodeRandomly(std::string_view _groupID) const
 {
     ReadGuard l(x_nodeServiceList);
     if (!m_groupInfos.count(_groupID))
@@ -207,14 +211,17 @@ NodeService::Ptr GroupManager::selectNodeRandomly(std::string const& _groupID) c
     {
         return nullptr;
     }
-    auto const& groupInfo = m_groupInfos.at(_groupID);
+
+    auto it = m_groupInfos.find(_groupID);
+    auto const& groupInfo = it->second;
     auto const& nodeInfos = groupInfo->nodeInfos();
     for (auto const& it : nodeInfos)
     {
         auto const& node = it.second;
-        if (m_nodeServiceList.at(_groupID).count(node->nodeName()))
+        auto serviceIt = m_nodeServiceList.find(_groupID);
+        if (serviceIt != m_nodeServiceList.end() && !serviceIt->second.empty())
         {
-            auto nodeService = m_nodeServiceList.at(_groupID).at(node->nodeName());
+            auto nodeService = serviceIt->second.at(node->nodeName());
             if (nodeService)
             {
                 return nodeService;
@@ -225,18 +232,24 @@ NodeService::Ptr GroupManager::selectNodeRandomly(std::string const& _groupID) c
 }
 
 NodeService::Ptr GroupManager::queryNodeService(
-    std::string const& _groupID, std::string const& _nodeName) const
+    std::string_view _groupID, std::string_view _nodeName) const
 {
     ReadGuard l(x_nodeServiceList);
-    if (m_nodeServiceList.count(_groupID) && m_nodeServiceList.at(_groupID).count(_nodeName))
+    auto it = m_nodeServiceList.find(_groupID);
+    if (it != m_nodeServiceList.end())
     {
-        return m_nodeServiceList.at(_groupID).at(_nodeName);
+        auto const& serviceList = it->second;
+        auto it2 = serviceList.find(_nodeName);
+        if (it2 != serviceList.end())
+        {
+            return it2->second;
+        }
     }
     return nullptr;
 }
 
 NodeService::Ptr GroupManager::getNodeService(
-    std::string const& _groupID, std::string const& _nodeName) const
+    std::string_view _groupID, std::string_view _nodeName) const
 {
     if (_nodeName.size() > 0)
     {

@@ -1,45 +1,61 @@
 {
-    "name": "fiscobcos",
-    "version-string": "3.0.0",
-    "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
-    "description": "FISCO BCOS",
-    "dependencies": [
-        {
-            "name": "vcpkg-cmake",
-            "host": true
-        },
-        {
-            "name": "vcpkg-cmake-config",
-            "host": true
-        },
-        {
-            "name": "openssl",
-            "version>=": "1.1.1-tassl"
-        },
-        "boost-log",
-        "boost-beast",
-        "boost-uuid",
-        "boost-coroutine2",
-        "boost-heap",
-        "boost-graph",
-        "boost-property-map",
-        "boost-chrono",
-        "boost-iostreams",
-        "boost-thread",
-        "boost-test",
-        "boost-multiprecision",
-        "boost-program-options",
-        "ms-gsl",
-        "tbb",
-        "rocksdb",
-        "zlib",
-        "jsoncpp",
-        "zstd",
-        "protobuf",
-        "evmc",
+  "name": "fiscobcos",
+  "version-string": "3.0.0",
+  "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
+  "description": "FISCO BCOS",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    {
+      "name": "openssl",
+      "version>=": "1.1.1-tassl"
+    },
+    "boost-log",
+    "boost-beast",
+    "boost-uuid",
+    "boost-heap",
+    "boost-graph",
+    "boost-property-map",
+    "boost-chrono",
+    "boost-iostreams",
+    "boost-thread",
+    "boost-test",
+    "boost-multiprecision",
+    "boost-program-options",
+    "ms-gsl",
+    "tbb",
+    "zlib",
+    "jsoncpp",
+    "protobuf",
+    "wedprcrypto"
+  ],
+  "features": {
+    "executor": {
+      "description": "Executor module dependencies",
+      "dependencies": [
         "evmone",
-        "wedprcrypto",
+        "boost-coroutine2"
+      ]
+    },
+    "rpcframework": {
+      "description": "RPC framework module dependencies",
+      "dependencies": [
         "tarscpp"
-    ],
-    "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
+      ]
+    },
+    "storage": {
+      "description": "Storage module dependencies",
+      "dependencies": [
+        "rocksdb",
+        "zstd"
+      ]
+    }
+  },
+  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
 }

@@ -27,7 +27,7 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 
 // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
-const size_t WsMessage::MESSAGE_MIN_LENGTH;
+constexpr size_t WsMessage::MESSAGE_MIN_LENGTH = 10;
 
 bool WsMessage::encode(bytes& _buffer)
 {
@@ -47,13 +47,14 @@ bool WsMessage::encode(bytes& _buffer)
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
     _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
 
+    m_length = _buffer.size();
     return true;
 }
 
 int64_t WsMessage::decode(bytesConstRef _buffer)
 {
-    std::size_t size = _buffer.size();
-    if (size < MESSAGE_MIN_LENGTH)
+    auto length = _buffer.size();
+    if (length < MESSAGE_MIN_LENGTH)
     {
         return -1;
     }
@@ -63,33 +64,45 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
 
     auto dataBuffer = _buffer.data();
     auto p = _buffer.data();
+    size_t offset = 0;
 
     // version field
     m_version = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
 
     // type field
     m_packetType = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
 
     // status field
     m_status = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
 
     // seqLength
     uint16_t seqLength = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
 
+    CHECK_OFFSET(offset + seqLength, length);
     // seq field
     m_seq.insert(m_seq.begin(), p, p + seqLength);
     p += seqLength;
+    offset += seqLength;
 
     // ext field
+    CHECK_OFFSET(offset + 2, length);
     m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
 
     // data field
-    m_payload->insert(m_payload->begin(), p, dataBuffer + size);
-
-    return size;
+    if (p)
+    {
+        m_payload->insert(m_payload->begin(), p, dataBuffer + length);
+    }
+    m_length = length;
+    return length;
 }

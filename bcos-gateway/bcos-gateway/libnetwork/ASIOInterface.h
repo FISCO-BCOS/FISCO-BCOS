@@ -43,6 +43,7 @@ public:
     virtual void setIOServicePool(IOServicePool::Ptr _ioServicePool)
     {
         m_ioServicePool = _ioServicePool;
+        m_timerIOService = m_ioServicePool->getIOService();
     }
 
     virtual std::shared_ptr<ba::ssl::context> sslContext() { return m_sslContext; }
@@ -54,7 +55,7 @@ public:
     virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
     {
         return std::make_shared<boost::asio::deadline_timer>(
-            *(m_ioServicePool->getIOService()), boost::posix_time::milliseconds(timeout));
+            *(m_timerIOService), boost::posix_time::milliseconds(timeout));
     }
 
     virtual std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
@@ -165,6 +166,7 @@ public:
 
 protected:
     IOServicePool::Ptr m_ioServicePool;
+    std::shared_ptr<ba::io_context> m_timerIOService;
     std::shared_ptr<ba::io_context::strand> m_strand;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;
     std::shared_ptr<bi::tcp::resolver> m_resolver;

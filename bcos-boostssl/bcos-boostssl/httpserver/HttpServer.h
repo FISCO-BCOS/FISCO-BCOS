@@ -20,6 +20,7 @@
 #pragma once
 
 #include <bcos-boostssl/httpserver/HttpSession.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <exception>
 #include <thread>
 namespace bcos
@@ -59,8 +60,7 @@ public:
     HttpReqHandler httpReqHandler() const { return m_httpReqHandler; }
     void setHttpReqHandler(HttpReqHandler _httpReqHandler) { m_httpReqHandler = _httpReqHandler; }
 
-    std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
+
 
     std::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor() const { return m_acceptor; }
     void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
@@ -94,6 +94,11 @@ public:
 
     std::string moduleName() { return m_moduleName; }
 
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioservicePool)
+    {
+        m_ioservicePool = _ioservicePool;
+    }
+
 private:
     std::string m_listenIP;
     uint16_t m_listenPort;
@@ -104,11 +109,12 @@ private:
     WsUpgradeHandler m_wsUpgradeHandler;
 
     std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
-    std::shared_ptr<boost::asio::io_context> m_ioc;
+
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
     std::shared_ptr<bcos::ThreadPool> m_threadPool;
     std::shared_ptr<HttpStreamFactory> m_httpStreamFactory;
+    bcos::IOServicePool::Ptr m_ioservicePool;
 };
 
 // The http server factory
