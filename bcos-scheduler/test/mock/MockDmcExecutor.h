@@ -1,12 +1,16 @@
 #pragma once
 #include "Common.h"
+#include "bcos-framework/interfaces/executor/ExecuteError.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include <boost/test/unit_test.hpp>
 
+
+
 using namespace std;
 using namespace bcos;
+using namespace bcos::executor;
 using namespace bcos::scheduler;
 namespace bcos::test
 {

@@ -25,21 +25,6 @@ using namespace bcos::crypto;
 
 namespace bcos::test
 {
-struct DmcFlagStruct
-{
-    using Ptr = std::shared_ptr<DmcFlagStruct>;
-    bool schedulerOutFlag = 0;
-    bool callFlag = 0;
-    bool DmcFlag = 0;
-    bool switchFlag = 0;
-    bool finishFlag = 0;
-    bool lockedFlag = 0;
-    std::atomic_size_t total = 0;
-    std::atomic_size_t paused = 0;
-    std::atomic_size_t finished = 0;
-    std::atomic_size_t error = 0;
-};
-
 struct DmcExecutorFixture
 {
     DmcExecutorFixture()
@@ -51,13 +36,30 @@ struct DmcExecutorFixture
         executor1 = std::make_shared<MockDmcExecutor>("executor1");
         keyLocks = std::make_shared<GraphKeyLocks>();
         dmcRecorder = std::make_shared<DmcStepRecorder>();
-    };
+    }
     bcos::scheduler::DmcExecutor::Ptr dmcExecutor;
     std::shared_ptr<MockDmcExecutor> executor1;
     bcos::scheduler::GraphKeyLocks::Ptr keyLocks;
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
     CryptoSuite::Ptr cryptoSuite = nullptr;
     bcos::protocol::BlockFactory::Ptr blockFactory;
+};
+
+BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
+
+struct DmcFlagStruct
+{
+    using Ptr = std::shared_ptr<DmcFlagStruct>;
+    bool schedulerOutFlag = false;
+    bool callFlag = false;
+    bool DmcFlag = false;
+    bool switchFlag = false;
+    bool finishFlag = false;
+    bool lockedFlag = false;
+    std::atomic_size_t total = 0;
+    std::atomic_size_t paused = 0;
+    std::atomic_size_t finished = 0;
+    std::atomic_size_t error = 0;
 };
 
 bcos::protocol::ExecutionMessage::UniquePtr createMessage(
@@ -73,8 +75,6 @@ bcos::protocol::ExecutionMessage::UniquePtr createMessage(
     return std::move(message);
 }
 
-BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
-
 BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 {
     DmcFlagStruct dmcFlagStruct;
@@ -82,13 +82,15 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, h256(6666), dmcRecorder);
 
-    dmcExecutor->setSchedulerOutHandler([this, &dmcFlagStruct](ExecutiveState::Ptr executiveState) {
-        dmcFlagStruct.schedulerOutFlag = true;
-        auto to = std::string(executiveState->message->to());
-        auto dmcExecutor2 = std::make_shared<DmcExecutor>(
-            "DmcExecutor2", to, block, executor1, keyLocks, h256(6667), dmcRecorder);
-        dmcExecutor2->scheduleIn(executiveState);
-    });
+    dmcExecutor->setSchedulerOutHandler(
+        [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
+            dmcFlagStruct.schedulerOutFlag = true;
+            auto to = std::string(executiveState->message->to());
+            auto block = blockFactory->createBlock();
+            auto dmcExecutor2 = std::make_shared<DmcExecutor>(
+                "DmcExecutor2", to, block, executor1, keyLocks, h256(6667), dmcRecorder);
+            dmcExecutor2->scheduleIn(executiveState);
+        });
 
     dmcExecutor->setOnTxFinishedHandler(
         [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
@@ -118,7 +120,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
         [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
 
 
-    auto executorCallback = [this, &dmcFlagStruct, callback = std::move(callback)](
+    auto executorCallback = [this, &dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
@@ -166,7 +168,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
 }
-BOOST_AUTO_TEST_CASE_END()
+BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 
 
