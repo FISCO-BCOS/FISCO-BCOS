@@ -48,8 +48,9 @@
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
+
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-tool/LedgerConfigFetcher.cpp>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -173,7 +174,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
-    auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
+    auto transactionSubmitResultFactory = std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
@@ -231,7 +232,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // build and init the pbft related modules
-    if (_nodeArchType == NodeArchitectureType::AIR)
+    if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
@@ -242,7 +243,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto blockSync =
             std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
 
-        auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
+        auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(protocol::ProtocolModuleID::NodeService);
         // registerNode when air node first start-up
         _gateway->registerNode(
             groupID, nodeID, blockSync->config()->nodeType(), frontService, nodeProtocolInfo);
@@ -251,7 +252,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("type", blockSync->config()->nodeType());
         // update the frontServiceInfo when nodeType changed
         blockSync->config()->registerOnNodeTypeChanged(
-            [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](NodeType _type) {
+            [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](protocol::NodeType _type) {
                 _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
                 INITIALIZER_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
                                       << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);

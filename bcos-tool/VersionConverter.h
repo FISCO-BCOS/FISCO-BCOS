@@ -21,7 +21,7 @@
  */
 #pragma once
 #include "Exceptions.h"
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <string>
 #include <vector>
 
