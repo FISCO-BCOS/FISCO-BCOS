@@ -35,25 +35,25 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
-        output = std::move(input);
-        if (output->to() == "0xaabbccdd")
+        // auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
+        // output = std::move(input);
+        if (input->to() == "0xaabbccdd")
         {
             std::string str = "Call Finished!";
-            output->setType(protocol::ExecutionMessage::FINISHED);
-            output->setData(bcos::bytes(str.begin(), str.end()));
-            output->setStatus(0);
-            output->setGasAvailable(123456);
-            callback(nullptr, std::move(output));
+            input->setType(protocol::ExecutionMessage::FINISHED);
+            input->setData(bcos::bytes(str.begin(), str.end()));
+            input->setStatus(0);
+            input->setGasAvailable(123456);
+            callback(nullptr, std::move(input));
         }
         else
         {
             std::string str = "Call error!";
-            output->setType(protocol::ExecutionMessage::FINISHED);
-            output->setData(bcos::bytes(str.begin(), str.end()));
-            output->setStatus(-1);
-            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, "call is error"),
-                std::move(output));
+            input->setType(protocol::ExecutionMessage::FINISHED);
+            input->setData(bcos::bytes(str.begin(), str.end()));
+            input->setStatus(-1);
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, "call is error"), std::move(input));
             return;
         }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
@@ -66,7 +66,7 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
-        std::vector<bcos::protocol::ExecutionMessage> results(inputs.size());
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
         {
             results.at(i) = std::move(inputs[i]);
