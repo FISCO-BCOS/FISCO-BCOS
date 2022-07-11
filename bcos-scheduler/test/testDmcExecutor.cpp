@@ -166,7 +166,9 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     // TXHASH  DMCEXECUTE
     auto message = createMessage(0, 0, 0, "0xaabbccdd", false);
     dmcExecutor->submit(std::move(message), false);
+    SCHEDULER_LOG << "prepare begin";
     auto need_scheduleOut = dmcExecutor->prepare();
+    SCHEDULER_LOG << "prepare begin" << LOG_KV("need_schedulerOut value is ", need_scheduleOut);
     BOOST_CHECK(!need_scheduleOut);
     dmcExecutor->go(executorCallback);
     BOOST_CHECK(dmcFlagStruct.DmcFlag);
