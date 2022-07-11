@@ -2,19 +2,26 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/ExecutiveState.h"
+#include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
 #include "mock/MockDmcExecutor.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
+
+
 using namespace std;
 using namespace bcos;
 using namespace bcos::scheduler;
+using namespace bcos::crypto;
 
 namespace bcos::test
 {
@@ -37,18 +44,20 @@ struct DmcExecutorFixture
 {
     DmcExecutorFixture()
     {
-        auto receiptFactory = std::make_shared<bcos::protocol::TransactionReceiptFactory>();
-        auto transactionFactory = std::make_shared<bcos::protocol::TransactionFactory>();
-        block = std::make_shared<bcos::protocol::Block>(transactionFactory, receiptFactory);
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+        cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+        blockFactory = createBlockFactory(cryptoSuite);
         executor1 = std::make_shared<MockDmcExecutor>("executor1");
         keyLocks = std::make_shared<GraphKeyLocks>();
         dmcRecorder = std::make_shared<DmcStepRecorder>();
     };
     bcos::scheduler::DmcExecutor::Ptr dmcExecutor;
-    bcos::protocol::Block::Ptr block;
     std::shared_ptr<MockDmcExecutor> executor1;
     bcos::scheduler::GraphKeyLocks::Ptr keyLocks;
     bcos::scheduler::DmcStepRecorder::Ptr dmcRecorder;
+    CryptoSuite::Ptr cryptoSuite = nullptr;
+    bcos::protocol::BlockFactory::Ptr blockFactory;
 };
 
 bcos::protocol::ExecutionMessage::UniquePtr createMessage(
@@ -69,12 +78,17 @@ BOOST_FIXTURE_TEST_SUITE(TestDmcExecutor, DmcExecutorFixture)
 BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 {
     DmcFlagStruct dmcFlagStruct;
-
+    auto block = blockFactory->createBlock();
     DmcExecutor::Ptr dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, h256(6666), dmcRecorder);
 
-    dmcExecutor->setSchedulerOutHandler(
-        [this, &dmcFlagStruct]() { dmcFlagStruct.schedulerOutFlag = true; });
+    dmcExecutor->setSchedulerOutHandler([this, &dmcFlagStruct](ExecutiveState::Ptr executiveState) {
+        dmcFlagStruct.schedulerOutFlag = true;
+        auto to = std::string(executiveState->message->to());
+        auto dmcExecutor2 = std::make_shared<DmcExecutor>(
+            "DmcExecutor2", to, block, executor1, keyLocks, h256(6667), dmcRecorder);
+        dmcExecutor2->scheduleIn(executiveState);
+    });
 
     dmcExecutor->setOnTxFinishedHandler(
         [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
@@ -100,10 +114,11 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
             }
         });
 
-    // dmcExecutor->setOnNeedSwitchEventHandler(
-    //     [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
+    dmcExecutor->setOnNeedSwitchEventHandler(
+        [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
 
-    auto executorCallback = [this, &dmcFlagStruct](
+
+    auto executorCallback = [this, &dmcFlagStruct, callback = std::move(callback)](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
@@ -152,7 +167,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
                          << LOG_KV("error is ", dmcFlagStruct.error);
 }
 BOOST_AUTO_TEST_CASE_END()
-};  // namespace bcos::test
+}  // namespace bcos::test
 
 
 // // need scheduleOut

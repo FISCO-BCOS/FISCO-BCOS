@@ -48,7 +48,8 @@ public:
             output->setType(protocol::ExecutionMessage::FINISHED);
             output->setData(bcos::bytes(str.begin(), str.end()));
             output->setStatus(-1);
-            callback(nullptr, std::move(output));
+            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, "call is error"),
+                std::move(output));
             return;
         }
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
@@ -64,25 +65,24 @@ public:
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (auto i = 0; i < inputs.size(); i++)
         {
-            // if (results.at(i)->transactionHash() == h256(10086))
-            // {
-
-            //     callback(nullptr, nullptr);
-            //     return;
-            // }
             results.at(i) = std::move(inputs[i]);
+            if (results.at(i)->transactionHash() == h256(10086))
+            {
+                callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, "execute is error"),
+                    std::move(results));
+                return;
+            }
+
             if (inputs[i]->type() == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
-                // callback(nullptr, executorStatus::PAUSE);
             }
             else
             {
                 results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
-                // callback(nullptr, executorStatus::FINISHED);
             }
         }
         callback(nullptr, std::move(results));
