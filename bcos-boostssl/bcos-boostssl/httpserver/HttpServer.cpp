@@ -92,10 +92,7 @@ void HttpServer::stop()
         m_acceptor->close();
     }
 
-    if (m_ioc && !m_ioc->stopped())
-    {
-        m_ioc->stop();
-    }
+
 
     HTTP_SERVER(INFO) << LOG_BADGE("stop") << LOG_DESC("http server");
 }
@@ -103,7 +100,7 @@ void HttpServer::stop()
 void HttpServer::doAccept()
 {
     // The new connection gets its own strand
-    m_acceptor->async_accept(boost::asio::make_strand(*m_ioc),
+    m_acceptor->async_accept(*(m_ioservicePool->getIOService()),
         boost::beast::bind_front_handler(&HttpServer::onAccept, shared_from_this()));
 }
 
@@ -220,11 +217,10 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     std::string m_moduleName = _moduleName;
     // create httpserver and launch a listening port
     auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, _moduleName);
-    auto acceptor =
-        std::make_shared<boost::asio::ip::tcp::acceptor>(boost::asio::make_strand(*_ioc));
+    auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>((*_ioc));
     auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
 
-    server->setIoc(_ioc);
+
     server->setCtx(_ctx);
     server->setAcceptor(acceptor);
     server->setHttpStreamFactory(httpStreamFactory);

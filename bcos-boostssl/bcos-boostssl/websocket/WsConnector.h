@@ -20,6 +20,7 @@
 #pragma once
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/ssl/ssl_stream.hpp>
@@ -42,9 +43,7 @@ public:
     using Ptr = std::shared_ptr<WsConnector>;
     using ConstPtr = std::shared_ptr<const WsConnector>;
 
-    WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver,
-        std::shared_ptr<boost::asio::io_context> _ioc)
-      : m_resolver(_resolver), m_ioc(_ioc)
+    WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver) : m_resolver(_resolver)
     {}
 
 public:
@@ -82,8 +81,7 @@ public:
     }
     std::shared_ptr<boost::asio::ip::tcp::resolver> resolver() const { return m_resolver; }
 
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
-    std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
+    void setIOServicePool(IOServicePool::Ptr _ioservicePool) { m_ioservicePool = _ioservicePool; }
 
     void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
     std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
@@ -97,13 +95,13 @@ public:
 private:
     std::shared_ptr<WsStreamDelegateBuilder> m_builder;
     std::shared_ptr<boost::asio::ip::tcp::resolver> m_resolver;
-    std::shared_ptr<boost::asio::io_context> m_ioc;
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
     mutable std::mutex x_pendingConns;
     std::set<std::string> m_pendingConns;
 
     std::string m_moduleName = "DEFAULT";
+    IOServicePool::Ptr m_ioservicePool;
 };
 }  // namespace ws
 }  // namespace boostssl

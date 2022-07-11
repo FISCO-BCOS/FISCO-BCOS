@@ -28,6 +28,7 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/dispatch.hpp>
@@ -125,8 +126,7 @@ public:
         m_sessionFactory = _sessionFactory;
     }
 
-    std::size_t iocThreadCount() const { return m_iocThreadCount; }
-    void setIocThreadCount(std::size_t _iocThreadCount) { m_iocThreadCount = _iocThreadCount; }
+
 
     int32_t waitConnectFinishTimeout() const { return m_waitConnectFinishTimeout; }
     void setWaitConnectFinishTimeout(int32_t _timeout) { m_waitConnectFinishTimeout = _timeout; }
@@ -140,8 +140,11 @@ public:
         m_threadPool = _threadPool;
     }
 
-    std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
+    void setIOServicePool(IOServicePool::Ptr _ioservicePool)
+    {
+        m_ioservicePool = _ioservicePool;
+        m_timerIoc = m_ioservicePool->getIOService();
+    }
 
     std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
     void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
@@ -255,6 +258,9 @@ private:
     std::vector<HandshakeHandler> m_handshakeHandlers;
     // sessionFactory
     WsSessionFactory::Ptr m_sessionFactory;
+    IOServicePool::Ptr m_ioservicePool;
+
+    std::shared_ptr<boost::asio::io_context> m_timerIoc;
 };
 
 }  // namespace ws

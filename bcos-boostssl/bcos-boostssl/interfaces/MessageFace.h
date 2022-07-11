@@ -42,7 +42,7 @@ public:
     virtual void setVersion(uint16_t) = 0;
     virtual uint16_t packetType() const = 0;
     virtual void setPacketType(uint16_t) = 0;
-    virtual std::string seq() const = 0;
+    virtual std::string const& seq() const = 0;
     virtual void setSeq(std::string) = 0;
     virtual uint16_t ext() const = 0;
     virtual void setExt(uint16_t) = 0;
@@ -52,16 +52,9 @@ public:
     virtual bool encode(bcos::bytes& _buffer) = 0;
     virtual int64_t decode(bytesConstRef _buffer) = 0;
 
-public:
-    virtual bool isRespPacket() const { return (m_ext & MessageExtFieldFlag::Response) != 0; }
-    virtual void setRespPacket() { m_ext |= MessageExtFieldFlag::Response; }
-
-protected:
-    uint16_t m_version = 0;
-    uint16_t m_packetType = 0;
-    std::string m_seq;
-    uint16_t m_ext = 0;
-    std::shared_ptr<bcos::bytes> m_payload;
+    virtual bool isRespPacket() const = 0;
+    virtual void setRespPacket() = 0;
+    virtual uint32_t length() const = 0;
 };
 
 class MessageFaceFactory
