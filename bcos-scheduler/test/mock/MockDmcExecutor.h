@@ -61,7 +61,7 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
-        // std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (auto i = 0; i < inputs.size(); i++)
         {
             // if (results.at(i)->transactionHash() == h256(10086))
@@ -70,22 +70,22 @@ public:
             //     callback(nullptr, nullptr);
             //     return;
             // }
-
-            if (inputs[i]->type == bcos::protocol::ExecutionMessage::KEY_LOCK)
+            results.at(i) = std::move(inputs[i]);
+            if (inputs[i]->type() == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
-                inputs[i]->setData(bcos::bytes(str.begin(), str.end()));
+                results[i]->setData(bcos::bytes(str.begin(), str.end()));
                 // callback(nullptr, executorStatus::PAUSE);
             }
             else
             {
-                inputs[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
+                results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";
-                inputs[i]->setData(bcos::bytes(str.begin(), str.end()));
+                results[i]->setData(bcos::bytes(str.begin(), str.end()));
                 // callback(nullptr, executorStatus::FINISHED);
             }
         }
-        callback(nullptr, std::move(inputs));
+        callback(nullptr, std::move(results));
     };
 
     void nextBlockHeader(int64_t, const bcos::protocol::BlockHeader::ConstPtr&,
