@@ -367,6 +367,12 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 prev.storage->setReadOnly(true);
                 stateStorage = createStateStorage(prev.storage);
             }
+
+            if (m_blockContext)
+            {
+                m_blockContext->clear();
+            }
+
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
@@ -566,14 +572,17 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 {
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
-    EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions request" << LOG_KV("txNum", txNum)
+    auto blockNumber = m_blockContext->number();
+    EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions request"
+                             << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
                              << LOG_KV("contractAddress", contractAddress)
                              << LOG_KV("requestTimestamp", requestTimestamp);
 
-    auto callback = [this, _callback = _callback, requestTimestamp, txNum, contractAddress](
-                        bcos::Error::UniquePtr error,
+    auto callback = [this, _callback = _callback, requestTimestamp, blockNumber, txNum,
+                        contractAddress](bcos::Error::UniquePtr error,
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-        EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions response" << LOG_KV("txNum", txNum)
+        EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions response"
+                                 << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
                                  << LOG_KV("outputNum", outputs.size())
                                  << LOG_KV("contractAddress", contractAddress)
                                  << LOG_KV("requestTimestamp", requestTimestamp)
@@ -774,13 +783,16 @@ void TransactionExecutor::dagExecuteTransactions(
 {
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
-    EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions request" << LOG_KV("txNum", txNum)
+    auto blockNumber = m_blockContext->number();
+    EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions request"
+                             << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
                              << LOG_KV("requestTimestamp", requestTimestamp);
 
-    auto callback = [this, _callback = _callback, requestTimestamp, txNum](
+    auto callback = [this, _callback = _callback, requestTimestamp, blockNumber, txNum](
                         bcos::Error::UniquePtr error,
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-        EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions response" << LOG_KV("txNum", txNum)
+        EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions response"
+                                 << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
                                  << LOG_KV("outputNum", outputs.size())
                                  << LOG_KV("requestTimestamp", requestTimestamp)
                                  << LOG_KV("errorMessage", error ? error->errorMessage() : "ok")

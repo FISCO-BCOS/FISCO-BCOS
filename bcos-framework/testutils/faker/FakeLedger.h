@@ -145,6 +145,16 @@ public:
         callback(nullptr);
     }
 
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(Error::UniquePtr&&)> _callback) override
+    {
+        if (!_callback)
+        {
+            return;
+        }
+        _callback(nullptr);
+    }
+
     // the txpool module use this interface to store txs
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override
