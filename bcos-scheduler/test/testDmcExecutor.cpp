@@ -81,7 +81,7 @@ bcos::protocol::ExecutionMessage::UniquePtr createMessage(
     return std::move(message);
 }
 
-BOOST_AUTO_TEST_CASE(stateSwitchTest1)
+BOOST_AUTO_TEST_CASE(stateSwitchTest)
 {
     DmcFlagStruct dmcFlagStruct;
 
@@ -190,13 +190,13 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
 
     // SEND_BACK    (MESSAGE)
     auto message3 = createMessage(3, 0, 4, "", false);
-    message3->setTransactionHash(h256(0));
+    message3->setTransactionHash(h256(123));
     bcos::u256 salt(787667543453);
     message3->setCreateSalt(salt);
     dmcExecutor->submit(std::move(message3), false);
 
     // NEED_SCHEDULE_OUT
-    auto message4 = createMessage(3, 0, 2, "0xbbbbccdd", false);
+    auto message4 = createMessage(3, 0, 2, "0xccddeeff", false);
     dmcExecutor->submit(std::move(message4), false);
 
     dmcExecutor->prepare();
@@ -206,8 +206,64 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
+    dmcExecutor->go(executorCallback);
+    BOOST_CHECK(dmcFlagStruct.callFlag);
 }
 
+BOOST_AUTO_TEST_CASE(callTest)
+{
+    DmcFlagStruct dmcFlagStruct;
+
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto block = blockFactory->createBlock();
+    auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
+    blockHeader->setNumber(1);
+    block->setBlockHeader(blockHeader);
+    // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
+    auto dmcExecutor = std::make_shared<DmcExecutor>(
+        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
+
+    dmcExecutor->setOnTxFinishedHandler(
+        [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
+            auto outputBytes = output->data();
+            std::string outputStr((char*)outputBytes.data(), outputBytes.size());
+            SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
+            if (outputStr == "Call Finished!")
+            {
+                dmcFlagStruct.callFlag = true;
+                dmcFlagStruct.finishFlag = true;
+            }
+            else if (outputStr == "DMCExecuteTransaction Finish!")
+            {
+                dmcFlagStruct.DmcFlag = true;
+                dmcFlagStruct.finishFlag = true;
+            }
+            else if (outputStr == "DMCExecuteTransaction Finish, I am keyLock!")
+            {
+                dmcFlagStruct.lockedFlag = true;
+            }
+            else
+            {
+                dmcFlagStruct.finishFlag = true;
+            }
+        });
+
+    dmcExecutor->setOnNeedSwitchEventHandler(
+        [this, &dmcFlagStruct]() { dmcFlagStruct.switchFlag = true; });
+
+    // call
+    message = createMessage(1, 0, 1, "0xaabbccdd", true);
+    submit(message);
+    dmcExecutor->prepare();
+    dmcExecutor->go(executorCallback);
+    dmcExecutor->prepare();
+    BOOST_CHECK(dmcFlagStruct.callFlag);
+    SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
+                         << LOG_KV("finished is ", dmcFlagStruct.finished)
+                         << LOG_KV("paused is ", dmcFlagStruct.paused)
+                         << LOG_KV("error is ", dmcFlagStruct.error);
+}
+BOOST_AUTO_TEST_CASE(keyLockTest)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 
