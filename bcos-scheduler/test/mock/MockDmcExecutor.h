@@ -50,12 +50,11 @@ public:
         }
         else
         {
-            std::string str = "Call error!";
+            std::string str = "Call error, Need Switch!";
             input->setType(protocol::ExecutionMessage::FINISHED);
             input->setData(bcos::bytes(str.begin(), str.end()));
-            input->setStatus(-1);
-            callback(
-                BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, "call is error"), std::move(input));
+            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, "Call is error"),
+                std::move(input));
             SCHEDULER_LOG(DEBUG) << LOG_KV("call  error, input type is ", input->type());
             return;
         }
