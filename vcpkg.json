@@ -12,10 +12,6 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
-    {
-      "name": "openssl",
-      "version>=": "1.1.1-tassl"
-    },
     "boost-log",
     "boost-beast",
     "boost-uuid",
@@ -33,7 +29,6 @@
     "zlib",
     "jsoncpp",
     "protobuf",
-    "wedprcrypto",
     "tarscpp"
   ],
   "default-features": [
@@ -47,6 +42,16 @@
         "boost-coroutine2",
         "rocksdb",
         "zstd"
+      ]
+    },
+    "boostssl": {
+      "description": "BoostSSL dependencies",
+      "dependencies": [
+        {
+          "name": "openssl",
+          "version>=": "1.1.1-tassl"
+        },
+        "wedprcrypto"
       ]
     },
     "lightnode": {
