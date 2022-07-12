@@ -918,9 +918,17 @@ void BlockExecutive::onDmcExecuteFinish(
                        << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
 
         // Set result to m_block
-        for (auto& it : m_executiveResults)
+        for (size_t i = 0; i < m_executiveResults.size(); i++)
         {
-            m_block->appendReceipt(it.receipt);
+            if (i < m_block->receiptsSize())
+            {
+                // bugfix: force update receipt of last executeBlock() remaining
+                m_block->setReceipt(i, m_executiveResults[i].receipt);
+            }
+            else
+            {
+                m_block->appendReceipt(m_executiveResults[i].receipt);
+            }
         }
         callback(nullptr, nullptr, m_isSysBlock);
     }
@@ -953,9 +961,17 @@ void BlockExecutive::onDmcExecuteFinish(
                 std::chrono::system_clock::now() - m_currentTimePoint);
 
             // Set result to m_block
-            for (auto& it : m_executiveResults)
+            for (size_t i = 0; i < m_executiveResults.size(); i++)
             {
-                m_block->appendReceipt(it.receipt);
+                if (i < m_block->receiptsSize())
+                {
+                    // bugfix: force update receipt of last executeBlock() remaining
+                    m_block->setReceipt(i, m_executiveResults[i].receipt);
+                }
+                else
+                {
+                    m_block->appendReceipt(m_executiveResults[i].receipt);
+                }
             }
             auto executedBlockHeader =
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(m_block->blockHeader());
