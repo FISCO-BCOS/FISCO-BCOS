@@ -160,6 +160,8 @@ public:
         }
     }
 
+    bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
+
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
         std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)

@@ -1,4 +1,5 @@
 #include "SerialBlockExecutive.h"
+#include "ChecksumAddress.h"
 #include "DmcExecutor.h"
 #include "SchedulerImpl.h"
 #include "bcos-framework/interfaces/executor/ExecuteError.h"
@@ -163,6 +164,25 @@ void SerialBlockExecutive::recursiveExecuteTx(
     case protocol::ExecutionMessage::KEY_LOCK:
     case protocol::ExecutionMessage::SEND_BACK:
     {
+        // handle create message
+        if (message->to().empty())
+        {
+            auto newSeq = executiveState->currentSeq;
+            if (message->createSalt())
+            {
+                // TODO: Add sender in this process(consider compat with ethereum)
+                message->setTo(bcos::newEVMAddress(m_scheduler->getHashImpl(), message->from(),
+                    message->data(), *(message->createSalt())));
+            }
+            else
+            {
+                // TODO: Add sender in this process(consider compat with ethereum)
+                message->setTo(bcos::newEVMAddress(m_scheduler->getHashImpl(),
+                    m_block->blockHeaderConst()->number(), contextID, newSeq));
+            }
+        }
+
+        // handle normal message
         auto newSeq = executiveState->currentSeq++;
         executiveState->callStack.push(newSeq);
         executiveState->message->setSeq(newSeq);
@@ -295,7 +315,7 @@ void SerialBlockExecutive::onExecuteFinish(
 
             if (error)
             {
-                DMC_LOG(ERROR) << "batchGetHashes error: " << error->errorMessage();
+                SERIAL_EXECUTE_LOG(ERROR) << "batchGetHashes error: " << error->errorMessage();
                 callback(std::move(error), nullptr, m_isSysBlock);
                 return;
             }
