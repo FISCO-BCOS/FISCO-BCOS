@@ -2,7 +2,7 @@
 #include "../Basic.h"
 #include "../Block.h"
 #include <concepts>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 
 namespace bcos::concepts::sync
 {
@@ -23,8 +23,8 @@ concept ResponseBlock = requires(MessageType message)
     bcos::concepts::serialize::Serializable<MessageType>;
     MessageType{};
     std::unsigned_integral<decltype(message.blockNumber)>;
-    requires std::ranges::range<decltype(message.blocks)> &&
-        bcos::concepts::block::Block<std::ranges::range_value_t<decltype(message.blocks)>>;
+    requires RANGES::range<decltype(message.blocks)> &&
+        bcos::concepts::block::Block<RANGES::range_value_t<decltype(message.blocks)>>;
 };
 
 }  // namespace bcos::concepts::sync

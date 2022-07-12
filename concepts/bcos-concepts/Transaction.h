@@ -4,7 +4,7 @@
 #include "Hash.h"
 #include "Serialize.h"
 #include <concepts>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 #include <type_traits>
 
 namespace bcos::concepts::transaction

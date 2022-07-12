@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <exception>
 #include <iterator>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 #include <stdexcept>
 #include <type_traits>
 
@@ -14,11 +14,11 @@ namespace bcos::tool::merkle
 {
 
 template <class Range, class HashType>
-concept InputRange = std::ranges::random_access_range<Range> &&
-    std::is_same_v<std::remove_cvref_t<std::ranges::range_value_t<Range>>, HashType>;
+concept InputRange = RANGES::random_access_range<Range> &&
+    std::is_same_v<std::remove_cvref_t<RANGES::range_value_t<Range>>, HashType>;
 
 template <class Range, class HashType>
-concept OutputRange = std::ranges::random_access_range<Range> && std::ranges::output_range<Range, HashType>;
+concept OutputRange = RANGES::random_access_range<Range> && RANGES::output_range<Range, HashType>;
 
 template <class HashType>
 struct Proof
@@ -50,7 +50,7 @@ public:
         if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
 
-        auto range = std::ranges::subrange{proof.hashes.begin(), proof.hashes.begin()};
+        auto range = RANGES::subrange{proof.hashes.begin(), proof.hashes.begin()};
         HasherType hasher;
         for (auto it = proof.levels.begin(); it != proof.levels.end(); ++it)
         {
@@ -58,7 +58,7 @@ public:
             if (std::end(range) > proof.hashes.end() || std::size(range) > width) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Proof level length out of range!"});
 
-            if (std::ranges::find(range, hash) == std::end(range)) [[unlikely]]
+            if (RANGES::find(range, hash) == std::end(range)) [[unlikely]]
                 return false;
 
             if (std::next(it) != proof.levels.end())
@@ -82,9 +82,9 @@ public:
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
         // Query the first level hashes(ordered)
-        auto levelRange = std::ranges::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+        auto levelRange = RANGES::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
 
-        auto it = std::ranges::lower_bound(levelRange, hash);
+        auto it = RANGES::lower_bound(levelRange, hash);
         if (it == levelRange.end() || *it != hash) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
@@ -101,11 +101,11 @@ public:
         proof.levels.push_back(end - start);
 
         // Query next level hashes
-        for (auto depth : std::ranges::iota_view{decltype(m_levels.size())(1), m_levels.size()})
+        for (auto depth : RANGES::iota_view{decltype(m_levels.size())(1), m_levels.size()})
         {
             auto length = m_levels[depth];
             index = indexAlign(index / width);
-            levelRange = std::ranges::subrange{levelRange.end(), levelRange.end() + length};
+            levelRange = RANGES::subrange{levelRange.end(), levelRange.end() + length};
 
             start = levelRange.begin() + index;
             // end = std::min(start + width, levelRange.end());
@@ -141,14 +141,14 @@ public:
         std::copy_n(std::begin(input), inputSize, m_nodes.begin());
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
-        auto inputRange = std::ranges::subrange{m_nodes.begin(), m_nodes.begin()};
+        auto inputRange = RANGES::subrange{m_nodes.begin(), m_nodes.begin()};
         m_levels.push_back(inputSize);
         while (inputSize > 1)  // Ignore only root
         {
             inputRange = {inputRange.end(), inputRange.end() + inputSize};
             assert(inputRange.end() <= m_nodes.end());
 
-            inputSize = calculateLevelHashes(inputRange, std::ranges::subrange{inputRange.end(), m_nodes.end()});
+            inputSize = calculateLevelHashes(inputRange, RANGES::subrange{inputRange.end(), m_nodes.end()});
             m_levels.push_back(inputSize);
         }
     }

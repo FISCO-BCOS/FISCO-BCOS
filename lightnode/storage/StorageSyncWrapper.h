@@ -37,7 +37,7 @@ public:
     }
 
     std::vector<std::optional<Entry>> impl_getRows(
-        std::string_view table, std::ranges::range auto&& keys)
+        std::string_view table, RANGES::range auto&& keys)
     {
         Error::UniquePtr error;
         std::vector<std::optional<Entry>> entries;
