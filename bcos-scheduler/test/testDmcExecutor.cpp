@@ -351,15 +351,19 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     dmcExecutor->submit(std::move(lockMessage3), false);
 
     dmcExecutor->prepare();
-    dmcExecutor->unlockPrepare();
-    dmcExecutor->detectLockAndRevert();
+    auto locked = dmcExecutor->unlockPrepare();
+    auto found = dmcExecutor->detectLockAndRevert();
+    BOOST_CHECK(found && locked);
+    SCHEDULER_LOG(DEBUG) << "no need_prepare, found deadlock and revert";
     dmcExecutor->releaseOutdatedLock();
     dmcExecutor->go(executorCallback);
-
     SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("round is ", dmcFlagStruct.round)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
+    BOOST_CHECK(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
+    BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
+    BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
