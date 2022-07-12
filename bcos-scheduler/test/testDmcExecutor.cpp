@@ -255,6 +255,20 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     auto dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
 
+    dmcExecutor->setSchedulerOutHandler(
+        [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
+            dmcFlagStruct.schedulerOutFlag = true;
+            auto to = std::string(executiveState->message->to());
+            auto hashImpl = std::make_shared<Keccak256>();
+            auto block = blockFactory->createBlock();
+            auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
+            blockHeader->setNumber(2);
+            block->setBlockHeader(blockHeader);
+            auto dmcExecutor2 = std::make_shared<DmcExecutor>(
+                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
+            dmcExecutor2->scheduleIn(executiveState);
+        });
+
     dmcExecutor->setOnTxFinishedHandler(
         [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
@@ -279,6 +293,11 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
                 dmcFlagStruct.finishFlag = true;
             }
         });
+
+    dmcExecutor->setOnNeedSwitchEventHandler([this, &dmcFlagStruct]() {
+        SCHEDULER_LOG(DEBUG) << "Transaction Perform Error , Need Switch.";
+        dmcFlagStruct.switchFlag = true;
+    });
 
     auto executorCallback = [this, &dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
@@ -324,11 +343,11 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     dmcExecutor->submit(std::move(lockMessage1), false);
     auto lockMessage2 = createMessage(1, 0, 3, "0xaabbccdd", false);
     lockMessage2->setKeyLocks({"key2"});
-    lockMessage1->setKeyLockAcquired("key3");
+    lockMessage2->setKeyLockAcquired("key3");
     dmcExecutor->submit(std::move(lockMessage2), false);
     auto lockMessage3 = createMessage(2, 0, 3, "0xaabbccdd", false);
     lockMessage3->setKeyLocks({"key3"});
-    lockMessage1->setKeyLockAcquired("key1");
+    lockMessage3->setKeyLockAcquired("key1");
     dmcExecutor->submit(std::move(lockMessage3), false);
 
     dmcExecutor->prepare();
