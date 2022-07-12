@@ -217,7 +217,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
                          << LOG_KV("error is ", dmcFlagStruct.error);
 
     BOOST_CHECK(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
-    BOOST_CKECK(dmcFlagStruct.schedulerOutFlag);
+    BOOST_CHECK(dmcFlagStruct.schedulerOutFlag);
     BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
     BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
     BOOST_CHECK(!dmcFlagStruct.callFlag);

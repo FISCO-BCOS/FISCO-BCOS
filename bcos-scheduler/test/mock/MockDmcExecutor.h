@@ -38,15 +38,6 @@ public:
         // auto output = std::make_unique<bcos::protocol::ExecutionMessage>();
         // output = std::move(input);
         SCHEDULER_LOG(DEBUG) << LOG_KV(",input type ", input->type());
-        if (input->to() == "0xaabbccdd")
-        {
-            std::string str = "Call Finished!";
-            input->setType(protocol::ExecutionMessage::FINISHED);
-            input->setData(bcos::bytes(str.begin(), str.end()));
-            input->setGasAvailable(123456);
-            SCHEDULER_LOG(DEBUG) << LOG_KV("call  finished, input type is ", input->type());
-            callback(nullptr, std::move(input));
-        }
         if (input->type() == bcos::protocol::ExecutionMessage::TXHASH)
         {
             std::string str = "Call error, Need Switch!";
@@ -55,6 +46,24 @@ public:
                 std::move(input));
             SCHEDULER_LOG(DEBUG) << LOG_KV("call  error, input type is ", input->type());
             return;
+        }
+        else
+        {
+            if (input->to() == "0xaabbccdd")
+            {
+                std::string str = "Call Finished!";
+                input->setType(protocol::ExecutionMessage::FINISHED);
+                input->setData(bcos::bytes(str.begin(), str.end()));
+                input->setGasAvailable(123456);
+                SCHEDULER_LOG(DEBUG) << LOG_KV("call  finished, input type is ", input->type());
+                callback(nullptr, std::move(input));
+            }
+            else
+            {
+                DMC_LOG(FATAL) << "Error! Need schedulerOut, But perform Call!";
+                assert(false);
+                break;
+            }
         }
     }
 
