@@ -62,7 +62,10 @@ public:
             {
                 DMC_LOG(FATAL) << "Error! Need schedulerOut, But perform Call!";
                 assert(false);
-                break;
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, "Call is error"),
+                    std::move(input));
+                return;
             }
         }
     }
