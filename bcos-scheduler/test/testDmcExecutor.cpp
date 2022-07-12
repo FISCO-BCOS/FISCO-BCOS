@@ -318,36 +318,15 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     // REVERT,      // Send/Receive a revert to/from previous external call
 
     // TXHASH  DMCEXECUTE
-    auto lockMessage1 = std::make_unique<bcos::executor::NativeExecutionMessage>();
-    lockMessage1->setStaticCall(false);
-    lockMessage1->setType(bcos::protocol::ExecutionMessage::Type(3));
-    lockMessage1->setContextID(1);
-    lockMessage1->setSeq(0);
-    lockMessage1->setFrom("0xeeffaabb");
-    lockMessage1->setTo("0xaabbccdd");
-    lockMessage1->setkeyLocks({"key1", "key2"});
-    dmcExecutor->submit(std::move(lockMessage1, false));
-
-    auto lockMessage2 = std::make_unique<bcos::executor::NativeExecutionMessage>();
-    lockMessage2->setStaticCall(false);
-    lockMessage2->setType(bcos::protocol::ExecutionMessage::Type(3));
-    lockMessage2->setContextID(2);
-    lockMessage2->setSeq(0);
-    lockMessage2->setFrom("0xeeffaabb");
-    lockMessage2->setTo("0xaabbccdd");
-    lockMessage2->setkeyLocks({"key2", "key3"});
-    dmcExecutor->submit(std::move(lockMessage2, false));
-
-    auto lockMessage3 = std::make_unique<bcos::executor::NativeExecutionMessage>();
-    lockMessage3->setStaticCall(false);
-    lockMessage3->setType(bcos::protocol::ExecutionMessage::Type(3));
-    lockMessage3->setContextID(3);
-    lockMessage3->setSeq(0);
-    lockMessage3->setFrom("0xeeffaabb");
-    lockMessage3->setTo("0xaabbccdd");
-    lockMessage3->setkeyLocks({"key3", "key1"});
-    dmcExecutor->submit(std::move(lockMessage3, false));
-
+    auto lockMessage1 = createMessage(0, 0, 3, "0xaabbccdd", false);
+    lockMessage1->setKeyLocks({"key1", "key2"});
+    dmcExecutor->submit(std::move(lockMessage1), false);
+    auto lockMessage2 = createMessage(1, 0, 3, "0xaabbccdd", false);
+    lockMessage2->setKeyLocks({"key2", "key3"});
+    dmcExecutor->submit(std::move(lockMessage2), false);
+    auto lockMessage3 = createMessage(2, 0, 3, "0xaabbccdd", false);
+    lockMessage3->setKeyLocks({"key3", "key1"});
+    dmcExecutor->submit(std::move(lockMessage3), false);
     dmcExecutor->prepare();
     dmcExecutor->unlockPrepare();
     dmcExecutor->detectLockAndRevert();
