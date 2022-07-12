@@ -26,14 +26,14 @@ include(BuildInfoGenerator)
 include(IncludeDirectories)
 include(TargetSettings)
 
-if(BOOSTSSL_MODULE)
+if(WITH_BOOSTSSL)
     add_subdirectory(bcos-boostssl)
     add_subdirectory(bcos-framework)
     add_subdirectory(bcos-crypto)
     add_subdirectory(bcos-utilities)
 endif()
 
-if(CORE_MODULES)
+if(FULLNODE)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
 
@@ -58,17 +58,19 @@ if(CORE_MODULES)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
 
-    if(TARS_SERVICES)
+    if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
     endif()
-
-    add_subdirectory(concepts)
-    add_subdirectory(lightnode)
 
     if(TESTS)
         enable_testing()
         add_subdirectory(tests)
     endif()
+endif()
+
+if(WITH_LIGHTNODE)
+    add_subdirectory(concepts)
+    add_subdirectory(lightnode)
 endif()
 
 # for code coverage

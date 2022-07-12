@@ -33,27 +33,33 @@
     "zlib",
     "jsoncpp",
     "protobuf",
-    "wedprcrypto"
+    "wedprcrypto",
+    "tarscpp"
+  ],
+  "default-features": [
+    "fullnode"
   ],
   "features": {
-    "executor": {
-      "description": "Executor module dependencies",
+    "fullnode": {
+      "description": "Full node dependencies",
       "dependencies": [
         "evmone",
-        "boost-coroutine2"
-      ]
-    },
-    "rpcframework": {
-      "description": "RPC framework module dependencies",
-      "dependencies": [
-        "tarscpp"
-      ]
-    },
-    "storage": {
-      "description": "Storage module dependencies",
-      "dependencies": [
+        "boost-coroutine2",
         "rocksdb",
         "zstd"
+      ]
+    },
+    "lightnode": {
+      "description": "Light node dependencies",
+      "dependencies": [
+        "evmone",
+        "rocksdb"
+      ]
+    },
+    "etcd": {
+      "description": "ETCD dependencies",
+      "dependencies": [
+        "offscale-libetcd-cpp"
       ]
     }
   },
