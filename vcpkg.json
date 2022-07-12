@@ -32,7 +32,7 @@
     "tarscpp"
   ],
   "default-features": [
-    "fullnode"
+    "fullnode","boostssl"
   ],
   "features": {
     "fullnode": {
