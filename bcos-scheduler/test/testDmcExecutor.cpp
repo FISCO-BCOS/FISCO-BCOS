@@ -183,14 +183,21 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     auto message1 = createMessage(1, 0, 1, "0xaabbccdd", false);
     dmcExecutor->submit(std::move(message1), false);
 
-    // SEND_BACK DMCEXECUTE
+    // SEND_BACK DMC_EXECUTE  (TXHASH)
     auto message2 = createMessage(2, 0, 4, "0xaabbccdd", false);
     dmcExecutor->submit(std::move(message2), false);
 
 
-    // REVERT
-    auto message3 = createMessage(3, 0, 5, "0xaabbccdd", false);
+    // SEND_BACK    (MESSAGE)
+    auto message3 = createMessage(3, 0, 4, "", false);
+    message3->setTransactionHash(h256(0));
+    bcos::u256 salt(787667543453);
+    message3->setCreateSalt(salt);
     dmcExecutor->submit(std::move(message3), false);
+
+    // NEED_SCHEDULE_OUT
+    auto message4 = createMessage(3, 0, 2, "0xbbbbccdd", false);
+    dmcExecutor->submit(std::move(message4), false);
 
     dmcExecutor->prepare();
     dmcExecutor->go(executorCallback);
