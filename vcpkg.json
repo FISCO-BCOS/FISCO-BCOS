@@ -29,10 +29,12 @@
     "zlib",
     "jsoncpp",
     "protobuf",
-    "tarscpp"
-  ],
-  "default-features": [
-    "fullnode","boostssl"
+    "tarscpp",
+    {
+      "name": "openssl",
+      "version>=": "1.1.1-tassl"
+    },
+    "wedprcrypto"
   ],
   "features": {
     "fullnode": {
@@ -42,16 +44,6 @@
         "boost-coroutine2",
         "rocksdb",
         "zstd"
-      ]
-    },
-    "boostssl": {
-      "description": "BoostSSL dependencies",
-      "dependencies": [
-        {
-          "name": "openssl",
-          "version>=": "1.1.1-tassl"
-        },
-        "wedprcrypto"
       ]
     },
     "lightnode": {
