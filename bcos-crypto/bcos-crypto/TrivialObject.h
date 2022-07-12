@@ -68,7 +68,7 @@ constexpr auto toView(trivial::Object auto&& object)
             std::is_const_v<std::remove_reference_t<RANGES::range_value_t<RawType>>>,
             std::byte const, std::byte>;
         std::span<ByteType> view{(ByteType*)std::data(object),
-            sizeof(std::remove_cvref_t<RANGES::range_value_t<RawType>>) * std::size(object)};
+            sizeof(std::remove_cvref_t<RANGES::range_value_t<RawType>>) * RANGES::size(object)};
 
         return view;
     }

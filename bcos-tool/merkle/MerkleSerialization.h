@@ -34,7 +34,7 @@ ostream& operator<<(ostream& stream, const bcos::tool::merkle::Merkle<T1, T2, T3
     size_t level = 0;
     for (auto length : merkle.m_levels)
     {
-        range = {std::end(range), std::end(range) + length};
+        range = {RANGES::end(range), RANGES::end(range) + length};
         stream << "Level " << level;
         for (auto& hash : range)
         {
@@ -53,7 +53,7 @@ ostream& operator<<(ostream& stream, const typename bcos::tool::merkle::Proof<Ha
     size_t level = 0;
     for (auto length : proof.levels)
     {
-        range = {std::end(range), std::end(range) + length};
+        range = {RANGES::end(range), RANGES::end(range) + length};
         stream << "Level " << level;
         for (auto& hash : range)
         {

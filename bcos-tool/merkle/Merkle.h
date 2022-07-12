@@ -1,12 +1,14 @@
 #pragma once
 
 #include <bcos-crypto/hasher/Hasher.h>
+#include <bcos-utilities/Ranges.h>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <exception>
 #include <iterator>
-#include <bcos-utilities/Ranges.h>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/subrange.hpp>
 #include <stdexcept>
 #include <type_traits>
 
@@ -54,11 +56,11 @@ public:
         HasherType hasher;
         for (auto it = proof.levels.begin(); it != proof.levels.end(); ++it)
         {
-            range = {std::end(range), std::end(range) + *it};
-            if (std::end(range) > proof.hashes.end() || std::size(range) > width) [[unlikely]]
+            range = {RANGES::end(range), RANGES::end(range) + *it};
+            if (RANGES::end(range) > proof.hashes.end() || RANGES::size(range) > width) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Proof level length out of range!"});
 
-            if (RANGES::find(range, hash) == std::end(range)) [[unlikely]]
+            if (RANGES::find(range, hash) == RANGES::end(range)) [[unlikely]]
                 return false;
 
             if (std::next(it) != proof.levels.end())
@@ -71,7 +73,10 @@ public:
             }
         }
 
-        if (hash != root) [[unlikely]] { return false; }
+        if (hash != root) [[unlikely]]
+        {
+            return false;
+        }
 
         return true;
     }
@@ -88,7 +93,7 @@ public:
         if (it == levelRange.end() || *it != hash) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
-        auto index = indexAlign(it - std::begin(levelRange));  // Align
+        auto index = indexAlign(it - RANGES::begin(levelRange));  // Align
         auto start = levelRange.begin() + index;
         auto end = (levelRange.end() - start < width) ? levelRange.end() : start + width;
         // auto end = std::min(start + width, levelRange.end());
@@ -101,7 +106,7 @@ public:
         proof.levels.push_back(end - start);
 
         // Query next level hashes
-        for (auto depth : RANGES::iota_view{decltype(m_levels.size())(1), m_levels.size()})
+        for (auto depth : RANGES::views::iota(1u, m_levels.size()))
         {
             auto length = m_levels[depth];
             index = indexAlign(index / width);
@@ -135,10 +140,10 @@ public:
         if (!empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle already imported"});
 
-        auto inputSize = std::size(input);
+        auto inputSize = RANGES::size(input);
         m_nodes.resize(getNodeSize(inputSize));
 
-        std::copy_n(std::begin(input), inputSize, m_nodes.begin());
+        std::copy_n(RANGES::begin(input), inputSize, m_nodes.begin());
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
         auto inputRange = RANGES::subrange{m_nodes.begin(), m_nodes.begin()};
@@ -148,7 +153,8 @@ public:
             inputRange = {inputRange.end(), inputRange.end() + inputSize};
             assert(inputRange.end() <= m_nodes.end());
 
-            inputSize = calculateLevelHashes(inputRange, RANGES::subrange{inputRange.end(), m_nodes.end()});
+            inputSize =
+                calculateLevelHashes(inputRange, RANGES::subrange{inputRange.end(), m_nodes.end()});
             m_levels.push_back(inputSize);
         }
     }
@@ -184,10 +190,11 @@ private:
         return inputSize == 1 ? 0 : (inputSize + (width - 1)) / width;
     }
 
-    size_t calculateLevelHashes(InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
+    size_t calculateLevelHashes(
+        InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
     {
-        auto inputSize = std::size(input);
-        [[maybe_unused]] auto outputSize = std::size(output);
+        auto inputSize = RANGES::size(input);
+        [[maybe_unused]] auto outputSize = RANGES::size(output);
         auto expectOutputSize = getLevelSize(inputSize);
 
         assert(inputSize > 0);

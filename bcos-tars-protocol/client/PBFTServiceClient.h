@@ -24,11 +24,11 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "bcos-framework//sealer/SealerInterface.h"
+#include "bcos-framework/sealer/SealerInterface.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/PBFTService.h"
-#include <bcos-framework//consensus/ConsensusInterface.h>
-#include <bcos-framework//sync/BlockSyncInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
 
 namespace bcostars
 {

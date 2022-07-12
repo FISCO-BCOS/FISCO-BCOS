@@ -170,10 +170,10 @@ public:
                                        SYS_HASH_2_TX :
                                        SYS_HASH_2_RECEIPT;
         auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
-        std::vector<OutputItemType> outputs(std::size(entries));
+        std::vector<OutputItemType> outputs(RANGES::size(entries));
 
 #pragma omp parallel for
-        for (auto i = 0u; i < std::size(entries); ++i)
+        for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
             if (!entries[i]) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
@@ -191,7 +191,7 @@ public:
 
         bcos::concepts::ledger::TransactionCount transactionCount;
         auto entries = m_storage.getRows(SYS_CURRENT_STATE, keys);
-        for (auto i = 0u; i < std::size(entries); ++i)
+        for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
             auto& entry = entries[i];
 
@@ -230,8 +230,8 @@ public:
     void impl_setTransactionOrReceiptBuffers(
         RANGES::range auto const& hashes, RANGES::range auto buffers)
     {
-        auto count = std::size(buffers);
-        if (count != std::size(hashes))
+        auto count = RANGES::size(buffers);
+        if (count != RANGES::size(hashes))
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"No match count"});
         }
@@ -244,7 +244,7 @@ public:
 
             auto&& hash = hashes[i];
             m_storage.setRow(
-                tableName, std::string_view(std::data(hash), std::size(hash)), std::move(entry));
+                tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
         }
     }
 
