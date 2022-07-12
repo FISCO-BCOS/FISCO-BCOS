@@ -35,10 +35,10 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::string& _storagePath, const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
+    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
+        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
     {
-        // FIXME: use blobDB of RocksDB
+        // FIXME: enable compress
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
         rocksdb::Options options;
@@ -49,8 +49,14 @@ public:
         // create the DB if it's not already present
         options.create_if_missing = true;
         options.enable_blob_files = keyPageSize > 1 ? true : false;
+        options.compression = rocksdb::kZSTD;
         // options.min_blob_size = 1024;
 
+        if (boost::filesystem::space(_storagePath).available < 1024 * 1024 * 100)
+        {
+            BCOS_LOG(INFO) << "available disk space is less than 100MB";
+            throw std::runtime_error("available disk space is less than 100MB");
+        }
 
         // open DB
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);

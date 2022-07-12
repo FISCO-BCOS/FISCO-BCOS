@@ -53,6 +53,8 @@ enum StorageError
     WriteError,
     EmptyStorage,
     ReadOnly,
+    DatabaseError,
+    DatabaseRetryable,
 };
 
 struct Condition
