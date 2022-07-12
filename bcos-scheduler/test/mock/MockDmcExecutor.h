@@ -43,22 +43,19 @@ public:
             std::string str = "Call Finished!";
             input->setType(protocol::ExecutionMessage::FINISHED);
             input->setData(bcos::bytes(str.begin(), str.end()));
-            input->setStatus(0);
             input->setGasAvailable(123456);
             SCHEDULER_LOG(DEBUG) << LOG_KV("call  finished, input type is ", input->type());
             callback(nullptr, std::move(input));
         }
-        else
+        if (input->type() == bcos::protocol::ExecutionMessage::TXHASH)
         {
             std::string str = "Call error, Need Switch!";
-            input->setType(protocol::ExecutionMessage::FINISHED);
             input->setData(bcos::bytes(str.begin(), str.end()));
             callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, "Call is error"),
                 std::move(input));
             SCHEDULER_LOG(DEBUG) << LOG_KV("call  error, input type is ", input->type());
             return;
         }
-        // BOOST_CHECK_EQUAL(input->from().size(), 40);
     }
 
 
