@@ -73,11 +73,8 @@ public:
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
         for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
         {
-            SCHEDULER_LOG(DEBUG) << "begin  dmcExecute"
-                                 << LOG_KV(",input type ", inputs[i]->type());
+            SCHEDULER_LOG(DEBUG) << "begin  dmcExecute" << LOG_KV("input type ", inputs[i]->type());
             results.at(i) = std::move(inputs[i]);
-            SCHEDULER_LOG(DEBUG) << "begin  dmcExecute"
-                                 << LOG_KV(",input type ", results[i]->type());
             if (results.at(i)->transactionHash() == h256(10086))
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, "execute is error"),
@@ -87,14 +84,14 @@ public:
 
             if (results[i]->type() == bcos::protocol::ExecutionMessage::KEY_LOCK)
             {
-                SCHEDULER_LOG(DEBUG) << "setData"
+                SCHEDULER_LOG(DEBUG) << "setData, "
                                      << "type is keyLocks";
                 std::string str = "DMCExecuteTransaction Finish, I am keyLock!";
                 results[i]->setData(bcos::bytes(str.begin(), str.end()));
             }
             else
             {
-                SCHEDULER_LOG(DEBUG) << "setData"
+                SCHEDULER_LOG(DEBUG) << "setData, "
                                      << "type is not keyLocks";
                 results[i]->setType(bcos::protocol::ExecutionMessage::FINISHED);
                 std::string str = "DMCExecuteTransaction Finish!";

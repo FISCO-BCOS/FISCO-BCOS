@@ -178,16 +178,37 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest1)
     dmcExecutor->submit(std::move(message), false);
     SCHEDULER_LOG(DEBUG) << "prepare begin";
     auto need_scheduleOut = dmcExecutor->prepare();
-    SCHEDULER_LOG(DEBUG) << "prepare begin"
+    SCHEDULER_LOG(DEBUG) << "prepare behind"
                          << LOG_KV("need_schedulerOut value is ", need_scheduleOut);
     BOOST_CHECK(!need_scheduleOut);
     dmcExecutor->go(executorCallback);
-    BOOST_CHECK(dmcFlagStruct.callFlag);
+    // BOOST_CHECK(dmcFlagStruct.callFlag);
+    SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
+                         << LOG_KV("finished is ", dmcFlagStruct.finished)
+                         << LOG_KV("paused is ", dmcFlagStruct.paused)
+                         << LOG_KV("error is ", dmcFlagStruct.error);
+
+    // MESSAGE Call
+    auto message1 = createMessage(1, 0, 1, "0xaabbccdd", true);
+    dmcExecutor->submit(std::move(message1), false);
+    dmcExecutor->prepare();
+    dmcExecutor->go(executorCallback);
+    SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
+                         << LOG_KV("finished is ", dmcFlagStruct.finished)
+                         << LOG_KV("paused is ", dmcFlagStruct.paused)
+                         << LOG_KV("error is ", dmcFlagStruct.error);
+
+    // SEND_BACK DMCEXECUTE
+    auto message2 = createMessage(2, 0, 4, "0xaabbccdd", false);
+    dmcExecutor->submit(std::move(message2), false);
+    dmcExecutor->prepare();
+    dmcExecutor->go(executorCallback);
     SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("total is ", dmcFlagStruct.total)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
 }
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
 
