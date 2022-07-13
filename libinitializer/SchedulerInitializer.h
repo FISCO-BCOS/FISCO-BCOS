@@ -63,7 +63,7 @@ public:
         crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute)
     {
         return std::make_shared<bcos::scheduler::SchedulerFactory>(std::move(executorManager),
-            std::move(_ledger), std::move(storage), executionMessageFactory, blockExecutiveFactory,
+            std::move(_ledger), std::move(storage), executionMessageFactory,
             std::move(blockFactory), txPool, std::move(transactionSubmitResultFactory),
             std::move(hashImpl), isAuthCheck, isWasm, isSerialExecute);
     }
