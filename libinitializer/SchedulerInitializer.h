@@ -57,7 +57,7 @@ public:
         bcos::scheduler::ExecutorManager::Ptr executorManager,
         bcos::ledger::LedgerInterface::Ptr _ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
-        bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute)
