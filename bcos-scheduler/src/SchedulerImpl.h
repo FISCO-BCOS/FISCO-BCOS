@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlockExecutive.h"
+#include "BlockExecutiveFactory.h"
 #include "ExecutorManager.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
@@ -15,6 +16,7 @@
 #include <future>
 #include <list>
 
+
 namespace bcos::scheduler
 {
 class SchedulerImpl : public SchedulerInterface, public std::enable_shared_from_this<SchedulerImpl>
@@ -25,7 +27,17 @@ public:
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
+      : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
+            txPool, hashImpl, isAuthCheck, isWasm, false, schedulerTermId)
+    {}
+
+
+    SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::storage::TransactionalStorageInterface::Ptr storage,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
@@ -34,7 +46,8 @@ public:
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
-        m_blockExecutiveFactory(make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
+        m_blockExecutiveFactory(
+            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
         m_blockFactory(std::move(blockFactory)),
         m_txPool(txPool),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),

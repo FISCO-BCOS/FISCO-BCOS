@@ -32,10 +32,9 @@ public:
 
     scheduler::SchedulerImpl::Ptr build(int64_t schedulerTermId)
     {
-        auto scheduler =
-            std::make_shared<scheduler::SchedulerImpl>(m_executorManager, m_ledger, m_storage,
-                m_blockExecutiveFactory, m_blockFactory, m_txPool, m_transactionSubmitResultFactory,
-                m_hashImpl, m_isAuthCheck, m_isWasm, m_isSerialExecute, schedulerTermId);
+        auto scheduler = std::make_shared<scheduler::SchedulerImpl>(m_executorManager, m_ledger,
+            m_storage, m_blockFactory, m_txPool, m_transactionSubmitResultFactory, m_hashImpl,
+            m_isAuthCheck, m_isWasm, m_isSerialExecute, schedulerTermId);
         scheduler->fetchGasLimit();
 
         scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);
