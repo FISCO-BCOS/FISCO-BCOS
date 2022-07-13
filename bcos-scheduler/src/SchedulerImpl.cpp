@@ -250,8 +250,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
                 verify);
 
-            blockExecutive =
-                blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
+            blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
         }
         else
         {

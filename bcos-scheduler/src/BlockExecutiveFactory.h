@@ -22,7 +22,6 @@
 #pragma once
 #include "BlockExecutive.h"
 #include "Common.h"
-#include "SchedulerImpl.h"
 #include "SerialBlockExecutive.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
