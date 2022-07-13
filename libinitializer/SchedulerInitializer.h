@@ -42,11 +42,13 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerSeq)
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+        int64_t schedulerSeq)
     {
         bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
             std::move(storage), executionMessageFactory, std::move(blockFactory), std::move(txPool),
-            std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm);
+            std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm,
+            isSerialExecute);
 
         return factory.build(schedulerSeq);
     }
@@ -55,15 +57,15 @@ public:
         bcos::scheduler::ExecutorManager::Ptr executorManager,
         bcos::ledger::LedgerInterface::Ptr _ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
-        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute)
     {
         return std::make_shared<bcos::scheduler::SchedulerFactory>(std::move(executorManager),
-            std::move(_ledger), std::move(storage), executionMessageFactory,
+            std::move(_ledger), std::move(storage), executionMessageFactory, blockExecutiveFactory,
             std::move(blockFactory), txPool, std::move(transactionSubmitResultFactory),
-            std::move(hashImpl), isAuthCheck, isWasm);
+            std::move(hashImpl), isAuthCheck, isWasm, isSerialExecute);
     }
 };
 }  // namespace bcos::initializer
