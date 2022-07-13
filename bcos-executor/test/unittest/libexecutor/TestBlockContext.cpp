@@ -58,6 +58,15 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     }
     BOOST_CHECK_EQUAL(count, 10);
     blockContext->clear();
+    int count1 = 0;
+    for (int i = 0; i < 10; ++i)
+    {
+        auto executiveFlow = std::dynamic_pointer_cast<MockExecutiveFlow>(
+            blockContext->getExecutiveFlow(codeAddressArr[i]));
+        if (executiveFlow->name() == executiveFlowName[i])
+            ++count1;
+    }
+    BOOST_CHECK_EQUAL(count, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

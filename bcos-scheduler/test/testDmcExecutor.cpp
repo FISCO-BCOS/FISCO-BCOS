@@ -357,6 +357,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     SCHEDULER_LOG(DEBUG) << "no need_prepare, found deadlock and revert";
     dmcExecutor->releaseOutdatedLock();
     dmcExecutor->go(executorCallback);
+    dmcExecutor->prepare();
     SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("round is ", dmcFlagStruct.round)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)

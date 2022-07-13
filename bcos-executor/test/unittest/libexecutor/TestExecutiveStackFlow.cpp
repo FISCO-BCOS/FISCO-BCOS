@@ -42,11 +42,25 @@ struct ExecutiveStackFlowFixture
     {
         for (int i = 1; i <= 20; ++i)
         {
-            if (i <= 10)
+            if (i <= 5)
             {
-                auto input = std::make_unique<CallParameters>(CallParameters::Type::REVERT);
+                auto input = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
                 input->contextID = i;
                 input->seq = 0;
+                txInputs->push_back(std::move(input));
+            }
+            else if (i <= 10)
+            {
+                auto input = std::make_unique<CallParameters>(CallParameters::Type::KEY_LOCK);
+                input->contextID = i;
+                input->seq = 1;
+                txInputs->push_back(std::move(input));
+            }
+            else if (i <= 15)
+            {
+                auto input = std::make_unique<CallParameters>(CallParameters::Type::FINISHED);
+                input->contextID = i;
+                input->seq = 1;
                 txInputs->push_back(std::move(input));
             }
             else
@@ -80,6 +94,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
     ExecutiveStackFlow::Ptr executiveStackFlow =
         std::make_shared<ExecutiveStackFlow>(executiveFactory);
     BOOST_CHECK(executiveStackFlow != nullptr);
+
     executiveStackFlow->submit(txInputs);
     EXECUTOR_LOG(DEBUG) << "submit 20 transaction success!";
     auto input1 = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
@@ -88,24 +103,10 @@ BOOST_AUTO_TEST_CASE(RunTest)
     executiveStackFlow->submit(std::move(input1));
     EXECUTOR_LOG(DEBUG) << "submit 1 transaction success!";
 
-    // auto input2 = std::make_unique<CallParameters>(CallParameters::Type::REVERT);
-    // input2->contextID = -1;
-    // input2->seq = -1;
-    // executiveStackFlow->submit(std::move(input2));
-    // EXECUTOR_LOG(DEBUG) << "submit 1 error transaction success!";
 
     executiveStackFlow->asyncRun(
         // onTxReturn
         [this, sequence](CallParameters::UniquePtr output) {
-            // if (output->seq == 0)
-            //{
-            // callback(BCOS_ERROR_UNIQUE_PTR(
-            //              ExecuteError::STOPPED, "TransactionExecutor is not running"),
-            //     {});
-            // EXECUTOR_LOG(DEBUG) << "one transaction perform failed! the seq is :" << output->seq
-            //<< ",the conntextID is:" << output->contextID;
-            // return;
-            //}
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
                                 << ",the conntextID is:" << output->contextID;
             sequence->push_back(output->contextID);
@@ -127,6 +128,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
                 BOOST_CHECK_EQUAL(sequence->size(), 21);
             }
         });
+
     EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size());
     bool flag = true;
     for (int i = 0; i < sequence->size(); ++i)
