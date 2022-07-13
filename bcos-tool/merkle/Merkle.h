@@ -18,7 +18,8 @@ concept InputRange = std::ranges::random_access_range<Range> &&
     std::is_same_v<std::remove_cvref_t<std::ranges::range_value_t<Range>>, HashType>;
 
 template <class Range, class HashType>
-concept OutputRange = std::ranges::random_access_range<Range> && std::ranges::output_range<Range, HashType>;
+concept OutputRange =
+    std::ranges::random_access_range<Range> && std::ranges::output_range<Range, HashType>;
 
 template <class HashType>
 struct Proof
@@ -71,7 +72,10 @@ public:
             }
         }
 
-        if (hash != root) [[unlikely]] { return false; }
+        if (hash != root) [[unlikely]]
+        {
+            return false;
+        }
 
         return true;
     }
@@ -90,7 +94,8 @@ public:
 
         auto index = indexAlign(it - std::begin(levelRange));  // Align
         auto start = levelRange.begin() + index;
-        auto end = (levelRange.end() - start < width) ? levelRange.end() : start + width;
+        auto end = (static_cast<size_t>(levelRange.end() - start) < width) ? levelRange.end() :
+                                                                             start + width;
         // auto end = std::min(start + width, levelRange.end());
 
         ProofType proof;
@@ -148,7 +153,8 @@ public:
             inputRange = {inputRange.end(), inputRange.end() + inputSize};
             assert(inputRange.end() <= m_nodes.end());
 
-            inputSize = calculateLevelHashes(inputRange, std::ranges::subrange{inputRange.end(), m_nodes.end()});
+            inputSize = calculateLevelHashes(
+                inputRange, std::ranges::subrange{inputRange.end(), m_nodes.end()});
             m_levels.push_back(inputSize);
         }
     }
@@ -184,7 +190,8 @@ private:
         return inputSize == 1 ? 0 : (inputSize + (width - 1)) / width;
     }
 
-    size_t calculateLevelHashes(InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
+    size_t calculateLevelHashes(
+        InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
     {
         auto inputSize = std::size(input);
         [[maybe_unused]] auto outputSize = std::size(output);
