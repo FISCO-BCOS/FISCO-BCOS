@@ -20,6 +20,7 @@
 
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
+#include "Initializer.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
