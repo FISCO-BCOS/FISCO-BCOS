@@ -31,11 +31,6 @@
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 
-
-using namespace std;
-using namespace bcos::protocol;
-using namespace bcos::scheduler;
-
 namespace bcos::scheduler
 {
 class BlockExecutiveFactory

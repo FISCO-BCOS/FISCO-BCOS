@@ -24,10 +24,12 @@
 #include "SerialBlockExecutive.h"
 
 
+using namespace std;
+using namespace bcos::protocol;
 using namespace bcos::scheduler;
 
 
-std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::Protocol::Block::Ptr block,
+std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Block::Ptr block,
     SchedulerImpl* scheduler, size_t startContextID,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,

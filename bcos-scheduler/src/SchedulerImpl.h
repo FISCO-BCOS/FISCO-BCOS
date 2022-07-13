@@ -31,7 +31,8 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
       : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
-            txPool, hashImpl, isAuthCheck, isWasm, false, schedulerTermId)
+            txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
+            schedulerTermId)
     {}
 
 
