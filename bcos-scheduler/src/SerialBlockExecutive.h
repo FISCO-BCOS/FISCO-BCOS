@@ -23,7 +23,7 @@
 #pragma once
 #include "BlockExecutive.h"
 
-#define SERIAL_EXECUTE_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("SerialExecute")
+#define SERIAL_EXECUTE_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("serialExecute")
 
 namespace bcos::scheduler
 {
@@ -56,7 +56,7 @@ public:
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
 private:
-    void SerialExecute(
+    void serialExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     void recursiveExecuteTx(
