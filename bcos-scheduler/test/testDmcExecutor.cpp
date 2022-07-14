@@ -365,6 +365,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     BOOST_CHECK(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
     BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
     BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
+    dmcExecutor->go(executorCallback);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
