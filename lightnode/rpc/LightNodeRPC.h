@@ -2,20 +2,36 @@
 
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <boost/throw_exception.hpp>
+#include <stdexcept>
+#include <type_traits>
 
 namespace bcos::rpc
 {
 
+template <bcos::concepts::ledger::Ledger Ledger>
 class LightNodeRPC : public bcos::rpc::JsonRpcInterface
 {
+public:
+    LightNodeRPC(Ledger ledger) {}
+
     void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
-        std::string_view _data, RespFunc _respFunc) override;
+        std::string_view _data, RespFunc _respFunc) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unsupported method!"});
+    }
 
     void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
-        std::string_view _data, bool _requireProof, RespFunc _respFunc) override;
+        std::string_view _data, bool _requireProof, RespFunc _respFunc) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unsupported method!"});
+    }
 
     void getTransaction(std::string_view _groupID, std::string_view _nodeName,
-        std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override;
+        std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override
+    {
+        // Get block from remote ledger
+    }
 
     void getTransactionReceipt(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override;
@@ -75,5 +91,10 @@ class LightNodeRPC : public bcos::rpc::JsonRpcInterface
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override;
 
     void getGroupBlockNumber(RespFunc _respFunc) override;
+
+private:
+    auto& ledger() { return bcos::concepts::getRef(m_ledger); }
+
+    Ledger m_ledger;
 };
 }  // namespace bcos::rpc

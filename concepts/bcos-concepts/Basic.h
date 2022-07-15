@@ -19,4 +19,17 @@ concept PointerLike = requires(Pointer p)
     p.operator->();
 };
 
+template <class Input>
+auto& getRef(Input& input)
+{
+    if constexpr (PointerLike<Input>)
+    {
+        return *input;
+    }
+    else
+    {
+        return input;
+    }
+}
+
 }  // namespace bcos::concepts

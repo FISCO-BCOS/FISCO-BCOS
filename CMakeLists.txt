@@ -74,7 +74,7 @@ endif()
 # for code coverage
 if(COVERAGE)
     include(Coverage)
-    config_coverage("tars-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+    config_coverage("coverage" "'/usr*' 'boost/*'")
 endif()
 
 print_config("FISCO BCOS")

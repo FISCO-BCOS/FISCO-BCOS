@@ -10,8 +10,8 @@ target_include_directories(bcos-boostssl PUBLIC .)
 target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities OpenSSL::SSL)
 
 if(TESTS)
-    # enable_testing()
-    # add_subdirectory(test)
+    enable_testing()
+    add_subdirectory(test)
 endif()
 
 include(GNUInstallDirs)

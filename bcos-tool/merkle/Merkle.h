@@ -114,7 +114,7 @@ public:
 
             start = levelRange.begin() + index;
             // end = std::min(start + width, levelRange.end());
-            end = (levelRange.end() - start < width) ? levelRange.end() : start + width;
+            end = (levelRange.end() - start < (size_t)width) ? levelRange.end() : start + width;
 
             assert(levelRange.end() <= m_nodes.end());
             proof.hashes.insert(proof.hashes.end(), start, end);
