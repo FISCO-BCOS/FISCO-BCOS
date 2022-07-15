@@ -20,8 +20,6 @@
 
 using HashType = std::array<std::byte, 32>;
 
-#if 0
-
 namespace std
 {
 std::ostream& operator<<(std::ostream& stream, const HashType& hash)
@@ -187,5 +185,3 @@ BOOST_AUTO_TEST_CASE(performance) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
-
-#endif
