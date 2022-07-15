@@ -1,5 +1,5 @@
-#include "../../bcos-utilities/merkle/Merkle.h"
-#include "../../bcos-utilities/merkle/MerkleSerialization.h"
+#include "../merkle/Merkle.h"
+#include "../merkle/MerkleSerialization.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
@@ -25,7 +25,8 @@ namespace std
 std::ostream& operator<<(std::ostream& stream, const HashType& hash)
 {
     std::string hex;
-    boost::algorithm::hex_lower((char*)hash.data(), (char*)hash.data() + hash.size(), std::back_inserter(hex));
+    boost::algorithm::hex_lower(
+        (char*)hash.data(), (char*)hash.data() + hash.size(), std::back_inserter(hex));
     std::string_view view{hex.data(), 8};
     stream << view;
     return stream;
@@ -63,22 +64,27 @@ void testFixedWidthMerkle(bcos::tool::merkle::InputRange<HashType> auto const& i
     emptyHash.fill(std::byte(0));
     auto seed = std::random_device{}();
 
-    for (auto count = 0lu; count < std::size(inputHashes); ++count)
+    for (auto count = 0lu; count < RANGES::size(inputHashes); ++count)
     {
         std::span<HashType const> hashes(inputHashes.data(), count);
 
-        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType, width> trie;
-        BOOST_CHECK_THROW(trie.import(std::vector<HashType>{}), boost::wrapexcept<std::invalid_argument>);
+        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
+            width>
+            trie;
+        BOOST_CHECK_THROW(
+            trie.import(std::vector<HashType>{}), boost::wrapexcept<std::invalid_argument>);
 
         if (count == 0)
         {
-            BOOST_CHECK_THROW(trie.import(std::as_const(hashes)), boost::wrapexcept<std::invalid_argument>);
+            BOOST_CHECK_THROW(
+                trie.import(std::as_const(hashes)), boost::wrapexcept<std::invalid_argument>);
         }
         else
         {
             BOOST_CHECK_NO_THROW(trie.import(std::as_const(hashes)));
 
-            BOOST_CHECK_THROW(trie.generateProof(emptyHash), boost::wrapexcept<std::invalid_argument>);
+            BOOST_CHECK_THROW(
+                trie.generateProof(emptyHash), boost::wrapexcept<std::invalid_argument>);
 
             for (auto& hash : hashes)
             {
@@ -94,8 +100,8 @@ void testFixedWidthMerkle(bcos::tool::merkle::InputRange<HashType> auto const& i
                 BOOST_CHECK(!trie.verifyProof(proof, hash, trie.root()));
 
                 proof.hashes.clear();
-                BOOST_CHECK_THROW(
-                    trie.verifyProof(proof, emptyHash, trie.root()), boost::wrapexcept<std::invalid_argument>);
+                BOOST_CHECK_THROW(trie.verifyProof(proof, emptyHash, trie.root()),
+                    boost::wrapexcept<std::invalid_argument>);
             }
         }
     }
@@ -106,7 +112,10 @@ constexpr void loopWidthTest(bcos::tool::merkle::InputRange<HashType> auto const
 {
     testFixedWidthMerkle<i>(inputHashes);
 
-    if constexpr (i > 2) { loopWidthTest<i - 1>(inputHashes); }
+    if constexpr (i > 2)
+    {
+        loopWidthTest<i - 1>(inputHashes);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(merkle)
@@ -117,10 +126,12 @@ BOOST_AUTO_TEST_CASE(merkle)
 
 BOOST_AUTO_TEST_CASE(serializeMerkle)
 {
-    using MerkleType = bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType, 4>;
+    using MerkleType =
+        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
+            4>;
     MerkleType trie1;
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
-    std::cout << trie1 << std::endl;
+    // std::cout << trie1 << std::endl;
 
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
@@ -131,7 +142,8 @@ BOOST_AUTO_TEST_CASE(serializeMerkle)
 
     BOOST_CHECK(!value.empty());
 
-    boost::iostreams::stream<boost::iostreams::array_source> inputStream(value.data(), value.size());
+    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+        value.data(), value.size());
     boost::archive::binary_iarchive iarchive(inputStream);
 
     MerkleType trie2;
@@ -142,12 +154,14 @@ BOOST_AUTO_TEST_CASE(serializeMerkle)
 
 BOOST_AUTO_TEST_CASE(serializeProof)
 {
-    using MerkleType = bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType, 4>;
+    using MerkleType =
+        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, HashType,
+            4>;
     MerkleType trie1;
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
 
     auto proof1 = trie1.generateProof(hashes[0]);
-    std::cout << proof1 << std::endl;
+    // std::cout << proof1 << std::endl;
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
     boost::archive::binary_oarchive oarchive(outputStream);
@@ -158,7 +172,8 @@ BOOST_AUTO_TEST_CASE(serializeProof)
     BOOST_CHECK(!value.empty());
 
     Proof<HashType> proof2;
-    boost::iostreams::stream<boost::iostreams::array_source> inputStream(value.data(), value.size());
+    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+        value.data(), value.size());
     boost::archive::binary_iarchive iarchive(inputStream);
 
     iarchive >> proof2;

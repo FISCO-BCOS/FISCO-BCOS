@@ -41,7 +41,7 @@ public:
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService);
-    ~JsonRpcImpl_2_0() {}
+    ~JsonRpcImpl_2_0() override {}
 
 
     void setClientID(std::string_view _clientID) { m_clientID = _clientID; }

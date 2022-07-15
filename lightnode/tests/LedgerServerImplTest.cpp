@@ -1,12 +1,9 @@
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 // clang-format off
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-concepts/Serialize.h>
 // clang-format on
-#include "../ledger/LedgerImpl.h"
+#include "../ledger/LedgerServerImpl.h"
 #include "bcos-concepts/ledger/Ledger.h"
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -19,7 +16,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 
 using namespace bcos::ledger;
 
@@ -50,10 +47,10 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
     }
 
     std::vector<std::optional<bcos::storage::Entry>> impl_getRows(
-        std::string_view table, std::ranges::range auto const& keys)
+        std::string_view table, RANGES::range auto const& keys)
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
-        output.reserve(std::size(keys));
+        output.reserve(RANGES::size(keys));
         for (auto&& key : keys)
         {
             output.emplace_back(getRow(table, key));
@@ -144,8 +141,8 @@ BOOST_FIXTURE_TEST_SUITE(LedgerImplTest, LedgerImplFixture)
 
 BOOST_AUTO_TEST_CASE(getBlock)
 {
-    bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
-        bcostars::Block>
+    bcos::ledger::LedgerServerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher,
+        MockMemoryStorage, bcostars::Block>
         ledger{storage};
 
     auto block = ledger.getBlock<bcos::concepts::ledger::HEADER,
@@ -194,7 +191,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
 
 BOOST_AUTO_TEST_CASE(setBlock)
 {
-    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
+    LedgerServerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage,
         bcostars::Block>
         ledger{storage};
 

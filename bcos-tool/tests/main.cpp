@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,18 +13,11 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
-
- * @brief main for the fisco-bcos
  * @file main.cpp
- * @author: ancelmo
- * @date 2022-07-04
+ * @author: yujiechen, jimmyshi
+ * @date 2021-02-24
  */
+#define BOOST_TEST_MODULE FISCO_BCOS_Tests
+#define BOOST_TEST_MAIN
 
-#include "ledger/LedgerServerImpl.h"
-#include "storage/StorageSyncWrapper.h"
-#include "syncer/BlockSyncerClientImpl.h"
-
-int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
-{
-    return 0;
-}
+#include <boost/test/unit_test.hpp>

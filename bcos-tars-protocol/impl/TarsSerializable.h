@@ -5,7 +5,7 @@
 #include "tars/Transaction.h"
 #include "tup/Tars.h"
 #include <bcos-concepts/Basic.h>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 #include <type_traits>
 #include <vector>
 
@@ -16,7 +16,7 @@ void impl_encode(
     bcostars::protocol::impl::TarsStruct auto const& object, bcos::concepts::ByteBuffer auto& out)
 {
     using StreamType = std::conditional_t<
-        std::is_signed_v<std::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>>,
+        std::is_signed_v<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>,
         tars::BufferWriter, bcostars::protocol::BufferWriterByteVector>;
 
     tars::TarsOutputStream<StreamType> output;
@@ -29,7 +29,7 @@ void impl_decode(
     bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& in)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)std::data(in), std::size(in));
+    input.setBuffer((const char*)std::data(in), RANGES::size(in));
 
     object.readFrom(input);
 }

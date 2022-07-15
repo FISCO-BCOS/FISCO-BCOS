@@ -18,11 +18,11 @@
 file(GLOB_RECURSE SOURCES "*.cpp")
 
 # cmake settings
-set(TEST_BINARY_NAME test-bcos-utilities)
+set(TEST_BINARY_NAME test-bcos-tool)
 find_package(Boost REQUIRED COMPONENTS unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(${TEST_BINARY_NAME} bcos-utilities Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE bcos-utilities bcos-crypto Boost::unit_test_framework)
 add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

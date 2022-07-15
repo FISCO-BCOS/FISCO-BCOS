@@ -47,7 +47,7 @@ template <typename T, typename S, typename... Args>
 std::pair<std::shared_ptr<T>, S> createServiceClient(
     std::string const& _serviceName, const Args&... _args)
 {
-    auto prx = Application::getCommunicator()->stringToProxy<S>(_serviceName);
+    auto prx = tars::Application::getCommunicator()->stringToProxy<S>(_serviceName);
     return std::make_pair(std::make_shared<T>(prx, _args...), prx);
 }
 }  // namespace gateway

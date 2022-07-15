@@ -10,9 +10,10 @@
 #include <sstream>
 
 using namespace bcos::scheduler;
+using namespace tars;
 
 
-TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointF>& endPointInfos)
+TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const std::vector<tars::EndpointF>& endPointInfos)
 {
     TarsRemoteExecutorManager::EndPointSet endPointSet =
         std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
@@ -22,7 +23,7 @@ TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointF>&
         return endPointSet;
     }
 
-    for (const EndpointF& endPointInfo : endPointInfos)
+    for (const tars::EndpointF& endPointInfo : endPointInfos)
     {
         if (endPointInfo.host.empty())
         {
@@ -35,17 +36,17 @@ TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const vector<EndpointF>&
 }
 
 std::string dumpEndPointsLog(
-    const vector<EndpointF>& activeEndPoints, const vector<EndpointF>& inactiveEndPoints)
+    const std::vector<tars::EndpointF>& activeEndPoints, const std::vector<tars::EndpointF>& inactiveEndPoints)
 {
     // dump logs
     std::stringstream ss;
     ss << "active:[";
-    for (const EndpointF& endpointInfo : activeEndPoints)
+    for (const tars::EndpointF& endpointInfo : activeEndPoints)
     {
         ss << endpointInfo.host << ":" << endpointInfo.port << ", ";
     }
     ss << "], inactive:[";
-    for (const EndpointF& endpointInfo : inactiveEndPoints)
+    for (const tars::EndpointF& endpointInfo : inactiveEndPoints)
     {
         ss << endpointInfo.host << ":" << endpointInfo.port << ", ";
     }
@@ -71,25 +72,25 @@ std::string dumpExecutor2Seq(std::map<std::string, int64_t> const& executor2Seq)
 
 
 // return success, activeEndPoints, inactiveEndPoints
-static std::tuple<bool, vector<EndpointF>, vector<EndpointF>> getActiveEndpoints(
+static std::tuple<bool, std::vector<tars::EndpointF>, std::vector<tars::EndpointF>> getActiveEndpoints(
     const std::string& executorServiceName)
 {
-    static string locator = tars::Application::getCommunicator()->getProperty("locator");
+    static std::string locator = tars::Application::getCommunicator()->getProperty("locator");
 
-    if (locator.find_first_not_of('@') == string::npos)
+    if (locator.find_first_not_of('@') == std::string::npos)
     {
         EXECUTOR_MANAGER_LOG(ERROR) << "Tars locator is not valid:" << LOG_KV("locator", locator);
 
         return {false, {}, {}};
     }
 
-    static QueryFPrx locatorPrx =
-        tars::Application::getCommunicator()->stringToProxy<QueryFPrx>(locator);
+    static tars::QueryFPrx locatorPrx =
+        tars::Application::getCommunicator()->stringToProxy<tars::QueryFPrx>(locator);
 
-    vector<EndpointF> activeEndPoints;
-    vector<EndpointF> inactiveEndPoints;
+    std::vector<tars::EndpointF> activeEndPoints;
+    std::vector<tars::EndpointF> inactiveEndPoints;
     int iRet = locatorPrx->findObjectById4Any(
-        executorServiceName, activeEndPoints, inactiveEndPoints, ServerConfig::Context);
+        executorServiceName, activeEndPoints, inactiveEndPoints, tars::ServerConfig::Context);
 
     if (iRet == 0)
     {
