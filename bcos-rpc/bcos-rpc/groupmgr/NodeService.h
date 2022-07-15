@@ -63,8 +63,8 @@ public:
 
     bool unreachable()
     {
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        std::vector<tars::EndpointInfo> activeEndPoints;
+        std::vector<tars::EndpointInfo> nactiveEndPoints;
         m_ledgerPrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         return (activeEndPoints.size() == 0);
     }
@@ -93,7 +93,7 @@ public:
     std::pair<std::shared_ptr<T>, S> createServiceClient(
         std::string const& _serviceName, const Args&... _args)
     {
-        auto prx = Application::getCommunicator()->stringToProxy<S>(_serviceName);
+        auto prx = tars::Application::getCommunicator()->stringToProxy<S>(_serviceName);
         return std::make_pair(std::make_shared<T>(prx, _args...), prx);
     }
 

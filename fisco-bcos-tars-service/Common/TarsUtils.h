@@ -17,22 +17,22 @@ namespace bcostars
 inline std::string getProxyDesc(std::string const& _servantName)
 {
     std::string desc =
-        ServerConfig::Application + "." + ServerConfig::ServerName + "." + _servantName;
+       tars::ServerConfig::Application + "." + tars::ServerConfig::ServerName + "." + _servantName;
     return desc;
 }
 inline std::string getLogPath()
 {
-    return ServerConfig::LogPath + "/" + ServerConfig::Application + "/" + ServerConfig::ServerName;
+    return tars::ServerConfig::LogPath + "/" + tars::ServerConfig::Application + "/" + tars::ServerConfig::ServerName;
 }
 
-inline std::string endPointToString(std::string const& _serviceName, TC_Endpoint const& _endPoint)
+inline std::string endPointToString(std::string const& _serviceName, tars::TC_Endpoint const& _endPoint)
 {
     return _serviceName + "@tcp -h " + _endPoint.getHost() + " -p " +
            boost::lexical_cast<std::string>(_endPoint.getPort());
 }
 
 inline std::pair<bool, std::string> getEndPointDescByAdapter(
-    Application* _application, std::string const& _servantName)
+    tars::Application* _application, std::string const& _servantName)
 {
     auto adapters = _application->getEpollServer()->getBindAdapters();
     if (adapters.size() == 0)

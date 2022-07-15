@@ -271,8 +271,8 @@ public:
         {
             return;
         }
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        std::vector<tars::EndpointInfo> activeEndPoints;
+        vector<tars::EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
         // try to call non-activate-endpoints when with zero connection
@@ -283,7 +283,7 @@ public:
             {
                 auto endPointStr = endPointToString(endPoint);
                 auto prx =
-                    Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+                    tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
                 prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
             }
         }
@@ -292,7 +292,7 @@ public:
         {
             auto endPointStr = endPointToString(endPoint);
             auto prx =
-                Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+                tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
             prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
         }
     }
@@ -437,7 +437,7 @@ public:
 protected:
     void start() override {}
     void stop() override {}
-    std::string endPointToString(EndpointInfo _endPoint)
+    std::string endPointToString(tars::EndpointInfo _endPoint)
     {
         return m_gatewayServiceName + "@tcp -h " + _endPoint.getEndpoint().getHost() + " -p " +
                boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
