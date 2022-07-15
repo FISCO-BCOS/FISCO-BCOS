@@ -99,8 +99,9 @@ public:
 
     virtual ~TransactionExecutive() = default;
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input);  // start a new coroutine to
-                                                                       // execute
+    virtual CallParameters::UniquePtr start(CallParameters::UniquePtr input);  // start a new
+                                                                               // coroutine to
+                                                                               // execute
 
     // External call request
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input);  // call by
@@ -171,18 +172,18 @@ public:
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
-    void setExchangeMessage(CallParameters::UniquePtr callParameters)
+    virtual void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
         m_exchangeMessage = std::move(callParameters);
     }
 
-    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
+    virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {
         std::copy(
             keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
     }
 
-    CallParameters::UniquePtr resume()
+    virtual CallParameters::UniquePtr resume()
     {
         EXECUTOR_LOG(TRACE) << "Context switch to executive coroutine, from resume";
         (*m_pullMessage)();

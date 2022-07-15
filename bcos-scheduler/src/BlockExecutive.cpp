@@ -457,7 +457,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
-                    "Prewrite block error： " + error->errorMessage(), *error));
+                    "Prewrite block error: " + error->errorMessage(), *error));
                 return;
             }
 
@@ -526,7 +526,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         SCHEDULER_LOG(ERROR)
                             << "asyncPrepare scheduler error: " << error->errorMessage();
                         callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
-                            "asyncPrepare block error： " + error->errorMessage()));
+                            "asyncPrepare block error: " + error->errorMessage()));
                         return;
                     }
                     else
