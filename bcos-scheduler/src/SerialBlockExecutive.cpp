@@ -82,13 +82,13 @@ void SerialBlockExecutive::asyncExecute(
                     return;
                 }
 
-                SerialExecute([this, createMsgT, startT, callback = std::move(callback)](
+                serialExecute([this, createMsgT, startT, callback = std::move(callback)](
                                   bcos::Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                   bool isSysBlock) {
                     if (error)
                     {
                         SERIAL_EXECUTE_LOG(INFO)
-                            << LOG_DESC("SerialExecute failed") << LOG_KV("createMsgT", createMsgT)
+                            << LOG_DESC("serialExecute failed") << LOG_KV("createMsgT", createMsgT)
                             << LOG_KV("executeT", (utcTime() - startT))
                             << LOG_KV("number", number()) << LOG_KV("errorCode", error->errorCode())
                             << LOG_KV("errorMessage", error->errorMessage());
@@ -97,7 +97,7 @@ void SerialBlockExecutive::asyncExecute(
                     }
 
                     SERIAL_EXECUTE_LOG(INFO)
-                        << LOG_DESC("SerialExecute success") << LOG_KV("createMsgT", createMsgT)
+                        << LOG_DESC("serialExecute success") << LOG_KV("createMsgT", createMsgT)
                         << LOG_KV("executeT", (utcTime() - startT))
                         << LOG_KV("hash", header->hash().abridged())
                         << LOG_KV("number", header->number());
@@ -107,11 +107,11 @@ void SerialBlockExecutive::asyncExecute(
     }
     else
     {
-        SerialExecute(std::move(callback));
+        serialExecute(std::move(callback));
     }
 }
 
-void SerialBlockExecutive::SerialExecute(
+void SerialBlockExecutive::serialExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
     recursiveExecuteTx(
@@ -221,7 +221,7 @@ void SerialBlockExecutive::recursiveExecuteTx(
         // handle error
         if (error)
         {
-            SERIAL_EXECUTE_LOG(DEBUG) << "SerialExecute:\t Error: " << error->errorMessage();
+            SERIAL_EXECUTE_LOG(DEBUG) << "serialExecute:\t Error: " << error->errorMessage();
             callback(
                 BCOS_ERROR_UNIQUE_PTR(SchedulerError::SerialExecuteError, error->errorMessage()));
 
