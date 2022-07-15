@@ -42,7 +42,7 @@ BOOST_FIXTURE_TEST_SUITE(TestExecutiveState, ExecutiveStateFixture)
 BOOST_AUTO_TEST_CASE(goTest)
 {
     CallParameters::UniquePtr output;
-    for (int8_t i = 0; i < 4; ++i)
+    for (int8_t i = 0; i < 2; ++i)
     {
         EXECUTOR_LOG(DEBUG) << "goTest begin";
         if (i == 0)
@@ -62,32 +62,11 @@ BOOST_AUTO_TEST_CASE(goTest)
             EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::NEED_RESUME);
             executiveState->go();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::PAUSED);
             EXECUTOR_LOG(DEBUG) << "i == 0  end!";
         }
-
         else if (i == 1)
         {
             EXECUTOR_LOG(DEBUG) << "i == 1 begin";
-            auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
-            callParameters->staticCall = false;
-            callParameters->codeAddress = "aabbccddee";
-            callParameters->contextID = i;
-            callParameters->seq = i;
-            auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            executiveState->go();
-            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
-            // executiveState->go();
-            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            EXECUTOR_LOG(DEBUG) << "i == 1  end!";
-        }
-
-        else if (i == 2)
-        {
-            EXECUTOR_LOG(DEBUG) << "i == 2 begin";
             auto callParameters = std::make_unique<CallParameters>(CallParameters::FINISHED);
             callParameters->staticCall = false;
             callParameters->codeAddress = "aabbccddee";
@@ -101,20 +80,7 @@ BOOST_AUTO_TEST_CASE(goTest)
             BOOST_CHECK(executiveState->getStatus() == ExecutiveState::Status::FINISHED);
             // executiveState->go();
             EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            EXECUTOR_LOG(DEBUG) << "i == 2  end!";
-        }
-        else
-        {
-            EXECUTOR_LOG(DEBUG) << "i == 3 begin";
-            auto callParameters = std::make_unique<CallParameters>(CallParameters::REVERT);
-            callParameters->staticCall = false;
-            callParameters->codeAddress = "aabbccddee";
-            callParameters->contextID = i;
-            callParameters->seq = i;
-            auto executiveState =
-                std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            executiveState->go();
+            EXECUTOR_LOG(DEBUG) << "i == 1  end!";
         }
     }
 }
