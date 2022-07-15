@@ -8,7 +8,7 @@ namespace bcos::concepts::receipt
 template <class LogEntryType>
 concept LogEntry = requires(LogEntryType logEntry) {
                        logEntry.address;
-                       std::ranges::range<decltype(logEntry.topic)>;
+                       RANGES::range<decltype(logEntry.topic)>;
                        logEntry.data;
                    };
 
@@ -20,9 +20,9 @@ concept TransactionReceiptData =
         transactionReceiptData.contractAddress;
         std::integral<decltype(transactionReceiptData.status)>;
         transactionReceiptData.output;
-        requires std::ranges::range<decltype(transactionReceiptData.logEntries)> &&
+        requires RANGES::range<decltype(transactionReceiptData.logEntries)> &&
                      LogEntry<
-                         std::ranges::range_value_t<decltype(transactionReceiptData.logEntries)>>;
+                         RANGES::range_value_t<decltype(transactionReceiptData.logEntries)>>;
         std::integral<decltype(transactionReceiptData.blockNumber)>;
     };
 

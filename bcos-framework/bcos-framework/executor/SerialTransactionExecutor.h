@@ -34,8 +34,8 @@ concept ResponseMessage = requires(MessageType message)
     std::integral<decltype(message.status)>;
     std::convertible_to<decltype(message.message), std::string_view>;
     std::convertible_to<decltype(message.newEVMContractAddress), std::string_view>;
-    requires std::ranges::range<decltype(message.logEntries)> &&
-        std::convertible_to<std::ranges::range_value_t<decltype(message.logEntries)>, bcos::protocol::LogEntry>;
+    requires RANGES::range<decltype(message.logEntries)> &&
+        std::convertible_to<RANGES::range_value_t<decltype(message.logEntries)>, bcos::protocol::LogEntry>;
 };
 
 template <class ExecutorType>

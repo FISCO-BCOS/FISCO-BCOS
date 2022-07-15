@@ -30,11 +30,11 @@ namespace std
 template <class T1, class T2, size_t T3>
 ostream& operator<<(ostream& stream, const bcos::tool::merkle::Merkle<T1, T2, T3>& merkle)
 {
-    auto range = std::ranges::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
+    auto range = RANGES::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
     size_t level = 0;
     for (auto length : merkle.m_levels)
     {
-        range = {std::end(range), std::end(range) + length};
+        range = {RANGES::end(range), RANGES::end(range) + length};
         stream << "Level " << level;
         for (auto& hash : range)
         {
@@ -49,11 +49,11 @@ ostream& operator<<(ostream& stream, const bcos::tool::merkle::Merkle<T1, T2, T3
 template <class HashType>
 ostream& operator<<(ostream& stream, const typename bcos::tool::merkle::Proof<HashType>& proof)
 {
-    auto range = std::ranges::subrange(proof.hashes.begin(), proof.hashes.begin());
+    auto range = RANGES::subrange(proof.hashes.begin(), proof.hashes.begin());
     size_t level = 0;
     for (auto length : proof.levels)
     {
-        range = {std::end(range), std::end(range) + length};
+        range = {RANGES::end(range), RANGES::end(range) + length};
         stream << "Level " << level;
         for (auto& hash : range)
         {

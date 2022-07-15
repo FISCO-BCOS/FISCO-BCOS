@@ -10,7 +10,7 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 #include <stdexcept>
 #include <tuple>
 
@@ -155,7 +155,7 @@ public:
     }
 
     template <concepts::ledger::DataFlag Flag>
-    auto impl_getTransactionsOrReceipts(std::ranges::range auto const& hashes)
+    auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes)
     {
         if constexpr (!std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> &&
                       !std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
@@ -165,16 +165,16 @@ public:
 
         using OutputItemType =
             std::conditional_t<std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>,
-                std::ranges::range_value_t<decltype(Block::transactions)>,
-                std::ranges::range_value_t<decltype(Block::receipts)>>;
+                RANGES::range_value_t<decltype(Block::transactions)>,
+                RANGES::range_value_t<decltype(Block::receipts)>>;
         constexpr auto tableName = std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ?
                                        SYS_HASH_2_TX :
                                        SYS_HASH_2_RECEIPT;
         auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
-        std::vector<OutputItemType> outputs(std::size(entries));
+        std::vector<OutputItemType> outputs(RANGES::size(entries));
 
 #pragma omp parallel for
-        for (auto i = 0u; i < std::size(entries); ++i)
+        for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
             if (!entries[i]) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
@@ -192,7 +192,7 @@ public:
 
         bcos::concepts::ledger::TransactionCount transactionCount;
         auto entries = m_storage.getRows(SYS_CURRENT_STATE, keys);
-        for (auto i = 0u; i < std::size(entries); ++i)
+        for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
             auto& entry = entries[i];
 
@@ -229,10 +229,10 @@ public:
 
     template <bool isTransaction>
     void impl_setTransactionOrReceiptBuffers(
-        std::ranges::range auto const& hashes, std::ranges::range auto buffers)
+        RANGES::range auto const& hashes, RANGES::range auto buffers)
     {
-        auto count = std::size(buffers);
-        if (count != std::size(hashes))
+        auto count = RANGES::size(buffers);
+        if (count != RANGES::size(hashes))
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"No match count"});
         }
@@ -245,7 +245,7 @@ public:
 
             auto&& hash = hashes[i];
             m_storage.setRow(
-                tableName, std::string_view(std::data(hash), std::size(hash)), std::move(entry));
+                tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
         }
     }
 

@@ -64,7 +64,7 @@ void testFixedWidthMerkle(bcos::tool::merkle::InputRange<HashType> auto const& i
     emptyHash.fill(std::byte(0));
     auto seed = std::random_device{}();
 
-    for (auto count = 0lu; count < std::size(inputHashes); ++count)
+    for (auto count = 0lu; count < RANGES::size(inputHashes); ++count)
     {
         std::span<HashType const> hashes(inputHashes.data(), count);
 

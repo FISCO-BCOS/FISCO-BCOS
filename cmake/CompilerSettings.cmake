@@ -99,6 +99,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
+        add_definitions(-DUSE_STD_RANGES)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
@@ -141,6 +142,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    add_definitions(-DUSE_STD_RANGES)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
 else()

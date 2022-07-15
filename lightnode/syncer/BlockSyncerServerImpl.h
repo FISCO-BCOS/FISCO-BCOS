@@ -40,7 +40,7 @@ public:
         response.blocks.reserve(count);
 
         for (auto currentBlockNumber :
-            std::ranges::iota_view{request.beginBlockNumber, request.beginBlockNumber + count})
+            RANGES::iota_view{request.beginBlockNumber, request.beginBlockNumber + count})
         {
             if (request.onlyHeader)
             {

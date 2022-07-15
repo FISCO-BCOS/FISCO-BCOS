@@ -16,7 +16,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 
 using namespace bcos::ledger;
 
@@ -47,10 +47,10 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
     }
 
     std::vector<std::optional<bcos::storage::Entry>> impl_getRows(
-        std::string_view table, std::ranges::range auto const& keys)
+        std::string_view table, RANGES::range auto const& keys)
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
-        output.reserve(std::size(keys));
+        output.reserve(RANGES::size(keys));
         for (auto&& key : keys)
         {
             output.emplace_back(getRow(table, key));

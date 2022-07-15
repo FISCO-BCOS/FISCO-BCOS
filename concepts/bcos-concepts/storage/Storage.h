@@ -2,7 +2,7 @@
 
 #include "../Basic.h"
 #include <bcos-framework/storage/Entry.h>
-#include <ranges>
+#include <bcos-utilities/Ranges.h>
 #include <type_traits>
 
 namespace bcos::concepts::storage
@@ -18,7 +18,7 @@ public:
     }
 
     std::vector<std::optional<bcos::storage::Entry>> getRows(
-        std::string_view table, std::ranges::range auto&& keys)
+        std::string_view table, RANGES::range auto&& keys)
     {
         return impl().impl_getRows(table, std::forward<decltype(keys)>(keys));
     }

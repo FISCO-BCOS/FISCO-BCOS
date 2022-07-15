@@ -22,7 +22,7 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include <bcos-framework//protocol/ProtocolInfoCodec.h>
+#include <bcos-framework/protocol/ProtocolInfoCodec.h>
 #include <bcos-tars-protocol/tars/ProtocolInfo.h>
 
 namespace bcostars
