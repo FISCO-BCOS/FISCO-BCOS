@@ -395,11 +395,11 @@ void TopicManager::notifyRpcToSubscribeTopics()
 {
     try
     {
-        auto servicePrx = Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(
+        auto servicePrx = tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(
             m_rpcServiceName);
         auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        std::vector<tars::EndpointInfo> activeEndPoints;
+        std::vector<tars::EndpointInfo> nactiveEndPoints;
         TOPIC_LOG(INFO) << LOG_DESC("notifyRpcToSubscribeTopics")
                         << LOG_KV("rpcServiceName", m_rpcServiceName)
                         << LOG_KV("activeEndPoints", activeEndPoints.size());
@@ -410,7 +410,7 @@ void TopicManager::notifyRpcToSubscribeTopics()
                                " -p " +
                                boost::lexical_cast<std::string>(endPoint.getEndpoint().getPort());
             auto servicePrx =
-                Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
+                tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
             auto serviceClient =
                 std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
             serviceClient->asyncNotifySubscribeTopic(

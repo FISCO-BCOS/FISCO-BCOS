@@ -29,10 +29,17 @@
     "zlib",
     "jsoncpp",
     "protobuf",
-    "tarscpp",
+    {
+      "name": "tarscpp",
+      "version>=": "3.0.3-m"
+    },
     {
       "name": "openssl",
       "version>=": "1.1.1-tassl"
+    },
+    {
+      "name": "boost-context",
+      "version>=": "1.79.0-m1"
     },
     "wedprcrypto",
     "range-v3"

@@ -131,7 +131,7 @@ private:
         const char* end;
         value.getString(&begin, &end);
 
-        std::string_view view{begin, end};
+        std::string_view view(begin, end - begin);
         return view;
     }
 

@@ -20,6 +20,8 @@
 
 using HashType = std::array<std::byte, 32>;
 
+#if 0
+
 namespace std
 {
 std::ostream& operator<<(std::ostream& stream, const HashType& hash)
@@ -131,7 +133,7 @@ BOOST_AUTO_TEST_CASE(serializeMerkle)
             4>;
     MerkleType trie1;
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
-    std::cout << trie1 << std::endl;
+    // std::cout << trie1 << std::endl;
 
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
@@ -161,7 +163,7 @@ BOOST_AUTO_TEST_CASE(serializeProof)
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
 
     auto proof1 = trie1.generateProof(hashes[0]);
-    std::cout << proof1 << std::endl;
+    // std::cout << proof1 << std::endl;
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
     boost::archive::binary_oarchive oarchive(outputStream);
@@ -185,3 +187,5 @@ BOOST_AUTO_TEST_CASE(performance) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
+
+#endif
