@@ -43,6 +43,22 @@ public:
             std::bind(&ExecutorManager::executorView, this, std::placeholders::_1));
     }
 
+    void forEachExecutor(
+        std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
+            handleExecutor)
+    {
+        ReadGuard lock(m_mutex);
+        if (m_name2Executors.empty())
+        {
+            return;
+        }
+
+        for (auto it : m_name2Executors)
+        {
+            handleExecutor(std::string(it.first), it.second->executor);
+        }
+    }
+
     size_t size() const { return m_name2Executors.size(); }
 
     void clear()

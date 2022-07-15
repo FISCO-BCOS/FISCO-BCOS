@@ -104,7 +104,6 @@ public:
 
     std::pair<bool, std::string> checkAndInit();
 
-
 private:
     void updateScheduler(int64_t schedulerTermId);
     void switchTerm(int64_t schedulerSeq);
@@ -114,7 +113,6 @@ private:
 
 private:
     SchedulerImpl::Ptr m_scheduler;
-    SchedulerImpl::Ptr m_oldScheduler;  // TODO: no to use this
     SchedulerFactory::Ptr m_factory;
     SchedulerTerm m_schedulerTerm;
     TarsRemoteExecutorManager::Ptr m_remoteExecutorManager;

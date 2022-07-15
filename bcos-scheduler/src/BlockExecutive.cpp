@@ -1010,38 +1010,40 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
         callback(nullptr);
     };
 
-    for (auto& it : *(m_scheduler->m_executorManager))
-    {
-        auto blockHeader = m_block->blockHeaderConst();
-        it->nextBlockHeader(
-            m_schedulerTermId, blockHeader, [this, status](bcos::Error::Ptr&& error) {
-                {
-                    WriteGuard lock(status->x_lock);
-                    if (error)
+    // for (auto& it : *(m_scheduler->m_executorManager))
+    m_scheduler->m_executorManager->forEachExecutor(
+        [this, status](
+            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+            auto blockHeader = m_block->blockHeaderConst();
+            executor->nextBlockHeader(
+                m_schedulerTermId, blockHeader, [this, status](bcos::Error::Ptr&& error) {
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << "Nextblock executor error!" << error->errorMessage();
-                        ++status->failed;
-
-                        if (error->errorCode() ==
-                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                        WriteGuard lock(status->x_lock);
+                        if (error)
                         {
-                            triggerSwitch();
+                            SCHEDULER_LOG(ERROR)
+                                << "Nextblock executor error!" << error->errorMessage();
+                            ++status->failed;
+
+                            if (error->errorCode() ==
+                                bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                            {
+                                triggerSwitch();
+                            }
+                        }
+                        else
+                        {
+                            ++status->success;
+                        }
+
+                        if (status->success + status->failed < status->total)
+                        {
+                            return;
                         }
                     }
-                    else
-                    {
-                        ++status->success;
-                    }
-
-                    if (status->success + status->failed < status->total)
-                    {
-                        return;
-                    }
-                }
-                status->checkAndCommit(*status);
-            });
-    }
+                    status->checkAndCommit(*status);
+                });
+        });
 }
 
 void BlockExecutive::batchGetHashes(
@@ -1074,10 +1076,13 @@ void BlockExecutive::batchGetHashes(
         callback(nullptr, std::move(*totalHash));
     };
 
-    for (auto& it : *(m_scheduler->m_executorManager))
-    {
-        it->getHash(
-            number(), [status, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
+    // for (auto& it : *(m_scheduler->m_executorManager))
+
+    m_scheduler->m_executorManager->forEachExecutor(
+        [this, status, totalHash](
+            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+            executor->getHash(number(), [status, totalHash](
+                                            bcos::Error::Ptr&& error, crypto::HashType&& hash) {
                 {
                     WriteGuard lock(status->x_lock);
                     if (error)
@@ -1101,7 +1106,7 @@ void BlockExecutive::batchGetHashes(
                 }
                 status->checkAndCommit(*status);
             });
-    }
+        });
 }
 
 void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> callback)
@@ -1233,41 +1238,45 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
         status->checkAndCommit(*status);
     });
 
-    for (auto& it : *(m_scheduler->m_executorManager))
-    {
-        bcos::protocol::TwoPCParams executorParams;
-        executorParams.number = number();
-        it->rollback(executorParams, [this, status](bcos::Error::Ptr&& error) {
-            {
-                WriteGuard lock(status->x_lock);
-                if (error)
+    // for (auto& it : *(m_scheduler->m_executorManager))
+    m_scheduler->m_executorManager->forEachExecutor(
+        [this, status](
+            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+            bcos::protocol::TwoPCParams executorParams;
+            executorParams.number = number();
+            executor->rollback(executorParams, [this, status](bcos::Error::Ptr&& error) {
                 {
-                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    WriteGuard lock(status->x_lock);
+                    if (error)
                     {
-                        SCHEDULER_LOG(DEBUG)
-                            << "Rollback a restarted executor. Ignore." << error->errorMessage();
-                        ++status->success;
-                        triggerSwitch();
+                        if (error->errorCode() ==
+                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                        {
+                            SCHEDULER_LOG(DEBUG) << "Rollback a restarted executor. Ignore."
+                                                 << error->errorMessage();
+                            ++status->success;
+                            triggerSwitch();
+                        }
+                        else
+                        {
+                            SCHEDULER_LOG(ERROR)
+                                << "Rollback executor error!" << error->errorMessage();
+                            ++status->failed;
+                        }
                     }
                     else
                     {
-                        SCHEDULER_LOG(ERROR) << "Rollback executor error!" << error->errorMessage();
-                        ++status->failed;
+                        ++status->success;
+                    }
+
+                    if (status->success + status->failed < status->total)
+                    {
+                        return;
                     }
                 }
-                else
-                {
-                    ++status->success;
-                }
-
-                if (status->success + status->failed < status->total)
-                {
-                    return;
-                }
-            }
-            status->checkAndCommit(*status);
+                status->checkAndCommit(*status);
+            });
         });
-    }
 }
 
 
