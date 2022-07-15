@@ -20,7 +20,6 @@
  */
 #include "BlockHeaderImpl.h"
 #include <bcos-utilities/Common.h>
-#include <tup/Tars.h>
 #include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcostars;

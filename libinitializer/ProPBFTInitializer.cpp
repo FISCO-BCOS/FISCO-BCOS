@@ -45,13 +45,13 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     // init rpc client
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
     auto rpcServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+        tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     // init gateway client
     auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
     auto gatewayServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
+        tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
             gatewayServiceName);
     m_gateway =
         std::make_shared<bcostars::GatewayServiceClient>(gatewayServicePrx, gatewayServiceName);

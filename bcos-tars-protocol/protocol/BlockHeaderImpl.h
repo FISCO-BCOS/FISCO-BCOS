@@ -26,6 +26,7 @@
 
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/Block.h"
+
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework//protocol/BlockHeader.h>

@@ -65,8 +65,8 @@ public:
     {
         m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
-                ledger::SYS_CONFIG,
-                ledger::SYS_CONSENSUS,
+                std::string(ledger::SYS_CONFIG),
+                std::string(ledger::SYS_CONSENSUS),
                 ledger::FS_ROOT,
                 ledger::FS_APPS,
                 ledger::FS_USER,

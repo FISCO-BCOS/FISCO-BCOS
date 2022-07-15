@@ -81,8 +81,8 @@ public:
         {
             return;
         }
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        std::vector<tars::EndpointInfo> activeEndPoints;
+        vector<tars::EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         // try to call non-activate-endpoints when with zero connection
         if (activeEndPoints.size() == 0)
@@ -92,7 +92,7 @@ public:
             {
                 auto endPointStr = endPointToString(endPoint);
                 auto prx =
-                    Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+                    tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
                 prx->async_asyncNotifyBlockNumber(
                     new Callback(_callback), _groupID, _nodeName, _blockNumber);
             }
@@ -101,7 +101,7 @@ public:
         for (auto const& endPoint : activeEndPoints)
         {
             auto endPointStr = endPointToString(endPoint);
-            auto prx = Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+            auto prx = tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
             prx->async_asyncNotifyBlockNumber(
                 new Callback(_callback), _groupID, _nodeName, _blockNumber);
         }
@@ -143,8 +143,8 @@ public:
         {
             return;
         }
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        std::vector<tars::EndpointInfo> activeEndPoints;
+        vector<tars::EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
         // notify groupInfo to all rpc nodes
@@ -156,14 +156,14 @@ public:
             {
                 auto endPointStr = endPointToString(endPoint);
                 auto prx =
-                    Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+                    tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
                 prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
             }
         }
         for (auto const& endPoint : activeEndPoints)
         {
             auto endPointStr = endPointToString(endPoint);
-            auto prx = Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+            auto prx = tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
             prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
         }
     }
@@ -262,7 +262,7 @@ public:
 protected:
     void start() override {}
     void stop() override {}
-    std::string endPointToString(EndpointInfo _endPoint)
+    std::string endPointToString(tars::EndpointInfo _endPoint)
     {
         return m_rpcServiceName + "@tcp -h " + _endPoint.getEndpoint().getHost() + " -p " +
                boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
