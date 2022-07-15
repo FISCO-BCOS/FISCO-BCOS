@@ -35,7 +35,6 @@ public:
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        callParameters->keyLocks = m_exchangeMessage->keyLocks;
         return std::move(callParameters);
     }
 

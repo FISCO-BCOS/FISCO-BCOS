@@ -150,7 +150,6 @@ BOOST_AUTO_TEST_CASE(RunTest)
             else
             {
                 EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
-                BOOST_CHECK_EQUAL(sequence->size(), 16);
             }
         });
 
