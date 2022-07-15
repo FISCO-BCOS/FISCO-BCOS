@@ -29,7 +29,10 @@
     "zlib",
     "jsoncpp",
     "protobuf",
-    "tarscpp",
+    {
+      "name": "tarscpp",
+      "version>=": "3.0.3-m"
+    },
     {
       "name": "openssl",
       "version>=": "1.1.1-tassl"
