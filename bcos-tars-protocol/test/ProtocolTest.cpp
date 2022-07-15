@@ -106,8 +106,7 @@ BOOST_AUTO_TEST_CASE(transaction)
 
 BOOST_AUTO_TEST_CASE(transactionMetaData)
 {
-    bcos::h256 hash("5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
-        bcos::crypto::HashType::FromHex);
+    bcos::h256 hash("5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9");
 
     bcostars::protocol::TransactionMetaDataImpl metaData(
         [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });

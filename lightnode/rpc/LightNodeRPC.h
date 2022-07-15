@@ -15,22 +15,27 @@ class LightNodeRPC : public bcos::rpc::JsonRpcInterface
 public:
     LightNodeRPC(Ledger ledger) {}
 
-    void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
-        std::string_view _data, RespFunc _respFunc) override
+    void call([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _to,
+        [[maybe_unused]] std::string_view _data, RespFunc _respFunc) override
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Unsupported method!"});
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
-    void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
-        std::string_view _data, bool _requireProof, RespFunc _respFunc) override
+    void sendTransaction([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _data,
+        [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Unsupported method!"});
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
     void getTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override
     {
-        // Get block from remote ledger
+        auto transaction =
+            ledger().template getTransactionsOrReceipts<bcos::concepts::ledger::TRANSACTIONS>();
     }
 
     void getTransactionReceipt(std::string_view _groupID, std::string_view _nodeName,

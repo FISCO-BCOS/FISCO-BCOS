@@ -14,10 +14,6 @@
 #include <stdexcept>
 #include <tuple>
 
-#ifndef LEDGER_LOG
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
-#endif
-
 namespace bcos::ledger
 {
 

@@ -29,10 +29,10 @@ add_library(${TOOL_TARGET} ${SRCS})
 # target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework)
 
-# if(TESTS)
-#     enable_testing()
-#     add_subdirectory(tests)
-# endif()
+if(TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # for code coverage
 if (COVERAGE)

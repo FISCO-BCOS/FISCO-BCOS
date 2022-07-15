@@ -22,11 +22,15 @@
 
 #include "DataConvertUtility.h"
 #include "Exceptions.h"
+#include <boost/algorithm/hex.hpp>
 #include <boost/functional/hash.hpp>
+#include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <iterator>
 #include <random>
+#include <stdexcept>
 
 namespace bcos
 {
@@ -102,6 +106,32 @@ public:
       : FixedBytes()
     {
         constructFixedBytes(bytesConstRef(_bytesData.data(), _bytesData.size()), _alignType);
+    }
+
+    explicit FixedBytes(std::string_view view, StringDataType type,
+        DataAlignType _alignType = DataAlignType::AlignRight)
+      : FixedBytes()
+    {
+        if (type == FromHex) [[likely]]
+        {
+            if ((view.size() > static_cast<std::string_view::size_type>(N * 2)) ||
+                (view.size() % 2 != 0)) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(std::invalid_argument{"Invalid input string!"});
+            }
+
+            auto startIndex = 0;
+            if (_alignType == DataAlignType::AlignRight) [[likely]]
+            {
+                startIndex = N - (view.size() / 2);
+            }
+            boost::algorithm::unhex(view.begin(), view.end(), m_data.begin() + startIndex);
+        }
+        else
+        {
+            constructFixedBytes(
+                bytesConstRef((const bcos::byte*)view.data(), view.size()), _alignType);
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
 
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-utilities/Ranges.h>
+#include <bits/ranges_base.h>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -52,7 +53,7 @@ public:
         if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
 
-        auto range = RANGES::subrange<HashType>{proof.hashes.begin(), proof.hashes.begin()};
+        auto range = RANGES::subrange{proof.hashes.begin(), proof.hashes.begin()};
         HasherType hasher;
         for (auto it = proof.levels.begin(); it != proof.levels.end(); ++it)
         {
@@ -87,8 +88,7 @@ public:
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
         // Query the first level hashes(ordered)
-        auto levelRange =
-            RANGES::subrange<HashType>{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+        auto levelRange = RANGES::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
 
         auto it = RANGES::lower_bound(levelRange, hash);
         if (it == levelRange.end() || *it != hash) [[unlikely]]
@@ -112,11 +112,14 @@ public:
         {
             auto length = m_levels[depth];
             index = indexAlign(index / width);
-            levelRange = RANGES::subrange<HashType>{levelRange.end(), levelRange.end() + length};
+            levelRange = RANGES::subrange{levelRange.end(), levelRange.end() + length};
 
             start = levelRange.begin() + index;
             // end = std::min(start + width, levelRange.end());
-            end = (levelRange.end() - start < (size_t)width) ? levelRange.end() : start + width;
+            end = (levelRange.end() - start <
+                      (RANGES::range_difference_t<decltype(levelRange)>)width) ?
+                      levelRange.end() :
+                      start + width;
 
             assert(levelRange.end() <= m_nodes.end());
             proof.hashes.insert(proof.hashes.end(), start, end);
@@ -148,7 +151,8 @@ public:
         std::copy_n(RANGES::begin(input), inputSize, m_nodes.begin());
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
-        auto inputRange = RANGES::subrange<HashType>{m_nodes.begin(), m_nodes.begin()};
+        auto inputRange = RANGES::subrange<typename decltype(m_nodes)::iterator>{
+            m_nodes.begin(), m_nodes.begin()};
         m_levels.push_back(inputSize);
         while (inputSize > 1)  // Ignore only root
         {
@@ -156,7 +160,8 @@ public:
             assert(inputRange.end() <= m_nodes.end());
 
             inputSize = calculateLevelHashes(
-                inputRange, RANGES::subrange<HashType>{inputRange.end(), m_nodes.end()});
+                inputRange, RANGES::subrange<RANGES::iterator_t<decltype(inputRange)>>{
+                                inputRange.end(), m_nodes.end()});
             m_levels.push_back(inputSize);
         }
     }
