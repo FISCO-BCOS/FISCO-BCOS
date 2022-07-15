@@ -435,17 +435,31 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         return nullptr;
     }
     std::vector<std::string> realKeys(keys.size());
+    std::vector<std::string> encryptedValues;
+    encryptedValues.resize(values.size());
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, keys.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i != range.end(); ++i)
             {
                 realKeys[i] = toDBKey(table, keys[i]);
+                if (m_dataEncryption)
+                {
+                    encryptedValues[i] = m_dataEncryption->encrypt(values[i]);
+                }
             }
         });
     auto writeBatch = WriteBatch();
     for (size_t i = 0; i < values.size(); ++i)
     {
-        writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+        // Storage Security
+        if (m_dataEncryption)
+        {
+            writeBatch.Put(std::move(realKeys[i]), std::move(encryptedValues[i]));
+        }
+        else
+        {
+            writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+        }
     }
     WriteOptions options;
     m_db->Write(options, &writeBatch);

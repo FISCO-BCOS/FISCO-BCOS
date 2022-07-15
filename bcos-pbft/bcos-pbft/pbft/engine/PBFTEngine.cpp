@@ -295,7 +295,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << m_config->printCurrentState()
                           << LOG_KV("syncingHighestNumber", m_config->syncingHighestNumber());
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
+        m_config->validator()->asyncResetTxsFlag(_proposalData, false, true);
         return;
     }
     if (_proposalIndex <= m_config->committedProposal()->index() ||
@@ -319,7 +319,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << LOG_KV("hash", _proposalHash.abridged())
                           << m_config->printCurrentState();
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
+        m_config->validator()->asyncResetTxsFlag(_proposalData, false, true);
         return;
     }
     PBFT_LOG(INFO) << LOG_DESC("asyncSubmitProposal") << LOG_KV("index", _proposalIndex)
@@ -1128,6 +1128,10 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     if (!isValidViewChangeMsg(_viewChangeMsg->from(), _viewChangeMsg))
     {
         return false;
+    }
+    if (!m_config->timeout() && _viewChangeMsg->from())
+    {
+        sendRecoverResponse(_viewChangeMsg->from());
     }
     m_cacheProcessor->addViewChangeReq(_viewChangeMsg);
     // try to trigger fast view change if receive more than (f+1) valid view

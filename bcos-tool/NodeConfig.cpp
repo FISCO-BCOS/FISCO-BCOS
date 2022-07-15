@@ -579,7 +579,7 @@ void NodeConfig::generateGenesisData()
 
     versionData = m_compatibilityVersionStr + "-";
     std::stringstream ss;
-    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
+    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-" << m_isSerialExecute;
     executorConfig = ss.str();
 
     std::stringstream s;
@@ -598,10 +598,12 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
     m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+    m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
     m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
-                         << LOG_KV("authAdminAccount", m_authAdminAddress);
+                         << LOG_KV("authAdminAccount", m_authAdminAddress)
+                         << LOG_KV("ismSerialExecute", m_isSerialExecute);
 }
 
 // Note: make sure the consensus param checker is consistent with the precompiled param checker

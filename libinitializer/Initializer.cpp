@@ -24,9 +24,9 @@
  * @date 2021-10-23
  */
 
-#include "Initializer.h"
 #include "AuthInitializer.h"
 #include "ExecutorInitializer.h"
+#include "Initializer.h"
 #include "LedgerInitializer.h"
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
@@ -42,18 +42,19 @@
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-scheduler/src/TarsRemoteExecutorManager.h"
 #include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
-
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-tool/LedgerConfigFetcher.cpp>
+
 
 using namespace bcos;
 using namespace bcos::tool;
+using namespace bcos::protocol;
 using namespace bcos::initializer;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
@@ -182,7 +183,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm());
+        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup

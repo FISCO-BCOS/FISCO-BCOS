@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlockExecutive.h"
+#include "BlockExecutiveFactory.h"
 #include "ExecutorManager.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
@@ -15,6 +16,7 @@
 #include <future>
 #include <list>
 
+
 namespace bcos::scheduler
 {
 class SchedulerImpl : public SchedulerInterface, public std::enable_shared_from_this<SchedulerImpl>
@@ -28,16 +30,32 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
+      : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
+            txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
+            schedulerTermId)
+    {}
+
+
+    SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::storage::TransactionalStorageInterface::Ptr storage,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+        int64_t schedulerTermId)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_blockExecutiveFactory(
+            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
         m_blockFactory(std::move(blockFactory)),
         m_txPool(txPool),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
+        m_isSerialExecute(isSerialExecute),
         m_schedulerTermId(schedulerTermId)
     {
         start();
@@ -160,6 +178,8 @@ public:
         }
     }
 
+    bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
+
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
         std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
@@ -207,12 +227,14 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
+    bcos::scheduler::BlockExecutiveFactory::Ptr m_blockExecutiveFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck = false;
     bool m_isWasm = false;
+    bool m_isSerialExecute = false;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
