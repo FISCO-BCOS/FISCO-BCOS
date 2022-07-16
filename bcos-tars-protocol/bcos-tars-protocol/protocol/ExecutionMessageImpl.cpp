@@ -19,7 +19,7 @@
  * @date 2022-05-09
  */
 #include "ExecutionMessageImpl.h"
-#include "bcos-tars-protocol/Common.h"
+#include "../Common.h"
 using namespace bcostars;
 using namespace bcostars::protocol;
 

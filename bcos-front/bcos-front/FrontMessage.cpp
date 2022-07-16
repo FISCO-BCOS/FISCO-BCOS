@@ -18,7 +18,7 @@
  * @date 2021-04-20
  */
 
-#include <bcos-front/FrontMessage.h>
+#include "FrontMessage.h"
 #include <boost/asio.hpp>
 
 using namespace bcos;

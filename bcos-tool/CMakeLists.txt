@@ -26,7 +26,7 @@ find_package(Boost REQUIRED COMPONENTS serialization)
 
 file(GLOB SRCS *.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
-# target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_include_directories(${TOOL_TARGET} PUBLIC ${CMAKE_BINARY_DIR}/bcos-protocol)
 target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework)
 
 if(TESTS)

@@ -1,11 +1,11 @@
 #pragma once
 #include "../Common.h"
 #include "TarsStruct.h"
-#include "tars/Block.h"
-#include "tars/Transaction.h"
-#include "tup/Tars.h"
 #include <bcos-concepts/Basic.h>
+#include <bcos-tars-protocol/tars/Block.h>
+#include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/Ranges.h>
+#include <tup/Tars.h>
 #include <type_traits>
 #include <vector>
 

@@ -25,5 +25,5 @@ find_package(ZLIB REQUIRED)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ..)
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-crypto ZLIB::ZLIB)
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-utilities bcos-crypto ZLIB::ZLIB)
 add_test(NAME test-crypto WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

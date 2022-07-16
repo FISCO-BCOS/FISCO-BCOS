@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
@@ -9,7 +10,7 @@
 namespace bcos::rpc
 {
 
-template <bcos::concepts::ledger::Ledger Ledger>
+template <bcos::concepts::ledger::Ledger Ledger, bcos::crypto::hasher::Hasher Hasher>
 class LightNodeRPC : public bcos::rpc::JsonRpcInterface
 {
 public:
@@ -34,6 +35,7 @@ public:
     void getTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override
     {
+        bcos::h256 binHash(_txHash, bcos::h256::FromHex);
         auto transaction =
             ledger().template getTransactionsOrReceipts<bcos::concepts::ledger::TRANSACTIONS>();
     }

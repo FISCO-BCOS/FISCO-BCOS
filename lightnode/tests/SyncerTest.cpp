@@ -4,14 +4,14 @@
 
 #include "../syncer/BlockSyncerClientImpl.h"
 #include "../syncer/BlockSyncerServerImpl.h"
-#include "tars/Transaction.h"
-#include "tars/TransactionReceipt.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
+#include <bcos-tars-protocol/tars/Transaction.h>
+#include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>

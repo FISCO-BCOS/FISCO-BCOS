@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "bcos-tars-protocol/tars/CommonProtocol.h"
+#include <bcos-tars-protocol/tars/CommonProtocol.h>
 #include <bcos-utilities/Error.h>
 
 namespace bcostars

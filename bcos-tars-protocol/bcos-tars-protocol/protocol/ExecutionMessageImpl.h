@@ -24,10 +24,10 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "bcos-tars-protocol/tars/ExecutionMessage.h"
-#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-tars-protocol/tars/ExecutionMessage.h>
+#include <bcos-tars-protocol/tars/TransactionReceipt.h>
 namespace bcostars
 {
 namespace protocol

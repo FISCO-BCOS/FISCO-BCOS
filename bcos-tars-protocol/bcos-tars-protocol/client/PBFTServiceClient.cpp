@@ -20,8 +20,7 @@
  */
 
 #include "PBFTServiceClient.h"
-#include "bcos-tars-protocol/Common.h"
-#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
+#include "../protocol/BlockFactoryImpl.h"
 using namespace bcostars;
 
 void PBFTServiceClient::asyncSubmitProposal(bool _containSysTxs, bcos::bytesConstRef _proposalData,

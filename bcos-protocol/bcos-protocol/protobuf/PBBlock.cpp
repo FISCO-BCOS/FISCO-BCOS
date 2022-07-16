@@ -21,7 +21,7 @@
 #include "PBBlock.h"
 #include "../Common.h"
 #include "PBTransactionMetaData.h"
-#include <bcos-framework//protocol/Exceptions.h>
+#include <bcos-framework/protocol/Exceptions.h>
 #include <tbb/parallel_invoke.h>
 
 using namespace bcos;
