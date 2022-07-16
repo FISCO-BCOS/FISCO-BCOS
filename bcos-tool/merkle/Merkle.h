@@ -2,14 +2,11 @@
 
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-utilities/Ranges.h>
-#include <bits/ranges_base.h>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <exception>
 #include <iterator>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/subrange.hpp>
 #include <stdexcept>
 #include <type_traits>
 
