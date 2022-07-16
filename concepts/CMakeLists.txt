@@ -9,3 +9,4 @@ target_link_libraries(bcos-concepts INTERFACE bcos-framework bcos-crypto)
 
 include(GNUInstallDirs)
 install(TARGETS bcos-concepts EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(DIRECTORY "bcos-concepts" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
