@@ -23,11 +23,11 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "bcos-tars-protocol/Common.h"
-#include "bcos-tars-protocol/ErrorConverter.h"
-#include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
-#include "bcos-tars-protocol/tars/RpcService.h"
-#include <bcos-framework//rpc/RPCInterface.h>
+#include "../Common.h"
+#include "../ErrorConverter.h"
+#include "../protocol/TransactionSubmitResultImpl.h"
+#include <bcos-tars-protocol/tars/RpcService.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-utilities/Common.h>
 #include <servant/Application.h>
 #include <boost/core/ignore_unused.hpp>

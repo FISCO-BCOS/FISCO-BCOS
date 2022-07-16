@@ -450,7 +450,9 @@ void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view
                         << LOG_KV("node", _nodeName);
 
     auto hashListPtr = std::make_shared<bcos::crypto::HashList>();
-    hashListPtr->push_back(bcos::crypto::HashType((bcos::byte*)_txHash.data(), _txHash.size()));
+
+    // TODO: Error hash here, need hex2bin
+    hashListPtr->push_back(bcos::crypto::HashType(_txHash, bcos::crypto::HashType::FromHex));
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getTransaction");
     auto ledger = nodeService->ledger();
@@ -501,7 +503,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                         << LOG_KV("requireProof", _requireProof) << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto hash = bcos::crypto::HashType((bcos::byte*)_txHash.data(), _txHash.size());
+    auto hash = bcos::crypto::HashType(_txHash, bcos::crypto::HashType::FromHex);
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getTransactionReceipt");
     auto ledger = nodeService->ledger();
@@ -580,7 +582,7 @@ void JsonRpcImpl_2_0::getBlockByHash(std::string_view _groupID, std::string_view
     checkService(ledger, "ledger");
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     ledger->asyncGetBlockNumberByHash(
-        bcos::crypto::HashType((bcos::byte*)_blockHash.data(), _blockHash.size()),
+        bcos::crypto::HashType(_blockHash, bcos::crypto::HashType::FromHex),
         [m_groupID = std::string(_groupID), m_nodeName = std::string(_nodeName),
             m_blockHash = std::string(_blockHash), _onlyHeader, _onlyTxHash,
             m_respFunc = std::move(_respFunc),

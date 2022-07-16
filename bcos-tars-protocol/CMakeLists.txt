@@ -5,7 +5,7 @@ include(Version)
 project(bcos-tars-protocol VERSION ${VERSION})
 
 # for tars generator
-set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/bcos-tars-protocol/tars)
+set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
 find_program(TARS_TARS2CPP tars2cpp REQUIRED)
 find_program(SED sed REQUIRED)
 
@@ -30,22 +30,30 @@ endif()
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${OUT_TARS_H_LIST}")
 
-aux_source_directory(./protocol SRC_LIST)
-aux_source_directory(./client SRC_LIST)
+file(GLOB_RECURSE SRC_LIST bcos-tars-protocol/*.cpp)
 
 find_package(tarscpp REQUIRED)
+find_package(TBB REQUIRED)
 
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
-target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC ${TARSCPP_ROOT}/include)
-
-# target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil)
+target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
+    $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
+# target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil  TBB::tbb)
 
 if(TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
+
+include(GNUInstallDirs)
+install(TARGETS ${TARS_PROTOCOL_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(DIRECTORY "bcos-tars-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY "${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
 
 # # for doxygen
 # include(BuildDocs)

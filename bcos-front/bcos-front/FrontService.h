@@ -19,10 +19,10 @@
  */
 
 #pragma once
+#include "FrontMessage.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
-#include <bcos-front/FrontMessage.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/asio.hpp>

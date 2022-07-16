@@ -78,3 +78,21 @@ if(COVERAGE)
 endif()
 
 print_config("FISCO BCOS")
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+  "${CMAKE_SOURCE_DIR}/cmake/fiscobcos-config.cmake.in"
+  "${CMAKE_BINARY_DIR}/fiscobcos-config.cmake"
+  INSTALL_DESTINATION "share/fiscobcos"
+)
+
+install(
+  FILES "${CMAKE_BINARY_DIR}/fiscobcos-config.cmake"
+  DESTINATION "share/fiscobcos"
+)
+
+install(
+    EXPORT fiscobcosTargets
+    DESTINATION share/fiscobcos
+    NAMESPACE fiscobcos::
+)

@@ -19,7 +19,7 @@
  * @date 2022-03-22
  */
 #include "ProtocolInfoCodecImpl.h"
-#include <bcos-tars-protocol/Common.h>
+#include "../Common.h"
 
 using namespace bcostars;
 using namespace bcostars::protocol;

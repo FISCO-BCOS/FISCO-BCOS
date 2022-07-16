@@ -8,7 +8,7 @@ target_link_libraries(${COMMAND_HELPER_LIB} bcos-framework Boost::program_option
 
 add_library(${PROTOCOL_INIT_LIB} ProtocolInitializer.cpp)
 # target_compile_options(${PROTOCOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(${PROTOCOL_INIT_LIB}
+target_link_libraries(${PROTOCOL_INIT_LIB} PUBLIC
                      ${CRYPTO_TARGET} ${TOOL_TARGET} ${TARS_PROTOCOL_TARGET} ${SECURITY_TARGET})
 
 add_library(${FRONTSERVICE_INIT_LIB} FrontServiceInitializer.cpp)

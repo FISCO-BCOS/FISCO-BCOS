@@ -29,4 +29,5 @@ add_library(${PBPROTOCOL_TARGET} ${SRC_LIST} ${MESSAGES_SRCS} ${HEADERS})
 # target_compile_options(${PBPROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(Protobuf CONFIG REQUIRED)
+target_include_directories(${PBPROTOCOL_TARGET} PUBLIC ${CMAKE_BINARY_DIR}/bcos-protocol)
 target_link_libraries(${PBPROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} ${UTILITIES_TARGET} ${CODEC_TARGET} protobuf::libprotobuf)

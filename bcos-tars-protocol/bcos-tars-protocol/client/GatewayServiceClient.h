@@ -23,12 +23,12 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "bcos-tars-protocol/Common.h"
-#include "bcos-tars-protocol/ErrorConverter.h"
+#include "../Common.h"
+#include "../ErrorConverter.h"
+#include "../protocol/GroupNodeInfoImpl.h"
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework//gateway/GatewayInterface.h>
-#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
 #include <string>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
@@ -282,8 +282,8 @@ public:
             for (auto const& endPoint : nactiveEndPoints)
             {
                 auto endPointStr = endPointToString(endPoint);
-                auto prx =
-                    tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+                auto prx = tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
+                    endPointStr);
                 prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
             }
         }

@@ -18,10 +18,10 @@
  * @date 2022-5-9
  */
 #include "ExecutorServiceClient.h"
-#include "bcos-tars-protocol/Common.h"
-#include "bcos-tars-protocol/ErrorConverter.h"
-#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
+#include "../Common.h"
+#include "../ErrorConverter.h"
+#include "../protocol/BlockHeaderImpl.h"
+#include "../protocol/ExecutionMessageImpl.h"
 
 using namespace bcostars;
 

@@ -18,11 +18,11 @@
  * @date 2021-10-17
  */
 #include "LedgerServiceClient.h"
-#include "bcos-tars-protocol/Common.h"
-#include "bcos-tars-protocol/ErrorConverter.h"
-#include "bcos-tars-protocol/protocol/BlockImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "../Common.h"
+#include "../ErrorConverter.h"
+#include "../protocol/BlockImpl.h"
+#include "../protocol/TransactionImpl.h"
+#include "../protocol/TransactionReceiptImpl.h"
 
 using namespace bcostars;
 

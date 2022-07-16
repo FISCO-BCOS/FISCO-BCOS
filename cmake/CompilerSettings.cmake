@@ -38,6 +38,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-fno-omit-frame-pointer)
     add_compile_options(-fvisibility=hidden)
     add_compile_options(-fvisibility-inlines-hidden)
+    add_compile_options(-Wno-unused-variable)
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)

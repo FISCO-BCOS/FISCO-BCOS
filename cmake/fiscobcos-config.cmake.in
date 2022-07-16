@@ -1,24 +1,5 @@
 @PACKAGE_INIT@
 
-include(GNUInstallDirs)
+include("${CMAKE_CURRENT_LIST_DIR}/fiscobcos-targets.cmake")
 
-get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)
-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH) 
-if(_IMPORT_PREFIX STREQUAL "/")
-  set(_IMPORT_PREFIX "")
-endif()
-
-add_library(fiscobcos::utilities STATIC IMPORTED)
-set_target_properties(wedprcrypto::crypto PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include/"
-  IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C;CXX"
-  IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}ffi_c_crypto_binary${CMAKE_STATIC_LIBRARY_SUFFIX}"
-)
-
-add_library(wedprcrypto::fisco-bcos STATIC IMPORTED)
-set_target_properties(wedprcrypto::fisco-bcos PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include/"
-  IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C;CXX"
-  IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}ffi_c_fisco_bcos${CMAKE_STATIC_LIBRARY_SUFFIX}"
-)
+check_required_components(fiscobcos)

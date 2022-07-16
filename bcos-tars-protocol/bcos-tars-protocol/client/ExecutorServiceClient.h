@@ -22,8 +22,8 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "bcos-tars-protocol/tars/ExecutorService.h"
-#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-tars-protocol/tars/ExecutorService.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 
 namespace bcostars
 {

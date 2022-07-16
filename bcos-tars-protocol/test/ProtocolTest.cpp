@@ -1,12 +1,3 @@
-#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/ExecutionMessageImpl.h"
-#include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
-#include "bcos-tars-protocol/tars/Block.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -16,7 +7,16 @@
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
+#include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/tools/old/interface.hpp>
@@ -106,8 +106,7 @@ BOOST_AUTO_TEST_CASE(transaction)
 
 BOOST_AUTO_TEST_CASE(transactionMetaData)
 {
-    bcos::h256 hash("5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
-        bcos::crypto::HashType::FromHex);
+    bcos::h256 hash("5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9");
 
     bcostars::protocol::TransactionMetaDataImpl metaData(
         [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });

@@ -27,13 +27,12 @@ void serialize(
 
 }  // namespace boost::serialization
 
-#if 0
 namespace std
 {
 template <class T1, class T2, size_t T3>
 ostream& operator<<(ostream& stream, const bcos::tool::merkle::Merkle<T1, T2, T3>& merkle)
 {
-    auto range = RANGES::subrange<T2>(merkle.m_nodes.begin(), merkle.m_nodes.begin());
+    auto range = RANGES::subrange(merkle.m_nodes.begin(), merkle.m_nodes.begin());
     size_t level = 0;
     for (auto length : merkle.m_levels)
     {
@@ -52,7 +51,7 @@ ostream& operator<<(ostream& stream, const bcos::tool::merkle::Merkle<T1, T2, T3
 template <class HashType>
 ostream& operator<<(ostream& stream, const typename bcos::tool::merkle::Proof<HashType>& proof)
 {
-    auto range = RANGES::subrange<HashType>(proof.hashes.begin(), proof.hashes.begin());
+    auto range = RANGES::subrange(proof.hashes.begin(), proof.hashes.begin());
     size_t level = 0;
     for (auto length : proof.levels)
     {
@@ -68,5 +67,3 @@ ostream& operator<<(ostream& stream, const typename bcos::tool::merkle::Proof<Ha
     return stream;
 }
 }  // namespace std
-
-#endif

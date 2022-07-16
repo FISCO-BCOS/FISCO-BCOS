@@ -29,6 +29,7 @@ find_package(protobuf REQUIRED)
 
 add_library(bcos-protocol INTERFACE)
 target_include_directories(bcos-protocol INTERFACE .)
+target_include_directories(bcos-protocol INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(bcos-protocol INTERFACE protobuf::libprotobuf)
 
 if (TESTS)
