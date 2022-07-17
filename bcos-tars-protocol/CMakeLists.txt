@@ -7,7 +7,6 @@ project(bcos-tars-protocol VERSION ${VERSION})
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
 find_program(TARS_TARS2CPP tars2cpp REQUIRED)
-find_program(SED sed REQUIRED)
 
 file(GLOB_RECURSE TARS_INPUT "*.tars")
 

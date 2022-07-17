@@ -27,9 +27,6 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - name: Prepare windows msbuild
-        if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v1.1
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
