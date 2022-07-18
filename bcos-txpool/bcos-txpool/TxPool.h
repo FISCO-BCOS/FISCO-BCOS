@@ -19,9 +19,9 @@
  * @date 2021-05-10
  */
 #pragma once
-#include "bcos-txpool/TxPoolConfig.h"
-#include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
-#include "bcos-txpool/txpool/interfaces/TxPoolStorageInterface.h"
+#include "TxPoolConfig.h"
+#include "sync/interfaces/TransactionSyncInterface.h"
+#include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <thread>

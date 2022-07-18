@@ -151,7 +151,7 @@ protected:
 
     virtual void subscribeTopicToAllNodes();
     virtual void removeTopicFromAllNodes(std::vector<std::string> const& _topicName);
-    std::string endPointToString(std::string const& _serviceName, TC_Endpoint const& _endPoint)
+    std::string endPointToString(std::string const& _serviceName, tars::TC_Endpoint const& _endPoint)
     {
         return _serviceName + "@tcp -h " + _endPoint.getHost() + " -p " +
                boost::lexical_cast<std::string>(_endPoint.getPort());

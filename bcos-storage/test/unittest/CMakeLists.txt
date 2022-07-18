@@ -19,7 +19,7 @@ list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-storage)
 
-if(TIKV_MODULE)
+if(WITH_TIKV)
     list(APPEND SOURCES "TestTiKVStorage.cpp")
 else()
     set(EXCLUDE_SUITES "TestTiKVStorage")

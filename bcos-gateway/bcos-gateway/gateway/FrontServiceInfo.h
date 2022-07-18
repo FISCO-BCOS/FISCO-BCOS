@@ -47,8 +47,8 @@ public:
         {
             return false;
         }
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        std::vector<tars::EndpointInfo> activeEndPoints;
+        std::vector<tars::EndpointInfo> nactiveEndPoints;
         m_frontServicePrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         return (activeEndPoints.size() == 0);
     }

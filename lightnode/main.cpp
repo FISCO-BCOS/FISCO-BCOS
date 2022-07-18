@@ -20,10 +20,9 @@
  * @date 2022-07-04
  */
 
-#include "ledger/LedgerImpl.h"
+#include "ledger/LedgerServerImpl.h"
 #include "storage/StorageSyncWrapper.h"
 #include "syncer/BlockSyncerClientImpl.h"
-#include "syncer/BlockSyncerServerImpl.h"
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 {

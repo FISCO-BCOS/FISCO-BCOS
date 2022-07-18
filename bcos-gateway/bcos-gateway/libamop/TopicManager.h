@@ -157,7 +157,7 @@ public:
                 return m_clientInfo[_clientID];
             }
             auto servicePrx =
-                Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(_clientID);
+                tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(_clientID);
             auto rpcClient =
                 std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
             UpgradeGuard ul(l);

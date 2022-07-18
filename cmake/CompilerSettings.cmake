@@ -38,6 +38,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-fno-omit-frame-pointer)
     add_compile_options(-fvisibility=hidden)
     add_compile_options(-fvisibility-inlines-hidden)
+    add_compile_options(-Wno-unused-variable)
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
@@ -99,6 +100,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
+        add_definitions(-DUSE_STD_RANGES)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
@@ -141,8 +143,16 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    add_definitions(-DUSE_STD_RANGES)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
+
+    # MSVC only support static build
+    set(CMAKE_CXX_FLAGS_DEBUG "/MTd /DEBUG")
+    set(CMAKE_CXX_FLAGS_MINSIZEREL "/MT /Os")
+    set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/MT /DEBUG")
+    link_libraries(ws2_32 Crypt32 userenv)
 else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
 endif()

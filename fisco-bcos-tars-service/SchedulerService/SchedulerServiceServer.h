@@ -19,6 +19,9 @@
  * @date 2021-10-18
  */
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>

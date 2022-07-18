@@ -1,4 +1,6 @@
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"

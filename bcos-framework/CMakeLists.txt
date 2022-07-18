@@ -27,7 +27,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 
 add_library(bcos-framework INTERFACE)
-target_include_directories(bcos-framework INTERFACE .)
+target_include_directories(bcos-framework INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/bcos-framework>)
 target_link_libraries(bcos-framework INTERFACE bcos-crypto Microsoft.GSL::GSL)
 
 if (TESTS)
@@ -43,5 +45,5 @@ if (COVERAGE)
 endif ()
 
 include(GNUInstallDirs)
-install(TARGETS bcos-framework ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS bcos-framework EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-framework" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

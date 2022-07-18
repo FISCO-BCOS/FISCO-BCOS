@@ -3,8 +3,18 @@
     {
       "kind": "git",
       "repository": "https://github.com/cyjseagull/registry",
-      "baseline": "acc7b83bd8bc6fe61cbb6cc2f9756e549e3ef09b",
-      "packages": [ "openssl", "evmone", "evmc", "wedprcrypto", "tarscpp", "ethash", "intx" ]
+      "baseline": "48f22670544cd6655c8ae626de7f569b7110fb75",
+      "packages": [
+        "openssl",
+        "evmone",
+        "evmc",
+        "wedprcrypto",
+        "tarscpp",
+        "ethash",
+        "intx",
+        "fiscobcos",
+        "boost-context"
+      ]
     }
   ]
 }

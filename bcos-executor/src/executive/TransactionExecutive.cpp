@@ -97,7 +97,7 @@ CallParameters::UniquePtr TransactionExecutive::dispatcher()
 {
     try
     {
-        for (auto it = std::begin(*m_pullMessage); it != std::end(*m_pullMessage); ++it)
+        for (auto it = RANGES::begin(*m_pullMessage); it != RANGES::end(*m_pullMessage); ++it)
         {
             if (*it)
             {

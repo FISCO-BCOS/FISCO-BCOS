@@ -70,7 +70,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto gatewayPrx = Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
+    auto gatewayPrx = tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
         m_nodeConfig->gatewayServiceName());
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
@@ -119,9 +119,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
     if (!_airVersion)
     {
-        storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+        storagePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
                       c_fileSeparator + m_nodeConfig->storagePath();
-        consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
+        consensusStoragePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
                                m_nodeConfig->groupId() + c_fileSeparator + c_consensusStorageDBName;
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
@@ -141,7 +141,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-#if TIKV_MODULE
+#if WITH_TIKV
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
         schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
         consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);

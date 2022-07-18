@@ -12,10 +12,6 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
-    {
-      "name": "openssl",
-      "version>=": "1.1.1-tassl"
-    },
     "boost-log",
     "boost-beast",
     "boost-uuid",
@@ -33,27 +29,42 @@
     "zlib",
     "jsoncpp",
     "protobuf",
-    "wedprcrypto"
+    {
+      "name": "tarscpp",
+      "version>=": "3.0.3-m"
+    },
+    {
+      "name": "openssl",
+      "version>=": "1.1.1-tassl"
+    },
+    {
+      "name": "boost-context",
+      "version>=": "1.79.0-m1"
+    },
+    "wedprcrypto",
+    "range-v3"
   ],
   "features": {
-    "executor": {
-      "description": "Executor module dependencies",
+    "fullnode": {
+      "description": "Full node dependencies",
       "dependencies": [
         "evmone",
-        "boost-coroutine2"
-      ]
-    },
-    "rpcframework": {
-      "description": "RPC framework module dependencies",
-      "dependencies": [
-        "tarscpp"
-      ]
-    },
-    "storage": {
-      "description": "Storage module dependencies",
-      "dependencies": [
+        "boost-coroutine2",
         "rocksdb",
         "zstd"
+      ]
+    },
+    "lightnode": {
+      "description": "Light node dependencies",
+      "dependencies": [
+        "evmone",
+        "rocksdb"
+      ]
+    },
+    "etcd": {
+      "description": "ETCD dependencies",
+      "dependencies": [
+        "offscale-libetcd-cpp"
       ]
     }
   },

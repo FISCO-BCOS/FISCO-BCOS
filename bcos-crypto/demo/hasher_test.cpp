@@ -16,10 +16,10 @@ using namespace bcos;
 using namespace bcos::crypto::hasher;
 
 template <Hasher HasherType>
-auto hasherTest(std::string_view name, std::ranges::random_access_range auto&& input,
+auto hasherTest(std::string_view name, RANGES::random_access_range auto&& input,
     size_t totalSize, bool multiThread)
 {
-    std::vector<std::array<std::byte, 32>> results{std::size(input)};
+    std::vector<std::array<std::byte, 32>> results{RANGES::size(input)};
 
     std::cout << "  " << name;
     auto begin = std::chrono::high_resolution_clock::now();
@@ -29,7 +29,7 @@ auto hasherTest(std::string_view name, std::ranges::random_access_range auto&& i
         HasherType hasher;
 
 #pragma omp for
-        for (std::ranges::range_size_t<decltype(input)> i = 0; i < std::size(input); ++i)
+        for (RANGES::range_size_t<decltype(input)> i = 0; i < RANGES::size(input); ++i)
         {
             hasher.update(input[i]);
             results[i] = hasher.final();

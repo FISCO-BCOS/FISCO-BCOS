@@ -18,12 +18,14 @@
  * @author: yujiechen
  * @date 2021-10-28
  */
+ #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+ 
 #include "AMOPClient.h"
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-protocol/amop/TopicItem.h>
 #include <bcos-rpc/Common.h>
-#include <bcos-tars-protocol/client/GatewayServiceClient.h>
+
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::boostssl::ws;
@@ -404,8 +406,8 @@ void AMOPClient::onClientDisconnect(std::shared_ptr<WsSession> _session)
 
 std::vector<tars::EndpointInfo> AMOPClient::getActiveGatewayEndPoints()
 {
-    vector<EndpointInfo> activeEndPoints;
-    vector<EndpointInfo> nactiveEndPoints;
+    std::vector<tars::EndpointInfo> activeEndPoints;
+    vector<tars::EndpointInfo> nactiveEndPoints;
     auto gatewayClient = std::dynamic_pointer_cast<bcostars::GatewayServiceClient>(m_gateway);
     gatewayClient->prx()->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
     return activeEndPoints;
@@ -423,7 +425,7 @@ void AMOPClient::subscribeTopicToAllNodes()
     {
         auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
         auto servicePrx =
-            Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+            tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncSubscribeTopic(
@@ -450,7 +452,7 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
     {
         auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
         auto servicePrx =
-            Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+            tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncRemoveTopic(

@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "Common.h"
-#include "Common/TarsUtils.h"
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
@@ -35,6 +34,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 namespace bcos
 {

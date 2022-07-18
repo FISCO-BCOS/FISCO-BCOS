@@ -1,0 +1,34 @@
+#include "Block.tars"
+#include "Transaction.tars"
+#include "TransactionReceipt.tars"
+
+module bcostars {
+
+struct RequestBlock
+{
+    1 optional unsigned int beginBlockNumber;
+    2 optional unsigned int endBlockNumber;
+    3 optional bool onlyHeader;
+};
+
+struct ResponseBlock
+{
+    1 optional unsigned int blockNumber;
+    2 optional vector<Block> blocks;
+};
+
+struct RequestTransactionsAndReceipts
+{
+    1 optional vector<vector<byte>> hashes;
+    2 optional bool withProof;
+};
+
+struct ResponseTransactions
+{
+    1 optional vector<Transaction> transactions;
+    2 optional vector<TransactionReceipt> receipts;
+    3 optional vector<vector<byte>> transactionProofs;
+    4 optional vector<vector<byte>> receiptProofs;
+};
+
+};

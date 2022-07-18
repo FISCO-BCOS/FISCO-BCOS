@@ -26,14 +26,12 @@ include(BuildInfoGenerator)
 include(IncludeDirectories)
 include(TargetSettings)
 
-if(BOOSTSSL_MODULE)
-    add_subdirectory(bcos-boostssl)
-    add_subdirectory(bcos-framework)
-    add_subdirectory(bcos-crypto)
-    add_subdirectory(bcos-utilities)
-endif()
+add_subdirectory(bcos-boostssl)
+add_subdirectory(bcos-framework)
+add_subdirectory(bcos-crypto)
+add_subdirectory(bcos-utilities)
 
-if(CORE_MODULES)
+if(FULLNODE)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
 
@@ -57,13 +55,11 @@ if(CORE_MODULES)
     add_subdirectory(bcos-leader-election)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
+    add_subdirectory(concepts)
 
-    if(TARS_SERVICES)
+    if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
     endif()
-
-    add_subdirectory(concepts)
-    add_subdirectory(lightnode)
 
     if(TESTS)
         enable_testing()
@@ -71,10 +67,36 @@ if(CORE_MODULES)
     endif()
 endif()
 
+if(WITH_LIGHTNODE)
+    add_subdirectory(lightnode)
+endif()
+
+if(WITH_BENCHMARK)
+    add_subdirectory(benchmark)
+endif()
+
 # for code coverage
 if(COVERAGE)
     include(Coverage)
-    config_coverage("tars-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+    config_coverage("coverage" "'/usr*' 'boost/*'")
 endif()
 
 print_config("FISCO BCOS")
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+  "${CMAKE_SOURCE_DIR}/cmake/fiscobcos-config.cmake.in"
+  "${CMAKE_BINARY_DIR}/fiscobcos-config.cmake"
+  INSTALL_DESTINATION "share/fiscobcos"
+)
+
+install(
+  FILES "${CMAKE_BINARY_DIR}/fiscobcos-config.cmake"
+  DESTINATION "share/fiscobcos"
+)
+
+install(
+    EXPORT fiscobcosTargets
+    DESTINATION share/fiscobcos
+    NAMESPACE fiscobcos::
+)

@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "bcos-table/src/StateStorageInterface.h"
+#include "StateStorageInterface.h"
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

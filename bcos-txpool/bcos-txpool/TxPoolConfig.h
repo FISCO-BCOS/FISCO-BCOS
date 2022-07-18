@@ -20,9 +20,9 @@
  * @date 2021-05-08
  */
 #pragma once
-#include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
-#include "bcos-txpool/txpool/interfaces/TxPoolStorageInterface.h"
-#include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
+#include "txpool/interfaces/NonceCheckerInterface.h"
+#include "txpool/interfaces/TxPoolStorageInterface.h"
+#include "txpool/interfaces/TxValidatorInterface.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
