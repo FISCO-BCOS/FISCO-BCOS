@@ -136,10 +136,10 @@ public:
     {
         m_amop->asyncSendMessageByTopic(_topic, _data, _respFunc);
     }
-    void asyncSendBroadbastMessageByTopic(
+    void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
     {
-        m_amop->asyncSendBroadbastMessageByTopic(_topic, _data);
+        m_amop->asyncSendBroadcastMessageByTopic(_topic, _data);
     }
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
