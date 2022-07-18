@@ -42,13 +42,13 @@ bcostars::Error GatewayServiceServer::asyncSubscribeTopic(
         });
     return bcostars::Error();
 }
-bcostars::Error GatewayServiceServer::asyncSendBroadbastMessageByTopic(
+bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
     const std::string& _topic, const vector<tars::Char>& _data, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncSendBroadbastMessageByTopic(
+    m_gatewayInitializer->gateway()->asyncSendBroadcastMessageByTopic(
         _topic, bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()));
-    async_response_asyncSendBroadbastMessageByTopic(
+    async_response_asyncSendBroadcastMessageByTopic(
         current, toTarsError<bcos::Error::Ptr>(nullptr));
     return bcostars::Error();
 }

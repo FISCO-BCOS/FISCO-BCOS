@@ -233,7 +233,7 @@ void AMOPClient::onRecvAMOPBroadcast(
     // broadcast message to the sdks connected to the local node
     broadcastAMOPMessage(amopReq->topic(), _msg);
     // broadcast messsage to sdks connected to other nodes
-    m_gateway->asyncSendBroadbastMessageByTopic(
+    m_gateway->asyncSendBroadcastMessageByTopic(
         amopReq->topic(), bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("onRecvAMOPBroadcast") << LOG_KV("seq", seq)
                            << LOG_KV("topic", amopReq->topic());
