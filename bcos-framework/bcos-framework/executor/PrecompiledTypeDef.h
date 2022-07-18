@@ -23,10 +23,12 @@
 
 namespace bcos
 {
-
 /// System contract
 constexpr const int SYS_CONTRACT_DEPLOY_NUMBER = 0;
-inline bool isSysContractDeploy(protocol::BlockNumber _number){return _number == SYS_CONTRACT_DEPLOY_NUMBER;}
+inline bool isSysContractDeploy(protocol::BlockNumber _number)
+{
+    return _number == SYS_CONTRACT_DEPLOY_NUMBER;
+}
 
 namespace precompiled
 {
@@ -56,8 +58,12 @@ constexpr const char* const DAG_TRANSFER_ADDRESS = "0000000000000000000000000000
 constexpr const char* const BFS_ADDRESS = "000000000000000000000000000000000000100e";
 constexpr const char* const SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
 
+// Contract address related to privacy computing
 constexpr const char* const GROUP_SIG_ADDRESS = "0000000000000000000000000000000000005004";
 constexpr const char* const RING_SIG_ADDRESS = "0000000000000000000000000000000000005005";
+// for zkp
+constexpr const char* const DISCRETE_ZKP_ADDRESS = "0000000000000000000000000000000000005100";
+
 
 /// auth system contract for solidity
 constexpr const char* const AUTH_INTERCEPT_ADDRESS = "0000000000000000000000000000000000010000";

@@ -218,6 +218,8 @@ protected:
 
     protocol::BlockNumber getBlockNumberInStorage();
 
+    void initPrecompiledByBlockContext(std::shared_ptr<BlockContext> _blockContext);
+
     std::string m_name;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
@@ -277,6 +279,8 @@ protected:
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled =
             std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
+    mutable bcos::SharedMutex x_constantPrecompiled;
+
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;

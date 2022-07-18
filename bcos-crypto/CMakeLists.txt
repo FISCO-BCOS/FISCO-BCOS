@@ -8,7 +8,7 @@ find_package(wedprcrypto REQUIRED)
 
 add_library(bcos-crypto STATIC ${SRCS})
 target_include_directories(bcos-crypto PUBLIC .)
-target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto bcos-utilities)
+target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto wedprcrypto::zkp bcos-utilities)
 
 if(TESTS)
     enable_testing()
