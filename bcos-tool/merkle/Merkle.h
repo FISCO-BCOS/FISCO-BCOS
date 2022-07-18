@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <exception>
 #include <iterator>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
 
@@ -50,7 +51,9 @@ public:
         if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
 
-        auto range = RANGES::subrange{proof.hashes.begin(), proof.hashes.begin()};
+        auto range = RANGES::subrange<decltype(proof.hashes.begin())>{
+            proof.hashes.begin(), proof.hashes.begin()};
+
         HasherType hasher;
         for (auto it = proof.levels.begin(); it != proof.levels.end(); ++it)
         {
@@ -85,7 +88,8 @@ public:
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
         // Query the first level hashes(ordered)
-        auto levelRange = RANGES::subrange{m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+        auto levelRange = RANGES::subrange<decltype(m_nodes.begin())>{
+            m_nodes.begin(), m_nodes.begin() + m_levels[0]};
 
         auto it = RANGES::lower_bound(levelRange, hash);
         if (it == levelRange.end() || *it != hash) [[unlikely]]
@@ -109,7 +113,8 @@ public:
         {
             auto length = m_levels[depth];
             index = indexAlign(index / width);
-            levelRange = RANGES::subrange{levelRange.end(), levelRange.end() + length};
+            levelRange = RANGES::subrange<decltype(levelRange.end())>{
+                levelRange.end(), levelRange.end() + length};
 
             start = levelRange.begin() + index;
             // end = std::min(start + width, levelRange.end());
@@ -148,17 +153,16 @@ public:
         std::copy_n(RANGES::begin(input), inputSize, m_nodes.begin());
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
-        auto inputRange = RANGES::subrange<typename decltype(m_nodes)::iterator>{
-            m_nodes.begin(), m_nodes.begin()};
+        auto inputRange =
+            RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
         m_levels.push_back(inputSize);
         while (inputSize > 1)  // Ignore only root
         {
             inputRange = {inputRange.end(), inputRange.end() + inputSize};
             assert(inputRange.end() <= m_nodes.end());
 
-            inputSize = calculateLevelHashes(
-                inputRange, RANGES::subrange<RANGES::iterator_t<decltype(inputRange)>>{
-                                inputRange.end(), m_nodes.end()});
+            inputSize = calculateLevelHashes(inputRange,
+                RANGES::subrange<decltype(inputRange.end())>{inputRange.end(), m_nodes.end()});
             m_levels.push_back(inputSize);
         }
     }

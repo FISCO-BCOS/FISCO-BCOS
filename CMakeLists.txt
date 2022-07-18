@@ -71,6 +71,10 @@ if(WITH_LIGHTNODE)
     add_subdirectory(lightnode)
 endif()
 
+if(WITH_BENCHMARK)
+    add_subdirectory(benchmark)
+endif()
+
 # for code coverage
 if(COVERAGE)
     include(Coverage)

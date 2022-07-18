@@ -146,6 +146,13 @@ elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_definitions(-DUSE_STD_RANGES)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
+
+    # MSVC only support static build
+    set(CMAKE_CXX_FLAGS_DEBUG "/MTd /DEBUG")
+    set(CMAKE_CXX_FLAGS_MINSIZEREL "/MT /Os")
+    set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/MT /DEBUG")
+    link_libraries(ws2_32 Crypt32 userenv)
 else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
 endif()

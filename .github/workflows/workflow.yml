@@ -18,8 +18,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # os: [ubuntu-20.04, windows-2019, macos-11]
-        os: [ubuntu-20.04, macos-11]
+        # os: [ubuntu-20.04, windows-2019, macos-12]
+        os: [ubuntu-20.04, macos-12]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -28,22 +28,24 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - name: Prepare windows msbuild
-        if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v1.1
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DTESTS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 4
-      - name: Build
-        if: runner.os != 'Windows'
+      - name: Build for linux
+        if: runner.os == 'Linux'
         run: |
           export CC='gcc-10'
           export CXX='g++-10'
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake --build . --parallel 4
+      - name: Build for macos
+        if: runner.os == 'macOS'
+        run: |
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 4
       - name: Test
