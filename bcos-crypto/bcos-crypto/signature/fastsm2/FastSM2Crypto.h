@@ -24,7 +24,7 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <memory>
 
-#ifdef SM2_OPTIMIZE
+#ifdef WITH_SM2_OPTIMIZE
 
 namespace bcos
 {
