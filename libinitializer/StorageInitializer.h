@@ -60,7 +60,11 @@ public:
 
         // open DB
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
-
+        if (!s.ok())
+        {
+            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", s.ToString());
+            throw std::runtime_error("open rocksDB failed, err:" + s.ToString());
+        }
         return std::make_shared<bcos::storage::RocksDBStorage>(
             std::unique_ptr<rocksdb::DB>(db), _dataEncrypt);
     }
