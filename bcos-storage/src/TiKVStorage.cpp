@@ -35,6 +35,7 @@
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
+#include <atomic>
 #include <exception>
 #include <iostream>
 #include <mutex>
@@ -57,7 +58,7 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
     auto fileChannel =
         Poco::AutoPtr<Poco::FileChannel>(new Poco::FileChannel(logPath + "/tikv-client.log"));
     fileChannel->setProperty("path", logPath + "/tikv-client.log");
-    fileChannel->setProperty("rotation", "20 M");
+    fileChannel->setProperty("rotation", "100 M");
     fileChannel->setProperty("archive", "timestamp");
     auto formatter = Poco::AutoPtr<Poco::Formatter>(
         new Poco::PatternFormatter("%L%p|%Y-%m-%d %H:%M:%S.%i|%T-%I|[%s]%t"));
@@ -207,8 +208,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                     << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
                     << LOG_KV("count", entries.size()) << LOG_KV("validCount", validCount)
                     << LOG_KV("read time(ms)", end - start)
-                    << LOG_KV("decode time(ms)", decode - end)
-                    << LOG_KV("callback time(ms)", utcTime() - decode);
+                    << LOG_KV("decode time(ms)", decode - end);
                 _callback(nullptr, std::move(entries));
             },
             _keys);
@@ -280,8 +280,8 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
-    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
-                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
+    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
+                           << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {
         auto start = utcTime();
@@ -289,20 +289,28 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
         atomic_bool isTableValid = true;
+        std::atomic_uint64_t putCount{0};
+        std::atomic_uint64_t deleteCount{0};
         storage.parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
+                if (!isValid(table, key))
+                {
+                    isTableValid = false;
+                    return false;
+                }
                 auto dbKey = toDBKey(table, key);
-
                 if (entry.status() == Entry::DELETED)
                 {
                     tbb::spin_mutex::scoped_lock lock(writeMutex);
                     mutations[dbKey] = "";
+                    ++deleteCount;
                 }
                 else
                 {
                     std::string value = std::string(entry.get());
                     tbb::spin_mutex::scoped_lock lock(writeMutex);
                     mutations[dbKey] = std::move(value);
+                    ++putCount;
                 }
                 return true;
             });
@@ -314,7 +322,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         auto encode = utcTime();
         if (mutations.empty() && params.timestamp == 0)
         {
-            STORAGE_TIKV_LOG(WARNING)
+            STORAGE_TIKV_LOG(ERROR)
                 << LOG_DESC("asyncPrepare empty storage") << LOG_KV("blockNumber", params.number);
             callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
             return;
@@ -326,15 +334,16 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
             m_cluster.get(), primaryLock, std::move(mutations), m_coroutineStackSize, m_maxRetry);
         if (params.timestamp == 0)
         {
-            STORAGE_TIKV_LOG(DEBUG)
+            STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncPrepare primary") << LOG_KV("blockNumber", params.number);
             auto result = m_committer->prewriteKeys();
             auto write = utcTime();
             callback(nullptr, result.start_ts);
             STORAGE_TIKV_LOG(INFO)
                 << "asyncPrepare primary finished" << LOG_KV("blockNumber", params.number)
-                << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                << LOG_KV("startTS", result.start_ts) << LOG_KV("encode time(ms)", encode - start)
+                << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount) << LOG_KV("size", size)
+                << LOG_KV("primaryLock", primaryLock) << LOG_KV("startTS", result.start_ts)
+                << LOG_KV("encode time(ms)", encode - start)
                 << LOG_KV("prewrite time(ms)", write - encode)
                 << LOG_KV("callback time(ms)", utcTime() - write);
         }
@@ -342,8 +351,9 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         {
             STORAGE_TIKV_LOG(INFO)
                 << "asyncPrepare secondary" << LOG_KV("blockNumber", params.number)
-                << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                << LOG_KV("startTS", params.timestamp) << LOG_KV("encode time(ms)", encode - start);
+                << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount) << LOG_KV("size", size)
+                << LOG_KV("primaryLock", primaryLock) << LOG_KV("startTS", params.timestamp)
+                << LOG_KV("encode time(ms)", encode - start);
             m_committer->prewriteKeys(params.timestamp);
             auto write = utcTime();
             // m_committer = nullptr;
@@ -374,7 +384,7 @@ void TiKVStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) noexcept
 {
     auto start = utcTime();
-    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
+    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
                             << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {

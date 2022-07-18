@@ -36,6 +36,7 @@
 #include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
 #include <boost/serialization/vector.hpp>
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <memory>
@@ -334,7 +335,6 @@ public:
         }
         void insertPageInfoNoLock(PageInfo&& pageInfo)
         {
-            assert(!pageInfo.getPageKey().empty());
             if (pageInfo.getPageKey().empty())
             {
                 KeyPage_LOG(FATAL) << LOG_DESC("insert empty pageInfo");
@@ -847,7 +847,7 @@ public:
                                      iter->second.hash(table, iter->first, hashImpl);
                     // if (c_fileLogLevel >= TRACE)
                     // {
-                    //     STORAGE_LOG(TRACE)
+                    //     KeyPage_LOG(TRACE)
                     //         << "Storage hash: " << LOG_KV("table", table)
                     //         << LOG_KV("key", toHex(iter->first)) << LOG_KV("hash",
                     //         entryHash.hex());
@@ -1212,6 +1212,8 @@ private:
     size_t m_pageSize = 8 * 1024;
     size_t m_splitSize;
     size_t m_mergeSize;
+    std::atomic_uint64_t m_readLength{0};
+    std::atomic_uint64_t m_writeLength{0};
     std::vector<Bucket> m_buckets;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
 };

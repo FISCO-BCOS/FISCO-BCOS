@@ -29,6 +29,7 @@
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_mutex.h>
 #include <boost/algorithm/hex.hpp>
+#include <csignal>
 #include <exception>
 #include <future>
 #include <optional>
@@ -275,6 +276,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
 
         if (!status.ok())
         {
+            checkStatus(status);
             std::string errorMessage = "Set row failed!";
             if (status.getState())
             {
@@ -298,6 +300,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
     std::ignore = param;
     try
     {
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
         auto start = utcTime();
         {
             tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
@@ -306,6 +309,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 m_writeBatch = std::make_shared<WriteBatch>();
             }
         }
+        std::atomic_uint64_t putCount{0};
+        std::atomic_uint64_t deleteCount{0};
         atomic_bool isTableValid = true;
         storage.parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
@@ -323,6 +328,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                         STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
                                                    << LOG_KV("key", toHex(key));
                     }
+                    ++deleteCount;
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
                     m_writeBatch->Delete(dbKey);
                 }
@@ -334,6 +340,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                             << LOG_DESC("write") << LOG_KV("table", table)
                             << LOG_KV("key", toHex(key)) << LOG_KV("size", entry.size());
                     }
+                    ++putCount;
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
 
                     std::string value(entry.get().data(), entry.get().size());
@@ -346,18 +353,21 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 }
                 return true;
             });
+
         if (!isTableValid)
         {
             {
                 tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
                 m_writeBatch = nullptr;
             }
+            STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
             callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
             return;
         }
         auto end = utcTime();
         callback(nullptr, 0);
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
+                                  << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("time(ms)", end - start)
                                   << LOG_KV("callback time(ms)", utcTime() - end);
@@ -379,10 +389,19 @@ void RocksDBStorage::asyncCommit(
         if (m_writeBatch)
         {
             WriteOptions options;
-            options.sync = true;
+            // options.sync = true;
             count = m_writeBatch->Count();
-            m_db->Write(options, m_writeBatch.get());
-
+            auto status = m_db->Write(options, m_writeBatch.get());
+            auto err = checkStatus(status);
+            if (err)
+            {
+                STORAGE_ROCKSDB_LOG(WARNING)
+                    << LOG_DESC("asyncCommit failed") << LOG_KV("number", params.number)
+                    << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
+                    << LOG_KV("time(ms)", utcTime() - start);
+                callback(err, 0);
+                return;
+            }
             m_writeBatch = nullptr;
         }
     }
@@ -464,4 +483,30 @@ bcos::Error::Ptr RocksDBStorage::setRows(
     WriteOptions options;
     m_db->Write(options, &writeBatch);
     return nullptr;
+}
+
+bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)
+{
+    if (status.ok() || status.IsNotFound())
+    {
+        return nullptr;
+    }
+    std::string errorInfo = "access rocksDB failed, status: " + status.ToString();
+    // fatal exception
+    if (status.IsIOError() || status.IsCorruption() || status.IsNoSpace() ||
+        status.IsNotSupported() || status.IsShutdownInProgress())
+    {
+        std::raise(SIGTERM);
+        STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
+        return BCOS_ERROR_PTR(DatabaseError, errorInfo);
+    }
+    // exception that can be recovered by retry
+    // statuses are: Busy, TimedOut, TryAgain, Aborted, MergeInProgress, IsIncomplete, Expired,
+    // CompactionToolLarge
+    else
+    {
+        errorInfo = errorInfo + ", please try again!";
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
+        return BCOS_ERROR_PTR(DatabaseRetryable, errorInfo);
+    }
 }
