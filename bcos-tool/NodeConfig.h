@@ -20,11 +20,11 @@
  */
 #pragma once
 #include "Exceptions.h"
-#include "bcos-framework//consensus/ConsensusNodeInterface.h"
-#include "bcos-framework//ledger/LedgerConfig.h"
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework//Common.h>
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 

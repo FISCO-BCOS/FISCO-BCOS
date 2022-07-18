@@ -20,9 +20,9 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//protocol/Block.h>
-#include <bcos-framework//protocol/BlockHeaderFactory.h>
-#include <bcos-framework//protocol/TransactionMetaData.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-protocol/Common.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-protocol/protobuf/proto/Block.pb.h>

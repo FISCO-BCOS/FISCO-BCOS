@@ -21,7 +21,7 @@
 #pragma once
 #include "PBBlockHeader.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//protocol/BlockHeaderFactory.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
 
 namespace bcos
 {

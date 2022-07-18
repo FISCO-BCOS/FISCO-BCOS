@@ -104,7 +104,6 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
         BOOST_THROW_EXCEPTION(
             bcos::protocol::PrecompiledError("ZkpPrecompiled call undefined function!"));
     }
-    auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
     return _callParameters;

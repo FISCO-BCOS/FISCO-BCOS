@@ -8,7 +8,6 @@ using namespace bcos::scheduler;
 
 namespace bcos::test
 {
-
 struct DmcStepRecorderFixture
 {
     DmcStepRecorderFixture()
@@ -88,5 +87,5 @@ BOOST_AUTO_TEST_CASE(Test)
 
     BOOST_CHECK(res1 == res2);
 }
-}
+}  // namespace bcos::test
 }  // namespace bcos::test

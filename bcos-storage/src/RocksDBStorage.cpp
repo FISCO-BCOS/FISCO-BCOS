@@ -20,8 +20,8 @@
  */
 #include "RocksDBStorage.h"
 #include "Common.h"
-#include "bcos-framework//protocol/ProtocolTypeDef.h"
-#include "bcos-framework//storage/Table.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Table.h"
 #include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>

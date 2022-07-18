@@ -21,8 +21,8 @@
 
 #pragma once
 #include "libinitializer/Initializer.h"
-#include <bcos-framework//gateway/GatewayInterface.h>
-#include <bcos-framework//rpc/RPCInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 namespace bcos
 {
 namespace node
@@ -42,7 +42,8 @@ protected:
         bcos::gateway::GatewayInterface::Ptr _gateway)
     {
         m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
-        m_nodeInitializer->initAirNode(_configFilePath, _genesisFile, _gateway, m_logInitializer->logPath());
+        m_nodeInitializer->initAirNode(
+            _configFilePath, _genesisFile, _gateway, m_logInitializer->logPath());
     }
 
 private:

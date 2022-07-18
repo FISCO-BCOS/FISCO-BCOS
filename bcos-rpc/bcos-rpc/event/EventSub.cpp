@@ -19,9 +19,9 @@
  */
 
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework//Common.h>
-#include <bcos-framework//protocol/CommonError.h>
-#include <bcos-framework//protocol/ProtocolTypeDef.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/event/EventSubRequest.h>

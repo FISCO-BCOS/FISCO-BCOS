@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bcos-framework//ledger/LedgerInterface.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
 
 namespace bcos::test
 {

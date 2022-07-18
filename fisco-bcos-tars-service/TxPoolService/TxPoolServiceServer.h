@@ -2,7 +2,7 @@
 
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"
-#include <bcos-framework//consensus/ConsensusNode.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>

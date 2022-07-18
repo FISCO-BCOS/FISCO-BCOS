@@ -27,7 +27,7 @@
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework//gateway/GatewayInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <string>
 

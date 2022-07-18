@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>

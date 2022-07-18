@@ -29,7 +29,7 @@
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//protocol/TransactionSubmitResult.h>
+#include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>

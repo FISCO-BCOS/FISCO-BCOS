@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "TransactionSubmitResultImpl.h"
-#include <bcos-framework//protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 
 namespace bcos
 {

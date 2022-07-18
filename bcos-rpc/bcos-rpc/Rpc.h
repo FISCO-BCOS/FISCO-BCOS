@@ -21,7 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include <bcos-framework//rpc/RPCInterface.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/amop/AMOPClient.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>

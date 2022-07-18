@@ -25,7 +25,7 @@
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include <bcos-framework//consensus/ConsensusNode.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>

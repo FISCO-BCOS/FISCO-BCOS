@@ -8,7 +8,6 @@
 
 namespace bcos::executor::serial
 {
-
 template <class MessageType>
 concept CommonFields = requires(MessageType message)
 {
@@ -34,20 +33,22 @@ concept ResponseMessage = requires(MessageType message)
     std::integral<decltype(message.status)>;
     std::convertible_to<decltype(message.message), std::string_view>;
     std::convertible_to<decltype(message.newEVMContractAddress), std::string_view>;
-    requires std::ranges::range<decltype(message.logEntries)> &&
-        std::convertible_to<std::ranges::range_value_t<decltype(message.logEntries)>, bcos::protocol::LogEntry>;
+    requires std::ranges::range<decltype(message.logEntries)>&& std::convertible_to<
+        std::ranges::range_value_t<decltype(message.logEntries)>, bcos::protocol::LogEntry>;
 };
 
 template <class ExecutorType>
-concept Executor = requires(
-    ExecutorType executor, typename boost::function_traits<decltype(&ExecutorType::execute)>::arg1_type executeArg1)
+concept Executor = requires(ExecutorType executor,
+    typename boost::function_traits<decltype(&ExecutorType::execute)>::arg1_type executeArg1)
 {
     {
         executeArg1
-        } -> RequestMessage;
+    }
+    ->RequestMessage;
     {
         executor.execute(executeArg1)
-        } -> ResponseMessage;
+    }
+    ->ResponseMessage;
 };
 
 // class SerialTransactionExecutor

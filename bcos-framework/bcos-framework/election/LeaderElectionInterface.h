@@ -19,7 +19,7 @@
  * @date 2022-04-26
  */
 #pragma once
-#include "bcos-framework//protocol/MemberInterface.h"
+#include "bcos-framework/protocol/MemberInterface.h"
 #include <memory>
 namespace bcos
 {

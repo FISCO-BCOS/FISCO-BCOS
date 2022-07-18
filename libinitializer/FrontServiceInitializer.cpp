@@ -21,11 +21,11 @@
 #include "FrontServiceInitializer.h"
 #include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework//consensus/ConsensusInterface.h>
-#include <bcos-framework//gateway/GatewayInterface.h>
-#include <bcos-framework//gateway/GroupNodeInfo.h>
-#include <bcos-framework//sync/BlockSyncInterface.h>
-#include <bcos-framework//txpool/TxPoolInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontServiceFactory.h>
 
 using namespace bcos;

@@ -21,7 +21,7 @@
 #pragma once
 #include "PBTransaction.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//protocol/TransactionFactory.h>
+#include <bcos-framework/protocol/TransactionFactory.h>
 #include <memory>
 
 namespace bcos

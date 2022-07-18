@@ -21,9 +21,9 @@
 #pragma once
 #include "Common/TarsUtils.h"
 #include "libinitializer/PBFTInitializer.h"
-#include <bcos-framework//front/FrontServiceInterface.h>
-#include <bcos-framework//gateway/GatewayInterface.h>
-#include <bcos-framework//rpc/RPCInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-utilities/Timer.h>
 
 namespace bcos

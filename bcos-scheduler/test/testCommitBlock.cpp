@@ -1,11 +1,11 @@
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
-#include "bcos-framework//executor/ExecutionMessage.h"
-#include "bcos-framework//ledger/LedgerInterface.h"
-#include "bcos-framework//protocol/BlockHeaderFactory.h"
-#include "bcos-framework//protocol/TransactionReceiptFactory.h"
-#include "bcos-framework//storage/StorageInterface.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutor3.h"
 #include "mock/MockLedger2.h"
@@ -13,8 +13,8 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework//executor/NativeExecutionMessage.h>
-#include <bcos-framework//storage/Table.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/storage/Table.h>
 #include <bcos-tars-protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/TransactionFactoryImpl.h>

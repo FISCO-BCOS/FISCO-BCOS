@@ -1,8 +1,8 @@
 #pragma once
 
-#include "bcos-framework//ledger/LedgerInterface.h"
-#include "bcos-framework//protocol/ProtocolTypeDef.h"
-#include "bcos-framework//storage/StorageInterface.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 
 using namespace bcos::protocol;

@@ -22,7 +22,7 @@
 #pragma once
 
 #include "bcos-executor/src/Common.h"
-#include "bcos-framework//executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
 #include <tbb/concurrent_unordered_map.h>
 
 

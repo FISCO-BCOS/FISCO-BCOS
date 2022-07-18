@@ -20,8 +20,8 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//dispatcher/SchedulerInterface.h>
-#include <bcos-framework//protocol/BlockFactory.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-tars-protocol/tars/SchedulerService.h>
 namespace bcostars
 {

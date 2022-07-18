@@ -21,7 +21,7 @@
 #pragma once
 
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/Common.h>

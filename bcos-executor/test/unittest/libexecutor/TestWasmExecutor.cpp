@@ -27,8 +27,8 @@
 #include "../mock/MockTxPool.h"
 // #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework//executor/ExecutionMessage.h"
-#include "bcos-framework//protocol/Transaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
@@ -39,7 +39,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework//executor/NativeExecutionMessage.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <unistd.h>
@@ -118,9 +118,7 @@ struct WasmExecutorFixture
             R"([{"inputs":[],"type":"constructor"},{"conflictFields":[{"kind":3,"path":[0],"read_only":false,"slot":0},{"kind":3,"path":[1],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"from","type":"string"},{"internalType":"string","name":"to","type":"string"},{"internalType":"uint32","name":"amount","type":"uint32"}],"name":"transfer","outputs":[{"internalType":"bool","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"query","outputs":[{"internalType":"uint32","type":"uint32"}],"type":"function"}])");
         createSysTable();
     }
-    ~WasmExecutorFixture(){
-        boost::log::core::get()->set_logging_enabled(true);
-    }
+    ~WasmExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }
 
     void createSysTable()
     {

@@ -2,8 +2,8 @@
 
 #include "Common.h"
 #include "MockExecutor.h"
-#include "bcos-framework//executor/ExecutionMessage.h"
-#include <bcos-framework//executor/PrecompiledTypeDef.h>
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <boost/lexical_cast.hpp>
 #include <tuple>
 

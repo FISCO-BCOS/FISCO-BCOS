@@ -77,10 +77,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -99,14 +96,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -144,17 +135,18 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     }
     // recover the nodeProtocolVersion
     auto& protocolInfo = _tarsNodeInfo.protocolInfo;
-    auto bcosProtocolInfo =
-        std::make_shared<bcos::protocol::ProtocolInfo>((bcos::protocol::ProtocolModuleID)protocolInfo.moduleID,
-            (bcos::protocol::ProtocolVersion)protocolInfo.minVersion,
-            (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
+    auto bcosProtocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+        (bcos::protocol::ProtocolModuleID)protocolInfo.moduleID,
+        (bcos::protocol::ProtocolVersion)protocolInfo.minVersion,
+        (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
     nodeInfo->setNodeProtocol(std::move(*bcosProtocolInfo));
     // recover system version(data version)
     nodeInfo->setCompatibilityVersion(_tarsNodeInfo.compatibilityVersion);
     return nodeInfo;
 }
 
-inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(bcos::group::ChainNodeInfoFactory::Ptr _nodeFactory,
+inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(
+    bcos::group::ChainNodeInfoFactory::Ptr _nodeFactory,
     bcos::group::GroupInfoFactory::Ptr _groupFactory, bcostars::GroupInfo const& _tarsGroupInfo)
 {
     auto groupInfo = _groupFactory->createGroupInfo();
@@ -172,7 +164,10 @@ inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(bcos::group::ChainNodeInfoFac
 inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::Ptr _nodeInfo)
 {
     bcostars::ChainNodeInfo tarsNodeInfo;
-    if (!_nodeInfo) { return tarsNodeInfo; }
+    if (!_nodeInfo)
+    {
+        return tarsNodeInfo;
+    }
     tarsNodeInfo.nodeName = _nodeInfo->nodeName();
     tarsNodeInfo.nodeCryptoType = _nodeInfo->nodeCryptoType();
     tarsNodeInfo.nodeType = _nodeInfo->nodeType();
@@ -197,7 +192,10 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
 inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
     bcostars::GroupInfo tarsGroupInfo;
-    if (!_groupInfo) { return tarsGroupInfo; }
+    if (!_groupInfo)
+    {
+        return tarsGroupInfo;
+    }
     tarsGroupInfo.chainID = _groupInfo->chainID();
     tarsGroupInfo.groupID = _groupInfo->groupID();
     tarsGroupInfo.genesisConfig = _groupInfo->genesisConfig();
@@ -215,13 +213,16 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
 }
 
 inline bcos::consensus::ConsensusNodeListPtr toConsensusNodeList(
-    bcos::crypto::KeyFactory::Ptr _keyFactory, vector<bcostars::ConsensusNode> const& _tarsConsensusNodeList)
+    bcos::crypto::KeyFactory::Ptr _keyFactory,
+    vector<bcostars::ConsensusNode> const& _tarsConsensusNodeList)
 {
     auto consensusNodeList = std::make_shared<bcos::consensus::ConsensusNodeList>();
     for (auto const& node : _tarsConsensusNodeList)
     {
-        auto nodeID = _keyFactory->createKey(bcos::bytesConstRef((bcos::byte*)node.nodeID.data(), node.nodeID.size()));
-        consensusNodeList->push_back(std::make_shared<bcos::consensus::ConsensusNode>(nodeID, node.weight));
+        auto nodeID = _keyFactory->createKey(
+            bcos::bytesConstRef((bcos::byte*)node.nodeID.data(), node.nodeID.size()));
+        consensusNodeList->push_back(
+            std::make_shared<bcos::consensus::ConsensusNode>(nodeID, node.weight));
     }
     return consensusNodeList;
 }
@@ -239,7 +240,8 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     auto hash = bcos::crypto::HashType();
     if (_ledgerConfig.hash.size() >= bcos::crypto::HashType::SIZE)
     {
-        hash = bcos::crypto::HashType((const bcos::byte*)_ledgerConfig.hash.data(), bcos::crypto::HashType::SIZE);
+        hash = bcos::crypto::HashType(
+            (const bcos::byte*)_ledgerConfig.hash.data(), bcos::crypto::HashType::SIZE);
     }
     ledgerConfig->setHash(hash);
     ledgerConfig->setBlockNumber(_ledgerConfig.blockNumber);
@@ -251,7 +253,8 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     return ledgerConfig;
 }
 
-inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(bcos::consensus::ConsensusNodeList const& _nodeList)
+inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
+    bcos::consensus::ConsensusNodeList const& _nodeList)
 {
     // set consensusNodeList
     vector<bcostars::ConsensusNode> tarsConsensusNodeList;
@@ -294,7 +297,8 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeInfo toTarsNodeIDInfo(std::string const& _groupID, std::set<std::string> const& _nodeIDList)
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
+    std::string const& _groupID, std::set<std::string> const& _nodeIDList)
 {
     GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
@@ -304,7 +308,10 @@ inline bcostars::GroupNodeInfo toTarsNodeIDInfo(std::string const& _groupID, std
 inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _bcosGatewayInfo)
 {
     bcostars::GatewayInfo tarsGatewayInfo;
-    if (!_bcosGatewayInfo) { return tarsGatewayInfo; }
+    if (!_bcosGatewayInfo)
+    {
+        return tarsGatewayInfo;
+    }
     tarsGatewayInfo.p2pInfo = toTarsP2PInfo(_bcosGatewayInfo->p2pInfo());
     auto nodeIDList = _bcosGatewayInfo->nodeIDInfo();
     std::vector<GroupNodeInfo> tarsNodeIDInfos;
@@ -335,7 +342,8 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
     for (auto const& it : _tarsGatewayInfo.nodeIDInfo)
     {
         auto const& nodeIDListInfo = it.nodeIDList;
-        nodeIDInfos[it.groupID] = std::set<std::string>(nodeIDListInfo.begin(), nodeIDListInfo.end());
+        nodeIDInfos[it.groupID] =
+            std::set<std::string>(nodeIDListInfo.begin(), nodeIDListInfo.end());
     }
     bcosGatewayInfo->setP2PInfo(std::move(p2pInfo));
     bcosGatewayInfo->setNodeIDInfo(std::move(nodeIDInfos));
@@ -349,10 +357,14 @@ bool checkConnection(std::string const& _module, std::string const& _func, T prx
     std::vector<tars::EndpointInfo> activeEndPoints;
     std::vector<tars::EndpointInfo> nactiveEndPoints;
     prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-    if (activeEndPoints.size() > 0) { return true; }
+    if (activeEndPoints.size() > 0)
+    {
+        return true;
+    }
     if (_errorCallback && _callsErrorCallback)
     {
-        std::string errorMessage = _module + " calls interface " + _func + " failed for empty connection";
+        std::string errorMessage =
+            _module + " calls interface " + _func + " failed for empty connection";
         _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
     }
     return false;
@@ -377,8 +389,8 @@ inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEnt
     {
         topics.emplace_back((const bcos::byte*)topicIt.data(), topicIt.size());
     }
-    return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()), topics,
-        bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
+    return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
+        topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
 }
 
 inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
