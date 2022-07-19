@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "ProtocolInitializer.h"
-#include "bcos-framework//protocol/BlockFactory.h"
+#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/executor/ExecutionMessage.h>

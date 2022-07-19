@@ -332,5 +332,6 @@ void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> m_callback;
         bcos::crypto::KeyFactory::Ptr m_keyFactory;
     };
-    m_prx->async_asyncGetNodeListByType(new Callback(_onGetConfig, m_keyFactory), std::string{_type});
+    m_prx->async_asyncGetNodeListByType(
+        new Callback(_onGetConfig, m_keyFactory), std::string{_type});
 }

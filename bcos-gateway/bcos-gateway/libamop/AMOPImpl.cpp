@@ -18,7 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
-#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/bind/bind.hpp>

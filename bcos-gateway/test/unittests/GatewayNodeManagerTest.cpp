@@ -19,8 +19,8 @@
  * @date 2021-05-14
  */
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//protocol/GlobalConfig.h>
-#include <bcos-framework//protocol/ProtocolInfo.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>

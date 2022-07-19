@@ -52,7 +52,8 @@ constexpr static std::string_view CONSENSUS_WORKING_SEALER = "consensus_working_
 // get current state key
 constexpr static std::string_view SYS_KEY_CURRENT_NUMBER = "current_number";
 constexpr static std::string_view SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
-constexpr static std::string_view SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
+constexpr static std::string_view SYS_KEY_TOTAL_FAILED_TRANSACTION =
+    "total_failed_transaction_count";
 
 // sys table name
 constexpr static std::string_view SYS_CONSENSUS{"s_consensus"};

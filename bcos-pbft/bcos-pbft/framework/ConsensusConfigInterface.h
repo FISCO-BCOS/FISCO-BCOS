@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "ProposalInterface.h"
-#include <bcos-framework//consensus/ConsensusNodeInterface.h>
-#include <bcos-framework//consensus/ConsensusTypeDef.h>
+#include <bcos-framework/consensus/ConsensusNodeInterface.h>
+#include <bcos-framework/consensus/ConsensusTypeDef.h>
 namespace bcos
 {
 namespace consensus

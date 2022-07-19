@@ -1,6 +1,6 @@
 #pragma once
-#include <bcos-framework//Common.h>
-#include <bcos-framework//protocol/ServiceDesc.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <servant/Application.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>

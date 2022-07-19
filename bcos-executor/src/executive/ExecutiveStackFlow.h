@@ -32,7 +32,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class ExecutiveStackFlow : public virtual ExecutiveFlowInterface,
                            public std::enable_shared_from_this<ExecutiveStackFlow>
 {

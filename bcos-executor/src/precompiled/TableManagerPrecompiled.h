@@ -25,7 +25,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework//storage/Table.h>
+#include <bcos-framework/storage/Table.h>
 
 namespace bcos::precompiled
 {

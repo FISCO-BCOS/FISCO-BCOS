@@ -23,7 +23,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-tars-protocol/tars/Member.h"
-#include <bcos-framework//protocol/MemberInterface.h>
+#include <bcos-framework/protocol/MemberInterface.h>
 namespace bcostars
 {
 namespace protocol

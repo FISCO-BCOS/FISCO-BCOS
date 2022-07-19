@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MockExecutor.h"
-#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <tbb/task_group.h>
 
 namespace bcos::test

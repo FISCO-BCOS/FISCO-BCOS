@@ -20,9 +20,9 @@
  */
 #pragma once
 #include "GroupTypeDef.h"
-#include "bcos-framework//protocol/Protocol.h"
-#include "bcos-framework//protocol/ProtocolInfo.h"
-#include "bcos-framework//protocol/ServiceDesc.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-framework/protocol/ServiceDesc.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
 namespace bcos

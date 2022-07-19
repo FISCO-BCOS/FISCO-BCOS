@@ -10,7 +10,7 @@ add_library(bcos-crypto STATIC ${SRCS})
 target_include_directories(bcos-crypto PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-crypto>)
-target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto bcos-utilities)
+target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto wedprcrypto::zkp bcos-utilities)
 
 if(TESTS)
     enable_testing()

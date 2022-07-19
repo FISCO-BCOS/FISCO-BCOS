@@ -28,7 +28,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class ExecutiveFlowInterface
 {
 public:

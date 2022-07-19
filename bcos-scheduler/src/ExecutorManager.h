@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework//executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>

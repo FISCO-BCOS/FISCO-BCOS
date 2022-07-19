@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "Common.h"
-#include "bcos-framework//rpc/RPCInterface.h"
+#include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>

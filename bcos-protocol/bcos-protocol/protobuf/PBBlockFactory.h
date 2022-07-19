@@ -22,10 +22,10 @@
 #include "./PBTransactionMetaData.h"
 #include "PBBlock.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//protocol/BlockFactory.h>
-#include <bcos-framework//protocol/BlockHeaderFactory.h>
-#include <bcos-framework//protocol/TransactionFactory.h>
-#include <bcos-framework//protocol/TransactionReceiptFactory.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <bcos-framework/protocol/TransactionFactory.h>
+#include <bcos-framework/protocol/TransactionReceiptFactory.h>
 namespace bcos
 {
 namespace protocol

@@ -22,7 +22,7 @@
 
 #include "Common.h"
 #include <bcos-codec/scale/Scale.h>
-#include <bcos-framework//ledger/LedgerTypeDef.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>

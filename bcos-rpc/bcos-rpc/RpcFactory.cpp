@@ -19,16 +19,16 @@
  * @date 2021-07-15
  */
 
-#include "bcos-framework//gateway/GatewayTypeDef.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-rpc/groupmgr/TarsGroupManager.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework//Common.h>
-#include <bcos-framework//protocol/AMOPRequest.h>
-#include <bcos-framework//security/DataEncryptInterface.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/AMOPRequest.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/DupTestTxJsonRpcImpl_2_0.h>

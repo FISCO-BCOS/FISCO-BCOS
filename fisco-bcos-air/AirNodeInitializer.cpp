@@ -20,7 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
@@ -64,8 +64,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_gateway = gateway;
 
     // create the node
-    m_nodeInitializer->init(
-        bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, m_gateway, true, m_logInitializer->logPath());
+    m_nodeInitializer->init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath,
+        _genesisFile, m_gateway, true, m_logInitializer->logPath());
 
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();

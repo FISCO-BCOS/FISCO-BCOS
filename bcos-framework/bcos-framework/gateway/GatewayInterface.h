@@ -20,10 +20,10 @@
  */
 #pragma once
 #include "GatewayTypeDef.h"
-#include "bcos-framework//front/FrontServiceInterface.h"
-#include "bcos-framework//multigroup/GroupInfo.h"
-#include "bcos-framework//protocol/Protocol.h"
-#include "bcos-framework//protocol/ProtocolInfo.h"
+#include "bcos-framework/front/FrontServiceInterface.h"
+#include "bcos-framework/multigroup/GroupInfo.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolInfo.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>

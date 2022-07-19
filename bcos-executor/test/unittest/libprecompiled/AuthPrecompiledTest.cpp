@@ -21,7 +21,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/extension/AuthManagerPrecompiled.h"
 #include "precompiled/extension/ContractAuthMgrPrecompiled.h"
-#include <bcos-framework//executor/PrecompiledTypeDef.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -1203,8 +1203,8 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
             // row not found
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
             BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(1),
-                                                          std::vector<std::string>({}),
-                                                          std::vector<std::string>({})));
+                                                         std::vector<std::string>({}),
+                                                         std::vector<std::string>({})));
         }
 
         // can't get now, even if not set any acl
@@ -1315,9 +1315,9 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(
-                result2->data().toBytes() == codec->encode((uint8_t)(2), std::vector<std::string>({}),
-                                            std::vector<std::string>({})));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(2),
+                                                         std::vector<std::string>({}),
+                                                         std::vector<std::string>({})));
         }
 
         // still can get now, even if not set any acl

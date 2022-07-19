@@ -18,8 +18,8 @@
  * @date 2021-04-13
  */
 #pragma once
-#include <bcos-framework//consensus/ConsensusNodeInterface.h>
-#include <bcos-framework//protocol/Block.h>
+#include <bcos-framework/consensus/ConsensusNodeInterface.h>
+#include <bcos-framework/protocol/Block.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <map>
 

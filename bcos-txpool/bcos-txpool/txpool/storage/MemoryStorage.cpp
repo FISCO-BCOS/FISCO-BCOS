@@ -495,7 +495,7 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
                      << LOG_KV("batchId", _batchId) << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
-                     << LOG_KV("updateLedgerNonceT", updateLedgerNonceT);
+                     << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
 TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)

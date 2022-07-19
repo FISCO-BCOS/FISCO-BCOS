@@ -25,7 +25,7 @@
 #include "bcos-txpool/test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework//protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>

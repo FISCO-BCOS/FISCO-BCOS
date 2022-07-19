@@ -23,20 +23,20 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
-#include "bcos-framework//ledger/LedgerTypeDef.h"
-#include "bcos-framework//protocol/Protocol.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"
-#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework//consensus/ConsensusNode.h>
-#include <bcos-framework//executor/PrecompiledTypeDef.h>
-#include <bcos-framework//storage/StorageInterface.h>
-#include <bcos-framework//storage/Table.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-framework/storage/Table.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -73,7 +73,6 @@ inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
 
 namespace bcos::test
 {
-
 class MockStorage : public virtual StateStorage
 {
 public:
@@ -188,11 +187,12 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
-            m_fakeBlocks = fakeBlocks(
-                m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
-            fakeBlockPromise.set_value(true);
-        });
+        m_ledger->asyncGetBlockHashByNumber(
+            0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
+                m_fakeBlocks = fakeBlocks(
+                    m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
+                fakeBlockPromise.set_value(true);
+            });
         future.get();
     }
 
@@ -200,11 +200,12 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
-            m_fakeBlocks = fakeEmptyBlocks(
-                m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
-            fakeBlockPromise.set_value(true);
-        });
+        m_ledger->asyncGetBlockHashByNumber(
+            0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
+                m_fakeBlocks = fakeEmptyBlocks(
+                    m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
+                fakeBlockPromise.set_value(true);
+            });
         future.get();
     }
 
@@ -594,7 +595,8 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
             BOOST_CHECK(entry);
 
             auto list = decodeConsensusList(entry->getField(0));
-            list.emplace_back(bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5");
+            list.emplace_back(
+                bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5");
 
             entry->setField(0, encodeConsensusList(list));
             m_storage->asyncSetRow(

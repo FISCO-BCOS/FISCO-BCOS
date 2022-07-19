@@ -20,7 +20,7 @@
 #pragma once
 #include "SealerConfig.h"
 #include "SealingManager.h"
-#include "bcos-framework//sealer/SealerInterface.h"
+#include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
 
 namespace bcos

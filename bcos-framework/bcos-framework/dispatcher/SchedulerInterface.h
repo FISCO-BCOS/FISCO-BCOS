@@ -22,8 +22,8 @@
 #pragma once
 #include "../executor/ParallelTransactionExecutorInterface.h"
 #include "../ledger/LedgerConfig.h"
-#include "../protocol/ProtocolTypeDef.h"
 #include "../protocol/Block.h"
+#include "../protocol/ProtocolTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <functional>

@@ -23,7 +23,7 @@
 #include "../executive/TransactionExecutive.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
-#include "bcos-framework//storage/Table.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -158,8 +158,9 @@ protected:
     crypto::Hash::Ptr m_hashImpl;
 
 protected:
-    std::optional<bcos::storage::Table> createTable(storage::StateStorageInterface::Ptr _tableFactory,
-        const std::string& _tableName, const std::string& _valueField);
+    std::optional<bcos::storage::Table> createTable(
+        storage::StateStorageInterface::Ptr _tableFactory, const std::string& _tableName,
+        const std::string& _valueField);
 
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;
 };

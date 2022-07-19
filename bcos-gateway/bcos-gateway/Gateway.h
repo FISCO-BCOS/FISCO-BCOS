@@ -20,8 +20,8 @@
 
 #pragma once
 
-#include <bcos-framework//front/FrontServiceInterface.h>
-#include <bcos-framework//gateway/GatewayInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>

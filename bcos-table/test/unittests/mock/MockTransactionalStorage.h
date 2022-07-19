@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework//storage/StorageInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
@@ -63,8 +63,8 @@ public:
         callback(nullptr, 0);
     }
 
-    void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+    void asyncCommit(const TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
         callback(nullptr, 0);

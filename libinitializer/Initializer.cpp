@@ -174,7 +174,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
-    auto transactionSubmitResultFactory = std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
+    auto transactionSubmitResultFactory =
+        std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,

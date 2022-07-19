@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../Common.h"
-#include "bcos-framework//storage/StorageInterface.h"
-#include "bcos-framework//storage/Table.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/throw_exception.hpp>
