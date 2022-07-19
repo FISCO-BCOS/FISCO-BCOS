@@ -357,6 +357,10 @@ void Initializer::stop()
         {
             m_txpoolInitializer->stop();
         }
+        if(m_scheduler)
+        {
+            m_scheduler->stop();
+        }
     }
     catch (std::exception const& e)
     {

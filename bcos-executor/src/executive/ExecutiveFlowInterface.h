@@ -44,6 +44,14 @@ public:
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) = 0;
 
+    virtual void stop()
+    {
+        auto pool = getPoolInstance();
+        if (pool)
+        {
+            pool->stop();
+        }
+    }
 
 protected:
     template <class S, class F>

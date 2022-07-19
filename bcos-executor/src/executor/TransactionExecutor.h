@@ -151,7 +151,7 @@ public:
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
     void start() override { m_isRunning = true; }
-    void stop() override { m_isRunning = false; }
+    void stop() override;
 
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
