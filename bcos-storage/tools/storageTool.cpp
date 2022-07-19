@@ -130,13 +130,13 @@ void writeKV(std::ofstream& output, std::string_view key, std::string_view value
     output << "[" << key << "] [" << (hex ? toHex(value) : value) << "]" << endl;
 }
 
-DB* createSecondaryRocksDB(const std::string& path)
+DB* createSecondaryRocksDB(
+    const std::string& path, const std::string& secondaryPath = "./rocksdb_secondary/")
 {
     Options options;
     options.max_open_files = -1;
-    const std::string kSecondaryPath = "./rocksdb_secondary/";
     DB* db_secondary = nullptr;
-    Status s = DB::OpenAsSecondary(options, path, kSecondaryPath, &db_secondary);
+    Status s = DB::OpenAsSecondary(options, path, secondaryPath, &db_secondary);
     assert(!s.ok() || db_secondary);
     s = db_secondary->TryCatchUpWithPrimary();
     assert(s.ok());
@@ -188,6 +188,7 @@ int main(int argc, const char* argv[])
 
     auto keyPageSize = nodeConfig->keyPageSize();
     auto keyPageIgnoreTables = getKeyPageIgnoreTables();
+    std::string secondaryPath = "./rocksdb_secondary/";
     if (params.count("read"))
     {  // read
         auto readParameters = params["read"].as<vector<string>>();
@@ -203,7 +204,7 @@ int main(int argc, const char* argv[])
             key = readParameters[1];
         }
         // create secondary instance
-        auto db = createSecondaryRocksDB(nodeConfig->storagePath());
+        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
         auto rocksdbStorage =
             std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
         StorageInterface::Ptr storage = rocksdbStorage;
@@ -331,7 +332,7 @@ int main(int argc, const char* argv[])
             cerr << "empty table name" << endl;
             return -1;
         }
-        auto db = createSecondaryRocksDB(nodeConfig->storagePath());
+        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
         auto rocksdbStorage =
             std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
         StorageInterface::Ptr storage = rocksdbStorage;
@@ -407,6 +408,10 @@ int main(int argc, const char* argv[])
         std::cout << "invalid parameters" << std::endl;
         std::cout << main_options << std::endl;
         return 1;
+    }
+    if (fs::exists(secondaryPath))
+    {
+        fs::remove(secondaryPath);
     }
     return 0;
 }

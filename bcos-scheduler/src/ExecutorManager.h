@@ -70,6 +70,14 @@ public:
             std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>();
     };
 
+    virtual void stop()
+    {
+        for (auto it : m_name2Executors)
+        {
+            it.second->executor->stop();
+        }
+    }
+
     struct ExecutorInfo
     {
         using Ptr = std::shared_ptr<ExecutorInfo>;

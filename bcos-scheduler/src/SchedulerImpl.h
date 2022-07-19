@@ -156,13 +156,14 @@ public:
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
                              << "Start with termId: " << getSchedulerTermId();
     }
-    void stop()
+    void stop() override
     {
         m_isRunning = false;
         for (auto& blockExecutive : *m_blocks)
         {
             blockExecutive->stop();
         }
+        m_executorManager->stop();
     }
 
     void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent)
