@@ -103,6 +103,13 @@ public:
     };
 
     std::pair<bool, std::string> checkAndInit();
+    void stop() override
+    {
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+    }
 
 private:
     void updateScheduler(int64_t schedulerTermId);

@@ -84,7 +84,14 @@ public:
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
-
+    void stop()
+    {
+        bcos::ReadGuard l(x_executiveFlows);
+        for (auto it : m_executiveFlows)
+        {
+            it.second->stop();
+        }
+    }
     void clear()
     {
         bcos::WriteGuard l(x_executiveFlows);
@@ -94,7 +101,6 @@ public:
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
-
 
     bcos::protocol::BlockNumber m_blockNumber;
     h256 m_blockHash;

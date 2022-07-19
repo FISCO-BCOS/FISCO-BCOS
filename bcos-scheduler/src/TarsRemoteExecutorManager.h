@@ -77,6 +77,8 @@ public:
 
     bool checkAllExecutorSeq();
 
+    void stop() override {}
+
 private:
     std::string buildEndPointUrl(std::string host, uint16_t port)
     {
