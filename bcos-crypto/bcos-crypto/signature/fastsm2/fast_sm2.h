@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#ifdef SM2_OPTIMIZE
+#ifdef WITH_SM2_OPTIMIZE
 #include <wedpr-crypto/WedprUtilities.h>
 
 namespace bcos
