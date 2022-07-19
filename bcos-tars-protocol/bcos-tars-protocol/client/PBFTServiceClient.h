@@ -20,7 +20,8 @@
  */
 
 #pragma once
-
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include "../ErrorConverter.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/sealer/SealerInterface.h>
@@ -114,12 +115,14 @@ public:
         std::function<void(bcos::Error::Ptr)> _onProposalSubmitted) override;
 
     // the sync module calls this interface to check block
-    // Note: if the sync module integrates with the PBFT module, no need to implement this interface
+    // Note: if the sync module integrates with the PBFT module, no need to implement this
+    // interface
     void asyncCheckBlock(bcos::protocol::Block::Ptr _block,
         std::function<void(bcos::Error::Ptr, bool)> _onVerifyFinish) override;
 
     // the sync module calls this interface to notify new block
-    // Note: if the sync module integrates with the PBFT module, no need to implement this interface
+    // Note: if the sync module integrates with the PBFT module, no need to implement this
+    // interface
     void asyncNotifyNewBlock(bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
         std::function<void(bcos::Error::Ptr)> _onRecv) override;
 
@@ -138,8 +141,8 @@ public:
             "PBFTServiceClient: asyncNotifySealProposal: unimplemented interface!");
     }
     // for the consensus module to notify the latest blockNumber to the sealer module
-    // Note: since the sealer module is integrated with the PBFT module, no need to implement the
-    // client interface
+    // Note: since the sealer module is integrated with the PBFT module, no need to implement
+    // the client interface
     void asyncNoteLatestBlockNumber(int64_t) override
     {
         throw std::runtime_error(

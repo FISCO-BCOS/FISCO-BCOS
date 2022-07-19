@@ -20,8 +20,8 @@
  */
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/sync/utilities/Common.h"
-#include <bcos-framework//protocol/CommonError.h>
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/Protocol.h>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -301,7 +301,6 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     auto txsRequest =
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
     auto encodedData = txsRequest->encode();
-    auto encodeT = utcTime() - startT;
     startT = utcTime();
     auto self = std::weak_ptr<TransactionSync>(shared_from_this());
     m_config->frontService()->asyncSendMessageByNodeID(ModuleID::TxsSync, _generatedNodeID,
@@ -387,7 +386,6 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         return;
     }
     // verify missedTxs
-    bool verifyResponsed = false;
     auto transactions = m_config->blockFactory()->createBlock(txsResponse->txsData(), true, false);
     auto decodeT = utcTime() - startT;
     startT = utcTime();

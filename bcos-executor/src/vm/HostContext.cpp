@@ -23,7 +23,7 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
-#include "bcos-framework//storage/Table.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
 #include <bcos-utilities/Common.h>

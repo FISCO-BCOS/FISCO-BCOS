@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "TransactionImpl.h"
-#include <bcos-framework//protocol/TransactionFactory.h>
+#include <bcos-framework/protocol/TransactionFactory.h>
 
 namespace bcostars
 {

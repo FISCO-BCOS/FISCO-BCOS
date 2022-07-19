@@ -1,7 +1,7 @@
 #pragma once
 
-#include "bcos-framework//ledger/LedgerInterface.h"
-#include "bcos-framework//protocol/Protocol.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test

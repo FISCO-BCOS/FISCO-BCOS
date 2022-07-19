@@ -26,8 +26,8 @@
 #include "../Common.h"
 #include "../ErrorConverter.h"
 #include "../protocol/TransactionSubmitResultImpl.h"
-#include <bcos-tars-protocol/tars/RpcService.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-tars-protocol/tars/RpcService.h>
 #include <bcos-utilities/Common.h>
 #include <servant/Application.h>
 #include <boost/core/ignore_unused.hpp>
@@ -101,7 +101,8 @@ public:
         for (auto const& endPoint : activeEndPoints)
         {
             auto endPointStr = endPointToString(endPoint);
-            auto prx = tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+            auto prx =
+                tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
             prx->async_asyncNotifyBlockNumber(
                 new Callback(_callback), _groupID, _nodeName, _blockNumber);
         }
@@ -163,7 +164,8 @@ public:
         for (auto const& endPoint : activeEndPoints)
         {
             auto endPointStr = endPointToString(endPoint);
-            auto prx = tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+            auto prx =
+                tars::Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
             prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
         }
     }

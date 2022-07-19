@@ -43,6 +43,7 @@
 #include "../precompiled/extension/GroupSigPrecompiled.h"
 #include "../precompiled/extension/RingSigPrecompiled.h"
 #include "../precompiled/extension/UserPrecompiled.h"
+#include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "ExecuteOutputs.h"
@@ -63,6 +64,7 @@
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/blocked_range.h>
@@ -274,6 +276,43 @@ void TransactionExecutor::initWasmEnvironment()
     SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
+    // creaete the zkp-precompiled
+    m_constantPrecompiled->insert(
+        {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+}
+
+void TransactionExecutor::initPrecompiledByBlockContext(std::shared_ptr<BlockContext> _blockContext)
+{
+    // TODO: use blockHash, version when call
+    // call
+    UpgradableGuard l(x_constantPrecompiled);
+    if (_blockContext->hash() == bcos::crypto::HashType())
+    {
+        if (!m_constantPrecompiled->count(DISCRETE_ZKP_ADDRESS))
+        {
+            UpgradeGuard ul(l);
+            m_constantPrecompiled->insert({DISCRETE_ZKP_ADDRESS,
+                std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+        }
+        return;
+    }
+    // transaction: with version smaller than 3.0
+    if (_blockContext->blockVersion() < (uint32_t)bcos::protocol::Version::V3_0_VERSION)
+    {
+        if (m_constantPrecompiled->count(DISCRETE_ZKP_ADDRESS))
+        {
+            UpgradeGuard ul(l);
+            m_constantPrecompiled->erase(DISCRETE_ZKP_ADDRESS);
+        }
+        return;
+    }
+    // transaction: with version no more than 3.0
+    if (!m_constantPrecompiled->count(DISCRETE_ZKP_ADDRESS))
+    {
+        UpgradeGuard ul(l);
+        m_constantPrecompiled->insert({DISCRETE_ZKP_ADDRESS,
+            std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+    }
 }
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
@@ -282,7 +321,6 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(
         storage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
-
     return context;
 }
 
@@ -379,6 +417,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage);
+            initPrecompiledByBlockContext(m_blockContext);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
@@ -434,6 +473,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         // TODO: pass blockHash, version here
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
+        initPrecompiledByBlockContext(m_blockContext);
+
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
 

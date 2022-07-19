@@ -21,10 +21,10 @@
 #pragma once
 #include "PBFTMessageInterface.h"
 #include "PBFTProposalInterface.h"
-#include <bcos-framework//ledger/LedgerConfig.h>
-#include <bcos-framework//protocol/Block.h>
-#include <bcos-framework//protocol/BlockHeader.h>
-#include <bcos-framework//protocol/ProtocolTypeDef.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace consensus

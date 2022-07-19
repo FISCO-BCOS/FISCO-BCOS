@@ -23,7 +23,6 @@
 
 namespace bcos::storage
 {
-
 void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     const std::optional<storage::Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback)

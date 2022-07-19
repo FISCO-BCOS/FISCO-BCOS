@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include <bcos-framework//Common.h>
-#include <bcos-framework//protocol/ProtocolInfo.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/ProtocolInfo.h>
 #include <json/json.h>
 #include <memory>
 namespace bcos

@@ -176,7 +176,7 @@ public:
     void setStatus(Status status)
     {
         m_status = status;
-        if(m_status == DELETED)
+        if (m_status == DELETED)
         {
             m_value = std::string();
         }
@@ -282,7 +282,7 @@ private:
         return view;
     }
 
-    ValueType m_value;           // should serialization
+    ValueType m_value;                // should serialization
     int32_t m_size = 0;               // no need to serialization
     Status m_status = Status::EMPTY;  // should serialization
     // bool m_dirty = false;              // no need to serialization

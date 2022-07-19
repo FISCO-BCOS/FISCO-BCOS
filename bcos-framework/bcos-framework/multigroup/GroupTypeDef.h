@@ -19,7 +19,7 @@
  * @date 2021-09-16
  */
 #pragma once
-#include <bcos-framework//Common.h>
+#include <bcos-framework/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <memory>
 

@@ -21,9 +21,9 @@
 #include "SystemConfigPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework//ledger/LedgerTypeDef.h>
-#include <bcos-framework//protocol/GlobalConfig.h>
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -48,9 +48,9 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
         {
             return;
         }
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
-                             " must be no less than " + std::to_string(_minValue)));
+        BOOST_THROW_EXCEPTION(PrecompiledError(
+            "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
+            " must be no less than " + std::to_string(_minValue)));
     };
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT,
         [defaultCmp](int64_t _v) { defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _v, TX_GAS_LIMIT_MIN); }));

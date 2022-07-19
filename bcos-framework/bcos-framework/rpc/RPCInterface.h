@@ -19,8 +19,8 @@
  */
 #pragma once
 
-#include "bcos-framework//multigroup/GroupInfo.h"
-#include "bcos-framework//protocol/ProtocolTypeDef.h"
+#include "bcos-framework/multigroup/GroupInfo.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Error.h>
 
 namespace bcos

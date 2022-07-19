@@ -18,7 +18,7 @@
  */
 
 #include "Hash.h"
-#include "bcos-framework//storage/StorageInterface.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreadPool.h>

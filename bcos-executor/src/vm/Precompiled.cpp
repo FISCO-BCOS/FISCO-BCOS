@@ -267,8 +267,9 @@ namespace bcos
 {
 namespace precompiled
 {
-std::optional<storage::Table> Precompiled::createTable(storage::StateStorageInterface::Ptr _tableFactory,
-    const std::string& tableName, const std::string& valueField)
+std::optional<storage::Table> Precompiled::createTable(
+    storage::StateStorageInterface::Ptr _tableFactory, const std::string& tableName,
+    const std::string& valueField)
 {
     auto ret = _tableFactory->createTable(tableName, valueField);
     return ret ? _tableFactory->openTable(tableName) : nullopt;

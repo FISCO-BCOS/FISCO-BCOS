@@ -22,8 +22,8 @@
 #include "../TransactionStatus.h"
 #include "bcos-protocol/protobuf/proto/TransactionReceipt.pb.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework//protocol/LogEntry.h>
-#include <bcos-framework//protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
 namespace bcos
 {
 namespace protocol

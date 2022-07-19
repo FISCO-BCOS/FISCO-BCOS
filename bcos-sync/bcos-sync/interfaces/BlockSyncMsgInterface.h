@@ -19,7 +19,7 @@
  * @date 2021-05-24
  */
 #pragma once
-#include <bcos-framework//protocol/ProtocolTypeDef.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <memory>
 namespace bcos
 {

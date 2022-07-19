@@ -77,10 +77,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -99,14 +96,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);

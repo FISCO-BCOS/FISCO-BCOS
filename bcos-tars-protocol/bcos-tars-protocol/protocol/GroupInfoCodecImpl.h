@@ -19,7 +19,7 @@
  * @date 2022-03-29
  */
 #pragma once
-#include "bcos-framework//multigroup/GroupInfoCodec.h"
+#include "bcos-framework/multigroup/GroupInfoCodec.h"
 #include "bcos-tars-protocol/Common.h"
 
 namespace bcostars

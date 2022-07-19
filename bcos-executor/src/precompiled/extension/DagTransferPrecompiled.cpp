@@ -22,8 +22,8 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework//ledger/LedgerTypeDef.h>
-#include <bcos-framework//storage/Common.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Common.h>
 
 using namespace bcos;
 using namespace bcos::executor;

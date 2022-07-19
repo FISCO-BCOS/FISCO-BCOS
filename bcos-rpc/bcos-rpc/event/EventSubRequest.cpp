@@ -18,7 +18,7 @@
  * @date 2021-09-03
  */
 
-#include <bcos-framework//Common.h>
+#include <bcos-framework/Common.h>
 #include <bcos-rpc/event/Common.h>
 #include <bcos-rpc/event/EventSubRequest.h>
 #include <bcos-rpc/event/EventSubTask.h>

@@ -21,9 +21,9 @@
 #include "ConsensusPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework//ledger/LedgerTypeDef.h>
-#include <bcos-framework//protocol/CommonError.h>
-#include <bcos-framework//protocol/Protocol.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/lexical_cast.hpp>

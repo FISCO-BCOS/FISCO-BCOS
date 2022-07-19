@@ -5,7 +5,7 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//rpc/RPCInterface.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/gateway/ProGatewayNodeManager.h>

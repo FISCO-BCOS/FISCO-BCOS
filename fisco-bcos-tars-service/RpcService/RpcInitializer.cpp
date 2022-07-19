@@ -22,7 +22,7 @@
 #include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//election/FailOverTypeDef.h>
+#include <bcos-framework/election/FailOverTypeDef.h>
 #ifdef WITH_ETCD
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif

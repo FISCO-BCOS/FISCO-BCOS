@@ -25,7 +25,7 @@
 #include "libinitializer/SchedulerInitializer.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework//protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
@@ -134,9 +134,10 @@ void SchedulerServiceApp::createScheduler()
         m_nodeConfig->executorServiceName());
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()), executionMessageFactory, blockFactory,
-        m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()), executionMessageFactory,
+        blockFactory, m_protocolInitializer->txResultFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+        m_nodeConfig->isWasm());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {

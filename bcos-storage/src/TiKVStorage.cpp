@@ -20,17 +20,14 @@
  */
 #include "TiKVStorage.h"
 #include "Common.h"
-<<<<<<< HEAD
-#include "bcos-framework//protocol/ProtocolTypeDef.h"
-#include "bcos-framework//storage/Table.h"
-=======
 #include "Poco/FileChannel.h"
 #include "Poco/FormattingChannel.h"
 #include "Poco/PatternFormatter.h"
 #include "Poco/StreamChannel.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/storage/Table.h"
->>>>>>> upstream/release-3.0.0-rc4
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Table.h"
 #include "pingcap/kv/BCOS2PC.h"
 #include "pingcap/kv/Cluster.h"
 #include "pingcap/kv/Scanner.h"

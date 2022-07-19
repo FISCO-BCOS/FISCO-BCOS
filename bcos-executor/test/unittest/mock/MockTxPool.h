@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework//txpool/TxPoolInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test

@@ -25,9 +25,9 @@
 #include "AirNodeInitializer.h"
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
-#include <thread>
-#include <stdexcept>
 #include <execinfo.h>
+#include <stdexcept>
+#include <thread>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
