@@ -245,6 +245,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         auto options = std::make_shared<P2PMessageOptions>();
         std::string groupID = std::string(100000, 'a');
         std::string srcNodeID = "nodeID";
+
         options->setGroupID(groupID);
         auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
         options->setSrcNodeID(srcNodeIDPtr);
@@ -287,6 +288,9 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         auto options = std::make_shared<P2PMessageOptions>();
         std::string groupID = "group";
         std::string srcNodeID = "nodeID";
+        uint16_t moduleID = 12345;
+
+        options->setModuleID(moduleID);
         options->setGroupID(groupID);
         auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
         options->setSrcNodeID(srcNodeIDPtr);
@@ -298,6 +302,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         auto ret = decodeOptions->decode(bytesConstRef(buffer->data(), buffer->size()));
         BOOST_CHECK(ret > 0);
         BOOST_CHECK_EQUAL(groupID, decodeOptions->groupID());
+        BOOST_CHECK_EQUAL(moduleID, decodeOptions->moduleID());
         BOOST_CHECK_EQUAL(srcNodeID,
             std::string(decodeOptions->srcNodeID()->begin(), decodeOptions->srcNodeID()->end()));
         BOOST_CHECK_EQUAL(0, decodeOptions->dstNodeIDs().size());
@@ -308,10 +313,12 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         std::string groupID = "group";
         std::string srcNodeID = "nodeID";
         std::string dstNodeID = "nodeID";
+        uint16_t moduleID = 11;
 
         auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
         auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
 
+        options->setModuleID(moduleID);
         options->setGroupID(groupID);
         options->setSrcNodeID(srcNodeIDPtr);
         auto& dstNodeIDS = options->dstNodeIDs();
@@ -321,12 +328,13 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
 
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(r);  // srcNodeID overflow
+        BOOST_CHECK(r);
 
         auto decodeOptions = std::make_shared<P2PMessageOptions>();
         auto ret = decodeOptions->decode(bytesConstRef(buffer->data(), buffer->size()));
         BOOST_CHECK(ret > 0);
         BOOST_CHECK_EQUAL(groupID, decodeOptions->groupID());
+        BOOST_CHECK_EQUAL(moduleID, decodeOptions->moduleID());
         BOOST_CHECK_EQUAL(srcNodeID,
             std::string(decodeOptions->srcNodeID()->begin(), decodeOptions->srcNodeID()->end()));
         BOOST_CHECK_EQUAL(3, decodeOptions->dstNodeIDs().size());
