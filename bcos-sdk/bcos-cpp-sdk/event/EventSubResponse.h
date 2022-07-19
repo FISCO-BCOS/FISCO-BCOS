@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,30 +13,46 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the information used to deploy new node
- * @file GroupInfoCodec.h
- * @author: yujiechen
- * @date 2022-03-29
+ * @file EvenPushResponse.h
+ * @author: octopus
+ * @date 2021-09-09
  */
+
 #pragma once
-#include "GroupInfo.h"
+
 #include <json/value.h>
 #include <memory>
-
+#include <string>
 namespace bcos
 {
-namespace group
+namespace cppsdk
 {
-class GroupInfoCodec
+namespace event
+{
+class EventSubResponse
 {
 public:
-    using Ptr = std::shared_ptr<GroupInfoCodec>;
-    GroupInfoCodec() = default;
-    virtual ~GroupInfoCodec() {}
+    using Ptr = std::shared_ptr<EventSubResponse>;
 
-    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual void serialize(std::string& _encodedData, GroupInfo::Ptr _groupInfo) = 0;
-    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
+public:
+    std::string id() const { return m_id; }
+    void setId(const std::string& _id) { m_id = _id; }
+    int status() const { return m_status; }
+    void setStatus(int _status) { m_status = _status; }
+
+    void setJResp(const Json::Value& _jResp) { m_jResp = _jResp; }
+    Json::Value jResp() const { return m_jResp; }
+
+public:
+    std::string generateJson();
+    bool fromJson(const std::string& _response);
+
+private:
+    std::string m_id;
+    int m_status;
+
+    Json::Value m_jResp;
 };
-}  // namespace group
+}  // namespace event
+}  // namespace cppsdk
 }  // namespace bcos

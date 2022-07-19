@@ -40,8 +40,7 @@ target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-# target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil  TBB::tbb)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
     enable_testing()

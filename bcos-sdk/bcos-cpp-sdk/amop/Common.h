@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,30 +13,36 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the information used to deploy new node
- * @file GroupInfoCodec.h
- * @author: yujiechen
- * @date 2022-03-29
+ * @file Common.h
+ * @author: octopus
+ * @date 2021-08-25
  */
 #pragma once
-#include "GroupInfo.h"
-#include <json/value.h>
-#include <memory>
+
+#define AMOP_CLIENT(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][CLIENT]"
+#define AMOP_TOPIC_MANAGER(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][TOPICMANAGER]"
 
 namespace bcos
 {
-namespace group
+namespace cppsdk
 {
-class GroupInfoCodec
+namespace amop
 {
-public:
-    using Ptr = std::shared_ptr<GroupInfoCodec>;
-    GroupInfoCodec() = default;
-    virtual ~GroupInfoCodec() {}
+/**
+ * @brief: amop message types
+ */
+enum MessageType
+{
+    // ------------AMOP begin ---------
 
-    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual void serialize(std::string& _encodedData, GroupInfo::Ptr _groupInfo) = 0;
-    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
+    AMOP_SUBTOPIC = 0x110,   // 272
+    AMOP_REQUEST = 0x111,    // 273
+    AMOP_BROADCAST = 0x112,  // 274
+    AMOP_RESPONSE = 0x113    // 275
+
+    // ------------AMOP end ---------
+
 };
-}  // namespace group
+}  // namespace amop
+}  // namespace cppsdk
 }  // namespace bcos
