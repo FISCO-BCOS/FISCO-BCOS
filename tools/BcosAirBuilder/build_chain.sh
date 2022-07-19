@@ -44,6 +44,7 @@ auth_admin_account=
 binary_path=""
 mtail_binary_path=""
 wasm_mode="false"
+serial_mode="false"
 download_timeout=240
 
 LOG_WARN() {
@@ -483,6 +484,7 @@ Usage:
     -D <docker mode>                    Default off. If set -d, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
+    -s <Serial_mode>                    [Optional] Whether to use serial execute,default is parallel
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -k <key page size>                  [Optional] key page size, default is 0 means not use key page
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
@@ -545,6 +547,7 @@ parse_params() {
            fi
         ;;
         A) auth_mode="true" ;;
+        s) serial_mode="true";;
         w) wasm_mode="true";;
         a)
           auth_mode="true"
@@ -1256,6 +1259,7 @@ generate_genesis_config() {
     is_wasm=${wasm_mode}
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
+    is_serial_execute=${serial_mode}
 EOF
 }
 
