@@ -1,5 +1,5 @@
 @PACKAGE_INIT@
 
-include("${CMAKE_CURRENT_LIST_DIR}/fiscobcos-targets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/fiscobcosTargets.cmake")
 
 check_required_components(fiscobcos)
