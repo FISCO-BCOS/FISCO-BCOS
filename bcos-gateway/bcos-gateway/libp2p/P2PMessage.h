@@ -47,6 +47,7 @@ namespace gateway
 ///       src nodeID        : bytes
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
+///       moduleID          : 2 bytes
 class P2PMessageOptions
 {
 public:
@@ -70,6 +71,9 @@ public:
     ssize_t decode(bytesConstRef _buffer);
 
 public:
+    uint16_t moduleID() const { return m_moduleID; }
+    void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
+
     std::string groupID() const { return m_groupID; }
     void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
 
@@ -86,6 +90,7 @@ protected:
     std::string m_groupID;
     std::shared_ptr<bytes> m_srcNodeID;
     std::vector<std::shared_ptr<bytes>> m_dstNodeIDs;
+    uint16_t m_moduleID;
 };
 
 /// Message format definition of gateway P2P network
@@ -103,6 +108,7 @@ protected:
 ///       src nodeID        : bytes
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
+///       moduleID          : 2 bytes
 ///   payload           :X bytes
 class P2PMessage : public Message
 {

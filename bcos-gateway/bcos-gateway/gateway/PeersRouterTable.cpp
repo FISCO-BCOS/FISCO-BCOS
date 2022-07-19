@@ -18,6 +18,7 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
+#include "bcos-utilities/BoostLog.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -238,7 +239,7 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 
 // broadcast message to given group
 void PeersRouterTable::asyncBroadcastMsg(
-    uint16_t _type, std::string const& _groupID, P2PMessage::Ptr _msg)
+    uint16_t _type, std::string const& _groupID, uint16_t _moduleID, P2PMessage::Ptr _msg)
 {
     std::vector<std::string> selectedPeers;
     {
@@ -259,12 +260,14 @@ void PeersRouterTable::asyncBroadcastMsg(
     }
     ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
                       << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode") << LOG_KV("type", _type)
+                      << LOG_KV("moduleID", _moduleID)
                       << LOG_KV("payloadSize", _msg->payload()->size())
                       << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
         ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
-                          << LOG_KV("type", _type) << LOG_KV("dst", peer);
+                          << LOG_KV("type", _type) << LOG_KV("moduleID", _moduleID)
+                          << LOG_KV("dst", peer);
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
 }

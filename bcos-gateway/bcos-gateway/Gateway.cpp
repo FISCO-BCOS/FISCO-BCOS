@@ -316,7 +316,7 @@ void Gateway::asyncSendBroadcastMessage(
 {
     // broadcast message to the local nodes
     auto ret = m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(
-        _type, _groupID, _srcNodeID, _payload);
+        _type, _groupID, _moduleID, _srcNodeID, _payload);
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::BroadcastMessage);
@@ -326,7 +326,8 @@ void Gateway::asyncSendBroadcastMessage(
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
     // broadcast message to the peers
-    m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(_type, _groupID, message);
+    m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(
+        _type, _groupID, _moduleID, message);
 }
 
 /**
@@ -467,6 +468,35 @@ void Gateway::onReceiveBroadcastMessage(
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
+
+    auto options = _msg->options();
+    auto msgPayload = _msg->payload();
+    auto payload = bytesConstRef(msgPayload->data(), msgPayload->size());
+
+    // groupID
+    auto groupID = options->groupID();
+    // moduleID
+    uint16_t moduleID = options->moduleID();
+
+    /*
+    // TODO: if outgoing bandwidth exceeds the upper limit
+    // the request of the module that restricts network traffic should not be forwarded to front
+    // other modules, discard the request directly ???
+
+    bool isOutGoingBWOverflow = false;
+    if (isOutGoingBWOverflow)
+    {
+        GATEWAY_LOG(WARNING)
+            << LOG_BADGE("onReceiveBroadcastMessage")
+            << LOG_DESC("stop forward the message to the front for outgoing bandwidth overflow")
+            << LOG_KV("group", groupID) << LOG_KV("moduleID", moduleID);
+
+        // TODO: Add statistics about discarded messages
+
+        return;
+    }
+    */
+
     auto srcNodeIDPtr =
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
     auto groupID = _msg->options()->groupID();
@@ -474,6 +504,6 @@ void Gateway::onReceiveBroadcastMessage(
     GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage")
                        << LOG_KV("src", _msg->srcP2PNodeID())
                        << LOG_KV("dst", _msg->dstP2PNodeID());
-    m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, srcNodeIDPtr,
-        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+    m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
+        srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
 }
