@@ -19,10 +19,11 @@ file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 
 set(TEST_BINARY_NAME test-bcos-cpp-sdk)
 
-find_package(Boost REQUIRED log serialization)
+find_package(Boost REQUIRED log serialization unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
 target_link_libraries(${TEST_BINARY_NAME} ${BCOS_CPP_SDK_TARGET} bcos-utilities ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
+add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})

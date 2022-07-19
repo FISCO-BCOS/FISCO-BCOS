@@ -34,10 +34,12 @@
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/throw_exception.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -88,9 +90,24 @@ void JsonRpcImpl_2_0::handleRpcRequest(
 
 bcos::bytes JsonRpcImpl_2_0::decodeData(std::string_view _data)
 {
+    auto begin = _data.begin();
+    auto end = _data.end();
+    auto length = _data.size();
+
+    if ((length == 0) || (length % 2 != 0)) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
+    }
+
+    if (*begin == '0' && *(begin + 1) == 'x')
+    {
+        begin += 2;
+        length -= 2;
+    }
+
     bcos::bytes data;
-    data.reserve(_data.size() * 2);
-    boost::algorithm::hex_lower(_data, std::back_inserter(data));
+    data.reserve(length / 2);
+    boost::algorithm::unhex(begin, end, std::back_inserter(data));
     return data;
 }
 

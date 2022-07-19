@@ -1,8 +1,8 @@
-file(GLOB_RECURSE SRC_LIST "*.cpp")
-file(GLOB_RECURSE HEADERS "*.h")
+file(GLOB_RECURSE SRC_LIST "bcos-cpp-sdk/*.cpp")
+# file(GLOB_RECURSE HEADERS "*.h")
 
 set(BCOS_CPP_SDK_TARGET sdk)
-add_library(${BCOS_CPP_SDK_TARGET} ${SRC_LIST} ${HEADERS})
+add_library(${BCOS_CPP_SDK_TARGET} ${SRC_LIST})
 target_include_directories(${BCOS_CPP_SDK_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-cpp-sdk>)
@@ -21,6 +21,7 @@ find_package(range-v3 REQUIRED)
 if (TESTS)
     enable_testing()
     add_subdirectory(tests)
+    add_subdirectory(sample)
 endif()
 
 target_link_libraries(${BCOS_CPP_SDK_TARGET} PUBLIC
@@ -29,6 +30,6 @@ target_link_libraries(${BCOS_CPP_SDK_TARGET} PUBLIC
    bcos-crypto
    bcos-boostssl
    bcos-utilities
-   jsoncpp_lib_static
+   jsoncpp_static
    OpenSSL::SSL
    OpenSSL::Crypto)
