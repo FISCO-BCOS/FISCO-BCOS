@@ -66,7 +66,7 @@ void ArithmeticProofData::decode(bytesConstRef _proofData)
     {
         BOOST_THROW_EXCEPTION(
             InvalidArithmeticProof() << errinfo_comment(
-                "InvalidArithmeticProof: the arithmetric proof data size must be at least " +
+                "InvalidArithmeticProof: the arithmetic proof data size must be at least " +
                 std::to_string(m_proofSize)));
     }
     // decode m_t1
