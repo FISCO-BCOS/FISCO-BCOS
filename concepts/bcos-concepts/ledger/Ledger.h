@@ -63,7 +63,7 @@ public:
         bcos::concepts::ledger::TransactionOrReceipt<RANGES::range_value_t<decltype(inputs)>>
     {
         auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
-            decltype(input.dataHash) hash;
+            decltype(input.dataHash) hash(Hasher::HASH_SIZE);
             bcos::concepts::hash::calculate<Hasher>(input, hash);
             return hash;
         });
