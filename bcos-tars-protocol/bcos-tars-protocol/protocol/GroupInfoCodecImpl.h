@@ -46,6 +46,8 @@ public:
         return toBcosGroupInfo(m_nodeFactory, m_groupFactory, tarsGroupInfo);
     }
 
+    Json::Value serialize(bcos::group::GroupInfo::Ptr) override { return {}; }
+
     void serialize(std::string& _encodedData, bcos::group::GroupInfo::Ptr _groupInfo) override
     {
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);

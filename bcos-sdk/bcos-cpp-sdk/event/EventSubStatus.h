@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,30 +13,23 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the information used to deploy new node
- * @file GroupInfoCodec.h
- * @author: yujiechen
- * @date 2022-03-29
+ * @file EventSubError.h
+ * @author: octopus
+ * @date 2021-09-01
  */
-#pragma once
-#include "GroupInfo.h"
-#include <json/value.h>
-#include <memory>
 
+#pragma once
 namespace bcos
 {
-namespace group
+namespace cppsdk
 {
-class GroupInfoCodec
+namespace event
 {
-public:
-    using Ptr = std::shared_ptr<GroupInfoCodec>;
-    GroupInfoCodec() = default;
-    virtual ~GroupInfoCodec() {}
-
-    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual void serialize(std::string& _encodedData, GroupInfo::Ptr _groupInfo) = 0;
-    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
+enum StatusCode
+{
+    Success = 0,
+    EndOfPush = 1,  // push completed
 };
-}  // namespace group
+}  // namespace event
+}  // namespace cppsdk
 }  // namespace bcos

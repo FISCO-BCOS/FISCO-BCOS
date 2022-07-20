@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,30 +13,42 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the information used to deploy new node
- * @file GroupInfoCodec.h
- * @author: yujiechen
- * @date 2022-03-29
+ * @file TopicManager.h
+ * @author: octopus
+ * @date 2021-08-23
  */
 #pragma once
-#include "GroupInfo.h"
-#include <json/value.h>
+
+#include <boost/thread/thread.hpp>
 #include <memory>
+#include <mutex>
+#include <set>
 
 namespace bcos
 {
-namespace group
+namespace cppsdk
 {
-class GroupInfoCodec
+namespace amop
+{
+// manage the topics user subscribed
+class TopicManager
 {
 public:
-    using Ptr = std::shared_ptr<GroupInfoCodec>;
-    GroupInfoCodec() = default;
-    virtual ~GroupInfoCodec() {}
+    using Ptr = std::shared_ptr<TopicManager>;
 
-    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual void serialize(std::string& _encodedData, GroupInfo::Ptr _groupInfo) = 0;
-    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
+    bool addTopic(const std::string& _topic);
+    bool addTopics(const std::set<std::string>& _topics);
+    bool removeTopic(const std::string& _topic);
+    bool removeTopics(const std::set<std::string>& _topics);
+    std::set<std::string> topics() const;
+    std::string toJson();
+
+private:
+    // mutex for m_sessions
+    mutable boost::shared_mutex x_topics;
+    std::set<std::string> m_topics;
 };
-}  // namespace group
+
+}  // namespace amop
+}  // namespace cppsdk
 }  // namespace bcos

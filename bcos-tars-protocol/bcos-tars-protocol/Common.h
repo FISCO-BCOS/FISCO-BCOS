@@ -50,14 +50,17 @@ namespace protocol
 {
 const static bcos::crypto::HashType emptyHash;
 
-template <class ByteType>
+template <class Container>
 class BufferWriter
 {
 protected:
-    mutable std::vector<ByteType> _buffer;
-    bcos::byte* _buf;
-    std::size_t _len;
-    std::size_t _buf_len;
+    using ByteType = typename Container::value_type;
+    using SizeType = typename Container::size_type;
+
+    mutable Container _buffer;
+    ByteType* _buf;
+    SizeType _len;
+    SizeType _buf_len;
     std::function<ByteType*(BufferWriter&, size_t)> _reserve;
 
 private:
@@ -77,7 +80,10 @@ public:
 
     ~BufferWriter() {}
 
-    void reset() { _len = 0; }
+    void reset()
+    {
+        _len = 0;
+    }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -86,18 +92,24 @@ public:
         _len += len;
     }
 
-    const std::vector<ByteType>& getByteBuffer() const
+    const Container& getByteBuffer() const
     {
         _buffer.resize(_len);
         return _buffer;
     }
-    std::vector<ByteType>& getByteBuffer()
+    Container& getByteBuffer()
     {
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const { return _buf; }
-    size_t getLength() const { return _len; }
+    const ByteType* getBuffer() const
+    {
+        return _buf;
+    }
+    size_t getLength() const
+    {
+        return _len;
+    }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -115,8 +127,9 @@ public:
     }
 };
 
-using BufferWriterByteVector = BufferWriter<bcos::byte>;
-using BufferWriterStdByteVector = BufferWriter<std::byte>;
+using BufferWriterByteVector = BufferWriter<std::vector<bcos::byte>>;
+using BufferWriterStdByteVector = BufferWriter<std::vector<std::byte>>;
+using BufferWriterString = BufferWriter<std::string>;
 }  // namespace protocol
 
 inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(

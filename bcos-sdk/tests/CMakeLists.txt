@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for ut of bcos-tars-protocol
+# Top-level CMake file for ut of bcos-rpc
 # ------------------------------------------------------------------------------
 # Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
@@ -15,17 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-file(GLOB_RECURSE SOURCES "*.cpp")
+file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 
-# cmake settings
-set(TEST_BINARY_NAME test-bcos-tars-protocol)
+set(TEST_BINARY_NAME test-bcos-cpp-sdk)
+
+find_package(Boost REQUIRED log serialization unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
-find_package(jsoncpp REQUIRED)
-
-target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TEST_BINARY_NAME} PRIVATE ${TARS_PROTOCOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework jsoncpp_static)
-add_test(NAME test-tars-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+target_link_libraries(${TEST_BINARY_NAME} ${BCOS_CPP_SDK_TARGET} bcos-utilities ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
+add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})

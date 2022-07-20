@@ -15,11 +15,10 @@ namespace bcos::concepts::serialize
 void impl_encode(
     bcostars::protocol::impl::TarsStruct auto const& object, bcos::concepts::ByteBuffer auto& out)
 {
-    using StreamType = std::conditional_t<
-        std::is_signed_v<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>,
-        tars::BufferWriter, bcostars::protocol::BufferWriterByteVector>;
+    using ContainerType = typename std::remove_cvref_t<decltype(out)>;
+    using WriterType = bcostars::protocol::BufferWriter<ContainerType>;
 
-    tars::TarsOutputStream<StreamType> output;
+    tars::TarsOutputStream<WriterType> output;
     object.writeTo(output);
 
     output.getByteBuffer().swap(out);
