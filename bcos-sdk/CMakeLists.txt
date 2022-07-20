@@ -1,6 +1,6 @@
 file(GLOB_RECURSE SRC_LIST "bcos-cpp-sdk/*.cpp")
 
-set(BCOS_CPP_SDK_TARGET sdk)
+set(BCOS_CPP_SDK_TARGET bcos-cpp-sdk)
 add_library(${BCOS_CPP_SDK_TARGET} ${SRC_LIST})
 target_include_directories(${BCOS_CPP_SDK_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

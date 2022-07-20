@@ -83,8 +83,8 @@ public:
 #pragma omp parallel for
             for (auto i = 0u; i < block.transactions.size(); ++i)
             {
-                transactionsBlock.transactionsMetaData[i].hash =
-                    bcos::concepts::hash::calculate<Hasher>(block.transactions[i]);
+                bcos::concepts::hash::calculate<Hasher>(
+                    block.transactions[i], transactionsBlock.transactionsMetaData[i].hash);
                 transactionsBlock.transactionsMetaData[i].to =
                     std::move(block.transactions[i].data.to);
             }
