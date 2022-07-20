@@ -1,4 +1,4 @@
-#include "GatewayService/GatewayServiceServer.h"
+#include "GatewayServiceServer.h"
 #include <bcos-tars-protocol/Common.h>
 using namespace bcostars;
 bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
