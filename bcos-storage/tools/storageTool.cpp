@@ -37,6 +37,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/throw_exception.hpp>
@@ -61,9 +62,10 @@ po::options_description main_options("storage tool used to read/write the data o
 po::variables_map initCommandLine(int argc, const char* argv[])
 {
     main_options.add_options()("help,h", "help of storage tool")(
-        "read,r", po::value<vector<string>>(), "[TableName] [Key]")(
-        "write,w", po::value<std::vector<std::string>>(), "[TableName] [Key] [Value]")("iterate,i",
-        po::value<std::string>(), "[TableName]")("hex,H", po::value<bool>()->default_value(false),
+        "read,r", po::value<vector<string>>()->multitoken(), "[TableName] [Key]")("write,w",
+        po::value<std::vector<std::string>>()->multitoken(),
+        "[TableName] [Key] [Value]")("iterate,i", po::value<std::string>(), "[TableName]")("hex,H",
+        po::value<bool>()->default_value(false),
         "if read display value use hex, if write decode hex value")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path")("genesis,g",
@@ -92,21 +94,21 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables()
 {
     return std::make_shared<std::set<std::string, std::less<>>>(
         std::initializer_list<std::set<std::string, std::less<>>::value_type>{
-            ledger::SYS_CONFIG,
-            ledger::SYS_CONSENSUS,
-            ledger::SYS_CURRENT_STATE,
-            ledger::SYS_HASH_2_NUMBER,
-            ledger::SYS_NUMBER_2_HASH,
-            ledger::SYS_BLOCK_NUMBER_2_NONCES,
-            ledger::SYS_NUMBER_2_BLOCK_HEADER,
-            ledger::SYS_NUMBER_2_TXS,
-            ledger::SYS_HASH_2_TX,
-            ledger::SYS_HASH_2_RECEIPT,
-            ledger::FS_ROOT,
-            ledger::FS_APPS,
-            ledger::FS_USER,
-            ledger::FS_SYS_BIN,
-            ledger::FS_USER_TABLE,
+            std::string(ledger::SYS_CONFIG),
+            std::string(ledger::SYS_CONSENSUS),
+            std::string(ledger::SYS_CURRENT_STATE),
+            std::string(ledger::SYS_HASH_2_NUMBER),
+            std::string(ledger::SYS_NUMBER_2_HASH),
+            std::string(ledger::SYS_BLOCK_NUMBER_2_NONCES),
+            std::string(ledger::SYS_NUMBER_2_BLOCK_HEADER),
+            std::string(ledger::SYS_NUMBER_2_TXS),
+            std::string(ledger::SYS_HASH_2_TX),
+            std::string(ledger::SYS_HASH_2_RECEIPT),
+            std::string(ledger::FS_ROOT),
+            std::string(ledger::FS_APPS),
+            std::string(ledger::FS_USER),
+            std::string(ledger::FS_SYS_BIN),
+            std::string(ledger::FS_USER_TABLE),
             storage::StorageInterface::SYS_TABLES,
         });
 }
@@ -199,10 +201,11 @@ int main(int argc, const char* argv[])
         }
         auto tableName = readParameters[0];
         string key = "";
-        if (readParameters.size() > 2)
+        if (readParameters.size() >= 2)
         {
             key = readParameters[1];
         }
+        cout << "read " << tableName << ", key is " << key << endl;
         // create secondary instance
         auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
         auto rocksdbStorage =
@@ -234,7 +237,7 @@ int main(int argc, const char* argv[])
     }
     else if (params.count("write"))
     {  // write
-        auto writeParameters = params["read"].as<vector<string>>();
+        auto writeParameters = params["write"].as<vector<string>>();
         if (writeParameters.empty() || writeParameters.size() < 3)
         {
             cerr << "invalid parameters, should include [TableName] [Key] [Value]" << endl;
@@ -411,7 +414,7 @@ int main(int argc, const char* argv[])
     }
     if (fs::exists(secondaryPath))
     {
-        fs::remove(secondaryPath);
+        fs::remove_all(secondaryPath);
     }
     return 0;
 }
