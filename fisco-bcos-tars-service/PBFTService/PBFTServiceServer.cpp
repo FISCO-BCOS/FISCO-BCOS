@@ -20,7 +20,7 @@
  */
 
 #include "PBFTServiceServer.h"
-#include "Common/TarsUtils.h"
+#include "../Common/TarsUtils.h"
 
 using namespace bcostars;
 using namespace bcos::consensus;

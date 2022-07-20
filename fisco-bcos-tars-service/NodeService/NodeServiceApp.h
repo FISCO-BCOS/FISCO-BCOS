@@ -31,7 +31,7 @@ class Initializer;
 }
 namespace bcostars
 {
-class NodeServiceApp : public Application
+class NodeServiceApp : public tars::Application
 {
 public:
     NodeServiceApp() {}
@@ -45,9 +45,9 @@ public:
 protected:
     virtual void initConfig()
     {
-        m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
-        m_genesisConfigPath = ServerConfig::BasePath + "/config.genesis";
-        m_privateKeyPath = ServerConfig::BasePath + "/node.pem";
+        m_iniConfigPath = tars::ServerConfig::BasePath + "/config.ini";
+        m_genesisConfigPath = tars::ServerConfig::BasePath + "/config.genesis";
+        m_privateKeyPath = tars::ServerConfig::BasePath + "/node.pem";
         addConfig("node.pem");
         addConfig("config.genesis");
         addConfig("config.ini");
