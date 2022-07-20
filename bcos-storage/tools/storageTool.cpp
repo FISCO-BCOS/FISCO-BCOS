@@ -19,8 +19,8 @@
  * @date 2022-07-13
  */
 
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"

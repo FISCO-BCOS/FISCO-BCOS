@@ -2,8 +2,8 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/ExecutiveState.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
@@ -16,9 +16,9 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/TransactionFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/TransactionFactory.h>
+#include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

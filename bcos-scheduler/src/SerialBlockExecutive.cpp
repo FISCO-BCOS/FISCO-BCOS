@@ -2,7 +2,7 @@
 #include "ChecksumAddress.h"
 #include "DmcExecutor.h"
 #include "SchedulerImpl.h"
-#include "bcos-framework/interfaces/executor/ExecuteError.h"
+#include "bcos-framework/executor/ExecuteError.h"
 
 using namespace bcos::scheduler;
 

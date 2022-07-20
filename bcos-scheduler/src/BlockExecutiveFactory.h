@@ -23,12 +23,12 @@
 #include "BlockExecutive.h"
 #include "Common.h"
 #include "SerialBlockExecutive.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 
 namespace bcos::scheduler
 {

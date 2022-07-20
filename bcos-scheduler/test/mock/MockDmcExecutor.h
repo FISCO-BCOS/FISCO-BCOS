@@ -1,9 +1,9 @@
 #pragma once
 #include "Common.h"
-#include "bcos-framework/interfaces/executor/ExecuteError.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/executor/ExecuteError.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/NativeExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include <boost/test/unit_test.hpp>
 
@@ -79,7 +79,7 @@ public:
     {
         SCHEDULER_LOG(DEBUG) << LOG_KV("inputs size ", inputs.size());
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); i++)
+        for (auto i = 0; i < inputs.size(); i++)
         {
             SCHEDULER_LOG(DEBUG) << "begin  dmcExecute" << LOG_KV("input type ", inputs[i]->type());
             results.at(i) = std::move(inputs[i]);

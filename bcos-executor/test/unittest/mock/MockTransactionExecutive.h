@@ -4,7 +4,7 @@
 #include "../../src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include <boost/test/unit_test.hpp>
 
 
