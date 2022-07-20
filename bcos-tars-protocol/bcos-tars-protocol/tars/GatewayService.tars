@@ -21,7 +21,7 @@ module bcostars
 
         Error asyncSendMessageByTopic(
             string _topic, vector<byte> _data, out int _type, out vector<byte> _responseData);
-        Error asyncSendBroadbastMessageByTopic(string _topic, vector<byte> _data);
+        Error asyncSendBroadcastMessageByTopic(string _topic, vector<byte> _data);
         Error asyncSubscribeTopic(string _clientID, string _topicInfo);
         Error asyncRemoveTopic(string _clientID, vector<string> _topicList);
     };

@@ -3,6 +3,7 @@
 #include "bcos-framework/executor/ExecuteError.h"
 #include <boost/format.hpp>
 
+
 using namespace bcos::scheduler;
 
 void DmcExecutor::releaseOutdatedLock()
@@ -420,38 +421,13 @@ void DmcExecutor::scheduleOut(ExecutiveState::Ptr executiveState)
     f_onSchedulerOut(std::move(executiveState));  // schedule out
 }
 
-inline void toChecksumAddress(std::string& _hexAddress, bcos::crypto::Hash::Ptr _hashImpl)
-{
-    boost::algorithm::to_lower(_hexAddress);
-    bcos::toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
-}
-
 std::string DmcExecutor::newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq)
 {
-    auto hash = m_hashImpl->hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
-                                 boost::lexical_cast<std::string>(contextID) + "_" +
-                                 boost::lexical_cast<std::string>(seq));
-
-    std::string hexAddress;
-    hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
-
-    toChecksumAddress(hexAddress, m_hashImpl);
-
-    return hexAddress;
+    return bcos::newEVMAddress(m_hashImpl, blockNumber, contextID, seq);
 }
 
 std::string DmcExecutor::newEVMAddress(
     const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
 {
-    auto hash =
-        m_hashImpl->hash(bytes{0xff} + _sender + toBigEndian(_salt) + m_hashImpl->hash(_init));
-
-    std::string hexAddress;
-    hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
-
-    toChecksumAddress(hexAddress, m_hashImpl);
-
-    return hexAddress;
+    return bcos::newEVMAddress(m_hashImpl, _sender, _init, _salt);
 }

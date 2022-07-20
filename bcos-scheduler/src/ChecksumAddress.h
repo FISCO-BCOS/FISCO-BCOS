@@ -72,4 +72,36 @@ inline std::string toChecksumAddressFromBytes(
     return hexAddress;
 }
 
+inline std::string newEVMAddress(
+    bcos::crypto::Hash::Ptr _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
+{
+    auto hash = _hashImpl->hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
+                                boost::lexical_cast<std::string>(contextID) + "_" +
+                                boost::lexical_cast<std::string>(seq));
+
+    std::string hexAddress;
+    hexAddress.reserve(40);
+    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
+
+    toChecksumAddress(hexAddress, _hashImpl);
+
+    return hexAddress;
+}
+
+
+inline std::string newEVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
+    bytesConstRef _init, u256 const& _salt)
+{
+    auto hash =
+        _hashImpl->hash(bytes{0xff} + _sender + toBigEndian(_salt) + _hashImpl->hash(_init));
+
+    std::string hexAddress;
+    hexAddress.reserve(40);
+    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
+
+    toChecksumAddress(hexAddress, _hashImpl);
+
+    return hexAddress;
+}
+
 }  // namespace bcos

@@ -91,6 +91,7 @@
 #include <thread>
 #include <vector>
 
+
 using namespace bcos;
 using namespace std;
 using namespace bcos::executor;
@@ -615,6 +616,14 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
 {
+    if (!m_blockContext)
+    {
+        _callback(BCOS_ERROR_UNIQUE_PTR(
+                      ExecuteError::EXECUTE_ERROR, "Execute failed with empty blockContext!"),
+            {});
+        return;
+    }
+
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
@@ -826,6 +835,14 @@ void TransactionExecutor::dagExecuteTransactions(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
 {
+    if (!m_blockContext)
+    {
+        _callback(BCOS_ERROR_UNIQUE_PTR(
+                      ExecuteError::EXECUTE_ERROR, "Execute failed with empty blockContext!"),
+            {});
+        return;
+    }
+
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
@@ -2218,4 +2235,13 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
         });
 
     return blockNumberFuture.get_future().get();
+}
+
+void TransactionExecutor::stop()
+{
+    m_isRunning = false;
+    if (m_blockContext)
+    {
+        m_blockContext->stop();
+    }
 }
