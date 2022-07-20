@@ -83,6 +83,12 @@ public:
 #pragma omp parallel for
             for (auto i = 0u; i < block.transactions.size(); ++i)
             {
+                if (RANGES::size(transactionsBlock.transactionsMetaData[i].hash) <
+                    Hasher::HASH_SIZE)
+                {
+                    transactionsBlock.transactionsMetaData[i].hash.resize(Hasher::HASH_SIZE);
+                }
+                
                 bcos::concepts::hash::calculate<Hasher>(
                     block.transactions[i], transactionsBlock.transactionsMetaData[i].hash);
                 transactionsBlock.transactionsMetaData[i].to =
