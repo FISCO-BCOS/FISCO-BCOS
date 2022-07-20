@@ -41,12 +41,12 @@ jobs:
         run: |
           export CC='gcc-10'
           export CXX='g++-10'
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 4
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 4
       - name: Test
         run:
