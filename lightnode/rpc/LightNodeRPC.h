@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Converter.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
@@ -32,23 +33,56 @@ public:
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
-    void getTransaction(std::string_view _groupID, std::string_view _nodeName,
-        std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override
+    void getTransaction([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _txHash,
+        [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
-        bcos::h256 binHash(_txHash, bcos::h256::FromHex);
+        std::array<bcos::h256, 1> hashes{bcos::h256{_txHash, bcos::h256::FromHex}};
         auto transaction =
-            ledger().template getTransactionsOrReceipts<bcos::concepts::ledger::TRANSACTIONS>();
+            ledger().template getTransactionsOrReceipts<bcos::concepts::ledger::TRANSACTIONS>(
+                hashes);
+
+        Json::Value resp;
+        toJsonResp<Hasher>(transaction, resp);
+
+        _respFunc(nullptr, resp);
     }
 
-    void getTransactionReceipt(std::string_view _groupID, std::string_view _nodeName,
-        std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override;
+    void getTransactionReceipt([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _txHash,
+        [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
+    {
+        std::array<bcos::h256, 1> hashes{bcos::h256{_txHash, bcos::h256::FromHex}};
+        auto receipt =
+            ledger().template getTransactionsOrReceipts<bcos::concepts::ledger::RECEIPTS>(hashes);
 
-    void getBlockByHash(std::string_view _groupID, std::string_view _nodeName,
-        std::string_view _blockHash, bool _onlyHeader, bool _onlyTxHash,
-        RespFunc _respFunc) override;
+        Json::Value resp;
+        toJsonResp<Hasher>(receipt, _txHash, resp);
 
-    void getBlockByNumber(std::string_view _groupID, std::string_view _nodeName,
-        int64_t _blockNumber, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) override;
+        _respFunc(nullptr, resp);
+    }
+
+    void getBlockByHash([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _blockHash,
+        [[maybe_unused]] bool _onlyHeader, [[maybe_unused]] bool _onlyTxHash,
+        RespFunc _respFunc) override
+    {}
+
+    void getBlockByNumber([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, int64_t _blockNumber, bool _onlyHeader,
+        bool _onlyTxHash, RespFunc _respFunc) override
+    {
+        if (_onlyHeader)
+        {
+            auto block = ledger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber);
+        }
+        else
+        {
+            auto block = ledger().template getBlock<bcos::concepts::ledger::ALL>(_blockNumber);
+        }
+
+        
+    }
 
     void getBlockHashByNumber(std::string_view _groupID, std::string_view _nodeName,
         int64_t _blockNumber, RespFunc _respFunc) override;

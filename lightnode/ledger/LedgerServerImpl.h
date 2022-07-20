@@ -8,9 +8,9 @@
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-utilities/Ranges.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <bcos-utilities/Ranges.h>
 #include <stdexcept>
 #include <tuple>
 
@@ -277,7 +277,7 @@ private:
 
             auto hashesRange =
                 block.transactionsMetaData |
-                std::views::transform(
+                RANGES::views::transform(
                     [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
                         return std::string_view{metaData.hash.data(), metaData.hash.size()};
                     });
