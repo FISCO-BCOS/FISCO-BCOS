@@ -61,8 +61,10 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void prepare();
-    void asyncExecute(
+    virtual ~BlockExecutive() { stop(); };
+
+    virtual void prepare();
+    virtual void asyncExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
@@ -97,7 +99,7 @@ public:
         }
     }
 
-private:
+protected:
     struct CommitStatus
     {
         std::atomic_size_t total;
@@ -129,7 +131,7 @@ private:
 
     void DMCExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
-    std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    virtual std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
     void scheduleExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(

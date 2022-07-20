@@ -1,7 +1,8 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
-#include <bcos-framework/ledger/LedgerConfig.h>
+#include "SerialBlockExecutive.h"
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tool/VersionConverter.h>
@@ -13,6 +14,7 @@
 #include <memory>
 #include <mutex>
 #include <variant>
+
 
 using namespace bcos::scheduler;
 
@@ -241,9 +243,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock")
                                  << "Not hit prepared block executive, create."
                                  << LOG_KV("blockNumber", block->blockHeaderConst()->number());
-            blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
+            // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
+            //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
+            //     verify);
+            blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
                 m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
                 verify);
+
             blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
         }
         else
@@ -684,7 +690,7 @@ false); return;
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExecuteBlock")
                              << "Not hit prepared block executive, create."
                              << LOG_KV("blockNumber", block->blockHeaderConst()->number());
-        blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
+        blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
 verify); blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
     }
@@ -998,8 +1004,12 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     block->appendTransaction(std::move(tx));
 
     // Create temp executive
+
+    // auto blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this,
+    //     m_calledContextID.fetch_add(1), m_transactionSubmitResultFactory, true, m_blockFactory,
+    //     m_txPool, m_gasLimit, false);
     auto blockExecutive =
-        std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID.fetch_add(1),
+        m_blockExecutiveFactory->build(std::move(block), this, m_calledContextID.fetch_add(1),
             m_transactionSubmitResultFactory, true, m_blockFactory, m_txPool, m_gasLimit, false);
     blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
@@ -1171,8 +1181,12 @@ void SchedulerImpl::preExecuteBlock(
         return;
     }
 
-    blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this, 0,
+    // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
+    //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+
+    blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
         m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+
     blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
     setPreparedBlock(blockNumber, timestamp, blockExecutive);

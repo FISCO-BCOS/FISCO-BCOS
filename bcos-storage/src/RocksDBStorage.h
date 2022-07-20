@@ -73,6 +73,7 @@ public:
         std::vector<std::string> values) noexcept override;
 
 private:
+    Error::Ptr checkStatus(rocksdb::Status const& status);
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
     tbb::spin_mutex m_writeBatchMutex;
     std::unique_ptr<rocksdb::DB> m_db;
