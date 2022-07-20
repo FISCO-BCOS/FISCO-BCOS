@@ -455,7 +455,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
     }
 }
 
-void AMOPImpl::asyncSendBroadbastMessageByTopic(
+void AMOPImpl::asyncSendBroadcastMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)
 {
     std::vector<std::string> nodeIDs;

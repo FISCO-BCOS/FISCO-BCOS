@@ -118,6 +118,7 @@ public:
 
     bool isWasm() const { return m_isWasm; }
     bool isAuthCheck() const { return m_isAuthCheck; }
+    bool isSerialExecute() const { return m_isSerialExecute; }
     std::string const& authAdminAddress() const { return m_authAdminAddress; }
 
     std::string const& rpcServiceName() const { return m_rpcServiceName; }
@@ -272,6 +273,7 @@ private:
     // executor config
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
+    bool m_isSerialExecute = false;
     std::string m_authAdminAddress;
 
     std::string m_rpcServiceName;

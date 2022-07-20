@@ -88,6 +88,10 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
 void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view keyView,
     std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback)
 {
+    if (!m_readOnly)
+    {
+        m_readLength += keyView.size();
+    }
     // if sys table, read cache and read from prev, return
     if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
     {
@@ -101,6 +105,10 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
         }
         if (entry)
         {  // add cache, found
+            if (!m_readOnly)
+            {
+                m_readLength += entry->size();
+            }
             _callback(nullptr, std::move(*entry));
         }
         else
@@ -111,6 +119,10 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
     }
 
     auto [error, entry] = getEntryFromPage(tableView, keyView);
+    if (!m_readOnly)
+    {
+        m_readLength += entry->size();
+    }
     _callback(std::move(error), std::move(entry));
 }
 
@@ -176,7 +188,8 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
             BCOS_ERROR_UNIQUE_PTR(StorageError::ReadOnly, "Try to operate a read-only storage"));
         return;
     }
-
+    m_writeLength += keyView.size();
+    m_writeLength += entry.size();
     // if sys table, write cache and write to prev, return
     if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
     {
@@ -358,6 +371,9 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
             }
         }
     }
+    KeyPage_LOG(INFO) << LOG_DESC("hash") << LOG_KV("size", allData.size())
+                      << LOG_KV("readLength", m_readLength) << LOG_KV("writeLength", m_writeLength)
+                      << LOG_KV("hash", totalHash.hex());
     return totalHash;
 }
 
@@ -382,7 +398,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 {
                     if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                     {
-                        STORAGE_LOG(TRACE)
+                        KeyPage_LOG(TRACE)
                             << "Revert exists: " << change.table << " | " << toHex(change.key)
                             << " | " << toHex(change.entry->get());
                     }
@@ -393,7 +409,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 {
                     if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                     {
-                        STORAGE_LOG(TRACE)
+                        KeyPage_LOG(TRACE)
                             << "Revert deleted: " << change.table << " | " << toHex(change.key)
                             << " | " << toHex(change.entry->get());
                     }
@@ -409,7 +425,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 {
                     if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                     {
-                        STORAGE_LOG(TRACE)
+                        KeyPage_LOG(TRACE)
                             << "Revert insert: " << change.table << " | " << toHex(change.key);
                     }
                     bucket->container.erase(it);
@@ -653,6 +669,7 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
             {
                 KeyPage_LOG(FATAL)
                     << LOG_DESC("getEntryFromPage readonly try to read entry(should read page)")
+                    << LOG_KV("table", table)
                     << LOG_KV("pageKey", toHex(pageInfoOp.value()->getPageKey()))
                     << LOG_KV("key", toHex(key));
             }
@@ -853,7 +870,6 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getRawEntryFro
     std::string_view table, std::string_view key)
 {
     auto prev = getPrev();  // prev must not null
-    assert(prev);
     if (!prev)
     {
         KeyPage_LOG(FATAL) << LOG_DESC("previous stortage is null");

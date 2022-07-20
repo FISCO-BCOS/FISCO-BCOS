@@ -342,18 +342,18 @@ public:
             ->async_asyncSendMessageByTopic(new Callback(_respFunc), _topic, tarsRequestData);
     }
 
-    void asyncSendBroadbastMessageByTopic(
+    void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
     {
         auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncSendBroadbastMessageByTopic", m_prx, nullptr, shouldBlockCall);
+            c_moduleName, "asyncSendBroadcastMessageByTopic", m_prx, nullptr, shouldBlockCall);
         if (!ret && shouldBlockCall)
         {
             return;
         }
         vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
-        m_prx->async_asyncSendBroadbastMessageByTopic(nullptr, _topic, tarsRequestData);
+        m_prx->async_asyncSendBroadcastMessageByTopic(nullptr, _topic, tarsRequestData);
     }
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,

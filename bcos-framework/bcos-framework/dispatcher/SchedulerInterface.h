@@ -75,5 +75,7 @@ public:
     // for performance, do the things before executing block in executor.
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr&&)> callback) = 0;
+
+    virtual void stop() {};
 };
 }  // namespace bcos::scheduler

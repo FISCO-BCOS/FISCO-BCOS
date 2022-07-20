@@ -49,11 +49,12 @@
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
-
 #include <bcos-tool/NodeConfig.h>
+
 
 using namespace bcos;
 using namespace bcos::tool;
+using namespace bcos::protocol;
 using namespace bcos::initializer;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
@@ -70,8 +71,9 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto gatewayPrx = tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
-        m_nodeConfig->gatewayServiceName());
+    auto gatewayPrx =
+        tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
+            m_nodeConfig->gatewayServiceName());
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);
@@ -119,8 +121,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
     if (!_airVersion)
     {
-        storagePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
-                      c_fileSeparator + m_nodeConfig->storagePath();
+        storagePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
+                      m_nodeConfig->groupId() + c_fileSeparator + m_nodeConfig->storagePath();
         consensusStoragePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
                                m_nodeConfig->groupId() + c_fileSeparator + c_consensusStorageDBName;
     }
@@ -185,7 +187,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm());
+        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup
@@ -358,6 +360,10 @@ void Initializer::stop()
         if (m_txpoolInitializer)
         {
             m_txpoolInitializer->stop();
+        }
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
         }
     }
     catch (std::exception const& e)

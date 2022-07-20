@@ -103,7 +103,13 @@ public:
     };
 
     std::pair<bool, std::string> checkAndInit();
-
+    void stop() override
+    {
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+    }
 
 private:
     void updateScheduler(int64_t schedulerTermId);
@@ -114,7 +120,6 @@ private:
 
 private:
     SchedulerImpl::Ptr m_scheduler;
-    SchedulerImpl::Ptr m_oldScheduler;  // TODO: no to use this
     SchedulerFactory::Ptr m_factory;
     SchedulerTerm m_schedulerTerm;
     TarsRemoteExecutorManager::Ptr m_remoteExecutorManager;
