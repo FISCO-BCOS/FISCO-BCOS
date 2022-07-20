@@ -25,6 +25,7 @@
 #include <boost/bind/bind.hpp>
 #include <etcd/Client.hpp>
 #include <etcd/Watcher.hpp>
+
 #include <memory>
 namespace bcos
 {

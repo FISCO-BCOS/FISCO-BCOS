@@ -63,7 +63,9 @@ public:
         bcos::concepts::ledger::TransactionOrReceipt<RANGES::range_value_t<decltype(inputs)>>
     {
         auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
-            return bcos::concepts::hash::calculate<Hasher>(input);
+            decltype(input.dataHash) hash;
+            bcos::concepts::hash::calculate<Hasher>(input, hash);
+            return hash;
         });
         auto buffersRange = inputs | RANGES::views::transform([](auto const& input) {
             std::vector<bcos::byte> buffer;
