@@ -114,6 +114,7 @@ std::string PBFTInitializer::generateIniConfig(bcos::tool::NodeConfig::Ptr _node
     iniConfig["smCryptoType"] = _nodeConfig->smCryptoType();
     iniConfig["isWasm"] = _nodeConfig->isWasm();
     iniConfig["isAuthCheck"] = _nodeConfig->isAuthCheck();
+    iniConfig["isSerialExecute"] = _nodeConfig->isSerialExecute();
     iniConfig["nodeName"] = _nodeConfig->nodeName();
     iniConfig["nodeID"] = m_protocolInitializer->keyPair()->publicKey()->hex();
     iniConfig["rpcServiceName"] = _nodeConfig->rpcServiceName();
