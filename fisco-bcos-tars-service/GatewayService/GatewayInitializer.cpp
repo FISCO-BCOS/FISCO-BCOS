@@ -19,13 +19,13 @@
  * @date 2021-10-15
  */
 #include "GatewayInitializer.h"
-#include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 #ifdef WITH_ETCD
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
@@ -118,5 +118,6 @@ void GatewayInitializer::stop()
     {
         m_gateway->stop();
     }
-    TLOGINFO(LOG_DESC("[GATEWAYSERVICE] Stop the GatewayService success") << std::endl);
+
+    GATEWAYSERVICE_LOG(INFO) << LOG_DESC("[GATEWAYSERVICE] Stop the GatewayService success");
 }

@@ -2,8 +2,8 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "RpcService/RpcInitializer.h"
 #include <bcos-tars-protocol/tars/RpcService.h>
+#include <fisco-bcos-tars-service/RpcService/RpcInitializer.h>
 namespace bcostars
 {
 struct RpcServiceParam
