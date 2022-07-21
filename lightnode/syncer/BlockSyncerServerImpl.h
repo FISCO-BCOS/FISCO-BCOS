@@ -39,8 +39,8 @@ public:
             request.beginBlockNumber;
         response.blocks.reserve(count);
 
-        for (auto currentBlockNumber :
-            RANGES::iota_view{request.beginBlockNumber, request.beginBlockNumber + count})
+        for (auto currentBlockNumber = request.beginBlockNumber;
+             currentBlockNumber < request.beginBlockNumber + count; ++currentBlockNumber)
         {
             if (request.onlyHeader)
             {
