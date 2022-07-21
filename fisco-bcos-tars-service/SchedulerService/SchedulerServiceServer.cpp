@@ -107,7 +107,7 @@ bcostars::Error SchedulerServiceServer::registerExecutor(
 {
     _current->setResponse(false);
     auto executorServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(_name);
+        tars::Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(_name);
     auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);
     m_scheduler->registerExecutor(_name, executor, [_current](bcos::Error::Ptr&& _error) {
         async_response_registerExecutor(_current, toTarsError(_error));

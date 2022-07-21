@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Common/TarsUtils.h"
 #include "GatewayService/GatewayInitializer.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-tars-protocol/Common.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-tars-protocol/tars/GatewayService.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #include <chrono>
 #include <mutex>
 

@@ -1,13 +1,14 @@
-#include "Common/TarsUtils.h"
-#include "RpcService/RpcInitializer.h"
-#include "RpcService/RpcServiceServer.h"
+
 #include "libinitializer/CommandHelper.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
+#include <fisco-bcos-tars-service/RpcService/RpcInitializer.h>
+#include <fisco-bcos-tars-service/RpcService/RpcServiceServer.h>
 #include <servant/Application.h>
 
 using namespace bcostars;
-class RpcServiceApp : public Application
+class RpcServiceApp : public tars::Application
 {
 public:
     RpcServiceApp() {}
@@ -21,7 +22,7 @@ public:
         // and output exception information here
         try
         {
-            auto configDir = ServerConfig::BasePath;
+            auto configDir = tars::ServerConfig::BasePath;
             m_iniConfigPath = configDir + "/config.ini";
             addConfig("config.ini");
 

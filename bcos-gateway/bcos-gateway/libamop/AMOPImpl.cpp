@@ -462,7 +462,7 @@ void AMOPImpl::asyncSendBroadcastMessageByTopic(
     m_topicManager->queryNodeIDsByTopic(_topic, nodeIDs);
     if (nodeIDs.empty())
     {
-        AMOP_LOG(WARNING) << LOG_BADGE("asyncSendBroadbastMessage")
+        AMOP_LOG(WARNING) << LOG_BADGE("asyncSendBroadcastMessageByTopic")
                           << LOG_DESC("there no node subscribe this topic")
                           << LOG_KV("topic", _topic);
         return;
@@ -470,8 +470,9 @@ void AMOPImpl::asyncSendBroadcastMessageByTopic(
     auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPBroadcast, _data);
     m_network->asyncSendMessageByP2PNodeIDs(GatewayMessageType::AMOPMessageType, nodeIDs,
         bytesConstRef(buffer->data(), buffer->size()), Options(0));
-    AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadbastMessage") << LOG_DESC("send broadcast message")
-                    << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
+    AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadcastMessageByTopic")
+                    << LOG_DESC("send broadcast message") << LOG_KV("topic", _topic)
+                    << LOG_KV("data size", _data.size());
 }
 
 void AMOPImpl::onAMOPMessage(

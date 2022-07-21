@@ -19,8 +19,8 @@
  * @date 2022-5-10
  */
 #include "SchedulerServiceApp.h"
-#include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
+#include "fisco-bcos-tars-service/SchedulerService/SchedulerServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/SchedulerInitializer.h"
 #include "libinitializer/StorageInitializer.h"
@@ -32,6 +32,7 @@
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 using namespace bcostars;
 using namespace bcos::initializer;
@@ -64,15 +65,17 @@ void SchedulerServiceApp::createAndInitSchedulerService()
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create RpcServiceClient")
                                 << LOG_KV("rpcServiceName", rpcServiceName);
     auto rpcServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+        tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(
+            rpcServiceName);
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
 
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
+                    
                                 << LOG_KV("txpoolServiceName", txpoolServiceName);
     auto txpoolServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
+        tars::Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
             txpoolServiceName);
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
@@ -92,8 +95,8 @@ void SchedulerServiceApp::createAndInitSchedulerService()
 }
 void SchedulerServiceApp::fetchConfig()
 {
-    m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
-    m_genesisConfigPath = ServerConfig::BasePath + "/config.genesis";
+    m_iniConfigPath = tars::ServerConfig::BasePath + "/config.ini";
+    m_genesisConfigPath = tars::ServerConfig::BasePath + "/config.genesis";
     addConfig("config.ini");
     addConfig("config.genesis");
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("fetchConfig success")

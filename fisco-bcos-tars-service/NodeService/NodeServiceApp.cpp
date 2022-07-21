@@ -19,17 +19,17 @@
  * @date 2021-10-18
  */
 #include "NodeServiceApp.h"
-#include "Common/TarsUtils.h"
-#include "FrontService/FrontServiceServer.h"
-#include "LedgerService/LedgerServiceServer.h"
-#include "PBFTService/PBFTServiceServer.h"
-#include "SchedulerService/SchedulerServiceServer.h"
-#include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
+#include <fisco-bcos-tars-service/FrontService/FrontServiceServer.h>
+#include <fisco-bcos-tars-service/LedgerService/LedgerServiceServer.h>
+#include <fisco-bcos-tars-service/PBFTService/PBFTServiceServer.h>
+#include <fisco-bcos-tars-service/SchedulerService/SchedulerServiceServer.h>
+#include <fisco-bcos-tars-service/TxPoolService/TxPoolServiceServer.h>
 
 using namespace bcostars;
 using namespace bcos;
@@ -85,7 +85,7 @@ void NodeServiceApp::initNodeService()
         m_nodeArchType, m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath, getLogPath());
     auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
     auto rpcServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+        tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
     auto rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
     m_nodeInitializer->initNotificationHandlers(rpc);
 

@@ -19,10 +19,10 @@
  * @date 2021-10-15
  */
 #include "RpcInitializer.h"
-#include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/election/FailOverTypeDef.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #ifdef WITH_ETCD
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif
@@ -94,7 +94,7 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     m_keyFactory = protocolInitializer->keyFactory();
 
     // get the gateway client
-    auto gatewayPrx = Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
+    auto gatewayPrx = tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
         _nodeConfig->gatewayServiceName());
     auto gateway = std::make_shared<GatewayServiceClient>(
         gatewayPrx, _nodeConfig->gatewayServiceName(), protocolInitializer->keyFactory());
