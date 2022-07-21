@@ -288,7 +288,7 @@ private:
                         return std::string_view{metaData.hash.data(), metaData.hash.size()};
                     });
 
-            auto outputs = getTransactionsOrReceipts<Flag>(std::move(hashesRange));
+            auto outputs = impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange));
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 block.transactions = std::move(outputs);
