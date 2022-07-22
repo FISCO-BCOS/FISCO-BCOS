@@ -38,7 +38,7 @@ public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
         const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
     {
-        // FIXME: enable compress
+
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
         rocksdb::Options options;
@@ -49,7 +49,9 @@ public:
         // create the DB if it's not already present
         options.create_if_missing = true;
         options.enable_blob_files = keyPageSize > 1 ? true : false;
+        // FIXME: enable compress
         options.compression = rocksdb::kZSTD;
+        options.max_open_files = 512;
         // options.min_blob_size = 1024;
 
         if (boost::filesystem::space(_storagePath).available < 1024 * 1024 * 100)
