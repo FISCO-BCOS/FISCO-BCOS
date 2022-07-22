@@ -13,10 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Executive flow for DMC execution
- * @file ExecutiveStackFlow.h
+ * @brief Executive flow for serial execution
+ * @file ExecutiveSerialFlow.h
  * @author: jimmyshi
- * @date: 2022-03-22
+ * @date: 2022-07-21
  */
 
 #pragma once
@@ -32,15 +32,15 @@ namespace bcos
 {
 namespace executor
 {
-class ExecutiveStackFlow : public virtual ExecutiveFlowInterface,
-                           public std::enable_shared_from_this<ExecutiveStackFlow>
+class ExecutiveSerialFlow : public virtual ExecutiveFlowInterface,
+                            public std::enable_shared_from_this<ExecutiveSerialFlow>
 {
 public:
-    ExecutiveStackFlow(ExecutiveFactory::Ptr executiveFactory)
+    ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory)
       : m_executiveFactory(executiveFactory)
     {}
 
-    virtual ~ExecutiveStackFlow() {}
+    virtual ~ExecutiveSerialFlow() {}
 
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
@@ -52,46 +52,21 @@ public:
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
-    struct ContextIDSeqCmp
-    {
-        bool operator()(
-            const std::tuple<int64_t, int64_t>& a, const std::tuple<int64_t, int64_t>& b) const
-        {
-            // <ContextID, Seq> order: ContextID increasing and Seq decreasing
-            return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) :
-                                                      std::get<0>(a) > std::get<0>(b);
-        }
-    };
-
 private:
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
-
-    void runWaitingFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
-
-    void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
-
-    void runOne(ExecutiveState::Ptr executiveState,
-        std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
     template <class F>
     void asyncTo(F f)
     {
         // call super function
-        ExecutiveFlowInterface::asyncTo<ExecutiveStackFlow::Ptr, F>(
+        ExecutiveFlowInterface::asyncTo<ExecutiveSerialFlow::Ptr, F>(
             shared_from_this(), std::move(f));
     }
 
-    std::queue<ExecutiveState::Ptr> m_originFlow;
 
-    // <ContextID, seq> -> Executive
-    std::set<std::tuple<int64_t, int64_t>> m_pausedPool;
-
-    // ContextID -> Executive
-    std::set<std::tuple<int64_t, int64_t>, ContextIDSeqCmp> m_waitingFlow;
-
-    // <ContextID, seq> -> Executive
-    std::map<std::tuple<int64_t, int64_t>, ExecutiveState::Ptr> m_executives;
+    // <ContextID> -> Executive
+    std::shared_ptr<std::vector<CallParameters::UniquePtr>> m_txInputs;
 
     ExecutiveFactory::Ptr m_executiveFactory;
 

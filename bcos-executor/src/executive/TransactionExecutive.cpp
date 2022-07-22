@@ -31,6 +31,7 @@
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -58,119 +59,69 @@ using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc
 
 CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr input)
 {
-    m_pullMessage.emplace([this, inputPtr = input.release()](Coroutine::push_type& push) {
-        COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Create new coroutine";
+    EXECUTIVE_LOG(TRACE) << "Execute start\t" << input->toFullString();
 
-        // Take ownership from input
-        m_pushMessage.emplace(std::move(push));
 
-        auto callParameters = std::unique_ptr<CallParameters>(inputPtr);
-        auto blockContext = m_blockContext.lock();
-        if (!blockContext)
-        {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
-        }
-
-        m_storageWrapper = std::make_unique<SyncStorageWrapper>(blockContext->storage(),
-            std::bind(&TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
-            m_recoder);
-
-        if (!callParameters->keyLocks.empty())
-        {
-            m_storageWrapper->importExistsKeyLocks(callParameters->keyLocks);
-        }
-
-        m_exchangeMessage = execute(std::move(callParameters));
-        // Execute is finished, erase the key locks
-        m_exchangeMessage->keyLocks.clear();
-
-        // Return the ownership to input
-        push = std::move(*m_pushMessage);
-
-        COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Finish coroutine executing";
-    });
-
-    return dispatcher();
-}
-
-CallParameters::UniquePtr TransactionExecutive::dispatcher()
-{
-    try
+    auto& callParameters = input;
+    auto blockContext = m_blockContext.lock();
+    if (!blockContext)
     {
-        for (auto it = RANGES::begin(*m_pullMessage); it != RANGES::end(*m_pullMessage); ++it)
-        {
-            if (*it)
-            {
-                COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
-                    << "Context switch to main coroutine to call func";
-                (*it)(ResumeHandler(*this));
-            }
-
-            if (m_exchangeMessage)
-            {
-                COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
-                    << "Context switch to main coroutine to return output";
-                return std::move(m_exchangeMessage);
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
-            << "Error while dispatch, " << boost::diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(-1, "Error while dispatch", e));
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
 
-    COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Context switch to main coroutine, Finished!";
-    return std::move(m_exchangeMessage);
+    m_storageWrapper = std::make_shared<StorageWrapper>(blockContext->storage(), m_recoder);
+
+    auto message = execute(std::move(callParameters));
+
+    EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
+
+    return message;
 }
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    input->keyLocks = m_storageWrapper->exportKeyLocks();
+    EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    auto newSeq = seq() + 1;
+    bool isCreate = input->create;
+    input->seq = newSeq;
+    input->contextID = m_contextID;
 
-    spawnAndCall([this, inputPtr = input.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
+    std::string newAddress;
+    if (isCreate)
+    {
+        if (input->createSalt)
+        {
+            // TODO: Add sender in this process(consider compat with ethereum)
+            newAddress = bcos::newEVMAddress(m_hashImpl, input->senderAddress,
+                bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
+        }
+        else
+        {
+            // TODO: Add sender in this process(consider compat with ethereum)
+            newAddress = bcos::newEVMAddress(
+                m_hashImpl, m_blockContext.lock()->number(), m_contextID, newSeq);
+        }
 
-    // When resume, exchangeMessage set to output
-    auto output = std::move(m_exchangeMessage);
+        input->receiveAddress = newAddress;
+        input->codeAddress = newAddress;
+    }
 
-    // After coroutine switch, set the recoder
-    m_storageWrapper->setRecoder(m_recoder);
+    auto executive = std::make_shared<TransactionExecutive>(
+        m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
 
-    // Set the keyLocks
-    m_storageWrapper->importExistsKeyLocks(output->keyLocks);
+    executive->setConstantPrecompiled(m_constantPrecompiled);
+    executive->setEVMPrecompiled(m_evmPrecompiled);
+    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
+    auto output = executive->start(std::move(input));
+
+    // update seq
+    m_seq = executive->seq();
+
+    EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
     return output;
 }
 
-void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
-{
-    EXECUTOR_LOG(TRACE) << "Executor acquire key lock: " << acquireKeyLock;
-
-    auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
-    callParameters->senderAddress = m_contractAddress;
-    callParameters->keyLocks = m_storageWrapper->exportKeyLocks();
-    callParameters->acquireKeyLock = std::move(acquireKeyLock);
-
-    spawnAndCall([this, inputPtr = callParameters.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
-
-    // After coroutine switch, set the recoder, before the exception throw
-    m_storageWrapper->setRecoder(m_recoder);
-
-    auto output = std::move(m_exchangeMessage);
-    if (output->type == CallParameters::REVERT)
-    {
-        // Deadlock, revert
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-            ExecuteError::DEAD_LOCK, "Dead lock detected, revert transaction: " +
-                                         boost::lexical_cast<std::string>(output->type)));
-    }
-
-    // Set the keyLocks
-    m_storageWrapper->importExistsKeyLocks(output->keyLocks);
-}
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
@@ -856,11 +807,6 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     return callResult;
 }
 
-void TransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)
-{
-    (*m_pushMessage)(std::move(function));
-}
-
 std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPrecompiled(
     precompiled::PrecompiledExecResult::Ptr const& _precompiledParams)
 {
@@ -909,7 +855,7 @@ int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef 
 void TransactionExecutive::setEVMPrecompiled(
     std::shared_ptr<const std::map<std::string, PrecompiledContract::Ptr>> precompiledContract)
 {
-    m_evmPrecompiled = std::move(precompiledContract);
+    m_evmPrecompiled = precompiledContract;
 }
 void TransactionExecutive::setConstantPrecompiled(
     const string& address, std::shared_ptr<precompiled::Precompiled> precompiled)
@@ -920,7 +866,7 @@ void TransactionExecutive::setConstantPrecompiled(
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         _constantPrecompiled)
 {
-    m_constantPrecompiled = std::move(_constantPrecompiled);
+    m_constantPrecompiled = _constantPrecompiled;
 }
 
 void TransactionExecutive::revert()
