@@ -19,7 +19,7 @@
  * @date 2021-10-15
  */
 #include "GatewayInitializer.h"
-#include "Common/TarsUtils.h"
+#include "../Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -35,6 +35,7 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 
+using namespace tars;
 using namespace bcostars;
 
 void GatewayInitializer::init(std::string const& _configPath)

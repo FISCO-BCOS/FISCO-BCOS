@@ -19,12 +19,12 @@
  * @date 2021-10-18
  */
 #include "NodeServiceApp.h"
-#include "Common/TarsUtils.h"
-#include "FrontService/FrontServiceServer.h"
-#include "LedgerService/LedgerServiceServer.h"
-#include "PBFTService/PBFTServiceServer.h"
-#include "SchedulerService/SchedulerServiceServer.h"
-#include "TxPoolService/TxPoolServiceServer.h"
+#include "../Common/TarsUtils.h"
+#include "../FrontService/FrontServiceServer.h"
+#include "../LedgerService/LedgerServiceServer.h"
+#include "../PBFTService/PBFTServiceServer.h"
+#include "../SchedulerService/SchedulerServiceServer.h"
+#include "../TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
