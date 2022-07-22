@@ -164,3 +164,19 @@ bool DiscreteLogarithmZkp::verifyEqualityProof(bytes const& c1Point, bytes const
     }
     return false;
 }
+
+// wedpr_aggregate_ristretto_point
+bytes DiscreteLogarithmZkp::aggregateRistrettoPoint(bytes const& pointSum, bytes const& pointShare)
+{
+    bytes aggregatedResult;
+    aggregatedResult.resize(m_pointLen);
+    CInputBuffer pointSumInput{(const char*)pointSum.data(), m_pointLen};
+    CInputBuffer pointShareInput{(const char*)pointShare.data(), m_pointLen};
+    COutputBuffer result{(char*)aggregatedResult.data(), m_pointLen};
+    auto ret = wedpr_aggregate_ristretto_point(&pointSumInput, &pointShareInput, &result);
+    if (ret == WEDPR_SUCCESS)
+    {
+        return aggregatedResult;
+    }
+    BOOST_THROW_EXCEPTION(ZkpExcetpion() << errinfo_comment("aggregateRistrettoPoint error"));
+}

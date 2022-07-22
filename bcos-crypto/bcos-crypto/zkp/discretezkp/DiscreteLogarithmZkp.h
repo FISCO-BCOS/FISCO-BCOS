@@ -61,6 +61,9 @@ public:
     bool verifyEqualityProof(bytes const& c1Point, bytes const c2Point, bytes const& equalityProof,
         bytes const& basePoint1, bytes const& basePoint2);
 
+    // wedpr_aggregate_ristretto_point
+    bytes aggregateRistrettoPoint(bytes const& pointSum, bytes const& pointShare);
+
 private:
     size_t m_scalarLen = 32;
     size_t m_pointLen = 33;

@@ -31,5 +31,6 @@ DERIVE_BCOS_EXCEPTION(InvalidFormatProof);
 DERIVE_BCOS_EXCEPTION(InvalidKnowledgeProof);
 DERIVE_BCOS_EXCEPTION(InvalidEqualityProof);
 DERIVE_BCOS_EXCEPTION(InvalidArithmeticProof);
+DERIVE_BCOS_EXCEPTION(ZkpExcetpion);
 }  // namespace crypto
 }  // namespace bcos
