@@ -44,11 +44,11 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "ExecutorService std::exception:" << e.what() << std::endl;
+        std::cerr << "ExecutorService std::exception:" << e.what() << std::endl;
     }
     catch (...)
     {
-        cerr << "ExecutorService unknown exception." << std::endl;
+        std::cerr << "ExecutorService unknown exception." << std::endl;
     }
     return -1;
 }
