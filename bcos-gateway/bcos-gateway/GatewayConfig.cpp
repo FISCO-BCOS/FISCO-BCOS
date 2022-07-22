@@ -358,7 +358,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     /*
     [flow_control]
     ; the module that does not limit bandwidth
-    ; list of all modules: raft,pbft,amop,block_sync,txs_sync
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
     ; modules_without_bw_limit=raft,pbft
 
@@ -388,7 +388,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
 
     // modules_without_bw_limit=raft,pbft
     std::string strNoLimitModules =
-        _pt.get<std::string>("flow_control.modules_without_bw_limit", "");
+        _pt.get<std::string>("flow_control.modules_without_bw_limit", "raft,pbft,cons_txs_sync");
 
     std::set<uint16_t> moduleIDs;
     std::vector<std::string> modules;

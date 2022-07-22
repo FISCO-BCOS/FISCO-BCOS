@@ -68,6 +68,7 @@ enum ModuleID
     Raft = 1001,
     BlockSync = 2000,
     TxsSync = 2001,
+    ConsTxsSync = 2002,
     AMOP = 3000,
     LIGHTNODE = 4000,
 };
@@ -161,6 +162,10 @@ inline std::optional<ModuleID> stringToModuleID(const std::string& _moduleName)
     {
         return bcos::protocol::ModuleID::TxsSync;
     }
+    else if (boost::iequals(_moduleName, "cons_txs_sync"))
+    {
+        return bcos::protocol::ModuleID::ConsTxsSync;
+    }
     else if (boost::iequals(_moduleName, "light_node"))
     {
         return bcos::protocol::ModuleID::LIGHTNODE;
@@ -183,6 +188,8 @@ inline std::string moduleIDToString(ModuleID _moduleID)
         return "block_sync";
     case ModuleID::TxsSync:
         return "txs_sync";
+    case ModuleID::ConsTxsSync:
+        return "cons_txs_sync";
     case ModuleID::AMOP:
         return "amop";
     case ModuleID::LIGHTNODE:

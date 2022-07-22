@@ -298,12 +298,16 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
         _onVerifyFinished(nullptr, true);
         return;
     }
+
+
+    auto protocolID = _verifiedProposal ? ModuleID::ConsTxsSync : ModuleID::TxsSync;
+
     auto txsRequest =
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
     auto encodedData = txsRequest->encode();
     startT = utcTime();
     auto self = std::weak_ptr<TransactionSync>(shared_from_this());
-    m_config->frontService()->asyncSendMessageByNodeID(ModuleID::TxsSync, _generatedNodeID,
+    m_config->frontService()->asyncSendMessageByNodeID(protocolID, _generatedNodeID,
         ref(*encodedData), m_config->networkTimeout(),
         [self, startT, _missedTxs, _verifiedProposal, proposalHeader, _onVerifyFinished](
             Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data, const std::string&,

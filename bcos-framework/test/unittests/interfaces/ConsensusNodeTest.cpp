@@ -117,6 +117,13 @@ BOOST_AUTO_TEST_CASE(test_stringToModuleID)
     BOOST_CHECK(
         bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("TXS_SYNC").value());
 
+    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+                protocol::stringToModuleID("cons_txs_sync").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+                protocol::stringToModuleID("cons_Txs_sync").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+                protocol::stringToModuleID("CONS_TXS_SYNC").value());
+
 
     BOOST_CHECK(!protocol::stringToModuleID("aa").has_value());
 }
@@ -130,6 +137,7 @@ BOOST_AUTO_TEST_CASE(test_moduleIDToString)
     BOOST_CHECK("block_sync" == protocol::moduleIDToString(protocol::ModuleID::BlockSync));
     BOOST_CHECK("txs_sync" == protocol::moduleIDToString(protocol::ModuleID::TxsSync));
     BOOST_CHECK("light_node" == protocol::moduleIDToString(protocol::ModuleID::LIGHTNODE));
+    BOOST_CHECK("cons_txs_sync" == protocol::moduleIDToString(protocol::ModuleID::ConsTxsSync));
 }
 
 
