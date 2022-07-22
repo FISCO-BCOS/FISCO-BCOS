@@ -36,7 +36,6 @@ using namespace bcos::tool;
 
 void AirNodeInitializer::init(std::string const& _configFilePath, std::string const& _genesisFile)
 {
-    INITIALIZER_LOG(INFO) << LOG_DESC("initGlobalConfig");
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
     boost::property_tree::ptree pt;
@@ -44,6 +43,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     m_logInitializer = std::make_shared<BoostLogInitializer>();
     m_logInitializer->initLog(pt);
+    INITIALIZER_LOG(INFO) << LOG_DESC("initGlobalConfig");
 
     // load nodeConfig
     // Note: this NodeConfig is used to create Gateway which not init the nodeName

@@ -50,7 +50,12 @@
       "dependencies": [
         "evmone",
         "boost-coroutine2",
-        "rocksdb",
+        {
+          "name": "rocksdb",
+          "features": [
+            "zstd"
+          ]
+        },
         "zstd"
       ]
     },
@@ -58,7 +63,12 @@
       "description": "Light node dependencies",
       "dependencies": [
         "evmone",
-        "rocksdb"
+        {
+          "name": "rocksdb",
+          "features": [
+            "zstd"
+          ]
+        }
       ]
     },
     "etcd": {
