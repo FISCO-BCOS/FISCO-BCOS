@@ -66,7 +66,7 @@ public:
 
 private:
     size_t m_scalarLen = 32;
-    size_t m_pointLen = 33;
+    size_t m_pointLen = 32;
 };
 }  // namespace crypto
 }  // namespace bcos

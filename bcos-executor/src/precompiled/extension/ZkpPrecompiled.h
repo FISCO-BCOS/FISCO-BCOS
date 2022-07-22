@@ -31,7 +31,7 @@ namespace precompiled
 #if 0
 contract ZkpPrecompiled
 {
-function verifyEitherEqualityProof(bytes memory c1_point, bytes memory c2_point, bytes memory c3_point, bytes memory proof, bytes memory c_basepoint, bytes memory blinding_basepoint) public virtual view returns(bool);
+    function verifyEitherEqualityProof(bytes memory c1_point, bytes memory c2_point, bytes memory c3_point, bytes memory proof, bytes memory c_basepoint, bytes memory blinding_basepoint) public virtual view returns(bool);
     function verifyKnowledgeProof(bytes memory c_point, bytes memory proof, bytes memory c_basepoint, bytes memory blinding_basepoint) public virtual view returns(bool);
     function verifyFormatProof(bytes memory c1_point, bytes memory c2_point, bytes memory proof, bytes memory c1_basepoint, bytes memory c2_basepoint, bytes memory blinding_basepoint) public virtual view returns(bool);
     function verifySumProof(bytes memory c1_point, bytes memory c2_point, bytes memory c3_point, bytes memory proof, bytes memory value_basepoint, bytes memory blinding_basepoint)public virtual view returns(bool);
