@@ -25,11 +25,7 @@ namespace bcos
 {
 namespace crypto
 {
-DERIVE_BCOS_EXCEPTION(InvalidInputData);
-DERIVE_BCOS_EXCEPTION(InvalidBalanceProof);
-DERIVE_BCOS_EXCEPTION(InvalidFormatProof);
-DERIVE_BCOS_EXCEPTION(InvalidKnowledgeProof);
-DERIVE_BCOS_EXCEPTION(InvalidEqualityProof);
-DERIVE_BCOS_EXCEPTION(InvalidArithmeticProof);
+DERIVE_BCOS_EXCEPTION(ZkpExcetpion);
+DERIVE_BCOS_EXCEPTION(InvalidInputInput);
 }  // namespace crypto
 }  // namespace bcos
