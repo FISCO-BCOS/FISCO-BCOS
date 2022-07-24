@@ -1,7 +1,6 @@
 file(GLOB_RECURSE SRC_LIST "bcos-cpp-sdk/*.cpp")
-# file(GLOB_RECURSE HEADERS "*.h")
 
-set(BCOS_CPP_SDK_TARGET sdk)
+set(BCOS_CPP_SDK_TARGET bcos-cpp-sdk)
 add_library(${BCOS_CPP_SDK_TARGET} ${SRC_LIST})
 target_include_directories(${BCOS_CPP_SDK_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -33,3 +32,7 @@ target_link_libraries(${BCOS_CPP_SDK_TARGET} PUBLIC
    jsoncpp_static
    OpenSSL::SSL
    OpenSSL::Crypto)
+
+include(GNUInstallDirs)
+install(TARGETS ${BCOS_CPP_SDK_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(DIRECTORY "bcos-cpp-sdk" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" FILES_MATCHING PATTERN "*.h")

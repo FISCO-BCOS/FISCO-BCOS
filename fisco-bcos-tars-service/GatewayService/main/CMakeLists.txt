@@ -3,9 +3,6 @@ cmake_minimum_required(VERSION 3.14)
 project(bcostars-Gateway)
 
 include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-gateway)
-include_directories(${CMAKE_SOURCE_DIR}/fisco-bcos-tars-service)
 
 find_package(Boost REQUIRED program_options)
 

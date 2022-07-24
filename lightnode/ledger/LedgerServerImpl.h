@@ -8,9 +8,9 @@
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-utilities/Ranges.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <bcos-utilities/Ranges.h>
 #include <stdexcept>
 #include <tuple>
 
@@ -83,8 +83,14 @@ public:
 #pragma omp parallel for
             for (auto i = 0u; i < block.transactions.size(); ++i)
             {
-                transactionsBlock.transactionsMetaData[i].hash =
-                    bcos::concepts::hash::calculate<Hasher>(block.transactions[i]);
+                if (RANGES::size(transactionsBlock.transactionsMetaData[i].hash) <
+                    Hasher::HASH_SIZE)
+                {
+                    transactionsBlock.transactionsMetaData[i].hash.resize(Hasher::HASH_SIZE);
+                }
+                
+                bcos::concepts::hash::calculate<Hasher>(
+                    block.transactions[i], transactionsBlock.transactionsMetaData[i].hash);
                 transactionsBlock.transactionsMetaData[i].to =
                     std::move(block.transactions[i].data.to);
             }
@@ -277,12 +283,12 @@ private:
 
             auto hashesRange =
                 block.transactionsMetaData |
-                std::views::transform(
+                RANGES::views::transform(
                     [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
                         return std::string_view{metaData.hash.data(), metaData.hash.size()};
                     });
 
-            auto outputs = getTransactionsOrReceipts<Flag>(std::move(hashesRange));
+            auto outputs = impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange));
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 block.transactions = std::move(outputs);
