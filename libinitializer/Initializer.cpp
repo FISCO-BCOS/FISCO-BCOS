@@ -31,6 +31,7 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -71,9 +72,10 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+
     auto gatewayPrx =
-        tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
-            m_nodeConfig->gatewayServiceName());
+        bcostars::createServantPrx<bcostars::GatewayServicePrx>(m_nodeConfig->gatewayServiceName());
+
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);

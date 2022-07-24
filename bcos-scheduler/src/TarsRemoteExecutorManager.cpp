@@ -3,6 +3,7 @@
 //
 
 #include "TarsRemoteExecutorManager.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
 #include <servant/ObjectProxy.h>
@@ -13,7 +14,8 @@ using namespace bcos::scheduler;
 using namespace tars;
 
 
-TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const std::vector<tars::EndpointF>& endPointInfos)
+TarsRemoteExecutorManager::EndPointSet buildEndPointSet(
+    const std::vector<tars::EndpointF>& endPointInfos)
 {
     TarsRemoteExecutorManager::EndPointSet endPointSet =
         std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
@@ -35,8 +37,8 @@ TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const std::vector<tars::
     return endPointSet;
 }
 
-std::string dumpEndPointsLog(
-    const std::vector<tars::EndpointF>& activeEndPoints, const std::vector<tars::EndpointF>& inactiveEndPoints)
+std::string dumpEndPointsLog(const std::vector<tars::EndpointF>& activeEndPoints,
+    const std::vector<tars::EndpointF>& inactiveEndPoints)
 {
     // dump logs
     std::stringstream ss;
@@ -72,8 +74,8 @@ std::string dumpExecutor2Seq(std::map<std::string, int64_t> const& executor2Seq)
 
 
 // return success, activeEndPoints, inactiveEndPoints
-static std::tuple<bool, std::vector<tars::EndpointF>, std::vector<tars::EndpointF>> getActiveEndpoints(
-    const std::string& executorServiceName)
+static std::tuple<bool, std::vector<tars::EndpointF>, std::vector<tars::EndpointF>>
+getActiveEndpoints(const std::string& executorServiceName)
 {
     static std::string locator = tars::Application::getCommunicator()->getProperty("locator");
 
@@ -84,6 +86,7 @@ static std::tuple<bool, std::vector<tars::EndpointF>, std::vector<tars::Endpoint
         return {false, {}, {}};
     }
 
+    // TODO: tars
     static tars::QueryFPrx locatorPrx =
         tars::Application::getCommunicator()->stringToProxy<tars::QueryFPrx>(locator);
 
@@ -229,10 +232,10 @@ void TarsRemoteExecutorManager::update(EndPointSet endPointSet, bool needNotifyC
         auto host = hostAndPort.first;
         auto port = hostAndPort.second;
 
-        string endPointUrl = buildEndPointUrl(host, port);
-        auto executorServicePrx =
-            Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(
-                endPointUrl);
+        string endPointUrl = bcostars::endPointToString(m_executorServiceName, host, port);
+        auto executorServicePrx = bcostars::createServantPrx<bcostars::ExecutorServicePrx>(
+            m_executorServiceName, host, port);
+
         auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);
         auto executorName = "executor-" + host + "-" + std::to_string(port);
 
@@ -241,7 +244,8 @@ void TarsRemoteExecutorManager::update(EndPointSet endPointSet, bool needNotifyC
         if (success)
         {
             EXECUTOR_MANAGER_LOG(DEBUG)
-                << "Build new executor connection: " << endPointUrl << LOG_KV("seq", status->seq());
+                << "Build new executor connection: " << LOG_KV("endPointUrl", endPointUrl)
+                << LOG_KV("seq", status->seq());
             m_executor2Seq[executorName] = status->seq();
             addExecutor(executorName, executor);
         }

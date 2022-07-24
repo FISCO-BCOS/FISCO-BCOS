@@ -94,8 +94,9 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     m_keyFactory = protocolInitializer->keyFactory();
 
     // get the gateway client
-    auto gatewayPrx = tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
-        _nodeConfig->gatewayServiceName());
+    auto gatewayPrx =
+        bcostars::createServantPrx<bcostars::GatewayServicePrx>(_nodeConfig->gatewayServiceName());
+
     auto gateway = std::make_shared<GatewayServiceClient>(
         gatewayPrx, _nodeConfig->gatewayServiceName(), protocolInitializer->keyFactory());
 

@@ -19,6 +19,8 @@
  * @date 2021-10-11
  */
 #pragma once
+#include "bcos-tars-protocol/Common.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -30,6 +32,7 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <servant/Application.h>
+#include <utility>
 namespace bcos
 {
 namespace rpc
@@ -63,10 +66,8 @@ public:
 
     bool unreachable()
     {
-        std::vector<tars::EndpointInfo> activeEndPoints;
-        std::vector<tars::EndpointInfo> nactiveEndPoints;
-        m_ledgerPrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-        return (activeEndPoints.size() == 0);
+        return !bcostars::checkConnection(
+            "NodeService", "unreachable", m_ledgerPrx, nullptr, false);
     }
 
 private:
@@ -90,14 +91,6 @@ public:
         bcos::group::ChainNodeInfo::Ptr _nodeInfo);
 
     template <typename T, typename S, typename... Args>
-    std::pair<std::shared_ptr<T>, S> createServiceClient(
-        std::string const& _serviceName, const Args&... _args)
-    {
-        auto prx = tars::Application::getCommunicator()->stringToProxy<S>(_serviceName);
-        return std::make_pair(std::make_shared<T>(prx, _args...), prx);
-    }
-
-    template <typename T, typename S, typename... Args>
     inline std::pair<std::shared_ptr<T>, S> createServicePrx(bcos::protocol::ServiceType _type,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, const Args&... _args)
     {
@@ -106,7 +99,11 @@ public:
         {
             return std::make_pair(nullptr, nullptr);
         }
-        return createServiceClient<T, S>(serviceName, _args...);
+
+        auto prx = bcostars::createServantPrx<S>(serviceName);
+        auto client = std::make_shared<T>(prx, _args...);
+
+        return std::make_pair(client, prx);
     }
 };
 }  // namespace rpc

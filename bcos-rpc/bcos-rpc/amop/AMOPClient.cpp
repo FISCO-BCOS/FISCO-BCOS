@@ -18,9 +18,11 @@
  * @author: yujiechen
  * @date 2021-10-28
  */
- #include <bcos-tars-protocol/client/GatewayServiceClient.h>
- 
+#include <bcos-tars-protocol/client/GatewayServiceClient.h>
+
 #include "AMOPClient.h"
+#include "bcos-tars-protocol/Common.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-protocol/amop/TopicItem.h>
@@ -75,12 +77,14 @@ void AMOPClient::onRecvSubTopics(
 {
     auto topicInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
     auto seq = _msg->seq();
+
     if (gatewayInactivated())
     {
         AMOP_CLIENT_LOG(WARNING) << LOG_BADGE("onRecvSubTopics: the gateway in-activated")
                                  << LOG_KV("topicInfo", topicInfo)
                                  << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("seq", seq);
     }
+
     auto ret = updateTopicInfos(topicInfo, _session);
     if (!ret)
     {
@@ -406,11 +410,10 @@ void AMOPClient::onClientDisconnect(std::shared_ptr<WsSession> _session)
 
 std::vector<tars::EndpointInfo> AMOPClient::getActiveGatewayEndPoints()
 {
-    std::vector<tars::EndpointInfo> activeEndPoints;
-    vector<tars::EndpointInfo> nactiveEndPoints;
     auto gatewayClient = std::dynamic_pointer_cast<bcostars::GatewayServiceClient>(m_gateway);
-    gatewayClient->prx()->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-    return activeEndPoints;
+
+    auto endPoints = tarsProxyAvailableEndPoints(gatewayClient->prx());
+    return std::vector<tars::EndpointInfo>(endPoints.begin(), endPoints.end());
 }
 
 void AMOPClient::subscribeTopicToAllNodes()
@@ -423,25 +426,25 @@ void AMOPClient::subscribeTopicToAllNodes()
                           << LOG_KV("activeEndPoints", activeEndPoints.size());
     for (auto const& endPoint : activeEndPoints)
     {
-        auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
-        auto servicePrx =
-            tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+        auto servicePrx = bcostars::createServantPrx<bcostars::GatewayServicePrx>(
+            m_gatewayServiceName, endPoint.getEndpoint());
+
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncSubscribeTopic(
-            m_clientID, topicInfo, [this, endPointStr](Error::Ptr&& _error) {
+            m_clientID, topicInfo, [this, endPoint](Error::Ptr&& _error) {
                 if (_error)
                 {
-                    AMOP_CLIENT_LOG(WARNING)
-                        << LOG_DESC("asyncSubScribeTopic error") << LOG_KV("gateway", endPointStr)
-                        << LOG_KV("code", _error->errorCode())
-                        << LOG_KV("msg", _error->errorMessage());
+                    AMOP_CLIENT_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic error")
+                                             << LOG_KV("gateway", endPoint.getEndpoint().toString())
+                                             << LOG_KV("code", _error->errorCode())
+                                             << LOG_KV("msg", _error->errorMessage());
                     // set the notify topic flag to false when subscribeTopic failed
                     m_notifyTopicSuccess.store(false);
                     return;
                 }
-                AMOP_CLIENT_LOG(INFO)
-                    << LOG_DESC("asyncSubScribeTopic success") << LOG_KV("gateway", endPointStr);
+                AMOP_CLIENT_LOG(INFO) << LOG_DESC("asyncSubScribeTopic success")
+                                      << LOG_KV("gateway", endPoint.getEndpoint().toString());
             });
     }
 }
@@ -450,18 +453,18 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
     auto activeEndPoints = getActiveGatewayEndPoints();
     for (auto const& endPoint : activeEndPoints)
     {
-        auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
-        auto servicePrx =
-            tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+        auto servicePrx = bcostars::createServantPrx<GatewayServicePrx>(
+            m_gatewayServiceName, endPoint.getEndpoint());
+
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncRemoveTopic(
-            m_clientID, topicsToRemove, [topicsToRemove, endPointStr](Error::Ptr&& _error) {
-                AMOP_CLIENT_LOG(INFO)
-                    << LOG_DESC("asyncRemoveTopic") << LOG_KV("gateway", endPointStr)
-                    << LOG_KV("removedSize", topicsToRemove.size())
-                    << LOG_KV("code", _error ? _error->errorCode() : 0)
-                    << LOG_KV("msg", _error ? _error->errorMessage() : "success");
+            m_clientID, topicsToRemove, [topicsToRemove, endPoint](Error::Ptr&& _error) {
+                AMOP_CLIENT_LOG(INFO) << LOG_DESC("asyncRemoveTopic")
+                                      << LOG_KV("gateway", endPoint.getEndpoint().toString())
+                                      << LOG_KV("removedSize", topicsToRemove.size())
+                                      << LOG_KV("code", _error ? _error->errorCode() : 0)
+                                      << LOG_KV("msg", _error ? _error->errorMessage() : "success");
             });
     }
 }

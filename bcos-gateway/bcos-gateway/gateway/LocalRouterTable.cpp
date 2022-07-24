@@ -18,6 +18,7 @@
  * @date 2021-12-29
  */
 #include "LocalRouterTable.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-gateway/Common.h>
 using namespace bcos;
@@ -179,12 +180,13 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         {
             continue;
         }
-        auto frontService =
-            createServiceClient<bcostars::FrontServiceClient, bcostars::FrontServicePrx>(
-                serviceName, m_keyFactory);
+
+        auto frontPrx = bcostars::createServantPrx<bcostars::FrontServicePrx>(serviceName);
+        auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
+
         UpgradeGuard ul(l);
         auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
-            nodeInfo->nodeID(), frontService.first, nodeInfo->nodeType(), frontService.second);
+            nodeInfo->nodeID(), frontClient, nodeInfo->nodeType(), frontPrx);
         frontServiceInfo->setProtocolInfo(nodeInfo->nodeProtocol());
         m_nodeList[groupID][nodeID] = frontServiceInfo;
         ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")

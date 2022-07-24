@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -271,28 +272,15 @@ public:
         {
             return;
         }
-        std::vector<tars::EndpointInfo> activeEndPoints;
-        vector<tars::EndpointInfo> nactiveEndPoints;
-        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+
+        auto activeEndPoints = tarsProxyAvailableEndPoints(m_prx);
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
-        // try to call non-activate-endpoints when with zero connection
-        if (activeEndPoints.size() == 0)
-        {
-            // notify groupInfo to all gateway nodes
-            for (auto const& endPoint : nactiveEndPoints)
-            {
-                auto endPointStr = endPointToString(endPoint);
-                auto prx = tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
-                    endPointStr);
-                prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
-            }
-        }
+
         // notify groupInfo to all gateway nodes
         for (auto const& endPoint : activeEndPoints)
         {
-            auto endPointStr = endPointToString(endPoint);
             auto prx =
-                tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+                bcostars::createServantPrx<GatewayServicePrx>(m_gatewayServiceName, endPoint);
             prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
         }
     }
@@ -437,12 +425,6 @@ public:
 protected:
     void start() override {}
     void stop() override {}
-    std::string endPointToString(tars::EndpointInfo _endPoint)
-    {
-        return m_gatewayServiceName + "@tcp -h " + _endPoint.getEndpoint().getHost() + " -p " +
-               boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
-    }
-
     static bool shouldStopCall() { return (s_tarsTimeoutCount >= c_maxTarsTimeoutCount); }
 
 private:

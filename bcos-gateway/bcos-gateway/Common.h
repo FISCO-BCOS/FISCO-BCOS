@@ -19,16 +19,12 @@
  */
 #pragma once
 #include "libnetwork/Common.h"
-#include <bcos-framework/protocol/ServiceDesc.h>
-#include <bcos-utilities/Exceptions.h>
-#include <servant/Application.h>
 
 #define GATEWAY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Gateway]"
 #define GATEWAY_CONFIG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Config]"
 #define GATEWAY_FACTORY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Factory]"
 #define NODE_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][GatewayNodeManager]"
 #define ROUTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Router]"
-
 namespace bcos
 {
 namespace gateway
@@ -43,12 +39,5 @@ enum GroupType : uint16_t
     OUTSIDE_GROUP = 0x2,
 };
 
-template <typename T, typename S, typename... Args>
-std::pair<std::shared_ptr<T>, S> createServiceClient(
-    std::string const& _serviceName, const Args&... _args)
-{
-    auto prx = tars::Application::getCommunicator()->stringToProxy<S>(_serviceName);
-    return std::make_pair(std::make_shared<T>(prx, _args...), prx);
-}
 }  // namespace gateway
 }  // namespace bcos

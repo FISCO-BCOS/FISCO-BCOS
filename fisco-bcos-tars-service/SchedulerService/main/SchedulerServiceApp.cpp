@@ -21,6 +21,8 @@
 #include "SchedulerServiceApp.h"
 #include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include "generated/bcos-tars-protocol/tars/TxPoolService.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/SchedulerInitializer.h"
 #include "libinitializer/StorageInitializer.h"
@@ -63,17 +65,19 @@ void SchedulerServiceApp::createAndInitSchedulerService()
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create RpcServiceClient")
                                 << LOG_KV("rpcServiceName", rpcServiceName);
-    auto rpcServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+
+    auto rpcServicePrx = bcostars::createServantPrx<bcostars::RpcServicePrx>(rpcServiceName);
+
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
 
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
                                 << LOG_KV("txpoolServiceName", txpoolServiceName);
+
     auto txpoolServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
-            txpoolServiceName);
+        bcostars::createServantPrx<bcostars::TxPoolServicePrx>(txpoolServiceName);
+
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
