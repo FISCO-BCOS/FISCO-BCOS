@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "ProPBFTInitializer.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-pbft/pbft/PBFTImpl.h>
 #include <bcos-sealer/Sealer.h>
 #include <bcos-sync/BlockSync.h>
@@ -44,17 +45,16 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
     // init rpc client
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
-    auto rpcServicePrx =
-        tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+
+    auto rpcServicePrx = bcostars::createServantPrx<bcostars::RpcServicePrx>(rpcServiceName);
+
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
-    // init gateway client
-    auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
     auto gatewayServicePrx =
-        tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
-            gatewayServiceName);
-    m_gateway =
-        std::make_shared<bcostars::GatewayServiceClient>(gatewayServicePrx, gatewayServiceName);
+        bcostars::createServantPrx<bcostars::GatewayServicePrx>(m_nodeConfig->gatewayServiceName());
+
+    m_gateway = std::make_shared<bcostars::GatewayServiceClient>(
+        gatewayServicePrx, m_nodeConfig->gatewayServiceName());
 }
 
 void ProPBFTInitializer::scheduledTask()

@@ -80,14 +80,6 @@ public:
     void stop() override {}
 
 private:
-    std::string buildEndPointUrl(std::string host, uint16_t port)
-    {
-        auto endPointStr = m_executorServiceName + "@tcp -h " + host + " -p " +
-                           boost::lexical_cast<std::string>(port);
-        return endPointStr;
-    }
-
-private:
     std::function<void()> m_onRemoteExecutorChange;
     std::string m_executorServiceName;
 
