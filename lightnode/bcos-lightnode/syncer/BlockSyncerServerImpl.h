@@ -18,6 +18,11 @@ class BlockSyncerServerImpl : public bcos::concepts::sync::SyncBlockServerBase<
 public:
     BlockSyncerServerImpl(LedgerType ledger) : m_ledger(std::move(ledger)) {}
 
+    auto impl_dispatchMessage(ByteBuffer auto const& input) -> ByteBuffer auto
+    {
+        // RequestType 
+    }
+
     ResponseType impl_getBlock(RequestType const& request)
     {
         if (request.endBlockNumber <= request.beginBlockNumber)

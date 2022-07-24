@@ -26,6 +26,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontServiceFactory.h>
+#include <bcos-lightnode/syncer/BlockSyncerServerImpl.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 using namespace bcos;
@@ -161,10 +162,12 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         });
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
 
+#ifdef WITH_LIGHTNODE
     m_front->registerModuleMessageDispatcher(
         protocol::LIGHTNODE, [](bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef) {
-            
+
         });
+#endif
 }
 
 

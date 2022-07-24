@@ -10,6 +10,11 @@ template <class Impl>
 class SyncBlockServerBase
 {
 public:
+    auto dispatchMessage(ByteBuffer auto const& input) -> ByteBuffer auto
+    {
+        return impl().impl_dispatchMessage(input);
+    }
+
     auto getBlock(RequestBlock auto const& request) -> ResponseBlock auto
     {
         return impl().impl_getBlock(request);
