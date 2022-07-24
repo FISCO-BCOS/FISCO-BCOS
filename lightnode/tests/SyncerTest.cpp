@@ -1,12 +1,10 @@
-// clang-format off
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
-// clang-format on
 
-#include "../syncer/BlockSyncerClientImpl.h"
-#include "../syncer/BlockSyncerServerImpl.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-lightnode/syncer/BlockSyncerClientImpl.h>
+#include <bcos-lightnode/syncer/BlockSyncerServerImpl.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/LightNode.h>

@@ -20,9 +20,7 @@
  * @date 2022-07-04
  */
 
-#include "ledger/LedgerServerImpl.h"
-#include "storage/StorageSyncWrapper.h"
-#include "syncer/BlockSyncerClientImpl.h"
+#include <bcos-lightnode/ledger/LedgerClientImpl.h>
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 {

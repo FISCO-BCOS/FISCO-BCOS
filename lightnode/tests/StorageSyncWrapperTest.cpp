@@ -1,7 +1,4 @@
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
-#include "../storage/StorageSyncWrapper.h"
+#include <bcos-lightnode/storage/StorageSyncWrapper.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/test/unit_test.hpp>
 
