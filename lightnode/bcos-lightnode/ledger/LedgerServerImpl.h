@@ -9,29 +9,29 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-utilities/Ranges.h>
+#include <bits/ranges_base.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 
 namespace bcos::ledger
 {
 
-template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage,
-    bcos::concepts::block::Block Block>
+template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
 class LedgerServerImpl
-  : public bcos::concepts::ledger::LedgerBase<LedgerServerImpl<Hasher, Storage, Block>>
+  : public bcos::concepts::ledger::LedgerBase<LedgerServerImpl<Hasher, Storage>>
 {
 public:
     LedgerServerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
+    void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block)
     {
-        Block block;
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
         (getBlockData<Flags>(blockNumberStr, block), ...);
-        return block;
     }
 
     void impl_setBlock(bcos::concepts::block::Block auto block)
@@ -88,7 +88,7 @@ public:
                 {
                     transactionsBlock.transactionsMetaData[i].hash.resize(Hasher::HASH_SIZE);
                 }
-                
+
                 bcos::concepts::hash::calculate<Hasher>(
                     block.transactions[i], transactionsBlock.transactionsMetaData[i].hash);
                 transactionsBlock.transactionsMetaData[i].to =
@@ -157,23 +157,23 @@ public:
     }
 
     template <concepts::ledger::DataFlag Flag>
-    auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes)
+    auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
+        if (RANGES::size(out) < RANGES::size(hashes))
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
+        }
+
         if constexpr (!std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> &&
                       !std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
             static_assert(!sizeof(hashes), "Unspported data flag!");
         }
 
-        using OutputItemType =
-            std::conditional_t<std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>,
-                RANGES::range_value_t<decltype(Block::transactions)>,
-                RANGES::range_value_t<decltype(Block::receipts)>>;
         constexpr auto tableName = std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ?
                                        SYS_HASH_2_TX :
                                        SYS_HASH_2_RECEIPT;
         auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
-        std::vector<OutputItemType> outputs(RANGES::size(entries));
 
 #pragma omp parallel for
         for (auto i = 0u; i < RANGES::size(entries); ++i)
@@ -181,9 +181,9 @@ public:
             if (!entries[i]) [[unlikely]]
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
             auto field = entries[i]->getField(0);
-            bcos::concepts::serialize::decode(outputs[i], field);
+            bcos::concepts::serialize::decode(field, out[i]);
         }
-        return outputs;
+        return out;
     }
 
     auto impl_getTotalTransactionCount()
@@ -253,7 +253,7 @@ public:
 
 private:
     template <bcos::concepts::ledger::DataFlag Flag>
-    void getBlockData(std::string_view key, Block& block)
+    void getBlockData(std::string_view key, bcos::concepts::block::Block auto& block)
     {
         if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
         {
@@ -264,7 +264,7 @@ private:
             }
 
             auto field = entry->getField(0);
-            bcos::concepts::serialize::decode(block.blockHeader, field);
+            bcos::concepts::serialize::decode(field, block.blockHeader);
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
                            std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
@@ -276,8 +276,8 @@ private:
                     BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
 
                 auto field = entry->getField(0);
-                Block metadataBlock;
-                bcos::concepts::serialize::decode(metadataBlock, field);
+                std::remove_reference_t<decltype(block)> metadataBlock;
+                bcos::concepts::serialize::decode(field, metadataBlock);
                 block.transactionsMetaData = std::move(metadataBlock.transactionsMetaData);
             }
 
@@ -287,15 +287,17 @@ private:
                     [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
                         return std::string_view{metaData.hash.data(), metaData.hash.size()};
                     });
+            auto outputSize = RANGES::size(block.transactionsMetaData);
 
-            auto outputs = impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange));
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
-                block.transactions = std::move(outputs);
+                block.transactions.resize(outputSize);
+                impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange), block.transactions);
             }
             else
             {
-                block.receipts = std::move(outputs);
+                block.receipts.resize(outputSize);
+                impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange), block.receipts);
             }
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
@@ -309,7 +311,7 @@ private:
         }
         else
         {
-            static_assert(!sizeof(Block), "Wrong input flag!");
+            static_assert(!sizeof(block), "Wrong input flag!");
         }
     }
 

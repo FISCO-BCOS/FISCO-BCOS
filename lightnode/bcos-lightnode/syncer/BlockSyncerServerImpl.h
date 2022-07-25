@@ -10,20 +10,15 @@
 namespace bcos::sync
 {
 
-template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::sync::RequestBlock RequestType,
-    bcos::concepts::sync::ResponseBlock ResponseType>
-class BlockSyncerServerImpl : public bcos::concepts::sync::SyncBlockServerBase<
-                                  BlockSyncerServerImpl<LedgerType, RequestType, ResponseType>>
+template <bcos::concepts::ledger::Ledger LedgerType>
+class BlockSyncerServerImpl
+  : public bcos::concepts::sync::SyncBlockServerBase<BlockSyncerServerImpl<LedgerType>>
 {
 public:
     BlockSyncerServerImpl(LedgerType ledger) : m_ledger(std::move(ledger)) {}
 
-    auto impl_dispatchMessage(ByteBuffer auto const& input) -> ByteBuffer auto
-    {
-        // RequestType 
-    }
-
-    ResponseType impl_getBlock(RequestType const& request)
+    void impl_getBlock(bcos::concepts::sync::RequestBlock auto const& request,
+        bcos::concepts::sync::ResponseBlock auto& response)
     {
         if (request.endBlockNumber <= request.beginBlockNumber)
         {
@@ -33,33 +28,37 @@ public:
         auto transactionCount = ledger().getTotalTransactionCount();
         auto blockNumber = transactionCount.blockNumber;
 
-        ResponseType response;
         response.blockNumber = blockNumber;
         if (request.beginBlockNumber > blockNumber)
         {
-            return response;
+            return;
         }
         auto count =
             std::min(blockNumber + 1, static_cast<decltype(blockNumber)>(request.endBlockNumber)) -
             request.beginBlockNumber;
-        response.blocks.reserve(count);
+        response.blocks.reserve(response.blocks.size() + count);
+
+        constexpr static auto getHeader =
+            [](decltype(ledger())& ledger, decltype(request.beginBlockNumber) blockNumber,
+                RANGES::range_value_t<decltype(response.blocks)>& block) {
+                ledger.template getBlock<concepts::ledger::HEADER>(blockNumber, block);
+            };
+        constexpr static auto getALL =
+            [](decltype(ledger())& ledger, decltype(request.beginBlockNumber) blockNumber,
+                RANGES::range_value_t<decltype(response.blocks)>& block) {
+                ledger.template getBlock<concepts::ledger::ALL>(blockNumber, block);
+            };
+        std::function<void(decltype(ledger())& ledger, decltype(request.beginBlockNumber),
+            RANGES::range_value_t<decltype(response.blocks)>&)>
+            func = request.onlyHeader ? getHeader : getALL;
 
         for (auto currentBlockNumber = request.beginBlockNumber;
              currentBlockNumber < request.beginBlockNumber + count; ++currentBlockNumber)
         {
-            if (request.onlyHeader)
-            {
-                response.blocks.emplace_back(
-                    ledger().template getBlock<concepts::ledger::HEADER>(currentBlockNumber));
-            }
-            else
-            {
-                response.blocks.emplace_back(
-                    ledger().template getBlock<concepts::ledger::ALL>(currentBlockNumber));
-            }
+            RANGES::range_value_t<decltype(response.blocks)> block;
+            func(ledger(), currentBlockNumber, block);
+            response.blocks.emplace_back(std::move(block));
         }
-
-        return response;
     }
 
 private:

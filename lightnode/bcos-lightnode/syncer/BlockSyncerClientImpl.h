@@ -75,7 +75,7 @@ public:
                         }
 
                         std::optional<ResponseType> response{ResponseType()};
-                        bcos::concepts::serialize::decode(*response, _data);
+                        bcos::concepts::serialize::decode(_data, *response);
 
                         promise.set_value(std::tuple{nullptr, std::move(response)});
                     }

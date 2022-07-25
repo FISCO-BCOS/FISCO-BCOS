@@ -67,7 +67,7 @@ enum ModuleID
     BlockSync = 2000,
     TxsSync = 2001,
     AMOP = 3000,
-    LIGHTNODE = 4000,
+    LIGHTNODE_GETBLOCK = 4000,
 };
 enum ProtocolModuleID : uint32_t
 {

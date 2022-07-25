@@ -39,10 +39,10 @@ class LedgerBase
 {
 public:
     template <DataFlag... flags>
-    auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
-        -> bcos::concepts::block::Block auto
+    void getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block)
     {
-        return impl().template impl_getBlock<flags...>(blockNumber);
+        impl().template impl_getBlock<flags...>(blockNumber, block);
     }
 
     void setBlock(bcos::concepts::block::Block auto block)
@@ -51,9 +51,9 @@ public:
     }
 
     template <DataFlag flag>
-    auto getTransactionsOrReceipts(RANGES::range auto const& hashes) -> RANGES::range auto
+    void getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
-        return impl().template impl_getTransactionsOrReceipts<flag>(hashes);
+        impl().template impl_getTransactionsOrReceipts<flag>(hashes, out);
     }
 
     TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }

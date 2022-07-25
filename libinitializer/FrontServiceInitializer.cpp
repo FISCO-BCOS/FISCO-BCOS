@@ -18,7 +18,10 @@
  * @author: yujiechen
  * @date 2021-06-10
  */
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
+
 #include "FrontServiceInitializer.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -27,6 +30,7 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-lightnode/syncer/BlockSyncerServerImpl.h>
+#include <bcos-tars-protocol/tars/LightNode.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 using namespace bcos;
@@ -162,12 +166,15 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         });
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
 
-#ifdef WITH_LIGHTNODE
-    m_front->registerModuleMessageDispatcher(
-        protocol::LIGHTNODE, [](bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef) {
+// #ifdef WITH_LIGHTNODE
+//     m_front->registerModuleMessageDispatcher(protocol::LIGHTNODE_GETBLOCK,
+//         [](bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef input) {
+//             bcostars::RequestBlock requestBlock;
+//             bcos::concepts::serialize::decode(input, requestBlock);
 
-        });
-#endif
+
+//         });
+// #endif
 }
 
 

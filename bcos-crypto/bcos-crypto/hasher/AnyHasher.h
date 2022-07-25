@@ -13,12 +13,12 @@ public:
 
     void update(bcos::crypto::trivial::Object auto&& in)
     {
-        std::visit([&in](auto&& hasher) { hasher.update(in); }, m_hasher);
+        std::visit([&in](auto& hasher) { hasher.update(in); }, m_hasher);
     };
 
     void final(bcos::crypto::trivial::Object auto&& out)
     {
-        std::visit([&out](auto&& hasher) { hasher.final(out); }, m_hasher);
+        std::visit([&out](auto& hasher) { hasher.final(out); }, m_hasher);
     }
 
 private:

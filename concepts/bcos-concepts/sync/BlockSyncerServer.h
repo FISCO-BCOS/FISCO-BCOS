@@ -10,20 +10,15 @@ template <class Impl>
 class SyncBlockServerBase
 {
 public:
-    auto dispatchMessage(ByteBuffer auto const& input) -> ByteBuffer auto
+    void getBlock(RequestBlock auto const& request, ResponseBlock auto& response)
     {
-        return impl().impl_dispatchMessage(input);
+        impl().impl_getBlock(request, response);
     }
 
-    auto getBlock(RequestBlock auto const& request) -> ResponseBlock auto
+    void getTransactionWithProof(bcos::concepts::ByteBuffer auto const& hash,
+        bcos::concepts::transaction::Transaction auto& transaction)
     {
-        return impl().impl_getBlock(request);
-    }
-
-    auto getTransactionWithProof(bcos::concepts::ByteBuffer auto const& hash)
-        -> bcos::concepts::transaction::Transaction auto
-    {
-        return impl().impl_getTransactionWithProof(hash);
+        impl().impl_getTransactionWithProof(hash, transaction);
     }
 
 private:

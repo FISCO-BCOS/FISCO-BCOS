@@ -62,7 +62,7 @@ class MockFront : public bcos::front::FrontServiceInterface
         BOOST_CHECK_EQUAL(_timeout, 0);
 
         bcostars::RequestBlock request;
-        bcos::concepts::serialize::decode(request, _data);
+        bcos::concepts::serialize::decode(_data, request);
         BOOST_CHECK_EQUAL(request.beginBlockNumber, 100);
         BOOST_CHECK_EQUAL(request.endBlockNumber, 110);
         BOOST_CHECK_EQUAL(request.onlyHeader, true);
@@ -168,15 +168,13 @@ struct MockLedgerForTestServer : public bcos::concepts::ledger::LedgerBase<MockL
     }
 
     template <bcos::concepts::ledger::DataFlag... flags>
-    auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
+    void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block)
     {
         BOOST_CHECK(blockNumber >= 200 && blockNumber < 220);
         if (blockNumber < 205)
         {
-            bcostars::Block block;
             block.blockHeader.data.blockNumber = blockNumber;
-
-            return block;
         }
         else
         {
@@ -189,16 +187,16 @@ BOOST_AUTO_TEST_CASE(testServer)
 {
     MockLedgerForTestServer serverLedger;
 
-    bcos::sync::BlockSyncerServerImpl<MockLedgerForTestServer, bcostars::RequestBlock,
-        bcostars::ResponseBlock>
-        syncerServer(std::move(serverLedger));
+    bcos::sync::BlockSyncerServerImpl<MockLedgerForTestServer> syncerServer(
+        std::move(serverLedger));
 
     bcostars::RequestBlock request;
     request.beginBlockNumber = 200;
     request.endBlockNumber = 220;
     request.onlyHeader = true;
 
-    auto response = syncerServer.getBlock(request);
+    bcostars::ResponseBlock response;
+    syncerServer.getBlock(request, response);
     BOOST_CHECK_EQUAL(response.blockNumber, 204);
     BOOST_CHECK_EQUAL(response.blocks.size(), 5);
 
@@ -208,7 +206,7 @@ BOOST_AUTO_TEST_CASE(testServer)
     }
 
     request.endBlockNumber = 200;
-    BOOST_CHECK_THROW(syncerServer.getBlock(request), std::invalid_argument);
+    BOOST_CHECK_THROW(syncerServer.getBlock(request, response), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
