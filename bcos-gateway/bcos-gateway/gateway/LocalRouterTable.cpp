@@ -230,8 +230,8 @@ bool LocalRouterTable::eraseUnreachableNodes()
     return updated;
 }
 
-bool LocalRouterTable::asyncBroadcastMsg(
-    uint16_t _nodeType, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID,
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.size() == 0)
@@ -253,14 +253,16 @@ bool LocalRouterTable::asyncBroadcastMsg(
         auto dstNodeID = it->nodeID();
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
-                          << LOG_KV("type", _nodeType) << LOG_KV("payloadSize", _payload.size())
+                          << LOG_KV("type", _nodeType) << LOG_KV("groupID", _groupID)
+                          << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", _payload.size())
                           << LOG_KV("dst", dstNodeID);
-        frontService->onReceiveMessage(
-            _groupID, _srcNodeID, _payload, [_srcNodeID, dstNodeID](Error::Ptr _error) {
+        frontService->onReceiveMessage(_groupID, _srcNodeID, _payload,
+            [_groupID, _moduleID, _srcNodeID, dstNodeID](Error::Ptr _error) {
                 if (_error)
                 {
                     GATEWAY_LOG(ERROR)
-                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("src", _srcNodeID->hex())
+                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
+                        << LOG_KV("moduleID", _moduleID) << LOG_KV("src", _srcNodeID->hex())
                         << LOG_KV("dst", dstNodeID) << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
                 }

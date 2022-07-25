@@ -114,6 +114,21 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                     }
                 });
         });
+
+    // register the message dispatcher for the consensus txs sync module
+    m_front->registerModuleMessageDispatcher(bcos::protocol::ModuleID::ConsTxsSync,
+        [_txpool](
+            bcos::crypto::NodeIDPtr _nodeID, std::string const& _id, bcos::bytesConstRef _data) {
+            _txpool->asyncNotifyTxsSyncMessage(
+                nullptr, _id, _nodeID, _data, [_id](bcos::Error::Ptr _error) {
+                    if (_error)
+                    {
+                        FRONTSERVICE_LOG(WARNING) << LOG_DESC("asyncNotifyTxsSyncMessage failed")
+                                                  << LOG_KV("code", _error->errorCode())
+                                                  << LOG_KV("msg", _error->errorMessage());
+                    }
+                });
+        });
     FRONTSERVICE_LOG(INFO) << LOG_DESC(
         "registerModuleMessageDispatcher for the txsSync module success");
 

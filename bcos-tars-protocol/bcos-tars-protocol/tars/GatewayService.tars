@@ -6,13 +6,14 @@ module bcostars
     interface GatewayService
     {
         Error asyncSendMessageByNodeID(
-            string groupID, vector<byte> srcNodeID, vector<byte> dstNodeID, vector<byte> payload);
+            string groupID, int moduleID, vector<byte> srcNodeID, vector<byte> dstNodeID, vector<byte> payload);
 
-        Error asyncSendMessageByNodeIDs(string groupID, vector<byte> srcNodeID,
+        Error asyncSendMessageByNodeIDs(string groupID, int moduleID, vector<byte> srcNodeID,
             vector<vector<byte>> dstNodeID, vector<byte> payload);
 
         Error asyncSendBroadcastMessage(
-            int _nodeType, string groupID, vector<byte> srcNodeID, vector<byte> payload);
+            int _nodeType, string groupID, int moduleID, vector<byte> srcNodeID, vector<byte> payload);
+
         Error asyncGetPeers(out GatewayInfo localInfo, out vector<GatewayInfo> peers);
 
         Error asyncGetGroupNodeInfo(string groupID, out GroupNodeInfo groupNodeInfo);
@@ -21,8 +22,11 @@ module bcostars
 
         Error asyncSendMessageByTopic(
             string _topic, vector<byte> _data, out int _type, out vector<byte> _responseData);
+
         Error asyncSendBroadcastMessageByTopic(string _topic, vector<byte> _data);
+
         Error asyncSubscribeTopic(string _clientID, string _topicInfo);
+        
         Error asyncRemoveTopic(string _clientID, vector<string> _topicList);
     };
 };

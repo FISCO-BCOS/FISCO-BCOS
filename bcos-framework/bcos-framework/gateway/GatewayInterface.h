@@ -72,37 +72,41 @@ public:
     /**
      * @brief: send message to a single node
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeID(const std::string& _groupID,
+    virtual void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, ErrorRespFunc _errorRespFunc) = 0;
 
     /**
      * @brief: send message to multiple nodes
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _nodeIDs: the receiver nodeIDs
      * @param _payload: message content
      * @param _errorRespFunc: error func
      * @return void
      */
-    virtual void asyncSendMessageByNodeIDs(const std::string& _groupID,
+    virtual void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
         bytesConstRef _payload) = 0;
 
     /**
      * @brief: send message to all nodes
+     * @param _type: type
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _payload: message content
      * @return void
      */
     virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
+        int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
 
     /// multi-group related interfaces
 

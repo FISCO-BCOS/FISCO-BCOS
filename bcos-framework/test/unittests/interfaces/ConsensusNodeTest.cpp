@@ -18,6 +18,7 @@
  */
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/signature/key/KeyImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -87,6 +88,59 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     BOOST_CHECK(nodeIdSet.count(nodeId3));
     BOOST_CHECK(nodeIdSet.size() == 2);
 }
+
+BOOST_AUTO_TEST_CASE(test_stringToModuleID)
+{
+    BOOST_CHECK(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("raft").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("Raft").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("RAFT").value());
+
+    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("pbft").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("Pbft").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("PBFT").value());
+
+    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("amop").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("Amop").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("AMOP").value());
+
+    BOOST_CHECK(
+        bcos::protocol::ModuleID::BlockSync == protocol::stringToModuleID("block_sync").value());
+    BOOST_CHECK(
+        bcos::protocol::ModuleID::BlockSync == protocol::stringToModuleID("Block_sync").value());
+    BOOST_CHECK(
+        bcos::protocol::ModuleID::BlockSync == protocol::stringToModuleID("BLOCK_SYNC").value());
+
+    BOOST_CHECK(
+        bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("txs_sync").value());
+    BOOST_CHECK(
+        bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("Txs_sync").value());
+    BOOST_CHECK(
+        bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("TXS_SYNC").value());
+
+    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+                protocol::stringToModuleID("cons_txs_sync").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+                protocol::stringToModuleID("cons_Txs_sync").value());
+    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+                protocol::stringToModuleID("CONS_TXS_SYNC").value());
+
+
+    BOOST_CHECK(!protocol::stringToModuleID("aa").has_value());
+}
+
+
+BOOST_AUTO_TEST_CASE(test_moduleIDToString)
+{
+    BOOST_CHECK("raft" == protocol::moduleIDToString(protocol::ModuleID::Raft));
+    BOOST_CHECK("pbft" == protocol::moduleIDToString(protocol::ModuleID::PBFT));
+    BOOST_CHECK("amop" == protocol::moduleIDToString(protocol::ModuleID::AMOP));
+    BOOST_CHECK("block_sync" == protocol::moduleIDToString(protocol::ModuleID::BlockSync));
+    BOOST_CHECK("txs_sync" == protocol::moduleIDToString(protocol::ModuleID::TxsSync));
+    BOOST_CHECK("light_node" == protocol::moduleIDToString(protocol::ModuleID::LIGHTNODE));
+    BOOST_CHECK("cons_txs_sync" == protocol::moduleIDToString(protocol::ModuleID::ConsTxsSync));
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
