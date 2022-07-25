@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, macos-12]
+        os: [ubuntu-20.04]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -38,6 +38,8 @@ jobs:
             coverage-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             coverage-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             coverage-v8-notest-${{ runner.temp }}-
+      - name: install Ubuntu dependencies
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake lcov ccache openssl libssl-dev wget libgmp-dev
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }

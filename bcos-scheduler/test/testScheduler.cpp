@@ -55,7 +55,7 @@ BOOST_FIXTURE_TEST_SUITE(Scheduler, SchedulerFixture)
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
     // Add executor
-    executorManager->addExecutor("executor1", std::make_shared<MockParallelExecutor3>("executor1"));
+    executorManager->addExecutor("executor1", std::make_shared< >("executor1"));
 
     // Generate a test block
     auto block = blockFactory->createBlock();
