@@ -13,47 +13,6 @@ on:
   release:
     types: [published, created, edited]
 jobs:
-  # generate_covrage:
-  #   name: generate_coverage
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       os: [ubuntu-20.04, macos-12]
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #       with:
-  #         fetch-depth: 5
-  #     - uses: actions-rs/toolchain@v1
-  #       with:
-  #         toolchain: nightly-2021-06-17
-  #         override: true
-  #     - uses: actions/cache@v2
-  #       id: deps_cache
-  #       with:
-  #         path: deps/src
-  #         key: coverage-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-  #         restore-keys: |
-  #           coverage-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-  #           coverage-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-  #           coverage-v8-notest-${{ runner.temp }}-
-  #     - name: Prepare vcpkg
-  #       uses: friendlyanon/setup-vcpkg@v1
-  #       with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
-  #     - name: configure
-  #       # Note: must run test inner build directory, otherwise the gateway ut maybe failed
-  #       run: mkdir -p build && cd build && cmake .. -DTESTS=ON  -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-  #     - name: compile
-  #       run: cd build && cmake --build . --parallel 4
-  #     - name: make test
-  #       run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
-  #     - name: generate coverage
-  #       run: cd build && make cov
-  #     - name: upload code coverage to codecov
-  #       uses: codecov/codecov-action@v2
-  #       with:
-  #         file: ./build/coverage.info
-  #         name: bcos rc4 coverage
-  #         fail_ci_if_error: true
   build:
     name: build
     runs-on: ${{ matrix.os }}
