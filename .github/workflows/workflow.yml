@@ -80,6 +80,7 @@ jobs:
             build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             build-v8-notest-${{ runner.temp }}-
+      - name: Prepare vcpkg  
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
