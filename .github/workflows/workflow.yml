@@ -78,6 +78,9 @@ jobs:
             build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             build-v8-notest-${{ runner.temp }}-
+      - uses: hendrikmuhs/ccache-action@v1.1
+        with:
+          key: ${{ matrix.os }}-${{ matrix.type }}
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
@@ -89,6 +92,7 @@ jobs:
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           export CC='gcc-10'
           export CXX='g++-10'
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
