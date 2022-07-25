@@ -215,8 +215,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             message->setTransactionHash(metaData->hash());
 
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-            {
-                // LIQUID
+            {  // LIQUID
                 if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
                 {
                     message->setCreate(true);

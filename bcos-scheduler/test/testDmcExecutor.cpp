@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(1);
     block->setBlockHeader(blockHeader);
-    // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
+
     auto dmcExecutor = std::make_shared<DmcExecutor>(
         "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
 
