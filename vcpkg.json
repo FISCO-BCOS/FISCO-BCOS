@@ -27,6 +27,8 @@
     "ms-gsl",
     "tbb",
     "zlib",
+    "grpc",
+    "poco",
     "jsoncpp",
     "protobuf",
     {
@@ -74,7 +76,7 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "offscale-libetcd-cpp"
+        "etcd-cpp-apiv3"
       ]
     }
   },

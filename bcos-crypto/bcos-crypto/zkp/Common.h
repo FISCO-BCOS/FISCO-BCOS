@@ -32,8 +32,8 @@ inline CInputBuffer bytesToInputBuffer(bytes const& data, size_t _length)
     if (data.size() < _length)
     {
         BOOST_THROW_EXCEPTION(
-            InvalidInputData() << errinfo_comment(
-                "InvalidInputData: the data size must be at least " + std::to_string(_length)));
+            InvalidInputInput() << errinfo_comment(
+                "InvalidInputInput: the data size must be at least " + std::to_string(_length)));
     }
     return CInputBuffer{(const char*)data.data(), _length};
 }

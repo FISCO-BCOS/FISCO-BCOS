@@ -17,7 +17,7 @@ target_link_libraries(${FRONTSERVICE_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOO
 
 add_library(${PBFT_INIT_LIB} PBFTInitializer.cpp ProPBFTInitializer.cpp)
 # target_compile_options(${PBFT_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB}  ${TOOL_TARGET} ${LEDGER_TARGET} ${SEALER_TARGET} ${PBFT_TARGET} ${SYNC_TARGET})
+target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${LEDGER_TARGET} ${TOOL_TARGET} ${SEALER_TARGET} ${PBFT_TARGET} ${SYNC_TARGET})
 
 add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 # target_compile_options(${TXPOOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)

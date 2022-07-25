@@ -42,6 +42,8 @@ const char* const VERIFY_PRODUCT_PROOF =
     "verifyProductProof(bytes, bytes, bytes, bytes, bytes, bytes)";
 // wedpr_verify_equality_relationship_proof(c1_point, c2_point, proof, basepoint1, basepoint2)
 const char* const VERIFY_EQUALITY_PROOF = "verifyEqualityProof(bytes,bytes,bytes,bytes,bytes)";
+// wedpr_aggregate_ristretto_point(*point_sum, *point_share,result);
+const char* const AGGREGATE_POINT = "aggregatePoint(bytes,bytes)";
 
 ZkpPrecompiled::ZkpPrecompiled(bcos::crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -55,6 +57,7 @@ ZkpPrecompiled::ZkpPrecompiled(bcos::crypto::Hash::Ptr _hashImpl) : Precompiled(
     name2Selector[VERIFY_SUM_PROOF] = getFuncSelector(VERIFY_SUM_PROOF, _hashImpl);
     name2Selector[VERIFY_PRODUCT_PROOF] = getFuncSelector(VERIFY_PRODUCT_PROOF, _hashImpl);
     name2Selector[VERIFY_EQUALITY_PROOF] = getFuncSelector(VERIFY_EQUALITY_PROOF, _hashImpl);
+    name2Selector[AGGREGATE_POINT] = getFuncSelector(AGGREGATE_POINT, _hashImpl);
 }
 std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
@@ -95,6 +98,11 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
     {
         // verifyEqualityProof
         verifyEqualityProof(codec, paramData, _callParameters);
+    }
+    else if (name2Selector[AGGREGATE_POINT] == funcSelector)
+    {
+        // aggregateRistrettoPoint
+        aggregateRistrettoPoint(codec, paramData, _callParameters);
     }
     else
     {
@@ -253,4 +261,25 @@ void ZkpPrecompiled::verifyEqualityProof(
                                  << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+}
+
+void ZkpPrecompiled::aggregateRistrettoPoint(
+    CodecWrapper const& _codec, bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult)
+{
+    int retCode = 0;
+    bytes result;
+    try
+    {
+        bytes sumPoint;
+        bytes pointShare;
+        _codec.decode(_paramData, sumPoint, pointShare);
+        result = m_zkpImpl->aggregateRistrettoPoint(sumPoint, pointShare);
+    }
+    catch (std::exception const& e)
+    {
+        retCode = -1;
+        PRECOMPILED_LOG(WARNING) << LOG_DESC("aggregateRistrettoPoint exception")
+                                 << LOG_KV("error", boost::diagnostic_information(e));
+    }
+    _callResult->setExecResult(_codec.encode(retCode, result));
 }

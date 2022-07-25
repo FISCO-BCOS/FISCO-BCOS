@@ -1,5 +1,7 @@
 #pragma once
 #include "../Common.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include <bcos-concepts/Basic.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
@@ -10,10 +12,10 @@ namespace bcos::concepts::hash
 {
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::Transaction const& transaction)
+void impl_calculate(bcostars::Transaction const& transaction, bcos::concepts::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
-        return transaction.dataHash;
+        out = transaction.dataHash;
 
     Hasher hasher;
     auto const& hashFields = transaction.data;
@@ -31,15 +33,41 @@ auto impl_calculate(bcostars::Transaction const& transaction)
     hasher.update(hashFields.abi);
 
     decltype(transaction.dataHash) hash(Hasher::HASH_SIZE);
-    hasher.final(hash);
-    return hash;
+    hasher.final(out);
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::BlockHeader const& blockHeader)
+void impl_calculate(
+    bcostars::TransactionReceipt const& receipt, bcos::concepts::ByteBuffer auto& out)
+{
+    // if (!transaction.dataHash.empty())
+    //     out = transaction.dataHash;
+
+    // Hasher hasher;
+    // auto const& hashFields = transaction.data;
+
+    // long version =
+    //     boost::asio::detail::socket_ops::host_to_network_long((int32_t)hashFields.version);
+    // hasher.update(version);
+    // hasher.update(hashFields.chainID);
+    // hasher.update(hashFields.groupID);
+    // long blockLimit =
+    // boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockLimit);
+    // hasher.update(blockLimit);
+    // hasher.update(hashFields.nonce);
+    // hasher.update(hashFields.to);
+    // hasher.update(hashFields.input);
+    // hasher.update(hashFields.abi);
+
+    // decltype(transaction.dataHash) hash(Hasher::HASH_SIZE);
+    // hasher.final(out);
+}
+
+template <bcos::crypto::hasher::Hasher Hasher>
+auto impl_calculate(bcostars::BlockHeader const& blockHeader, bcos::concepts::ByteBuffer auto& out)
 {
     if (!blockHeader.dataHash.empty())
-        return blockHeader.dataHash;
+        out = blockHeader.dataHash;
 
     Hasher hasher;
     auto const& hashFields = blockHeader.data;
@@ -80,9 +108,7 @@ auto impl_calculate(bcostars::BlockHeader const& blockHeader)
         hasher.update(networkWeight);
     }
 
-    decltype(blockHeader.dataHash) hash(Hasher::HASH_SIZE);
-    hasher.final(hash);
-    return hash;
+    hasher.final(out);
 }
 
 }  // namespace bcos::concepts::hash

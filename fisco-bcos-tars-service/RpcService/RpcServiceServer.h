@@ -2,7 +2,7 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "RpcService/RpcInitializer.h"
+#include "RpcInitializer.h"
 #include <bcos-tars-protocol/tars/RpcService.h>
 namespace bcostars
 {

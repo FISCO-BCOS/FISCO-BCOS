@@ -1,6 +1,6 @@
-#include "Common/TarsUtils.h"
-#include "GatewayService/GatewayInitializer.h"
-#include "GatewayService/GatewayServiceServer.h"
+#include "../../Common/TarsUtils.h"
+#include "../GatewayInitializer.h"
+#include "../GatewayServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -8,7 +8,7 @@
 
 using namespace bcostars;
 
-class GatewayServiceApp : public Application
+class GatewayServiceApp : public tars::Application
 {
 public:
     GatewayServiceApp() {}
@@ -22,7 +22,7 @@ public:
         // and output exception information here
         try
         {
-            m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
+            m_iniConfigPath = tars::ServerConfig::BasePath + "/config.ini";
             addConfig("config.ini");
             initService(m_iniConfigPath);
             GatewayServiceParam param;
@@ -52,8 +52,8 @@ protected:
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
         gatewayConfig->initP2PConfig(pt, true);
-        gatewayConfig->setCertPath(ServerConfig::BasePath);
-        gatewayConfig->setNodePath(ServerConfig::BasePath);
+        gatewayConfig->setCertPath(tars::ServerConfig::BasePath);
+        gatewayConfig->setNodePath(tars::ServerConfig::BasePath);
         if (gatewayConfig->smSSL())
         {
             addConfig("sm_ca.crt");
