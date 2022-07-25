@@ -20,7 +20,7 @@
  */
 #include "ExecutorServiceApp.h"
 #include "../../Common/TarsUtils.h"
-#include "ExecutorService/ExecutorServiceServer.h"
+#include "../ExecutorServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/ExecutorInitializer.h"
 #include "libinitializer/ParallelExecutor.h"
@@ -57,8 +57,8 @@ void ExecutorServiceApp::initialize()
 void ExecutorServiceApp::createAndInitExecutor()
 {
     // fetch config
-    m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
-    m_genesisConfigPath = ServerConfig::BasePath + "/config.genesis";
+    m_iniConfigPath = tars::ServerConfig::BasePath + "/config.ini";
+    m_genesisConfigPath = tars::ServerConfig::BasePath + "/config.genesis";
     addConfig("config.ini");
     addConfig("config.genesis");
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor: fetch config success")

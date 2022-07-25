@@ -36,12 +36,10 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
-    // init a hashContext
-    void* init() override { return nullptr; }
-    // update the hashContext
-    void* update(void*, bytesConstRef) override { return nullptr; }
-    // final the hashContext
-    bcos::crypto::HashType final(void*) override { return bcos::crypto::HashType(); }
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
+    }
 };
 
 struct TestTiKVStorageFixture
