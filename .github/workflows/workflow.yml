@@ -72,16 +72,14 @@ jobs:
       - uses: actions/cache@v2
         id: deps_cache
         with:
-          path: deps/src
+          path: |
+            deps/src
+            ccache
           key: build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
             build-v8-notest-${{ runner.temp }}-
-      - uses: hendrikmuhs/ccache-action@v1.1
-        with:
-          key: ${{ matrix.os }}-${{ matrix.type }}
-      - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
@@ -93,7 +91,6 @@ jobs:
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
-          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           export CC='gcc-10'
           export CXX='g++-10'
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
@@ -122,31 +119,29 @@ jobs:
       - uses: actions/cache@v2
         id: deps_cache
         with:
-          path: deps/src
-          key: build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          path: |
+            deps/src
+            ccache
+          key: centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            build-v8-notest-${{ runner.temp }}-
+            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            centos-v8-notest-${{ runner.temp }}-
       - name: Prepare centos tools
         run: |
           yum install yum install -y epel-release centos-release-scl flex bison
-          yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel
+          yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
       - name: Prepare vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
-      - uses: hendrikmuhs/ccache-action@v1.1
-        with:
-          key: ${{ matrix.os }}-${{ matrix.type }}
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2021-06-17
           override: true
       - name: Build
         run: |
-          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           alias cmake='cmake3'
           . /opt/rh/devtoolset-10/enable
           . /opt/rh/rh-perl530/enable
