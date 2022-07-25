@@ -55,7 +55,11 @@ jobs:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
   build_centos:
     name: build_centos
-    runs-on: ubuntu-20.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+        tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
     container: docker.io/centos:7
     steps:
       - uses: actions/checkout@v2
@@ -83,8 +87,20 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 4
+      - name: Test with tikv
+        if: matrix.tikv == 'WITH_TIKV=ON'
+        run: |
+          mkdir -p /root/.tiup/bin/
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /github/home/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.4.2 --mode tikv-slim &
+          sleep 10
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - name: Test
+        if: matrix.tikv == 'WITH_TIKV=OFF'
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test

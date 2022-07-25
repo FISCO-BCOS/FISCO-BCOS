@@ -31,8 +31,10 @@ compile_service("NodeService/pro" ${PRO_NODE_SERVICE_BINARY_NAME})
 set(MAX_NODE_SERVICE_BINARY_NAME BcosMaxNodeService)
 compile_service("NodeService/max" ${MAX_NODE_SERVICE_BINARY_NAME})
 
-# ExecutorService
-set(EXECUTOR_BINARY_NAME BcosExecutorService)
-compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
+if(WITH_TIKV)
+    # ExecutorService
+    set(EXECUTOR_BINARY_NAME BcosExecutorService)
+    compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
+endif()
 
 add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})

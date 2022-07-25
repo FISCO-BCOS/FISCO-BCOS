@@ -27,6 +27,8 @@
     "ms-gsl",
     "tbb",
     "zlib",
+    "grpc",
+    "poco",
     "jsoncpp",
     "protobuf",
     {
