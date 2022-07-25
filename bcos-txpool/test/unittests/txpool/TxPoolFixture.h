@@ -170,6 +170,16 @@ public:
         m_txpool->setTransactionSync(m_sync);
     }
 
+    void asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr _txsResult,
+        std::function<void(Error::Ptr)> _onNotifyFinished)
+    {
+        m_txpool->txpoolStorage()->batchRemove(_blockNumber, *_txsResult);
+        if (_onNotifyFinished)
+        {
+            _onNotifyFinished(nullptr);
+        }
+    }
+
 private:
     void updateConnectedNodeList()
     {
