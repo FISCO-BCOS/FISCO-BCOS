@@ -352,7 +352,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     BOOST_CHECK(notifiedTxs->size() == sealedTxs->size());
 
     finish = false;
-    _txpool->asyncNotifyBlockResult(blockNumber, txsResult, [&](Error::Ptr _error) {
+    _faker->asyncNotifyBlockResult(blockNumber, txsResult, [&](Error::Ptr _error) {
         BOOST_CHECK(_error == nullptr);
         finish = true;
     });
