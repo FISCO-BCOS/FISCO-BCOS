@@ -103,11 +103,11 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                     response.result.swap(_result);
                 }
                 auto strResp = toStringResponse(std::move(response));
-                _sender(std::move(strResp));
                 RPC_IMPL_LOG(TRACE)
                     << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
                     << LOG_KV("response",
                            std::string_view((const char*)strResp.data(), strResp.size()));
+                _sender(std::move(strResp));
             });
 
         // success response
