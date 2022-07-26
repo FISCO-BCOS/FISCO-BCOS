@@ -66,7 +66,8 @@ public:
         }
         auto groupInfo = it->second;
 
-        auto nodeIt = groupInfo->nodeInfos().find(_nodeName);
+        auto nodeInfos = groupInfo->nodeInfos();
+        auto nodeIt = nodeInfos.find(_nodeName);
         return nodeIt->second;
     }
 
