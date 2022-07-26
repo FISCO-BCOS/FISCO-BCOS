@@ -27,10 +27,11 @@
 #include <boost/exception/detail/type_info.hpp>
 #include <exception>
 #include <functional>
+#include <memory>
 #include <set>
 #include <shared_mutex>
 
-#define TARS_PING_PERIOD (1000)
+#define TARS_PING_PERIOD (3000)
 
 namespace bcostars
 {
@@ -48,6 +49,7 @@ using TarsServantProxyOnConnectHandler = std::function<void(const tars::TC_Endpo
 using TarsServantProxyOnCloseHandler = std::function<void(const tars::TC_Endpoint& ep)>;
 
 class TarsServantProxyCallback : public tars::ServantProxyCallback
+
 {
 public:
     using Ptr = std::shared_ptr<TarsServantProxyCallback>;
@@ -59,11 +61,6 @@ public:
       : m_serviceName(_serviceName), m_servantProxy(_servantProxy)
     {
         m_timer = std::make_shared<bcos::Timer>(TARS_PING_PERIOD, "tars_ping");
-        m_timer->registerTimeoutHandler([this, _serviceName]() {
-            ping();
-            report();
-            startTimer();
-        });
 
         BCOS_LOG(INFO) << LOG_BADGE("[NEWOBJ][TarsServantProxyCallback]")
                        << LOG_KV("_serviceName", _serviceName) << LOG_KV("this", this);
@@ -90,10 +87,10 @@ public:
 
     void onClose(const tars::TC_Endpoint& ep) override
     {
-        auto p = addInactiveEndPoint(ep);
-        BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onClose")
+        auto p = addInactiveEndpoint(ep);
+        BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onClose") << LOG_KV("this", this)
                        << LOG_KV("endPoint", ep.toString()) << LOG_KV("result", p.first)
-                       << LOG_KV("inactiveEndPoints size", p.second);
+                       << LOG_KV("inactiveEndpoints size", p.second);
 
         if (p.first && m_onCloseHandler)
         {
@@ -103,10 +100,10 @@ public:
 
     void onConnect(const tars::TC_Endpoint& ep) override
     {
-        auto p = addActiveEndPoint(ep);
-        BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onConnect")
+        auto p = addActiveEndpoint(ep);
+        BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onConnect") << LOG_KV("this", this)
                        << LOG_KV("endPoint", ep.toString()) << LOG_KV("result", p.first)
-                       << LOG_KV("activeEndPoints size", p.second);
+                       << LOG_KV("activeEndpoints size", p.second);
 
         if (p.first && m_onConnectHandler)
         {
@@ -117,50 +114,57 @@ public:
 public:
     void startTimer()
     {
-        if (m_timer)
+        if (!m_timer)
         {
-            m_timer->start();
+            return;
         }
+
+        m_timer->registerTimeoutHandler([this]() {
+            ping();
+            report();
+        });
+
+        m_timer->start();
     }
 
     const std::string& serviceName() const { return m_serviceName; }
 
-    auto activeEndPoints()
+    auto activeEndpoints()
     {
-        std::shared_lock l(x_endPoints);
-        return m_activeEndPoints;
+        std::shared_lock l(x_endpoints);
+        return m_activeEndpoints;
     }
 
-    EndpointSet inactiveEndPoints()
+    EndpointSet inactiveEndpoints()
     {
-        std::shared_lock l(x_endPoints);
-        return m_inactiveEndPoints;
+        std::shared_lock l(x_endpoints);
+        return m_inactiveEndpoints;
     }
 
-    std::pair<bool, std::size_t> addActiveEndPoint(const tars::TC_Endpoint& ep)
+    std::pair<bool, std::size_t> addActiveEndpoint(const tars::TC_Endpoint& ep)
     {
-        std::unique_lock l(x_endPoints);
-        auto result = m_activeEndPoints.insert(ep);
-        m_inactiveEndPoints.erase(ep);
-        return std::make_pair(result.second, m_activeEndPoints.size());
+        std::unique_lock l(x_endpoints);
+        auto result = m_activeEndpoints.insert(ep);
+        m_inactiveEndpoints.erase(ep);
+        return std::make_pair(result.second, m_activeEndpoints.size());
     }
 
-    std::pair<bool, std::size_t> addInactiveEndPoint(const tars::TC_Endpoint& ep)
+    std::pair<bool, std::size_t> addInactiveEndpoint(const tars::TC_Endpoint& ep)
     {
         {
-            std::shared_lock l(x_endPoints);
-            if (m_inactiveEndPoints.find(ep) != m_inactiveEndPoints.end())
+            std::shared_lock l(x_endpoints);
+            if (m_inactiveEndpoints.find(ep) != m_inactiveEndpoints.end())
             {
-                return std::make_pair(false, m_inactiveEndPoints.size());
+                return std::make_pair(false, m_inactiveEndpoints.size());
             }
         }
 
         {
-            std::unique_lock l(x_endPoints);
-            auto result = m_inactiveEndPoints.insert(ep);
-            m_activeEndPoints.erase(ep);
+            std::unique_lock l(x_endpoints);
+            auto result = m_inactiveEndpoints.insert(ep);
+            m_activeEndpoints.erase(ep);
 
-            return std::make_pair(result.second, m_inactiveEndPoints.size());
+            return std::make_pair(result.second, m_inactiveEndpoints.size());
         }
     }
 
@@ -174,16 +178,13 @@ public:
 
     void setOnCloseHandler(TarsServantProxyOnCloseHandler _handler) { m_onCloseHandler = _handler; }
 
-    bool available() { return !activeEndPoints().empty(); }
+    bool available() { return !activeEndpoints().empty(); }
 
     void ping()
     {
         try
         {
-            // m_servantProxy.tars_ping();
             m_servantProxy.tars_async_ping();
-            BCOS_LOG(TRACE) << LOG_BADGE("ServantProxyCallback::tars_async_ping")
-                            << LOG_KV("serviceName", m_serviceName);
         }
         catch (const std::exception& _e)
         {
@@ -191,19 +192,19 @@ public:
                             << LOG_KV("serviceName", m_serviceName)
                             << LOG_KV("e", boost::diagnostic_information(_e));
         }
+    }
+
+    void report()
+    {
+        // BCOS_LOG(TRACE) << LOG_BADGE("ServantProxyCallback") << LOG_DESC("report endpoint")
+        //                 << LOG_KV("serviceName", m_serviceName)
+        //                 << LOG_KV("activeEndpoints size", activeEndpoints().size())
+        //                 << LOG_KV("inactiveEndpoints size", inactiveEndpoints().size());
 
         if (m_timer)
         {
             m_timer->restart();
         }
-    }
-
-    void report()
-    {
-        BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback") << LOG_DESC("report endpoint")
-                       << LOG_KV("serviceName", m_serviceName)
-                       << LOG_KV("activeEndpoints size", activeEndPoints().size())
-                       << LOG_KV("inactiveEndpoints size", inactiveEndPoints().size());
     }
 
 private:
@@ -215,12 +216,12 @@ private:
     // timer for ping and report
     std::shared_ptr<bcos::Timer> m_timer;
 
-    // lock for m_activeEndPoints and m_inactiveEndPoints
-    mutable std::shared_mutex x_endPoints;
+    // lock for m_activeEndpoints and m_inactiveEndpoints
+    mutable std::shared_mutex x_endpoints;
     // all active tars endpoints
-    EndpointSet m_activeEndPoints;
+    EndpointSet m_activeEndpoints;
     // all inactive tars endpoints
-    EndpointSet m_inactiveEndPoints;
+    EndpointSet m_inactiveEndpoints;
 
     std::function<void(const tars::TC_Endpoint& ep)> m_onConnectHandler;
     std::function<void(const tars::TC_Endpoint& ep)> m_onCloseHandler;

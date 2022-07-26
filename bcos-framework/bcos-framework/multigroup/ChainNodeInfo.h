@@ -70,6 +70,10 @@ public:
         bcos::protocol::ServiceType _type, std::string const& _serviceName)
     {
         m_servicesInfo[_type] = _serviceName;
+
+        BCOS_LOG(TRACE) << LOG_BADGE("ChainNodeInfo") << LOG_DESC("appendServiceInfo")
+                        << LOG_KV("type", _type) << LOG_KV("name", getServiceNameByType(_type))
+                        << LOG_KV("serviceName", _serviceName);
     }
 
     virtual ServicesInfo const& serviceInfo() const { return m_servicesInfo; }

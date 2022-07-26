@@ -181,7 +181,8 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
             continue;
         }
 
-        auto frontPrx = bcostars::createServantPrx<bcostars::FrontServicePrx>(serviceName);
+        // TODO:: tars
+        auto frontPrx = bcostars::createServantProxy<bcostars::FrontServicePrx>(serviceName);
         auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
 
         UpgradeGuard ul(l);

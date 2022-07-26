@@ -391,7 +391,7 @@ auto tarsProxyAvailableEndPoints(const T& prx)
 {
     auto cb = prx->tars_get_push_callback();
     assert(cb);
-    return ((TarsServantProxyCallback*)cb.get())->activeEndPoints();
+    return ((TarsServantProxyCallback*)cb.get())->activeEndpoints();
 }
 
 inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)

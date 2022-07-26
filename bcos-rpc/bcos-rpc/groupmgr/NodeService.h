@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "bcos-tars-protocol/Common.h"
+#include "bcos-tool/NodeConfig.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -88,19 +89,34 @@ public:
     NodeServiceFactory() = default;
     virtual ~NodeServiceFactory() {}
     NodeService::Ptr buildNodeService(std::string const& _chainID, std::string const& _groupID,
-        bcos::group::ChainNodeInfo::Ptr _nodeInfo);
+        bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig);
 
     template <typename T, typename S, typename... Args>
     inline std::pair<std::shared_ptr<T>, S> createServicePrx(bcos::protocol::ServiceType _type,
-        bcos::group::ChainNodeInfo::Ptr _nodeInfo, const Args&... _args)
+        bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig,
+        const Args&... _args)
     {
+        auto withoutTarsFramework = _nodeConfig->withoutTarsFramework();
         auto serviceName = _nodeInfo->serviceName(_type);
         if (serviceName.size() == 0)
+        {
+            if (!withoutTarsFramework)
+            {
+                return std::make_pair(nullptr, nullptr);
+            }
+        }
+
+        std::vector<tars::TC_Endpoint> endPoints;
+        try
+        {
+            _nodeConfig->getTarsClientProxyEndpoints(getServiceNameByType(_type), endPoints);
+        }
+        catch (const std::exception&)
         {
             return std::make_pair(nullptr, nullptr);
         }
 
-        auto prx = bcostars::createServantPrx<S>(serviceName);
+        auto prx = bcostars::createServantProxy<S>(serviceName);
         auto client = std::make_shared<T>(prx, _args...);
 
         return std::make_pair(client, prx);

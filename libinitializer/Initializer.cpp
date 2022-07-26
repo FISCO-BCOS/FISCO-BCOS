@@ -51,6 +51,8 @@
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
+#include <util/tc_clientsocket.h>
+#include <vector>
 
 
 using namespace bcos;
@@ -73,8 +75,14 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
-    auto gatewayPrx =
-        bcostars::createServantPrx<bcostars::GatewayServicePrx>(m_nodeConfig->gatewayServiceName());
+    auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
+    // TODO: tars
+    auto gatewayPrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
+        withoutTarsFramework, gatewayServiceName, endPoints);
 
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);

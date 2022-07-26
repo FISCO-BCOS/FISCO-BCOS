@@ -139,7 +139,8 @@ bool GroupManager::updateNodeService(
         return false;
     }
     // a started node
-    auto nodeService = m_nodeServiceFactory->buildNodeService(m_chainID, _groupID, _nodeInfo);
+    auto nodeService =
+        m_nodeServiceFactory->buildNodeService(m_chainID, _groupID, _nodeInfo, m_nodeConfig);
     if (!nodeService)
     {
         return false;

@@ -20,6 +20,7 @@
  */
 #include "NodeService.h"
 #include "Common.h"
+#include "bcos-tool/NodeConfig.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
@@ -33,8 +34,8 @@ using namespace bcos::crypto;
 using namespace bcos::group;
 using namespace bcos::protocol;
 
-NodeService::Ptr NodeServiceFactory::buildNodeService(
-    std::string const&, std::string const&, bcos::group::ChainNodeInfo::Ptr _nodeInfo)
+NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::string const&,
+    bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig)
 {
     auto appName = _nodeInfo->nodeName();
     // create cryptoSuite
@@ -52,41 +53,51 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(
     cryptoSuite->setKeyFactory(keyFactory);
 
     auto blockFactory = createBlockFactory(cryptoSuite);
+
+    // TODO: tars
     auto ledgerClient = createServicePrx<bcostars::LedgerServiceClient, bcostars::LedgerServicePrx>(
-        LEDGER, _nodeInfo, blockFactory);
+        LEDGER, _nodeInfo, _nodeConfig, blockFactory);
     if (!ledgerClient.first)
     {
         return nullptr;
     }
+
+    // TODO: tars
     auto schedulerClient =
         createServicePrx<bcostars::SchedulerServiceClient, bcostars::SchedulerServicePrx>(
-            SCHEDULER, _nodeInfo, cryptoSuite);
+            SCHEDULER, _nodeInfo, _nodeConfig, cryptoSuite);
     if (!schedulerClient.first)
     {
         return nullptr;
     }
+
+    // TODO: tars
     // create txpool client
     auto txpoolClient = createServicePrx<bcostars::TxPoolServiceClient, bcostars::TxPoolServicePrx>(
-        TXPOOL, _nodeInfo, cryptoSuite, blockFactory);
+        TXPOOL, _nodeInfo, _nodeConfig, cryptoSuite, blockFactory);
     if (!txpoolClient.first)
     {
         return nullptr;
     }
 
+    // TODO: tars
     // create consensus client
     auto consensusClient = createServicePrx<bcostars::PBFTServiceClient, bcostars::PBFTServicePrx>(
-        CONSENSUS, _nodeInfo);
+        CONSENSUS, _nodeInfo, _nodeConfig);
     if (!consensusClient.first)
     {
         return nullptr;
     }
+
+    // TODO: tars
     // create sync client
     auto syncClient = createServicePrx<bcostars::BlockSyncServiceClient, bcostars::PBFTServicePrx>(
-        CONSENSUS, _nodeInfo);
+        CONSENSUS, _nodeInfo, _nodeConfig);
     if (!syncClient.first)
     {
         return nullptr;
     }
+
     auto nodeService = std::make_shared<NodeService>(ledgerClient.first, schedulerClient.first,
         txpoolClient.first, consensusClient.first, syncClient.first, blockFactory);
 

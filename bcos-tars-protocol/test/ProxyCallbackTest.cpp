@@ -52,7 +52,8 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 
     tars::Communicator* c = new tars::Communicator();
 
-    auto proxy = bcostars::createServantPrx<bcostars::GatewayServicePrx>(c, serviceName, ep, true);
+    auto proxy = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
+        c, endPointToString(serviceName, ep));
 
     proxy->tars_reconnect(3);
 
@@ -68,47 +69,47 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
-    auto activeEndPoints = cb.activeEndPoints();
-    auto inactiveEndPoints = cb.inactiveEndPoints();
+    auto activeEndpoints = cb.activeEndpoints();
+    auto inactiveEndpoints = cb.inactiveEndpoints();
 
     BOOST_CHECK_EQUAL(cb.serviceName(), serviceName);
 
-    BOOST_CHECK_EQUAL(activeEndPoints.size(), 0);
-    BOOST_CHECK_EQUAL(inactiveEndPoints.size(), 0);
+    BOOST_CHECK_EQUAL(activeEndpoints.size(), 0);
+    BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 0);
     BOOST_CHECK(!cb.available());
 
-    auto p = cb.addActiveEndPoint(ep);
+    auto p = cb.addActiveEndpoint(ep);
     BOOST_CHECK(p.first);
     BOOST_CHECK(p.second == 1);
-    BOOST_CHECK_EQUAL(cb.activeEndPoints().size(), 1);
+    BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 1);
 
-    p = cb.addActiveEndPoint(ep);
+    p = cb.addActiveEndpoint(ep);
     BOOST_CHECK(!p.first);
     BOOST_CHECK(p.second == 1);
-    BOOST_CHECK_EQUAL(cb.activeEndPoints().size(), 1);
+    BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 1);
 
-    p = cb.addActiveEndPoint(ep);
+    p = cb.addActiveEndpoint(ep);
     BOOST_CHECK(!p.first);
     BOOST_CHECK(p.second == 1);
-    BOOST_CHECK_EQUAL(cb.activeEndPoints().size(), 1);
+    BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 1);
 
-    p = cb.addInactiveEndPoint(ep);
+    p = cb.addInactiveEndpoint(ep);
     BOOST_CHECK(p.first);
     BOOST_CHECK_EQUAL(p.second, 1);
-    BOOST_CHECK_EQUAL(cb.activeEndPoints().size(), 0);
-    BOOST_CHECK_EQUAL(cb.inactiveEndPoints().size(), 1);
+    BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 0);
+    BOOST_CHECK_EQUAL(cb.inactiveEndpoints().size(), 1);
 
-    p = cb.addInactiveEndPoint(ep);
+    p = cb.addInactiveEndpoint(ep);
     BOOST_CHECK(!p.first);
     BOOST_CHECK(p.second == 1);
-    BOOST_CHECK_EQUAL(cb.activeEndPoints().size(), 0);
-    BOOST_CHECK_EQUAL(cb.inactiveEndPoints().size(), 1);
+    BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 0);
+    BOOST_CHECK_EQUAL(cb.inactiveEndpoints().size(), 1);
 
-    p = cb.addInactiveEndPoint(ep);
+    p = cb.addInactiveEndpoint(ep);
     BOOST_CHECK(!p.first);
     BOOST_CHECK(p.second == 1);
-    BOOST_CHECK_EQUAL(cb.activeEndPoints().size(), 0);
-    BOOST_CHECK_EQUAL(cb.inactiveEndPoints().size(), 1);
+    BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 0);
+    BOOST_CHECK_EQUAL(cb.inactiveEndpoints().size(), 1);
 
     BOOST_CHECK(!cb.available());
 
@@ -124,11 +125,11 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
     BOOST_CHECK(cb.available());
     BOOST_CHECK_EQUAL(conCount, 3);
 
-    activeEndPoints = cb.activeEndPoints();
-    inactiveEndPoints = cb.inactiveEndPoints();
+    activeEndpoints = cb.activeEndpoints();
+    inactiveEndpoints = cb.inactiveEndpoints();
 
-    BOOST_CHECK_EQUAL(activeEndPoints.size(), 3);
-    BOOST_CHECK_EQUAL(inactiveEndPoints.size(), 0);
+    BOOST_CHECK_EQUAL(activeEndpoints.size(), 3);
+    BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 0);
 
     cb.onClose(ep);
     BOOST_CHECK(cb.available());
@@ -142,11 +143,11 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
     BOOST_CHECK(!cb.available());
     BOOST_CHECK_EQUAL(closeCount, 3);
 
-    activeEndPoints = cb.activeEndPoints();
-    inactiveEndPoints = cb.inactiveEndPoints();
+    activeEndpoints = cb.activeEndpoints();
+    inactiveEndpoints = cb.inactiveEndpoints();
 
-    BOOST_CHECK_EQUAL(activeEndPoints.size(), 0);
-    BOOST_CHECK_EQUAL(inactiveEndPoints.size(), 3);
+    BOOST_CHECK_EQUAL(activeEndpoints.size(), 0);
+    BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

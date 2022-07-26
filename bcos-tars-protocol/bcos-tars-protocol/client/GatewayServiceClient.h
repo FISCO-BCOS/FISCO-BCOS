@@ -281,7 +281,7 @@ public:
         for (auto const& endPoint : activeEndPoints)
         {
             auto prx =
-                bcostars::createServantPrx<GatewayServicePrx>(m_gatewayServiceName, endPoint);
+                bcostars::createServantProxy<GatewayServicePrx>(m_gatewayServiceName, endPoint);
             prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
         }
     }

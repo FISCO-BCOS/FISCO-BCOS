@@ -31,8 +31,8 @@ class TarsGroupManager : public GroupManager
 public:
     using Ptr = std::shared_ptr<TarsGroupManager>;
     TarsGroupManager(std::string _rpcServiceName, std::string const& _chainID,
-        NodeServiceFactory::Ptr _nodeServiceFactory)
-      : GroupManager(_rpcServiceName, _chainID, _nodeServiceFactory)
+        NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
+      : GroupManager(_rpcServiceName, _chainID, _nodeServiceFactory, _nodeConfig)
     {
         m_groupStatusUpdater = std::make_shared<Timer>(c_tarsAdminRefreshTime);
         m_groupStatusUpdater->start();

@@ -87,7 +87,7 @@ public:
         // notify block number to all rpc nodes
         for (auto const& endPoint : activeEndPoints)
         {
-            auto prx = bcostars::createServantPrx<RpcServicePrx>(m_rpcServiceName, endPoint);
+            auto prx = bcostars::createServantProxy<RpcServicePrx>(m_rpcServiceName, endPoint);
             prx->async_asyncNotifyBlockNumber(
                 new Callback(_callback), _groupID, _nodeName, _blockNumber);
         }
@@ -135,7 +135,7 @@ public:
 
         for (auto const& endPoint : activeEndPoints)
         {
-            auto prx = bcostars::createServantPrx<RpcServicePrx>(m_rpcServiceName, endPoint);
+            auto prx = bcostars::createServantProxy<RpcServicePrx>(m_rpcServiceName, endPoint);
             prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
         }
     }

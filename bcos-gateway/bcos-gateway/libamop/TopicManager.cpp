@@ -24,6 +24,7 @@
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-gateway/libamop/TopicManager.h>
 #include <json/json.h>
+#include <servant/Application.h>
 #include <algorithm>
 
 using namespace bcos;
@@ -404,7 +405,8 @@ bcos::rpc::RPCInterface::Ptr TopicManager::createAndGetServiceByClient(std::stri
 
         auto serviceName = m_rpcServiceName;
 
-        auto servicePrx = bcostars::createServantPrxWithCB<bcostars::RpcServicePrx>(_clientID,
+        auto servicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
+            tars::Application::getCommunicator().get(), _clientID,
             bcostars::TarsServantProxyOnConnectHandler(),
             [serviceName, this](const tars::TC_Endpoint& ep) {
                 auto endPointUrl = bcostars::endPointToString(serviceName, ep);
@@ -433,7 +435,7 @@ void TopicManager::notifyRpcToSubscribeTopics()
 {
     try
     {
-        auto servicePrx = bcostars::createServantPrx<bcostars::RpcServicePrx>(m_rpcServiceName);
+        auto servicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(m_rpcServiceName);
 
         auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
 
@@ -448,7 +450,7 @@ void TopicManager::notifyRpcToSubscribeTopics()
             auto endPointStr = bcostars::endPointToString(m_rpcServiceName, endPoint);
 
             auto servicePrx =
-                bcostars::createServantPrx<bcostars::RpcServicePrx>(m_rpcServiceName, endPoint);
+                bcostars::createServantProxy<bcostars::RpcServicePrx>(m_rpcServiceName, endPoint);
 
             auto serviceClient =
                 std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);

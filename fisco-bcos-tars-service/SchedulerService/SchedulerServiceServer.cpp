@@ -110,7 +110,7 @@ bcostars::Error SchedulerServiceServer::registerExecutor(
 {
     _current->setResponse(false);
 
-    auto executorServicePrx = bcostars::createServantPrx<bcostars::ExecutorServicePrx>(name);
+    auto executorServicePrx = bcostars::createServantProxy<bcostars::ExecutorServicePrx>(_name);
 
     auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);
     m_scheduler->registerExecutor(_name, executor, [_current](bcos::Error::Ptr&& _error) {

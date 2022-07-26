@@ -88,12 +88,20 @@ void ExecutorServiceApp::createAndInitExecutor()
     // for stat the nodeVersion
     bcos::initializer::showNodeVersionMetric();
 
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+
     // create txpool client
     auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
-                               << LOG_KV("txpoolServiceName", txpoolServiceName);
+                               << LOG_KV("txpoolServiceName", txpoolServiceName)
+                               << LOG_KV("withoutTarsFramework", withoutTarsFramework);
 
-    auto txpoolServicePrx = createServantPrx<bcostars::TxPoolServicePrx>(txpoolServiceName);
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
+
+    // TODO: tars
+    auto txpoolServicePrx = createServantProxy<bcostars::TxPoolServicePrx>(
+        withoutTarsFramework, txpoolServiceName, endPoints);
 
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
@@ -102,7 +110,8 @@ void ExecutorServiceApp::createAndInitExecutor()
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create SchedulerServiceClient")
                                << LOG_KV("schedulerServiceName", schedulerServiceName);
 
-    auto schedulerPrx = createServantPrx<bcostars::SchedulerServicePrx>(schedulerServiceName);
+    // TODO: tars
+    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(schedulerServiceName);
 
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(
         schedulerPrx, m_protocolInitializer->cryptoSuite());

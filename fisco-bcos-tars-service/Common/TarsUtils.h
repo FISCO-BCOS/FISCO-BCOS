@@ -1,11 +1,14 @@
 #pragma once
+#include "bcos-tars-protocol/bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
-#include <bcos-tars-protocol/impl/TarsServantProxyCallback.h>
 #include <servant/Application.h>
 #include <servant/Communicator.h>
+#include <util/tc_clientsocket.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/throw_exception.hpp>
 
 #define RPCSERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPCSERVICE][INITIALIZER]"
@@ -16,6 +19,22 @@
 
 namespace bcostars
 {
+
+inline tars::TC_Endpoint string2TarsEndPoint(const std::string& _strEndPoint)
+{
+    std::vector<std::string> temp;
+    boost::split(temp, _strEndPoint, boost::is_any_of(":"), boost::token_compress_on);
+
+    if (temp.size() != 2)
+    {
+        BOOST_THROW_EXCEPTION(bcos::InvalidParameter() << bcos::errinfo_comment(
+                                  "incorrect string endpoint, it should be in IP:Port format"));
+    }
+
+    tars::TC_Endpoint ep(temp[0], boost::lexical_cast<int>(temp[1]), 60000);
+    return ep;
+}
+
 inline std::string getProxyDesc(std::string const& _servantName)
 {
     std::string desc =
@@ -83,29 +102,16 @@ inline std::pair<bool, std::string> getEndPointDescByAdapter(
     return std::make_pair(false, "");
 }
 
-template <typename S, typename... Args>
-S createServantPrx(std::string const& _serviceName, bool _withCb = true)
-{
-    auto prx = tars::Application::getCommunicator()->stringToProxy<S>(_serviceName);
-    if (_withCb)
-    {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
-        prx->tars_set_push_callback(proxyCallback);
-        proxyCallback->startTimer();
-    }
-    return prx;
-}
-
-template <typename S, typename... Args>
-S createServantPrxWithCB(std::string const& _serviceName,
+template <typename S>
+S createServantProxy(tars::Communicator* communicator, std::string const& _serviceName,
     TarsServantProxyOnConnectHandler _connectHandler = TarsServantProxyOnConnectHandler(),
-    TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler(),
-    bool _withCb = true)
+    TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler())
 {
-    auto prx = tars::Application::getCommunicator()->stringToProxy<S>(_serviceName);
-    if (_withCb)
+    auto prx = communicator->stringToProxy<S>(_serviceName);
+    if (!prx->tars_get_push_callback())
     {
         auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
+
         if (_connectHandler)
         {
             proxyCallback->setOnConnectHandler(_connectHandler);
@@ -122,58 +128,50 @@ S createServantPrxWithCB(std::string const& _serviceName,
     return prx;
 }
 
-template <typename S, typename... Args>
-S createServantPrx(
-    std::string const& _serviceName, const std::string& _host, uint16_t _port, bool _withCb = true)
+template <typename S>
+S createServantProxy(std::string const& _serviceName)
+{
+    return createServantProxy<S>(tars::Application::getCommunicator().get(), _serviceName,
+        TarsServantProxyOnConnectHandler(), TarsServantProxyOnCloseHandler());
+}
+
+template <typename S>
+S createServantProxy(std::string const& _serviceName, const std::string& _host, uint16_t _port)
 {
     auto endPointStr = endPointToString(_serviceName, _host, _port);
-    auto prx = tars::Application::getCommunicator()->stringToProxy<S>(endPointStr);
-    if (_withCb)
-    {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
-        prx->tars_set_push_callback(proxyCallback);
-        proxyCallback->startTimer();
-    }
-    return prx;
+    return createServantProxy<S>(endPointStr);
 }
 
-template <typename S, typename... Args>
-S createServantPrx(tars::Communicator* communicator, std::string const& _serviceName,
-    const tars::TC_Endpoint& _ep, bool _withCb = true)
+template <typename S>
+S createServantProxy(std::string const& _serviceName, const tars::TC_Endpoint& _ep)
 {
     auto endPointStr = endPointToString(_serviceName, _ep);
-    auto prx = communicator->stringToProxy<S>(endPointStr);
-    if (_withCb)
-    {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
-        prx->tars_set_push_callback(proxyCallback);
-        proxyCallback->startTimer();
-    }
-    return prx;
+    return createServantProxy<S>(endPointStr);
 }
 
-template <typename S, typename... Args>
-S createServantPrx(
-    std::string const& _serviceName, const tars::TC_Endpoint& _ep, bool _withCB = true)
-{
-    return createServantPrx<S, Args...>(
-        tars::Application::getCommunicator().get(), _serviceName, _ep, _withCB);
-}
-
-template <typename S, typename... Args>
-S createServantPrx(std::string const& _serviceName, const std::vector<tars::TC_Endpoint>& _eps,
-    bool _withCb = true)
+template <typename S>
+S createServantProxy(std::string const& _serviceName, const std::vector<tars::TC_Endpoint>& _eps)
 {
     std::string endPointStr = endPointToString(_serviceName, _eps);
-    auto prx = tars::Application::getCommunicator()->stringToProxy<S>(endPointStr);
-    if (_withCb)
-    {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
-        prx->tars_set_push_callback(proxyCallback);
-        proxyCallback->startTimer();
-    }
-    return prx;
+
+    return createServantProxy<S>(endPointStr);
 }
 
+template <typename S>
+S createServantProxy(bool _withEndPoints, std::string const& _serviceName,
+    const std::vector<tars::TC_Endpoint>& _eps = std::vector<tars::TC_Endpoint>{})
+{
+    std::string serviceParams;
+    if (_withEndPoints)
+    {
+        serviceParams = endPointToString(_serviceName, _eps);
+    }
+    else
+    {
+        serviceParams = _serviceName;
+    }
+
+    return createServantProxy<S>(serviceParams);
+}
 
 }  // namespace bcostars

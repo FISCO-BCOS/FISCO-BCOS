@@ -86,7 +86,7 @@ getActiveEndpoints(const std::string& executorServiceName)
         return {false, {}, {}};
     }
 
-    // TODO: tars
+    // TODO: tars, how to impl without tars admin site
     static tars::QueryFPrx locatorPrx =
         tars::Application::getCommunicator()->stringToProxy<tars::QueryFPrx>(locator);
 
@@ -233,7 +233,7 @@ void TarsRemoteExecutorManager::update(EndPointSet endPointSet, bool needNotifyC
         auto port = hostAndPort.second;
 
         string endPointUrl = bcostars::endPointToString(m_executorServiceName, host, port);
-        auto executorServicePrx = bcostars::createServantPrx<bcostars::ExecutorServicePrx>(
+        auto executorServicePrx = bcostars::createServantProxy<bcostars::ExecutorServicePrx>(
             m_executorServiceName, host, port);
 
         auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);

@@ -6,10 +6,10 @@ macro(compile_service SERVICE_SOURCE_PATH BINARY_NAME)
     add_subdirectory(${SERVICE_SOURCE_PATH})
 
     add_custom_command(OUTPUT ${BINARY_NAME}.tgz
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${SERVICE_SOURCE_PATH}/${BINARY_NAME} ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${BINARY_NAME}/${BINARY_NAME}
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
-    COMMENT "Compressing ${BINARY_NAME}...")
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${SERVICE_SOURCE_PATH}/${BINARY_NAME} ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${BINARY_NAME}/${BINARY_NAME}
+        COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
+        COMMENT "Compressing ${BINARY_NAME}...")
 
     add_custom_target(${BINARY_NAME}-tar DEPENDS ${BINARY_NAME}.tgz ${BINARY_NAME})
     list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)
@@ -31,10 +31,8 @@ compile_service("NodeService/pro" ${PRO_NODE_SERVICE_BINARY_NAME})
 set(MAX_NODE_SERVICE_BINARY_NAME BcosMaxNodeService)
 compile_service("NodeService/max" ${MAX_NODE_SERVICE_BINARY_NAME})
 
-if(WITH_TIKV)
-    # ExecutorService
-    set(EXECUTOR_BINARY_NAME BcosExecutorService)
-    compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
-endif()
+# ExecutorService
+set(EXECUTOR_BINARY_NAME BcosExecutorService)
+compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
 
 add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})

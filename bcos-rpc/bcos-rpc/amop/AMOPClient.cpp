@@ -426,7 +426,7 @@ void AMOPClient::subscribeTopicToAllNodes()
                           << LOG_KV("activeEndPoints", activeEndPoints.size());
     for (auto const& endPoint : activeEndPoints)
     {
-        auto servicePrx = bcostars::createServantPrx<bcostars::GatewayServicePrx>(
+        auto servicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
             m_gatewayServiceName, endPoint.getEndpoint());
 
         auto serviceClient =
@@ -453,7 +453,7 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
     auto activeEndPoints = getActiveGatewayEndPoints();
     for (auto const& endPoint : activeEndPoints)
     {
-        auto servicePrx = bcostars::createServantPrx<GatewayServicePrx>(
+        auto servicePrx = bcostars::createServantProxy<GatewayServicePrx>(
             m_gatewayServiceName, endPoint.getEndpoint());
 
         auto serviceClient =
