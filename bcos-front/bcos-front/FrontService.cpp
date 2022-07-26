@@ -296,9 +296,11 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
             [this, _moduleID, _nodeID, uuid](Error::Ptr _error) {
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
+                    /*
                     FRONT_LOG(ERROR) << LOG_BADGE("sendMessage callback") << LOG_KV("uuid", uuid)
                                      << LOG_KV("errorCode", _error->errorCode())
                                      << LOG_KV("errorMessage", _error->errorMessage());
+                */
                     handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
                 }
             });
@@ -354,7 +356,7 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     message->encode(*buffer.get());
 
     m_gatewayInterface->asyncSendBroadcastMessage(
-        _type, m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
 }
 
 /**
@@ -624,7 +626,7 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     message->encode(*buffer.get());
 
     // call gateway interface to send the message
-    m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, m_nodeID, _nodeID,
+    m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, _nodeID,
         bytesConstRef(buffer->data(), buffer->size()), [_receiveMsgCallback](Error::Ptr _error) {
             if (_receiveMsgCallback)
             {

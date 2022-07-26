@@ -63,13 +63,20 @@ public:
     {
         m_uuid++;
         auto id = std::to_string(m_uuid);
-        insertCallback(_moduleId, id, _responseCallback);
+        insertCallback(id, _responseCallback);
 
         if (_moduleId == ModuleID::TxsSync && m_nodeId2TxPool.count(_nodeId))
         {
             auto txpool = m_nodeId2TxPool[_nodeId];
             txpool->asyncNotifyTxsSyncMessage(nullptr, id, _fromNode, _data, nullptr);
         }
+
+        if (_moduleId == ModuleID::ConsTxsSync && m_nodeId2TxPool.count(_nodeId))
+        {
+            auto txpool = m_nodeId2TxPool[_nodeId];
+            txpool->asyncNotifyTxsSyncMessage(nullptr, id, _fromNode, _data, nullptr);
+        }
+
         if (_moduleId == ModuleID::PBFT && m_nodeId2Consensus.count(_nodeId))
         {
             auto consensus = m_nodeId2Consensus[_nodeId];
@@ -82,13 +89,13 @@ public:
         }
     }
 
-    virtual void asyncSendResponse(const std::string& _id, int _moduleId,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _responseData, ReceiveMsgFunc)
+    virtual void asyncSendResponse(const std::string& _id, int, bcos::crypto::NodeIDPtr _nodeID,
+        bytesConstRef _responseData, ReceiveMsgFunc)
     {
-        if (m_uuidToCallback.count(_moduleId) && m_uuidToCallback[_moduleId].count(_id))
+        if (m_uuidToCallback.count(_id))
         {
-            auto callback = m_uuidToCallback[_moduleId][_id];
-            removeCallback(_moduleId, _id);
+            auto callback = m_uuidToCallback[_id];
+            removeCallback(_id);
             if (callback)
             {
                 callback(nullptr, _nodeID, _responseData, "", nullptr);
@@ -96,24 +103,21 @@ public:
         }
     }
 
-    void insertCallback(int _moduleID, std::string const& _id, CallbackFunc _callback)
+    void insertCallback(std::string const& _id, CallbackFunc _callback)
     {
         Guard l(m_mutex);
-        m_uuidToCallback[_moduleID][_id] = _callback;
+        m_uuidToCallback[_id] = _callback;
     }
 
-    void removeCallback(int _moduleId, std::string const& _id)
+    void removeCallback(std::string const& _id)
     {
         Guard l(m_mutex);
-        m_uuidToCallback[_moduleId].erase(_id);
-        if (m_uuidToCallback.count(_moduleId) && m_uuidToCallback[_moduleId].size() == 0)
-        {
-            m_uuidToCallback.erase(_moduleId);
-        }
+
+        m_uuidToCallback.erase(_id);
     }
 
 private:
-    std::map<int, std::map<std::string, CallbackFunc>> m_uuidToCallback;
+    std::map<std::string, CallbackFunc> m_uuidToCallback;
     Mutex m_mutex;
 
     std::map<NodeIDPtr, TxPoolInterface::Ptr, KeyCompare> m_nodeId2TxPool;

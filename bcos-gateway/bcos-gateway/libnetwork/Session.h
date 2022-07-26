@@ -66,6 +66,14 @@ public:
         m_messageHandler = messageHandler;
     }
 
+    // handle before sending message, if the check fails, meaning false is returned, the message is
+    // not sent, and the SessionCallbackFunc will be performed
+    void setBeforeMessageHandler(
+        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> handler) override
+    {
+        m_beforeMessageHandler = handler;
+    }
+
     void setHostNodeID(std::string const& _hostNodeID) { m_hostNodeID = _hostNodeID; }
 
 protected:
@@ -122,7 +130,7 @@ private:
     void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer);
     void write();
 
-    /// call by doRead() to deal with mesage
+    /// call by doRead() to deal with message
     void onMessage(NetworkException const& e, Message::Ptr message);
 
     std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
@@ -155,6 +163,9 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+
+    std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> m_beforeMessageHandler;
+
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
     uint64_t m_idleTimeInterval = 60 * 1000;

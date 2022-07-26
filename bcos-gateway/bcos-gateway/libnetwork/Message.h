@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 #include <set>
 #include <string>
@@ -29,6 +30,16 @@ namespace bcos
 {
 namespace gateway
 {
+
+class MessageExtAttributes
+{
+public:
+    using Ptr = std::shared_ptr<MessageExtAttributes>;
+
+public:
+    virtual ~MessageExtAttributes() = default;
+};
+
 class Message
 {
 public:
@@ -48,7 +59,11 @@ public:
 
     virtual std::string const& srcP2PNodeID() const = 0;
     virtual std::string const& dstP2PNodeID() const = 0;
+
+    virtual MessageExtAttributes::Ptr extAttributes() = 0;
 };
+
+//
 
 class MessageFactory
 {

@@ -9,7 +9,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <memory>
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 
 namespace bcos
 {
@@ -81,7 +81,7 @@ public:
      * @param _payload the payload
      */
     virtual void asyncBroadcastMessageToP2PNodes(
-        int16_t _type, bytesConstRef _payload, Options _options) = 0;
+        int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) = 0;
 
     /**
      * @brief send message to the given nodeIDs
@@ -91,7 +91,9 @@ public:
 
     using MessageHandler =
         std::function<void(NetworkException, std::shared_ptr<P2PSession>, P2PMessage::Ptr)>;
+
     virtual void registerHandlerByMsgType(int16_t _type, MessageHandler const& _msgHandler) = 0;
+
     virtual void eraseHandlerByMsgType(int16_t _type) = 0;
 
     virtual void sendRespMessageBySession(bytesConstRef _payload, P2PMessage::Ptr _p2pMessage,

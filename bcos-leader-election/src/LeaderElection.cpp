@@ -223,7 +223,7 @@ void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self
         << LOG_DESC("updateSelfConfig, the node-self is leader, sync the modified memberConfig")
         << LOG_KV("lease", leaseID);
     auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
-    tx->init_compare(leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
+    tx->init_lease_compare(leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
     tx->setup_basic_failure_operation(m_config->leaderKey());
     tx->setup_compare_and_swap_sequence(m_config->leaderValue(), leaseID);
     auto response = m_etcdClient->txn(*tx).get();

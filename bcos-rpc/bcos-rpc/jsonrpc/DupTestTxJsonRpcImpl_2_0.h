@@ -49,7 +49,7 @@ public:
                             << LOG_KV("node", _nodeName);
 
         auto submitCallback =
-            [_groupID, _requireProof](Error::Ptr _error,
+            [_requireProof](Error::Ptr _error,
                 bcos::protocol::TransactionSubmitResult::Ptr _transactionSubmitResult) {
                 if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
                 {
