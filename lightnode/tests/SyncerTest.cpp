@@ -119,9 +119,9 @@ BOOST_AUTO_TEST_CASE(testClient)
             m_blocks.emplace(std::make_pair(blockNumber, std::move(block)));
         }
 
-        bcos::concepts::ledger::TransactionCount impl_getTotalTransactionCount()
+        bcos::concepts::ledger::Status impl_getTotalTransactionCount()
         {
-            bcos::concepts::ledger::TransactionCount status;
+            bcos::concepts::ledger::Status status;
             status.blockNumber = 100;
             status.total = 10000;
             status.failed = 500;
@@ -157,9 +157,9 @@ BOOST_AUTO_TEST_CASE(testClient)
 
 struct MockLedgerForTestServer : public bcos::concepts::ledger::LedgerBase<MockLedgerForTestServer>
 {
-    bcos::concepts::ledger::TransactionCount impl_getTotalTransactionCount()
+    bcos::concepts::ledger::Status impl_getTotalTransactionCount()
     {
-        bcos::concepts::ledger::TransactionCount status;
+        bcos::concepts::ledger::Status status;
         status.blockNumber = 204;
         status.total = 10000;
         status.failed = 500;

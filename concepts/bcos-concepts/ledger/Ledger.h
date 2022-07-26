@@ -26,7 +26,7 @@ struct NONCES: public DataFlagBase {};
 template <class FlagType>
 concept DataFlag = std::derived_from<FlagType, DataFlagBase>;
 
-struct TransactionCount
+struct Status
 {
     uint64_t total = 0;
     uint64_t failed = 0;
@@ -45,9 +45,10 @@ public:
         impl().template impl_getBlock<flags...>(blockNumber, block);
     }
 
+    template <DataFlag... flags>
     void setBlock(bcos::concepts::block::Block auto block)
     {
-        impl().impl_setBlock(std::move(block));
+        impl().template impl_setBlock<flags...>(std::move(block));
     }
 
     template <DataFlag flag>
@@ -56,7 +57,7 @@ public:
         impl().template impl_getTransactionsOrReceipts<flag>(hashes, out);
     }
 
-    TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }
+    Status getStatus() { return impl().impl_getTotalTransactionCount(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
     void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires

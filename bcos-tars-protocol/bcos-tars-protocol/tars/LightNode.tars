@@ -17,7 +17,11 @@ struct ResponseBlock
     2 optional vector<Block> blocks;
 };
 
-struct RequestTransactionsAndReceipts
+struct Proof {
+    1 optional vector<vector<byte>> hashes;
+};
+
+struct RequestTransactions
 {
     1 optional vector<vector<byte>> hashes;
     2 optional bool withProof;
@@ -26,9 +30,19 @@ struct RequestTransactionsAndReceipts
 struct ResponseTransactions
 {
     1 optional vector<Transaction> transactions;
-    2 optional vector<TransactionReceipt> receipts;
-    3 optional vector<vector<byte>> transactionProofs;
-    4 optional vector<vector<byte>> receiptProofs;
+    2 optional vector<Proof> proofs;
+};
+
+struct RequestReceipts
+{
+    1 optional vector<vector<byte>> hashes;
+    2 optional bool withProof;
+};
+
+struct ResponseReceipts
+{
+    1 optional vector<TransactionReceipt> receipts;
+    2 optional vector<Proof> proofs;
 };
 
 };

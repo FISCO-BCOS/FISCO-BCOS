@@ -1,22 +1,23 @@
 #pragma once
-#include <bcos-framework/gateway/GroupNodeInfo.h>
+
+#include <concepts>
 
 namespace bcos::concepts::sync
 {
 
 template <class Impl>
-class BlockSyncerClientBase
+class BlockSyncerBase
 {
 public:
     void fetchAndStoreNewBlocks() { impl().impl_fetchAndStoreNewBlocks(); }
 
 private:
     friend Impl;
-    BlockSyncerClientBase() = default;
+    BlockSyncerBase() = default;
     auto& impl() { return static_cast<Impl&>(*this); }
 };
 
 template <class Impl>
-concept BlockSyncerClient = std::derived_from<Impl, BlockSyncerClientBase<Impl>>;
+concept BlockSyncerClient = std::derived_from<Impl, BlockSyncerBase<Impl>>;
 
 }  // namespace bcos::concepts::sync
