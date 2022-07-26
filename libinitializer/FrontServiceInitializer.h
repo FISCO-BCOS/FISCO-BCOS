@@ -25,7 +25,6 @@
 
 #ifdef WITH_LIGHTNODE
 #include <bcos-lightnode/ledger/LedgerServerImpl.h>
-#include <bcos-lightnode/syncer/BlockSyncerServerImpl.h>
 #endif
 
 namespace bcos

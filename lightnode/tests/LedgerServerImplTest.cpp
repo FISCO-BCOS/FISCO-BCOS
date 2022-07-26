@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(setBlock)
     ledger.setTransactionsOrReceipts<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         block.transactions);
 
-    BOOST_CHECK_NO_THROW(ledger.setBlock(block));
+    BOOST_CHECK_NO_THROW(ledger.setBlock<bcos::concepts::ledger::ALL>(block));
     bcostars::Block gotBlock;
     ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock);
 

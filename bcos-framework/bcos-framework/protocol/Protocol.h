@@ -168,7 +168,7 @@ inline std::optional<ModuleID> stringToModuleID(const std::string& _moduleName)
     }
     else if (boost::iequals(_moduleName, "light_node"))
     {
-        return bcos::protocol::ModuleID::LIGHTNODE;
+        return bcos::protocol::ModuleID::LIGHTNODE_GETBLOCK;
     }
     else
     {
@@ -192,7 +192,7 @@ inline std::string moduleIDToString(ModuleID _moduleID)
         return "cons_txs_sync";
     case ModuleID::AMOP:
         return "amop";
-    case ModuleID::LIGHTNODE:
+    case ModuleID::LIGHTNODE_GETBLOCK:
         return "light_node";
     default:
         return "unrecognized module";
