@@ -21,11 +21,11 @@ namespace bcos::ledger
 {
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
-class LedgerServerImpl
-  : public bcos::concepts::ledger::LedgerBase<LedgerServerImpl<Hasher, Storage>>
+class LedgerImpl
+  : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>
 {
 public:
-    LedgerServerImpl(Storage storage) : m_storage{std::move(storage)} {}
+    LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
     template <bcos::concepts::ledger::DataFlag... Flags>
     void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,

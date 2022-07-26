@@ -20,8 +20,6 @@
  * @date 2022-07-04
  */
 
-#include <bcos-lightnode/ledger/LedgerClientImpl.h>
-
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 {
     return 0;

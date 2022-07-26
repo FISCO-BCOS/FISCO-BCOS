@@ -7,7 +7,8 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-lightnode/ledger/LedgerServerImpl.h>
+#include <bcos-lightnode/ledger/LedgerImpl.h>
+#include <bcos-lightnode/ledger/LedgerSyncerImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
@@ -140,8 +141,7 @@ BOOST_FIXTURE_TEST_SUITE(LedgerImplTest, LedgerImplFixture)
 
 BOOST_AUTO_TEST_CASE(getBlock)
 {
-    bcos::ledger::LedgerServerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher,
-        MockMemoryStorage>
+    bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage>
         ledger{storage};
 
     bcostars::Block block;
@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
 
 BOOST_AUTO_TEST_CASE(setBlock)
 {
-    LedgerServerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> ledger{
+    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> ledger{
         storage};
 
     bcostars::Block block;
@@ -233,6 +233,43 @@ BOOST_AUTO_TEST_CASE(setBlock)
         block.transactions.begin(), block.transactions.end());
     BOOST_CHECK_EQUAL_COLLECTIONS(gotBlock.receipts.begin(), gotBlock.receipts.end(),
         block.receipts.begin(), block.receipts.end());
+}
+
+BOOST_AUTO_TEST_CASE(ledgerSync)
+{
+    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> fromLedger{
+        storage};
+    LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> toLedger{
+        storage};
+
+    constexpr static size_t blockCount = 100;
+    for (auto i = 0u; i < blockCount; ++i)
+    {
+        bcostars::Block block;
+        block.blockHeader.data.blockNumber = i + 100;
+
+        for (auto i = 0u; i < count; ++i)
+        {
+            bcostars::Transaction transaction;
+            transaction.data.blockLimit = 1000;
+            transaction.data.to = "i am to";
+            transaction.data.version = static_cast<decltype(transaction.data.version)>(i);
+
+            bcostars::TransactionReceipt receipt;
+            receipt.data.contractAddress = "contract to";
+            if (i >= blockCount / 2)
+            {
+                receipt.data.status = -1;
+            }
+
+            block.transactions.emplace_back(std::move(transaction));
+            block.receipts.emplace_back(std::move(receipt));
+        }
+
+        fromLedger.setTransactionsOrReceipts<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
+            block.transactions);
+        BOOST_CHECK_NO_THROW(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

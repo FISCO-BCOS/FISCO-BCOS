@@ -24,7 +24,7 @@
 #include <memory>
 
 #ifdef WITH_LIGHTNODE
-#include <bcos-lightnode/ledger/LedgerServerImpl.h>
+#include <bcos-lightnode/ledger/LedgerImpl.h>
 #endif
 
 namespace bcos

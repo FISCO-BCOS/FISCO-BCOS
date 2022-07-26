@@ -14,7 +14,6 @@
 #include <future>
 #include <iterator>
 
-
 namespace bcos::sync
 {
 template <bcos::concepts::ledger::Ledger FromLedgerType,
@@ -30,7 +29,7 @@ public:
     {}
 
     template <bcos::concepts::block::Block BlockType>
-    void impl_sync()
+    void impl_sync(bool onlyHeader)
     {
         auto& toLedger = bcos::concepts::getRef(m_toLedger);
         auto& fromLedger = bcos::concepts::getRef(m_fromLedger);
@@ -38,55 +37,30 @@ public:
         auto toStatus = toLedger.getStatus();
         auto fromStatus = fromLedger.getStatus();
 
-        for (auto blockNumber = toStatus.blockNumber; blockNumber < fromStatus.blockNumber;
-             ++blockNumber)
+        if (onlyHeader)
         {
-            BlockType block;
-            fromLedger.getBlock(blockNumber, block);
-            toLedger.setBlock(std::move(block));
+            for (auto blockNumber = toStatus.blockNumber; blockNumber < fromStatus.blockNumber;
+                 ++blockNumber)
+            {
+                BlockType block;
+                fromLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
+                toLedger.template setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
+            }
         }
-
-        // std::promise<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> nodeInfofPromise;
-        // m_front->asyncGetGroupNodeInfo([&nodeInfofPromise](Error::Ptr _error,
-        //                                    bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-        //     nodeInfofPromise.set_value(std::tuple{std::move(_error), std::move(_groupNodeInfo)});
-        // });
-        // auto nodeInfoFuture = nodeInfofPromise.get_future();
-
-        // auto [error, nodeInfo] = nodeInfoFuture.get();
-        // if (error)
-        //     BOOST_THROW_EXCEPTION(*error);
-
-        // for (auto& it : nodeInfo->nodeIDList())
-        // {
-        //     auto count = ledger().getStatus();
-        //     auto blockHeight = count.blockNumber;
-        //     // auto nodeID =
-        //     m_keyFactory->createKey(bcos::bytesConstRef((bcos::byte*)it.data(), it.size()));
-
-        // RequestType request;
-        // request.beginBlockNumber = blockHeight;
-        // request.endBlockNumber = blockHeight + m_requestBlockCount;
-        // request.onlyHeader = true;
-
-        //     if (!response->blocks.empty())
-        //     {
-        //         // TODO: Verify the signer
-        //         for (auto& block : response->blocks)
-        //         {
-        //             ledger().setBlock(std::move(block));
-        //         }
-
-        //         // If got block, break current query
-        //         break;
-        //     }
-        // }
+        else
+        {
+            for (auto blockNumber = toStatus.blockNumber; blockNumber < fromStatus.blockNumber;
+                 ++blockNumber)
+            {
+                BlockType block;
+                fromLedger.template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
+                toLedger.template setBlock<bcos::concepts::ledger::ALL>(std::move(block));
+            }
+        }
     }
 
 private:
     FromLedgerType m_fromLedger;
     ToLedgerType m_toLedger;
-
-    constexpr static auto m_requestBlockCount = 10u;
 };
 }  // namespace bcos::sync
