@@ -93,8 +93,8 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     else
     {
         // no defined function
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("CryptoPrecompiled: undefined method")
-                               << LOG_KV("funcSelector", std::to_string(funcSelector));
+        PRECOMPILED_LOG(INFO) << LOG_DESC("CryptoPrecompiled: undefined method")
+                              << LOG_KV("funcSelector", std::to_string(funcSelector));
         BOOST_THROW_EXCEPTION(
             bcos::protocol::PrecompiledError("CryptoPrecompiled call undefined function!"));
     }
@@ -135,8 +135,8 @@ void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExe
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("CryptoPrecompiled: sm2Verify exception")
-                                 << LOG_KV("e", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(INFO) << LOG_DESC("CryptoPrecompiled: sm2Verify exception")
+                              << LOG_KV("e", boost::diagnostic_information(e));
         Address emptyAccount;
         _callResult->setExecResult(codec.encode(false, emptyAccount));
     }
