@@ -57,7 +57,7 @@ public:
         impl().template impl_getTransactionsOrReceipts<flag>(hashes, out);
     }
 
-    Status getStatus() { return impl().impl_getTotalTransactionCount(); }
+    Status getStatus() { return impl().impl_getStatus(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
     void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires
@@ -85,6 +85,15 @@ public:
     {
         impl().template impl_setTransactionOrReceiptBuffers<isTransaction>(
             hashes, std::move(buffers));
+    }
+
+    template <class LedgerType, bcos::concepts::block::Block BlockType>
+    requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
+        std::derived_from<typename LedgerType::element_type,
+            LedgerBase<typename LedgerType::element_type>>
+    void sync(LedgerType& source, bool onlyHeader)
+    {
+        impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
     }
 
 private:

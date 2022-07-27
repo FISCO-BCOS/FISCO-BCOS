@@ -21,12 +21,14 @@ namespace bcos::ledger
 {
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
-class LedgerImpl
-  : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>
+class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>
 {
+    friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
+
 public:
     LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
 
+private:
     template <bcos::concepts::ledger::DataFlag... Flags>
     void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
@@ -38,8 +40,8 @@ public:
     template <bcos::concepts::ledger::DataFlag... Flags>
     void impl_setBlock(bcos::concepts::block::Block auto block)
     {
-        if (block.blockHeader.data.blockNumber == 0 && !std::empty(block.transactions))
-            return;
+        // if (!std::empty(block.transactions))
+        //     return;
 
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader.data.blockNumber);
         (setBlockData<Flags>(blockNumberStr, block), ...);
@@ -140,7 +142,36 @@ public:
         }
     }
 
-private:
+    template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::block::Block BlockType>
+    void impl_sync(LedgerType& source, bool onlyHeader)
+    {
+        auto& sourceLedger = bcos::concepts::getRef(source);
+
+        auto status = impl_getStatus();
+        auto sourceStatus = sourceLedger.getStatus();
+
+        if (onlyHeader)
+        {
+            for (auto blockNumber = status.blockNumber; blockNumber <= sourceStatus.blockNumber;
+                 ++blockNumber)
+            {
+                BlockType block;
+                sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
+                setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
+            }
+        }
+        else
+        {
+            for (auto blockNumber = status.blockNumber; blockNumber <= sourceStatus.blockNumber;
+                 ++blockNumber)
+            {
+                BlockType block;
+                sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
+                setBlock<bcos::concepts::ledger::ALL>(std::move(block));
+            }
+        }
+    }
+
     template <bcos::concepts::ledger::DataFlag Flag>
     void getBlockData(std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
@@ -249,30 +280,26 @@ private:
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
                            std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
+            if (std::empty(block.transactionsMetaData))
+            {
+                block.transactionsMetaData.resize(block.transactions.size());
+#pragma omp parallel for
+                for (auto i = 0u; i < block.transactions.size(); ++i)
+                {
+                    if (RANGES::size(block.transactionsMetaData[i].hash) < Hasher::HASH_SIZE)
+                    {
+                        block.transactionsMetaData[i].hash.resize(Hasher::HASH_SIZE);
+                    }
+
+                    bcos::concepts::hash::calculate<Hasher>(
+                        block.transactions[i], block.transactionsMetaData[i].hash);
+                }
+            }
+
             if (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 std::remove_cvref_t<decltype(block)> transactionsBlock;
-                transactionsBlock.transactionsMetaData = std::move(block.transactionsMetaData);
-                if (std::empty(transactionsBlock.transactionsMetaData) &&
-                    !std::empty(block.transactions))
-                {
-                    transactionsBlock.transactionsMetaData.resize(block.transactions.size());
-#pragma omp parallel for
-                    for (auto i = 0u; i < block.transactions.size(); ++i)
-                    {
-                        if (RANGES::size(transactionsBlock.transactionsMetaData[i].hash) <
-                            Hasher::HASH_SIZE)
-                        {
-                            transactionsBlock.transactionsMetaData[i].hash.resize(
-                                Hasher::HASH_SIZE);
-                        }
-
-                        bcos::concepts::hash::calculate<Hasher>(
-                            block.transactions[i], transactionsBlock.transactionsMetaData[i].hash);
-                        transactionsBlock.transactionsMetaData[i].to =
-                            std::move(block.transactions[i].data.to);
-                    }
-                }
+                std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
 
                 bcos::storage::Entry number2TransactionHashesEntry;
                 std::vector<bcos::byte> number2TransactionHashesBuffer;
@@ -282,7 +309,7 @@ private:
                     {std::move(number2TransactionHashesBuffer)});
                 m_storage.setRow(
                     SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
-                block.transactionsMetaData = std::move(transactionsBlock.transactionsMetaData);
+                std::swap(block.transactionsMetaData, transactionsBlock.transactionsMetaData);
             }
             else
             {
