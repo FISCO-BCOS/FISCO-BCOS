@@ -23,10 +23,6 @@
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
 
-#ifdef WITH_LIGHTNODE
-#include <bcos-lightnode/ledger/LedgerImpl.h>
-#endif
-
 namespace bcos
 {
 namespace consensus

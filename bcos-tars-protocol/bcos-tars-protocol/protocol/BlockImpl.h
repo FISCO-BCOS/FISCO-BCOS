@@ -122,20 +122,20 @@ public:
             return txsRoot;
         }
 
-        std::vector<bcos::bytes> transactionsList;
-        if (transactionsSize() > 0)
-        {
-            transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsSize(),
-                [this](uint64_t _index) { return transaction(_index)->hash(); });
-        }
-        else if (transactionsMetaDataSize() > 0)
-        {
-            transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsHashSize(),
-                [this](uint64_t _index) { return transactionMetaData(_index)->hash(); });
-        }
+        // std::vector<bcos::bytes> transactionsList;
+        // if (transactionsSize() > 0)
+        // {
+        //     transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsSize(),
+        //         [this](uint64_t _index) { return transaction(_index)->hash(); });
+        // }
+        // else if (transactionsMetaDataSize() > 0)
+        // {
+        //     transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsHashSize(),
+        //         [this](uint64_t _index) { return transactionMetaData(_index)->hash(); });
+        // }
 
-        txsRoot = bcos::protocol::calculateMerkleProofRoot(
-            m_transactionFactory->cryptoSuite(), transactionsList);
+        // txsRoot = bcos::protocol::calculateMerkleProofRoot(
+        //     m_transactionFactory->cryptoSuite(), transactionsList);
         return txsRoot;
     }
 
@@ -147,11 +147,11 @@ public:
         {
             return receiptsRoot;
         }
-        auto receiptsList = bcos::protocol::encodeToCalculateRoot(
-            receiptsSize(), [this](uint64_t _index) { return receipt(_index)->hash(); });
-        receiptsRoot =
-            bcos::protocol::calculateMerkleProofRoot(m_receiptFactory->cryptoSuite(),
-            receiptsList);
+        // auto receiptsList = bcos::protocol::encodeToCalculateRoot(
+        //     receiptsSize(), [this](uint64_t _index) { return receipt(_index)->hash(); });
+        // receiptsRoot =
+        //     bcos::protocol::calculateMerkleProofRoot(m_receiptFactory->cryptoSuite(),
+        //     receiptsList);
         return receiptsRoot;
     }
 
