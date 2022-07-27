@@ -30,8 +30,8 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-protocol/Common.h>
+#include <bcos-protocol/ParallelMerkleProof.h>
 #include <gsl/span>
 #include <memory>
 
