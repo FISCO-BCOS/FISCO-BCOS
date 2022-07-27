@@ -4,7 +4,7 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-executor)
 
-add_executable(${TEST_BINARY_NAME} ${SOURCES})
+add_executable(${TEST_BINARY_NAME} ${SOURCES} libprecompiled/PrecompiledCallTest.cpp)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include)
 
 find_package(Boost REQUIRED unit_test_framework)

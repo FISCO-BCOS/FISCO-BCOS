@@ -672,14 +672,79 @@ public:
         return result3;
     };
 
+    ExecutionMessage::UniquePtr checkMethodAuth(protocol::BlockNumber _number, Address const& _path,
+        std::string const& helloMethod, Address const& _account, int _errorCode = 0)
+    {
+        nextBlock(_number);
+        bytes fun = codec->encodeWithSig(helloMethod);
+        auto func = toString32(h256(fun, FixedBytes<32>::AlignLeft));
+        bytes in = codec->encodeWithSig("checkMethodAuth(address,bytes4,address)", _path, func);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto hash = tx->hash();
+        txpool->hash2Transaction[hash] = tx;
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(1000);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result1 = executePromise.get_future().get();
+
+        result1->setSeq(1001);
+
+        /// internal call
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->executeTransaction(std::move(result1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+        /// internal callback
+        result2->setSeq(1000);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result3;
+    };
+
     ExecutionMessage::UniquePtr resetAdmin(protocol::BlockNumber _number, int _contextId,
-        Address const& _path, Address const& _newAdmin, int _errorCode = 0)
+        Address const& _path, Address const& _newAdmin, int _errorCode = 0,
+        bool _useWrongSender = false)
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("resetAdmin(address,address)", _path, _newAdmin);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
-        tx->forceSender(newSender.asBytes());
+        auto wrongSender = Address("0000000000000000000000000000000000011111");
+        tx->forceSender(_useWrongSender ? wrongSender.asBytes() : newSender.asBytes());
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -704,6 +769,12 @@ public:
                 executePromise.set_value(std::move(result));
             });
         auto result1 = executePromise.get_future().get();
+
+        if (_useWrongSender)
+        {
+            commitBlock(_number);
+            return result1;
+        }
 
         result1->setSeq(1001);
 
@@ -1274,6 +1345,14 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
             BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
+
+            auto result2 = checkMethodAuth(number++, Address(helloAddress), "get()",
+                Address("0x1234567890123456789012345678901234567890"));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(bool(false)));
+
+            auto result3 = checkMethodAuth(number++, Address(helloAddress), "set(string)",
+                Address("0x1234567890123456789012345678901234567890"));
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(bool(true)));
         }
 
         // use address 0x1234567890123456789012345678901234567890 still can set
@@ -1468,6 +1547,13 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
             auto result = resetAdmin(_number++, 1000, Address(helloAddress),
                 Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+        }
+
+        // reset admin with wrong sender
+        {
+            auto result = resetAdmin(_number++, 1000, Address(helloAddress),
+                Address("0x1234567890123456789012345678901234567890"), 0, true);
+            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(CODE_NO_AUTHORIZED)));
         }
 
         // get admin

@@ -30,9 +30,9 @@
 #include "../executive/ExecutiveFactory.h"
 #include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
+#include "../precompiled/BFSPrecompiled.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
-#include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
@@ -126,7 +126,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
 
-
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -201,7 +200,7 @@ void TransactionExecutor::initEvmEnvironment()
     m_constantPrecompiled->insert(
         {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
-        {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
+        {BFS_ADDRESS, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
     /// auth precompiled
     if (m_isAuthCheck)
     {
@@ -224,6 +223,7 @@ void TransactionExecutor::initEvmEnvironment()
         storage = m_cachedStorage;
     }
     SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
+    DagTransferPrecompiled::createDagTable(storage);
 
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
@@ -254,7 +254,7 @@ void TransactionExecutor::initWasmEnvironment()
         {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
-        {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
+        {BFS_NAME, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
 
     // TODO: enable it after update wedpr
     // m_constantPrecompiled->insert(
@@ -275,9 +275,11 @@ void TransactionExecutor::initWasmEnvironment()
         storage = m_cachedStorage;
     }
     SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
+    DagTransferPrecompiled::createDagTable(storage);
+
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
-    // creaete the zkp-precompiled
+    // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
 }
@@ -352,8 +354,8 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
     try
     {
-        EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader request: "
-                                << LOG_KV("number", blockHeader->number());
+        EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader request: " << NUMBER(blockHeader->number())
+                                << LOG_KV("schedulerTermId", schedulerTermId);
 
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -395,6 +397,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             {
                 auto& prev = m_stateStorages.back();
 
+                // check number continuity
                 if (blockHeader->number() - prev.number != 1)
                 {
                     m_stateStorages.pop_back();
@@ -529,7 +532,9 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
             if (error)
             {
                 std::string errorMessage = "Call failed: " + error->errorMessage();
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+                EXECUTOR_NAME_LOG(WARNING)
+                    << LOG_DESC("Call error") << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
                 return;
             }
@@ -552,19 +557,10 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                     return;
                 }
             }
-            if (!error)
-            {
-                EXECUTOR_NAME_LOG(TRACE)
-                    << "Call success" << LOG_KV("staticCall", result->staticCall())
-                    << LOG_KV("from", result->from()) << LOG_KV("to", result->to())
-                    << LOG_KV("context", result->contextID());
-            }
-            else
-            {
-                EXECUTOR_NAME_LOG(WARNING)
-                    << LOG_DESC("Call error") << LOG_KV("code", error->errorCode())
-                    << LOG_KV("msg", error->errorMessage());
-            }
+
+            EXECUTOR_NAME_LOG(TRACE) << "Call success" << LOG_KV("staticCall", result->staticCall())
+                                     << LOG_KV("from", result->from()) << LOG_KV("to", result->to())
+                                     << LOG_KV("context", result->contextID());
             callback(std::move(error), std::move(result));
         });
 }
@@ -627,17 +623,15 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
-    EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions request"
-                             << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
-                             << LOG_KV("contractAddress", contractAddress)
-                             << LOG_KV("requestTimestamp", requestTimestamp);
+    EXECUTOR_NAME_LOG(INFO) << "dmcExecuteTransactions request" << NUMBER(blockNumber)
+                            << LOG_KV("txNum", txNum) << LOG_KV("contractAddress", contractAddress)
+                            << LOG_KV("requestTimestamp", requestTimestamp);
 
     auto callback = [this, _callback = _callback, requestTimestamp, blockNumber, txNum,
                         contractAddress](bcos::Error::UniquePtr error,
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-        EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions response"
-                                 << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
-                                 << LOG_KV("outputNum", outputs.size())
+        EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions response" << NUMBER(blockNumber)
+                                 << LOG_KV("txNum", txNum) << LOG_KV("outputNum", outputs.size())
                                  << LOG_KV("contractAddress", contractAddress)
                                  << LOG_KV("requestTimestamp", requestTimestamp)
                                  << LOG_KV("errorMessage", error ? error->errorMessage() : "ok")
@@ -699,7 +693,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         default:
         {
             auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
-            EXECUTOR_NAME_LOG(ERROR) << "DAG Execute error, " << message;
+            EXECUTOR_NAME_LOG(ERROR) << "DAG Execute error, " << message << NUMBER(blockNumber);
             // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
             break;
         }
@@ -723,7 +717,8 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
             [this, startT, contractAddress, indexes = std::move(indexes),
                 fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                txHashes,
+                blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
                 auto fillTxsT = (utcTime() - startT);
 
                 if (!m_isRunning)
@@ -738,7 +733,8 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                 if (error)
                 {
                     auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
-                    EXECUTOR_NAME_LOG(ERROR) << errorMessage << error->errorMessage();
+                    EXECUTOR_NAME_LOG(ERROR)
+                        << errorMessage << error->errorMessage() << NUMBER(blockNumber);
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  ExecuteError::DAG_ERROR, errorMessage, *error),
                         {});
@@ -767,7 +763,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                 EXECUTOR_NAME_LOG(INFO)
                     << LOG_DESC("dmcExecuteTransactionsInternal after fillblock")
                     << LOG_KV("fillTxsT", fillTxsT) << LOG_KV("prepareT", prepareT)
-                    << LOG_KV("dmcT", (utcTime() - recordT));
+                    << LOG_KV("dmcT", (utcTime() - recordT)) << NUMBER(blockNumber);
             });
     }
     else
@@ -789,7 +785,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << "GetTableHashes" << LOG_KV("number", number);
+    EXECUTOR_NAME_LOG(INFO) << "GetTableHashes" << NUMBER(number);
 
     if (!m_isRunning)
     {
@@ -823,7 +819,7 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     }
 
     auto hash = last.storage->hash(m_hashImpl);
-    EXECUTOR_NAME_LOG(INFO) << "GetTableHashes success" << LOG_KV("number", number)
+    EXECUTOR_NAME_LOG(INFO) << "GetTableHashes success" << NUMBER(number)
                             << LOG_KV("hash", hash.hex());
 
     callback(nullptr, std::move(hash));
@@ -846,9 +842,9 @@ void TransactionExecutor::dagExecuteTransactions(
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
-    EXECUTOR_NAME_LOG(DEBUG) << "dagExecuteTransactions request"
-                             << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
-                             << LOG_KV("requestTimestamp", requestTimestamp);
+    EXECUTOR_NAME_LOG(INFO) << "dagExecuteTransactions request"
+                            << LOG_KV("blockNumber", blockNumber) << LOG_KV("txNum", txNum)
+                            << LOG_KV("requestTimestamp", requestTimestamp);
 
     auto callback = [this, _callback = _callback, requestTimestamp, blockNumber, txNum](
                         bcos::Error::UniquePtr error,
@@ -920,7 +916,8 @@ void TransactionExecutor::dagExecuteTransactions(
         m_txpool->asyncFillBlock(txHashes,
             [this, startT, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                txHashes,
+                blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
                 auto fillTxsT = utcTime() - startT;
 
                 if (!m_isRunning)
@@ -934,7 +931,8 @@ void TransactionExecutor::dagExecuteTransactions(
                 if (error)
                 {
                     auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
-                    EXECUTOR_NAME_LOG(ERROR) << errorMessage << error->errorMessage();
+                    EXECUTOR_NAME_LOG(ERROR)
+                        << errorMessage << error->errorMessage() << NUMBER(blockNumber);
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  ExecuteError::DAG_ERROR, errorMessage, *error),
                         {});
@@ -1246,7 +1244,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                             EXECUTOR_NAME_LOG(DEBUG)
                                 << LOG_BADGE("dagExecuteTransactionsInternal")
                                 << LOG_DESC("the precompiled can't be parallel")
-                                << LOG_KV("adddress", to);
+                                << LOG_KV("address", to);
                             executionResults[i] = toExecutionResult(std::move(inputs[i]));
                             executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                             continue;
@@ -1270,7 +1268,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                             {
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
-                                    << LOG_DESC("ABI had beed loaded by other workers")
+                                    << LOG_DESC("ABI had been loaded by other workers")
                                     << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                                 auto& functionAbi = cacheHandle.value();
                                 conflictFields =
@@ -1287,7 +1285,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 {
                                     executionResults[i] = toExecutionResult(std::move(inputs[i]));
                                     executionResults[i]->setType(ExecutionMessage::REVERT);
-                                    EXECUTOR_NAME_LOG(WARNING)
+                                    EXECUTOR_NAME_LOG(INFO)
                                         << LOG_BADGE("dagExecuteTransactionsInternal")
                                         << LOG_DESC("No ABI found, please deploy first")
                                         << LOG_KV("tableName", tableName);
@@ -1296,14 +1294,12 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 // get abi json
                                 auto entry = table->getRow(ACCOUNT_ABI);
                                 auto abiStr = entry->getField(0);
-                                bool isSmCrypto = false;
-                                if (m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash)
-                                {
-                                    isSmCrypto = true;
-                                }
+                                bool isSmCrypto =
+                                    m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash;
+
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
-                                    << LOG_DESC("ABI loaded") << LOG_KV("adddress", to)
+                                    << LOG_DESC("ABI loaded") << LOG_KV("address", to)
                                     << LOG_KV("selector", toHexString(selector))
                                     << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
@@ -1313,7 +1309,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                     EXECUTOR_NAME_LOG(DEBUG)
                                         << LOG_BADGE("dagExecuteTransactionsInternal")
                                         << LOG_DESC("ABI deserialize failed")
-                                        << LOG_KV("adddress", to) << LOG_KV("ABI", abiStr);
+                                        << LOG_KV("address", to) << LOG_KV("ABI", abiStr);
                                     executionResults[i] = toExecutionResult(std::move(inputs[i]));
                                     executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                                     // If abi is not valid, we don't impact the cache. In such a
@@ -1342,7 +1338,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         {
                             EXECUTOR_NAME_LOG(DEBUG)
                                 << LOG_BADGE("dagExecuteTransactionsInternal")
-                                << LOG_DESC("Found ABI in cache") << LOG_KV("adddress", to)
+                                << LOG_DESC("Found ABI in cache") << LOG_KV("address", to)
                                 << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                             auto& functionAbi = cacheHandle.value();
                             conflictFields =
@@ -1354,7 +1350,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         EXECUTOR_NAME_LOG(DEBUG)
                             << LOG_BADGE("dagExecuteTransactionsInternal")
                             << LOG_DESC("The transaction can't be executed concurrently")
-                            << LOG_KV("adddress", to)
+                            << LOG_KV("address", to)
                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                         executionResults[i] = toExecutionResult(std::move(inputs[i]));
                         executionResults[i]->setType(ExecutionMessage::SEND_BACK);
@@ -1378,6 +1374,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
     try
     {
         // DAG run
+        EXECUTOR_NAME_LOG(INFO) << LOG_DESC("begin executeTransactionsWithCriticals")
+                                << NUMBER(m_blockContext->number())
+                                << LOG_KV("txsCriticalsSize", txsCriticals->size());
         executeTransactionsWithCriticals(txsCriticals, inputs, executionResults);
     }
     catch (exception& e)
@@ -1398,7 +1397,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 void TransactionExecutor::prepare(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << "Prepare request" << LOG_KV("blockNumber", params.number);
+    EXECUTOR_NAME_LOG(INFO) << "Prepare request" << NUMBER(params.number);
 
     if (!m_isRunning)
     {
@@ -1435,7 +1434,8 @@ void TransactionExecutor::prepare(
         params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
 
     m_backendStorage->asyncPrepare(storageParams, *(first->storage),
-        [this, callback = std::move(callback)](auto&& error, uint64_t) {
+        [this, callback = std::move(callback), blockNumber = params.number](
+            auto&& error, uint64_t) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1447,13 +1447,13 @@ void TransactionExecutor::prepare(
             {
                 auto errorMessage = "Prepare error: " + error->errorMessage();
 
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+                EXECUTOR_NAME_LOG(ERROR) << errorMessage << NUMBER(blockNumber);
                 callback(
                     BCOS_ERROR_WITH_PREV_PTR(ExecuteError::PREPARE_ERROR, errorMessage, *error));
                 return;
             }
 
-            EXECUTOR_NAME_LOG(INFO) << "Prepare success";
+            EXECUTOR_NAME_LOG(INFO) << "Prepare success" << NUMBER(blockNumber);
             callback(nullptr);
         });
 }
@@ -1461,7 +1461,7 @@ void TransactionExecutor::prepare(
 void TransactionExecutor::commit(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(TRACE) << "Commit request" << LOG_KV("number", params.number);
+    EXECUTOR_NAME_LOG(TRACE) << "Commit request" << NUMBER(params.number);
 
     if (!m_isRunning)
     {
@@ -1510,12 +1510,12 @@ void TransactionExecutor::commit(
         {
             auto errorMessage = "Commit error: " + error->errorMessage();
 
-            EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+            EXECUTOR_NAME_LOG(ERROR) << errorMessage << NUMBER(blockNumber);
             callback(BCOS_ERROR_WITH_PREV_PTR(ExecuteError::COMMIT_ERROR, errorMessage, *error));
             return;
         }
 
-        EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << LOG_KV("number", blockNumber);
+        EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << NUMBER(blockNumber);
 
         m_lastCommittedBlockNumber = blockNumber;
 
@@ -1528,8 +1528,7 @@ void TransactionExecutor::commit(
 void TransactionExecutor::rollback(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << "Rollback request: " << LOG_KV("number", params.number);
-
+    EXECUTOR_NAME_LOG(INFO) << "Rollback request: " << NUMBER(params.number);
 
     if (!m_isRunning)
     {
@@ -1564,8 +1563,8 @@ void TransactionExecutor::rollback(
 
     bcos::protocol::TwoPCParams storageParams{
         params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
-    m_backendStorage->asyncRollback(
-        storageParams, [this, callback = std::move(callback)](auto&& error) {
+    m_backendStorage->asyncRollback(storageParams,
+        [this, callback = std::move(callback), blockNumber = params.number](auto&& error) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1577,12 +1576,12 @@ void TransactionExecutor::rollback(
             {
                 auto errorMessage = "Rollback error: " + error->errorMessage();
 
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+                EXECUTOR_NAME_LOG(ERROR) << errorMessage << NUMBER(blockNumber);
                 callback(BCOS_ERROR_WITH_PREV_PTR(-1, errorMessage, *error));
                 return;
             }
 
-            EXECUTOR_NAME_LOG(INFO) << "Rollback success";
+            EXECUTOR_NAME_LOG(INFO) << "Rollback success" << NUMBER(blockNumber);
             callback(nullptr);
         });
 }
@@ -1632,7 +1631,7 @@ void TransactionExecutor::getCode(
 
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR) << "Get code error: " << error->errorMessage();
+                EXECUTOR_NAME_LOG(INFO) << "Get code error: " << error->errorMessage();
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
                 return;
@@ -1640,7 +1639,7 @@ void TransactionExecutor::getCode(
 
             if (!entry)
             {
-                EXECUTOR_NAME_LOG(WARNING) << "Get code success, empty code";
+                EXECUTOR_NAME_LOG(DEBUG) << "Get code success, empty code";
 
                 callback(nullptr, bcos::bytes());
                 return;
@@ -1692,7 +1691,7 @@ void TransactionExecutor::getABI(
 
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR) << "Get ABI error: " << error->errorMessage();
+                EXECUTOR_NAME_LOG(INFO) << "Get ABI error: " << error->errorMessage();
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
                 return;
@@ -1700,7 +1699,7 @@ void TransactionExecutor::getABI(
 
             if (!entry)
             {
-                EXECUTOR_NAME_LOG(WARNING) << "Get ABI success, empty ABI";
+                EXECUTOR_NAME_LOG(DEBUG) << "Get ABI success, empty ABI";
 
                 callback(nullptr, std::string());
                 return;
@@ -1711,7 +1710,6 @@ void TransactionExecutor::getABI(
             callback(nullptr, std::string(abi));
         });
 }
-
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress)
@@ -1782,12 +1780,12 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
         callback)
 {
-    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("asyncExecute")
-                             << LOG_KV("keyLockSize", input->keyLocks().size())
-                             << LOG_KV("contextID", input->contextID())
+    EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("asyncExecute") << LOG_KV("contextID", input->contextID())
                              << LOG_KV("seq", input->seq())
-                             << LOG_KV("type", std::to_string(input->type()))
-                             << LOG_KV("staticCall", input->staticCall());
+                             << LOG_KV("MessageType", std::to_string(input->type()))
+                             << LOG_KV("To", input->to())
+                             << LOG_KV("staticCall", input->staticCall())
+                             << LOG_KV("Create", input->create()) << NUMBER(blockContext->number());
     switch (input->type())
     {
     case bcos::protocol::ExecutionMessage::TXHASH:
@@ -2225,7 +2223,7 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
         [this, &blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
             if (error)
             {
-                EXECUTOR_NAME_LOG(ERROR) << "Get blockNumber from storage failed";
+                EXECUTOR_NAME_LOG(INFO) << "Get blockNumber from storage failed";
                 blockNumberFuture.set_value(-1);
             }
             else
