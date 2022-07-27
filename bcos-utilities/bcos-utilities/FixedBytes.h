@@ -124,10 +124,19 @@ public:
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Invalid input string!"});
             }
 
+            if (view.size() != N)
+            {}
+
             auto startIndex = 0;
             if (_alignType == DataAlignType::AlignRight) [[likely]]
             {
                 startIndex = N - (view.size() / 2);
+                std::fill(m_data.begin(), m_data.begin() + startIndex, 0);
+            }
+            else
+            {
+                auto endIndex = view.size() / 2;
+                std::fill(m_data.begin() + endIndex, m_data.end(), 0);
             }
             boost::algorithm::unhex(view.begin(), view.end(), m_data.begin() + startIndex);
         }
