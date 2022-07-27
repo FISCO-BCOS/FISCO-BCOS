@@ -30,7 +30,7 @@ target_include_directories(bcos-protocol INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:include/bcos-protocol>
 )
-target_link_libraries(bcos-protocol INTERFACE protobuf::libprotobuf)
+target_link_libraries(bcos-protocol INTERFACE protobuf::libprotobuf ${CODEC_TARGET})
 
 if (TESTS)
     # fetch bcos-test    
