@@ -59,6 +59,9 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     auto tableName = dynamicParams.at(0);
     tableName = getActualTableName(tableName);
 
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled") << LOG_DESC("call dynamic kv table")
+                          << LOG_KV("tableName", tableName) << NUMBER(blockContext->number());
+
     // get user call actual params
     auto originParam = ref(param);
     uint32_t func = getParamFunc(originParam);
@@ -85,8 +88,8 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTablePrecompiled")
-                               << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled")
+                              << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("KVTablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
@@ -128,8 +131,8 @@ void KVTablePrecompiled::set(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key, value);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
-                           << LOG_KV("key", key) << LOG_KV("value", value);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
+                          << LOG_KV("key", key) << LOG_KV("value", value);
 
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
 

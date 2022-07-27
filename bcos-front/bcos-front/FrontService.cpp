@@ -17,9 +17,6 @@
  * @author: octopus
  * @date 2021-04-19
  */
-
-#include <thread>
-
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-front/Common.h>
@@ -27,10 +24,10 @@
 #include <bcos-front/FrontService.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
-#include <boost/asio.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <random>
+#include <thread>
 
 using namespace bcos;
 using namespace front;
@@ -259,7 +256,9 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
 {
     try
     {
-        std::string uuid = boost::uuids::to_string(boost::uuids::random_generator()());
+        static thread_local auto uuid_gen =
+            boost::uuids::basic_random_generator<std::random_device>();
+        std::string uuid = boost::uuids::to_string(uuid_gen());
         if (_callbackFunc)
         {
             auto callback = std::make_shared<Callback>();

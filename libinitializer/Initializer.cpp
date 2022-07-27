@@ -28,6 +28,7 @@
 #include "AuthInitializer.h"
 #include "ExecutorInitializer.h"
 #include "LedgerInitializer.h"
+#include "LightNodeInitializer.h"
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"

@@ -102,7 +102,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
                                << LOG_DESC("open table failed.");
         auto blockContext = _executive->blockContext().lock();
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_OPEN_ERROR,
@@ -123,8 +123,8 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("error func")
+                              << LOG_KV("func", func);
     }
 
     _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
@@ -181,7 +181,7 @@ void SmallBankPrecompiled::updateBalanceCall(
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret));
@@ -292,7 +292,7 @@ void SmallBankPrecompiled::sendPaymentCall(
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret));

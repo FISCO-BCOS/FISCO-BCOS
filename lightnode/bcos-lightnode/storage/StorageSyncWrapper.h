@@ -7,12 +7,12 @@
 namespace bcos::storage
 {
 
-template <class StoragePtr>
+template <class StorageType>
 class StorageSyncWrapper
-  : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<StoragePtr>>
+  : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<StorageType>>
 {
 public:
-    StorageSyncWrapper(StoragePtr storage) : m_storage(std::move(storage)) {}
+    StorageSyncWrapper(StorageType storage) : m_storage(std::move(storage)) {}
     StorageSyncWrapper(const StorageSyncWrapper&) = default;
     StorageSyncWrapper(StorageSyncWrapper&&) = default;
     StorageSyncWrapper& operator=(const StorageSyncWrapper&) = default;
@@ -79,9 +79,9 @@ public:
     };
 
 private:
-    constexpr auto& storage() { return *m_storage; }
+    constexpr auto& storage() { return bcos::concepts::getRef(m_storage); }
 
-    StoragePtr m_storage;
+    StorageType m_storage;
 };
 
 static_assert(bcos::concepts::storage::Storage<StorageSyncWrapper<int>>, "fail!");

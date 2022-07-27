@@ -71,14 +71,14 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
         }
         catch (std::exception& error)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error.what())
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error.what())
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
             result = false;
         }
         catch (std::string& error)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error)
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(error)
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
             result = false;
@@ -92,7 +92,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("GroupSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
         _callParameters->setExecResult(codec->encode((int32_t)CODE_UNKNOW_FUNCTION_CALL, false));
     }

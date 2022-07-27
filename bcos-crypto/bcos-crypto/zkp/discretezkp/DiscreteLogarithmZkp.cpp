@@ -142,10 +142,15 @@ bool DiscreteLogarithmZkp::verifyEqualityProof(bytes const& c1Point, bytes const
 // wedpr_aggregate_ristretto_point
 bytes DiscreteLogarithmZkp::aggregateRistrettoPoint(bytes const& pointSum, bytes const& pointShare)
 {
+    // with empty pointShare to aggregate
+    if (pointShare.size() == 0)
+    {
+        return pointSum;
+    }
+    auto pointSumInput = bytesToInputBuffer(pointSum, m_pointLen);
+    auto pointShareInput = bytesToInputBuffer(pointShare, m_pointLen);
     bytes aggregatedResult;
     aggregatedResult.resize(m_pointLen);
-    CInputBuffer pointSumInput{(const char*)pointSum.data(), m_pointLen};
-    CInputBuffer pointShareInput{(const char*)pointShare.data(), m_pointLen};
     COutputBuffer result{(char*)aggregatedResult.data(), m_pointLen};
     auto ret = wedpr_aggregate_ristretto_point(&pointSumInput, &pointShareInput, &result);
     if (ret == WEDPR_SUCCESS)
