@@ -110,8 +110,12 @@ public:
 
     explicit FixedBytes(std::string_view view, StringDataType type,
         DataAlignType _alignType = DataAlignType::AlignRight)
-      : FixedBytes()
     {
+        if (view.size() >= 2 && (view[0] == '0' && view[1] == 'x'))
+        {
+            view = view.substr(2);
+        }
+
         if (type == FromHex) [[likely]]
         {
             if ((view.size() > static_cast<std::string_view::size_type>(N * 2)) ||
