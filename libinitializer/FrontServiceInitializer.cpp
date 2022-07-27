@@ -177,16 +177,6 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 << LOG_DESC("notifyGroupNodeInfo") << LOG_KV("connectedNodeSize", nodeIdSet.size());
         });
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
-
-// #ifdef WITH_LIGHTNODE
-//     m_front->registerModuleMessageDispatcher(protocol::LIGHTNODE_GETBLOCK,
-//         [](bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef input) {
-//             bcostars::RequestBlock requestBlock;
-//             bcos::concepts::serialize::decode(input, requestBlock);
-
-
-//         });
-// #endif
 }
 
 

@@ -28,7 +28,6 @@
 #include "AuthInitializer.h"
 #include "ExecutorInitializer.h"
 #include "LedgerInitializer.h"
-#include "LightNodeInitializer.h"
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
@@ -56,6 +55,9 @@
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
 
+#ifdef WITH_LIGHTNODE
+#include "LightNodeInitializer.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::tool;

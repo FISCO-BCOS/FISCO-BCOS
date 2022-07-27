@@ -99,8 +99,11 @@ public:
             std::shared_ptr<AnyLedger> anyLedger) {
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETBLOCK,
-        [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
-                           const std::string &id, bytesConstRef data) {
+        [anyLedger, frontWeak = std::weak_ptr(front)](
+            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
+            bytesConstRef data) {
+          auto front = frontWeak.lock();
+
           bcostars::RequestBlock request;
           bcos::concepts::serialize::decode(data, request);
 
@@ -116,6 +119,29 @@ public:
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(block, responseBuffer);
           front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETBLOCK,
+                                   nodeID, bcos::ref(responseBuffer),
+                                   [](Error::Ptr _error) {
+                                     if (_error) {
+                                     }
+                                   });
+        });
+    front->registerModuleMessageDispatcher(
+        bcos::protocol::LIGHTNODE_GETTRANSACTION,
+        [anyLedger, frontWeak = std::weak_ptr(front)](
+            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
+            bytesConstRef data) {
+          auto front = frontWeak.lock();
+          bcostars::RequestTransactions request;
+          bcos::concepts::serialize::decode(data, request);
+
+          bcostars::ResponseTransactions response;
+          anyLedger
+              ->getTransactionsOrReceipts<bcos::concepts::ledger::TRANSACTIONS>(
+                  request.hashes, response.transactions);
+
+          bcos::bytes responseBuffer;
+          bcos::concepts::serialize::encode(response, responseBuffer);
+          front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETTRANSACTION,
                                    nodeID, bcos::ref(responseBuffer),
                                    [](Error::Ptr _error) {
                                      if (_error) {

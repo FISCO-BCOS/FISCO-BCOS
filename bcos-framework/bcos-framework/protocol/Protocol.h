@@ -70,7 +70,12 @@ enum ModuleID
     TxsSync = 2001,
     ConsTxsSync = 2002,
     AMOP = 3000,
+
     LIGHTNODE_GETBLOCK = 4000,
+    LIGHTNODE_GETTRANSACTION,
+    LIGHTNODE_GETRECEIPT,
+    LIGHTNODE_STATUS,
+    LIGHTNODE_END = 4999
 };
 enum ProtocolModuleID : uint32_t
 {
