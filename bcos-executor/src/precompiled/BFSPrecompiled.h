@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file FileSystemPrecompiled.h
+ * @file BFSPrecompiled.h
  * @author: kyonRay
  * @date 2021-06-10
  */
@@ -23,12 +23,12 @@
 
 namespace bcos::precompiled
 {
-class FileSystemPrecompiled : public bcos::precompiled::Precompiled
+class BFSPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
-    using Ptr = std::shared_ptr<FileSystemPrecompiled>;
-    FileSystemPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~FileSystemPrecompiled() = default;
+    using Ptr = std::shared_ptr<BFSPrecompiled>;
+    BFSPrecompiled(crypto::Hash::Ptr _hashImpl);
+    virtual ~BFSPrecompiled() = default;
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;

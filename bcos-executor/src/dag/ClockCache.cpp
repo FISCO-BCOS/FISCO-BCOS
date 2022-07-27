@@ -93,10 +93,10 @@ CacheItem* CacheShard::lookup(size_t hash)
         // if other threads sneak in, evict/erase the entry and re-used the item
         // for another cache entry.
         if (hash != item->hash)
-    {
-        unref(item, false);
-        return nullptr;
-    }
+        {
+            unref(item, false);
+            return nullptr;
+        }
     return item;
 }
 
