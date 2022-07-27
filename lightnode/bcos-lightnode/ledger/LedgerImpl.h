@@ -64,7 +64,7 @@ private:
         constexpr auto tableName = std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ?
                                        SYS_HASH_2_TX :
                                        SYS_HASH_2_RECEIPT;
-        auto entries = m_storage.getRows(std::string_view{tableName}, hashes);
+        auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
 #pragma omp parallel for
         for (auto i = 0u; i < RANGES::size(entries); ++i)
@@ -84,7 +84,7 @@ private:
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
         bcos::concepts::ledger::Status status;
-        auto entries = m_storage.getRows(SYS_CURRENT_STATE, keys);
+        auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
         for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
             auto& entry = entries[i];
@@ -137,7 +137,7 @@ private:
             entry.importFields({std::move(buffers[i])});
 
             auto&& hash = hashes[i];
-            m_storage.setRow(
+            storage().setRow(
                 tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
         }
     }
@@ -177,7 +177,7 @@ private:
     {
         if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
         {
-            auto entry = m_storage.getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
+            auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
             if (!entry) [[unlikely]]
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
@@ -191,7 +191,7 @@ private:
         {
             if (RANGES::empty(block.transactionsMetaData))
             {
-                auto entry = m_storage.getRow(SYS_NUMBER_2_TXS, blockNumberKey);
+                auto entry = storage().getRow(SYS_NUMBER_2_TXS, blockNumberKey);
                 if (!entry) [[unlikely]]
                     BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
 
@@ -243,17 +243,17 @@ private:
             // current number
             bcos::storage::Entry numberEntry;
             numberEntry.importFields({std::string(blockNumberKey)});
-            m_storage.setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
+            storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
 
             // number 2 block hash
             bcos::storage::Entry hashEntry;
             hashEntry.importFields({block.blockHeader.dataHash});
-            m_storage.setRow(SYS_NUMBER_2_HASH, blockNumberKey, std::move(hashEntry));
+            storage().setRow(SYS_NUMBER_2_HASH, blockNumberKey, std::move(hashEntry));
 
             // block hash 2 number
             bcos::storage::Entry hash2NumberEntry;
             hash2NumberEntry.importFields({std::string(blockNumberKey)});
-            m_storage.setRow(SYS_HASH_2_NUMBER,
+            storage().setRow(SYS_HASH_2_NUMBER,
                 std::string_view{
                     block.blockHeader.dataHash.data(), block.blockHeader.dataHash.size()},
                 std::move(hash2NumberEntry));
@@ -263,7 +263,7 @@ private:
             std::vector<bcos::byte> number2HeaderBuffer;
             bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
             number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
-            m_storage.setRow(
+            storage().setRow(
                 SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
@@ -274,7 +274,7 @@ private:
             std::vector<bcos::byte> number2NonceBuffer;
             bcos::concepts::serialize::encode(blockNonceList, number2NonceBuffer);
             number2NonceEntry.importFields({std::move(number2NonceBuffer)});
-            m_storage.setRow(
+            storage().setRow(
                 SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey, std::move(number2NonceEntry));
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
@@ -307,7 +307,7 @@ private:
                     transactionsBlock, number2TransactionHashesBuffer);
                 number2TransactionHashesEntry.importFields(
                     {std::move(number2TransactionHashesBuffer)});
-                m_storage.setRow(
+                storage().setRow(
                     SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
                 std::swap(block.transactionsMetaData, transactionsBlock.transactionsMetaData);
             }
@@ -352,7 +352,7 @@ private:
 
                 bcos::storage::Entry totalEntry;
                 totalEntry.importFields({boost::lexical_cast<std::string>(transactionCount.total)});
-                m_storage.setRow(
+                storage().setRow(
                     SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(totalEntry));
 
                 if (transactionCount.failed > 0)
@@ -360,7 +360,7 @@ private:
                     bcos::storage::Entry failedEntry;
                     failedEntry.importFields(
                         {boost::lexical_cast<std::string>(transactionCount.failed)});
-                    m_storage.setRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
+                    storage().setRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
                         std::move(failedEntry));
                 }
 
@@ -383,6 +383,11 @@ private:
         {
             static_assert(!sizeof(block), "Wrong input flag!");
         }
+    }
+
+    auto& storage()
+    {
+        return bcos::concepts::getRef(m_storage);
     }
 
     Storage m_storage;

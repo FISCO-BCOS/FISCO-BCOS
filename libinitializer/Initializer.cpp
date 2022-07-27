@@ -32,6 +32,9 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-lightnode/storage/StorageSyncWrapper.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -51,6 +54,7 @@
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
+#include <memory>
 
 
 using namespace bcos;
@@ -279,6 +283,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
+
+#ifdef WITH_LIGHTNODE
+    bcos::storage::StorageSyncWrapper<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
+    std::shared_ptr<AnyLedger> anyLedger;
+    if (m_nodeConfig->smCryptoType())
+    {
+        AnyLedger::SM3Ledger sm3Ledger(std::move(storageWrapper));
+        anyLedger = std::make_shared<AnyLedger>(std::move(sm3Ledger));
+    }
+    else
+    {
+        AnyLedger::Keccak256Ledger keccak256Ledger(std::move(storageWrapper));
+        anyLedger = std::make_shared<AnyLedger>(std::move(keccak256Ledger));
+    }
+    LightNodeInitializer lightNodeInitializer;
+    lightNodeInitializer.init(
+        std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
+        anyLedger);
+#endif
 }
 
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)

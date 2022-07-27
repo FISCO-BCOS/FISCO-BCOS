@@ -41,8 +41,9 @@ public:
     {
         Error::UniquePtr error;
         std::vector<std::optional<Entry>> entries;
+        gsl::span<std::string_view const> view(keys.data(), keys.size());
 
-        storage().asyncGetRows(table, std::forward<decltype(keys)>,
+        storage().asyncGetRows(table, view,
             [&error, &entries](
                 Error::UniquePtr errorOut, std::vector<std::optional<Entry>> entriesOut) {
                 error = std::move(errorOut);
@@ -70,7 +71,7 @@ public:
     {
         Error::UniquePtr error;
 
-        storage()->asyncCreateTable(std::move(tableName), std::string{},
+        storage().asyncCreateTable(std::move(tableName), std::string{},
             [&error](Error::UniquePtr errorOut, [[maybe_unused]] auto&& table) {
                 error = std::move(errorOut);
             });

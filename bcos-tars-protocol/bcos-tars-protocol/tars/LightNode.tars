@@ -6,19 +6,13 @@ module bcostars {
 
 struct RequestBlock
 {
-    1 optional unsigned int beginBlockNumber;
-    2 optional unsigned int endBlockNumber;
-    3 optional bool onlyHeader;
+    1 optional unsigned int blockNumber;
+    2 optional bool onlyHeader;
 };
 
 struct ResponseBlock
 {
-    1 optional unsigned int blockNumber;
-    2 optional vector<Block> blocks;
-};
-
-struct Proof {
-    1 optional vector<vector<byte>> hashes;
+    2 optional Block blocks;
 };
 
 struct RequestTransactions
@@ -30,7 +24,6 @@ struct RequestTransactions
 struct ResponseTransactions
 {
     1 optional vector<Transaction> transactions;
-    2 optional vector<Proof> proofs;
 };
 
 struct RequestReceipts
@@ -42,7 +35,6 @@ struct RequestReceipts
 struct ResponseReceipts
 {
     1 optional vector<TransactionReceipt> receipts;
-    2 optional vector<Proof> proofs;
 };
 
 };

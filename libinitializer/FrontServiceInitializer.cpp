@@ -18,8 +18,6 @@
  * @author: yujiechen
  * @date 2021-06-10
  */
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
 #include "FrontServiceInitializer.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "libinitializer/ProtocolInitializer.h"
