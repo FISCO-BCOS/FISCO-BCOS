@@ -60,7 +60,7 @@ int64_t PrecompiledGas::calComputationGas()
     {
         if (!m_metric->OpCode2GasCost.count(it.first))
         {
-            PRECOMPILED_LOG(WARNING) << LOG_DESC("Invalid opType:") << it.first;
+            PRECOMPILED_LOG(INFO) << LOG_DESC("Invalid opType:") << it.first;
             continue;
         }
         totalGas += ((m_metric->OpCode2GasCost)[it.first]) * it.second;

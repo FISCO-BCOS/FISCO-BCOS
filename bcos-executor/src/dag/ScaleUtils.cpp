@@ -56,8 +56,8 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         // for values 64-(2**14-1)).
         if (encodedBytes.size() - startPos < 2)
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor")
-                                << LOG_DESC("not enough data to decode compact integer");
+            BCOS_LOG(INFO) << LOG_BADGE("decodeCompactInteger")
+                           << LOG_DESC("not enough data to decode compact integer");
             return nullopt;
         }
         auto _2ndByte = encodedBytes[startPos + 1];
@@ -75,8 +75,8 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         size_t multiplier = 256u;
         if (encodedBytes.size() - startPos < 4)
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor")
-                                << LOG_DESC("not enough data to decode compact integer");
+            BCOS_LOG(INFO) << LOG_BADGE("decodeCompactInteger")
+                           << LOG_DESC("not enough data to decode compact integer");
             return nullopt;
         }
 
@@ -97,8 +97,8 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         auto bytesCount = ((_1stByte) >> 2u) + 4u;
         if (encodedBytes.size() - startPos < bytesCount + 1)
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor")
-                                << LOG_DESC("not enough data to decode compact integer");
+            BCOS_LOG(INFO) << LOG_BADGE("decodeCompactInteger")
+                           << LOG_DESC("not enough data to decode compact integer");
             return nullopt;
         }
 
@@ -125,8 +125,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         auto leftBracketPos = type.rfind("[");
         if (leftBracketPos == type.npos)
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor") << LOG_DESC("unable to parse array type")
-                                << LOG_KV("type", type);
+            BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength")
+                           << LOG_DESC("unable to parse array type") << LOG_KV("type", type);
             return nullopt;
         }
 
@@ -143,23 +143,23 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             }
             else
             {
-                EXECUTOR_LOG(ERROR)
-                    << LOG_BADGE("executor") << LOG_DESC("unable to parse length of dynamic array");
+                BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength")
+                               << LOG_DESC("unable to parse length of dynamic array");
                 return nullopt;
             }
         }
         else
         {
-            auto dimmension = type.substr(leftBracketPos + 1, type.length() - leftBracketPos - 1);
+            auto dimension = type.substr(leftBracketPos + 1, type.length() - leftBracketPos - 1);
             try
             {
-                size = stoul(dimmension);
+                size = stoul(dimension);
             }
             catch (...)
             {
-                EXECUTOR_LOG(ERROR)
-                    << LOG_BADGE("executor") << LOG_DESC("unable to parse dimmension")
-                    << LOG_KV("dimmension", dimmension);
+                BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength")
+                               << LOG_DESC("unable to parse dimension")
+                               << LOG_KV("dimension", dimension);
                 return nullopt;
             }
         }
@@ -176,8 +176,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             }
             else
             {
-                EXECUTOR_LOG(ERROR)
-                    << LOG_BADGE("executor") << LOG_DESC("unable to calculate length of element");
+                BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength")
+                               << LOG_DESC("unable to calculate length of element");
                 return nullopt;
             }
         }
@@ -194,8 +194,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         }
         catch (...)
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor") << LOG_DESC("unable to parse type")
-                                << LOG_KV("type", type);
+            BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
+                           << LOG_KV("type", type);
             return nullopt;
         }
         return digitsNum >> 3;
@@ -211,8 +211,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         }
         else
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor")
-                                << LOG_DESC("unable to parse string or bytes");
+            BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength")
+                           << LOG_DESC("unable to parse string or bytes");
             return nullopt;
         }
     }
@@ -232,8 +232,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         }
         catch (...)
         {
-            EXECUTOR_LOG(ERROR) << LOG_BADGE("executor") << LOG_DESC("unable to parse type")
-                                << LOG_KV("type", type);
+            BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
+                           << LOG_KV("type", type);
             return nullopt;
         }
         return digitsNum;
@@ -253,16 +253,16 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             }
             else
             {
-                EXECUTOR_LOG(ERROR)
-                    << LOG_BADGE("executor") << LOG_DESC("unable to parse component")
-                    << LOG_KV("type", component);
+                BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength")
+                               << LOG_DESC("unable to parse component")
+                               << LOG_KV("type", component);
                 return nullopt;
             }
         }
         return {length};
     }
 
-    EXECUTOR_LOG(ERROR) << LOG_BADGE("executor") << LOG_DESC("unable to parse type")
-                        << LOG_KV("type", type);
+    BCOS_LOG(INFO) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
+                   << LOG_KV("type", type);
     return nullopt;
 }

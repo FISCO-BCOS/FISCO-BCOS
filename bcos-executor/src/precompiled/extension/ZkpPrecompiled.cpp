@@ -107,8 +107,8 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
     else
     {
         // no defined function
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("ZkpPrecompiled: undefined method")
-                               << LOG_KV("funcSelector", std::to_string(funcSelector));
+        PRECOMPILED_LOG(INFO) << LOG_DESC("ZkpPrecompiled: undefined method")
+                              << LOG_KV("funcSelector", std::to_string(funcSelector));
         BOOST_THROW_EXCEPTION(
             bcos::protocol::PrecompiledError("ZkpPrecompiled call undefined function!"));
     }
@@ -137,8 +137,8 @@ void ZkpPrecompiled::verifyEitherEqualityProof(
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("verifyEitherEqualityProof exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyEitherEqualityProof exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
 }
@@ -159,8 +159,8 @@ void ZkpPrecompiled::verifyKnowledgeProof(
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("verifyKnowledgeProof exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyKnowledgeProof exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
 }
@@ -184,8 +184,8 @@ void ZkpPrecompiled::verifyFormatProof(
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("verifyFormatProof exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyFormatProof exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
 }
@@ -209,8 +209,8 @@ void ZkpPrecompiled::verifySumProof(
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("verifySumProof exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifySumProof exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
 }
@@ -234,8 +234,8 @@ void ZkpPrecompiled::verifyProductProof(
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("verifyProductProof exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyProductProof exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
 }
@@ -257,8 +257,8 @@ void ZkpPrecompiled::verifyEqualityProof(
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("verifyEqualityProof exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyEqualityProof exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
 }
@@ -278,8 +278,8 @@ void ZkpPrecompiled::aggregateRistrettoPoint(
     catch (std::exception const& e)
     {
         retCode = -1;
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("aggregateRistrettoPoint exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("aggregateRistrettoPoint exception")
+                               << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(retCode, result));
 }

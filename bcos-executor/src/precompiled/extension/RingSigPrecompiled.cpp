@@ -70,14 +70,14 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
         }
         catch (std::exception& error)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error.what())
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error.what())
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("paramInfo", paramInfo);
             result = false;
         }
         catch (std::string& error)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error)
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error)
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("paramInfo", paramInfo);
             result = false;
@@ -91,7 +91,7 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("RingSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
         _callParameters->setExecResult(codec->encode((int32_t)CODE_UNKNOW_FUNCTION_CALL, false));
     }

@@ -165,8 +165,8 @@ std::shared_ptr<PrecompiledExecResult> DagTransferPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("error func")
+                              << LOG_KV("func", func);
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
@@ -216,7 +216,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret));
@@ -292,7 +292,7 @@ void DagTransferPrecompiled::userSaveCall(
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret));
@@ -358,7 +358,7 @@ void DagTransferPrecompiled::userDrawCall(
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret));
@@ -407,7 +407,7 @@ void DagTransferPrecompiled::userBalanceCall(
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret), balance);
@@ -512,7 +512,7 @@ void DagTransferPrecompiled::userTransferCall(
     } while (false);
     if (!strErrorMsg.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
                                << LOG_KV("errorCode", ret);
     }
     _out = codec.encode(u256(ret));
