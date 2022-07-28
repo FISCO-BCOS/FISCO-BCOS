@@ -12,7 +12,7 @@ struct RequestBlock
 
 struct ResponseBlock
 {
-    2 optional Block blocks;
+    2 optional Block block;
 };
 
 struct RequestTransactions
@@ -35,6 +35,17 @@ struct RequestReceipts
 struct ResponseReceipts
 {
     1 optional vector<TransactionReceipt> receipts;
+};
+
+struct RequestGetStatus
+{
+};
+
+struct ResponseGetStatus
+{
+    1 optional unsigned int total;
+    2 optional unsigned int failed;
+    3 optional unsigned int blockNumber; 
 };
 
 };

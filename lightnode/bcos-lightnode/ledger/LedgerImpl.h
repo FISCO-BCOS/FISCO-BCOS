@@ -9,7 +9,6 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-utilities/Ranges.h>
-#include <bits/ranges_base.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <ranges>

@@ -3,6 +3,7 @@
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
 #include "bcos-framework/protocol/Protocol.h"
+#include "concepts/bcos-concepts/ledger/Ledger.h"
 #include "generated/bcos-tars-protocol/tars/LightNode.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -95,8 +96,8 @@ private:
 
 class LightNodeInitializer {
 public:
-  void init(std::shared_ptr<bcos::front::FrontService> front,
-            std::shared_ptr<AnyLedger> anyLedger) {
+  void initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
+                        std::shared_ptr<AnyLedger> anyLedger) {
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETBLOCK,
         [anyLedger, frontWeak = std::weak_ptr(front)](
@@ -107,17 +108,18 @@ public:
           bcostars::RequestBlock request;
           bcos::concepts::serialize::decode(data, request);
 
-          bcostars::Block block;
+          // bcostars::Block block;
+          bcostars::ResponseBlock response;
           if (request.onlyHeader) {
             anyLedger->getBlock<bcos::concepts::ledger::HEADER>(
-                request.blockNumber, block);
+                request.blockNumber, response.block);
           } else {
             anyLedger->getBlock<bcos::concepts::ledger::ALL>(
-                request.blockNumber, block);
+                request.blockNumber, response.block);
           }
 
           bcos::bytes responseBuffer;
-          bcos::concepts::serialize::encode(block, responseBuffer);
+          bcos::concepts::serialize::encode(response, responseBuffer);
           front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETBLOCK,
                                    nodeID, bcos::ref(responseBuffer),
                                    [](Error::Ptr _error) {
@@ -126,7 +128,7 @@ public:
                                    });
         });
     front->registerModuleMessageDispatcher(
-        bcos::protocol::LIGHTNODE_GETTRANSACTION,
+        bcos::protocol::LIGHTNODE_GETTRANSACTIONS,
         [anyLedger, frontWeak = std::weak_ptr(front)](
             bcos::crypto::NodeIDPtr nodeID, const std::string &id,
             bytesConstRef data) {
@@ -141,7 +143,54 @@ public:
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
-          front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETTRANSACTION,
+          front->asyncSendResponse(
+              id, bcos::protocol::LIGHTNODE_GETTRANSACTIONS, nodeID,
+              bcos::ref(responseBuffer), [](Error::Ptr _error) {
+                if (_error) {
+                }
+              });
+        });
+    front->registerModuleMessageDispatcher(
+        bcos::protocol::LIGHTNODE_GETRECEIPTS,
+        [anyLedger, frontWeak = std::weak_ptr(front)](
+            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
+            bytesConstRef data) {
+          auto front = frontWeak.lock();
+          bcostars::RequestReceipts request;
+          bcos::concepts::serialize::decode(data, request);
+
+          bcostars::ResponseReceipts response;
+          anyLedger
+              ->getTransactionsOrReceipts<bcos::concepts::ledger::RECEIPTS>(
+                  request.hashes, response.receipts);
+
+          bcos::bytes responseBuffer;
+          bcos::concepts::serialize::encode(response, responseBuffer);
+          front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETRECEIPTS,
+                                   nodeID, bcos::ref(responseBuffer),
+                                   [](Error::Ptr _error) {
+                                     if (_error) {
+                                     }
+                                   });
+        });
+    front->registerModuleMessageDispatcher(
+        bcos::protocol::LIGHTNODE_GETSTATUS,
+        [anyLedger, frontWeak = std::weak_ptr(front)](
+            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
+            bytesConstRef data) {
+          auto front = frontWeak.lock();
+          bcostars::RequestStatus request;
+          bcos::concepts::serialize::decode(data, request);
+
+          bcostars::ResponseStatus response;
+          auto status = anyLedger->getStatus();
+          response.total = status.totla;
+          response.failed = status.failed;
+          response.blockNumber = status.blockNumber;
+
+          bcos::bytes responseBuffer;
+          bcos::concepts::serialize::encode(response, responseBuffer);
+          front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETSTATUS,
                                    nodeID, bcos::ref(responseBuffer),
                                    [](Error::Ptr _error) {
                                      if (_error) {
