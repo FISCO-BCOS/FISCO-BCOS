@@ -73,7 +73,7 @@ public:
         std::function<void(Error::Ptr)> _callback)
     {
         // do nothing
-        callback(nullptr);
+        _callback(nullptr);
     }
     void asyncExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override
@@ -88,7 +88,7 @@ public:
         {
             auto blockHeader = m_blockHeaderFactory->createBlockHeader();
             blockHeader->setNumber(m_number);
-            m_blockBlock.push_back(m_number);
+            m_blockNumber.push_back(m_number);
             ++m_number;
             callback(nullptr, std::move(blockHeader), false);
             return;
@@ -98,8 +98,8 @@ public:
     {
         if (m_number == 100)
         {
-            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
-                "Prewrite block error: " + error->errorMessage(), *error));
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
+                "asyncCommit errors! " + boost::lexical_cast<std::string>(status.failed)));
         }
         else
         {
@@ -120,11 +120,13 @@ private:
     bcos::protocol::Block::Ptr m_block;
     bcostars::protocol::BlockHeaderFactoryImpl::Ptr m_blockHeaderFactory;
     std::vector<std::uint8_t> m_blockNumber;
-    std::uint_8 m_number = 100;
+    std::uint8_t m_number = 100;
+    size_t m_gasLimit = TRANSACTION_GAS;
     bool m_isSysBlock;
     bool m_running = false;
+    bool m_syncBlock = false;
 
-protected:
+public:
     struct CommitStatus
     {
         std::atomic_size_t total;

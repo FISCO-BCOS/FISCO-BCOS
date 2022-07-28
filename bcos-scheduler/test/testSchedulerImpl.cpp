@@ -1,3 +1,4 @@
+#include "RocksDBStorage.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -23,6 +24,7 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <future>
@@ -67,13 +69,13 @@ struct schedulerImplFixture
             std::make_shared<bcos::protocol::TransactionSubmitResultFactory>();
     };
     ~schedulerImplFixture() {}
-    ledger::LedgerInterface::Ptr ledger;
-    scheduler::ExecutorManager::Ptr executorManager;
+    bcos::ledger::LedgerInterface::Ptr ledger;
+    bcos::scheduler::ExecutorManager::Ptr executorManager;
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
     protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory;
     protocol::BlockHeaderFactory::Ptr blockHeaderFactory;
     bcos::crypto::Hash::Ptr hashImpl;
-    scheduler::SchedulerImpl::Ptr scheduler;
+    bcos::scheduler::SchedulerImpl::Ptr scheduler;
 
     bcostars::protocol::TransactionFactoryImpl::Ptr transactionFactory;
     bcos::crypto::SignatureCrypto::Ptr signature;
@@ -84,7 +86,6 @@ struct schedulerImplFixture
     bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory;
 
     std::string path = "./unittestdb";
-    std::make_shared<MockBlockExecutive> blockExecutive;
     RocksDBStorage::Ptr storage = nullptr;
 };
 
