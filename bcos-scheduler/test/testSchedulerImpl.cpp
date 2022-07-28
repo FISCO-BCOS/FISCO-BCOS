@@ -69,11 +69,10 @@ struct schedulerImplFixture
         transactionSubmitResultFactory =
             std::make_shared<bcos::protocol::TransactionSubmitResultFactory>();
 
-        auto scheduler = std::make_shared<schedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
-            false, false, false, 0);
-        auto blockExecutiveFactory =
-            std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
+        auto scheduler = std::make_shared<bcos::scheduler::schedulerImpl>(executorManager, ledger,
+            storage, executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
+            hashImpl, false, false, false, 0);
+        auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
         scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     };
     ~schedulerImplFixture() {}
