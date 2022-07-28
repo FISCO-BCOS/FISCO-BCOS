@@ -12,6 +12,7 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
+
 jobs:
   build:
     name: build
@@ -32,6 +33,20 @@ jobs:
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
+      - uses: actions/cache@v2
+        id: deps_cache
+        with:
+          path: |
+            /home/runner/.cargo
+            /Users/runner/.cargo/
+            /home/runner/.ccache
+            /Users/runner/.ccache/
+            deps/src
+          key: build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            build-v8-notest-${{ runner.temp }}-
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
@@ -40,7 +55,8 @@ jobs:
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
-          export CC='gcc-10'
+          sudo apt install -y lcov ccache
+          export GCC='gcc-10'
           export CXX='g++-10'
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
@@ -65,10 +81,24 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
+      - uses: actions/cache@v2
+        id: deps_cache
+        with:
+          path: |
+            /home/runner/.cargo
+            /Users/runner/.cargo/
+            /home/runner/.ccache
+            /Users/runner/.ccache/
+            deps/src
+          key: centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            centos-v8-notest-${{ runner.temp }}-
       - name: Prepare centos tools
         run: |
           yum install yum install -y epel-release centos-release-scl flex bison
-          yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel
+          yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
       - name: Prepare vcpkg

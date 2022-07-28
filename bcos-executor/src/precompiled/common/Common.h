@@ -32,7 +32,7 @@ namespace bcos
 {
 namespace precompiled
 {
-#define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[PRECOMPILED]"
+#define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
@@ -78,7 +78,7 @@ const int TX_GAS_LIMIT_MIN = 100000;
 
 enum PrecompiledErrorCode : int
 {
-    // FileSystemPrecompiled -53099 ~ -53000
+    // BFSPrecompiled -53099 ~ -53000
     CODE_ADDRESS_OR_VERSION_ERROR = -51202,
     CODE_FILE_INVALID_TYPE = -53006,
     CODE_FILE_INVALID_PATH = -53005,

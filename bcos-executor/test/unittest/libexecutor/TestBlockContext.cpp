@@ -67,6 +67,7 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     //         ++count1;
     // }
     BOOST_CHECK(blockContext->getExecutiveFlow(codeAddressArr[0]) == nullptr);
+    blockContext->stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

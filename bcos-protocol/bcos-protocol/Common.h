@@ -18,7 +18,8 @@
  * @date 2021-04-12
  */
 #pragma once
-#include "bcos-codec/scale/ScaleEncoderStream.h"
+
+#include <bcos-codec/scale/ScaleEncoderStream.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>

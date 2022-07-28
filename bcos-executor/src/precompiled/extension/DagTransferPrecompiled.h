@@ -43,6 +43,21 @@ public:
     bool isParallelPrecompiled() override { return true; }
     std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
 
+    static void createDagTable(std::shared_ptr<storage::StorageInterface> storageInterface)
+    {
+        std::string _tableName(ledger::DAG_TRANSFER);
+        // create table first
+        std::promise<Error::UniquePtr> createPromise;
+        storageInterface->asyncCreateTable(_tableName, SYS_VALUE_FIELDS,
+            [&createPromise](Error::UniquePtr _e, std::optional<storage::Table>) {
+                createPromise.set_value(std::move(_e));
+            });
+        Error::UniquePtr _e = createPromise.get_future().get();
+        BCOS_LOG(DEBUG) << LOG_BADGE("DAG TRANSFER") << "create DAG Transfer table"
+                        << LOG_KV("table", _tableName)
+                        << (_e == nullptr ? "" : " withError: " + _e->errorMessage());
+    }
+
 public:
     void userAddCall(std::shared_ptr<executor::TransactionExecutive> _executive,
         bytesConstRef _data, std::string const& _origin, bytes& _out);

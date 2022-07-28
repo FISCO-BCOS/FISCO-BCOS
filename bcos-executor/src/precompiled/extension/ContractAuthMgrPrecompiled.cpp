@@ -86,18 +86,18 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
 {
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("func", func);
 
     auto blockContext = _executive->blockContext().lock();
     auto authAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("call")
+                           << LOG_KV("func", func) << NUMBER(blockContext->number());
 
     if (_callParameters->m_sender != authAddress)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("sender is not from AuthManager")
-                               << LOG_KV("sender", _callParameters->m_sender);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                              << LOG_DESC("sender is not from AuthManager")
+                              << LOG_KV("sender", _callParameters->m_sender);
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
             CODE_NO_AUTHORIZED, "ContractAuthMgrPrecompiled: sender is not from AuthManager"));
     }
@@ -146,8 +146,8 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError(
             "ContractAuthMgrPrecompiled call undefined function!"));
     }
@@ -182,15 +182,16 @@ void ContractAuthMgrPrecompiled::getAdmin(
     auto table = _executive->storage().openTable(path);
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("path not found") << LOG_KV("path", path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("contract ACL table not found") << LOG_KV("table", path);
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
     }
     auto entry = table->getRow(ADMIN_FIELD);
     if (!entry)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("entry not found") << LOG_KV("path", path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("contract ACL admin entry not found")
+                               << LOG_KV("path", path);
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract Admin row not found."));
     }
     std::string adminStr = std::string(entry->getField(0));
@@ -222,14 +223,15 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     {
         codec.decode(_callParameters->params(), path, admin);
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
-                           << LOG_KV("path", path) << LOG_KV("admin", admin);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
+                          << LOG_KV("path", path) << LOG_KV("admin", admin)
+                          << NUMBER(blockContext->number());
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table || !table->getRow(ADMIN_FIELD))
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("resetAdmin: path not found") << LOG_KV("path", path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
     }
     auto newEntry = table->newEntry();
@@ -263,24 +265,24 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     uint8_t type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                           << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
-                           << LOG_KV("func", toHexStringWithPrefix(func))
-                           << LOG_KV("type", (uint32_t)type);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                          << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
+                          << LOG_KV("func", toHexStringWithPrefix(func))
+                          << LOG_KV("type", (uint32_t)type) << NUMBER(blockContext->number());
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("path not found") << LOG_KV("path", path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
     auto entry = table->getRow(METHOD_AUTH_TYPE);
     if (!entry)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("method_auth_type row not found")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("contract ACL table method_auth_type row not found")
                                << LOG_KV("path", path);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
         return;
@@ -484,15 +486,15 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         codec.decode(_callParameters->params(), path, _func, account);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
-                           << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
-                           << LOG_KV("account", account);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
+                          << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
+                          << LOG_KV("account", account) << NUMBER(blockContext->number());
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("auth table not found, should not set acl")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("setMethodAuth: contract ACL table not found")
                                << LOG_KV("path", path);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
@@ -505,7 +507,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         getTypeStr = METHOD_AUTH_BLACK;
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("error auth type") << LOG_KV("path", path)
                                << LOG_KV("type", authType);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
@@ -549,7 +551,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         }
         catch (...)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                    << LOG_DESC("auth map parse error") << LOG_KV("path", path);
             getErrorCodeOut(
                 _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
@@ -591,7 +593,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     }
     catch (...)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("decode method type error");
         return (int)CODE_TABLE_AUTH_TYPE_DECODE_ERROR;
     }
@@ -649,13 +651,13 @@ void ContractAuthMgrPrecompiled::setContractStatus(
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("setContractStatus") << LOG_KV("address", address)
-                           << LOG_KV("isFreeze", isFreeze);
+                           << LOG_KV("isFreeze", isFreeze) << NUMBER(blockContext->number());
     auto path = getAuthTableName(address);
     auto table = _executive->storage().openTable(path);
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("auth table not found") << LOG_KV("path", path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                               << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }

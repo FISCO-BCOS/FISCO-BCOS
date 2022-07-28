@@ -52,7 +52,7 @@ ParameterAbi parseParameter(const Json::Value& input)
     return parameterAbi;
 }
 
-vector<string> flattenStaticParamter(const ParameterAbi& param)
+vector<string> flattenStaticParameter(const ParameterAbi& param)
 {  // TODO: return vector<std::pair<string, vector<uint8>>>, pair is type and access path
     const auto TUPLE_STR = "tuple";
     auto flatTypes = vector<string>();
@@ -60,7 +60,7 @@ vector<string> flattenStaticParamter(const ParameterAbi& param)
     {
         for (auto i = (size_t)0; i < param.components.size(); i++)
         {
-            auto types = flattenStaticParamter(param.components[i]);
+            auto types = flattenStaticParameter(param.components[i]);
             flatTypes.insert(flatTypes.end(), types.begin(), types.end());
         }
     }
@@ -189,7 +189,7 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
         for (auto i = (Json::ArrayIndex)0; i < functionInputs.size(); ++i)
         {
             auto param = parseParameter(functionInputs[i]);
-            auto flatTypes = flattenStaticParamter(param);
+            auto flatTypes = flattenStaticParameter(param);
             flatInputs.insert(flatInputs.end(), flatTypes.begin(), flatTypes.end());
             inputs.emplace_back(std::move(param));
         }
