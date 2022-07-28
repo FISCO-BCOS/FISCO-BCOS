@@ -87,15 +87,24 @@ public:
         else
         {
             auto blockHeader = m_blockHeaderFactory->createBlockHeader();
-            blockHeader->setNumber(100);
+            blockHeader->setNumber(m_number);
+            m_blockBlock.push_back(m_number);
+            ++m_number;
             callback(nullptr, std::move(blockHeader), false);
             return;
         }
     }
     void asyncCommit(std::function<void(Error::UniquePtr)> callback)
     {
-        m_ledger->asyncPrewriteBlock(nullptr, nullptr, nullptr,
-            [this, callback = std::move(callback)](Error::Ptr&& error) { callback(nullptr); });
+        if (m_number == 100)
+        {
+            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
+                "Prewrite block error: " + error->errorMessage(), *error));
+        }
+        else
+        {
+            callback(nullptr);
+        }
     }
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
@@ -109,8 +118,9 @@ public:
 private:
     bcos::protocol::BlockHeader::Ptr m_result;
     bcos::protocol::Block::Ptr m_block;
-    bcos::bcostars::protocol::BlockHeaderFactoryImpl::Ptr m_blockHeaderFactory;
-    std::make_shared<MockLedger3>::Ptr m_ledger;
+    bcostars::protocol::BlockHeaderFactoryImpl::Ptr m_blockHeaderFactory;
+    std::vector<std::uint8_t> m_blockNumber;
+    std::uint_8 m_number = 100;
     bool m_isSysBlock;
     bool m_running = false;
 

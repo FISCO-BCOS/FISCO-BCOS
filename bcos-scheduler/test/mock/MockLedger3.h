@@ -14,8 +14,6 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr, bcos::protocol::TransactionsPtr,
         bcos::protocol::Block::ConstPtr, std::function<void(Error::Ptr&&)> callback)
     {
-        auto number = block->bcos::protocol::BlockHeaderConst()->number();
-        m_blockNumber.push_back(number);
         callback(nullptr);
     }
 
@@ -105,6 +103,8 @@ public:
     void asyncGetNodeListByType(std::string const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
     {
+        m_blockNumber.push_back(m_number);
+        ++m_number;
         if (_type == ledger::CONSENSUS_SEALER)
         {
             _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
@@ -127,6 +127,7 @@ public:
 
 private:
     std::vector<std::uint8_t> m_blockNumber;
+    std::int8_t m_number = 100;
 };
 #pragma GCC diagnostic pop
 }  // namespace bcos::test

@@ -18,11 +18,11 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/storage/Table.h>
-#include <bcos-tars-protocol/BlockFactoryImpl.h>
-#include <bcos-tars-protocol/BlockHeaderFactoryImpl.h>
-#include <bcos-tars-protocol/TransactionFactoryImpl.h>
-#include <bcos-tars-protocol/TransactionMetaDataImpl.h>
-#include <bcos-tars-protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <future>
@@ -42,7 +42,7 @@ struct schedulerImplFixture
         hashImpl = std::make_shared<Keccak256>();
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
-        ledger = std::make_shared<MockLedger3>();
+        ledger = std::make_shared<MockLedger>();
         executorManager = std::make_shared<scheduler::ExecutorManager>();
 
         // create RocksDBStorage
@@ -117,9 +117,10 @@ BOOST_AUTO_TEST_CASE(executeBlock)
                 BOOST_CHECK(header);
                 blockHeader = std::move(header);
             });
+
         BOOST_CHECK(blockHeader);
         SCHEDULER_LOG(DEBUG) << LOG_KV("BlockNumber", i)
-                             << LOG_KV("executeBlock second, blockHeader", blockHeader);
+                             << LOG_KV("executeBlock second, blockHeader", blockHeader->number());
         blockHeader = nullptr;
     }
 
