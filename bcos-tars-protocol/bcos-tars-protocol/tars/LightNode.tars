@@ -39,6 +39,7 @@ struct ResponseReceipts
 
 struct RequestGetStatus
 {
+    0 optional int nothing;
 };
 
 struct ResponseGetStatus

@@ -45,9 +45,11 @@ public:
   template <bcos::concepts::ledger::DataFlag flag>
   void getTransactionsOrReceipts(RANGES::range auto const &hashes,
                                  RANGES::range auto &out) {
-    std::visit([&hashes, &out](
-                   auto &self) { self.getTransactionsOrReceipts(hashes, out); },
-               m_ledger);
+    std::visit(
+        [&hashes, &out](auto &self) {
+          self.template getTransactionsOrReceipts<flag>(hashes, out);
+        },
+        m_ledger);
   }
 
   auto getStatus() {
@@ -100,11 +102,8 @@ public:
                         std::shared_ptr<AnyLedger> anyLedger) {
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETBLOCK,
-        [anyLedger, frontWeak = std::weak_ptr(front)](
-            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
-            bytesConstRef data) {
-          auto front = frontWeak.lock();
-
+        [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
+                           const std::string &id, bytesConstRef data) {
           bcostars::RequestBlock request;
           bcos::concepts::serialize::decode(data, request);
 
@@ -129,10 +128,8 @@ public:
         });
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETTRANSACTIONS,
-        [anyLedger, frontWeak = std::weak_ptr(front)](
-            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
-            bytesConstRef data) {
-          auto front = frontWeak.lock();
+        [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
+                           const std::string &id, bytesConstRef data) {
           bcostars::RequestTransactions request;
           bcos::concepts::serialize::decode(data, request);
 
@@ -152,10 +149,8 @@ public:
         });
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETRECEIPTS,
-        [anyLedger, frontWeak = std::weak_ptr(front)](
-            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
-            bytesConstRef data) {
-          auto front = frontWeak.lock();
+        [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
+                           const std::string &id, bytesConstRef data) {
           bcostars::RequestReceipts request;
           bcos::concepts::serialize::decode(data, request);
 
@@ -175,16 +170,14 @@ public:
         });
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETSTATUS,
-        [anyLedger, frontWeak = std::weak_ptr(front)](
-            bcos::crypto::NodeIDPtr nodeID, const std::string &id,
-            bytesConstRef data) {
-          auto front = frontWeak.lock();
-          bcostars::RequestStatus request;
+        [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
+                           const std::string &id, bytesConstRef data) {
+          bcostars::RequestGetStatus request;
           bcos::concepts::serialize::decode(data, request);
 
-          bcostars::ResponseStatus response;
+          bcostars::ResponseGetStatus response;
           auto status = anyLedger->getStatus();
-          response.total = status.totla;
+          response.total = status.total;
           response.failed = status.failed;
           response.blockNumber = status.blockNumber;
 
@@ -198,7 +191,5 @@ public:
                                    });
         });
   }
-
-private:
 };
 } // namespace bcos::initializer

@@ -300,7 +300,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         anyLedger = std::make_shared<AnyLedger>(std::move(keccak256Ledger));
     }
     LightNodeInitializer lightNodeInitializer;
-    lightNodeInitializer.init(
+    lightNodeInitializer.initLedgerServer(
         std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
         anyLedger);
 #endif

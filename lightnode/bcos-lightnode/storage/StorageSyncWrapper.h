@@ -1,8 +1,10 @@
 #pragma once
 
+#include <bcos-concepts/Basic.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-framework/storage/Entry.h>
 #include <boost/throw_exception.hpp>
+#include <type_traits>
 
 namespace bcos::storage
 {
@@ -37,18 +39,44 @@ public:
     }
 
     std::vector<std::optional<Entry>> impl_getRows(
-        std::string_view table, RANGES::range auto&& keys)
+        std::string_view table, RANGES::range auto const& keys)
     {
         Error::UniquePtr error;
         std::vector<std::optional<Entry>> entries;
-        gsl::span<std::string_view const> view(keys.data(), keys.size());
 
-        storage().asyncGetRows(table, view,
-            [&error, &entries](
-                Error::UniquePtr errorOut, std::vector<std::optional<Entry>> entriesOut) {
-                error = std::move(errorOut);
-                entries = std::move(entriesOut);
-            });
+        using ValueType = RANGES::range_value_t<std::remove_cvref_t<decltype(keys)>>;
+        auto callback = [&error, &entries](Error::UniquePtr errorOut,
+                            std::vector<std::optional<Entry>> entriesOut) {
+            error = std::move(errorOut);
+            entries = std::move(entriesOut);
+        };
+
+        if constexpr (std::is_same_v<ValueType, std::string_view>)
+        {
+            gsl::span<std::string_view const> view(RANGES::data(keys), RANGES::size(keys));
+            storage().asyncGetRows(table, view, std::move(callback));
+        }
+        else if constexpr (std::is_same_v<ValueType, std::string>)
+        {
+            gsl::span<std::string const> view(RANGES::data(keys), RANGES::size(keys));
+            storage().asyncGetRows(table, view, std::move(callback));
+        }
+        else if constexpr (bcos::concepts::ByteBuffer<ValueType>)
+        {
+            std::vector<std::string_view> viewArray;
+            viewArray.reserve(RANGES::size(keys));
+            for (auto& it : keys)
+            {
+                viewArray.emplace_back(
+                    std::string_view((const char*)RANGES::data(it), RANGES::size(it)));
+            }
+
+            storage().asyncGetRows(table, viewArray, std::move(callback));
+        }
+        else
+        {
+            static_assert(!sizeof(keys), "Unknown key type!");
+        }
 
         if (error)
             BOOST_THROW_EXCEPTION(*error);
