@@ -1,4 +1,3 @@
-#include "RocksDBStorage.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -7,6 +6,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-scheduler/src/BlockExecutive.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
+#include "bcos-storage/src/RocksDBStorage.h"
 #include "mock/MockBlcokExecutive.h"
 #include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"

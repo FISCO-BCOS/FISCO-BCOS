@@ -37,13 +37,10 @@ public:
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
+        bcos::txpool::TxPoolInterface::Ptr _txPool)
       : MockBlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory,
             staticCall, _blockFactory, _txPool)
-    {
-        m_syncBlock = _syncBlock;
-        m_gasLimit = _gasLimit;
-    }
+    {}
     virtual ~MockBlockExecutive(){};
 
     void prepare() override
@@ -98,8 +95,7 @@ public:
     {
         if (m_number == 100)
         {
-            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
-                "asyncCommit errors! " + boost::lexical_cast<std::string>(status.failed)));
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, "asyncCommit errors!"));
         }
         else
         {
