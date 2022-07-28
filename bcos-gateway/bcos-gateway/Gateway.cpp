@@ -682,7 +682,6 @@ void Gateway::onReceiveBroadcastMessage(
 
     auto options = _msg->options();
     auto msgPayload = _msg->payload();
-    auto payload = bytesConstRef(msgPayload->data(), msgPayload->size());
 
     // groupID
     auto groupID = options->groupID();
