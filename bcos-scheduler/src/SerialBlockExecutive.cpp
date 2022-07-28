@@ -63,6 +63,7 @@ void SerialBlockExecutive::saveMessage(
 void SerialBlockExecutive::asyncExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
+    SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute execute block");
     if (m_result)
     {
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr,
@@ -86,53 +87,58 @@ void SerialBlockExecutive::asyncExecute(
 
     if (!m_staticCall)
     {
+        SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number())
+                                 << LOG_DESC("serialExecute batch next block");
         // Execute nextBlock
-        batchNextBlock(
-            [this, startT, createMsgT, callback = std::move(callback)](Error::UniquePtr error) {
-                if (!m_isRunning)
-                {
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
-                        nullptr, m_isSysBlock);
-                    return;
-                }
+        batchNextBlock([this, startT, createMsgT, callback = std::move(callback)](
+                           Error::UniquePtr error) {
+            if (!m_isRunning)
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
+                    nullptr, m_isSysBlock);
+                return;
+            }
 
+            if (error)
+            {
+                SERIAL_EXECUTE_LOG(ERROR) << "Next block with error!" << error->errorMessage();
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                             SchedulerError::NextBlockError, "Next block error!", *error),
+                    nullptr, m_isSysBlock);
+
+                if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                {
+                    triggerSwitch();
+                }
+                return;
+            }
+
+            SERIAL_EXECUTE_LOG(INFO)
+                << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block begin");
+
+            serialExecute([this, createMsgT, startT, callback = std::move(callback)](
+                              bcos::Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+                              bool isSysBlock) {
                 if (error)
                 {
-                    SERIAL_EXECUTE_LOG(ERROR) << "Next block with error!" << error->errorMessage();
-                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                 SchedulerError::NextBlockError, "Next block error!", *error),
-                        nullptr, m_isSysBlock);
-
-                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                    {
-                        triggerSwitch();
-                    }
+                    SERIAL_EXECUTE_LOG(INFO)
+                        << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block failed")
+                        << LOG_KV("createMsgT", createMsgT)
+                        << LOG_KV("executeT", (utcTime() - startT))
+                        << LOG_KV("errorCode", error->errorCode())
+                        << LOG_KV("errorMessage", error->errorMessage());
+                    callback(std::move(error), nullptr, isSysBlock);
                     return;
                 }
 
-                serialExecute([this, createMsgT, startT, callback = std::move(callback)](
-                                  bcos::Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                  bool isSysBlock) {
-                    if (error)
-                    {
-                        SERIAL_EXECUTE_LOG(INFO)
-                            << LOG_DESC("serialExecute failed") << LOG_KV("createMsgT", createMsgT)
-                            << LOG_KV("executeT", (utcTime() - startT))
-                            << LOG_KV("number", number()) << LOG_KV("errorCode", error->errorCode())
-                            << LOG_KV("errorMessage", error->errorMessage());
-                        callback(std::move(error), nullptr, isSysBlock);
-                        return;
-                    }
-
-                    SERIAL_EXECUTE_LOG(INFO)
-                        << LOG_DESC("serialExecute success") << LOG_KV("createMsgT", createMsgT)
-                        << LOG_KV("executeT", (utcTime() - startT))
-                        << LOG_KV("hash", header->hash().abridged())
-                        << LOG_KV("number", header->number());
-                    callback(nullptr, header, isSysBlock);
-                });
+                SERIAL_EXECUTE_LOG(INFO)
+                    << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute success")
+                    << LOG_KV("createMsgT", createMsgT) << LOG_KV("executeT", (utcTime() - startT))
+                    << LOG_KV("hash", header->hash().abridged());
+                callback(nullptr, header, isSysBlock);
             });
+        });
     }
     else
     {
@@ -143,6 +149,7 @@ void SerialBlockExecutive::asyncExecute(
 void SerialBlockExecutive::serialExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
+    SERIAL_EXECUTE_LOG(INFO) << "Send Transaction size " << m_transactions.size();
     // handle create message, to generate address
     for (auto& tx : m_transactions)
     {
@@ -208,7 +215,7 @@ void SerialBlockExecutive::serialExecute(
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 if (error)
                 {
-                    SERIAL_EXECUTE_LOG(DEBUG)
+                    SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number())
                         << "serialExecute:\t Error: " << error->errorMessage();
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  SchedulerError::SerialExecuteError, error->errorMessage()),

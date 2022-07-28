@@ -214,22 +214,31 @@ public:
         initBlocks(_number);
         for (int i = 0; i < _number; ++i)
         {
+            auto txSize = m_fakeBlocks->at(i)->transactionsSize();
             auto txDataList = std::make_shared<std::vector<bytesConstPtr>>();
             auto txHashList = std::make_shared<protocol::HashList>();
-            for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
+            auto txList = std::make_shared<std::vector<Transaction::Ptr>>();
+            for (size_t j = 0; j < txSize; ++j)
             {
                 auto txData = m_fakeBlocks->at(i)->transaction(j)->encode();
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
-                txDataList->emplace_back(txPointer);
-                txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+                txDataList->push_back(txPointer);
+                txHashList->push_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+                txList->push_back(m_blockFactory->transactionFactory()->createTransaction(txData));
             }
 
             std::promise<bool> p1;
             auto f1 = p1.get_future();
-            m_ledger->asyncStoreTransactions(txDataList, txHashList, [=, &p1](Error::Ptr _error) {
-                BOOST_CHECK_EQUAL(_error, nullptr);
-                p1.set_value(true);
-            });
+            m_ledger->asyncPreStoreBlockTxs(
+                txList, m_fakeBlocks->at(i), [=, &p1](Error::Ptr _error) {
+                    BOOST_CHECK_EQUAL(_error, nullptr);
+                    p1.set_value(true);
+                });
+            //            m_ledger->asyncStoreTransactions(txDataList, txHashList, [=,
+            //            &p1](Error::Ptr _error) {
+            //                BOOST_CHECK_EQUAL(_error, nullptr);
+            //                p1.set_value(true);
+            //            });
             BOOST_CHECK_EQUAL(f1.get(), true);
 
             auto& block = m_fakeBlocks->at(i);

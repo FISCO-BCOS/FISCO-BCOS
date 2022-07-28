@@ -68,7 +68,7 @@ bool DmcExecutor::unlockPrepare()
                 assert(false);
             }
 
-            // Try acquire key lock
+            // Try to acquire key lock
             if (!m_keyLocks->acquireKeyLock(
                     message->from(), message->keyLockAcquired(), contextID, seq))
             {
@@ -153,7 +153,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     /*
      this code may lead to inconsistency, because in parallel for go(),
      some message sent by other DMCExecutor will be executed in executor and return before this
-     instance go(), so some need send messages will be ignored in the code below
+     instance go(), so some needs send messages will be ignored in the code below
 
     if (!m_executivePool.empty(MessageHint::NEED_PREPARE))
     {
@@ -257,7 +257,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                         triggerSwitch();
                     }
 
-                    callback(std::move(error), ERROR);
+                    callback(std::move(error), Status::ERROR);
                 }
                 else
                 {

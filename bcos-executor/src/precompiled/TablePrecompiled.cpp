@@ -75,8 +75,8 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(param.size());
 
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call dynamic table")
-                          << LOG_KV("tableName", tableName) << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("TablePrecompiled")
+                          << LOG_DESC("call dynamic table") << LOG_KV("tableName", tableName);
 
     auto table = _executive->storage().openTable(tableName);
     if (!table.has_value())

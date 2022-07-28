@@ -78,10 +78,10 @@ public:
     virtual void saveMessage(
         std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
 
-    bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    inline bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
-    bcos::protocol::Block::Ptr block() { return m_block; }
-    bcos::protocol::BlockHeader::Ptr result() { return m_result; }
+    inline bcos::protocol::Block::Ptr block() { return m_block; }
+    inline bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
     bool sysBlock() const { return m_isSysBlock; }

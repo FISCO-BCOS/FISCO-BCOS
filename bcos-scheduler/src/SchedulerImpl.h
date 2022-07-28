@@ -109,6 +109,8 @@ public:
 
     inline void fetchGasLimit(protocol::BlockNumber _number = -1)
     {
+        SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
+                            << LOG_KV("requestBlockNumber", _number);
         if (_number == -1)
         {
             std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
@@ -140,6 +142,7 @@ public:
                 BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
         }
 
+        // cast must be success
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 

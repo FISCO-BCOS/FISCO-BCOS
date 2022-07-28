@@ -33,6 +33,7 @@ namespace bcos
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
+#define PRECOMPILED_BLK_LOG(LEVEL, BLK_NUMBER) PRECOMPILED_LOG(LEVEL) << BLOCK_NUMBER(BLK_NUMBER)
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;

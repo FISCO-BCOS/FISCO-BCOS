@@ -11,6 +11,8 @@ void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verif
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("executeBlock: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(
             BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {}, false);
         return;
@@ -35,6 +37,8 @@ void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("commitBlock: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
         return;
     }
@@ -50,7 +54,7 @@ void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     m_scheduler->commitBlock(header, std::move(_holdSchedulerCallback));
 }
 
-// by console, query committed committing executing
+// by console, query committed and committing executing
 void SchedulerManager::status(
     std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback)
 {
@@ -58,6 +62,8 @@ void SchedulerManager::status(
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("status: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
         return;
     }
@@ -80,6 +86,7 @@ void SchedulerManager::call(protocol::Transaction::Ptr tx,
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("call: checkAndInit not ok") << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
         return;
     }
@@ -118,6 +125,8 @@ void SchedulerManager::reset(std::function<void(Error::Ptr&&)> callback)
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("reset: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message));
         return;
     }

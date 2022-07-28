@@ -65,7 +65,7 @@ public:
     bytes aggregateRistrettoPoint(bytes const& pointSum, bytes const& pointShare);
 
 private:
-    size_t m_scalarLen = 32;
+    [[maybe_unused]] size_t m_scalarLen = 32;
     size_t m_pointLen = 32;
 };
 }  // namespace crypto

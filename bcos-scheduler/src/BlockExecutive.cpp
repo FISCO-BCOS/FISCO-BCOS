@@ -69,8 +69,7 @@ void BlockExecutive::prepare()
     }
     else
     {
-        SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: empty block"
-                             << LOG_KV("block number", m_block->blockHeaderConst()->number());
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: empty block";
     }
 #pragma omp flush(m_hasDAG)
 
@@ -83,12 +82,10 @@ void BlockExecutive::prepare()
 
     m_hasPrepared = true;
 
-    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("prepareBlockExecutive")
-                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                         << LOG_KV(
-                                "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                         << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
-                         << LOG_KV("timeCost", (utcTime() - startT));
+    SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("prepareBlockExecutive") << BLOCK_NUMBER(number())
+                        << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
+                        << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                        << LOG_KV("timeCost", (utcTime() - startT));
 }
 
 bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
@@ -165,9 +162,9 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
 
 void BlockExecutive::buildExecutivesFromMetaData()
 {
-    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromMetaData"
-                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                         << LOG_KV("tx count", m_block->transactionsMetaDataSize());
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number())
+                         << "BlockExecutive prepare: buildExecutivesFromMetaData"
+                         << LOG_KV("tx meta count", m_block->transactionsMetaDataSize());
 
     m_blockTxs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
 
@@ -257,9 +254,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
 void BlockExecutive::buildExecutivesFromNormalTransaction()
 {
-    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
-                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                         << LOG_KV("tx count", m_block->transactionsSize());
+    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
+                        << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
+                        << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                        << LOG_KV("tx count", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
 #pragma omp parallel for
@@ -283,9 +281,8 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
     bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool)
 {
-    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: fillBlock start"
-                         << LOG_KV("number", block->blockHeaderConst()->number())
-                         << LOG_KV("txNum", block->transactionsMetaDataSize());
+    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock start"
+                        << LOG_KV("txNum", block->transactionsMetaDataSize());
     bcos::protocol::TransactionsPtr txs = nullptr;
     auto lastT = utcTime();
     if (txPool != nullptr)
@@ -320,8 +317,8 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         if (future.wait_for(std::chrono::milliseconds(10 * 1000)) != std::future_status::ready)
         {
             // 10s timeout
-            SCHEDULER_LOG(ERROR) << "BlockExecutive prepare: fillBlock timeout/error"
-                                 << LOG_KV("number", block->blockHeaderConst()->number())
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number())
+                                 << "BlockExecutive prepare: fillBlock timeout/error"
                                  << LOG_KV("txNum", block->transactionsMetaDataSize())
                                  << LOG_KV("cost", utcTime() - lastT)
                                  << LOG_KV("fetchNum", txs ? txs->size() : 0);
@@ -330,11 +327,10 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         txs = future.get();
         txsPromise = nullptr;
     }
-    SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: fillBlock end"
-                         << LOG_KV("number", block->blockHeaderConst()->number())
-                         << LOG_KV("txNum", block->transactionsMetaDataSize())
-                         << LOG_KV("cost", utcTime() - lastT)
-                         << LOG_KV("fetchNum", txs ? txs->size() : 0);
+    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock end"
+                        << LOG_KV("txNum", block->transactionsMetaDataSize())
+                        << LOG_KV("cost", utcTime() - lastT)
+                        << LOG_KV("fetchNum", txs ? txs->size() : 0);
     return txs;
 }
 
@@ -396,7 +392,8 @@ void BlockExecutive::asyncExecute(
 
             if (error)
             {
-                SCHEDULER_LOG(ERROR) << "Next block with error!" << error->errorMessage();
+                SCHEDULER_LOG(ERROR)
+                    << BLOCK_NUMBER(number()) << "Next block with error!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                              SchedulerError::NextBlockError, "Next block error!", *error),
                     nullptr, m_isSysBlock);
@@ -425,11 +422,10 @@ void BlockExecutive::asyncExecute(
                         return;
                     }
                     auto blockHeader = m_block->blockHeader();
-                    SCHEDULER_LOG(INFO)
-                        << LOG_DESC("DAGExecute success") << LOG_KV("createMsgT", createMsgT)
-                        << LOG_KV("dagExecuteT", (utcTime() - startT))
-                        << LOG_KV("hash", blockHeader->hash().abridged())
-                        << LOG_KV("number", blockHeader->number());
+                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
+                                        << LOG_KV("createMsgT", createMsgT)
+                                        << LOG_KV("dagExecuteT", (utcTime() - startT))
+                                        << LOG_KV("hash", blockHeader->hash().abridged());
                     DMCExecute(std::move(callback));
                 });
             }
@@ -450,6 +446,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
     auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
 
     m_currentTimePoint = std::chrono::system_clock::now();
+    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
 
     m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_blockTxs, m_block,
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
@@ -466,15 +463,15 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (status.failed > 0)
                 {
-                    std::string errorMessage =
-                        "Prepare with errors! " + boost::lexical_cast<std::string>(status.failed);
-                    SCHEDULER_LOG(WARNING) << errorMessage;
+                    std::string errorMessage = "Prepare with errors, begin rollback, status: " +
+                                               boost::lexical_cast<std::string>(status.failed);
+                    SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << errorMessage;
                     batchBlockRollback([this, callback, errorMessage](Error::UniquePtr&& error) {
                         if (error)
                         {
                             SCHEDULER_LOG(ERROR)
-                                << "Rollback storage failed!" << LOG_KV("number", number()) << " "
-                                << error->errorMessage();
+                                << BLOCK_NUMBER(number()) << "Rollback storage failed!"
+                                << LOG_KV("number", number()) << " " << error->errorMessage();
                             // FATAL ERROR, NEED MANUAL FIX!
 
                             callback(std::move(error));
@@ -491,6 +488,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     return;
                 }
 
+                SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
                 batchBlockCommit([this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
@@ -505,8 +503,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
                     m_commitElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now() - m_currentTimePoint);
-                    SCHEDULER_LOG(INFO) << "CommitBlock: " << number()
-                                        << " success, execute elapsed: " << m_executeElapsed.count()
+                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "CommitBlock: "
+                                        << "success, execute elapsed: " << m_executeElapsed.count()
                                         << "ms hash elapsed: " << m_hashElapsed.count()
                                         << "ms commit elapsed: " << m_commitElapsed.count() << "ms";
 
@@ -524,7 +522,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     {
                         ++status->failed;
                         SCHEDULER_LOG(ERROR)
-                            << "asyncPrepare scheduler error: " << error->errorMessage();
+                            << BLOCK_NUMBER(number())
+                            << "scheduler asyncPrepare storage error: " << error->errorMessage();
                         callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
                             "asyncPrepare block error: " + error->errorMessage()));
                         return;
@@ -534,8 +533,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         ++status->success;
                     }
                     SCHEDULER_LOG(INFO)
+                        << BLOCK_NUMBER(number())
                         << "primary prepare finished, call executor prepare"
-                        << LOG_KV("blockNumber", number())
                         << LOG_KV("startTimeStamp", startTimeStamp)
                         << LOG_KV("executors", m_scheduler->m_executorManager->size())
                         << LOG_KV("success", status->success) << LOG_KV("failed", status->failed);
@@ -553,6 +552,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                                 {
                                     ++status->failed;
                                     SCHEDULER_LOG(ERROR)
+                                        << BLOCK_NUMBER(number())
                                         << "asyncPrepare executor failed: " << error->what();
 
                                     if (error->errorCode() ==
@@ -565,6 +565,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                                 {
                                     ++status->success;
                                     SCHEDULER_LOG(DEBUG)
+                                        << BLOCK_NUMBER(number())
                                         << "asyncPrepare executor success, success: "
                                         << status->success;
                                 }
@@ -618,13 +619,14 @@ void BlockExecutive::asyncNotify(
         }
         if (_error == nullptr)
         {
-            SCHEDULER_LOG(INFO) << LOG_DESC("notify block result success")
-                                << LOG_KV("number", blockHeader->number())
+            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
+                                << LOG_DESC("notify block result success")
                                 << LOG_KV("hash", blockHeader->hash().abridged())
                                 << LOG_KV("txsSize", txsSize);
             return;
         }
-        SCHEDULER_LOG(INFO) << LOG_DESC("notify block result failed")
+        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
+                            << LOG_DESC("notify block result failed")
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("msg", _error->errorMessage());
     });
@@ -655,8 +657,10 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
             });
     }
 
+    // map< string => <tuple<std::string, ContextID> => ExecutiveState::Ptr>::it >
     std::multimap<std::string, decltype(m_executiveStates)::iterator> requests;
 
+    // filter enableDAG request to map
     for (auto it = m_executiveStates.begin(); it != m_executiveStates.end(); ++it)
     {
         if (it->second->enableDAG)
@@ -674,9 +678,10 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
     auto totalCount = std::make_shared<std::atomic_size_t>(requests.size());
     auto failed = std::make_shared<std::atomic_size_t>(0);
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
-    SCHEDULER_LOG(DEBUG) << LOG_BADGE("DAG") << LOG_BADGE("Stat")
-                         << "DAGExecute.0:\t>>> Start send to executor";
+    SCHEDULER_LOG(INFO) << LOG_BADGE("DAG") << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                        << "DAGExecute.0:\t>>> Start send to executor";
 
+    // string => <tuple<std::string, ContextID> => ExecutiveState::Ptr>::it
     for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
     {
         auto contractAddress = it->first;
@@ -684,11 +689,14 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(contractAddress);
         auto count = requests.count(it->first);
+        // get all same address request,
         auto range = requests.equal_range(it->first);
 
         auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>(count);
         auto iterators = std::vector<decltype(m_executiveStates)::iterator>(count);
         size_t i = 0;
+        // traverse range, messageIt: <string => <tuple<std::string, ContextID> =>
+        // ExecutiveState::Ptr>::it>::it
         for (auto messageIt = range.first; messageIt != range.second; ++messageIt)
         {
             SCHEDULER_LOG(TRACE) << "DAG message: " << messageIt->second->second->message.get()
@@ -699,18 +707,18 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
             ++i;
         }
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("DAG") << LOG_BADGE("Stat")
-                             << "DAGExecute.1:\t--> Send to executor\t"
-                             << LOG_KV("contract", contractAddress)
-                             << LOG_KV("txNum", messages->size());
+        SCHEDULER_LOG(INFO) << LOG_BADGE("DAG") << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                            << "DAGExecute.1:\t--> Send to executor\t"
+                            << LOG_KV("contract", contractAddress)
+                            << LOG_KV("txNum", messages->size());
         auto prepareT = utcTime() - startT;
         startT = utcTime();
         executor->dagExecuteTransactions(*messages,
             [this, contractAddress, messages, startT, prepareT, iterators = std::move(iterators),
                 totalCount, failed, callbackPtr](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
-                SCHEDULER_LOG(DEBUG)
-                    << LOG_BADGE("DAG") << LOG_BADGE("Stat")
+                SCHEDULER_LOG(INFO)
+                    << LOG_BADGE("DAG") << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
                     << "DAGExecute.2:\t<-- Receive from executor\t"
                     << LOG_KV("contract", contractAddress) << LOG_KV("txNum", messages->size())
                     << LOG_KV("costT", utcTime() - startT) << LOG_KV("failed", *failed)
@@ -719,7 +727,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 {
                     ++(*failed);
                     SCHEDULER_LOG(ERROR)
-                        << "DAG execute error: " << error->errorMessage()
+                        << BLOCK_NUMBER(number()) << "DAG execute error: " << error->errorMessage()
                         << LOG_KV("failed", *failed) << LOG_KV("totalCount", *totalCount)
                         << LOG_KV("blockNumber", number());
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
@@ -730,7 +738,8 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 else if (messages->size() != responseMessages.size())
                 {
                     ++(*failed);
-                    SCHEDULER_LOG(ERROR) << "DAG messages mismatch!";
+                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number())
+                                         << "DAG messages size and response size mismatch!";
                 }
                 else
                 {
@@ -747,7 +756,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 if (*totalCount == 0)
                 {
                     SCHEDULER_LOG(DEBUG)
-                        << LOG_BADGE("DAG") << LOG_BADGE("Stat")
+                        << LOG_BADGE("DAG") << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
                         << "DAGExecute.3:\t<<< Joint all contract result\t"
                         << LOG_KV("costT", utcTime() - startT) << LOG_KV("failed", *failed)
                         << LOG_KV("totalCount", *totalCount) << LOG_KV("blockNumber", number());
@@ -760,8 +769,8 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                     }
 
                     SCHEDULER_LOG(INFO)
-                        << LOG_DESC("DAGExecute finish") << LOG_KV("prepareT", prepareT)
-                        << LOG_KV("execT", (utcTime() - startT));
+                        << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute finish")
+                        << LOG_KV("prepareT", prepareT) << LOG_KV("execT", (utcTime() - startT));
                     (*callbackPtr)(nullptr);
                 }
             });
@@ -782,19 +791,20 @@ void BlockExecutive::DMCExecute(
     m_dmcRecorder->nextDmcRound();
 
     auto lastT = utcTime();
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.0:\t [+] Start\t\t\t"
-                   << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("blockNumber", number())
-                   << LOG_KV("checksum", m_dmcRecorder->getChecksum());
+    DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                  << "DMCExecute.0:\t [+] Start\t\t\t" << LOG_KV("round", m_dmcRecorder->getRound())
+                  << LOG_KV("checksum", m_dmcRecorder->getChecksum());
 
     // prepare all dmcExecutor
     serialPrepareExecutor();
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
-                   << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("blockNumber", number())
-                   << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                   << LOG_KV("cost", utcTime() - lastT);
+    DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                  << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
+                  << LOG_KV("round", m_dmcRecorder->getRound())
+                  << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                  << LOG_KV("cost", utcTime() - lastT);
     lastT = utcTime();
 
-    // dump address for omp parallization
+    // dump address for omp parallelization
     std::vector<std::string> contractAddress;
     contractAddress.reserve(m_dmcExecutors.size());
     for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
@@ -817,10 +827,10 @@ void BlockExecutive::DMCExecute(
         if (error || status == DmcExecutor::Status::ERROR)
         {
             batchStatus->error++;
-            SCHEDULER_LOG(ERROR) << LOG_BADGE("DmcExecutor") << "dmcExecutor->go() error, "
-                                 << LOG_KV("errorCode", error ? error->errorCode() : -1)
-                                 << LOG_KV("errorMessage",
-                                        error ? error.get()->errorMessage() : "null");
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("DmcExecutor")
+                                 << "dmcExecutor->go() with error"
+                                 << LOG_KV("code", error ? error->errorCode() : -1)
+                                 << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
         }
         else if (status == DmcExecutor::Status::PAUSED ||
                  status == DmcExecutor::Status::NEED_PREPARE)
@@ -861,17 +871,18 @@ void BlockExecutive::DMCExecute(
         }
 
         // handle batch result(only one thread can get in here)
-        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.5:\t <<< Joint all executor result\t"
-                       << LOG_KV("round", m_dmcRecorder->getRound())
-                       << LOG_KV("blockNumber", number())
-                       << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                       << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
-                       << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
-                       << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                      << "DMCExecute.5:\t <<< Joint all executor result\t"
+                      << LOG_KV("round", m_dmcRecorder->getRound())
+                      << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                      << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
+                      << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
+                      << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
 
         if (batchStatus->error != 0)
         {
-            DMC_LOG(ERROR) << "DMCExecute with errors: " << error->errorMessage();
+            DMC_LOG(ERROR) << BLOCK_NUMBER(number())
+                           << "DMCExecute with errors: " << error->errorMessage();
             callback(std::move(error), nullptr, m_isSysBlock);
         }
         else if (batchStatus->paused != 0)  // new contract
@@ -891,11 +902,12 @@ void BlockExecutive::DMCExecute(
         }
     };
 
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DMCExecute.2:\t >>> Start send to executors\t"
-                   << LOG_KV("round", m_dmcRecorder->getRound()) << LOG_KV("blockNumber", number())
-                   << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                   << LOG_KV("cost", utcTime() - lastT)
-                   << LOG_KV("contractNum", contractAddress.size());
+    DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                  << "DMCExecute.2:\t >>> Start send to executors\t"
+                  << LOG_KV("round", m_dmcRecorder->getRound())
+                  << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                  << LOG_KV("cost", utcTime() - lastT)
+                  << LOG_KV("contractNum", contractAddress.size());
 
 // for each dmcExecutor
 #pragma omp parallel for
@@ -1017,7 +1029,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
         {
             auto message = "Next block:" + boost::lexical_cast<std::string>(number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
-            SCHEDULER_LOG(ERROR) << message;
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << message;
 
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, std::move(message)));
             return;
@@ -1038,7 +1050,8 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
                         if (error)
                         {
                             SCHEDULER_LOG(ERROR)
-                                << "Nextblock executor error!" << error->errorMessage();
+                                << BLOCK_NUMBER(number()) << "Next block executor error!"
+                                << error->errorMessage();
                             ++status->failed;
 
                             if (error->errorCode() ==
@@ -1082,7 +1095,7 @@ void BlockExecutive::batchGetHashes(
         {
             auto message = "batchGetHashes" + boost::lexical_cast<std::string>(number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
-            SCHEDULER_LOG(WARNING) << message;
+            SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << message;
 
             callback(
                 BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, std::move(message)), h256(0));
@@ -1140,7 +1153,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
         {
             auto message = "Commit block:" + boost::lexical_cast<std::string>(number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
-            SCHEDULER_LOG(WARNING) << message;
+            SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << message;
 
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, std::move(message)));
             return;
@@ -1155,7 +1168,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
         params, [status, this](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
-                SCHEDULER_LOG(ERROR) << "Commit storage error!" << error->errorMessage();
+                SCHEDULER_LOG(ERROR)
+                    << BLOCK_NUMBER(number()) << "Commit storage error!" << error->errorMessage();
 
                 ++status->failed;
                 status->checkAndCommit(*status);
@@ -1179,7 +1193,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
                             if (error)
                             {
                                 SCHEDULER_LOG(ERROR)
-                                    << "Commit executor error!" << error->errorMessage();
+                                    << BLOCK_NUMBER(number()) << "Commit executor error!"
+                                    << error->errorMessage();
                                 ++status->failed;
 
                                 if (error->errorCode() ==
@@ -1192,6 +1207,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
                             {
                                 ++status->success;
                                 SCHEDULER_LOG(DEBUG)
+                                    << BLOCK_NUMBER(number())
                                     << "Commit executor success, success: " << status->success;
                             }
 
@@ -1221,7 +1237,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
         {
             auto message = "Rollback block:" + boost::lexical_cast<std::string>(number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
-            SCHEDULER_LOG(WARNING) << message;
+            SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << message;
 
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::RollbackError, std::move(message)));
             return;
@@ -1232,27 +1248,29 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
     bcos::protocol::TwoPCParams params;
     params.number = number();
-    m_scheduler->m_storage->asyncRollback(params, [status](Error::Ptr&& error) {
-        {
-            WriteGuard lock(status->x_lock);
-            if (error)
+    m_scheduler->m_storage->asyncRollback(
+        params, [number = params.number, status](Error::Ptr&& error) {
             {
-                SCHEDULER_LOG(ERROR) << "Commit storage error!" << error->errorMessage();
+                WriteGuard lock(status->x_lock);
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback storage error!"
+                                         << error->errorMessage();
 
-                ++status->failed;
-            }
-            else
-            {
-                ++status->success;
-            }
+                    ++status->failed;
+                }
+                else
+                {
+                    ++status->success;
+                }
 
-            if (status->success + status->failed < status->total)
-            {
-                return;
+                if (status->success + status->failed < status->total)
+                {
+                    return;
+                }
             }
-        }
-        status->checkAndCommit(*status);
-    });
+            status->checkAndCommit(*status);
+        });
 
     // for (auto& it : *(m_scheduler->m_executorManager))
     m_scheduler->m_executorManager->forEachExecutor(
@@ -1268,15 +1286,17 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
                         if (error->errorCode() ==
                             bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                         {
-                            SCHEDULER_LOG(DEBUG) << "Rollback a restarted executor. Ignore."
-                                                 << error->errorMessage();
+                            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
+                                                << "Rollback a restarted executor. Ignore."
+                                                << error->errorMessage();
                             ++status->success;
                             triggerSwitch();
                         }
                         else
                         {
                             SCHEDULER_LOG(ERROR)
-                                << "Rollback executor error!" << error->errorMessage();
+                                << BLOCK_NUMBER(number()) << "Rollback executor error!"
+                                << error->errorMessage();
                             ++status->failed;
                         }
                     }

@@ -107,9 +107,10 @@ void TableManagerPrecompiled::createTable(
     codec.decode(_callParameters->params(), tableName, tableInfoTuple);
     auto& [keyField, valueFields] = tableInfoTuple;
     auto valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled")
                           << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
-                          << LOG_KV("valueField", valueField) << NUMBER(blockContext->number());
+                          << LOG_KV("valueField", valueField);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -154,9 +155,10 @@ void TableManagerPrecompiled::createKVTable(
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), tableName, key, value);
     precompiled::checkCreateTableParam(tableName, key, value);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled")
                           << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
-                          << LOG_KV("valueField", value) << NUMBER(blockContext->number());
+                          << LOG_KV("valueField", value);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -203,10 +205,10 @@ void TableManagerPrecompiled::appendColumns(
     codec.decode(_callParameters->params(), tableName, newColumns);
     tableName = getActualTableName(getTableName(tableName));
 
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
                           << LOG_KV("tableName", tableName)
-                          << LOG_KV("newColumns", boost::join(newColumns, ","))
-                          << NUMBER(blockContext->number());
+                          << LOG_KV("newColumns", boost::join(newColumns, ","));
     // 1. get origin table info
     auto table = _executive->storage().openTable(StorageInterface::SYS_TABLES);
     auto existEntry = table->getRow(tableName);

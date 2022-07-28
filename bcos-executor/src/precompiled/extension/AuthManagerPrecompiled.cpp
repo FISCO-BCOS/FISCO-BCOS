@@ -239,9 +239,9 @@ void AuthManagerPrecompiled::resetAdmin(
     {
         codec.decode(data, path, admin);
     }
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
-                          << LOG_KV("path", path) << LOG_KV("admin", admin)
-                          << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
+                          << LOG_KV("path", path) << LOG_KV("admin", admin);
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
@@ -432,9 +432,9 @@ void AuthManagerPrecompiled::setContractStatus(
         codec.decode(data, contractAddress, isFreeze);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
-                          << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze)
-                          << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
+                          << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
 
     /// check sender is contract admin
     auto admin = getContractAdmin(_executive, address, _callParameters);
