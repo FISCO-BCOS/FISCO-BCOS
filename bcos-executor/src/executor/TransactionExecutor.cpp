@@ -477,7 +477,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         // TODO: pass blockHash, version here
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
-        initPrecompiledByBlockContext(m_blockContext);
+        initPrecompiledByBlockContext(blockContext);
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});

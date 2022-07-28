@@ -67,7 +67,7 @@ macro(configure_project)
     default_option(WITH_LIGHTNODE OFF)
     default_option(WITH_TIKV OFF)
     default_option(WITH_ETCD ON)
-    default_option(WITH_TARS_SERVICES OFF)
+    default_option(WITH_TARS_SERVICES ON)
     default_option(WITH_SM2_OPTIMIZE ON)
     default_option(WITH_CPPSDK ON)
 
@@ -87,7 +87,7 @@ macro(configure_project)
     if(WITH_SM2_OPTIMIZE)
         add_compile_definitions(WITH_SM2_OPTIMIZE)
     endif()
-    
+
     if (NOT DEFINED VERSION_SUFFIX)
         set(VERSION_SUFFIX "")
     endif()

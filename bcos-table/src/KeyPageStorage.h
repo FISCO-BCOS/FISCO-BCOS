@@ -796,7 +796,7 @@ public:
             }
             else
             {
-                KeyPage_LOG(ERROR)
+                KeyPage_LOG(WARNING)
                     << LOG_DESC("merge self") << LOG_KV("startKey", toHex(entries.begin()->first))
                     << LOG_KV("endKey", toHex(entries.rbegin()->first))
                     << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size());
@@ -1128,7 +1128,7 @@ private:
     {
         if (newPageKey.empty())
         {
-            KeyPage_LOG(ERROR) << LOG_DESC("changePageKey empty page") << LOG_KV("table", table)
+            KeyPage_LOG(ERROR) << LOG_DESC("changePageKey to empty") << LOG_KV("table", table)
                                << LOG_KV("oldPageKey", toHex(oldPageKey))
                                << LOG_KV("newPageKey", toHex(newPageKey));
             return nullptr;
