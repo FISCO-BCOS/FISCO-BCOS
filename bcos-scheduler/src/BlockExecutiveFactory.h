@@ -39,25 +39,19 @@ public:
     BlockExecutiveFactory(bool isSerialExecute) : m_isSerialExecute(isSerialExecute) {}
     ~BlockExecutiveFactory() {}
 
-    std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
+    virtual std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
         SchedulerImpl* scheduler, size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool);
 
-    std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
+    virtual std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
         SchedulerImpl* scheduler, size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock);
 
 private:
-    // std::shared_ptr<Block> m_block;
-    // std::shared_ptr<SchedulerImpl> m_scheduler;
-    // std::shared_ptr<TransactionSubmitResultFactory> m_transactionSubmitResultFactory;
-    // std::shared_ptr<BlockFactory> m_blockFactory;
-    // std::shared_ptr<TxpoolInterface> m_txPool;
-    // size_t m_startContextID;
     bool m_isSerialExecute;
 };
 }  // namespace bcos::scheduler

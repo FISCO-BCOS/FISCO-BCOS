@@ -1,12 +1,15 @@
-#include "ExecutorManager.h"
-#include "SchedulerImpl.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-scheduler/src/BlockExecutive.h"
+#include "bcos-scheduler/src/SchedulerImpl.h"
+#include "mock/MockBlcokExecutive.h"
+#include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
+#include "mock/MockLedger.h"
 #include "mock/MockLedger2.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -23,6 +26,7 @@
 #include <filesystem>
 #include <future>
 
+
 using namespace std;
 using namespace bcos;
 using namespace bcos::scheduler;
@@ -37,7 +41,7 @@ struct schedulerImplFixture
         hashImpl = std::make_shared<Keccak256>();
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
-        ledger = std::make_shared<MockLedger2>();
+        ledger = std::make_shared<MockLedger>();
         executorManager = std::make_shared<scheduler::ExecutorManager>();
 
         // create RocksDBStorage
@@ -47,7 +51,6 @@ struct schedulerImplFixture
         rocksdb::Status s = rocksdb::DB::Open(options, path, &db);
         BOOST_CHECK_EQUAL(s.ok(), true);
         storage = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
-
         transactionFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite);
         transactionReceiptFactory =
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
@@ -56,14 +59,11 @@ struct schedulerImplFixture
 
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
+        blockExecutiveFactory = std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
 
         txPool = std::make_shared<MockTxPool>();
         transactionSubmitResultFactory =
             std::make_shared<bcos::protocol::TransactionSubmitResultFactory>();
-
-        // scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-        //     executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
-        //     hashImpl, false, false, false, 0);
     };
     ~schedulerImplFixture() {}
     ledger::LedgerInterface::Ptr ledger;
@@ -80,52 +80,210 @@ struct schedulerImplFixture
     bcostars::protocol::BlockFactoryImpl::Ptr blockFactory;
     bcos::txpool::TxPoolInterface::Ptr txPool;
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory;
+    bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory;
 
     std::string path = "./unittestdb";
+    std::make_shared<MockBlockExecutive> blockExecutive;
     RocksDBStorage::Ptr storage = nullptr;
 };
-BOOST_FIXTURE_TEST_SUITE(TestSchedulerImpl, schedulerImplFixture)
+
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
-    executorManager->addExecutor("executor1", std::make_shared<test::MockDmcExecutor>("executor1"));
-    auto scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
-        false, false, false, 0);
+    auto scheduler =
+        std::make_shared<schedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory =
+        std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
+    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
+
+    for (size_t i = 5; i < 10; ++i)
+    {
+        auto block = blockFactory->createBlock();
+        block->blockHeader->setNumber(i);
+        for (size_t j = 0; j < 10; ++j)
+        {
+            auto metaTx =
+                std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract1");
+            block->appendTransactionMetaData(std::move(metaTx));
+        }
+        // executeBlock
+        bcos::protocol::BlockHeader::Ptr blockHeader;
+
+        scheduler->executeBlock(block, false,
+            [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(header);
+                blockHeader = std::move(header);
+            });
+        BOOST_CHECK(blockHeader);
+        blockHeader = nullptr;
+    }
+
+    for (size_t i = 4; i < 7; i++)
+    {
+        auto block = blockFactory->createBlock();
+        block->blockHeader->setNumber(i);
+        for (size_t j = 0; j < 10; ++j)
+        {
+            auto metaTx =
+                std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
+            block->appendTransactionMetaData(std::move(metaTx));
+        }
+        bcos::protocol::BlockHeader::Ptr executeHeader1;
+        // execute olderBlock whenQueueFront whenInQueue
+        scheduler->executeBlock(block, false,
+            [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(header);
+                executeHeader1 = std::move(header);
+            });
+        BOOST(executeHeader1);
+        executeHeader1 = nullptr;
+    }
+
     auto block = blockFactory->createBlock();
-    block->BlockHeader()->setNumber(95);
-    for (size_t i = 0; i < 20; ++i)
+    block->blockHeader->setNumber(10);
+    for (size_t j = 0; j < 10; ++j)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    bcos::protocol::BlockHeader::Ptr executeHeader10;
+    // requestBlock = backNumber + 1
+    scheduler->executeBlock(
+        block, false, [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(header);
+            executeHeader10 = std::move(header);
+        });
+    BOOST(executeHeader10);
+}
+
+BOOST_AUTO_TEST_CASE(commitBlock)
+{
+    auto scheduler =
+        std::make_shared<schedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory =
+        std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
+    // preExecuteBlock
+
+    // Fill m_block
+    for (size_t i = 100; i < 10; ++i)
+    {
+        auto block = blockFactory->createBlock();
+        block->blockHeader->setNumber(i);
+        for (size_t i = 0; i < 10; ++i)
+        {
+            auto metaTx =
+                std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract1");
+            block->appendTransactionMetaData(std::move(metaTx));
+        }
+        bcos::protocol::BlockHeader::Ptr executeHeader1;
+        // execute olderBlock whenQueueFront whenInQueue
+        scheduler->executeBlock(block, false,
+            [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(header);
+                executeHeader1 = std::move(header);
+            });
+        BOOST(executeHeader1);
+        executeHeader1 = nullptr;
+    }
+    // commit
+    for (size_t i = 100; i < 10; ++i)
+    {
+        auto blockHeader = blockHeaderFactory->createHeader();
+        blockHeader->setNumber(i);
+        scheduler->commitBlock(
+            blockHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(config);
+                BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+                BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+                BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+                BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+                BOOST_CHECK_EQUAL(config->hash().hex(), h256(110).hex());
+                committedPromise.set_value(true);
+            });
+    }
+}
+BOOST_AUTO_TEST_CASE(handlerBlockTest)
+{
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory =
+        std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
+    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
+
+    // create Block
+    auto block = blockFactory->createBlock();
+    block->blockHeader->setNumber(100);
+
+    for (size_t i = 0; i < 10; ++i)
     {
         auto metaTx =
             std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract1");
         block->appendTransactionMetaData(std::move(metaTx));
     }
-    bcos::protocol::BlockHeader::Ptr executedHeader;
+    for (size_t i = 10; i < 20; ++i)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract2");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    for (size_t i = 20; i < 30; ++i)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract3");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    // preExecuteBlock
+    std::promise<bcos::protocol::BlockHeader::Ptr> executedHeaderPromise;
+    scheduler->preExecuteBlock(
+        block, false, [&](bcos::ERROR::Ptr&& error) { BOOST_CHECK(!error); });
 
-    scheduler->executeBlock(block, false,
-        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
+    auto blockNumber = block->blockHeaderConst()->number();
+    int64_t timestamp = block->blockHeaderConst()->timestamp();
+    BOOST_CHECK_EQUAL(scheduler->getPreparedBlock(blockNumber, timestamp));
+    BOOST_CHECK_EQUAL(blockNumber, 100);
+
+    // executeBlock
+    scheduler->executeBlock(
+        block, false, [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
-            executedHeader = std::move(header);
+            executeHeaderPromise.set_value(std::move(header));
         });
+
+    bcos::protocol::BlockHeader::Ptr executedHeader = executeHeaderPromise.get_future().get();
+    BOOST_CHECK(executedHeader);
+    BOOST_CHECK_EQUAL(executedHeader->stateRoot(), h256());
+
+    // registerBlockNumberReceiver
+    bcos::protocol::BlockNumber notifyBlockNumber = 0;
+    scheduler->registerBlockNumberReceiver(
+        [&](protocol::BlockNumber number) { notifyBlockNumber = number; });
+
+    // commitBlock
+    std::promise<bool> committedPromise;
     scheduler->commitBlock(
         executedHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
             BOOST_CHECK(!error);
-            // BOOST_CHECK(config);
-            (void)config;
+            BOOST_CHECK(config);
+            BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+            BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+            BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+            BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+            BOOST_CHECK_EQUAL(config->hash().hex(), h256(110).hex());
+            committedPromise.set_value(true);
         });
-    promise<Table> prom;
-    storage->asyncOpenTable(SYS_CURRENT_STATE, [&](auto&& error, auto&& table) {
-        BOOST_CHECK_EQUAL(error.get(), nullptr);
-        if (table)
-        {
-            prom.set_value(table.value());
-        }
-    });
-    auto table = prom.get_future().get();
-    auto entry = table.getRow(SYS_KEY_CURRENT_NUMBER);
-    BOOST_CHECK_EQUAL(entry.has_value(), true);
-    auto blockNumber = entry->getField("value");
-    BOOST_CHECK_EQUAL(blockNumber, "95");
+
+    bool committed = committedPromise.get_future().get();
+    BOOST_CHECK(committed);
+    BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
 }
 
 BOOST_AUTO_TEST_CASE() {}

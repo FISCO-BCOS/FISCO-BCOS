@@ -377,8 +377,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, message), nullptr);
     };
 
-    auto whenQueueFront = [this, requestBlockNumber, header = std::move(header), callback](
-                              BlockExecutive::Ptr blockExecutive) {
+    auto = [this, requestBlockNumber, header = std::move(header), callback](
+               BlockExecutive::Ptr blockExecutive) {
         // acquire lock
         std::shared_ptr<std::unique_lock<std::mutex>> commitLock =
             std::make_shared<std::unique_lock<std::mutex>>(m_commitMutex, std::try_to_lock);
