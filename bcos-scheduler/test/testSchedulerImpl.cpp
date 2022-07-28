@@ -7,7 +7,7 @@
 #include "bcos-scheduler/src/BlockExecutive.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
 #include "bcos-storage/src/RocksDBStorage.h"
-#include "mock/MockBlcokExecutive.h"
+#include "mock/MockBlockExecutive.h"
 #include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
 #include "mock/MockLedger.h"
@@ -28,10 +28,12 @@
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <future>
+#include <optional>
 
 
 using namespace std;
 using namespace bcos;
+using namespace bcos::storage;
 using namespace bcos::scheduler;
 using namespace bcos::crypto;
 
@@ -62,11 +64,17 @@ struct schedulerImplFixture
 
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
-        blockExecutiveFactory = std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
 
         txPool = std::make_shared<MockTxPool>();
         transactionSubmitResultFactory =
             std::make_shared<bcos::protocol::TransactionSubmitResultFactory>();
+
+        auto scheduler = std::make_shared<schedulerImpl>(executorManager, ledger, storage,
+            executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+            false, false, false, 0);
+        auto blockExecutiveFactory =
+            std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
+        scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     };
     ~schedulerImplFixture() {}
     bcos::ledger::LedgerInterface::Ptr ledger;
@@ -91,13 +99,6 @@ struct schedulerImplFixture
 
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
-    auto scheduler =
-        std::make_shared<schedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
-    auto blockExecutiveFactory =
-        std::make_shared<bcos::scheduler::MockBlockExecutiveFactory>(false);
-    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
-
     for (size_t i = 5; i < 10; ++i)
     {
         auto block = blockFactory->createBlock();

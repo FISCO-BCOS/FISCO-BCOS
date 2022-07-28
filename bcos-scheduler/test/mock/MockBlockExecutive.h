@@ -38,9 +38,10 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool)
-      : MockBlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory,
+      : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory,
             staticCall, _blockFactory, _txPool)
     {}
+
     virtual ~MockBlockExecutive(){};
 
     void prepare() override
