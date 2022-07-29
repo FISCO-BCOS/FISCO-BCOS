@@ -17,7 +17,9 @@ jobs:
   build:
     name: build
     runs-on: ${{ matrix.os }}
+    contonue-on-error: true
     strategy:
+      fast-fail: false
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-12]
         # os: [ubuntu-20.04, macos-12]
@@ -42,11 +44,11 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-          key: build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            build-v8-notest-${{ runner.temp }}-
+            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
+            build-v8-notest-${{ matrix.os }}-
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
@@ -72,7 +74,9 @@ jobs:
   build_centos:
     name: build_centos
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     strategy:
+      fast-fail: false
       matrix:
         os: [ubuntu-20.04]
         tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
