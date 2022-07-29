@@ -94,11 +94,11 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-          key: centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            centos-v8-notest-${{ runner.temp }}-
+            centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
+            centos-v8-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
           yum install yum install -y epel-release centos-release-scl flex bison
