@@ -29,7 +29,7 @@ jobs:
           fetch-depth: 5
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2022-07-28
           override: true
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
@@ -116,7 +116,7 @@ jobs:
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2022-07-28
           override: true
       - name: Build
         run: |
