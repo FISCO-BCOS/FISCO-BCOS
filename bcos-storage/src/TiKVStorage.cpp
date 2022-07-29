@@ -147,13 +147,13 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRow failed") << LOG_KV("message", e.message())
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow failed") << LOG_KV("message", e.message())
                                 << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRow failed!", e), {});
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table)
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table)
                                 << LOG_KV("key", toHex(_key)) << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRow failed!", e), {});
     }
@@ -217,14 +217,14 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRows failed") << LOG_KV("message", e.message())
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRows failed") << LOG_KV("message", e.message())
                                 << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRows failed! ", e),
             std::vector<std::optional<Entry>>());
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRows failed") << LOG_KV("table", _table)
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRows failed") << LOG_KV("table", _table)
                                 << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRows failed! ", e),
             std::vector<std::optional<Entry>>());
@@ -267,13 +267,13 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncSetRow failed") << LOG_KV("message", e.message())
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncSetRow failed") << LOG_KV("message", e.message())
                                 << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncSetRow failed! ", e));
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncSetRow failed") << LOG_KV("table", _table)
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncSetRow failed") << LOG_KV("table", _table)
                                 << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncSetRow failed! ", e));
     }
@@ -367,7 +367,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare Exception")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncPrepare Exception")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
                                 << LOG_KV("what", e.what());
@@ -375,7 +375,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare failed")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncPrepare failed")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("message", e.what());
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncPrepare failed! ", e), 0);
@@ -413,7 +413,7 @@ void TiKVStorage::asyncCommit(
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncCommit Exception")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncCommit Exception")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("commitTS", params.timestamp)
                                 << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
@@ -422,7 +422,7 @@ void TiKVStorage::asyncCommit(
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncCommit failed")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncCommit failed")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("commitTS", params.timestamp)
                                 << LOG_KV("message", e.what());
@@ -454,7 +454,7 @@ void TiKVStorage::asyncRollback(
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncRollback Exception")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncRollback Exception")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
                                 << LOG_KV("what", e.what());
@@ -462,7 +462,7 @@ void TiKVStorage::asyncRollback(
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncRollback failed")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncRollback failed")
                                 << LOG_KV("blockNumber", params.number)
                                 << LOG_KV("message", e.what());
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncRollback failed! ", e));
@@ -509,7 +509,7 @@ bcos::Error::Ptr TiKVStorage::setRows(
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(ERROR) << LOG_DESC("setRows failed") << LOG_KV("message", e.message())
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows failed") << LOG_KV("message", e.message())
                                 << LOG_KV("code", e.code()) << LOG_KV("what", e.what());
         return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
     }
