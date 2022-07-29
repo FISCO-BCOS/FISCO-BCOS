@@ -1092,9 +1092,9 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
         _viewChangeMsg->committedProposal()->hash() != m_config->committedProposal()->hash())
     {
         PBFT_LOG(WARNING) << LOG_DESC("InvalidViewChangeReq: conflict with local committedProposal")
-                          << LOG_DESC("received proposal")
+                          << LOG_DESC(", received proposal: ")
                           << printPBFTProposal(_viewChangeMsg->committedProposal())
-                          << LOG_DESC("local committedProposal")
+                          << LOG_DESC(", local committedProposal:")
                           << printPBFTProposal(m_config->committedProposal());
         return false;
     }
