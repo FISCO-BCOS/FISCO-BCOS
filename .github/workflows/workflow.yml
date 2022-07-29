@@ -17,7 +17,7 @@ jobs:
   build:
     name: build
     runs-on: ${{ matrix.os }}
-    contonue-on-error: true
+    continue-on-error: true
     strategy:
       fast-fail: false
       matrix:
