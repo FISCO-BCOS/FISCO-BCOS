@@ -34,7 +34,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc4"
+default_version="v3.0.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -1279,7 +1279,7 @@ generate_genesis_config() {
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
     ; the default is 3.0.0-rc4
-    compatibility_version=3.0.0-rc4
+    compatibility_version=3.0.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
