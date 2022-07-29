@@ -19,9 +19,7 @@
  * @date: 2022-03-23
  */
 
-
 #include "ExecutiveState.h"
-#include "TransactionExecutive.h"
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -32,7 +30,8 @@ CallParameters::UniquePtr ExecutiveState::go()
     if (!m_executive)
     {
         m_executive =
-            m_executiveFactory->build(m_input->codeAddress, m_input->contextID, m_input->seq);
+            std::dynamic_pointer_cast<CoroutineTransactionExecutive>(m_executiveFactory->build(
+                m_input->codeAddress, m_input->contextID, m_input->seq, true));
     }
 
     // run

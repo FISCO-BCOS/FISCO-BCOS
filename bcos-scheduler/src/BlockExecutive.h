@@ -75,6 +75,9 @@ public:
             std::function<void(Error::Ptr)>)>& notifier,
         std::function<void(Error::Ptr)> _callback);
 
+    virtual void saveMessage(
+        std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
+
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
 
     bcos::protocol::Block::Ptr block() { return m_block; }
@@ -136,13 +139,15 @@ protected:
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
+    virtual void onExecuteFinish(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     bcos::protocol::ExecutionMessage::UniquePtr buildMessage(
         ContextID contextID, bcos::protocol::Transaction::ConstPtr tx);
     void buildExecutivesFromMetaData();
     void buildExecutivesFromNormalTransaction();
 
-    void serialPrepareExecutor();
+    virtual void serialPrepareExecutor();
     bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);

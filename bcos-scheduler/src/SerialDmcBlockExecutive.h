@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief The block executive(context) for serial transaction execution
- * @file SerialBlockExecutive.h
+ * @file SerialDmcBlockExecutive.h
  * @author: jimmyshi
  * @date: 2022-07-12
  */
@@ -27,11 +27,12 @@
 
 namespace bcos::scheduler
 {
+static const std::string SERIAL_EXECUTOR_NAME = std::string("serial_executor");
 
-class SerialBlockExecutive : public BlockExecutive
+class SerialDmcBlockExecutive : public BlockExecutive
 {
 public:
-    SerialBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
+    SerialDmcBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
@@ -39,7 +40,7 @@ public:
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
             _blockFactory, _txPool){};
 
-    SerialBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
+    SerialDmcBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
@@ -47,28 +48,24 @@ public:
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
             _blockFactory, _txPool, _gasLimit, _syncBlock)
     {}
-    virtual ~SerialBlockExecutive(){};
+    virtual ~SerialDmcBlockExecutive(){};
 
 
     void prepare() override;
     void asyncExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void saveMessage(
-        std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG) override;
-
 private:
     void serialExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
+    void recursiveExecuteTx(
+        ContextID contextID, std::function<void(bcos::Error::UniquePtr)> callback);
+
     void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void serialPrepareExecutor() override{
-        // do nothing
-    };
-
-    std::vector<protocol::ExecutionMessage::UniquePtr> m_transactions;
+    std::vector<ExecutiveState::Ptr> m_serialExecutiveStates;
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     bcos::scheduler::ExecutorManager::ExecutorInfo::Ptr m_executorInfo;
 };
