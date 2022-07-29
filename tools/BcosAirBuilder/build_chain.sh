@@ -505,7 +505,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:v:i:M:k:wDshmAa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:v:i:M:k:wDshmARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
