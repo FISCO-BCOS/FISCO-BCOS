@@ -69,7 +69,7 @@ struct schedulerImplFixture
         transactionSubmitResultFactory =
             std::make_shared<bcos::protocol::TransactionSubmitResultFactory>();
 
-        auto scheduler = std::make_shared<bcos::scheduler::schedulerImpl>(executorManager, ledger,
+        auto scheduler = std::make_shared<bcos::scheduler::SchedulerImpl>(executorManager, ledger,
             storage, executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
             hashImpl, false, false, false, 0);
         auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
@@ -96,7 +96,9 @@ struct schedulerImplFixture
     RocksDBStorage::Ptr storage = nullptr;
 };
 
-BOOST_AUTO_TEST_CASE(executeBlock)
+BOOST_FIXTURE_TEST_SUIT(testSchedulerImpl, schedulerImplFixture)
+
+BOOST_AUTO_TEST_CASE(executeBlockTest)
 {
     for (size_t i = 5; i < 10; ++i)
     {
@@ -114,7 +116,6 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
         scheduler->executeBlock(block, false,
             [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
-                BOOST_CHECK(!error);
                 BOOST_CHECK(header);
                 blockHeader = std::move(header);
             });
@@ -170,12 +171,13 @@ BOOST_AUTO_TEST_CASE(executeBlock)
                          << LOG_KV("executeBlock second, blockHeader", executeHeader10);
     BOOST(executeHeader10);
 }
-
-// BOOST_AUTO_TEST_CASE(commitBlock)
-// {
-//     auto scheduler =
-//         std::make_shared<schedulerImpl>(executorManager, ledger, storage,
-//         executionMessageFactory,
+BOOST_AUTO_TEST_CASE_END()
+}  // namespace bcos::test
+   // BOOST_AUTO_TEST_CASE(commitBlock)
+   // {
+   //     auto scheduler =
+   //         std::make_shared<schedulerImpl>(executorManager, ledger, storage,
+   //         executionMessageFactory,
 //             blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false,
 //             0);
 //     auto blockExecutiveFactory =
@@ -303,5 +305,3 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 //     BOOST_CHECK(committed);
 //     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
 // }
-BOOST_AUTO_TEST_CASE_END()
-}  // namespace bcos::test

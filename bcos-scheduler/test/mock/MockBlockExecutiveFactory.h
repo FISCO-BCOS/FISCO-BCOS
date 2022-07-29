@@ -10,6 +10,9 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 
+using namespace bcos;
+using namespace bcos::scheduler;
+using namespace bcos::protocol;
 
 namespace bcos::test
 {
