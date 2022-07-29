@@ -19,7 +19,7 @@ void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verif
     auto _holdSchedulerCallback =
         [schedulerHolder = m_scheduler, callback = std::move(callback)](bcos::Error::Ptr&& error,
             bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
-            SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+            SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                                  << LOG_KV("ptr count", schedulerHolder.use_count());
             callback(std::move(error), std::move(blockHeader), _sysBlock);
         };
@@ -42,7 +42,7 @@ void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
                                       bcos::Error::Ptr&& error,
                                       bcos::ledger::LedgerConfig::Ptr&& ledger) {
-        SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                              << LOG_KV("ptr count", schedulerHolder.use_count());
         callback(std::move(error), std::move(ledger));
     };
@@ -65,7 +65,7 @@ void SchedulerManager::status(
     auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
                                       bcos::Error::Ptr&& error,
                                       bcos::protocol::Session::ConstPtr&& session) {
-        SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                              << LOG_KV("ptr count", schedulerHolder.use_count());
         callback(std::move(error), std::move(session));
     };
@@ -87,7 +87,7 @@ void SchedulerManager::call(protocol::Transaction::Ptr tx,
     auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
                                       bcos::Error::Ptr&& error,
                                       protocol::TransactionReceipt::Ptr&& receipt) {
-        SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                              << LOG_KV("ptr count", schedulerHolder.use_count());
         callback(std::move(error), std::move(receipt));
     };
@@ -138,7 +138,7 @@ void SchedulerManager::getCode(
 
     auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
                                       bcos::Error::Ptr&& error, bcos::bytes bytes) {
-        SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                              << LOG_KV("ptr count", schedulerHolder.use_count());
         callback(std::move(error), std::move(bytes));
     };
@@ -160,7 +160,7 @@ void SchedulerManager::getABI(
 
     auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
                                       bcos::Error::Ptr&& error, std::string str) {
-        SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                              << LOG_KV("ptr count", schedulerHolder.use_count());
         callback(std::move(error), std::move(str));
     };
@@ -181,7 +181,7 @@ void SchedulerManager::preExecuteBlock(
 
     auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
                                       bcos::Error::Ptr&& error) {
-        SCHEDULER_LOG(DEBUG) << "Release scheduler holder"
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
                              << LOG_KV("ptr count", schedulerHolder.use_count());
         callback(std::move(error));
     };

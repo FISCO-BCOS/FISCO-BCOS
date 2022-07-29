@@ -12,14 +12,15 @@ using namespace bcos;
 using namespace bcos::executor;
 namespace bcos::test
 {
-class MockTransactionExecutive : public bcos::executor::TransactionExecutive
+class MockTransactionExecutive : public bcos::executor::CoroutineTransactionExecutive
 {
 public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
     MockTransactionExecutive(std::weak_ptr<bcos::executor::BlockContext> blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq,
         std::shared_ptr<wasm::GasInjector>& gasInjector)
-      : TransactionExecutive(std::move(blockContext), contractAddress, contextID, seq, gasInjector)
+      : CoroutineTransactionExecutive(
+            std::move(blockContext), contractAddress, contextID, seq, gasInjector)
     {}
 
     virtual ~MockTransactionExecutive() {}

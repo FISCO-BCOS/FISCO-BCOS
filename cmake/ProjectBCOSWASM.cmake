@@ -1,14 +1,22 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "$ENV{USERPROFILE}\\.cargo\\bin")
-find_program(RUSTUP_COMMAND NAMES rustup REQUIRED PATHS "$ENV{USERPROFILE}\\.cargo\\bin")
+if(CMAKE_HOST_WIN32)
+    set(USER_HOME "$ENV{USERPROFILE}")
+else()
+    set(USER_HOME "$ENV{HOME}")
+endif()
+
+message(${USER_HOME})
+
+find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
+find_program(RUSTUP_COMMAND NAMES rustup REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
 
 if(NOT CARGO_COMMAND OR NOT RUSTUP_COMMAND)
     message(FATAL_ERROR "cargo/rustup is not installed")
 endif()
 
-find_program(RUSTC_COMMAND NAMES rustc REQUIRED PATHS "$ENV{USERPROFILE}\\.cargo\\bin")
+find_program(RUSTC_COMMAND NAMES rustc REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
 if(NOT CARGO_COMMAND OR NOT RUSTC_COMMAND)
     message(FATAL_ERROR "rustc is not installed")
 endif()
@@ -36,7 +44,7 @@ ExternalProject_Add(bcos_wasm_project
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND cargo build --release
+        BUILD_COMMAND ${CARGO_COMMAND} build --release
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1

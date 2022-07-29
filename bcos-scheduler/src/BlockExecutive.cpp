@@ -1,8 +1,8 @@
 #include "BlockExecutive.h"
-#include "ChecksumAddress.h"
 #include "Common.h"
 #include "DmcExecutor.h"
 #include "SchedulerImpl.h"
+#include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -190,7 +190,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
             m_hasDAG = enableDAG;
-            registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
+            saveMessage(to, std::move(message), enableDAG);
         }
     }
     else
@@ -249,7 +249,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
             m_hasDAG = m_hasDAG || enableDAG;
-            registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
+            saveMessage(to, std::move(message), enableDAG);
         }
     }
 }
@@ -276,7 +276,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 
 #pragma omp critical
         m_hasDAG = m_hasDAG || enableDAG;
-        registerAndGetDmcExecutor(to)->submit(std::move(message), enableDAG);
+        saveMessage(to, std::move(message), enableDAG);
     }
 }
 
@@ -630,6 +630,12 @@ void BlockExecutive::asyncNotify(
     });
 }
 
+void BlockExecutive::saveMessage(
+    std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG)
+{
+    registerAndGetDmcExecutor(address)->submit(std::move(message), withDAG);
+}
+
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 {
     if (!m_isRunning)
@@ -903,20 +909,35 @@ void BlockExecutive::DMCExecute(
 void BlockExecutive::onDmcExecuteFinish(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
-    SCHEDULER_LOG(TRACE) << "Empty states, end";
-    auto now = std::chrono::system_clock::now();
-    m_executeElapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
-    m_currentTimePoint = now;
-
     auto dmcChecksum = m_dmcRecorder->dumpAndClearChecksum();
-
     if (m_staticCall)
     {
         DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:"
                        << "\t " << LOG_BADGE("DMCRecorder") << " DMCExecute for call finished "
                        << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+    }
+    else
+    {
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
+                      << "\t " << LOG_BADGE("DMCRecorder")
+                      << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
+                      << LOG_KV("checksum", dmcChecksum);
+    }
 
+    onExecuteFinish(std::move(callback));
+}
+
+void BlockExecutive::onExecuteFinish(
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
+{
+    auto now = std::chrono::system_clock::now();
+    m_executeElapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
+    m_currentTimePoint = now;
+
+
+    if (m_staticCall)
+    {
         // Set result to m_block
         for (size_t i = 0; i < m_executiveResults.size(); i++)
         {
@@ -934,11 +955,6 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                      << "\t " << LOG_BADGE("DMCRecorder")
-                      << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
-                      << LOG_KV("checksum", dmcChecksum);
-
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](
                            Error::UniquePtr error, crypto::HashType hash) {
@@ -952,7 +968,7 @@ void BlockExecutive::onDmcExecuteFinish(
 
             if (error)
             {
-                DMC_LOG(ERROR) << "batchGetHashes error: " << error->errorMessage();
+                SCHEDULER_LOG(ERROR) << "batchGetHashes error: " << error->errorMessage();
                 callback(std::move(error), nullptr, m_isSysBlock);
                 return;
             }

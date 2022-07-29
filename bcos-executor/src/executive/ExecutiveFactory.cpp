@@ -20,16 +20,26 @@
  */
 
 #include "ExecutiveFactory.h"
+#include "CoroutineTransactionExecutive.h"
 #include "TransactionExecutive.h"
 
 using namespace bcos::executor;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq)
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
 {
-    auto executive = std::make_shared<TransactionExecutive>(
-        m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+    std::shared_ptr<TransactionExecutive> executive;
+    if (useCoroutine)
+    {
+        executive = std::make_shared<CoroutineTransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+    }
+    else
+    {
+        executive = std::make_shared<TransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+    }
     executive->setConstantPrecompiled(m_constantPrecompiled);
     executive->setEVMPrecompiled(m_precompiledContract);
     executive->setBuiltInPrecompiled(m_builtInPrecompiled);

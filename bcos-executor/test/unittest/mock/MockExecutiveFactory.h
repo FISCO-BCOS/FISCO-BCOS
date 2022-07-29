@@ -29,7 +29,7 @@ public:
     virtual ~MockExecutiveFactory() {}
 
 
-    std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t) override
+    std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t, bool) override
     {
         std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
             nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);

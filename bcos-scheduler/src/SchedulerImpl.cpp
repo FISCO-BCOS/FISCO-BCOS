@@ -1,6 +1,6 @@
 #include "SchedulerImpl.h"
+#include "BlockExecutive.h"
 #include "Common.h"
-#include "SerialBlockExecutive.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -75,8 +75,9 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
             }
             else if (requestBlockNumber == frontNumber)
             {
+                auto frontBlock = m_blocks->front();
                 blocksLock.unlock();
-                whenQueueFront(m_blocks->front());
+                whenQueueFront(frontBlock);
 
                 blocksLock.lock();
                 afterFront();

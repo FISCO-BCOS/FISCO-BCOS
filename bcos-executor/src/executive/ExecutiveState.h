@@ -22,6 +22,7 @@
 #pragma once
 
 #include "../CallParameters.h"
+#include "CoroutineTransactionExecutive.h"
 #include "ExecutiveFactory.h"
 
 namespace bcos
@@ -61,7 +62,7 @@ private:
     int64_t m_contextID;
     int64_t m_seq;
     CallParameters::UniquePtr m_input;
-    std::shared_ptr<TransactionExecutive> m_executive;
+    std::shared_ptr<CoroutineTransactionExecutive> m_executive;
     Status m_status = NEED_RUN;
     ExecutiveFactory::Ptr m_executiveFactory;
 };

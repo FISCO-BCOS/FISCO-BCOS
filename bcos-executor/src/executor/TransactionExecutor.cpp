@@ -28,6 +28,7 @@
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
 #include "../executive/ExecutiveFactory.h"
+#include "../executive/ExecutiveSerialFlow.h"
 #include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
@@ -384,7 +385,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 {
                     auto fmt = boost::format(
                                    "[%s] Block number mismatch in storage! request: %d, current in "
-                                   "storage: %d") %
+                                   "storage: %d, trigger switch") %
                                m_name % blockHeader->number() % storageBlockNumber;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
                     // to trigger switch operation
@@ -400,13 +401,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 // check number continuity
                 if (blockHeader->number() - prev.number != 1)
                 {
-                    m_stateStorages.pop_back();
-                    auto fmt =
-                        boost::format(
-                            "[%s] Block number mismatch! request: %d, current: %d. Reverted.") %
-                        m_name % blockHeader->number() % prev.number;
+                    // m_stateStorages.pop_back();
+                    auto fmt = boost::format(
+                                   "[%s] Block number mismatch! request: %d, current: %d. trigger "
+                                   "switch.") %
+                               m_name % blockHeader->number() % prev.number;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
-                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, fmt.str()));
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt.str()));
                     return;
                 }
 
@@ -477,7 +479,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         // TODO: pass blockHash, version here
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
-        initPrecompiledByBlockContext(m_blockContext);
+        initPrecompiledByBlockContext(blockContext);
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1720,8 +1722,16 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
             m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
-        executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
-        blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+        if (codeAddress == bcos::protocol::SERIAL_EXECUTIVE_FLOW_ADDRESS)
+        {
+            executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
+            blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+        }
+        else
+        {
+            executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
+            blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+        }
     }
     return executiveFlow;
 }

@@ -32,6 +32,10 @@ namespace bcos
 {
 namespace protocol
 {
+
+static const std::string SERIAL_EXECUTIVE_FLOW_ADDRESS =
+    std::string("serial_executive_flow_address");
+
 class ExecutionMessage
 {
 public:
