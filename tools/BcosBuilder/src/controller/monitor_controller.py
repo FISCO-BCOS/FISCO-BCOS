@@ -8,13 +8,13 @@ class MonitorController:
     the monitor controller
     """
 
-    def __init__(self, config, node_type):
+    def __init__(self, config, node_type, output_dir):
         self.config = config
         self.binary_name = ""
         self.download_url = ""
         self.node_type = node_type
         self.monitor_generator = MonitorConfigGenerator(
-            self.config, node_type)
+            self.config, node_type, output_dir)
 
     def generate_monitor_config(self):
         if self.monitor_generator.generate_monitor_config() is False:

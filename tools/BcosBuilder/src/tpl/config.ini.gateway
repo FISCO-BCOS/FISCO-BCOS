@@ -8,6 +8,10 @@
 
 [service]
     ;rpc=chain0
+    
+    ; run without tars framework
+    ; without_tars_framework = true
+    ; tars_proxy_file = conf/tars_proxy.json
 
 [cert]
     ; directory the certificates located in
@@ -20,7 +24,7 @@
     node_cert=ssl.crt
 
 [chain]
-    ; use SM crypto or not, should nerver be changed
+    ; use SM crypto or not, should never be changed
     sm_crypto=false
     chain_id=chain0
 

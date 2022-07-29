@@ -6,10 +6,10 @@ import os
 
 
 class MaxNodeConfigGenerator(NodeConfigGenerator):
-    def __init__(self, chain_config, node_type):
-        NodeConfigGenerator.__init__(self, chain_config, node_type)
+    def __init__(self, chain_config, node_type, output_dir):
+        NodeConfigGenerator.__init__(self, chain_config, node_type, output_dir)
         self.chain_config = chain_config
-        self.root_dir = "./generated"
+        self.root_dir = output_dir
         self.ini_tmp_config_file = "config.ini"
         self.genesis_tmp_config_file = 'config.genesis'
 
@@ -18,23 +18,23 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
         generate all config for max-node
         """
         for group_config in self.chain_config.group_list.values():
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate genesis config for group %s" % group_config.group_id)
             if self.generate_all_genesis_config(group_config, enforce_genesis_exists) is False:
                 return False
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate genesis config for %s success" % group_config.group_id)
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate ini config for BcosMaxNodeService of group %s" % group_config.group_id)
             if self.generate_all_ini_config(group_config) is False:
                 return False
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate ini config for BcosMaxNodeService of group %s success" % group_config.group_id)
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate ini config for BcosExecutorService of group %s" % group_config.group_id)
             if self.__generate_all_executor_config(group_config) is False:
                 return False
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate ini config for BcosExecutorService of group %s success" % group_config.group_id)
         return True
 
@@ -45,7 +45,7 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
         for group_config in self.chain_config.group_list.values():
             if self.__generate_all_executor_config(group_config) is False:
                 return False
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate ini config for BcosExecutorService of group %s success" % group_config.group_id)
         return True
 
