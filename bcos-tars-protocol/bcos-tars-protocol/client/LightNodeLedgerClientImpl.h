@@ -19,6 +19,7 @@
 
 namespace bcos::ledger
 {
+
 class LightNodeLedgerClientImpl
   : public bcos::concepts::ledger::LedgerBase<LightNodeLedgerClientImpl>
 {
@@ -118,7 +119,19 @@ private:
         std::promise<std::tuple<bcos::Error::Ptr, std::string>> promise;
         m_front->asyncGetGroupNodeInfo([this, &promise](bcos::Error::Ptr _error,
                                            bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
+            if (_error || !_groupNodeInfo)
+            {
+                promise.set_value(std::make_tuple(std::move(_error), std::string{}));
+                return;
+            }
+            
             auto& nodeIDList = _groupNodeInfo->nodeIDList();
+            if (nodeIDList.empty())
+            {
+                promise.set_value(std::make_tuple(std::move(_error), std::string{}));
+                return;
+            }
+
             std::uniform_int_distribution<size_t> distribution{0u, nodeIDList.size()};
             auto& nodeID = nodeIDList[distribution(m_rng)];
             promise.set_value(std::make_tuple(std::move(_error), std::move(nodeID)));
@@ -126,9 +139,10 @@ private:
 
         auto [error, nodeIDStr] = promise.get_future().get();
         if (error)
-        {
             BOOST_THROW_EXCEPTION(*error);
-        }
+
+        if (nodeIDStr.empty())
+            BOOST_THROW_EXCEPTION(std::runtime_error{"No node available"});
 
         auto nodeID = m_keyFactory->createKey(nodeIDStr);
         return nodeID;
