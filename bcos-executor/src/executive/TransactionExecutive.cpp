@@ -1003,6 +1003,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
+    case EVMC_WASM_TRAP:
     case EVMC_WASM_UNREACHABLE_INSTRUCTION:
     {
         EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Unreachable Instruction");
@@ -1014,7 +1015,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     default:
     {
         EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
-                               << LOG_KV("errCode", EVMC_INTERNAL_ERROR);
+                               << LOG_KV("errCode", _result.status());
         revert();
         if (_result.status() <= EVMC_INTERNAL_ERROR)
         {

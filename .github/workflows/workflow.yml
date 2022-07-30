@@ -17,7 +17,9 @@ jobs:
   build:
     name: build
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-12]
         # os: [ubuntu-20.04, macos-12]
@@ -27,12 +29,16 @@ jobs:
           fetch-depth: 5
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2022-07-28
           override: true
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          max-size: 5G
       - uses: actions/cache@v2
         id: deps_cache
         with:
@@ -42,11 +48,11 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-          key: build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            build-v8-notest-${{ runner.temp }}-
+            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
+            build-v8-notest-${{ matrix.os }}-
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
@@ -58,11 +64,13 @@ jobs:
           sudo apt install -y lcov ccache
           export GCC='gcc-10'
           export CXX='g++-10'
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
@@ -72,7 +80,9 @@ jobs:
   build_centos:
     name: build_centos
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-20.04]
         tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
@@ -90,11 +100,11 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-          key: centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            centos-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            centos-v8-notest-${{ runner.temp }}-
+            centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
+            centos-v8-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
           yum install yum install -y epel-release centos-release-scl flex bison
@@ -106,7 +116,7 @@ jobs:
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2022-07-28
           override: true
       - name: Build
         run: |
@@ -114,6 +124,7 @@ jobs:
           . /opt/rh/devtoolset-10/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
@@ -122,6 +133,7 @@ jobs:
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
         run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p /root/.tiup/bin/
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
           source /github/home/.profile
