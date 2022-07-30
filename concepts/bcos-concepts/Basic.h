@@ -1,5 +1,6 @@
 #pragma once
 #include <bcos-utilities/Ranges.h>
+#include <boost/throw_exception.hpp>
 
 namespace bcos::concepts
 {
@@ -36,6 +37,18 @@ auto& getRef(Input& input)
     else
     {
         return input;
+    }
+}
+
+void resizeTo(RANGES::range auto& out, size_t size)
+{
+    if (RANGES::size(out) < size)
+    {
+        if constexpr (!bcos::concepts::DynamicRange<std::remove_cvref_t<decltype(out)>>)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
+        }
+        out.resize(size);
     }
 }
 

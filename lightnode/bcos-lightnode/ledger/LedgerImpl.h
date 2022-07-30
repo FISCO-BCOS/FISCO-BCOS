@@ -39,30 +39,17 @@ private:
     template <bcos::concepts::ledger::DataFlag... Flags>
     void impl_setBlock(bcos::concepts::block::Block auto block)
     {
-        // if (!std::empty(block.transactions))
-        //     return;
-
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader.data.blockNumber);
         (setBlockData<Flags>(blockNumberStr, block), ...);
     }
 
-    template <concepts::ledger::DataFlag Flag>
     auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
-        if (RANGES::size(out) < RANGES::size(hashes))
-        {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Output size too short!"});
-        }
+        bcos::concepts::resizeTo(out, RANGES::size(hashes));
+        using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
 
-        if constexpr (!std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> &&
-                      !std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
-        {
-            static_assert(!sizeof(hashes), "Unspported data flag!");
-        }
-
-        constexpr auto tableName = std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ?
-                                       SYS_HASH_2_TX :
-                                       SYS_HASH_2_RECEIPT;
+        constexpr auto tableName =
+            bcos::concepts::transaction::Transaction<DataType> ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
 #pragma omp parallel for
@@ -211,12 +198,12 @@ private:
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 block.transactions.resize(outputSize);
-                impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange), block.transactions);
+                impl_getTransactionsOrReceipts(std::move(hashesRange), block.transactions);
             }
             else
             {
                 block.receipts.resize(outputSize);
-                impl_getTransactionsOrReceipts<Flag>(std::move(hashesRange), block.receipts);
+                impl_getTransactionsOrReceipts(std::move(hashesRange), block.receipts);
             }
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)

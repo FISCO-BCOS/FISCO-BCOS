@@ -2,6 +2,7 @@
 #include "../Block.h"
 #include "../storage/Storage.h"
 #include <bcos-utilities/Ranges.h>
+#include <bits/ranges_base.h>
 #include <concepts>
 
 namespace bcos::concepts::ledger
@@ -51,17 +52,18 @@ public:
         impl().template impl_setBlock<flags...>(std::move(block));
     }
 
-    template <DataFlag flag>
-    void getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
+    void getTransactionsOrReceipts(
+        RANGES::range auto const& hashes, RANGES::range auto& out) requires
+        TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
-        impl().template impl_getTransactionsOrReceipts<flag>(hashes, out);
+        impl().impl_getTransactionsOrReceipts(hashes, out);
     }
 
     Status getStatus() { return impl().impl_getStatus(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
-    void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires
-        bcos::concepts::ledger::TransactionOrReceipt<RANGES::range_value_t<decltype(inputs)>>
+    void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires bcos::concepts::
+        ledger::TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
     {
         auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
             decltype(input.dataHash) hash(Hasher::HASH_SIZE);

@@ -28,7 +28,7 @@
 #include "rocksdb/slice.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
-#include <bcos-storage/src/RocksDBStorage.h>
+#include <bcos-storage/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>

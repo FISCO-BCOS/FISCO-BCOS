@@ -42,14 +42,11 @@ public:
                m_ledger);
   }
 
-  template <bcos::concepts::ledger::DataFlag flag>
   void getTransactionsOrReceipts(RANGES::range auto const &hashes,
                                  RANGES::range auto &out) {
-    std::visit(
-        [&hashes, &out](auto &self) {
-          self.template getTransactionsOrReceipts<flag>(hashes, out);
-        },
-        m_ledger);
+    std::visit([&hashes, &out](
+                   auto &self) { self.getTransactionsOrReceipts(hashes, out); },
+               m_ledger);
   }
 
   auto getStatus() {
@@ -134,9 +131,8 @@ public:
           bcos::concepts::serialize::decode(data, request);
 
           bcostars::ResponseTransactions response;
-          anyLedger
-              ->getTransactionsOrReceipts<bcos::concepts::ledger::TRANSACTIONS>(
-                  request.hashes, response.transactions);
+          anyLedger->getTransactionsOrReceipts(request.hashes,
+                                               response.transactions);
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
@@ -155,9 +151,8 @@ public:
           bcos::concepts::serialize::decode(data, request);
 
           bcostars::ResponseReceipts response;
-          anyLedger
-              ->getTransactionsOrReceipts<bcos::concepts::ledger::RECEIPTS>(
-                  request.hashes, response.receipts);
+          anyLedger->getTransactionsOrReceipts(request.hashes,
+                                               response.receipts);
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
