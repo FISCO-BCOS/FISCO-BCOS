@@ -94,9 +94,9 @@ jobs:
       - run: apt update  # Only for Docker jobs
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
-      - uses: actions/cache@v2
         with: 
           max-size: 5G
+      - uses: actions/cache@v2
         id: deps_cache
         with:
           path: |
