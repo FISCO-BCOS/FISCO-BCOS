@@ -22,7 +22,7 @@
 #pragma once
 #include "BlockExecutive.h"
 #include "Common.h"
-#include "SerialBlockExecutive.h"
+#include "SerialDmcBlockExecutive.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"

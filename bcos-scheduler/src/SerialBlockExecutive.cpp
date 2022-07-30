@@ -1,41 +1,65 @@
 #include "SerialBlockExecutive.h"
-#include "ChecksumAddress.h"
 #include "DmcExecutor.h"
 #include "SchedulerImpl.h"
+#include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+
 
 using namespace bcos::scheduler;
 
 
 void SerialBlockExecutive::prepare()
 {
-    BlockExecutive::prepare();
-
-    // dump executive states from DmcExecutor
-    WriteGuard lock(x_prepareLock);
-    if (m_serialExecutiveStates.empty())
     {
-        m_serialExecutiveStates.resize(m_executiveResults.size());
-
-        for (auto it : m_dmcExecutors)
+        if (m_hasPrepared)
         {
-            auto dmcExecutor = it.second;
-            dmcExecutor->forEachExecutive(
-                [this](ContextID contextID, ExecutiveState::Ptr executiveState) {
-                    m_serialExecutiveStates[contextID - m_startContextID] = executiveState;
-                    executiveState->callStack = std::stack<int64_t, std::list<int64_t>>();
-                    executiveState->currentSeq = 0;
-                    executiveState->message->setSeq(0);
-                });
+            return;
+        }
+        WriteGuard lock(x_prepareLock);
+        if (m_hasPrepared)
+        {
+            return;
+        }
+
+        uint64_t txSize = 0;
+        if (m_block->transactionsMetaDataSize() > 0)
+        {
+            txSize = m_block->transactionsMetaDataSize();
+        }
+        else if (m_block->transactionsSize() > 0)
+        {
+            txSize = m_block->transactionsSize();
+        }
+        else
+        {
+            SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: empty block"
+                                 << LOG_KV("block number", m_block->blockHeaderConst()->number());
+        }
+        m_transactions.resize(txSize);
+
+        if (m_executor == nullptr)
+        {
+            m_executor = m_scheduler->executorManager()->dispatchExecutor(SERIAL_EXECUTOR_NAME);
+            m_executorInfo = m_scheduler->executorManager()->getExecutorInfo(SERIAL_EXECUTOR_NAME);
         }
     }
 
-    if (m_executor == nullptr)
-    {
-        m_executor = m_scheduler->executorManager()->dispatchExecutor(SERIAL_EXECUTOR_NAME);
-        m_executorInfo = m_scheduler->executorManager()->getExecutorInfo(SERIAL_EXECUTOR_NAME);
-    }
+    BlockExecutive::prepare();
 }
+
+void SerialBlockExecutive::saveMessage(
+    std::string, protocol::ExecutionMessage::UniquePtr message, bool)
+{
+    auto idx = message->contextID() - m_startContextID;
+
+    if (m_transactions.size() <= idx)
+    {
+        m_transactions.resize(idx + 1);
+    }
+    m_transactions[idx] = std::move(message);
+}
+
 void SerialBlockExecutive::asyncExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
@@ -79,6 +103,11 @@ void SerialBlockExecutive::asyncExecute(
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  SchedulerError::NextBlockError, "Next block error!", *error),
                         nullptr, m_isSysBlock);
+
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
                     return;
                 }
 
@@ -114,237 +143,103 @@ void SerialBlockExecutive::asyncExecute(
 void SerialBlockExecutive::serialExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
-    recursiveExecuteTx(
-        m_startContextID, [this, callback = std::move(callback)](bcos::Error::UniquePtr error) {
-            if (error)
-            {
-                callback(std::move(error), nullptr, m_syncBlock);
-                return;
-            }
-
-            onExecuteFinish(std::move(callback));
-        });
-}
-
-void SerialBlockExecutive::recursiveExecuteTx(
-    ContextID contextID, std::function<void(bcos::Error::UniquePtr)> callback)
-{
-    if (((size_t)contextID - m_startContextID) >= m_serialExecutiveStates.size())
+    // handle create message, to generate address
+    for (auto& tx : m_transactions)
     {
-        callback(nullptr);  // execute finish
-        return;
-    }
-
-
-    auto executiveState = m_serialExecutiveStates[contextID - m_startContextID];
-
-    if (!executiveState)
-    {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks,
-            "Transaction not found of contextID: " + std::to_string(contextID) + " in block " +
-                std::to_string(number())));
-        return;
-    }
-
-    if (!executiveState->message)
-    {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks,
-            "ExecutionMessage not found of contextID: " + std::to_string(contextID) + " in block " +
-                std::to_string(number())));
-        return;
-    }
-
-    // handle message type
-    auto& message = executiveState->message;
-    switch (message->type())
-    {
-        // Request type, push stack
-    case protocol::ExecutionMessage::MESSAGE:
-    case protocol::ExecutionMessage::TXHASH:
-    case protocol::ExecutionMessage::KEY_LOCK:
-    case protocol::ExecutionMessage::SEND_BACK:
-    {
-        // handle create message
-        if (message->to().empty())
+        if (tx->to().empty())
         {
-            auto newSeq = executiveState->currentSeq;
-            if (message->createSalt())
+            auto newSeq = tx->seq();
+            if (tx->createSalt())
             {
                 // TODO: Add sender in this process(consider compat with ethereum)
-                message->setTo(bcos::newEVMAddress(m_scheduler->getHashImpl(), message->from(),
-                    message->data(), *(message->createSalt())));
+                tx->setTo(bcos::newEVMAddress(
+                    m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt())));
             }
             else
             {
                 // TODO: Add sender in this process(consider compat with ethereum)
-                message->setTo(bcos::newEVMAddress(m_scheduler->getHashImpl(),
-                    m_block->blockHeaderConst()->number(), contextID, newSeq));
+                tx->setTo(bcos::newEVMAddress(m_scheduler->getHashImpl(),
+                    m_block->blockHeaderConst()->number(), tx->contextID(), newSeq));
             }
         }
 
-        // handle normal message
-        auto newSeq = executiveState->currentSeq++;
-        executiveState->callStack.push(newSeq);
-        executiveState->message->setSeq(newSeq);
-        break;
+        SERIAL_EXECUTE_LOG(DEBUG) << "0.Send:\t >>>> [" << m_executorInfo->name
+                                  << "]: " << tx->toString();
     }
-        // Return type, pop stack
-    case protocol::ExecutionMessage::FINISHED:
-    case protocol::ExecutionMessage::REVERT:
-    {
-        executiveState->callStack.pop();
-        if (executiveState->callStack.empty())
-        {
-            // Empty stack, execution is finished
-            onTxFinish(std::move(message));
-            recursiveExecuteTx(contextID + 1, std::move(callback));  // execute next tx
-            return;
-        }
-        else
-        {
-            message->setSeq(executiveState->callStack.top());
-            message->setCreate(false);
-        }
-        break;
-    }
-    default:
-    {
-        SERIAL_EXECUTE_LOG(FATAL) << "Unrecognized message type: " << message->toString();
-        assert(false);
-        break;
-    }
-    }
-
-    auto handleExecutorResponse = [this, contextID, executiveState, callback = std::move(callback)](
-                                      bcos::Error::UniquePtr error,
-                                      bcos::protocol::ExecutionMessage::UniquePtr output) {
-        // handle error
-        if (error)
-        {
-            SERIAL_EXECUTE_LOG(DEBUG) << "serialExecute:\t Error: " << error->errorMessage();
-            callback(
-                BCOS_ERROR_UNIQUE_PTR(SchedulerError::SerialExecuteError, error->errorMessage()));
-
-            if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-            {
-                triggerSwitch();
-            }
-            return;
-        }
-
-        if (!output)
-        {
-            SERIAL_EXECUTE_LOG(ERROR)
-                << "Execute success but output is null" << LOG_KV("contextID", contextID);
-            callback(
-                BCOS_ERROR_UNIQUE_PTR(SchedulerError::SerialExecuteError, error->errorMessage()));
-            return;
-        }
-
-        SERIAL_EXECUTE_LOG(DEBUG) << "1.Receive:\t <<<< [" << m_executorInfo->name
-                                  << "]: " << output->toString();
-        // clear keylock
-        output->setKeyLocks({});
-        output->setKeyLockAcquired({});
-        executiveState->message = std::move(output);
-        recursiveExecuteTx(contextID, std::move(callback));
-    };
-
 
     // send one tx
-    SERIAL_EXECUTE_LOG(DEBUG) << "0.Send:\t >>>> [" << m_executorInfo->name
-                              << "]: " << message->toString();
     if (m_staticCall)
     {
-        if (m_serialExecutiveStates.size() != 1)
+        if (m_transactions.size() != 1)
         {
-            callback(BCOS_ERROR_UNIQUE_PTR(
-                SchedulerError::CallError, "The block of call should only has 1 request, but has " +
-                                               std::to_string(m_serialExecutiveStates.size())));
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CallError,
+                         "The block of call should only has 1 request, but has " +
+                             std::to_string(m_transactions.size())),
+                nullptr, m_syncBlock);
             return;
         }
-        m_executor->call(std::move(message), std::move(handleExecutorResponse));
+        m_executor->call(std::move(std::move(m_transactions[0])),
+            [this, callback = std::move(callback)](
+                bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
+                if (error)
+                {
+                    SERIAL_EXECUTE_LOG(DEBUG)
+                        << "serialExecute:\t Error: " << error->errorMessage();
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 SchedulerError::SerialExecuteError, error->errorMessage()),
+                        nullptr, m_syncBlock);
+
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
+                    return;
+                }
+
+                onTxFinish(std::move(output));
+                onExecuteFinish(std::move(callback));
+            });
     }
     else
     {
-        m_executor->executeTransaction(std::move(message), std::move(handleExecutorResponse));
+        m_executor->dmcExecuteTransactions(bcos::protocol::SERIAL_EXECUTIVE_FLOW_ADDRESS,
+            m_transactions,
+            [this, callback = std::move(callback)](bcos::Error::UniquePtr error,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+                if (error)
+                {
+                    SERIAL_EXECUTE_LOG(DEBUG)
+                        << "serialExecute:\t Error: " << error->errorMessage();
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 SchedulerError::SerialExecuteError, error->errorMessage()),
+                        nullptr, m_syncBlock);
+
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
+                    return;
+                }
+
+                for (auto& output : outputs)
+                {
+                    SERIAL_EXECUTE_LOG(DEBUG) << "1.Receive:\t <<<< [" << m_executorInfo->name
+                                              << "]: " << output->toString();
+                    onTxFinish(std::move(output));
+                }
+                onExecuteFinish(std::move(callback));
+            });
     }
 }
 
 void SerialBlockExecutive::onExecuteFinish(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
-    auto now = std::chrono::system_clock::now();
-    m_executeElapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
-    m_currentTimePoint = now;
-
-    if (m_staticCall)
-    {
-        // Set result to m_block
-        for (size_t i = 0; i < m_executiveResults.size(); i++)
-        {
-            if (i < m_block->receiptsSize())
-            {
-                // bugfix: force update receipt of last executeBlock() remaining
-                m_block->setReceipt(i, m_executiveResults[i].receipt);
-            }
-            else
-            {
-                m_block->appendReceipt(m_executiveResults[i].receipt);
-            }
-        }
-        callback(nullptr, nullptr, m_isSysBlock);
-    }
-    else
+    if (!m_staticCall)
     {
         SERIAL_EXECUTE_LOG(DEBUG) << "2.Receipt:\t [^^]"
                                   << LOG_KV("receiptsSize", m_executiveResults.size())
                                   << LOG_KV("blockNumber", number());
-
-        // All Transaction finished, get hash
-        batchGetHashes([this, callback = std::move(callback)](
-                           Error::UniquePtr error, crypto::HashType hash) {
-            if (!m_isRunning)
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
-                    nullptr, m_isSysBlock);
-                return;
-            }
-
-            if (error)
-            {
-                SERIAL_EXECUTE_LOG(ERROR) << "batchGetHashes error: " << error->errorMessage();
-                callback(std::move(error), nullptr, m_isSysBlock);
-                return;
-            }
-
-            m_hashElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now() - m_currentTimePoint);
-
-            // Set result to m_block
-            for (size_t i = 0; i < m_executiveResults.size(); i++)
-            {
-                if (i < m_block->receiptsSize())
-                {
-                    // bugfix: force update receipt of last executeBlock() remaining
-                    m_block->setReceipt(i, m_executiveResults[i].receipt);
-                }
-                else
-                {
-                    m_block->appendReceipt(m_executiveResults[i].receipt);
-                }
-            }
-            auto executedBlockHeader =
-                m_blockFactory->blockHeaderFactory()->populateBlockHeader(m_block->blockHeader());
-            executedBlockHeader->setStateRoot(hash);
-            executedBlockHeader->setGasUsed(m_gasUsed);
-            executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
-            executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
-
-            m_result = executedBlockHeader;
-            callback(nullptr, m_result, m_isSysBlock);
-        });
     }
+    BlockExecutive::onExecuteFinish(std::move(callback));
 }
