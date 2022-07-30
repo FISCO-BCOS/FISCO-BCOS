@@ -91,7 +91,12 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
+      - run: apt update  # Only for Docker jobs
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
       - uses: actions/cache@v2
+        with: 
+          max-size: 5G
         id: deps_cache
         with:
           path: |
@@ -133,6 +138,7 @@ jobs:
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
         run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p /root/.tiup/bin/
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
           source /github/home/.profile
