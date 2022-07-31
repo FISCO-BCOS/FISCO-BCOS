@@ -100,8 +100,8 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     auto wsConfig = rpcFactory.initConfig(nodeConfig);
     auto wsService = rpcFactory.buildWsService(wsConfig);
     auto jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(
-        localLedger, nodeConfig->chainId(), nodeConfig->groupId());
+        decltype(remoteLedger), bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(
+        localLedger, remoteLedger, nodeConfig->chainId(), nodeConfig->groupId());
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
         [nodeConfig, nodeID](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {

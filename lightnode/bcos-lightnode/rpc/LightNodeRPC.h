@@ -17,12 +17,17 @@
 namespace bcos::rpc
 {
 
-template <bcos::concepts::ledger::Ledger Ledger, bcos::crypto::hasher::Hasher Hasher>
+template <bcos::concepts::ledger::Ledger LocalLedgerType,
+    bcos::concepts::ledger::Ledger RemoteLedgerType, bcos::crypto::hasher::Hasher Hasher>
 class LightNodeRPC : public bcos::rpc::JsonRpcInterface
 {
 public:
-    LightNodeRPC(Ledger ledger, std::string chainID, std::string groupID)
-      : m_ledger(std::move(ledger)), m_chainID(std::move(chainID)), m_groupID(std::move(groupID))
+    LightNodeRPC(LocalLedgerType localLedger, RemoteLedgerType remoteLedger, std::string chainID,
+        std::string groupID)
+      : m_localLedger(std::move(localLedger)),
+        m_remoteLedger(std::move(remoteLedger)),
+        m_chainID(std::move(chainID)),
+        m_groupID(std::move(groupID))
     {}
 
     void call([[maybe_unused]] std::string_view _groupID,
@@ -194,13 +199,7 @@ public:
     void getGroupInfo(std::string_view _groupID, RespFunc _respFunc) override
     {
         Json::Value value;
-        value["chainID"] = m_chainID;
-        value["groupID"] = m_groupID;
-        value["genesisConfig"] = "";
-        value["iniConfig"] = "";
-        value["nodeList"] = Json::Value(Json::arrayValue);
-
-        _respFunc(nullptr, value);
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
     void getGroupInfoList(RespFunc _respFunc) override
     {
@@ -221,9 +220,10 @@ public:
     }
 
 private:
-    auto& ledger() { return bcos::concepts::getRef(m_ledger); }
+    auto& ledger() { return bcos::concepts::getRef(m_localLedger); }
 
-    Ledger m_ledger;
+    LocalLedgerType m_localLedger;
+    RemoteLedgerType m_remoteLedger;
     std::string m_chainID;
     std::string m_groupID;
 };
