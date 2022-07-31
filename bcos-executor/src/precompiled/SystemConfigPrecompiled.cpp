@@ -103,10 +103,10 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             codec.decode(_callParameters->params(), configKey, configValue);
             // Uniform lowercase configKey
             boost::to_lower(configKey);
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                                  << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
-                                  << LOG_KV("configValue", configValue)
-                                  << NUMBER(blockContext->number());
+                                  << LOG_KV("configValue", configValue);
 
             checkValueValid(configKey, configValue);
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);

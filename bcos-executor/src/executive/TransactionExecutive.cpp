@@ -170,11 +170,10 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
 
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("executive call")
+    EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("executive call")
                          << LOG_KV("contract", callParameters->codeAddress)
                          << LOG_KV("sender", callParameters->senderAddress)
-                         << LOG_KV("internalCall", callParameters->internalCall)
-                         << NUMBER(blockContext->number());
+                         << LOG_KV("internalCall", callParameters->internalCall);
 
     if (isPrecompiled(callParameters->codeAddress) || callParameters->internalCall)
     {
@@ -295,11 +294,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
 
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("executive deploy contract") << LOG_KV("tableName", tableName)
+    EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                         << LOG_DESC("executive deploy contract") << LOG_KV("tableName", tableName)
                          << LOG_KV("abi len", extraData->abi.size())
                          << LOG_KV("sender", callParameters->senderAddress)
-                         << LOG_KV("internalCreate", callParameters->internalCreate)
-                         << NUMBER(blockContext->number());
+                         << LOG_KV("internalCreate", callParameters->internalCreate);
     if (callParameters->internalCreate)
     {
         return {nullptr, internalCreate(std::move(callParameters))};
@@ -876,7 +875,7 @@ void TransactionExecutive::revert()
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null!"));
     }
-    EXECUTOR_LOG(INFO) << "Revert transaction" << NUMBER(blockContext->number());
+    EXECUTOR_BLK_LOG(INFO, blockContext->number()) << "Revert transaction";
 
     blockContext->storage()->rollback(*m_recoder);
     m_recoder->clear();

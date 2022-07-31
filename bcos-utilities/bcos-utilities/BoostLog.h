@@ -81,5 +81,6 @@ void setStatLogLevel(LogLevel const& _level);
     if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
     BOOST_LOG_SEV(                                     \
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
-
+// for block number log
+#define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
 }  // namespace bcos
