@@ -20,6 +20,7 @@
  * @date 2022-07-04
  */
 
+#include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-rpc/Common.h"
 #include <bcos-tars-protocol/client/LightNodeLedgerClientImpl.h>
@@ -90,63 +91,18 @@ static auto startSyncerThread(
     return worker;
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
+static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
+    bcos::gateway::Gateway::Ptr gateway, bcos::crypto::KeyFactory::Ptr keyFactory,
+    bcos::concepts::ledger::Ledger auto localLedger)
 {
-    std::string configFile = "config.ini";
-    std::string genesisFile = "config.genesis";
-
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(configFile, pt);
-
-    auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    logInitializer->initLog(pt);
-
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
-
-    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
-    nodeConfig->loadConfig(configFile);
-    nodeConfig->loadGenesisConfig(genesisFile);
-
-    auto protocolInitializer = bcos::initializer::ProtocolInitializer();
-    protocolInitializer.init(nodeConfig);
-    protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
-    auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
-
-    // gateway
-    bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
-    auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
-    gateway->start();
-
-    // front
-    auto front = std::make_shared<bcos::front::FrontService>();
-    front->setMessageFactory(std::make_shared<bcos::front::FrontMessageFactory>());
-    front->setGroupID(nodeConfig->groupId());
-    front->setNodeID(protocolInitializer.keyPair()->publicKey());
-    front->setIoService(std::make_shared<boost::asio::io_service>());
-    front->setGatewayInterface(std::move(gateway));
-    front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
-    front->start();
-
-    // remote ledger
-    bcos::ledger::LightNodeLedgerClientImpl remoteLedger(std::move(front), std::move(keyFactory));
-
-    // local ledger
-    auto storage = newStorage(nodeConfig->storagePath());
-    bcos::storage::StorageSyncWrapper storageWrapper(std::move(storage));
-    auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
-        std::move(storageWrapper));
-
-    // rpc
     bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), gateway, keyFactory, nullptr);
     auto wsConfig = rpcFactory.initConfig(nodeConfig);
     auto wsService = rpcFactory.buildWsService(wsConfig);
-    auto jsonrpc = bcos::rpc::LightNodeRPC<decltype(localLedger),
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>(
+    auto jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
+        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(
         localLedger, nodeConfig->chainId(), nodeConfig->groupId());
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
-        [&nodeConfig, &nodeID](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [nodeConfig, nodeID](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(INFO) << "LightNode handshake request";
             Json::Value handshakeResponse(Json::objectValue);
@@ -225,13 +181,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             RPC_LOG(INFO) << "LightNode amop topic request";
         });
     wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [&jsonrpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
-            std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
+        [jsonrpc = std::move(jsonrpc)](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+            std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
             auto buffer = msg->payload();
             auto req = std::string_view((const char*)buffer->data(), buffer->size());
 
-            jsonrpc.onRPCRequest(req, [m_buffer = std::move(buffer), msg = std::move(msg),
-                                          session = std::move(session)](bcos::bytes resp) {
+            jsonrpc->onRPCRequest(req, [m_buffer = std::move(buffer), msg = std::move(msg),
+                                           session = std::move(session)](bcos::bytes resp) {
                 if (session && session->isConnected())
                 {
                     // TODO: no need to cppy resp
@@ -252,6 +208,60 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
                 }
             });
         });
+    return wsService;
+}
+
+int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
+{
+    std::string configFile = "config.ini";
+    std::string genesisFile = "config.genesis";
+
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(configFile, pt);
+
+    auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
+    logInitializer->initLog(pt);
+
+    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
+    nodeConfig->loadConfig(configFile);
+    nodeConfig->loadGenesisConfig(genesisFile);
+
+    auto protocolInitializer = bcos::initializer::ProtocolInitializer();
+    protocolInitializer.init(nodeConfig);
+    protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
+    auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
+
+    // gateway
+    bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
+    auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
+    gateway->start();
+
+    // front
+    auto front = std::make_shared<bcos::front::FrontService>();
+    front->setMessageFactory(std::make_shared<bcos::front::FrontMessageFactory>());
+    front->setGroupID(nodeConfig->groupId());
+    front->setNodeID(protocolInitializer.keyPair()->publicKey());
+    front->setIoService(std::make_shared<boost::asio::io_service>());
+    front->setGatewayInterface(std::move(gateway));
+    front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
+    front->start();
+
+    // remote ledger
+    auto remoteLedger =
+        std::make_shared<bcos::ledger::LightNodeLedgerClientImpl>(std::move(front), keyFactory);
+
+    // local ledger
+    auto storage = newStorage(nodeConfig->storagePath());
+    bcos::storage::StorageSyncWrapper storageWrapper(std::move(storage));
+    auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
+        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
+        std::move(storageWrapper));
+
+    // rpc
+    auto wsService = initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger);
     wsService->start();
 
     auto syncer = startSyncerThread(std::move(remoteLedger), localLedger);

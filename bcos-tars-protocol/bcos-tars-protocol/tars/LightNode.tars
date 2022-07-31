@@ -49,4 +49,14 @@ struct ResponseGetStatus
     3 optional unsigned int blockNumber; 
 };
 
+struct RequestSendTransaction
+{
+    0 optional Transaction transaction;
+};
+
+struct ResponseSendTransaction
+{
+    0 optional TransactionReceipt receipt;
+}
+
 };
