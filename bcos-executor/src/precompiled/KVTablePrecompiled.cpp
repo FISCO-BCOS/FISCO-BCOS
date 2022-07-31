@@ -59,8 +59,8 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     auto tableName = dynamicParams.at(0);
     tableName = getActualTableName(tableName);
 
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled") << LOG_DESC("call dynamic kv table")
-                          << LOG_KV("tableName", tableName) << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("KVTablePrecompiled")
+                          << LOG_DESC("call dynamic kv table") << LOG_KV("tableName", tableName);
 
     // get user call actual params
     auto originParam = ref(param);

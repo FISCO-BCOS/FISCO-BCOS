@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <tuple>
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER")
+#define SCHEDULER_BLK_LOG(LEVEL, NUMBER) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER") << BLOCK_NUMBER(NUMBER)
 namespace bcos::scheduler
 {
 using ContextID = int64_t;

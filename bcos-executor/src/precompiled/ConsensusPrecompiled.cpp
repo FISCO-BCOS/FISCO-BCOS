@@ -116,8 +116,9 @@ int ConsensusPrecompiled::addSealer(
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
 
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer")
-                          << LOG_KV("nodeID", nodeID) << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer")
+                          << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),
             [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
@@ -181,8 +182,9 @@ int ConsensusPrecompiled::addObserver(
     codec.decode(_data, nodeID);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver")
-                          << LOG_KV("nodeID", nodeID) << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver")
+                          << LOG_KV("nodeID", nodeID);
 
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),

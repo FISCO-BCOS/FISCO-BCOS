@@ -153,8 +153,8 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_KV("mkdir", absolutePath)
-                          << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
+                          << LOG_KV("mkdir", absolutePath);
     auto table = _executive->storage().openTable(absolutePath);
     if (table)
     {
@@ -257,12 +257,11 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         contractAddress = boost::algorithm::to_lower_copy(trimHexPrefix(contractAddress));
     }
 
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("link")
-                          << LOG_KV("contractName", contractName)
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
+                          << LOG_DESC("link") << LOG_KV("contractName", contractName)
                           << LOG_KV("contractVersion", contractVersion)
                           << LOG_KV("contractAddress", contractAddress)
-                          << LOG_KV("contractAbiSize", contractAbi.size())
-                          << NUMBER(blockContext->number());
+                          << LOG_KV("contractAbiSize", contractAbi.size());
     int validCode =
         checkLinkParam(_executive, contractAddress, contractName, contractVersion, contractAbi);
     auto linkTableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;
@@ -342,8 +341,7 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_KV("readlink", absolutePath)
-                          << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_KV("readlink", absolutePath);
     bytes emptyResult =
         blockContext->isWasm() ? codec.encode(std::string("")) : codec.encode(Address());
     if (!checkPathValid(absolutePath))
@@ -388,9 +386,9 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath, type);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("touch new file")
-                          << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type)
-                          << NUMBER(blockContext->number());
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
+                          << LOG_DESC("touch new file") << LOG_KV("absolutePath", absolutePath)
+                          << LOG_KV("type", type);
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("file name is invalid");

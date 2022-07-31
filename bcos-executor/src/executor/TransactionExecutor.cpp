@@ -355,7 +355,8 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
     try
     {
-        EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader request: " << NUMBER(blockHeader->number())
+        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
+                                << "NextBlockHeader request: "
                                 << LOG_KV("schedulerTermId", schedulerTermId);
 
         {
@@ -625,14 +626,14 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
-    EXECUTOR_NAME_LOG(INFO) << "dmcExecuteTransactions request" << NUMBER(blockNumber)
+    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockNumber) << "dmcExecuteTransactions request"
                             << LOG_KV("txNum", txNum) << LOG_KV("contractAddress", contractAddress)
                             << LOG_KV("requestTimestamp", requestTimestamp);
 
     auto callback = [this, _callback = _callback, requestTimestamp, blockNumber, txNum,
                         contractAddress](bcos::Error::UniquePtr error,
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-        EXECUTOR_NAME_LOG(DEBUG) << "dmcExecuteTransactions response" << NUMBER(blockNumber)
+        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "dmcExecuteTransactions response"
                                  << LOG_KV("txNum", txNum) << LOG_KV("outputNum", outputs.size())
                                  << LOG_KV("contractAddress", contractAddress)
                                  << LOG_KV("requestTimestamp", requestTimestamp)
@@ -695,7 +696,8 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         default:
         {
             auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
-            EXECUTOR_NAME_LOG(ERROR) << "DAG Execute error, " << message << NUMBER(blockNumber);
+            EXECUTOR_NAME_LOG(ERROR)
+                << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
             // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
             break;
         }
@@ -736,7 +738,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                 {
                     auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
                     EXECUTOR_NAME_LOG(ERROR)
-                        << errorMessage << error->errorMessage() << NUMBER(blockNumber);
+                        << BLOCK_NUMBER(blockNumber) << errorMessage << error->errorMessage();
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  ExecuteError::DAG_ERROR, errorMessage, *error),
                         {});
@@ -763,9 +765,10 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                     });
 
                 EXECUTOR_NAME_LOG(INFO)
+                    << BLOCK_NUMBER(blockNumber)
                     << LOG_DESC("dmcExecuteTransactionsInternal after fillblock")
                     << LOG_KV("fillTxsT", fillTxsT) << LOG_KV("prepareT", prepareT)
-                    << LOG_KV("dmcT", (utcTime() - recordT)) << NUMBER(blockNumber);
+                    << LOG_KV("dmcT", (utcTime() - recordT));
             });
     }
     else
@@ -787,7 +790,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << "GetTableHashes" << NUMBER(number);
+    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes";
 
     if (!m_isRunning)
     {
@@ -821,7 +824,7 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     }
 
     auto hash = last.storage->hash(m_hashImpl);
-    EXECUTOR_NAME_LOG(INFO) << "GetTableHashes success" << NUMBER(number)
+    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
                             << LOG_KV("hash", hash.hex());
 
     callback(nullptr, std::move(hash));
@@ -934,7 +937,7 @@ void TransactionExecutor::dagExecuteTransactions(
                 {
                     auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
                     EXECUTOR_NAME_LOG(ERROR)
-                        << errorMessage << error->errorMessage() << NUMBER(blockNumber);
+                        << BLOCK_NUMBER(blockNumber) << errorMessage << error->errorMessage();
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                  ExecuteError::DAG_ERROR, errorMessage, *error),
                         {});
@@ -1376,8 +1379,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
     try
     {
         // DAG run
-        EXECUTOR_NAME_LOG(INFO) << LOG_DESC("begin executeTransactionsWithCriticals")
-                                << NUMBER(m_blockContext->number())
+        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(m_blockContext->number())
+                                << LOG_DESC("begin executeTransactionsWithCriticals")
                                 << LOG_KV("txsCriticalsSize", txsCriticals->size());
         executeTransactionsWithCriticals(txsCriticals, inputs, executionResults);
     }
@@ -1399,7 +1402,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 void TransactionExecutor::prepare(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << "Prepare request" << NUMBER(params.number);
+    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(params.number) << "Prepare request";
 
     if (!m_isRunning)
     {
@@ -1449,13 +1452,13 @@ void TransactionExecutor::prepare(
             {
                 auto errorMessage = "Prepare error: " + error->errorMessage();
 
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage << NUMBER(blockNumber);
+                EXECUTOR_NAME_LOG(ERROR) << BLOCK_NUMBER(blockNumber) << errorMessage;
                 callback(
                     BCOS_ERROR_WITH_PREV_PTR(ExecuteError::PREPARE_ERROR, errorMessage, *error));
                 return;
             }
 
-            EXECUTOR_NAME_LOG(INFO) << "Prepare success" << NUMBER(blockNumber);
+            EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockNumber) << "Prepare success";
             callback(nullptr);
         });
 }
@@ -1463,7 +1466,7 @@ void TransactionExecutor::prepare(
 void TransactionExecutor::commit(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(TRACE) << "Commit request" << NUMBER(params.number);
+    EXECUTOR_NAME_LOG(TRACE) << BLOCK_NUMBER(params.number) << "Commit request";
 
     if (!m_isRunning)
     {
@@ -1512,12 +1515,12 @@ void TransactionExecutor::commit(
         {
             auto errorMessage = "Commit error: " + error->errorMessage();
 
-            EXECUTOR_NAME_LOG(ERROR) << errorMessage << NUMBER(blockNumber);
+            EXECUTOR_NAME_LOG(ERROR) << BLOCK_NUMBER(blockNumber) << errorMessage;
             callback(BCOS_ERROR_WITH_PREV_PTR(ExecuteError::COMMIT_ERROR, errorMessage, *error));
             return;
         }
 
-        EXECUTOR_NAME_LOG(DEBUG) << "Commit success" << NUMBER(blockNumber);
+        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockNumber = blockNumber;
 
@@ -1530,7 +1533,7 @@ void TransactionExecutor::commit(
 void TransactionExecutor::rollback(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << "Rollback request: " << NUMBER(params.number);
+    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(params.number) << "Rollback request: ";
 
     if (!m_isRunning)
     {
@@ -1578,12 +1581,12 @@ void TransactionExecutor::rollback(
             {
                 auto errorMessage = "Rollback error: " + error->errorMessage();
 
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage << NUMBER(blockNumber);
+                EXECUTOR_NAME_LOG(ERROR) << BLOCK_NUMBER(blockNumber) << errorMessage;
                 callback(BCOS_ERROR_WITH_PREV_PTR(-1, errorMessage, *error));
                 return;
             }
 
-            EXECUTOR_NAME_LOG(INFO) << "Rollback success" << NUMBER(blockNumber);
+            EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockNumber) << "Rollback success";
             callback(nullptr);
         });
 }
@@ -1790,12 +1793,13 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
         callback)
 {
-    EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("asyncExecute") << LOG_KV("contextID", input->contextID())
+    EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("asyncExecute")
+                             << LOG_KV("contextID", input->contextID())
                              << LOG_KV("seq", input->seq())
                              << LOG_KV("MessageType", std::to_string(input->type()))
                              << LOG_KV("To", input->to())
                              << LOG_KV("staticCall", input->staticCall())
-                             << LOG_KV("Create", input->create()) << NUMBER(blockContext->number());
+                             << LOG_KV("Create", input->create());
     switch (input->type())
     {
     case bcos::protocol::ExecutionMessage::TXHASH:

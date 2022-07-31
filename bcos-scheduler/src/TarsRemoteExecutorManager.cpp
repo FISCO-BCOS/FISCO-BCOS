@@ -13,7 +13,8 @@ using namespace bcos::scheduler;
 using namespace tars;
 
 
-TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const std::vector<tars::EndpointF>& endPointInfos)
+TarsRemoteExecutorManager::EndPointSet buildEndPointSet(
+    const std::vector<tars::EndpointF>& endPointInfos)
 {
     TarsRemoteExecutorManager::EndPointSet endPointSet =
         std::make_shared<std::set<std::pair<std::string, uint16_t>>>();
@@ -35,8 +36,8 @@ TarsRemoteExecutorManager::EndPointSet buildEndPointSet(const std::vector<tars::
     return endPointSet;
 }
 
-std::string dumpEndPointsLog(
-    const std::vector<tars::EndpointF>& activeEndPoints, const std::vector<tars::EndpointF>& inactiveEndPoints)
+std::string dumpEndPointsLog(const std::vector<tars::EndpointF>& activeEndPoints,
+    const std::vector<tars::EndpointF>& inactiveEndPoints)
 {
     // dump logs
     std::stringstream ss;
@@ -72,8 +73,8 @@ std::string dumpExecutor2Seq(std::map<std::string, int64_t> const& executor2Seq)
 
 
 // return success, activeEndPoints, inactiveEndPoints
-static std::tuple<bool, std::vector<tars::EndpointF>, std::vector<tars::EndpointF>> getActiveEndpoints(
-    const std::string& executorServiceName)
+static std::tuple<bool, std::vector<tars::EndpointF>, std::vector<tars::EndpointF>>
+getActiveEndpoints(const std::string& executorServiceName)
 {
     static std::string locator = tars::Application::getCommunicator()->getProperty("locator");
 
