@@ -56,7 +56,7 @@ public:
                     return;
                 }
 
-                std::uniform_int_distribution<size_t> distribution{0u, nodeIDs.size()};
+                std::uniform_int_distribution<size_t> distribution{0u, nodeIDs.size() - 1};
                 auto nodeIDIt = nodeIDs.begin();
                 auto step = distribution(m_rng);
                 for (size_t i = 0; i < step; ++i)

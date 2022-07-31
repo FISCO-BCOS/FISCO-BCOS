@@ -35,7 +35,7 @@ private:
     {
         bcostars::RequestBlock request;
         request.blockNumber = blockNumber;
-        request.onlyHeader = true;
+        request.onlyHeader = false;
 
         bcos::bytes requestBuffer;
         bcos::concepts::serialize::encode(request, requestBuffer);

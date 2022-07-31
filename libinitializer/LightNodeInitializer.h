@@ -106,6 +106,8 @@ public:
         bcos::protocol::LIGHTNODE_GETBLOCK,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
+          BCOS_LOG(INFO) << "LightNode get block id:" << id
+                         << " nodeID: " << nodeID;
           bcostars::RequestBlock request;
           bcos::concepts::serialize::decode(data, request);
 
