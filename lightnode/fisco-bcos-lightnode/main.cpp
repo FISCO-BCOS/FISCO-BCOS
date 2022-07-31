@@ -93,7 +93,8 @@ static auto startSyncerThread(
 
 static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     bcos::gateway::Gateway::Ptr gateway, bcos::crypto::KeyFactory::Ptr keyFactory,
-    bcos::concepts::ledger::Ledger auto localLedger)
+    bcos::concepts::ledger::Ledger auto localLedger,
+    bcos::concepts::ledger::Ledger auto remoteLedger)
 {
     bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), gateway, keyFactory, nullptr);
     auto wsConfig = rpcFactory.initConfig(nodeConfig);
@@ -190,7 +191,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                                            session = std::move(session)](bcos::bytes resp) {
                 if (session && session->isConnected())
                 {
-                    // TODO: no need to cppy resp
+                    // TODO: no need to copy resp
                     auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
                     msg->setPayload(buffer);
                     session->asyncSendMessage(msg);
@@ -245,13 +246,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     front->setGroupID(nodeConfig->groupId());
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
     front->setIoService(std::make_shared<boost::asio::io_service>());
-    front->setGatewayInterface(std::move(gateway));
+    front->setGatewayInterface(gateway);
     front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
     front->start();
 
     // remote ledger
     auto remoteLedger =
-        std::make_shared<bcos::ledger::LightNodeLedgerClientImpl>(std::move(front), keyFactory);
+        std::make_shared<bcos::ledger::LightNodeLedgerClientImpl>(front, gateway, keyFactory);
 
     // local ledger
     auto storage = newStorage(nodeConfig->storagePath());
@@ -261,10 +262,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         std::move(storageWrapper));
 
     // rpc
-    auto wsService = initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger);
+    auto wsService = initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger, remoteLedger);
     wsService->start();
 
-    auto syncer = startSyncerThread(std::move(remoteLedger), localLedger);
+    auto syncer = startSyncerThread(remoteLedger, localLedger);
     syncer.join();
 
     return 0;

@@ -4,12 +4,15 @@
 
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/Serialize.h"
+#include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-gateway/Gateway.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>
@@ -26,9 +29,10 @@ class LightNodeLedgerClientImpl
     friend bcos::concepts::ledger::LedgerBase<LightNodeLedgerClientImpl>;
 
 public:
-    LightNodeLedgerClientImpl(
-        bcos::front::FrontServiceInterface::Ptr front, bcos::crypto::KeyFactoryImpl::Ptr keyFactory)
+    LightNodeLedgerClientImpl(bcos::front::FrontServiceInterface::Ptr front,
+        bcos::gateway::GatewayInterface::Ptr gateway, bcos::crypto::KeyFactoryImpl::Ptr keyFactory)
       : m_front(std::move(front)),
+        m_gateway(std::move(gateway)),
         m_keyFactory(std::move(keyFactory)),
         m_rng(std::random_device{}())
     {}
@@ -54,7 +58,7 @@ private:
         std::swap(response.block, block);
     }
 
-    void getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
+    void impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
         using RequestType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
@@ -117,24 +121,31 @@ private:
     crypto::NodeIDPtr selectNode()
     {
         std::promise<std::tuple<bcos::Error::Ptr, std::string>> promise;
-        m_front->asyncGetGroupNodeInfo([this, &promise](bcos::Error::Ptr _error,
-                                           bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            if (_error || !_groupNodeInfo)
+        m_gateway->asyncGetPeers([this, &promise](Error::Ptr error, gateway::GatewayInfo::Ptr,
+                                     gateway::GatewayInfosPtr peerGatewayInfos) {
+            auto groups = peerGatewayInfos->at(0);
+            auto nodeIDInfo = groups->nodeIDInfo();
+            auto it = nodeIDInfo.find("group0");
+            if (it != nodeIDInfo.end())
             {
-                promise.set_value(std::make_tuple(std::move(_error), std::string{}));
-                return;
-            }
-            
-            auto& nodeIDList = _groupNodeInfo->nodeIDList();
-            if (nodeIDList.empty())
-            {
-                promise.set_value(std::make_tuple(std::move(_error), std::string{}));
-                return;
-            }
+                auto& nodeIDs = it->second;
+                if (nodeIDs.empty())
+                {
+                    promise.set_value(std::make_tuple(std::move(error), std::string{}));
+                    return;
+                }
 
-            std::uniform_int_distribution<size_t> distribution{0u, nodeIDList.size()};
-            auto& nodeID = nodeIDList[distribution(m_rng)];
-            promise.set_value(std::make_tuple(std::move(_error), std::move(nodeID)));
+                std::uniform_int_distribution<size_t> distribution{0u, nodeIDs.size()};
+                auto nodeIDIt = nodeIDs.begin();
+                auto step = distribution(m_rng);
+                for (size_t i = 0; i < step; ++i)
+                    ++nodeIDIt;
+                promise.set_value(std::make_tuple(std::move(error), *nodeIDIt));
+            }
+            else
+            {
+                promise.set_value(std::make_tuple(std::move(error), std::string{}));
+            }
         });
 
         auto [error, nodeIDStr] = promise.get_future().get();
@@ -144,7 +155,9 @@ private:
         if (nodeIDStr.empty())
             BOOST_THROW_EXCEPTION(std::runtime_error{"No node available"});
 
-        auto nodeID = m_keyFactory->createKey(nodeIDStr);
+        bcos::bytes nodeIDBin;
+        boost::algorithm::unhex(nodeIDStr.begin(), nodeIDStr.end(), std::back_inserter(nodeIDBin));
+        auto nodeID = m_keyFactory->createKey(nodeIDBin);
         return nodeID;
     }
 
@@ -169,6 +182,7 @@ private:
     }
 
     bcos::front::FrontServiceInterface::Ptr m_front;
+    bcos::gateway::GatewayInterface::Ptr m_gateway;
     bcos::crypto::KeyFactoryImpl::Ptr m_keyFactory;
     std::mt19937 m_rng;
 };
