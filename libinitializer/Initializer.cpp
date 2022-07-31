@@ -33,7 +33,6 @@
 #include "StorageInitializer.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-lightnode/storage/StorageSyncWrapper.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -57,6 +56,8 @@
 
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"
+#include <bcos-lightnode/storage/StorageImpl.h>
+#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
 #endif
 
 using namespace bcos;
@@ -287,7 +288,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
 #ifdef WITH_LIGHTNODE
-    bcos::storage::StorageSyncWrapper<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
+    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
     std::shared_ptr<AnyLedger> anyLedger;
     if (m_nodeConfig->smCryptoType())
     {
@@ -299,10 +300,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         AnyLedger::Keccak256Ledger keccak256Ledger(std::move(storageWrapper));
         anyLedger = std::make_shared<AnyLedger>(std::move(keccak256Ledger));
     }
+    auto txpool = m_txpoolInitializer->txpool();
+    auto transactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(txpool);
+
     LightNodeInitializer lightNodeInitializer;
     lightNodeInitializer.initLedgerServer(
         std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
-        anyLedger);
+        anyLedger, transactionPool);
 #endif
 }
 

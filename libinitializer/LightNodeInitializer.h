@@ -2,15 +2,16 @@
 
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
-#include "bcos-framework/protocol/Protocol.h"
-#include "concepts/bcos-concepts/ledger/Ledger.h"
-#include "generated/bcos-tars-protocol/tars/LightNode.h"
+#include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-lightnode/ledger/LedgerImpl.h>
-#include <bcos-lightnode/storage/StorageSyncWrapper.h>
+#include <bcos-lightnode/storage/StorageImpl.h>
+#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 
 namespace bcos::initializer {
@@ -19,10 +20,10 @@ class AnyLedger {
 public:
   using Keccak256Ledger = bcos::ledger::LedgerImpl<
       bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher,
-      bcos::storage::StorageSyncWrapper<bcos::storage::StorageInterface::Ptr>>;
+      bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr>>;
   using SM3Ledger = bcos::ledger::LedgerImpl<
       bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher,
-      bcos::storage::StorageSyncWrapper<bcos::storage::StorageInterface::Ptr>>;
+      bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr>>;
   using LedgerType = std::variant<Keccak256Ledger, SM3Ledger>;
 
   AnyLedger(LedgerType ledger) : m_ledger(std::move(ledger)) {}
@@ -95,8 +96,12 @@ private:
 
 class LightNodeInitializer {
 public:
-  void initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
-                        std::shared_ptr<AnyLedger> anyLedger) {
+  void
+  initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
+                   std::shared_ptr<AnyLedger> anyLedger,
+                   std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
+                       std::shared_ptr<bcos::txpool::TxPoolInterface>>>
+                       transactionPool) {
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETBLOCK,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
@@ -184,6 +189,26 @@ public:
                                      if (_error) {
                                      }
                                    });
+        });
+    front->registerModuleMessageDispatcher(
+        bcos::protocol::LIGHTNODE_SENDTRANSACTION,
+        [transactionPool, front](bcos::crypto::NodeIDPtr nodeID,
+                                 const std::string &id, bytesConstRef data) {
+          bcostars::RequestSendTransaction request;
+          bcos::concepts::serialize::decode(data, request);
+
+          bcostars::ResponseSendTransaction response;
+          transactionPool->submitTransaction(std::move(request.transaction),
+                                             response.receipt);
+
+          bcos::bytes responseBuffer;
+          bcos::concepts::serialize::encode(response, responseBuffer);
+          front->asyncSendResponse(
+              id, bcos::protocol::LIGHTNODE_SENDTRANSACTION, nodeID,
+              bcos::ref(responseBuffer), [](Error::Ptr _error) {
+                if (_error) {
+                }
+              });
         });
   }
 };

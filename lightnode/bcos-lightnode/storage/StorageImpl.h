@@ -10,16 +10,15 @@ namespace bcos::storage
 {
 
 template <class StorageType>
-class StorageSyncWrapper
-  : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<StorageType>>
+class StorageImpl : public bcos::concepts::storage::StorageBase<StorageImpl<StorageType>>
 {
 public:
-    StorageSyncWrapper(StorageType storage) : m_storage(std::move(storage)) {}
-    StorageSyncWrapper(const StorageSyncWrapper&) = default;
-    StorageSyncWrapper(StorageSyncWrapper&&) = default;
-    StorageSyncWrapper& operator=(const StorageSyncWrapper&) = default;
-    StorageSyncWrapper& operator=(StorageSyncWrapper&&) = default;
-    ~StorageSyncWrapper() = default;
+    StorageImpl(StorageType storage) : m_storage(std::move(storage)) {}
+    StorageImpl(const StorageImpl&) = default;
+    StorageImpl(StorageImpl&&) = default;
+    StorageImpl& operator=(const StorageImpl&) = default;
+    StorageImpl& operator=(StorageImpl&&) = default;
+    ~StorageImpl() = default;
 
     std::optional<Entry> impl_getRow(std::string_view table, std::string_view key)
     {
@@ -113,5 +112,5 @@ private:
     StorageType m_storage;
 };
 
-static_assert(bcos::concepts::storage::Storage<StorageSyncWrapper<int>>, "fail!");
+static_assert(bcos::concepts::storage::Storage<StorageImpl<int>>, "fail!");
 }  // namespace bcos::storage

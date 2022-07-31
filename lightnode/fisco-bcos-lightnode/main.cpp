@@ -23,17 +23,19 @@
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-rpc/Common.h"
-#include <bcos-tars-protocol/client/LightNodeLedgerClientImpl.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 
+#include "client/LedgerClientImpl.h"
+#include "client/P2PClientImpl.h"
+#include "client/TransactionPoolClientImpl.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-lightnode/ledger/LedgerImpl.h>
 #include <bcos-lightnode/rpc/LightNodeRPC.h>
-#include <bcos-lightnode/storage/StorageSyncWrapper.h>
+#include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tool/NodeConfig.h>
@@ -94,14 +96,17 @@ static auto startSyncerThread(
 static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     bcos::gateway::Gateway::Ptr gateway, bcos::crypto::KeyFactory::Ptr keyFactory,
     bcos::concepts::ledger::Ledger auto localLedger,
-    bcos::concepts::ledger::Ledger auto remoteLedger)
+    bcos::concepts::ledger::Ledger auto remoteLedger,
+    bcos::concepts::transacton_pool::TransactionPool auto transactionPool)
 {
     bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), gateway, keyFactory, nullptr);
     auto wsConfig = rpcFactory.initConfig(nodeConfig);
     auto wsService = rpcFactory.buildWsService(wsConfig);
-    auto jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
-        decltype(remoteLedger), bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(
-        localLedger, remoteLedger, nodeConfig->chainId(), nodeConfig->groupId());
+    auto jsonrpc =
+        std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger), decltype(remoteLedger),
+            decltype(transactionPool), bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(
+            localLedger, remoteLedger, transactionPool, nodeConfig->chainId(),
+            nodeConfig->groupId());
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
         [nodeConfig, nodeID](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
@@ -250,19 +255,24 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
     front->start();
 
-    // remote ledger
-    auto remoteLedger =
-        std::make_shared<bcos::ledger::LightNodeLedgerClientImpl>(front, gateway, keyFactory);
+    // clients
+    auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(front, gateway, keyFactory);
+    auto remoteLedger = std::make_shared<bcos::ledger::LedgerClientImpl>(p2pClient);
+    auto remoteTransactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
+    auto transactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
 
     // local ledger
     auto storage = newStorage(nodeConfig->storagePath());
-    bcos::storage::StorageSyncWrapper storageWrapper(std::move(storage));
+    bcos::storage::StorageImpl storageWrapper(std::move(storage));
     auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
         bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
         std::move(storageWrapper));
 
     // rpc
-    auto wsService = initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger, remoteLedger);
+    auto wsService = initRPC(
+        nodeConfig, nodeID, gateway, keyFactory, localLedger, remoteLedger, transactionPool);
     wsService->start();
 
     auto syncer = startSyncerThread(remoteLedger, localLedger);

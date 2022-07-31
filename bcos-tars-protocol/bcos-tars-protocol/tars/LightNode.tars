@@ -51,12 +51,12 @@ struct ResponseGetStatus
 
 struct RequestSendTransaction
 {
-    0 optional Transaction transaction;
+    1 optional Transaction transaction;
 };
 
 struct ResponseSendTransaction
 {
-    0 optional TransactionReceipt receipt;
-}
+    1 optional TransactionReceipt receipt;
+};
 
 };
