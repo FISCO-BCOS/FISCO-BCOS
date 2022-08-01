@@ -225,6 +225,11 @@ void PBBlock::encodeReceipts() const
 
 void PBBlock::encodeTransactionsMetaData() const
 {
+    auto allocatedMetaDataSize = m_pbRawBlock->transactionsmetadata_size();
+    for (int i = 0; i < allocatedMetaDataSize; i++)
+    {
+        m_pbRawBlock->mutable_transactionsmetadata()->UnsafeArenaReleaseLast();
+    }
     m_pbRawBlock->clear_transactionsmetadata();
     for (auto txMetaData : *m_transactionMetaDataList)
     {
