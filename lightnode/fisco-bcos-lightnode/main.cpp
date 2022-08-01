@@ -22,6 +22,8 @@
 
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
+#include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-rpc/Common.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
@@ -240,19 +242,27 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
     auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
 
+    auto front = std::make_shared<bcos::front::FrontService>();
     // gateway
     bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
     auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
+    auto protocolInfo = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
+    gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
+        protocolInitializer.keyPair()->publicKey(), bcos::protocol::OBSERVER_NODE, front,
+        protocolInfo);
     gateway->start();
 
     // front
-    auto front = std::make_shared<bcos::front::FrontService>();
     front->setMessageFactory(std::make_shared<bcos::front::FrontMessageFactory>());
     front->setGroupID(nodeConfig->groupId());
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
     front->setIoService(std::make_shared<boost::asio::io_service>());
     front->setGatewayInterface(gateway);
     front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
+    front->registerModuleMessageDispatcher(bcos::protocol::BlockSync,
+        [](bcos::crypto::NodeIDPtr, const std::string&, bcos::bytesConstRef) {});
+    front->registerModuleMessageDispatcher(bcos::protocol::AMOP,
+        [](bcos::crypto::NodeIDPtr, const std::string&, bcos::bytesConstRef) {});
     front->start();
 
     // clients
