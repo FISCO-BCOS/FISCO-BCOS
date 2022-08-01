@@ -33,7 +33,6 @@
 #include "StorageInitializer.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-lightnode/scheduler/SchedulerImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -58,8 +57,6 @@
 
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"
-#include <bcos-lightnode/storage/StorageImpl.h>
-#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
 #endif
 
 using namespace bcos;
@@ -312,8 +309,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto txpool = m_txpoolInitializer->txpool();
     auto transactionPool =
         std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(txpool);
-    auto scheduler =
-        std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(m_scheduler);
+    auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
+        m_scheduler, m_protocolInitializer->cryptoSuite());
 
     LightNodeInitializer lightNodeInitializer;
     lightNodeInitializer.initLedgerServer(

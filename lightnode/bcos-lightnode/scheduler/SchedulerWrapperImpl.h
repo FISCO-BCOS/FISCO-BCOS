@@ -11,8 +11,10 @@ namespace bcos::scheduler
 
 template <class SchedulerType>
 class SchedulerWrapperImpl
-  : public bcos::concepts::scheduler::Scheduler<SchedulerWrapperImpl<SchedulerType>>
+  : public bcos::concepts::scheduler::SchedulerBase<SchedulerWrapperImpl<SchedulerType>>
 {
+    friend bcos::concepts::scheduler::SchedulerBase<SchedulerWrapperImpl<SchedulerType>>;
+
 public:
     SchedulerWrapperImpl(SchedulerType scheduler, bcos::crypto::CryptoSuite::Ptr cryptoSuite)
       : m_scheduler(std::move(scheduler)), m_cryptoSuite(std::move(cryptoSuite))
@@ -24,8 +26,8 @@ private:
     void impl_call(bcos::concepts::transaction::Transaction auto const& transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
-            m_cryptoSuite, [&transaction]() { return &transaction; });
+        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+            [&transaction]() { return const_cast<bcostars::Transaction*>(&transaction); });
 
         std::promise<Error::Ptr> promise;
         scheduler().call(

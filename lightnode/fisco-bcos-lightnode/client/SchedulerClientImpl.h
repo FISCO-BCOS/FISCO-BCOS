@@ -3,14 +3,15 @@
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
 #include "P2PClientImpl.h"
+#include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 
 namespace bcos::scheduler
 {
-class SchedulerClientImpl : public bcos::concepts::scheduler::Scheduler<SchedulerClientImpl>
+class SchedulerClientImpl : public bcos::concepts::scheduler::SchedulerBase<SchedulerClientImpl>
 {
-    friend bcos::concepts::scheduler::Scheduler<SchedulerClientImpl>;
+    friend bcos::concepts::scheduler::SchedulerBase<SchedulerClientImpl>;
 
 public:
     SchedulerClientImpl(std::shared_ptr<p2p::P2PClientImpl> p2p) : m_p2p(std::move(p2p)) {}

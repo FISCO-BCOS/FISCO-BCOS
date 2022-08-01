@@ -7,7 +7,7 @@
 namespace bcos::concepts::scheduler
 {
 template <class Impl>
-class Scheduler
+class SchedulerBase
 {
 public:
     void call(bcos::concepts::transaction::Transaction auto const& transaction,
@@ -20,4 +20,8 @@ private:
     friend Impl;
     auto& impl() { return static_cast<Impl&>(*this); }
 };
+
+template <class Impl>
+concept Scheduler = std::derived_from<Impl, SchedulerBase<Impl>> ||
+    std::derived_from<typename Impl::element_type, SchedulerBase<typename Impl::element_type>>;
 }  // namespace bcos::concepts::scheduler

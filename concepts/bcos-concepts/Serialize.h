@@ -6,10 +6,11 @@ namespace bcos::concepts::serialize
 {
 
 template <class ObjectType>
-concept Serializable = requires(ObjectType object)
+concept Serializable = requires(
+    ObjectType object, std::vector<std::byte> out, std::vector<std::byte> in)
 {
-    impl_encode(object, std::vector<std::byte>{});
-    impl_decode(std::vector<std::byte>{}, object);
+    impl_encode(object, out);
+    impl_decode(in, object);
 };
 
 template <class ObjectType>

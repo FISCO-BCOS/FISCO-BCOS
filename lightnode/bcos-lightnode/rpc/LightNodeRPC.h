@@ -4,9 +4,11 @@
 
 #include "../Log.h"
 #include "Converter.h"
+#include "bcos-concepts/Basic.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
@@ -25,15 +27,17 @@ namespace bcos::rpc
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
     bcos::concepts::ledger::Ledger RemoteLedgerType,
     bcos::concepts::transacton_pool::TransactionPool TransactionPoolType,
-    bcos::crypto::hasher::Hasher Hasher>
+    bcos::concepts::scheduler::Scheduler SchedulerType, bcos::crypto::hasher::Hasher Hasher>
 class LightNodeRPC : public bcos::rpc::JsonRpcInterface
 {
 public:
     LightNodeRPC(LocalLedgerType localLedger, RemoteLedgerType remoteLedger,
-        TransactionPoolType remoteTransactionPool, std::string chainID, std::string groupID)
+        TransactionPoolType remoteTransactionPool, SchedulerType scheduler, std::string chainID,
+        std::string groupID)
       : m_localLedger(std::move(localLedger)),
         m_remoteLedger(std::move(remoteLedger)),
         m_remoteTransactionPool(std::move(remoteTransactionPool)),
+        m_scheduler(std::move(scheduler)),
         m_chainID(std::move(chainID)),
         m_groupID(std::move(groupID))
     {}
@@ -42,9 +46,15 @@ public:
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _to,
         [[maybe_unused]] std::string_view _data, RespFunc _respFunc) override
     {
-        auto binData = decodeData(_data);
+        // call data is json
         bcostars::Transaction transaction;
-        bcos::concepts::serialize::decode(binData, transaction);
+        decodeData(_data, transaction.data.input);
+        transaction.data.to = _to;
+        transaction.data.nonce = "0";
+        transaction.data.blockLimit = 0;
+        transaction.data.chainID = "";
+        transaction.data.groupID = "";
+        transaction.importTime = 0;
 
         bcos::bytes txHash;
         bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
@@ -55,7 +65,7 @@ public:
         LIGHTNODE_LOG(INFO) << "RPC call request: " << txHashStr;
 
         bcostars::TransactionReceipt receipt;
-        remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
+        scheduler().call(transaction, receipt);
 
         Json::Value resp;
         toJsonResp<Hasher>(receipt, txHashStr, resp);
@@ -68,7 +78,8 @@ public:
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _data,
         [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
-        auto binData = decodeData(_data);
+        bcos::bytes binData;
+        decodeData(_data, binData);
         bcostars::Transaction transaction;
         bcos::concepts::serialize::decode(binData, transaction);
 
@@ -282,7 +293,9 @@ private:
     auto& localLedger() { return bcos::concepts::getRef(m_localLedger); }
     auto& remoteLedger() { return bcos::concepts::getRef(m_remoteLedger); }
     auto& remoteTransactionPool() { return bcos::concepts::getRef(m_remoteTransactionPool); }
-    bcos::bytes decodeData(std::string_view _data)
+    auto& scheduler() { return bcos::concepts::getRef(m_scheduler); }
+
+    void decodeData(std::string_view _data, bcos::concepts::ByteBuffer auto& out)
     {
         auto begin = _data.begin();
         auto end = _data.end();
@@ -299,15 +312,15 @@ private:
             length -= 2;
         }
 
-        bcos::bytes data;
-        data.reserve(length / 2);
-        boost::algorithm::unhex(begin, end, std::back_inserter(data));
-        return data;
+        bcos::concepts::resizeTo(out, length / 2);
+        boost::algorithm::unhex(begin, end, RANGES::begin(out));
     }
 
     LocalLedgerType m_localLedger;
     RemoteLedgerType m_remoteLedger;
     TransactionPoolType m_remoteTransactionPool;
+    SchedulerType m_scheduler;
+
     std::string m_chainID;
     std::string m_groupID;
 };

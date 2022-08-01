@@ -11,7 +11,7 @@
 #include <bcos-front/FrontService.h>
 #include <bcos-lightnode/Log.h>
 #include <bcos-lightnode/ledger/LedgerImpl.h>
-#include <bcos-lightnode/scheduler/SchedulerImpl.h>
+#include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
 #include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
@@ -101,15 +101,15 @@ private:
 
 class LightNodeInitializer {
 public:
-  void initLedgerServer(
-      std::shared_ptr<bcos::front::FrontService> front,
-      std::shared_ptr<AnyLedger> anyLedger,
-      std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
-          std::shared_ptr<bcos::txpool::TxPoolInterface>>>
-          transactionPool,
-      std::shared_ptr<
-          bcos::scheduler::SchedulerWrapperImpl<bcos::scheduler::SchedulerImpl>>
-          scheduler) {
+  void
+  initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
+                   std::shared_ptr<AnyLedger> anyLedger,
+                   std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
+                       std::shared_ptr<bcos::txpool::TxPoolInterface>>>
+                       transactionPool,
+                   std::shared_ptr<bcos::scheduler::SchedulerWrapperImpl<
+                       std::shared_ptr<bcos::scheduler::SchedulerInterface>>>
+                       scheduler) {
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETBLOCK,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
