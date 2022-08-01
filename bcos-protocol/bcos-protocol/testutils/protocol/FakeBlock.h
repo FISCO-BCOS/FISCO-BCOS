@@ -138,7 +138,7 @@ inline void checkBlock(CryptoSuite::Ptr _cryptoSuite, Block::Ptr block, Block::P
 }
 
 inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _blockFactory,
-    bool _withHeader, size_t _txsNum, size_t _txsHashNum)
+    bool _withHeader, size_t _txsNum, size_t _txsHashNum, bool _check = true)
 {
     auto block = _blockFactory->createBlock();
     if (_withHeader)
@@ -165,7 +165,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     // fake receipts
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto receipt = testPBTransactionReceipt(_cryptoSuite);
+        auto receipt = testPBTransactionReceipt(_cryptoSuite, _check);
         block->setReceipt(i, receipt);
     }
     // fake txsHash
@@ -186,6 +186,10 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     {
         block->blockHeader()->setReceiptsRoot(block->calculateReceiptRoot());
         block->blockHeader()->setTxsRoot(block->calculateTransactionRoot());
+    }
+    if (!_check)
+    {
+        return block;
     }
 
     // encode block
