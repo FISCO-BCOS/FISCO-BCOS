@@ -25,23 +25,21 @@
 #include "protocol/PB/PBFTMessageFactoryImpl.h"
 #include "storage/LedgerStorage.h"
 #include "utilities/Common.h"
-#include <bcos-scheduler/src/SchedulerManager.h>
 #include <memory>
 
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 
-PBFTFactory::PBFTFactory(bcos::protocol::NodeArchitectureType _nodeArchType,
-    bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::KeyPairInterface::Ptr _keyPair,
+PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    bcos::crypto::KeyPairInterface::Ptr _keyPair,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
     std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-  : m_nodeArchType(_nodeArchType),
-    m_cryptoSuite(_cryptoSuite),
+  : m_cryptoSuite(_cryptoSuite),
     m_keyPair(_keyPair),
     m_frontService(_frontService),
     m_storage(_storage),
@@ -79,22 +77,5 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
     pbft->setLedgerFetcher(ledgerFetcher);
-
-    if (m_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        PBFT_LOG(INFO) << LOG_DESC("Register switch handler in scheduler manager");
-        // PBFT and scheduler are in the same process here, we just cast m_scheduler to
-        // SchedulerService
-        auto schedulerServer =
-            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
-        schedulerServer->registerOnSwitchTermHandler(
-            [pbftEngine](bcos::protocol::BlockNumber blockNumber) {
-                PBFT_LOG(DEBUG) << LOG_BADGE("Switch")
-                                << "Receive scheduler switch term notify of number " +
-                                       std::to_string(blockNumber);
-                pbftEngine->clearExceptionProposalState(blockNumber);
-            });
-    }
-
     return pbft;
 }

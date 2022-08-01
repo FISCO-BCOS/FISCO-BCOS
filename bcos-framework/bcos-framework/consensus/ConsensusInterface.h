@@ -82,6 +82,8 @@ public:
         std::function<void(Error::Ptr, std::string)> _onGetConsensusStatus) = 0;
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
+
+    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber) {}
 };
 }  // namespace consensus
 }  // namespace bcos

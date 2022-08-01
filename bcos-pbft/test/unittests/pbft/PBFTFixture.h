@@ -203,8 +203,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-      : PBFTFactory(bcos::protocol::NodeArchitectureType::AIR, _cryptoSuite, _keyPair,
-            _frontService, _storage, _ledger, _scheduler, _txpool, _blockFactory, _txResultFactory)
+      : PBFTFactory(_cryptoSuite, _keyPair, _frontService, _storage, _ledger, _scheduler, _txpool,
+            _blockFactory, _txResultFactory)
     {}
 
     PBFTImpl::Ptr createPBFT() override

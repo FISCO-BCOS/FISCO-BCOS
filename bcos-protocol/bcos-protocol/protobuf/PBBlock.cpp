@@ -225,7 +225,7 @@ void PBBlock::encodeReceipts() const
 
 void PBBlock::encodeTransactionsMetaData() const
 {
-    clearTransactionMetaDataCache();
+    m_pbRawBlock->clear_transactionsmetadata();
     for (auto txMetaData : *m_transactionMetaDataList)
     {
         auto txMetaDataImpl = std::dynamic_pointer_cast<PBTransactionMetaData>(txMetaData);

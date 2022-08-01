@@ -199,13 +199,10 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     BOOST_CHECK(decodedBlock->transactionsMetaDataSize() == _txsHashNum);
     for (size_t i = 0; i < _txsHashNum; i++)
     {
-        auto hash = decodedBlock->transaction(i)->hash();
-        auto to = decodedBlock->transactionMetaData(i)->to();
+        auto hash = block->transaction(i)->hash();
         BOOST_CHECK(decodedBlock->transactionHash(i) == hash);
         BOOST_CHECK(decodedBlock->transactionMetaData(i)->hash() == hash);
-        BOOST_CHECK(decodedBlock->transactionMetaData(i)->to() == to);
     }
-
     // exception test
     /*(*encodedData)[0] += 1;
     BOOST_CHECK_THROW(
