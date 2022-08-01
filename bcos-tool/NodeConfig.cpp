@@ -23,8 +23,16 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/FileUtility.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
+#include <json/forwards.h>
+#include <json/reader.h>
+#include <json/value.h>
+#include <util/tc_clientsocket.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -98,6 +106,26 @@ void NodeConfig::loadServiceConfig(boost::property_tree::ptree const& _pt)
 {
     loadGatewayServiceConfig(_pt);
     loadRpcServiceConfig(_pt);
+
+    /*
+    [service]
+        without_tars_framework = true
+        tars_proxy_file = tars_proxy.json
+     */
+
+    auto withoutTarsFramework = _pt.get<bool>("service.without_tars_framework", false);
+    m_withoutTarsFramework = withoutTarsFramework;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadServiceConfig")
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+
+    if (m_withoutTarsFramework)
+    {
+        // TODO: tars
+        std::string tarsPrxJsonFile =
+            _pt.get<std::string>("service.tars_proxy_file", "./tars_proxy.json");
+        loadTarsProxyConfig(tarsPrxJsonFile, true);
+    }
 }
 
 void NodeConfig::loadNodeServiceConfig(
@@ -113,6 +141,28 @@ void NodeConfig::loadNodeServiceConfig(
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The node name must be number or digit"));
     }
+
+    /*
+    [service]
+        without_tars_framework = true
+        tars_proxy_file = tars_proxy.json
+     */
+
+    // TODO: rename
+    auto withoutTarsFramework = _pt.get<bool>("service.without_tars_framework", false);
+    m_withoutTarsFramework = withoutTarsFramework;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadNodeServiceConfig")
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+
+    if (m_withoutTarsFramework)
+    {
+        // TODO: tars
+        std::string tarsPrxJsonFile =
+            _pt.get<std::string>("service.tars_proxy_file", "./tars_proxy.json");
+        loadTarsProxyConfig(tarsPrxJsonFile, true);
+    }
+
     m_nodeName = nodeName;
     m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
         getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), _require);
@@ -122,9 +172,125 @@ void NodeConfig::loadNodeServiceConfig(
         getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), _require);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
                          << LOG_KV("executorServiceName", m_executorServiceName);
 }
+
+void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyFile, bool)
+{
+    auto content = readContentsToString(boost::filesystem::path(_tarsProxyFile));
+    if (!content || content->empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "unable to read tars proxy config, tars proxy file =" + _tarsProxyFile));
+    }
+
+    loadTarsProxyConfig(*content);
+
+    NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig")
+                         << LOG_KV("tarsPrxFile", _tarsProxyFile)
+                         << LOG_KV("tarsPrxContent", *content);
+}
+
+void NodeConfig::loadTarsProxyConfig(const std::string& _tarsJson)
+{
+    /*
+    {
+        "front": [],
+        "gateway": [],
+        "rpc": [],
+        "scheduler": [],
+        "executor": [],
+        "txpool": []
+    }
+    */
+
+    Json::Value root;
+    Json::Reader reader;
+
+    try
+    {
+        if (!reader.parse(_tarsJson, root))
+        {
+            NodeConfig_LOG(ERROR) << LOG_BADGE("loadTarsProxyConfig")
+                                  << "unable to parse tars proxy json"
+                                  << LOG_KV("tarsJson", _tarsJson);
+
+            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                      "unable to parse tars proxy json, tarsJson: " + _tarsJson));
+        }
+
+        for (auto const& serviceName : root.getMemberNames())
+        {
+            for (Json::ArrayIndex index = 0; index < root[serviceName].size(); index++)
+            {
+                auto str = root[serviceName][index].asString();
+                // string to endpoint
+                tars::TC_Endpoint endpoint = bcostars::string2TarsEndPoint(str);
+                m_tarsSN2EndPoints[serviceName].push_back(endpoint);
+
+                NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig") << LOG_DESC("add element")
+                                     << LOG_KV("serviceName", serviceName)
+                                     << LOG_KV("endpoint", endpoint.toString());
+            }
+
+            NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig")
+                                 << LOG_KV("serviceName", serviceName)
+                                 << LOG_KV("endpoint size", m_tarsSN2EndPoints[serviceName].size());
+        }
+
+        NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig")
+                             << LOG_KV("service size", m_tarsSN2EndPoints.size());
+    }
+    catch (const std::exception& e)
+    {
+        NodeConfig_LOG(ERROR) << LOG_BADGE("loadTarsProxyConfig") << "parse tars proxy json failed"
+                              << LOG_KV("tarsJson", _tarsJson) << LOG_KV("exception", e.what());
+
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "parse tars proxy json failed, tarsJson: " + _tarsJson));
+    }
+}
+
+//
+void NodeConfig::getTarsClientProxyEndpoints(
+    const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endpoints)
+{
+    if (!m_withoutTarsFramework)
+    {
+        NodeConfig_LOG(TRACE) << LOG_BADGE("getTarsClientProxyEndpoints")
+                              << "not work with tars rpc"
+                              << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+        return;
+    }
+
+    _endpoints.clear();
+
+    auto it = m_tarsSN2EndPoints.find(boost::to_lower_copy(_clientPrx));
+    if (it != m_tarsSN2EndPoints.end())
+    {
+        _endpoints = it->second;
+
+        NodeConfig_LOG(INFO) << LOG_BADGE("getTarsClientProxyEndpoints")
+                             << LOG_DESC("find tars client proxy endpoints")
+                             << LOG_KV("serviceName", _clientPrx)
+                             << LOG_KV("endpoints size", _endpoints.size());
+    }
+
+    if (_endpoints.empty())
+    {
+        NodeConfig_LOG(WARNING) << LOG_BADGE("getTarsClientProxyEndpoints")
+                                << LOG_DESC("can not find tars client proxy endpoints")
+                                << LOG_KV("serviceName", _clientPrx);
+
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                ("can not find tars client proxy endpoints, serviceName : " + _clientPrx)));
+    }
+}
+
 void NodeConfig::checkService(std::string const& _serviceType, std::string const& _serviceName)
 {
     if (_serviceName.size() == 0)

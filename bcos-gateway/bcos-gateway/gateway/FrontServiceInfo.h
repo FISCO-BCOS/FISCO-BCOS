@@ -18,6 +18,7 @@
  * @date 2021-05-13
  */
 #pragma once
+#include "bcos-tars-protocol/Common.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/protocol/ProtocolInfo.h>
@@ -47,10 +48,9 @@ public:
         {
             return false;
         }
-        std::vector<tars::EndpointInfo> activeEndPoints;
-        std::vector<tars::EndpointInfo> nactiveEndPoints;
-        m_frontServicePrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-        return (activeEndPoints.size() == 0);
+
+        return !bcostars::checkConnection(
+            "FrontService", "unreachable", m_frontServicePrx, nullptr, false);
     }
 
     std::string const& nodeID() const { return m_nodeID; }

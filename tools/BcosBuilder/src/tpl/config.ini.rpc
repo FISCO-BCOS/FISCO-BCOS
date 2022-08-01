@@ -10,7 +10,7 @@
     ;gateway=chain0
 
 [chain]
-    ; use SM crypto or not, should nerver be changed
+    ; use SM crypto or not, should never be changed
     sm_crypto=false
     chain_id=chain0
 

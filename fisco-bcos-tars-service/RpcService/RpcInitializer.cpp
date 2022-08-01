@@ -20,6 +20,8 @@
  */
 #include "RpcInitializer.h"
 #include "../Common/TarsUtils.h"
+#include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/BoostLog.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/election/FailOverTypeDef.h>
@@ -93,16 +95,26 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     protocolInitializer->init(_nodeConfig);
     m_keyFactory = protocolInitializer->keyFactory();
 
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+    auto gatewayServiceName = _nodeConfig->gatewayServiceName();
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
+
+    // TODO: tars
     // get the gateway client
-    auto gatewayPrx = tars::Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
-        _nodeConfig->gatewayServiceName());
+    auto gatewayPrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
+        withoutTarsFramework, gatewayServiceName, endPoints);
+
     auto gateway = std::make_shared<GatewayServiceClient>(
-        gatewayPrx, _nodeConfig->gatewayServiceName(), protocolInitializer->keyFactory());
+        gatewayPrx, gatewayServiceName, protocolInitializer->keyFactory());
 
     auto factory = std::make_shared<bcos::rpc::RpcFactory>(_nodeConfig->chainId(), gateway,
         protocolInitializer->keyFactory(), protocolInitializer->dataEncryption());
     factory->setNodeConfig(_nodeConfig);
-    RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success");
+    RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success")
+                         << LOG_KV("withoutTarsFramework", withoutTarsFramework)
+                         << LOG_KV("gatewayServiceName", gatewayServiceName);
     return factory;
 }
 

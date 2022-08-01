@@ -38,27 +38,36 @@ enum ServiceType : int32_t
     RPC = 7,
     TXPOOL = 8,
 };
+const std::string NATIVE_NAME = "Native";
 const std::string NATIVE_SERVANT_NAME = "NativeNodeObj";
 
+const std::string LEDGER_NAME = "Ledger";
 const std::string LEDGER_SERVANT_NAME = "LedgerServiceObj";
 
+const std::string EXECUTOR_NAME = "Executor";
 const std::string EXECUTOR_SERVANT_NAME = "ExecutorServiceObj";
 const std::string EXECUTOR_SERVICE_NAME = "ExecutorService";
 
+const std::string SCHEDULER_NAME = "Scheduler";
 const std::string SCHEDULER_SERVANT_NAME = "SchedulerServiceObj";
 const std::string SCHEDULER_SERVICE_NAME = "SchedulerService";
 
+const std::string FRONT_NAME = "Front";
 const std::string FRONT_SERVANT_NAME = "FrontServiceObj";
 const std::string FRONT_SERVICE_NAME = "FrontService";
 
+const std::string GATEWAY_NAME = "Gateway";
 const std::string GATEWAY_SERVANT_NAME = "GatewayServiceObj";
 
+const std::string TXPOOL_NAME = "TxPool";
 const std::string TXPOOL_SERVANT_NAME = "TxPoolServiceObj";
 const std::string TXPOOL_SERVICE_NAME = "TxPoolService";
 
+const std::string CONSENSUS_NAME = "PBFT";
 const std::string CONSENSUS_SERVANT_NAME = "PBFTServiceObj";
 const std::string CONSENSUS_SERVICE_NAME = "PBFTService";
 
+const std::string RPC_NAME = "Rpc";
 const std::string RPC_SERVANT_NAME = "RpcServiceObj";
 
 const std::string UNKNOWN_SERVANT = "Unknown";
@@ -90,6 +99,35 @@ inline std::string getServiceObjByType(ServiceType _type)
         return RPC_SERVANT_NAME;
     case TXPOOL:
         return TXPOOL_SERVANT_NAME;
+    default:
+        // undefined Comparator
+        break;
+    }
+    return UNKNOWN_SERVANT;
+}
+
+inline std::string getServiceNameByType(ServiceType _type)
+{
+    switch (_type)
+    {
+    case NATIVE:
+        return NATIVE_NAME;
+    case EXECUTOR:
+        return EXECUTOR_NAME;
+    case LEDGER:
+        return LEDGER_NAME;
+    case SCHEDULER:
+        return SCHEDULER_NAME;
+    case FRONT:
+        return FRONT_NAME;
+    case CONSENSUS:
+        return CONSENSUS_NAME;
+    case GATEWAY:
+        return GATEWAY_NAME;
+    case RPC:
+        return RPC_SERVANT_NAME;
+    case TXPOOL:
+        return TXPOOL_NAME;
     default:
         // undefined Comparator
         break;

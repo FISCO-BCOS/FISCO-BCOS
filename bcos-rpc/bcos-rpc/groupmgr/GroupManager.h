@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "NodeService.h"
+#include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Timer.h>
 namespace bcos
 {
@@ -30,10 +31,11 @@ class GroupManager : public std::enable_shared_from_this<GroupManager>
 public:
     using Ptr = std::shared_ptr<GroupManager>;
     GroupManager(std::string _rpcServiceName, std::string const& _chainID,
-        NodeServiceFactory::Ptr _nodeServiceFactory)
+        NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
       : m_rpcServiceName(_rpcServiceName),
         m_chainID(_chainID),
-        m_nodeServiceFactory(_nodeServiceFactory)
+        m_nodeServiceFactory(_nodeServiceFactory),
+        m_nodeConfig(_nodeConfig)
     {}
     virtual ~GroupManager() {}
     virtual bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
@@ -186,6 +188,8 @@ protected:
     std::string m_rpcServiceName;
     std::string m_chainID;
     NodeServiceFactory::Ptr m_nodeServiceFactory;
+
+    bcos::tool::NodeConfig::Ptr m_nodeConfig;
 
     // map between groupID to groupInfo
     std::map<std::string, bcos::group::GroupInfo::Ptr, std::less<>> m_groupInfos;

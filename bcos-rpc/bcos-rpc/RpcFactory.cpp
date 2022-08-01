@@ -409,11 +409,12 @@ GroupManager::Ptr RpcFactory::buildGroupManager(
     if (!_entryPoint)
     {
         RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-        return std::make_shared<TarsGroupManager>(_rpcServiceName, m_chainID, nodeServiceFactory);
+        return std::make_shared<TarsGroupManager>(
+            _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
     }
     RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
-    auto groupManager =
-        std::make_shared<GroupManager>(_rpcServiceName, m_chainID, nodeServiceFactory);
+    auto groupManager = std::make_shared<GroupManager>(
+        _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
     auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     _entryPoint->addMemberChangeNotificationHandler(
         [groupManager, groupInfoCodec](

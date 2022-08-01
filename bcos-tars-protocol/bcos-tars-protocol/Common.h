@@ -18,6 +18,7 @@
  * @date 2021-04-20
  */
 
+#include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -364,16 +365,18 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 }
 
 template <typename T>
-bool checkConnection(std::string const& _module, std::string const& _func, T prx,
+bool checkConnection(std::string const& _module, std::string const& _func, const T& prx,
     std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
 {
-    std::vector<tars::EndpointInfo> activeEndPoints;
-    std::vector<tars::EndpointInfo> nactiveEndPoints;
-    prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-    if (activeEndPoints.size() > 0)
+    auto cb = prx->tars_get_push_callback();
+    assert(cb);
+    auto* tarsServantProxyCallback = (TarsServantProxyCallback*)cb.get();
+
+    if (tarsServantProxyCallback->available())
     {
         return true;
     }
+
     if (_errorCallback && _callsErrorCallback)
     {
         std::string errorMessage =
@@ -381,6 +384,14 @@ bool checkConnection(std::string const& _module, std::string const& _func, T prx
         _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
     }
     return false;
+}
+
+template <typename T>
+auto tarsProxyAvailableEndPoints(const T& prx)
+{
+    auto cb = prx->tars_get_push_callback();
+    assert(cb);
+    return ((TarsServantProxyCallback*)cb.get())->activeEndpoints();
 }
 
 inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)
