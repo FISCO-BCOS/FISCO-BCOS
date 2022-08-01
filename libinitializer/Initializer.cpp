@@ -33,6 +33,8 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-scheduler/src/TarsCbExecutorManager.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -183,8 +185,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
     }
-    auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
-        m_nodeConfig->executorServiceName());
+    auto executorManager = std::make_shared<bcos::scheduler::TarsCbExecutorManager>(
+        m_nodeConfig->executorServiceName(), m_nodeConfig);
 
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();

@@ -59,11 +59,6 @@ public:
 
     void waitForExecutorConnection();
 
-    void setRemoteExecutorChangeHandler(std::function<void()> handler)
-    {
-        m_onRemoteExecutorChange = std::move(handler);
-    }
-
     void executeWorker() override;
 
     void refresh(bool needNotifyChange = true);
@@ -85,7 +80,6 @@ public:
     }
 
 private:
-    std::function<void()> m_onRemoteExecutorChange;
     std::string m_executorServiceName;
 
     boost::condition_variable m_signalled;

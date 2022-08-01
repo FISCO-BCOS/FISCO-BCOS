@@ -202,7 +202,7 @@ std::pair<bool, std::string> SchedulerManager::checkAndInit()
 {
     initSchedulerIfNotExist();
 
-    if (m_remoteExecutorManager->empty())
+    if (m_executorManager->size() == 0)
     {
         return {false, "Waiting to connect some executors..."};
     }
