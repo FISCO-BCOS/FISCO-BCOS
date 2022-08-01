@@ -65,7 +65,7 @@ private:
 
     auto impl_getStatus()
     {
-        LEDGER_LOG(INFO) << "GetStatus request";
+        LEDGER_LOG(INFO) << "getStatus request";
         constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
@@ -161,6 +161,8 @@ private:
     template <bcos::concepts::ledger::DataFlag Flag>
     void getBlockData(std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
+        LEDGER_LOG(DEBUG) << "Get block data: " << typeid(Flag).name();
+
         if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
         {
             auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);

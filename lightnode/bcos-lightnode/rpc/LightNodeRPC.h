@@ -170,7 +170,8 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block number request";
 
-        auto count = localLedger().getStatus();
+        // auto count = localLedger().getStatus();
+        auto count = remoteLedger().getStatus();
 
         Json::Value resp = count.blockNumber;
 
