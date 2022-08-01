@@ -51,6 +51,7 @@ struct TestRocksDBStorageFixture
 {
     TestRocksDBStorageFixture()
     {
+        boost::log::core::get()->set_logging_enabled(false);
         rocksdb::DB* db;
         rocksdb::Options options;
         // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
@@ -207,6 +208,7 @@ struct TestRocksDBStorageFixture
         {
             boost::filesystem::remove_all(path);
         }
+        boost::log::core::get()->set_logging_enabled(true);
     }
 
     std::string path = "./unittestdb";
