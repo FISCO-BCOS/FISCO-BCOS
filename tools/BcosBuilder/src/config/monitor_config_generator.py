@@ -11,10 +11,10 @@ class MonitorConfigGenerator:
     the common Monitor config generator
     """
 
-    def __init__(self, config, node_type):
+    def __init__(self, config, node_type, output_dir):
         self.config = config
         self.node_type = node_type
-        self.root_dir = "./generated"
+        self.root_dir = output_dir
         self.monitor_start_scirpts_file = "start_monitor.sh"
         self.monitor_stop_scirpts_file = "stop_monitor.sh"
         self.monitor_tpl_config = ConfigInfo.monitor_config_tpl_path
@@ -43,11 +43,11 @@ class MonitorConfigGenerator:
         generate mtail config for all-node
         """
         for group_config in self.config.group_list.values():
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate mtail config for group %s" % group_config.group_id)
             if self.generate_all_mtail_config(group_config) is False:
                 return False
-            utilities.print_badage(
+            utilities.print_badge(
                 "generate mtail config for group %s success" % group_config.group_id)
         return True
 
@@ -100,7 +100,7 @@ class MonitorConfigGenerator:
         """
         generate graphna&prometheus config for all-node 
         """
-        utilities.print_badage(" generate graphna&prometheus config ")
+        utilities.print_badge(" generate graphna&prometheus config ")
         targets = ""
         for group_config in self.config.group_list.values():
             for node_config in group_config.node_list:
@@ -120,7 +120,7 @@ class MonitorConfigGenerator:
                             targets += ',"' + ip + ':' + node_config.monitor_listen_port + '"'
         if self.__generate_and_store_monitor_config(targets) is False:
             return False
-        utilities.print_badage(
+        utilities.print_badge(
             "generate graphna&prometheus config success")
         return True
 

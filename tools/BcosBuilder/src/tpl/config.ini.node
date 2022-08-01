@@ -1,13 +1,17 @@
 [chain]
-    ; use SM crypto or not, should nerver be changed
+    ; use SM crypto or not, should never be changed
     sm_crypto=false
-    ; the group id, should nerver be changed
+    ; the group id, should never be changed
     group_id=group0
-    ; the chain id, should nerver be changed
+    ; the chain id, should never be changed
     chain_id=chain0
 [service]
     rpc=chain0
     gateway=chain0
+    
+    ; run without tars framework
+    ; without_tars_framework = true
+    ; tars_proxy_file = conf/tars_proxy.json
 
 [security]
     private_key_path=conf/node.pem

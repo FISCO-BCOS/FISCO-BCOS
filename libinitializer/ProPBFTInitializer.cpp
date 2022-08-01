@@ -19,12 +19,16 @@
  * @date 2021-06-10
  */
 #include "ProPBFTInitializer.h"
+#include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/Exceptions.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-pbft/pbft/PBFTImpl.h>
 #include <bcos-sealer/Sealer.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <boost/throw_exception.hpp>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -42,17 +46,23 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
         _storage, _frontService)
 {
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+
     // init rpc client
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
-    auto rpcServicePrx =
-        tars::Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
+    // TODO: tars
+    auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
+        withoutTarsFramework, rpcServiceName, endPoints);
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
-    // init gateway client
     auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
-    auto gatewayServicePrx =
-        tars::Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
-            gatewayServiceName);
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
+    // TODO: tars
+    auto gatewayServicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
+        withoutTarsFramework, gatewayServiceName, endPoints);
     m_gateway =
         std::make_shared<bcostars::GatewayServiceClient>(gatewayServicePrx, gatewayServiceName);
 }

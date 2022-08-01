@@ -66,7 +66,7 @@ class TarsService:
 
     def get_node_auto_port(self, node_name):
         # get the auto_port
-        utilities.log_debug("get the un-occuppied port")
+        utilities.log_debug("get the un-occupied port")
         params = {"node_name": node_name, "ticket": self.tars_token}
         response = requests.get(self.get_port_url, params=params)
         if TarsService.parse_response("get the un-occupied port", response) is False:

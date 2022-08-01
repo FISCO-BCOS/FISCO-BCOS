@@ -36,7 +36,7 @@ class BinaryController:
                 self.cdn_link_header, self.mtail_binary_name)
 
     def download_all_binary(self):
-        utilities.print_badage(
+        utilities.print_badge(
             "Download binary, use_cdn: %s, version: %s" % (self.use_cdn, self.version))
         for binary in self.binary_list:
             download_url = self.get_binary_download_url(binary)

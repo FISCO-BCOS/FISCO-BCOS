@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
+import json
 import sys
 import os
 
@@ -8,19 +9,27 @@ from common.utilities import ServiceInfo
 
 
 class TarsConfig:
-    def __init__(self, config):
+    def __init__(self, config, requireUrl):
         self.config = config
         section = "tars"
-        self.tars_url = utilities.get_value(
-            self.config, section, "tars_url", None, True)
-        self.tars_token = utilities.get_value(
-            self.config, section, "tars_token", None, True)
         self.tars_pkg_dir = utilities.get_value(
             self.config, section, "tars_pkg_dir", "binary", False)
+        self.tars_pkg_dir.strip()
+
+        if not requireUrl:
+            utilities.log_info("* Don't load tars token and url")
+            return
+
+        self.tars_url = utilities.get_value(
+            self.config, section, "tars_url", None, True)
+        self.tars_url.strip()
+        self.tars_token = utilities.get_value(
+            self.config, section, "tars_token", None, True)
+        self.tars_token.strip()
+
         if len(self.tars_token) == 0:
             utilities.log_error("Must config 'tars.tars_token'")
             sys.exit(-1)
-
 
 class GenesisConfig:
     def __init__(self, config):
@@ -97,6 +106,13 @@ class ServiceInfoConfig:
         # peers info
         self.peers = utilities.get_item_value(
             self.config, "peers", [], False, self.desc)
+        # tars listen ip
+        self.tars_listen_ip = utilities.get_item_value(
+            self.config, "tars_listen_ip", ServiceInfo.default_listen_ip, False, self.desc)
+        # tars listen port
+        self.tars_listen_port = utilities.get_item_value(
+            self.config, "tars_listen_port", 40400, False, self.desc)
+
 
 
 class NodeServiceConfig:
@@ -131,7 +147,10 @@ class NodeConfig:
             self.config, "cipher_data_key", "", False, self.desc)
         self.deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True, self.desc)
-
+        self.tars_listen_ip = utilities.get_item_value(
+            self.config, "tars_listen_ip", "0.0.0.0", False, self.desc)
+        self.tars_listen_port = utilities.get_item_value(
+            self.config, "tars_listen_port", 40400, False, self.desc)
         self.monitor_listen_port = utilities.get_item_value(
             self.config, "monitor_listen_port", None, False, self.desc)
         self.monitor_log_path = utilities.get_item_value(
@@ -213,7 +232,7 @@ class MaxNodeConfig(NodeConfig):
 
 
 class GroupConfig:
-    def __init__(self, config, chain_id):
+    def __init__(self, config, chain_id, output_dir):
         self.config = config
         self.chain_id = chain_id
         self.desc = "[[group]]."
@@ -222,7 +241,7 @@ class GroupConfig:
         # check the groupID
         utilities.check_service_name("group_id", self.group_id)
         default_genesis_config_path = os.path.join(
-            "generated/", self.chain_id, self.group_id, "config.genesis")
+            output_dir + "/", self.chain_id, self.group_id, "config.genesis")
         self.genesis_config_path = utilities.get_item_value(
             self.config, "genesis_config_path", default_genesis_config_path, False, self.desc)
         # self.vm_type = utilities.get_item_value(
@@ -241,14 +260,15 @@ class GroupConfig:
 
 
 class ChainConfig:
-    def __init__(self, config, node_type, should_load_node_config):
+    def __init__(self, config, node_type, output_dir, should_load_node_config, require_tars_url):
         self.config = config
+        self.output_dir = output_dir
         self.node_type = node_type
         self.enforce_failover = False
         if self.node_type == "max":
             self.enforce_failover = True
         self.default_failover_url = "127.0.0.1:2379"
-        self.tars_config = TarsConfig(config)
+        self.tars_config = TarsConfig(config, require_tars_url)
         self.desc = "[chain]."
         self.__load_chain_config()
         # load the group list
@@ -271,7 +291,7 @@ class ChainConfig:
         group_list_config = utilities.get_item_value(
             self.config, "group", [], False, self.desc)
         for group in group_list_config:
-            group_config = GroupConfig(group, self.chain_id)
+            group_config = GroupConfig(group, self.chain_id, self.output_dir)
             self.group_list[group_config.group_id] = group_config
 
     def __load_chain_config(self):
@@ -282,12 +302,13 @@ class ChainConfig:
             self.config, "chain", "chain_id", "chain", False)
         # check the chain_id
         utilities.check_service_name("chain_id", self.chain_id)
-        default_rpc_ca_cert = os.path.join(
-            "./generated/rpc", self.chain_id, "ca")
+        default_rpc_ca_cert = os.path.join(self.output_dir, "rpc", self.chain_id, "ca")
+
         self.rpc_ca_cert_path = utilities.get_value(
             self.config, "chain", "rpc_ca_cert_path", default_rpc_ca_cert, False)
-        default_gateway_ca_cert = os.path.join(
-            "./generated/gateway", self.chain_id, "ca")
+
+        default_gateway_ca_cert = os.path.join(self.output_dir, "gateway", self.chain_id, "ca")
+        
         self.gateway_ca_cert_path = utilities.get_value(
             self.config, "chain", "gateway_ca_cert_path", default_gateway_ca_cert, False)
         self.rpc_sm_ssl = utilities.get_value(

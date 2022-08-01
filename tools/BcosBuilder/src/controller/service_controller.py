@@ -12,13 +12,14 @@ class ServiceController:
     common controller for rpc/gateway
     """
 
-    def __init__(self, config, service_type, node_type):
+    def __init__(self, config, service_type, node_type, output_dir):
         self.config = config
         self.service_type = service_type
         self.service_list = self.config.rpc_service_list
         self.node_type = node_type
+        self.output_dir = output_dir
         self.config_generator = ServiceConfigGenerator(
-            self.config, self.service_type, self.node_type)
+            self.config, self.service_type, self.node_type, self.output_dir)
         if self.service_type == ServiceInfo.gateway_service_type:
             self.service_list = self.config.gateway_service_list
 
@@ -69,8 +70,8 @@ class ServiceController:
                 utilities.log_info("upgrade service %s success" % service.name)
         return True
 
-    def gen_all_service_config(self):
-        if self.config_generator.generate_all_config() is False:
+    def gen_all_service_config(self, is_build_opr):
+        if self.config_generator.generate_all_config(is_build_opr) is False:
             utilities.log_error(
                 "gen configuration for %s service failed" % self.service_type)
             return False

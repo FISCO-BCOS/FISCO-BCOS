@@ -88,22 +88,31 @@ void ExecutorServiceApp::createAndInitExecutor()
     // for stat the nodeVersion
     bcos::initializer::showNodeVersionMetric();
 
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+
     // create txpool client
     auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
-                               << LOG_KV("txpoolServiceName", txpoolServiceName);
-    auto txpoolServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
-            txpoolServiceName);
+                               << LOG_KV("txpoolServiceName", txpoolServiceName)
+                               << LOG_KV("withoutTarsFramework", withoutTarsFramework);
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
+
+    // TODO: tars
+    auto txpoolServicePrx = createServantProxy<bcostars::TxPoolServicePrx>(
+        withoutTarsFramework, txpoolServiceName, endPoints);
+
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
     auto schedulerServiceName = m_nodeConfig->schedulerServiceName();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create SchedulerServiceClient")
                                << LOG_KV("schedulerServiceName", schedulerServiceName);
-    auto schedulerPrx =
-        Application::getCommunicator()->stringToProxy<bcostars::SchedulerServicePrx>(
-            schedulerServiceName);
+
+    // TODO: tars
+    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(schedulerServiceName);
+
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(
         schedulerPrx, m_protocolInitializer->cryptoSuite());
 
@@ -128,9 +137,10 @@ void ExecutorServiceApp::createAndInitExecutor()
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
-    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger, m_txpool, cache, storage,
-        executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
+    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
+        m_txpool, cache, storage, executionMessageFactory,
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+        m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
 
     m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
 

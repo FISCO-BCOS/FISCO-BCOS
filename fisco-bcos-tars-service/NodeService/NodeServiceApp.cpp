@@ -25,6 +25,7 @@
 #include "../PBFTService/PBFTServiceServer.h"
 #include "../SchedulerService/SchedulerServiceServer.h"
 #include "../TxPoolService/TxPoolServiceServer.h"
+#include "bcos-framework/protocol/ServiceDesc.h"
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
@@ -84,8 +85,17 @@ void NodeServiceApp::initNodeService()
     m_nodeInitializer->initMicroServiceNode(
         m_nodeArchType, m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath, getLogPath());
     auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
-    auto rpcServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+
+    auto withoutTarsFramework = m_nodeInitializer->nodeConfig()->withoutTarsFramework();
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeInitializer->nodeConfig()->getTarsClientProxyEndpoints(
+        bcos::protocol::RPC_NAME, endPoints);
+
+    // TODO: tars
+    auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
+        withoutTarsFramework, rpcServiceName, endPoints);
+
     auto rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
     m_nodeInitializer->initNotificationHandlers(rpc);
 

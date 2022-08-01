@@ -32,7 +32,6 @@
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
-#include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
