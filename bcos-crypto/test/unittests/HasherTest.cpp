@@ -23,6 +23,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
+#include <boost/test/unit_test_suite.hpp>
 #include <iterator>
 #include <string>
 #include <type_traits>
@@ -90,6 +91,22 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     auto hash2 = final(hasher2);
 
     BOOST_CHECK_EQUAL(hash, hash2);
+}
+
+BOOST_AUTO_TEST_CASE(dynamicRange)
+{
+    bcos::h256 hash;
+
+    int a = 10;
+    openssl::OpenSSL_SHA3_256_Hasher hasher;
+    hasher.update(a);
+    BOOST_CHECK_NO_THROW(hasher.final(hash));
+
+    std::vector<char> hashVec;
+    hasher.update(a);
+    BOOST_CHECK_NO_THROW(hasher.final(hashVec));
+
+    auto b = bcos::crypto::trivial::DynamicRange<std::vector<char>>;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

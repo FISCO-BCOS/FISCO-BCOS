@@ -1,12 +1,15 @@
 #pragma once
 
+#include "../Log.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <memory>
+
 
 namespace bcos::transaction_pool
 {
@@ -27,6 +30,8 @@ private:
     void impl_submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
+        TRANSACTIONPOOL_LOG(INFO) << "Submit transaction request";
+
         auto transactionData = std::make_shared<bcos::bytes>();
         bcos::concepts::serialize::encode(transaction, *transactionData);
 
@@ -39,7 +44,8 @@ private:
                     auto receiptImpl =
                         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
                             transactionSubmitResult->transactionReceipt());
-                    receipt = receiptImpl->inner();
+                    receipt =
+                        std::move(const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
                 }
 
                 promise.set_value(std::move(error));

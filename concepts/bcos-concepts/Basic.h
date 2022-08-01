@@ -19,14 +19,6 @@ concept PointerLike = requires(Pointer p)
     p.operator->();
 };
 
-template <class Range>
-concept DynamicRange = requires(Range range, size_t newSize)
-{
-    RANGES::range<Range>;
-    range.resize(newSize);
-    range.reserve(newSize);
-};
-
 template <class Input>
 auto& getRef(Input& input)
 {
@@ -40,15 +32,24 @@ auto& getRef(Input& input)
     }
 }
 
+template <class Range>
+concept DynamicRange = requires(Range range, size_t newSize)
+{
+    RANGES::range<Range>;
+    range.resize(newSize);
+    range.reserve(newSize);
+};
+
 void resizeTo(RANGES::range auto& out, size_t size)
 {
     if (RANGES::size(out) < size)
     {
-        if constexpr (!bcos::concepts::DynamicRange<std::remove_cvref_t<decltype(out)>>)
+        if constexpr (bcos::concepts::DynamicRange<std::remove_cvref_t<decltype(out)>>)
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
+            out.resize(size);
+            return;
         }
-        out.resize(size);
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
     }
 }
 

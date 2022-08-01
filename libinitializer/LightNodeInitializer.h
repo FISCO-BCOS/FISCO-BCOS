@@ -9,10 +9,15 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-lightnode/Log.h>
 #include <bcos-lightnode/ledger/LedgerImpl.h>
+#include <bcos-lightnode/scheduler/SchedulerImpl.h>
 #include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
+#include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
+#include <boost/algorithm/hex.hpp>
+#include <iterator>
 
 namespace bcos::initializer {
 
@@ -96,18 +101,21 @@ private:
 
 class LightNodeInitializer {
 public:
-  void
-  initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
-                   std::shared_ptr<AnyLedger> anyLedger,
-                   std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
-                       std::shared_ptr<bcos::txpool::TxPoolInterface>>>
-                       transactionPool) {
+  void initLedgerServer(
+      std::shared_ptr<bcos::front::FrontService> front,
+      std::shared_ptr<AnyLedger> anyLedger,
+      std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
+          std::shared_ptr<bcos::txpool::TxPoolInterface>>>
+          transactionPool,
+      std::shared_ptr<
+          bcos::scheduler::SchedulerWrapperImpl<bcos::scheduler::SchedulerImpl>>
+          scheduler) {
     front->registerModuleMessageDispatcher(
         bcos::protocol::LIGHTNODE_GETBLOCK,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
-          BCOS_LOG(INFO) << "LightNode get block id:" << id
-                         << " nodeID: " << nodeID;
+          LIGHTNODE_LOG(INFO) << "LightNode get block id:" << id;
+
           bcostars::RequestBlock request;
           bcos::concepts::serialize::decode(data, request);
 
@@ -199,6 +207,13 @@ public:
           bcostars::RequestSendTransaction request;
           bcos::concepts::serialize::decode(data, request);
 
+          std::string transactionHash;
+          boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
+                                      request.transaction.dataHash.end(),
+                                      std::back_inserter(transactionHash));
+
+          LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
+
           bcostars::ResponseSendTransaction response;
           transactionPool->submitTransaction(std::move(request.transaction),
                                              response.receipt);
@@ -211,6 +226,32 @@ public:
                 if (_error) {
                 }
               });
+        });
+    front->registerModuleMessageDispatcher(
+        bcos::protocol::LIGHTNODE_CALL,
+        [scheduler, front](bcos::crypto::NodeIDPtr nodeID,
+                           const std::string &id, bytesConstRef data) {
+          bcostars::RequestSendTransaction request;
+          bcos::concepts::serialize::decode(data, request);
+
+          std::string transactionHash;
+          boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
+                                      request.transaction.dataHash.end(),
+                                      std::back_inserter(transactionHash));
+
+          LIGHTNODE_LOG(INFO) << "Call: " << transactionHash;
+
+          bcostars::ResponseSendTransaction response;
+          scheduler->call(request.transaction, response.receipt);
+
+          bcos::bytes responseBuffer;
+          bcos::concepts::serialize::encode(response, responseBuffer);
+          front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_CALL, nodeID,
+                                   bcos::ref(responseBuffer),
+                                   [](Error::Ptr _error) {
+                                     if (_error) {
+                                     }
+                                   });
         });
   }
 };

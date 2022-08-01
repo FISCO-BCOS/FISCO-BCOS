@@ -23,8 +23,7 @@ public:
         int moduleID, crypto::NodeIDPtr nodeID, bcos::bytesConstRef buffer)
     {
         std::promise<std::tuple<bcos::Error::Ptr, bcos::bytes>> promise;
-        m_front->asyncSendMessageByNodeID(bcos::protocol::LIGHTNODE_GETBLOCK, std::move(nodeID),
-            buffer, 0,
+        m_front->asyncSendMessageByNodeID(moduleID, std::move(nodeID), buffer, 0,
             [&promise](Error::Ptr _error, bcos::crypto::NodeIDPtr, bytesConstRef _data,
                 const std::string&, front::ResponseFunc) {
                 promise.set_value(

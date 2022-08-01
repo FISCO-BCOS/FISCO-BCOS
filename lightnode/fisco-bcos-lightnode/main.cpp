@@ -153,6 +153,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             Json::Value iniConfig;
             iniConfig["isWasm"] = nodeConfig->isWasm();
             iniConfig["smCryptoType"] = nodeConfig->smCryptoType();
+            iniConfig["chainID"] = nodeConfig->chainId();
             std::string iniStr = fastWriter.write(iniConfig);
 
             node0["iniConfig"] = iniStr;

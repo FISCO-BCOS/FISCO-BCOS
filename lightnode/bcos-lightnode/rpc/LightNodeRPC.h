@@ -2,6 +2,7 @@
 
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
+#include "../Log.h"
 #include "Converter.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
@@ -41,8 +42,26 @@ public:
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _to,
         [[maybe_unused]] std::string_view _data, RespFunc _respFunc) override
     {
-        Json::Value value;
-        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+        auto binData = decodeData(_data);
+        bcostars::Transaction transaction;
+        bcos::concepts::serialize::decode(binData, transaction);
+
+        bcos::bytes txHash;
+        bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
+        std::string txHashStr;
+        txHashStr.reserve(txHash.size() * 2);
+        boost::algorithm::hex_lower(txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
+
+        LIGHTNODE_LOG(INFO) << "RPC call request: " << txHashStr;
+
+        bcostars::TransactionReceipt receipt;
+        remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
+
+        Json::Value resp;
+        toJsonResp<Hasher>(receipt, txHashStr, resp);
+
+        LIGHTNODE_LOG(INFO) << "RPC send transaction finished";
+        _respFunc(nullptr, resp);
     }
 
     void sendTransaction([[maybe_unused]] std::string_view _groupID,
@@ -59,12 +78,15 @@ public:
         txHashStr.reserve(txHash.size() * 2);
         boost::algorithm::hex_lower(txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
 
+        LIGHTNODE_LOG(INFO) << "RPC send transaction request: " << txHashStr;
+
         bcostars::TransactionReceipt receipt;
         remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
 
         Json::Value resp;
         toJsonResp<Hasher>(receipt, txHashStr, resp);
 
+        LIGHTNODE_LOG(INFO) << "RPC send transaction finished";
         _respFunc(nullptr, resp);
     }
 
@@ -72,6 +94,8 @@ public:
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _txHash,
         [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
+        LIGHTNODE_LOG(INFO) << "RPC get transaction request";
+
         std::array<bcos::h256, 1> hashes{bcos::h256{_txHash, bcos::h256::FromHex}};
         std::vector<bcostars::Transaction> transactions;
         remoteLedger().getTransactionsOrReceipts(hashes, transactions);
@@ -79,6 +103,7 @@ public:
         Json::Value resp;
         toJsonResp<Hasher>(transactions[0], resp);
 
+        LIGHTNODE_LOG(INFO) << "RPC get transaction finished";
         _respFunc(nullptr, resp);
     }
 
@@ -86,6 +111,8 @@ public:
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _txHash,
         [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
+        LIGHTNODE_LOG(INFO) << "RPC get receipt request";
+
         std::array<bcos::h256, 1> hashes{bcos::h256{_txHash, bcos::h256::FromHex}};
         std::vector<bcostars::TransactionReceipt> receipts;
         remoteLedger().getTransactionsOrReceipts(hashes, receipts);
@@ -109,6 +136,8 @@ public:
         [[maybe_unused]] std::string_view _nodeName, int64_t _blockNumber, bool _onlyHeader,
         bool _onlyTxHash, RespFunc _respFunc) override
     {
+        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber;
+
         bcostars::Block block;
         remoteLedger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber, block);
 
@@ -128,9 +157,13 @@ public:
     void getBlockNumber(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override
     {
+        LIGHTNODE_LOG(INFO) << "RPC get block number request";
+
         auto count = localLedger().getStatus();
 
         Json::Value resp = count.blockNumber;
+
+        LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << count.blockNumber;
         _respFunc(nullptr, resp);
     }
 
@@ -231,12 +264,16 @@ public:
     void getGroupNodeInfo(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override
     {
+        LIGHTNODE_LOG(INFO) << "RPC get group node info request";
+
         Json::Value value;
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
     void getGroupBlockNumber(RespFunc _respFunc) override
     {
+        LIGHTNODE_LOG(INFO) << "RPC get group block number request";
+
         Json::Value value;
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
