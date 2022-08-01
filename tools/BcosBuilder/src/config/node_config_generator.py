@@ -11,8 +11,6 @@ import os
 import sys
 
 from common.utilities import execute_command_and_getoutput
-from common.utilities import ServiceInfo
-
 
 class NodeConfigGenerator:
     """
@@ -133,7 +131,7 @@ class NodeConfigGenerator:
         """
         service_section = "service"
         ini_config[service_section]["node_name"] = node_name
-        ini_config["service"]['without_tars_framework'] =  "true" if is_build_opr else "false"
+        ini_config["service"]['without_tars_framework'] = "true" if is_build_opr else "false"
         ini_config["service"]['tars_proxy_file'] = 'conf/tars_proxy.json'
         ini_config[service_section]["rpc"] = self.config.chain_id + \
             "." + node_config.agency_config.rpc_service_name
@@ -264,7 +262,7 @@ class NodeConfigGenerator:
             return True
         return False
 
-    def generate_genesis_config(self, group_config, must_genesis_exists, is_build_opr):
+    def generate_genesis_config(self, group_config, must_genesis_exists, is_build_opr = False):
         if self.__genesis_config_generated(group_config):
             config_content = configparser.ConfigParser(
                 comment_prefixes='/', allow_no_value=True)
@@ -381,31 +379,31 @@ class NodeConfigGenerator:
             content = {}
         
         if "txpool" in content:
-           content["txpool"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port))
+            content["txpool"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port))
         else:
             content["txpool"] = []
             content["txpool"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port))
         
         if "scheduler" in content:
-           content["scheduler"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 1))
+            content["scheduler"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 1))
         else:
             content["scheduler"] = []
             content["scheduler"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 1))
         
         if "pbft" in content:
-           content["pbft"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2))
+            content["pbft"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2))
         else:
             content["pbft"] = []
             content["pbft"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2))
         
         if "ledger" in content:
-           content["ledger"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3))
+            content["ledger"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3))
         else:
             content["ledger"] = []
             content["ledger"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3))
         
         if "front" in content:
-           content["front"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4))
+            content["front"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4))
         else:
             content["front"] = []
             content["front"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4))

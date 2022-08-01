@@ -11,6 +11,7 @@ from common import parser_handler
 def main():
     try:
         args = parser_handler.parse_command()
+        parser_handler.build_package_operation(args, "max")
         parser_handler.chain_operations(args, "max")
         parser_handler.download_binary_operation(args, "max")
     except Exception as error:
