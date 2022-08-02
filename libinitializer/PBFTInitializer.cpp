@@ -386,10 +386,9 @@ void PBFTInitializer::createPBFT()
     auto keyPair = m_protocolInitializer->keyPair();
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
     // create pbft
-    auto pbftFactory = std::make_shared<PBFTFactory>(m_nodeArchType,
-        m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
-        kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
-        m_protocolInitializer->txResultFactory());
+    auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
+        m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory());
 
     m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();

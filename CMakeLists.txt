@@ -34,6 +34,7 @@ add_subdirectory(bcos-utilities)
 if(FULLNODE)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
+    include(ProjectGroupSig)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)

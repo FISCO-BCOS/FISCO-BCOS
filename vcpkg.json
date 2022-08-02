@@ -31,6 +31,7 @@
     "poco",
     "jsoncpp",
     "protobuf",
+    "cryptopp",
     {
       "name": "tarscpp",
       "version>=": "3.0.3-m"

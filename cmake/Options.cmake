@@ -69,7 +69,7 @@ macro(configure_project)
     default_option(WITH_ETCD ON)
     default_option(WITH_TARS_SERVICES ON)
     default_option(WITH_SM2_OPTIMIZE ON)
-    default_option(WITH_CPPSDK ON)
+    default_option(WITH_CPPSDK OFF)
 
     if(FULLNODE)
         list(APPEND VCPKG_MANIFEST_FEATURES "fullnode")
