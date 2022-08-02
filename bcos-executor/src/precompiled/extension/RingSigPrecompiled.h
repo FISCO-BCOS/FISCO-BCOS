@@ -17,8 +17,6 @@
  * @author: yklu
  * @date 2022-04-12
  */
-
-#if 0
 #pragma once
 
 #include "../../vm/Precompiled.h"
@@ -41,4 +39,3 @@ public:
 };
 }  // namespace precompiled
 }  // namespace bcos
-#endif

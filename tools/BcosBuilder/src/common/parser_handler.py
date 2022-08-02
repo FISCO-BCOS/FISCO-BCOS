@@ -1,7 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from ast import arg
-from black import out
 from common import utilities
 from common.utilities import CommandInfo
 from argparse import RawTextHelpFormatter

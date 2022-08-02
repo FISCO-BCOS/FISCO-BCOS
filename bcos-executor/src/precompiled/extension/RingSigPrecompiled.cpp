@@ -17,8 +17,6 @@
  * @author: yklu
  * @date 2022-04-12
  */
-
-#if 0
 #include "RingSigPrecompiled.h"
 #include "../../executive/BlockContext.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
@@ -71,15 +69,15 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
         catch (std::exception& error)
         {
             PRECOMPILED_LOG(INFO) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error.what())
-                                   << LOG_KV("signature", signature) << LOG_KV("message", message)
-                                   << LOG_KV("paramInfo", paramInfo);
+                                  << LOG_KV("signature", signature) << LOG_KV("message", message)
+                                  << LOG_KV("paramInfo", paramInfo);
             result = false;
         }
         catch (std::string& error)
         {
             PRECOMPILED_LOG(INFO) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(error)
-                                   << LOG_KV("signature", signature) << LOG_KV("message", message)
-                                   << LOG_KV("paramInfo", paramInfo);
+                                  << LOG_KV("signature", signature) << LOG_KV("message", message)
+                                  << LOG_KV("paramInfo", paramInfo);
             result = false;
         }
         int32_t retCode = CODE_SUCCESS;
@@ -92,11 +90,10 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
     else
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("RingSigPrecompiled")
-                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
+                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
         _callParameters->setExecResult(codec->encode((int32_t)CODE_UNKNOW_FUNCTION_CALL, false));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
     return _callParameters;
 }
-#endif

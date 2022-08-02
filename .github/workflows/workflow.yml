@@ -61,7 +61,7 @@ jobs:
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
-          sudo apt install -y lcov ccache
+          sudo apt install -y lcov ccache openssl libssl-dev wget libgmp-dev
           export GCC='gcc-10'
           export CXX='g++-10'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
@@ -70,6 +70,7 @@ jobs:
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
+          brew install ccache gmp
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
@@ -107,7 +108,7 @@ jobs:
             centos-v8-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
-          yum install yum install -y epel-release centos-release-scl flex bison
+          yum install yum install -y epel-release centos-release-scl flex bison patch gmp-static
           yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
@@ -141,8 +142,10 @@ jobs:
           tiup clean --all
           tiup playground v5.4.2 --mode tikv-slim &
           sleep 15
+          export OMP_NUM_THREADS=1
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - name: Test
         if: matrix.tikv == 'WITH_TIKV=OFF'
-        run:
+        run: |
+          export OMP_NUM_THREADS=1
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test

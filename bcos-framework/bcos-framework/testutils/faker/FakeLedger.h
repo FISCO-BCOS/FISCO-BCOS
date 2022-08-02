@@ -95,8 +95,8 @@ public:
     Block::Ptr init(BlockHeader::Ptr _parentBlockHeader, bool _withHeader, BlockNumber _blockNumber,
         size_t _txsSize, int64_t _timestamp = utcTime())
     {
-        auto block =
-            fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, false, _txsSize, 0);
+        auto block = fakeAndCheckBlock(
+            m_blockFactory->cryptoSuite(), m_blockFactory, false, _txsSize, 0, false);
         if (!_withHeader)
         {
             return block;
@@ -104,8 +104,8 @@ public:
         ParentInfoList parentInfo;
         if (_parentBlockHeader != nullptr)
         {
-            parentInfo.push_back(
-                ParentInfo{_parentBlockHeader->number(), _parentBlockHeader->hash()});
+            ParentInfo info{_parentBlockHeader->number(), _parentBlockHeader->hash()};
+            parentInfo.push_back(info);
         }
         auto rootHash =
             m_blockFactory->cryptoSuite()->hashImpl()->hash(std::to_string(_blockNumber));
