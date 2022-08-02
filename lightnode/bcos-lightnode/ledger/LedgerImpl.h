@@ -32,6 +32,8 @@ private:
     void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
     {
+        LEDGER_LOG(INFO) << "getBlock: " << blockNumber;
+
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
         (getBlockData<Flags>(blockNumberStr, block), ...);
     }
@@ -39,6 +41,8 @@ private:
     template <bcos::concepts::ledger::DataFlag... Flags>
     void impl_setBlock(bcos::concepts::block::Block auto block)
     {
+        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeader.data.blockNumber;
+
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader.data.blockNumber);
         (setBlockData<Flags>(blockNumberStr, block), ...);
     }
@@ -50,8 +54,12 @@ private:
 
         constexpr auto tableName =
             bcos::concepts::transaction::Transaction<DataType> ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+
+        LEDGER_LOG(INFO) << "getTransactionOrReceipts: " << tableName << " "
+                         << RANGES::size(hashes);
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
+        bcos::concepts::resizeTo(out, RANGES::size(hashes));
 #pragma omp parallel for
         for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
@@ -65,7 +73,7 @@ private:
 
     auto impl_getStatus()
     {
-        LEDGER_LOG(INFO) << "getStatus request";
+        LEDGER_LOG(INFO) << "getStatus";
         constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
@@ -117,6 +125,9 @@ private:
         }
         constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
 
+        LEDGER_LOG(INFO) << "setTransactionOrReceiptBuffers: " << tableName << " "
+                         << RANGES::size(hashes);
+
         for (auto i = 0u; i < count; ++i)
         {
             bcos::storage::Entry entry;
@@ -135,6 +146,10 @@ private:
 
         auto status = impl_getStatus();
         auto sourceStatus = sourceLedger.getStatus();
+
+        LEDGER_LOG(INFO) << "sync onlyHeader: " << onlyHeader
+                         << " local block number: " << status.blockNumber
+                         << " remote block number: " << sourceStatus.blockNumber;
 
         if (onlyHeader)
         {
@@ -161,7 +176,7 @@ private:
     template <bcos::concepts::ledger::DataFlag Flag>
     void getBlockData(std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
-        LEDGER_LOG(DEBUG) << "Get block data: " << typeid(Flag).name();
+        LEDGER_LOG(DEBUG) << "getBlockData: " << blockNumberKey << " " << typeid(Flag).name();
 
         if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
         {
@@ -209,7 +224,9 @@ private:
             }
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
-        {}
+        {
+            // TODO: add get nonce logic
+        }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {
             getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
@@ -226,6 +243,8 @@ private:
     template <bcos::concepts::ledger::DataFlag Flag>
     void setBlockData(std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
+        LEDGER_LOG(DEBUG) << "setBlockData: " << blockNumberKey << " " << typeid(Flag).name();
+
         if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
         {
             // current number

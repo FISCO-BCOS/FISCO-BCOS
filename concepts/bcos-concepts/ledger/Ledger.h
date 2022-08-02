@@ -17,7 +17,8 @@ concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType>
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 // clang-format off
-struct DataFlagBase {};
+struct DataFlagBase {
+};
 struct ALL: public DataFlagBase {};
 struct HEADER: public DataFlagBase {};
 struct TRANSACTIONS: public DataFlagBase {};
@@ -39,17 +40,17 @@ template <class Impl>
 class LedgerBase
 {
 public:
-    template <DataFlag... flags>
+    template <DataFlag... Flags>
     void getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
     {
-        impl().template impl_getBlock<flags...>(blockNumber, block);
+        impl().template impl_getBlock<Flags...>(blockNumber, block);
     }
 
-    template <DataFlag... flags>
+    template <DataFlag... Flags>
     void setBlock(bcos::concepts::block::Block auto block)
     {
-        impl().template impl_setBlock<flags...>(std::move(block));
+        impl().template impl_setBlock<Flags...>(std::move(block));
     }
 
     void getTransactionsOrReceipts(

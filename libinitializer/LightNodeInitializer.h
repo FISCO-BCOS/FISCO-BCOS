@@ -33,31 +33,38 @@ public:
 
   AnyLedger(LedgerType ledger) : m_ledger(std::move(ledger)) {}
 
-  template <bcos::concepts::ledger::DataFlag... flags>
+  template <bcos::concepts::ledger::DataFlag... Flags>
   void getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
                 bcos::concepts::block::Block auto &block) {
-    std::visit([blockNumber,
-                &block](auto &self) { self.getBlock(blockNumber, block); },
-               m_ledger);
+    std::visit(
+        [blockNumber, &block](auto &ledger) {
+          ledger.template getBlock<Flags...>(blockNumber, block);
+        },
+        m_ledger);
   }
 
-  template <bcos::concepts::ledger::DataFlag... flags>
+  template <bcos::concepts::ledger::DataFlag... Flags>
   void setBlock(bcos::concepts::block::Block auto block) {
-    std::visit([block = std::move(block)](
-                   auto &self) { self.setBlock(std::move(block)); },
-               m_ledger);
+    std::visit(
+        [block = std::move(block)](auto &ledger) {
+          ledger.template setBlock<Flags...>(std::move(block));
+        },
+        m_ledger);
   }
 
   void getTransactionsOrReceipts(RANGES::range auto const &hashes,
                                  RANGES::range auto &out) {
-    std::visit([&hashes, &out](
-                   auto &self) { self.getTransactionsOrReceipts(hashes, out); },
-               m_ledger);
+    std::visit(
+        [&hashes, &out](auto &ledger) {
+          ledger.getTransactionsOrReceipts(hashes, out);
+        },
+        m_ledger);
   }
 
   auto getStatus() {
     bcos::concepts::ledger::Status status;
-    std::visit([&status](auto &self) { status = self.getStatus(); }, m_ledger);
+    std::visit([&status](auto &ledger) { status = ledger.getStatus(); },
+               m_ledger);
     return status;
   }
 
@@ -65,8 +72,8 @@ public:
   void setTransactionsOrReceipts(RANGES::range auto const &inputs) requires
       bcos::concepts::ledger::TransactionOrReceipt<
           RANGES::range_value_t<decltype(inputs)>> {
-    std::visit([&inputs]<Hasher>(auto &self) {
-      self.template setTransactionsOrReceipts<Hasher>(inputs);
+    std::visit([&inputs]<Hasher>(auto &ledger) {
+      ledger.template setTransactionsOrReceipts<Hasher>(inputs);
     });
   }
 
@@ -76,8 +83,8 @@ public:
     std::visit(
         [
           &hashes, buffers = std::move(buffers)
-        ]<bool _isTransaction = isTransaction>(auto &self) {
-          self.template setTransactionOrReceiptBuffers<_isTransaction>(
+        ]<bool _isTransaction = isTransaction>(auto &ledger) {
+          ledger.template setTransactionOrReceiptBuffers<_isTransaction>(
               hashes, std::move(buffers));
         },
         m_ledger);
@@ -90,9 +97,11 @@ public:
           typename LedgerType::element_type,
           bcos::concepts::ledger::LedgerBase<typename LedgerType::element_type>>
   void sync(LedgerType &source, bool onlyHeader) {
-    std::visit([&source, onlyHeader]<LedgerType, BlockType>(
-                   auto &self) { self.template sync<LedgerType, BlockType>(); },
-               m_ledger);
+    std::visit(
+        [&source, onlyHeader]<LedgerType, BlockType>(auto &ledger) {
+          ledger.template sync<LedgerType, BlockType>();
+        },
+        m_ledger);
   }
 
 private:
