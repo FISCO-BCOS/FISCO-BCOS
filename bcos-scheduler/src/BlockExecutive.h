@@ -68,7 +68,7 @@ public:
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
-    void asyncCommit(std::function<void(Error::UniquePtr)> callback);
+    virtual void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
     void asyncNotify(
         std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,

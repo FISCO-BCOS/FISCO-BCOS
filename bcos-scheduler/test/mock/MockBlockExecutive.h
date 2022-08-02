@@ -52,6 +52,7 @@ public:
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
             _blockFactory, _txPool)
     {
+        m_blockNumber = block->blockHeader()->number();
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
     }
@@ -106,19 +107,17 @@ public:
             m_blockHeaderFactory =
                 std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite);
             auto blockHeader = m_blockHeaderFactory->createBlockHeader();
-            SCHEDULER_LOG(DEBUG) << LOG_KV("BlockNumber", m_number)
+            SCHEDULER_LOG(DEBUG) << LOG_KV("BlockNumber", m_blockNumber)
                                  << LOG_KV("blockHeader", blockHeader);
-            blockHeader->setNumber(m_number);
-            m_blockNumber.push_back(m_number);
-            ++m_number;
-            SCHEDULER_LOG(DEBUG) << LOG_KV("BlockNumber", m_number);
-            callback(nullptr, std::move(blockHeader), false);
+            blockHeader->setNumber(m_blockNumber);
+            m_result = blockHeader;
+            callback(nullptr, blockHeader, false);
             return;
         }
     }
-    void asyncCommit(std::function<void(Error::UniquePtr)> callback)
+    void asyncCommit(std::function<void(Error::UniquePtr)> callback) override
     {
-        if (m_number == 100)
+        if (m_blockNumber <= 5)
         {
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, "asyncCommit errors!"));
         }
@@ -128,20 +127,25 @@ public:
         }
     }
     bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
-    bcos::protocol::BlockHeader::Ptr result() { return m_result; }
     bcos::protocol::Block::Ptr block() { return m_block; }
     bool sysBlock() const { return m_isSysBlock; }
+
+    void triggerSwitch()
+    {
+        if (f_onNeedSwitchEvent)
+        {
+            f_onNeedSwitchEvent();
+        }
+    }
     void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
     {
         f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
     }
 
 private:
-    bcos::protocol::BlockHeader::Ptr m_result;
     bcos::protocol::Block::Ptr m_block;
     bcostars::protocol::BlockHeaderFactoryImpl::Ptr m_blockHeaderFactory;
-    std::vector<std::uint8_t> m_blockNumber;
-    std::uint8_t m_number = 100;
+    bcos::protocol::BlockNumber m_blockNumber;
     size_t m_gasLimit = TRANSACTION_GAS;
     bool m_isSysBlock;
     bool m_running = false;

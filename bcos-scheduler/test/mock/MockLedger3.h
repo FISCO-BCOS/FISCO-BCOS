@@ -1,5 +1,4 @@
 #pragma once
-
 #include "bcos-framework/bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
@@ -31,7 +30,6 @@ public:
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback) override
     {
-        BOOST_CHECK_EQUAL(block->blockHeaderConst()->number(), 5);
         callback(nullptr);
     }
 
@@ -128,6 +126,15 @@ public:
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override
     {}
+    //     void commitSuccess(bool _success)
+    //     {
+    //         ++commitBlockNumber;
+    //         SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
+    //                              << LOG_KV("commitBlockNumber", commitBlockNumber);
+    //     }
+
+    // private:
+    //     bcos::protocol::BlockNumber commitBlockNumber = 5;
 };
 
 #pragma GCC diagnostic pop

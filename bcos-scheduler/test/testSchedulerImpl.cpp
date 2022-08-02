@@ -258,57 +258,199 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
         });
     BOOST_CHECK(executeBlockError);
 }
-// BOOST_AUTO_TEST_CASE(commitBlock)
-// {
-//     auto scheduler = std::make_shared<bcos::scheduler::SchedulerImpl>(executorManager, ledger,
-//         storage, executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
-//         hashImpl, false, false, false, 0);
-//     auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
-//     scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
-//     // preExecuteBlock
+BOOST_AUTO_TEST_CASE(commitBlock)
+{
+    auto scheduler = std::make_shared<bcos::scheduler::SchedulerImpl>(executorManager, ledger,
+        storage, executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
+        hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
+    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
 
-//     // Fill m_block
-//     for (size_t i = 5; i < 10; ++i)
-//     {
-//         auto block = blockFactory->createBlock();
-//         block->blockHeader->setNumber(i);
-//         for (size_t i = 0; i < 10; ++i)
-//         {
-//             auto metaTx =
-//                 std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i),
-//                 "contract1");
-//             block->appendTransactionMetaData(std::move(metaTx));
-//         }
-//         bcos::protocol::BlockHeader::Ptr executeHeader1;
-//         // execute olderBlock whenQueueFront whenInQueue
-//         scheduler->executeBlock(block, false,
-//             [&](bcos::ERROR::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
-//                 BOOST_CHECK(!error);
-//                 BOOST_CHECK(header);
-//                 executeHeader1 = std::move(header);
-//             });
-//         BOOST(executeHeader1);
-//         executeHeader1 = nullptr;
-//     }
-//     // commit
-//     for (size_t i = 100; i < 10; ++i)
-//     {
-//         auto blockHeader = blockHeaderFactory->createHeader();
-//         blockHeader->setNumber(i);
-//         scheduler->commitBlock(
-//             blockHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config)
-//             {
-//                 BOOST_CHECK(!error);
-//                 BOOST_CHECK(config);
-//                 BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
-//                 BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
-//                 BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
-//                 BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
-//                 BOOST_CHECK_EQUAL(config->hash().hex(), h256(110).hex());
-//                 committedPromise.set_value(true);
-//             });
-//     }
-// }
+    // executeBlock, Fill m_block
+    bool executeBlockError = false;
+    for (size_t i = 5; i < 10; ++i)
+    {
+        auto block = blockFactory->createBlock();
+        block->blockHeader()->setNumber(i);
+        for (size_t j = 0; j < 20; ++j)
+        {
+            auto metaTx =
+                std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
+            block->appendTransactionMetaData(std::move(metaTx));
+        }
+        // executeBlock
+        bcos::protocol::BlockHeader::Ptr blockHeader;
+        scheduler->executeBlock(block, false,
+            [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
+                if (error)
+                {
+                    executeBlockError = true;
+                    BOOST_CHECK(error);
+                    SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
+                }
+                else
+                {
+                    BOOST_CHECK(!error);
+                    BOOST_CHECK(header);
+                    blockHeader = std::move(header);
+                }
+            });
+        if (!executeBlockError)
+        {
+            BOOST_CHECK(blockHeader);
+        }
+        executeBlockError = false;
+        blockHeader = nullptr;
+    }
+    // commit
+    bool commitBlockError = false;
+    size_t errorNumber = 0;
+    size_t queueFrontNumber = 0;
+    for (size_t i = 5; i < 11; ++i)
+    {
+        auto blockHeader = blockHeaderFactory->createBlockHeader();
+        blockHeader->setNumber(i);
+        std::promise<bool> committedPromise;
+        scheduler->commitBlock(
+            blockHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR) << "CommitBlock error";
+                    commitBlockError = true;
+                    ++errorNumber;
+                    committedPromise.set_value(false);
+                }
+                else
+                {
+                    ++queueFrontNumber;
+                    BOOST_CHECK(config);
+                    BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+                    BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+                    BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+                    BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+                    BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
+                    committedPromise.set_value(true);
+                }
+            });
+        if (commitBlockError)
+        {
+            commitBlockError = false;
+        }
+    }
+    BOOST_CHECK_EQUAL(errorNumber, 2);
+    BOOST_CHECK_EQUAL(queueFrontNumber, 4);
+    BOOST_CHECK(!commitBlockError);
+    SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
+                         << LOG_KV("queueFrontNumber", queueFrontNumber);
 
+    // commit blockNumber <= 5
+    auto blockHeader0 = blockHeaderFactory->createBlockHeader();
+    blockHeader0->setNumber(0);
+    std::promise<bool> committedPromise;
+    scheduler->commitBlock(
+        blockHeader0, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR) << "CommitBlock error";
+                commitBlockError = true;
+                ++errorNumber;
+                committedPromise.set_value(false);
+            }
+            else
+            {
+                ++queueFrontNumber;
+                BOOST_CHECK(config);
+                BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+                BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+                BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+                BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+                BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
+                committedPromise.set_value(true);
+            }
+        });
+    SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
+                         << LOG_KV("queueFrontNumber", queueFrontNumber);
+}
+
+BOOST_AUTO_TEST_CASE(handlerBlockTest)
+{
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
+    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
+
+    // create Block
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(6);
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract1");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    for (size_t i = 10; i < 20; ++i)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract2");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    for (size_t i = 20; i < 30; ++i)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(i), "contract3");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    // preExecuteBlock
+    scheduler->preExecuteBlock(
+        block, false, [&](bcos::Error::Ptr&& error) { BOOST_CHECK(!error); });
+
+
+    // executeBlock
+    bool executeBlockError = false;
+    bcos::protocol::BlockHeader::Ptr blockHeader;
+    scheduler->executeBlock(
+        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+            if (error)
+            {
+                executeBlockError = true;
+                BOOST_CHECK(error);
+                SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
+            }
+            else
+            {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(header);
+                blockHeader = std::move(header);
+            }
+        });
+
+    BOOST_CHECK(blockHeader);
+
+
+    // commitBlock
+    bool commitBlockError = false;
+    scheduler->commitBlock(
+        blockHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR) << "CommitBlock error";
+                commitBlockError = true;
+            }
+            else
+            {
+                BOOST_CHECK(config);
+                BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+                BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+                BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+                BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+                BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
+            }
+        });
+
+    BOOST_CHECK(!commitBlockError);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
