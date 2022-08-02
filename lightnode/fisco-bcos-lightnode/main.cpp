@@ -83,13 +83,13 @@ static auto startSyncerThread(
             {
                 auto ledger = bcos::concepts::getRef(toLedger);
                 ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                    fromLedger, false);
+                    fromLedger, true);
             }
             catch (std::exception& e)
             {
                 // std::cout << boost::diagnostic_information(e);
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     });
 

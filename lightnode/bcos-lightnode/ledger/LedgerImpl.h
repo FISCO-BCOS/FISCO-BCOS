@@ -153,7 +153,7 @@ private:
 
         if (onlyHeader)
         {
-            for (auto blockNumber = status.blockNumber; blockNumber <= sourceStatus.blockNumber;
+            for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
                  ++blockNumber)
             {
                 BlockType block;
@@ -163,7 +163,7 @@ private:
         }
         else
         {
-            for (auto blockNumber = status.blockNumber; blockNumber <= sourceStatus.blockNumber;
+            for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
                  ++blockNumber)
             {
                 BlockType block;

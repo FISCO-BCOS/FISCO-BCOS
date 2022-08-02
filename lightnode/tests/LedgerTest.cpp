@@ -297,10 +297,10 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
     // get all block
     std::vector<bcostars::Block> fromBlocks(blockCount);
     std::vector<bcostars::Block> toBlocks(blockCount);
-    for (auto i = 0u; i < blockCount; ++i)
+    for (auto i = 1u; i < blockCount; ++i)
     {
-        fromLedger.getBlock<bcos::concepts::ledger::ALL>(0, fromBlocks[i]);
-        toLedger.getBlock<bcos::concepts::ledger::ALL>(0, toBlocks[i]);
+        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]);
+        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]);
     }
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
