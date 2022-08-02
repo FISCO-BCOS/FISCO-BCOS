@@ -40,7 +40,18 @@ public:
         m_schedulerWorker =
             std::make_shared<ThreadPool>("preExec", (std::thread::hardware_concurrency() * 2));
     }
-    ~StateMachine() override {}
+    
+    ~StateMachine() override
+    {
+        if (m_worker)
+        {
+            m_worker->stop();
+        }
+        if (m_schedulerWorker)
+        {
+            m_schedulerWorker->stop();
+        }
+    }
 
     void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,

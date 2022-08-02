@@ -38,7 +38,8 @@ void ExecutorServiceClient::status(
         {}
         ~Callback() override {}
 
-        void callback_status(const bcostars::Error& ret, const bcostars::ExecutorStatus& _output)
+        void callback_status(
+            const bcostars::Error& ret, const bcostars::ExecutorStatus& _output) override
         {
             auto error = toUniqueBcosError(ret);
             auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
@@ -49,7 +50,7 @@ void ExecutorServiceClient::status(
             m_callback(std::move(error), std::move(status));
         }
 
-        void callback_status_exception(tars::Int32 ret)
+        void callback_status_exception(tars::Int32 ret) override
         {
             m_callback(toUniqueBcosError(ret), std::make_unique<bcos::protocol::ExecutorStatus>());
         }

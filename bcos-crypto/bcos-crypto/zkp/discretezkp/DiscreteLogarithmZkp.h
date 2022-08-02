@@ -30,9 +30,7 @@ class DiscreteLogarithmZkp
 {
 public:
     using Ptr = std::shared_ptr<DiscreteLogarithmZkp>;
-    DiscreteLogarithmZkp(size_t _scalarLen, size_t _pointLen)
-      : m_scalarLen(_scalarLen), m_pointLen(_pointLen)
-    {}
+    DiscreteLogarithmZkp(size_t _pointLen) : m_pointLen(_pointLen) {}
     DiscreteLogarithmZkp() {}
 
     virtual ~DiscreteLogarithmZkp() {}
@@ -65,7 +63,6 @@ public:
     bytes aggregateRistrettoPoint(bytes const& pointSum, bytes const& pointShare);
 
 private:
-    [[maybe_unused]] size_t m_scalarLen = 32;
     size_t m_pointLen = 32;
 };
 }  // namespace crypto

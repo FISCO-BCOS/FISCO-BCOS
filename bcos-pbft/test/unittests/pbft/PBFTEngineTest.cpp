@@ -56,8 +56,9 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     BlockNumber currentBlockNumber = 19;
+    std::cout << "### createFakers: " << currentBlockNumber << std::endl;
     auto fakerMap = createFakers(cryptoSuite, _consensusNodes, currentBlockNumber, _connectedNodes);
-
+    std::cout << "### createFakers: " << currentBlockNumber << " success" << std::endl;
     // check the leader notify the sealer to seal proposals
     IndexType leaderIndex = 0;
     auto leaderFaker = fakerMap[leaderIndex];
@@ -135,9 +136,13 @@ BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
 {
     size_t consensusNodeSize = 10;
     // case1: all non-faulty
+    std::cout << "testPBFTEngineWithFaulty with 10 non-faulty" << std::endl;
     testPBFTEngineWithFaulty(consensusNodeSize, consensusNodeSize);
+    std::cout << "testPBFTEngineWithFaulty with 10 non-faulty success" << std::endl;
     // case2: with f=3 faulty
+    std::cout << "testPBFTEngineWithFaulty with 7 non-faulty" << std::endl;
     testPBFTEngineWithFaulty(consensusNodeSize, 7);
+    std::cout << "testPBFTEngineWithFaulty with 7 non-faulty success" << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)

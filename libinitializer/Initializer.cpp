@@ -277,7 +277,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
             consensusStorage, m_frontServiceInitializer->front());
     }
-
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("Register switch handler in scheduler manager");
+        // PBFT and scheduler are in the same process here, we just cast m_scheduler to
+        // SchedulerService
+        auto schedulerServer =
+            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
+        auto consensus = m_pbftInitializer->pbft();
+        schedulerServer->registerOnSwitchTermHandler([consensus](
+                                                         bcos::protocol::BlockNumber blockNumber) {
+            INITIALIZER_LOG(DEBUG)
+                << LOG_BADGE("Switch")
+                << "Receive scheduler switch term notify of number " + std::to_string(blockNumber);
+            consensus->clearExceptionProposalState(blockNumber);
+        });
+    }
     // init the txpool
     m_txpoolInitializer->init(m_pbftInitializer->sealer());
 

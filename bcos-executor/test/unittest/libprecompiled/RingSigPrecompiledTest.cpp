@@ -13,8 +13,6 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-
-#if 0
 #include "bcos-executor/src/precompiled/extension/RingSigPrecompiled.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/executive/BlockContext.h"
@@ -205,5 +203,3 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
-
-#endif
