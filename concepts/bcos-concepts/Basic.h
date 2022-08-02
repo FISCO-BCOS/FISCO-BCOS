@@ -19,6 +19,11 @@ concept PointerLike = requires(Pointer p)
     p.operator->();
 };
 
+std::string_view toView(ByteBuffer auto const& buffer)
+{
+    return std::string_view((const char*)RANGES::data(buffer), RANGES::size(buffer));
+}
+
 template <class Input>
 auto& getRef(Input& input)
 {

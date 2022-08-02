@@ -25,6 +25,7 @@
 #include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
+#include <bcos-concepts/Basic.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -159,14 +160,15 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 hash
     Entry hashEntry;
-    hashEntry.importFields({header->hash().hex()});
+    hashEntry.importFields({header->hash().asBytes()});
     storage->asyncSetRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // hash 2 number
     Entry hash2NumberEntry;
     hash2NumberEntry.importFields({blockNumberStr});
-    storage->asyncSetRow(SYS_HASH_2_NUMBER, header->hash().hex(), std::move(hash2NumberEntry),
+    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::toView(header->hash()),
+        std::move(hash2NumberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 header
@@ -246,9 +248,10 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
                 Entry receiptEntry;
                 receiptEntry.importFields({std::move(receiptBuffer)});
-                storage->asyncSetRow(SYS_HASH_2_RECEIPT, hash.hex(), std::move(receiptEntry),
-                    [setRowCallback](
-                        auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
+                storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::toView(hash),
+                    std::move(receiptEntry), [setRowCallback](auto&& error) {
+                        setRowCallback(std::forward<decltype(error)>(error));
+                    });
             }
         });
 
@@ -352,7 +355,8 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                keys[i] = _txHashList->at(i).hex();
+                auto& binHash = _txHashList->at(i);
+                keys[i].assign(binHash.begin(), binHash.end());
                 values[i] =
                     std::string((char*)(_txToStore->at(i)->data()), _txToStore->at(i)->size());
             }
@@ -538,7 +542,8 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                 }
 
                 auto hashStr = entry->getField(0);
-                bcos::crypto::HashType hash(std::string(hashStr), bcos::crypto::HashType::FromHex);
+                bcos::crypto::HashType hash(
+                    std::string(hashStr), bcos::crypto::HashType::FromBinary);
 
                 LEDGER_LOG(INFO) << "GetBlockHashByNumber success" << LOG_KV("hash", hashStr);
                 callback(nullptr, std::move(hash));
@@ -555,10 +560,10 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
 void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
     std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock)
 {
-    auto key = _blockHash.hex();
+    auto key = _blockHash;
     LEDGER_LOG(INFO) << "GetBlockNumberByHash request" << LOG_KV("hash", key);
 
-    asyncGetSystemTableEntry(SYS_HASH_2_NUMBER, key,
+    asyncGetSystemTableEntry(SYS_HASH_2_NUMBER, concepts::toView(key),
         [callback = std::move(_onGetBlock)](
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             try
@@ -620,7 +625,8 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
 
     for (auto& it : *_txHashList)
     {
-        hexList->push_back(it.hex());
+        std::string hex(it.begin(), it.end());
+        hexList->emplace_back(std::move(hex));
     }
 
     asyncBatchGetTransactions(
@@ -690,11 +696,11 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
     std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr, MerkleProofPtr)>
         _onGetTx)
 {
-    auto key = _txHash.hex();
+    auto key = _txHash;
 
     LEDGER_LOG(INFO) << "GetTransactionReceiptByHash" << LOG_KV("hash", key);
 
-    asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, key,
+    asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, concepts::toView(key),
         [this, callback = std::move(_onGetTx), key, _withProof](
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)
@@ -1124,7 +1130,8 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
                     for (size_t i = 0; i < blockWithTxs->transactionsHashSize(); ++i)
                     {
                         auto hash = blockWithTxs->transactionHash(i);
-                        hashList[i] = hash.hex();
+                        hashList[i].assign(hash.begin(), hash.end());
+                        // hashList[i] = hash.hex();
                     }
 
                     callback(nullptr, std::move(hashList));

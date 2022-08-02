@@ -26,6 +26,7 @@
 
 namespace bcos
 {
+
 template <typename T>
 class RefDataContainer
 {
