@@ -169,6 +169,11 @@ public:
         m_executorManager->stop();
     }
 
+    void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory)
+    {
+        m_blockExecutiveFactory = blockExecutiveFactory;
+    }
+
     void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent)
     {
         f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);

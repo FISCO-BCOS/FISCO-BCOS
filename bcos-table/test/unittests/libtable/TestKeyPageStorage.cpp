@@ -2480,6 +2480,90 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(insertAndDelete)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+    auto cacheSize = 256 * 1024 * 1024;
+    auto pageSize = 512;
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    stateStorage0->setMaxCapacity(cacheSize);
+    StateStorageInterface::Ptr prev0 = stateStorage0;
+
+    auto tableName = "table_0";
+    BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
+
+    size_t count = 10;
+    auto keyCount = 100;
+    auto index = 0;
+    srand(time(NULL));
+    for (size_t i = 0; i < count; ++i)
+    {
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto table0 = tableStorage0->openTable(tableName);
+        BOOST_REQUIRE(table0);
+
+        std::vector<int> keys(keyCount, 0);
+#if defined(__APPLE__)
+#pragma omp parallel for
+#endif
+        for (int k = 0; k < keyCount; ++k)
+        {
+            auto v = rand() + index + k;
+            keys[k] = v;
+            auto key = boost::lexical_cast<std::string>(v);
+            auto value =
+                boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
+            auto entry0 = std::make_optional(table0->newEntry());
+            entry0->setField(0, value);
+            BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+        }
+
+#if defined(__APPLE__)
+#pragma omp parallel for
+#endif
+        for (int k = 0; k < keyCount; ++k)
+        {
+            auto v = rand() + index + k;
+            auto key = boost::lexical_cast<std::string>(v);
+            auto entry0 = std::make_optional(table0->newDeletedEntry());
+            BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+        }
+        if (rand() % 2 == 0)
+        {
+            BCOS_LOG(DEBUG) << LOG_DESC("delete from head");
+            for (int k = 0; k < keyCount; ++k)
+            {
+                auto key = boost::lexical_cast<std::string>(keys[k]);
+                auto entry0 = std::make_optional(table0->newDeletedEntry());
+                BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+            }
+        }
+        else
+        {
+            BCOS_LOG(DEBUG) << LOG_DESC("delete from tail");
+            for (int k = keyCount - 1; k >= 0; --k)
+            {
+                auto key = boost::lexical_cast<std::string>(keys[k]);
+                auto entry0 = std::make_optional(table0->newDeletedEntry());
+                BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+            }
+        }
+        auto hash0 = tableStorage0->hash(hashImpl);
+        BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
+                        << LOG_KV("hash", hash0.hex());
+        BOOST_TEST(hash0.hex() != crypto::HashType(0).hex());
+        tableStorage0->setReadOnly(true);
+        stateStorage0->merge(true, *tableStorage0);
+        hash0 = stateStorage0->hash(hashImpl);
+        BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage0") << LOG_KV("i", i)
+                        << LOG_KV("hash", hash0.hex());
+        index += keyCount;
+    }
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
