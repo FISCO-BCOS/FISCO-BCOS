@@ -170,8 +170,8 @@ void SerialBlockExecutive::serialExecute(
             }
         }
 
-        SERIAL_EXECUTE_LOG(DEBUG) << "0.Send:\t >>>> [" << m_executorInfo->name
-                                  << "]: " << tx->toString();
+        SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "0.Send:\t >>>> ["
+                                  << m_executorInfo->name << "]: " << tx->toString();
     }
 
     // send one tx
@@ -191,6 +191,7 @@ void SerialBlockExecutive::serialExecute(
                 if (error)
                 {
                     SERIAL_EXECUTE_LOG(DEBUG)
+                        << BLOCK_NUMBER(number())
                         << "serialExecute:\t Error: " << error->errorMessage();
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  SchedulerError::SerialExecuteError, error->errorMessage()),
@@ -215,7 +216,8 @@ void SerialBlockExecutive::serialExecute(
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 if (error)
                 {
-                    SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number())
+                    SERIAL_EXECUTE_LOG(DEBUG)
+                        << BLOCK_NUMBER(number())
                         << "serialExecute:\t Error: " << error->errorMessage();
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  SchedulerError::SerialExecuteError, error->errorMessage()),
@@ -230,8 +232,9 @@ void SerialBlockExecutive::serialExecute(
 
                 for (auto& output : outputs)
                 {
-                    SERIAL_EXECUTE_LOG(DEBUG) << "1.Receive:\t <<<< [" << m_executorInfo->name
-                                              << "]: " << output->toString();
+                    SERIAL_EXECUTE_LOG(DEBUG)
+                        << BLOCK_NUMBER(number()) << "1.Receive:\t <<<< [" << m_executorInfo->name
+                        << "]: " << output->toString();
                     onTxFinish(std::move(output));
                 }
                 onExecuteFinish(std::move(callback));
@@ -244,7 +247,7 @@ void SerialBlockExecutive::onExecuteFinish(
 {
     if (!m_staticCall)
     {
-        SERIAL_EXECUTE_LOG(DEBUG) << "2.Receipt:\t [^^]"
+        SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "2.Receipt:\t [^^]"
                                   << LOG_KV("receiptsSize", m_executiveResults.size())
                                   << LOG_KV("blockNumber", number());
     }

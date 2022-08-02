@@ -136,8 +136,8 @@ public:
         if (e)
         {
             SCHEDULER_LOG(WARNING)
-                << LOG_DESC("fetchGasLimit failed") << LOG_KV("code", e->errorCode())
-                << LOG_KV("message", e->errorMessage());
+                << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasLimit failed")
+                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
             BOOST_THROW_EXCEPTION(
                 BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
         }

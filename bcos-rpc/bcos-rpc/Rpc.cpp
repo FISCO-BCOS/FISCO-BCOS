@@ -213,7 +213,7 @@ void Rpc::onRecvHandshakeRequest(
     }
     auto self = std::weak_ptr<Rpc>(shared_from_this());
 
-    // notify the handshakeResonse
+    // notify the handshakeResponse
     m_jsonRpcImpl->getGroupInfoList([_msg, _session, self](
                                         bcos::Error::Ptr _error, Json::Value& _groupListResponse) {
         if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)

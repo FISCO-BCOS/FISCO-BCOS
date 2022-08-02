@@ -226,7 +226,8 @@ void SerialDmcBlockExecutive::recursiveExecuteTx(
         // handle error
         if (error)
         {
-            SERIAL_EXECUTE_LOG(DEBUG) << "serialExecute:\t Error: " << error->errorMessage();
+            SERIAL_EXECUTE_LOG(DEBUG)
+                << BLOCK_NUMBER(number()) << "serialExecute:\t Error: " << error->errorMessage();
             callback(
                 BCOS_ERROR_UNIQUE_PTR(SchedulerError::SerialExecuteError, error->errorMessage()));
 
@@ -246,8 +247,8 @@ void SerialDmcBlockExecutive::recursiveExecuteTx(
             return;
         }
 
-        SERIAL_EXECUTE_LOG(DEBUG) << "1.Receive:\t <<<< [" << m_executorInfo->name
-                                  << "]: " << output->toString();
+        SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "1.Receive:\t <<<< ["
+                                  << m_executorInfo->name << "]: " << output->toString();
         // clear keylock
         output->setKeyLocks({});
         output->setKeyLockAcquired({});
@@ -255,10 +256,9 @@ void SerialDmcBlockExecutive::recursiveExecuteTx(
         recursiveExecuteTx(contextID, std::move(callback));
     };
 
-
     // send one tx
-    SERIAL_EXECUTE_LOG(DEBUG) << "0.Send:\t >>>> [" << m_executorInfo->name
-                              << "]: " << message->toString();
+    SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "0.Send:\t >>>> ["
+                              << m_executorInfo->name << "]: " << message->toString();
     if (m_staticCall)
     {
         if (m_serialExecutiveStates.size() != 1)
@@ -281,9 +281,8 @@ void SerialDmcBlockExecutive::onExecuteFinish(
 {
     if (!m_staticCall)
     {
-        SERIAL_EXECUTE_LOG(DEBUG) << "2.Receipt:\t [^^]"
-                                  << LOG_KV("receiptsSize", m_executiveResults.size())
-                                  << LOG_KV("blockNumber", number());
+        SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "2.Receipt:\t [^^]"
+                                  << LOG_KV("receiptsSize", m_executiveResults.size());
     }
     BlockExecutive::onExecuteFinish(std::move(callback));
 }
