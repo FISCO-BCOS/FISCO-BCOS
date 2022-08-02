@@ -36,6 +36,9 @@ namespace bcostars
 {
 namespace test
 {
+
+#if 0  
+
 BOOST_FIXTURE_TEST_SUITE(testServiceClient, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testGatewayService)
 {
@@ -128,5 +131,7 @@ BOOST_AUTO_TEST_CASE(testEndPointToString)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#endif
 }  // namespace test
 }  // namespace bcostars
