@@ -82,7 +82,7 @@ void PBFTEngine::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        PBFT_LOG(WARNING) << LOG_DESC("sendResonse failed") << LOG_KV("uuid", _id)
+                        PBFT_LOG(WARNING) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
                                           << LOG_KV("module", std::to_string(_moduleID))
                                           << LOG_KV("dst", _dstNode->shortHex())
                                           << LOG_KV("code", _error->errorCode())
@@ -92,7 +92,7 @@ void PBFTEngine::initSendResponseHandler()
         }
         catch (std::exception const& e)
         {
-            PBFT_LOG(WARNING) << LOG_DESC("sendResonse exception")
+            PBFT_LOG(WARNING) << LOG_DESC("sendResponse exception")
                               << LOG_KV("error", boost::diagnostic_information(e))
                               << LOG_KV("uuid", _id) << LOG_KV("moduleID", _moduleID)
                               << LOG_KV("peer", _dstNode->shortHex());

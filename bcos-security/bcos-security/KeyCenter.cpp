@@ -66,7 +66,7 @@ void KeyCenterHttpClient::connect()
     }
     catch (exception& e)
     {
-        KC_LOG(ERROR) << LOG_DESC("Init key manager failed.") << LOG_KV("reason", e.what()) << endl;
+        KC_LOG(DEBUG) << LOG_DESC("Init key manager failed.") << LOG_KV("reason", e.what()) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterInitError());
     }
 }
@@ -82,7 +82,7 @@ void KeyCenterHttpClient::close()
 
     if (ec && ec != beast::errc::not_connected)
     {
-        KC_LOG(ERROR) << LOG_DESC("Close key manager failed.") << LOG_KV("error_code", ec) << endl;
+        KC_LOG(DEBUG) << LOG_DESC("Close key manager failed.") << LOG_KV("error_code", ec) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterCloseError());
     }
 }
@@ -137,7 +137,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
 
         if (rsp.result_int() != 200)
         {
-            KC_LOG(ERROR) << LOG_BADGE("callMethod") << LOG_DESC("http error")
+            KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("http error")
                           << LOG_KV("reason", rsp.result_int());
             throw;
         }
@@ -146,7 +146,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         bool parsingSuccessful = reader.parse(rsp.body().c_str(), res);
         if (!parsingSuccessful)
         {
-            KC_LOG(ERROR) << LOG_BADGE("callMethod") << LOG_DESC("respond json error")
+            KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("respond json error")
                           << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
             throw;
         }
@@ -155,7 +155,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
     }
     catch (exception& e)
     {
-        KC_LOG(ERROR) << LOG_DESC("CallMethod error") << LOG_KV("reason", e.what());
+        KC_LOG(DEBUG) << LOG_DESC("CallMethod error") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError());
     }
 
@@ -166,7 +166,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey, const bool 
 {
     if (_cipherDataKey.empty())
     {
-        KC_LOG(ERROR) << LOG_DESC("Get datakey exception. cipherDataKey is empty");
+        KC_LOG(DEBUG) << LOG_DESC("Get datakey exception. cipherDataKey is empty");
         BOOST_THROW_EXCEPTION(KeyCenterDataKeyError());
     }
 
@@ -218,7 +218,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey, const bool 
     catch (exception& e)
     {
         clearCache();
-        KC_LOG(ERROR) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
+        KC_LOG(DEBUG) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
