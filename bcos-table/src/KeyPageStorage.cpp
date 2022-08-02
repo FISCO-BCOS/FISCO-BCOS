@@ -59,7 +59,8 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     size_t validCount = 0;
     for (auto& info : pageInfo)
     {
-        auto [error, data] = getData(tableView, info.getPageKey(), true);
+        auto [error, data] =
+            getData(tableView, info.getPageKey(), info.getCount() > 0 ? true : false);
         boost::ignore_unused(error);
         assert(!error);
         auto page = &std::get<0>(data.value()->data);
@@ -650,7 +651,8 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
         Data* pageData = pageInfoOp.value()->getPageData();
         if (!pageData)
         {
-            auto [error, pageDataOp] = getData(table, pageInfoOp.value()->getPageKey(), true);
+            auto [error, pageDataOp] = getData(table, pageInfoOp.value()->getPageKey(),
+                pageInfoOp.value()->getCount() > 0 ? true : false);
             if (error)
             {
                 return std::make_pair(std::move(error), std::nullopt);
@@ -727,7 +729,9 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
     std::optional<Entry> entryOld;
     if (!pageData)
     {
-        auto [e, pageDataOp] = getData(table, pageKey, pageInfoOption.has_value());
+        bool shouldExist =
+            pageInfoOption.has_value() ? (pageInfoOption.value()->getCount() > 0) : false;
+        auto [e, pageDataOp] = getData(table, pageKey, shouldExist);
         if (e)
         {
             return std::move(e);
