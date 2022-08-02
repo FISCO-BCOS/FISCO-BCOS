@@ -106,7 +106,7 @@ void BlockSync::initSendResponseHandler()
                     if (_error)
                     {
                         BLKSYNC_LOG(WARNING)
-                            << LOG_DESC("sendResonse failed") << LOG_KV("uuid", _id)
+                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
                             << LOG_KV("module", std::to_string(_moduleID))
                             << LOG_KV("dst", _dstNode->shortHex())
                             << LOG_KV("code", _error->errorCode())
@@ -116,7 +116,7 @@ void BlockSync::initSendResponseHandler()
         }
         catch (std::exception const& e)
         {
-            BLKSYNC_LOG(WARNING) << LOG_DESC("sendResonse exception")
+            BLKSYNC_LOG(WARNING) << LOG_DESC("sendResponse exception")
                                  << LOG_KV("error", boost::diagnostic_information(e));
         }
     };
@@ -242,7 +242,7 @@ bool BlockSync::shouldSyncing()
     {
         return false;
     }
-    // the node is consensusing the block
+    // the node is reaching consensus the block
     if (m_config->committedProposalNumber() >= m_config->knownHighestNumber())
     {
         return false;
@@ -600,7 +600,6 @@ void BlockSync::maintainDownloadingQueue()
         m_downloadingQueue->pop();
         m_state = SyncState::Downloading;
         auto blockHeader = block->blockHeader();
-        auto blockNumber = blockHeader->number();
         auto header = block->blockHeader();
         auto signature = header->signatureList();
         BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_DESC("BlockSync: applyBlock")

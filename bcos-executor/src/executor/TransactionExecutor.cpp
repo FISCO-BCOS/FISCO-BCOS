@@ -219,10 +219,6 @@ void TransactionExecutor::initEvmEnvironment()
 
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     storage::StorageInterface::Ptr storage = m_backendStorage;
-    if (m_cachedStorage)
-    {
-        storage = m_cachedStorage;
-    }
     SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
     DagTransferPrecompiled::createDagTable(storage);
 
@@ -271,10 +267,6 @@ void TransactionExecutor::initWasmEnvironment()
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     storage::StorageInterface::Ptr storage = m_backendStorage;
-    if (m_cachedStorage)
-    {
-        storage = m_cachedStorage;
-    }
     SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
     DagTransferPrecompiled::createDagTable(storage);
 

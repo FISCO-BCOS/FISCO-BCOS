@@ -103,7 +103,8 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     if (!table)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
-                               << LOG_DESC("open table failed.");
+                               << LOG_DESC("open table failed.")
+                               << LOG_KV("tableName", m_tableName);
         auto blockContext = _executive->blockContext().lock();
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_OPEN_ERROR,
             CodecWrapper(blockContext->hashHandler(), blockContext->isWasm()));

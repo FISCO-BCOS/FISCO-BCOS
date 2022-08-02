@@ -211,26 +211,32 @@ bool DownloadingQueue::verifyExecutedBlock(
 std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 {
     std::stringstream oss;
-    auto sealerList = _header->sealerList();
     std::stringstream sealerListStr;
-    for (auto const& sealer : sealerList)
-    {
-        sealerListStr << *toHexString(sealer) << ", ";
-    }
-    auto signatureList = _header->signatureList();
     std::stringstream signatureListStr;
-    for (auto const& signatureData : signatureList)
-    {
-        signatureListStr << (*toHexString(signatureData.signature)) << ":" << signatureData.index
-                         << ", ";
-    }
-
     std::stringstream weightsStr;
+
+    sealerListStr << "size: " << _header->sealerList().size();
+    signatureListStr << "size: " << _header->signatureList().size();
+    if (c_fileLogLevel >= TRACE)
+    {
+        auto sealerList = _header->sealerList();
+        for (auto const& sealer : sealerList)
+        {
+            sealerListStr << *toHexString(sealer) << ", ";
+        }
+        auto signatureList = _header->signatureList();
+        for (auto const& signatureData : signatureList)
+        {
+            signatureListStr << (*toHexString(signatureData.signature)) << ":"
+                             << signatureData.index << ", ";
+        }
+    }
     auto weightList = _header->consensusWeights();
     for (auto const& weight : weightList)
     {
         weightsStr << weight << ", ";
     }
+
     auto parentInfo = _header->parentInfo();
     std::stringstream parentInfoStr;
     for (auto const& parent : parentInfo)

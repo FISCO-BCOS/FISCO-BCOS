@@ -415,7 +415,8 @@ void BlockExecutive::asyncExecute(
                     if (error)
                     {
                         SCHEDULER_LOG(ERROR)
-                            << "DAG execute block with error!" << error->errorMessage();
+                            << BLOCK_NUMBER(number()) << "DAG execute block with error!"
+                            << error->errorMessage();
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                      SchedulerError::DAGError, "DAG execute error!", *error),
                             nullptr, m_isSysBlock);
@@ -492,8 +493,9 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 batchBlockCommit([this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR) << "Commit block to storage failed!"
-                                             << LOG_KV("number", number()) << error->errorMessage();
+                        SCHEDULER_LOG(ERROR)
+                            << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
+                            << error->errorMessage();
 
                         // FATAL ERROR, NEED MANUAL FIX!
 
