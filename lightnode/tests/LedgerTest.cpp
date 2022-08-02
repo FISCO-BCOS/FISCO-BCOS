@@ -305,21 +305,6 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         fromBlocks.begin(), fromBlocks.end(), toBlocks.begin(), toBlocks.end());
-
-    for (auto& fromIt : fromData)
-    {
-        auto toIt = toData.find(fromIt.first);
-        if (toIt == toData.end())
-        {
-            std::cout << "Not found key in toData: " << std::get<0>(fromIt.first) << ":"
-                      << std::get<1>(fromIt.first) << std::endl;
-            BOOST_FAIL("Not found key");
-        }
-        else
-        {
-            BOOST_CHECK_EQUAL(toIt->second, toIt->second);
-        }
-    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
