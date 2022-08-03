@@ -72,12 +72,12 @@ static auto newStorage(const std::string& path)
         std::unique_ptr<rocksdb::DB>(db), nullptr);
 }
 
-static auto startSyncerThread(
-    bcos::concepts::ledger::Ledger auto fromLedger, bcos::concepts::ledger::Ledger auto toLedger)
+static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
+    bcos::concepts::ledger::Ledger auto toLedger, std::atomic_bool const& stopToken)
 {
-    std::jthread worker([fromLedger = std::move(fromLedger), toLedger = std::move(toLedger)](
-                            const std::stop_token& stopToken) mutable {
-        while (!stopToken.stop_requested())
+    std::thread worker([fromLedger = std::move(fromLedger), toLedger = std::move(toLedger),
+                           &stopToken]() mutable {
+        while (!stopToken)
         {
             try
             {
@@ -289,7 +289,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         transactionPool, scheduler);
     wsService->start();
 
-    auto syncer = startSyncerThread(remoteLedger, localLedger);
+    auto stopToken = false;
+    auto syncer = startSyncerThread(remoteLedger, localLedger, stopToken);
     syncer.join();
 
     return 0;
