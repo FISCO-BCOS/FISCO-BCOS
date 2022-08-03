@@ -21,6 +21,7 @@
 #pragma once
 
 #include <bcos-utilities/Ranges.h>
+#include <boost/throw_exception.hpp>
 #include <span>
 
 namespace bcos::crypto::trivial
@@ -75,6 +76,28 @@ constexpr auto toView(trivial::Object auto&& object)
     else
     {
         static_assert(!sizeof(object), "Unsupported type!");
+    }
+}
+
+template <class Range>
+concept DynamicRange = requires(Range range, size_t newSize)
+{
+    RANGES::range<Range>;
+    range.resize(newSize);
+    range.reserve(newSize);
+};
+
+void resizeTo(RANGES::range auto& out, size_t size)
+{
+    if (RANGES::size(out) < size)
+    {
+        if constexpr (DynamicRange<std::remove_cvref_t<decltype(out)>>)
+        {
+            out.resize(size);
+            return;
+        }
+
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
     }
 }
 

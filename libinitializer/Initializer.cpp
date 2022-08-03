@@ -31,7 +31,8 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -54,6 +55,9 @@
 #include <util/tc_clientsocket.h>
 #include <vector>
 
+#ifdef WITH_LIGHTNODE
+#include "LightNodeInitializer.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -303,6 +307,31 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
+
+#ifdef WITH_LIGHTNODE
+    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
+    std::shared_ptr<AnyLedger> anyLedger;
+    if (m_nodeConfig->smCryptoType())
+    {
+        AnyLedger::SM3Ledger sm3Ledger(std::move(storageWrapper));
+        anyLedger = std::make_shared<AnyLedger>(std::move(sm3Ledger));
+    }
+    else
+    {
+        AnyLedger::Keccak256Ledger keccak256Ledger(std::move(storageWrapper));
+        anyLedger = std::make_shared<AnyLedger>(std::move(keccak256Ledger));
+    }
+    auto txpool = m_txpoolInitializer->txpool();
+    auto transactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(txpool);
+    auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
+        m_scheduler, m_protocolInitializer->cryptoSuite());
+
+    LightNodeInitializer lightNodeInitializer;
+    lightNodeInitializer.initLedgerServer(
+        std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
+        anyLedger, transactionPool, scheduler);
+#endif
 }
 
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)

@@ -1,7 +1,4 @@
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
-#include "../storage/StorageSyncWrapper.h"
+#include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/test/unit_test.hpp>
 
@@ -11,7 +8,7 @@ struct StorageSyncWrapperFixture
 {
     StorageSyncWrapperFixture() : storage(std::make_shared<StateStorage>(nullptr)) {}
 
-    StorageSyncWrapper<StateStorage::Ptr> storage;
+    StorageImpl<StateStorage::Ptr> storage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(StorageSyncWrapperTest, StorageSyncWrapperFixture)

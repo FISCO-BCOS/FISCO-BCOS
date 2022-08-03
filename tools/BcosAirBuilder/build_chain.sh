@@ -45,6 +45,7 @@ binary_path=""
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="false"
+lightnode_exec=""
 download_timeout=240
 
 LOG_WARN() {
@@ -474,6 +475,7 @@ Usage:
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
     -v <FISCO-BCOS binary version>      Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
+    -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
     -t <mtail exec>                     [Required] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
@@ -505,11 +507,15 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:v:i:M:k:wDshmARa:" option; do
+    while getopts "l:L:C:c:o:e:t:p:d:v:i:M:k:wDshmARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
             use_ip_param="true"
+            ;;
+        L)
+            lightnode_exec="$OPTARG"
+            file_must_exists "${lightnode_exec}"
             ;;
         o)
             output_dir="$OPTARG"

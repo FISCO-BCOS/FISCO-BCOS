@@ -1312,7 +1312,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key =
@@ -1327,7 +1327,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             if (k % 5 < 4)
             {
@@ -1346,7 +1346,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1369,7 +1369,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 2200);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeRandom)
@@ -1380,7 +1380,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
-    auto entryCount = 1000;
+    auto entryCount = 100;
     auto tableCount = 100;
 
 #if defined(__APPLE__)
@@ -1491,8 +1491,8 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
         }
         return true;
     });
-    BOOST_TEST(totalCount == 4190);  // meta + 5page + s_table
-    BOOST_TEST(deleted == 3300);     // meta + 5page + s_table
+    BOOST_TEST(totalCount == 2200);  // meta + 5page + s_table
+    BOOST_TEST(deleted == 1900);     // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
@@ -1693,7 +1693,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key =
@@ -1708,7 +1708,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1724,7 +1724,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 2200);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitRandom)
@@ -1764,7 +1764,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 5000; ++k)
+        for (int k = 0; k < 500; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1854,14 +1854,13 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#if defined(__APPLE__)
 #pragma omp parallel for
-#endif
         for (int k = 0; k < 1000; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
             entry->setField(0, boost::lexical_cast<std::string>(k));
+#pragma omp critical
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -1871,22 +1870,25 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#if defined(__APPLE__)
 #pragma omp parallel for
-#endif
         for (int k = 0; k < 1000; ++k)
         {
             Condition c;
             c.limit(0, 200);
             auto keys = table->getPrimaryKeys(c);
+
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 200);
             c.limit(200, 300);
             keys = table->getPrimaryKeys(c);
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 300);
             c.limit(900, 200);
             keys = table->getPrimaryKeys(c);
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
             c.GE("900");
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
         }
     }

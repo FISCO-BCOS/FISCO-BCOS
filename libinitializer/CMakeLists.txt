@@ -4,7 +4,7 @@ find_package(Boost REQUIRED program_options)
 find_package(jsoncpp CONFIG REQUIRED)
 
 add_library(${COMMAND_HELPER_LIB} CommandHelper.cpp)
-target_link_libraries(${COMMAND_HELPER_LIB} bcos-framework Boost::program_options)
+target_link_libraries(${COMMAND_HELPER_LIB} PUBLIC bcos-framework Boost::program_options)
 
 add_library(${PROTOCOL_INIT_LIB} ProtocolInitializer.cpp)
 # target_compile_options(${PROTOCOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
@@ -25,8 +25,11 @@ target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARG
 
 add_library(${INIT_LIB} Initializer.cpp)
 # target_compile_options(${INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
+list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET})
 if(WITH_ETCD)
-    target_link_libraries(${INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${LEADER_ELECTION_TARGET})
-else()
-    target_link_libraries(${INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} )
+    list(APPEND INIT_LIB_DEPENDS ${LEADER_ELECTION_TARGET})
 endif()
+if(WITH_LIGHTNODE)
+    list(APPEND INIT_LIB_DEPENDS bcos-lightnode bcos-concepts)
+endif()
+target_link_libraries(${INIT_LIB} PUBLIC ${INIT_LIB_DEPENDS})

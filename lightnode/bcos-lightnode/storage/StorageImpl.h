@@ -1,23 +1,24 @@
 #pragma once
 
+#include <bcos-concepts/Basic.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-framework/storage/Entry.h>
 #include <boost/throw_exception.hpp>
+#include <type_traits>
 
 namespace bcos::storage
 {
 
-template <class StoragePtr>
-class StorageSyncWrapper
-  : public bcos::concepts::storage::StorageBase<StorageSyncWrapper<StoragePtr>>
+template <class StorageType>
+class StorageImpl : public bcos::concepts::storage::StorageBase<StorageImpl<StorageType>>
 {
 public:
-    StorageSyncWrapper(StoragePtr storage) : m_storage(std::move(storage)) {}
-    StorageSyncWrapper(const StorageSyncWrapper&) = default;
-    StorageSyncWrapper(StorageSyncWrapper&&) = default;
-    StorageSyncWrapper& operator=(const StorageSyncWrapper&) = default;
-    StorageSyncWrapper& operator=(StorageSyncWrapper&&) = default;
-    ~StorageSyncWrapper() = default;
+    StorageImpl(StorageType storage) : m_storage(std::move(storage)) {}
+    StorageImpl(const StorageImpl&) = default;
+    StorageImpl(StorageImpl&&) = default;
+    StorageImpl& operator=(const StorageImpl&) = default;
+    StorageImpl& operator=(StorageImpl&&) = default;
+    ~StorageImpl() = default;
 
     std::optional<Entry> impl_getRow(std::string_view table, std::string_view key)
     {
@@ -37,17 +38,25 @@ public:
     }
 
     std::vector<std::optional<Entry>> impl_getRows(
-        std::string_view table, RANGES::range auto&& keys)
+        std::string_view table, RANGES::range auto const& keys)
     {
         Error::UniquePtr error;
         std::vector<std::optional<Entry>> entries;
 
-        storage().asyncGetRows(table, std::forward<decltype(keys)>,
-            [&error, &entries](
-                Error::UniquePtr errorOut, std::vector<std::optional<Entry>> entriesOut) {
-                error = std::move(errorOut);
-                entries = std::move(entriesOut);
-            });
+        auto callback = [&error, &entries](Error::UniquePtr errorOut,
+                            std::vector<std::optional<Entry>> entriesOut) {
+            error = std::move(errorOut);
+            entries = std::move(entriesOut);
+        };
+
+        std::vector<std::string_view> viewArray;
+        viewArray.reserve(RANGES::size(keys));
+        for (auto&& it : keys)
+        {
+            viewArray.emplace_back(
+                std::string_view((const char*)RANGES::data(it), RANGES::size(it)));
+        }
+        storage().asyncGetRows(table, viewArray, std::move(callback));
 
         if (error)
             BOOST_THROW_EXCEPTION(*error);
@@ -70,7 +79,7 @@ public:
     {
         Error::UniquePtr error;
 
-        storage()->asyncCreateTable(std::move(tableName), std::string{},
+        storage().asyncCreateTable(std::move(tableName), std::string{},
             [&error](Error::UniquePtr errorOut, [[maybe_unused]] auto&& table) {
                 error = std::move(errorOut);
             });
@@ -79,10 +88,10 @@ public:
     };
 
 private:
-    constexpr auto& storage() { return *m_storage; }
+    constexpr auto& storage() { return bcos::concepts::getRef(m_storage); }
 
-    StoragePtr m_storage;
+    StorageType m_storage;
 };
 
-static_assert(bcos::concepts::storage::Storage<StorageSyncWrapper<int>>, "fail!");
+static_assert(bcos::concepts::storage::Storage<StorageImpl<int>>, "fail!");
 }  // namespace bcos::storage

@@ -16,7 +16,8 @@ concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType>
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 // clang-format off
-struct DataFlagBase {};
+struct DataFlagBase {
+};
 struct ALL: public DataFlagBase {};
 struct HEADER: public DataFlagBase {};
 struct TRANSACTIONS: public DataFlagBase {};
@@ -26,7 +27,7 @@ struct NONCES: public DataFlagBase {};
 template <class FlagType>
 concept DataFlag = std::derived_from<FlagType, DataFlagBase>;
 
-struct TransactionCount
+struct Status
 {
     uint64_t total = 0;
     uint64_t failed = 0;
@@ -38,29 +39,31 @@ template <class Impl>
 class LedgerBase
 {
 public:
-    template <DataFlag... flags>
-    auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber)
-        -> bcos::concepts::block::Block auto
+    template <DataFlag... Flags>
+    void getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block)
     {
-        return impl().template impl_getBlock<flags...>(blockNumber);
+        impl().template impl_getBlock<Flags...>(blockNumber, block);
     }
 
+    template <DataFlag... Flags>
     void setBlock(bcos::concepts::block::Block auto block)
     {
-        impl().impl_setBlock(std::move(block));
+        impl().template impl_setBlock<Flags...>(std::move(block));
     }
 
-    template <DataFlag flag>
-    auto getTransactionsOrReceipts(RANGES::range auto const& hashes) -> RANGES::range auto
+    void getTransactionsOrReceipts(
+        RANGES::range auto const& hashes, RANGES::range auto& out) requires
+        TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
-        return impl().template impl_getTransactionsOrReceipts<flag>(hashes);
+        impl().impl_getTransactionsOrReceipts(hashes, out);
     }
 
-    TransactionCount getTotalTransactionCount() { return impl().impl_getTotalTransactionCount(); }
+    Status getStatus() { return impl().impl_getStatus(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
-    void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires
-        bcos::concepts::ledger::TransactionOrReceipt<RANGES::range_value_t<decltype(inputs)>>
+    void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires bcos::concepts::
+        ledger::TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
     {
         auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
             decltype(input.dataHash) hash(Hasher::HASH_SIZE);
@@ -84,6 +87,15 @@ public:
     {
         impl().template impl_setTransactionOrReceiptBuffers<isTransaction>(
             hashes, std::move(buffers));
+    }
+
+    template <class LedgerType, bcos::concepts::block::Block BlockType>
+    requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
+        std::derived_from<typename LedgerType::element_type,
+            LedgerBase<typename LedgerType::element_type>>
+    void sync(LedgerType& source, bool onlyHeader)
+    {
+        impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
     }
 
 private:

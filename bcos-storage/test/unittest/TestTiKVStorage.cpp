@@ -1,5 +1,5 @@
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-storage/src/TiKVStorage.h"
+#include "bcos-storage/TiKVStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
 #include <bcos-utilities/DataConvertUtility.h>
