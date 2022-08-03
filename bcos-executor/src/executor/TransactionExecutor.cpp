@@ -629,7 +629,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                                  << LOG_KV("txNum", txNum) << LOG_KV("outputNum", outputs.size())
                                  << LOG_KV("contractAddress", contractAddress)
                                  << LOG_KV("requestTimestamp", requestTimestamp)
-                                 << LOG_KV("errorMessage", error ? error->errorMessage() : "ok")
+                                 << LOG_KV("msg", error ? error->errorMessage() : "ok")
                                  << LOG_KV("timeCost", utcTime() - requestTimestamp);
         _callback(std::move(error), std::move(outputs));
     };

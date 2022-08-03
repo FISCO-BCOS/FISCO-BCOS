@@ -29,11 +29,12 @@ macro(default_option O DEF)
     endif()
 endmacro()
 
-set(MARCH_TYPE "-march=native -mtune=generic")
+set(MARCH_TYPE "-mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
 if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
     message(FATAL "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
 endif()
 
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
 
@@ -44,9 +45,17 @@ macro(configure_project)
 
     default_option(BUILD_STATIC OFF)
 
+    
+    # for boost-ssl enable/disable native
+    set(ARCH_NATIVE OFF)
+    # for groupSignature enable/disable native
     default_option(NATIVE OFF)
+    if ("${ARCHITECTURE}" MATCHES "aarch64" OR "${ARCHITECTURE}" MATCHES "arm64")
+        default_option(NATIVE ON)
+        set(ARCH_NATIVE ON)
+    endif()
     if(NATIVE)
-        set(MARCH_TYPE "-march=native -mtune=native")
+        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
 
     default_option(SANITIZE OFF)
