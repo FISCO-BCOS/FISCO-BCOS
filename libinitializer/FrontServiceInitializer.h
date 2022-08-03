@@ -49,6 +49,7 @@ class FrontService;
 namespace initializer
 {
 class ProtocolInitializer;
+
 class FrontServiceInitializer
 {
 public:

@@ -1,7 +1,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-storage/src/RocksDBStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
+#include <bcos-storage/RocksDBStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
@@ -697,7 +697,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         params.number = i;
         rocksDBStorage->asyncPrepare(
             params, *state, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
-        rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+        rocksDBStorage->asyncCommit(
+            params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

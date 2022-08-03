@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import configparser
+import platform
 import shutil
 
 from common import utilities
@@ -144,25 +145,37 @@ class ServiceConfigGenerator:
             if not os.path.exists(stop_all_file):
                 shutil.copy(tars_stop__all_file, stop_all_file)
 
-            sed_cmd = "sed -i .bak s/@SERVICE_NAME@/" + service_name + "/g " + start_file
+            sys_name = platform.system()
+            if sys_name.lower() == "darwin":
+                sed = "sed -i .bak "
+            else:
+                sed = "sed -i "
+
+            sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + start_file
             execute_command_and_getoutput(sed_cmd)
-            sed_cmd = "sed -i .bak s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
+            sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
             execute_command_and_getoutput(sed_cmd)
 
-            sed_cmd = "sed -i .bak s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
+            sed_cmd = sed + "s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
 
             execute_command_and_getoutput(sed_cmd)
-            sed_cmd = "sed -i .bak s/@TARS_SERVER@/" + service_config.agency_config.name + service_name + "/g " + conf_file
+            sed_cmd = sed + "s/@TARS_SERVER@/" + service_config.agency_config.name + service_name + "/g " + conf_file
             execute_command_and_getoutput(sed_cmd)
 
-            sed_cmd = "sed -i .bak s/@TARS_LISTEN_IP@/" + ip + "/g " + conf_file
+            sed_cmd = sed + "s/@TARS_LISTEN_IP@/" + ip + "/g " + conf_file
             execute_command_and_getoutput(sed_cmd)
-            sed_cmd = "sed -i .bak s/@TARS_LISTEN_PORT@/" + str(service_config.tars_listen_port) + "/g " + conf_file
+            sed_cmd = sed + "s/@TARS_LISTEN_PORT@/" + str(service_config.tars_listen_port) + "/g " + conf_file
             execute_command_and_getoutput(sed_cmd)
 
-            os.remove(start_file + ".bak")
-            os.remove(stop_file + ".bak")
-            os.remove(conf_file + ".bak")
+            if os.path.exists(start_file + ".bak"):
+                os.remove(start_file + ".bak")
+
+            if os.path.exists(stop_file + ".bak"):
+                os.remove(stop_file + ".bak")
+        
+            if os.path.exists(conf_file + ".bak"):
+                os.remove(conf_file + ".bak")
+
             shutil.rmtree(os.path.join(conf_dir, "ssl"))
 
     def __get_cert_config_file_list(self, service_config, ip):

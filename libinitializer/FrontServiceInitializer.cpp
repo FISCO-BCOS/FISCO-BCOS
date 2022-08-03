@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "FrontServiceInitializer.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -26,6 +27,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontServiceFactory.h>
+#include <bcos-tars-protocol/tars/LightNode.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 using namespace bcos;

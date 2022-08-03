@@ -26,8 +26,8 @@
 #include "boost/filesystem.hpp"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-storage/src/RocksDBStorage.h>
-#include <bcos-storage/src/TiKVStorage.h>
+#include <bcos-storage/RocksDBStorage.h>
+#include <bcos-storage/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
 
 namespace bcos::initializer
@@ -38,7 +38,6 @@ public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
         const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
     {
-
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
         rocksdb::Options options;

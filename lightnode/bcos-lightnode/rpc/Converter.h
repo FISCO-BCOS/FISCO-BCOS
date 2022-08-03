@@ -6,22 +6,28 @@
 #include <bcos-concepts/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/value.h>
+#include <boost/algorithm/hex.hpp>
+#include <iterator>
 
 namespace bcos::rpc
 {
 template <bcos::crypto::hasher::Hasher Hasher>
 void toJsonResp(bcos::concepts::transaction::Transaction auto const& transaction, Json::Value& resp)
 {
-    resp["version"] = transaction.version;
+    resp["version"] = transaction.data.version;
     std::string hash;
     bcos::concepts::hash::calculate<Hasher>(transaction, hash);
     resp["hash"] = toHexStringWithPrefix(hash);
-    resp["nonce"] = transaction.nonce.str(16);
-    resp["blockLimit"] = transaction.blockLimit;
-    resp["to"] = transaction.to;
+
+    std::string nonce;
+    boost::algorithm::hex_lower(RANGES::begin(transaction.data.nonce),
+        RANGES::end(transaction.data.nonce), std::back_inserter(nonce));
+    resp["nonce"] = std::move(nonce);
+    resp["blockLimit"] = Json::Value((Json::Int64)transaction.data.blockLimit);
+    resp["to"] = transaction.data.to;
     resp["from"] = toHexStringWithPrefix(transaction.sender);
     resp["input"] = toHexStringWithPrefix(transaction.data.input);
-    resp["importTime"] = transaction.importTime;
+    resp["importTime"] = (Json::Int64)transaction.importTime;
     resp["chainID"] = std::string(transaction.data.chainID);
     resp["groupID"] = std::string(transaction.data.groupID);
     resp["abi"] = std::string(transaction.data.abi);
@@ -32,11 +38,11 @@ template <bcos::crypto::hasher::Hasher Hasher>
 void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     std::string_view txHash, Json::Value& resp)
 {
-    resp["version"] = receipt.data.version;
+    resp["version"] = Json::Value((Json::Int64)receipt.data.version);
     resp["contractAddress"] = receipt.data.contractAddress;
     resp["gasUsed"] = receipt.data.gasUsed;
-    resp["status"] = receipt.data.status;
-    resp["blockNumber"] = receipt.data.blockNumber;
+    resp["status"] = Json::Value((Json::Int64)receipt.data.status);
+    resp["blockNumber"] = Json::Value((Json::Int64)receipt.data.blockNumber);
     resp["output"] = toHexStringWithPrefix(receipt.data.output);
     resp["message"] = receipt.message;
     resp["transactionHash"] = std::string(txHash);
@@ -48,9 +54,9 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     for (const auto& logEntry : receipt.data.logEntries)
     {
         Json::Value jLog;
-        jLog["address"] = logEntry.address();
+        jLog["address"] = logEntry.address;
         jLog["topics"] = Json::Value(Json::arrayValue);
-        for (const auto& topic : logEntry.topics())
+        for (const auto& topic : logEntry.topic)
         {
             jLog["topics"].append(toHexStringWithPrefix(topic));
         }
@@ -60,40 +66,39 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-void toJsonResp(
-    bcos::concepts::block::Block auto const& block, std::string_view txHash, Json::Value& jResp)
+void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jResp)
 {
     auto const& blockHeader = block.blockHeader;
     std::string hash;
     bcos::concepts::hash::calculate<Hasher>(block, hash);
     jResp["hash"] = toHexStringWithPrefix(hash);
-    jResp["version"] = block.version;
-    jResp["txsRoot"] = toHexStringWithPrefix(blockHeader.txsRoot);
-    jResp["receiptsRoot"] = toHexStringWithPrefix(blockHeader.receiptRoot);
-    jResp["stateRoot"] = toHexStringWithPrefix(blockHeader.stateRoot);
-    jResp["number"] = blockHeader.blockNumber;
-    jResp["gasUsed"] = blockHeader.gasUsed;
-    jResp["timestamp"] = blockHeader.timestamp;
-    jResp["sealer"] = blockHeader.sealer;
-    jResp["extraData"] = toHexStringWithPrefix(blockHeader.extraData);
+    jResp["version"] = Json::Value((Json::Int64)block.version);
+    jResp["txsRoot"] = toHexStringWithPrefix(blockHeader.data.txsRoot);
+    jResp["receiptsRoot"] = toHexStringWithPrefix(blockHeader.data.receiptRoot);
+    jResp["stateRoot"] = toHexStringWithPrefix(blockHeader.data.stateRoot);
+    jResp["number"] = Json::Value((Json::Int64)blockHeader.data.blockNumber);
+    jResp["gasUsed"] = blockHeader.data.gasUsed;
+    jResp["timestamp"] = Json::Value((Json::Int64)blockHeader.data.timestamp);
+    jResp["sealer"] = Json::Value((Json::Int64)blockHeader.data.sealer);
+    jResp["extraData"] = toHexStringWithPrefix(blockHeader.data.extraData);
 
     jResp["consensusWeights"] = Json::Value(Json::arrayValue);
-    for (const auto& wei : blockHeader.consensusWeights)
+    for (const auto& weight : blockHeader.data.consensusWeights)
     {
-        jResp["consensusWeights"].append(wei);
+        jResp["consensusWeights"].append(Json::Value((Json::Int64)weight));
     }
 
     jResp["sealerList"] = Json::Value(Json::arrayValue);
-    for (const auto& sealer : blockHeader.sealerList)
+    for (const auto& sealer : blockHeader.data.sealerList)
     {
         jResp["sealerList"].append(toHexStringWithPrefix(sealer));
     }
 
     Json::Value jParentInfo(Json::arrayValue);
-    for (const auto& parent : blockHeader.parentInfo)
+    for (const auto& parent : blockHeader.data.parentInfo)
     {
         Json::Value jp;
-        jp["blockNumber"] = parent.blockNumber;
+        jp["blockNumber"] = Json::Value((Json::Int64)parent.blockNumber);
         jp["blockHash"] = toHexStringWithPrefix(parent.blockHash);
         jParentInfo.append(std::move(jp));
     }
@@ -103,7 +108,7 @@ void toJsonResp(
     for (const auto& sign : blockHeader.signatureList)
     {
         Json::Value jSign;
-        jSign["sealerIndex"] = sign.index;
+        jSign["sealerIndex"] = Json::Value((Json::Int64)sign.sealerIndex);
         jSign["signature"] = toHexStringWithPrefix(sign.signature);
         jSignList.append(std::move(jSign));
     }

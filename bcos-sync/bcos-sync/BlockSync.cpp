@@ -562,8 +562,8 @@ void BlockSync::maintainDownloadingQueue()
     m_downloadingQueue->tryToCommitBlockToLedger();
     auto executedBlock = m_config->executedBlock();
     // remove the expired block
-    while (m_downloadingQueue->top() &&
-           m_downloadingQueue->top()->blockHeader()->number() <= executedBlock)
+    auto topBlock = m_downloadingQueue->top();
+    while (topBlock && topBlock->blockHeader()->number() <= executedBlock)
     {
         m_downloadingQueue->pop();
     }
@@ -593,10 +593,15 @@ void BlockSync::maintainDownloadingQueue()
         return;
     }
     // execute the expected block
-    if (m_downloadingQueue->top() &&
-        m_downloadingQueue->top()->blockHeader()->number() == (executedBlock + 1))
+    topBlock = m_downloadingQueue->top();
+    if (topBlock && topBlock->blockHeader()->number() == (executedBlock + 1))
     {
         auto block = m_downloadingQueue->top();
+        // Note: the block maybe cleared here
+        if (!block)
+        {
+            return;
+        }
         m_downloadingQueue->pop();
         m_state = SyncState::Downloading;
         auto blockHeader = block->blockHeader();

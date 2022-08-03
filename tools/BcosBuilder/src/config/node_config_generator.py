@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 import configparser
 import json
+import platform
 import shutil
 from common import utilities
 from common.utilities import ConfigInfo
@@ -446,31 +447,42 @@ class NodeConfigGenerator:
         # copy service binary exec
         shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name), base_dir)
 
-        sed_cmd = "sed -i .bak s/@SERVICE_NAME@/" + service_name + "/g " + start_file
+        sys_name = platform.system()
+        if sys_name.lower() == "darwin":
+            sed = "sed -i .bak "
+        else:
+            sed = "sed -i "
+
+        sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + start_file
         execute_command_and_getoutput(sed_cmd)
 
-        sed_cmd = "sed -i .bak s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
+        sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
         execute_command_and_getoutput(sed_cmd)
 
-        sed_cmd = "sed -i .bak s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
+        sed_cmd = sed + "s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@TARS_SERVER@/" + node_config.node_service.service_name + "/g " + conf_file
+        sed_cmd = sed + "s/@TARS_SERVER@/" + node_config.node_service.service_name + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
 
         # tars config
-        sed_cmd = "sed -i .bak s/@TARS_LISTEN_IP@/" + node_config.deploy_ip + "/g " + conf_file
+        sed_cmd = sed + "s/@TARS_LISTEN_IP@/" + node_config.deploy_ip + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@TXPOOL_LISTEN_PORT@/" + str(node_config.tars_listen_port + 0) + "/g " + conf_file
+        sed_cmd = sed + "s/@TXPOOL_LISTEN_PORT@/" + str(node_config.tars_listen_port + 0) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@SCHEDULER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 1) + "/g " + conf_file
+        sed_cmd = sed + "s/@SCHEDULER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 1) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@PBFT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 2) + "/g " + conf_file
+        sed_cmd = sed + "s/@PBFT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 2) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@LEDGER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 3) + "/g " + conf_file
+        sed_cmd = sed + "s/@LEDGER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 3) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@FRONT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 4) + "/g " + conf_file
+        sed_cmd = sed + "s/@FRONT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 4) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
 
-        os.remove(start_file + ".bak")
-        os.remove(stop_file + ".bak")
-        os.remove(conf_file + ".bak")
+        if os.path.exists(start_file + ".bak"):
+            os.remove(start_file + ".bak")
+
+        if os.path.exists(stop_file + ".bak"):
+            os.remove(stop_file + ".bak")
+        
+        if os.path.exists(conf_file + ".bak"):
+            os.remove(conf_file + ".bak")

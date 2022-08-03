@@ -10,6 +10,7 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <compare>
 #include <cstdint>
 #include <exception>
 #include <initializer_list>
@@ -50,6 +51,7 @@ public:
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry&) = default;
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
+    auto operator<=>(const Entry&) const = default;
 
     ~Entry() noexcept {}
 

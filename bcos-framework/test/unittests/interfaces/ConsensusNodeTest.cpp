@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(test_moduleIDToString)
     BOOST_CHECK("amop" == protocol::moduleIDToString(protocol::ModuleID::AMOP));
     BOOST_CHECK("block_sync" == protocol::moduleIDToString(protocol::ModuleID::BlockSync));
     BOOST_CHECK("txs_sync" == protocol::moduleIDToString(protocol::ModuleID::TxsSync));
-    BOOST_CHECK("light_node" == protocol::moduleIDToString(protocol::ModuleID::LIGHTNODE));
+    BOOST_CHECK("light_node" == protocol::moduleIDToString(protocol::ModuleID::LIGHTNODE_GETBLOCK));
     BOOST_CHECK("cons_txs_sync" == protocol::moduleIDToString(protocol::ModuleID::ConsTxsSync));
 }
 
