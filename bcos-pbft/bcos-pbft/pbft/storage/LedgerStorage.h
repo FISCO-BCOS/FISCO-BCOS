@@ -45,7 +45,13 @@ public:
         createKVTable(m_pbftCommitDB);
         m_commitBlockWorker = std::make_shared<ThreadPool>("blockSubmit", 1);
     }
-
+    ~LedgerStorage() override
+    {
+        if (m_commitBlockWorker)
+        {
+            m_commitBlockWorker->stop();
+        }
+    }
     void createKVTable(std::string const& _dbName);
     PBFTProposalListPtr loadState(bcos::protocol::BlockNumber _stabledIndex) override;
 

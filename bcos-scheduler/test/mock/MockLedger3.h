@@ -1,5 +1,9 @@
 #pragma once
-#include "bcos-framework/bcos-framework/ledger/LedgerConfig.h"
+<<<<<<< HEAD
+== == == =
+
+>>>>>>> 96ba7d897c80396fd0b12c62b822fccaf7976d5f
+             #include "bcos-framework/bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/bcos-framework/protocol/Block.h"
@@ -14,7 +18,7 @@
 #include <map>
 
 
-using namespace bcos::ledger;
+    using namespace bcos::ledger;
 
 
 namespace bcos::test
@@ -126,15 +130,15 @@ public:
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override
     {}
-    //     void commitSuccess(bool _success)
-    //     {
-    //         ++commitBlockNumber;
-    //         SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
-    //                              << LOG_KV("commitBlockNumber", commitBlockNumber);
-    //     }
+    void commitSuccess(bool _success)
+    {
+        ++commitBlockNumber;
+        SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
+                             << LOG_KV("commitBlockNumber", commitBlockNumber);
+    }
 
-    // private:
-    //     bcos::protocol::BlockNumber commitBlockNumber = 5;
+private:
+    bcos::protocol::BlockNumber commitBlockNumber = 5;
 };
 
 #pragma GCC diagnostic pop

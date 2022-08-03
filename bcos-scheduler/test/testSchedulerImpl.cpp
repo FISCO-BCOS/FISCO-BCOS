@@ -454,3 +454,4 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
+

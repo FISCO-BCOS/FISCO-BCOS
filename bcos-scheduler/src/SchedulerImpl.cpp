@@ -112,7 +112,8 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     }
     catch (std::exception const& e)
     {
-        SCHEDULER_LOG(ERROR) << "handleBlockQueue exception" << e.what();
+        SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "handleBlockQueue exception"
+                             << e.what();
         blocksLock.unlock();
         whenException(e);
     }
@@ -126,7 +127,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     if (block->blockHeader()->version() > (uint32_t)g_BCOSConfig.maxSupportedVersion())
     {
         auto errorMessage = "The block version is larger than maxSupportedVersion";
-        SCHEDULER_LOG(WARNING) << errorMessage << LOG_KV("version", block->version())
+        SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeaderConst()->number()) << errorMessage
+                               << LOG_KV("version", block->version())
                                << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
         _callback(std::make_shared<bcos::Error>(SchedulerError::InvalidBlockVersion, errorMessage),
             nullptr, false);
@@ -150,7 +152,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     }
     catch (std::exception& e)
     {
-        SCHEDULER_LOG(ERROR) << "fetchGasLimit exception: " << boost::diagnostic_information(e);
+        SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(block->blockHeaderConst()->number())
+                             << "fetchGasLimit exception: " << boost::diagnostic_information(e);
         _callback(BCOS_ERROR_WITH_PREV_PTR(
                       SchedulerError::fetchGasLimitError, "etchGasLimit exception", e),
             nullptr, false);
@@ -300,7 +303,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
             if (error)
             {
-                SCHEDULER_LOG(ERROR) << "executeBlock error: " << error->what();
+                SCHEDULER_LOG(ERROR)
+                    << BLOCK_NUMBER(header->number()) << "executeBlock error: " << error->what();
                 {
                     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                     m_blocks->pop_back();
@@ -340,7 +344,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto requestBlockNumber = header->number();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](
                         bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber) << METRIC << "CommitBlock response"
+        SCHEDULER_LOG(INFO) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock response"
                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
     };
@@ -395,7 +399,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     .str();
 
 
-            SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
+                                 << message;
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BlockIsCommitting, message), nullptr);
             return;
         }

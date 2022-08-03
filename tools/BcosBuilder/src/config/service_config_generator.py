@@ -1,10 +1,8 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import configparser
-from itertools import chain
 import shutil
 
-from soupsieve import select
 from common import utilities
 from common.utilities import ServiceInfo
 from common.utilities import ConfigInfo
@@ -32,7 +30,6 @@ class ServiceConfigGenerator:
 
     def generate_rpc_config_files(self, is_build_opr):
         utilities.log_info("* generate config for the rpc service, build opr: %s" % str(is_build_opr))
-        
         section = "rpc"
         for rpc_service in self.config.rpc_service_list.keys():
             rpc_service_config = self.config.rpc_service_list[rpc_service]
@@ -245,7 +242,7 @@ class ServiceConfigGenerator:
         ini_config["service"]['rpc'] = service_config.agency_config.chain_id + \
             "." + service_config.agency_config.rpc_service_name
 
-        ini_config["service"]['without_tars_framework'] =  "true" if is_build_opr else "false"
+        ini_config["service"]['without_tars_framework'] = "true" if is_build_opr else "false"
         ini_config["service"]['tars_proxy_file'] = 'conf/tars_proxy.json'
 
         ini_config["chain"]['chain_id'] = service_config.agency_config.chain_id

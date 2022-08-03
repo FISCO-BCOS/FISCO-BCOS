@@ -13,20 +13,20 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
         self.ini_tmp_config_file = "config.ini"
         self.genesis_tmp_config_file = 'config.genesis'
 
-    def generate_all_config(self, enforce_genesis_exists):
+    def generate_all_config(self, enforce_genesis_exists, is_build_opr = False):
         """
         generate all config for max-node
         """
         for group_config in self.chain_config.group_list.values():
             utilities.print_badge(
                 "generate genesis config for group %s" % group_config.group_id)
-            if self.generate_all_genesis_config(group_config, enforce_genesis_exists) is False:
+            if self.generate_all_genesis_config(group_config, enforce_genesis_exists, is_build_opr) is False:
                 return False
             utilities.print_badge(
                 "generate genesis config for %s success" % group_config.group_id)
             utilities.print_badge(
                 "generate ini config for BcosMaxNodeService of group %s" % group_config.group_id)
-            if self.generate_all_ini_config(group_config) is False:
+            if self.generate_all_ini_config(group_config, is_build_opr) is False:
                 return False
             utilities.print_badge(
                 "generate ini config for BcosMaxNodeService of group %s success" % group_config.group_id)

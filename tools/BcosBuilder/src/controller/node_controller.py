@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from black import out
 from config.max_node_config_generator import MaxNodeConfigGenerator
 from config.node_config_generator import NodeConfigGenerator
 from common import utilities
@@ -75,7 +74,7 @@ class NodeController:
         """
         generate expand config
         """
-        if self.node_generator.generate_all_config(True) is False:
+        if self.node_generator.generate_all_config(True, False) is False:
             return False
         return True
 

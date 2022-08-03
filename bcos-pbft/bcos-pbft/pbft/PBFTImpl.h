@@ -142,6 +142,11 @@ public:
         return m_pbftEngine->pbftConfig()->compatibilityVersion();
     }
 
+    void clearExceptionProposalState(bcos::protocol::BlockNumber _number) override
+    {
+        m_pbftEngine->clearExceptionProposalState(_number);
+    }
+
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;

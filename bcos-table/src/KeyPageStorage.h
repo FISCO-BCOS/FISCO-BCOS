@@ -478,13 +478,10 @@ public:
             {
                 if (it->getCount() == 0)
                 {
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                    {  // FIXME: this log is only for debug, comment it when release
-                        KeyPage_LOG(TRACE)
-                            << LOG_DESC("TableMeta empty page")
-                            << LOG_KV("pageKey", toHex(it->getPageKey()))
-                            << LOG_KV("count", it->getCount()) << LOG_KV("size", it->getSize());
-                    }
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta empty page")
+                        << LOG_KV("pageKey", toHex(it->getPageKey()))
+                        << LOG_KV("count", it->getCount()) << LOG_KV("size", it->getSize());
                     it = pages->erase(it);
                 }
                 else
@@ -493,6 +490,8 @@ public:
                 }
             }
             ar << *pages;
+            KeyPage_LOG(DEBUG) << LOG_DESC("Serialize TableMeta")
+                               << LOG_KV("validCount", pages->size());
         }
         template <class Archive>
         void load(Archive& ar, const unsigned int version)
