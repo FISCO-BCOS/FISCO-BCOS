@@ -64,6 +64,7 @@ public:
     }
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
+        override
     {
         asyncExecute([executive = shared_from_this(), callback](
                          Error::UniquePtr&& _error, protocol::BlockHeader::Ptr, bool) {
@@ -119,10 +120,12 @@ public:
     {
         if (m_blockNumber <= 5)
         {
+            // m_ledger->commitSuccess(false);
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, "asyncCommit errors!"));
         }
         else
         {
+            // m_ledger->commitSuccess(true);
             callback(nullptr);
         }
     }
@@ -146,6 +149,7 @@ private:
     bcos::protocol::Block::Ptr m_block;
     bcostars::protocol::BlockHeaderFactoryImpl::Ptr m_blockHeaderFactory;
     bcos::protocol::BlockNumber m_blockNumber;
+    bcos::test::MockLedger3::Ptr m_ledger;
     size_t m_gasLimit = TRANSACTION_GAS;
     bool m_isSysBlock;
     bool m_running = false;

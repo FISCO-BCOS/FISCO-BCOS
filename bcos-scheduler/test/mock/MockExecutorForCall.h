@@ -14,6 +14,7 @@ namespace bcos::test
 class MockParallelExecutorForCall : public MockParallelExecutor
 {
 public:
+    using Ptr = std::shared_ptr<MockParallelExecutorForCall>();
     MockParallelExecutorForCall(const std::string& name) : MockParallelExecutor(name) {}
 
     ~MockParallelExecutorForCall() override {}

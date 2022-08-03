@@ -1,3 +1,4 @@
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -14,6 +15,9 @@
 #include "mock/MockBlockExecutive.h"
 #include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
+#include "mock/MockExecutor.h"
+#include "mock/MockExecutorForCall.h"
+#include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger3.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -452,6 +456,149 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
 
     BOOST_CHECK(!commitBlockError);
 }
+
+
+BOOST_AUTO_TEST_CASE(getCode)
+{
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
+    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
+
+    // Add executor
+    auto executor = std::make_shared<MockDmcExecutor>("executor1");
+    executorManager->addExecutor("executor1", executor);
+    SCHEDULER_LOG(DEBUG) << "----- add Executor ------";
+    scheduler->getCode("hello world!", [](Error::Ptr error, bcos::bytes code) {
+        BOOST_CHECK(!error);
+        BOOST_CHECK(code.empty());
+    });
+}
+
+BOOST_AUTO_TEST_CASE(call)
+{
+    // Add executor
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    // auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
+    // scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
+    auto executor = std::make_shared<MockParallelExecutorForCall>("executor1");
+    executorManager->addExecutor("executor1", executor);
+
+
+    std::string inputStr = "Hello world! request";
+    bcos::crypto::KeyPairInterface::Ptr keyPair =
+        blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
+    auto tx = blockFactory->transactionFactory()->createTransaction(0, "address_to",
+        bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
+
+    auto empty_to = blockFactory->transactionFactory()->createTransaction(
+        0, "", bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
+
+    // call
+    {
+        bcos::protocol::TransactionReceipt::Ptr receipt;
+
+        scheduler->call(tx,
+            [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(receiptResponse);
+
+                receipt = std::move(receiptResponse);
+            });
+
+        BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        BOOST_CHECK_GT(receipt->gasUsed(), 0);
+        auto output = receipt->output();
+
+        std::string outputStr((char*)output.data(), output.size());
+        SCHEDULER_LOG(DEBUG) << LOG_KV("outputStr", outputStr);
+        BOOST_CHECK_EQUAL(outputStr, "Hello world! response");
+    }
+
+    // call empty to
+    {
+        scheduler->call(empty_to,
+            [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
+                BOOST_CHECK(error);
+                BOOST_CHECK(error->errorMessage() == "Call address is empty");
+                BOOST_CHECK(receiptResponse == nullptr);
+            });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(registerExecutor)
+{
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
+    auto executor2 = std::make_shared<MockDmcExecutor>("executor2");
+    scheduler->registerExecutor(
+        "executor1", executor1, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
+    scheduler->registerExecutor(
+        "executor2", executor2, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
+}
+
+
+BOOST_AUTO_TEST_CASE(testDeploySysContract)
+{
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    // Add executor
+    auto executor1 = std::make_shared<MockParallelExecutor>("executor1");
+    executorManager->addExecutor("executor1", executor1);
+
+    // Generate a test block
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(0);
+
+    auto tx = blockFactory->transactionFactory()->createTransaction(
+        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());
+    block->appendTransaction(std::move(tx));
+
+    std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
+    scheduler->executeBlock(block, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
+            // callback(BCOS_ERROR_UNIQUE_PTR(-1, "deploy sys contract!"), nullptr);
+            BOOST_CHECK(error == nullptr);
+            executedHeader.set_value(std::move(header));
+        });
+    auto header = executedHeader.get_future().get();
+
+    BOOST_CHECK(header);
+    BOOST_CHECK_NE(header->stateRoot(), h256());
+}
+
+BOOST_AUTO_TEST_CASE(testCallSysContract)
+{
+    auto scheduler =
+        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
+            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
+    // Add executor
+    auto executor1 = std::make_shared<MockParallelExecutorForCall>("executor1");
+    executorManager->addExecutor("executor1", executor1);
+
+    auto tx = blockFactory->transactionFactory()->createTransaction(
+        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());
+
+    bcos::protocol::TransactionReceipt::Ptr receipt;
+
+    scheduler->call(
+        tx, [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(receiptResponse);
+
+            receipt = std::move(receiptResponse);
+        });
+    BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+    BOOST_CHECK_GT(receipt->gasUsed(), 0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
-

@@ -1,9 +1,6 @@
 #pragma once
-<<<<<<< HEAD
-== == == =
 
->>>>>>> 96ba7d897c80396fd0b12c62b822fccaf7976d5f
-             #include "bcos-framework/bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/bcos-framework/protocol/Block.h"
@@ -18,7 +15,7 @@
 #include <map>
 
 
-    using namespace bcos::ledger;
+using namespace bcos::ledger;
 
 
 namespace bcos::test
@@ -29,7 +26,7 @@ class MockLedger3 : public bcos::ledger::LedgerInterface
 {
 public:
     MockLedger3() : LedgerInterface() {}
-
+    using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback) override
@@ -130,11 +127,22 @@ public:
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override
     {}
+
     void commitSuccess(bool _success)
     {
-        ++commitBlockNumber;
-        SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
-                             << LOG_KV("commitBlockNumber", commitBlockNumber);
+        if (_success)
+        {
+            ++commitBlockNumber;
+            SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
+                                 << LOG_KV("CommitBlock success, commitBlockNumber",
+                                        commitBlockNumber);
+        }
+        else
+        {
+            SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
+                                 << LOG_KV(
+                                        "CommitBlock failed, commitBlockNumber", commitBlockNumber);
+        }
     }
 
 private:

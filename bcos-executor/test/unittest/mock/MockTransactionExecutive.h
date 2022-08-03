@@ -25,10 +25,7 @@ public:
 
     virtual ~MockTransactionExecutive() {}
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override
-    {
-        return std::move(input);
-    }
+    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override { return input; }
     CallParameters::UniquePtr resume() override
     {
         auto callParameters = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
@@ -36,7 +33,7 @@ public:
         callParameters->codeAddress = "aabbccddee";
         callParameters->contextID = 1;
         callParameters->seq = 1;
-        return std::move(callParameters);
+        return callParameters;
     }
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters) override

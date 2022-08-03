@@ -66,11 +66,11 @@ public:
     virtual void prepare();
     virtual void asyncExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
-    void asyncCall(
+    virtual void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     virtual void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
-    void asyncNotify(
+    virtual void asyncNotify(
         std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
             std::function<void(Error::Ptr)>)>& notifier,
         std::function<void(Error::Ptr)> _callback);
