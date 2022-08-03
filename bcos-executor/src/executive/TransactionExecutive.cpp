@@ -87,7 +87,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     input->contextID = m_contextID;
 
     std::string newAddress;
-    if (isCreate)
+    if (isCreate && !m_blockContext.lock()->isWasm())
     {
         if (input->createSalt)
         {
