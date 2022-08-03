@@ -2,7 +2,6 @@
 #include "../Block.h"
 #include "../storage/Storage.h"
 #include <bcos-utilities/Ranges.h>
-#include <bits/ranges_base.h>
 #include <concepts>
 
 namespace bcos::concepts::ledger
