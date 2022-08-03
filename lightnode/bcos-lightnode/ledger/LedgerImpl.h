@@ -158,7 +158,7 @@ private:
             {
                 BlockType block;
                 sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
-                setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
+                impl_setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
             }
         }
         else
@@ -168,7 +168,7 @@ private:
             {
                 BlockType block;
                 sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
-                setBlock<bcos::concepts::ledger::ALL>(std::move(block));
+                impl_setBlock<bcos::concepts::ledger::ALL>(std::move(block));
             }
         }
     }
