@@ -23,11 +23,11 @@ void toJsonResp(bcos::concepts::transaction::Transaction auto const& transaction
     boost::algorithm::hex_lower(RANGES::begin(transaction.data.nonce),
         RANGES::end(transaction.data.nonce), std::back_inserter(nonce));
     resp["nonce"] = std::move(nonce);
-    resp["blockLimit"] = Json::Value(transaction.data.blockLimit);
+    resp["blockLimit"] = Json::Value((Json::Int64)transaction.data.blockLimit);
     resp["to"] = transaction.data.to;
     resp["from"] = toHexStringWithPrefix(transaction.sender);
     resp["input"] = toHexStringWithPrefix(transaction.data.input);
-    resp["importTime"] = Json::Value(transaction.importTime);
+    resp["importTime"] = (Json::Int64)transaction.importTime;
     resp["chainID"] = std::string(transaction.data.chainID);
     resp["groupID"] = std::string(transaction.data.groupID);
     resp["abi"] = std::string(transaction.data.abi);
@@ -38,11 +38,11 @@ template <bcos::crypto::hasher::Hasher Hasher>
 void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     std::string_view txHash, Json::Value& resp)
 {
-    resp["version"] = Json::Value(receipt.data.version);
+    resp["version"] = Json::Value((Json::Int64)receipt.data.version);
     resp["contractAddress"] = receipt.data.contractAddress;
     resp["gasUsed"] = receipt.data.gasUsed;
-    resp["status"] = Json::Value(receipt.data.status);
-    resp["blockNumber"] = Json::Value(receipt.data.blockNumber);
+    resp["status"] = Json::Value((Json::Int64)receipt.data.status);
+    resp["blockNumber"] = Json::Value((Json::Int64)receipt.data.blockNumber);
     resp["output"] = toHexStringWithPrefix(receipt.data.output);
     resp["message"] = receipt.message;
     resp["transactionHash"] = std::string(txHash);
@@ -72,20 +72,20 @@ void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jRe
     std::string hash;
     bcos::concepts::hash::calculate<Hasher>(block, hash);
     jResp["hash"] = toHexStringWithPrefix(hash);
-    jResp["version"] = Json::Value(block.version);
+    jResp["version"] = Json::Value((Json::Int64)block.version);
     jResp["txsRoot"] = toHexStringWithPrefix(blockHeader.data.txsRoot);
     jResp["receiptsRoot"] = toHexStringWithPrefix(blockHeader.data.receiptRoot);
     jResp["stateRoot"] = toHexStringWithPrefix(blockHeader.data.stateRoot);
-    jResp["number"] = Json::Value(blockHeader.data.blockNumber);
+    jResp["number"] = Json::Value((Json::Int64)blockHeader.data.blockNumber);
     jResp["gasUsed"] = blockHeader.data.gasUsed;
-    jResp["timestamp"] = Json::Value(blockHeader.data.timestamp);
-    jResp["sealer"] = Json::Value(blockHeader.data.sealer);
+    jResp["timestamp"] = Json::Value((Json::Int64)blockHeader.data.timestamp);
+    jResp["sealer"] = Json::Value((Json::Int64)blockHeader.data.sealer);
     jResp["extraData"] = toHexStringWithPrefix(blockHeader.data.extraData);
 
     jResp["consensusWeights"] = Json::Value(Json::arrayValue);
     for (const auto& weight : blockHeader.data.consensusWeights)
     {
-        jResp["consensusWeights"].append(Json::Value(weight));
+        jResp["consensusWeights"].append(Json::Value((Json::Int64)weight));
     }
 
     jResp["sealerList"] = Json::Value(Json::arrayValue);
@@ -98,7 +98,7 @@ void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jRe
     for (const auto& parent : blockHeader.data.parentInfo)
     {
         Json::Value jp;
-        jp["blockNumber"] = Json::Value(parent.blockNumber);
+        jp["blockNumber"] = Json::Value((Json::Int64)parent.blockNumber);
         jp["blockHash"] = toHexStringWithPrefix(parent.blockHash);
         jParentInfo.append(std::move(jp));
     }
@@ -108,7 +108,7 @@ void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jRe
     for (const auto& sign : blockHeader.signatureList)
     {
         Json::Value jSign;
-        jSign["sealerIndex"] = Json::Value(sign.sealerIndex);
+        jSign["sealerIndex"] = Json::Value((Json::Int64)sign.sealerIndex);
         jSign["signature"] = toHexStringWithPrefix(sign.signature);
         jSignList.append(std::move(jSign));
     }
