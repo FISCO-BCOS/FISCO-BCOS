@@ -1711,6 +1711,7 @@ void TransactionExecutor::getABI(
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress)
 {
+    EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
     bcos::RecursiveGuard lock(x_executiveFlowLock);
     ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
@@ -1738,7 +1739,7 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
         callback)
 {
     ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
-
+    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start";
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {

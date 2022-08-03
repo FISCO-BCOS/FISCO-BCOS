@@ -291,9 +291,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
 
-        blockExecutive->asyncExecute([this, callback = std::move(callback), executeLock](
-                                         Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                         bool _sysBlock) {
+        blockExecutive->asyncExecute([this, requestBlockNumber, callback = std::move(callback),
+                                         executeLock](Error::UniquePtr error,
+                                         protocol::BlockHeader::Ptr header, bool _sysBlock) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
@@ -304,7 +304,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(header->number()) << "executeBlock error: " << error->what();
+                    << BLOCK_NUMBER(requestBlockNumber) << "executeBlock error: " << error->what();
                 {
                     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                     m_blocks->pop_back();
