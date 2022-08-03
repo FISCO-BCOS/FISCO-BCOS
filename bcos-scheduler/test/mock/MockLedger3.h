@@ -26,12 +26,11 @@ class MockLedger3 : public bcos::ledger::LedgerInterface
 {
 public:
     MockLedger3() : LedgerInterface() {}
-
+    using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback) override
     {
-        BOOST_CHECK_EQUAL(block->blockHeaderConst()->number(), 5);
         callback(nullptr);
     }
 
@@ -128,6 +127,26 @@ public:
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override
     {}
+
+    void commitSuccess(bool _success)
+    {
+        if (_success)
+        {
+            ++commitBlockNumber;
+            SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
+                                 << LOG_KV("CommitBlock success, commitBlockNumber",
+                                        commitBlockNumber);
+        }
+        else
+        {
+            SCHEDULER_LOG(DEBUG) << "---- mockLedger -----"
+                                 << LOG_KV(
+                                        "CommitBlock failed, commitBlockNumber", commitBlockNumber);
+        }
+    }
+
+private:
+    bcos::protocol::BlockNumber commitBlockNumber = 5;
 };
 
 #pragma GCC diagnostic pop

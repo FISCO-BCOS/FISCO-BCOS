@@ -139,7 +139,11 @@ public:
         const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
     {}
 
-    void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)>) override {}
+    void getCode(
+        std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
+    {
+        callback(nullptr, {});
+    }
     void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)>) override {}
     void reset(std::function<void(bcos::Error::Ptr)>) override {}
     // void start() override() {}
