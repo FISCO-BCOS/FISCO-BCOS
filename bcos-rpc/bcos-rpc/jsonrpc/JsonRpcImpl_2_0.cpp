@@ -29,6 +29,7 @@
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-utilities/Base64.h>
+#include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
@@ -527,8 +528,8 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
     checkService(ledger, "ledger");
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     ledger->asyncGetTransactionReceiptByHash(hash, _requireProof,
-        [_groupID, _nodeName, m_txHash = std::string(_txHash), hash, _requireProof,
-            m_respFunc = std::move(_respFunc),
+        [m_group = std::string(_groupID), m_nodeName = std::string(_nodeName),
+            m_txHash = std::string(_txHash), hash, _requireProof, m_respFunc = std::move(_respFunc),
             self](Error::Ptr _error, protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
             ledger::MerkleProofPtr _merkleProofPtr) {
             auto rpc = self.lock();
@@ -560,7 +561,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                 addProofToResponse(jResp, "receiptProof", _merkleProofPtr);
 
                 // fetch transaction proof
-                rpc->getTransaction(_groupID, _nodeName, m_txHash, _requireProof,
+                rpc->getTransaction(m_group, m_nodeName, m_txHash, _requireProof,
                     [m_jResp = std::move(jResp), m_txHash, m_respFunc = std::move(m_respFunc)](
                         bcos::Error::Ptr _error, Json::Value& _jTx) mutable {
                         if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
@@ -1183,6 +1184,7 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
     {
         auto groupNodeIDInfo = info->nodeIDInfo();
         auto it = groupNodeIDInfo.find(_groupID);
+
         if (it != groupNodeIDInfo.end())
         {
             auto const& nodeList = it->second;
@@ -1192,6 +1194,7 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
             }
         }
     }
+
     if (nodeIDList.size() == 0)
     {
         return;
@@ -1204,10 +1207,11 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
 
 void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFunc)
 {
-    m_gatewayInterface->asyncGetPeers([_respFunc, _groupID, this](Error::Ptr _error,
+    m_gatewayInterface->asyncGetPeers([_respFunc, group = std::string(_groupID), this](
+                                          Error::Ptr _error,
                                           bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
                                           bcos::gateway::GatewayInfosPtr _peersInfo) {
-        Json::Value jResp;
+        Json::Value jResp(Json::arrayValue);
         if (_error)
         {
             RPC_IMPL_LOG(ERROR) << LOG_BADGE("getGroupPeers") << LOG_KV("code", _error->errorCode())
@@ -1215,7 +1219,7 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
             _respFunc(_error, jResp);
             return;
         }
-        getGroupPeers(jResp, _groupID, _localP2pInfo, _peersInfo);
+        getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
         _respFunc(_error, jResp);
     });
 }
