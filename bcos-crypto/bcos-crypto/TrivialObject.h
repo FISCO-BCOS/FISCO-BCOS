@@ -23,6 +23,7 @@
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <span>
+#include <stdexcept>
 
 namespace bcos::crypto::trivial
 {
