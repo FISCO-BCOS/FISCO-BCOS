@@ -97,7 +97,7 @@ void resizeTo(RANGES::range auto& out, size_t size)
             return;
         }
 
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
+        BOOST_THROW_EXCEPTION(std::runtime_error("Not enough output space!"));
     }
 }
 

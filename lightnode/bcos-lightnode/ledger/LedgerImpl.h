@@ -183,7 +183,7 @@ private:
             auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
             if (!entry) [[unlikely]]
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
+                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found header!"});
             }
 
             auto field = entry->getField(0);
@@ -196,7 +196,8 @@ private:
             {
                 auto entry = storage().getRow(SYS_NUMBER_2_TXS, blockNumberKey);
                 if (!entry) [[unlikely]]
-                    BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found!"});
+                    BOOST_THROW_EXCEPTION(
+                        std::runtime_error{"GetBlock not found transaction meta data!"});
 
                 auto field = entry->getField(0);
                 std::remove_reference_t<decltype(block)> metadataBlock;

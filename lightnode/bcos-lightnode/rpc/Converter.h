@@ -18,11 +18,7 @@ void toJsonResp(bcos::concepts::transaction::Transaction auto const& transaction
     std::string hash;
     bcos::concepts::hash::calculate<Hasher>(transaction, hash);
     resp["hash"] = toHexStringWithPrefix(hash);
-
-    std::string nonce;
-    boost::algorithm::hex_lower(RANGES::begin(transaction.data.nonce),
-        RANGES::end(transaction.data.nonce), std::back_inserter(nonce));
-    resp["nonce"] = std::move(nonce);
+    resp["nonce"] = transaction.data.nonce;
     resp["blockLimit"] = Json::Value((Json::Int64)transaction.data.blockLimit);
     resp["to"] = transaction.data.to;
     resp["from"] = toHexStringWithPrefix(transaction.sender);
@@ -55,18 +51,20 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     {
         Json::Value jLog;
         jLog["address"] = logEntry.address;
-        jLog["topics"] = Json::Value(Json::arrayValue);
+
+        auto topisc = Json::Value(Json::arrayValue);
         for (const auto& topic : logEntry.topic)
         {
-            jLog["topics"].append(toHexStringWithPrefix(topic));
+            topisc.append(toHexStringWithPrefix(topic));
         }
+        jLog["topics"] = std::move(topisc);
         jLog["data"] = toHexStringWithPrefix(logEntry.data);
         resp["logEntries"].append(std::move(jLog));
     }
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jResp)
+void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jResp, bool onlyHeader)
 {
     auto const& blockHeader = block.blockHeader;
     std::string hash;
@@ -113,6 +111,19 @@ void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jRe
         jSignList.append(std::move(jSign));
     }
     jResp["signatureList"] = std::move(jSignList);
+
+    if (!onlyHeader)
+    {
+        Json::Value transactions(Json::arrayValue);
+        for (auto const& transaction : block.transactions)
+        {
+            Json::Value transactionObject;
+            toJsonResp<Hasher>(transaction, transactionObject);
+
+            transactions.append(std::move(transactionObject));
+        }
+        jResp["transactions"] = std::move(transactions);
+    }
 }
 
 }  // namespace bcos::rpc

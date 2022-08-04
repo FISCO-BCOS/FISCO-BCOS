@@ -29,6 +29,15 @@ public:
 private:
     auto& p2p() { return bcos::concepts::getRef(m_p2p); }
 
+    template <bcos::concepts::ledger::DataFlag Flag>
+    void processGetBlockFlags(bool& onlyHeaderFlag)
+    {
+        if constexpr (std::is_same_v<Flag, bcos::concepts::ledger::HEADER>)
+        {
+            onlyHeaderFlag = true;
+        }
+    }
+
     template <bcos::concepts::ledger::DataFlag... Flags>
     void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
@@ -36,6 +45,8 @@ private:
         bcostars::RequestBlock request;
         request.blockNumber = blockNumber;
         request.onlyHeader = false;
+
+        (processGetBlockFlags<Flags>(request.onlyHeader), ...);
 
         bcos::bytes requestBuffer;
         bcos::concepts::serialize::encode(request, requestBuffer);

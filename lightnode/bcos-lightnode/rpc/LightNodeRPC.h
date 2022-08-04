@@ -147,13 +147,14 @@ public:
         [[maybe_unused]] std::string_view _nodeName, int64_t _blockNumber, bool _onlyHeader,
         bool _onlyTxHash, RespFunc _respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber;
+        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber << " "
+                            << _onlyHeader;
 
         bcostars::Block block;
-        remoteLedger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber, block);
+        localLedger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber, block);
 
         Json::Value resp;
-        toJsonResp<Hasher>(block, resp);
+        toJsonResp<Hasher>(block, resp, _onlyHeader);
 
         _respFunc(nullptr, resp);
     }
