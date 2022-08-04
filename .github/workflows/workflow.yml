@@ -43,7 +43,12 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-            ${VCPKG_INSTALLATION_ROOT}/vcpkg_installed
+            ${VCPKG_INSTALLATION_ROOT}
+            !${VCPKG_INSTALLATION_ROOT}/.git
+            !${VCPKG_INSTALLATION_ROOT}/buildtrees
+            !${VCPKG_INSTALLATION_ROOT}/packages
+            !${VCPKG_INSTALLATION_ROOT}/downloads
+            ${{ github.workspace }}/build/vcpkg_installed
           key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -97,7 +102,12 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-            ${VCPKG_INSTALLATION_ROOT}/vcpkg_installed
+            ${VCPKG_INSTALLATION_ROOT}
+            !${VCPKG_INSTALLATION_ROOT}/.git
+            !${VCPKG_INSTALLATION_ROOT}/buildtrees
+            !${VCPKG_INSTALLATION_ROOT}/packages
+            !${VCPKG_INSTALLATION_ROOT}/downloads
+            ${{ github.workspace }}/build/vcpkg_installed
           key: centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
