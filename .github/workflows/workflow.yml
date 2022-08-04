@@ -22,11 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-2019, macos-12]
-        buildtype: ['Debug', 'Release']
-        lightnode: ['-DWITH_LIGHTNODE=ON', '-DWITH_LIGHTNODE=OFF']
-        cppsdk: ['-DWITH_CPPSDK=ON', '-DWITH_CPPSDK=OFF']
-        etcd: ['-DWITH_ETCD=ON', '-DWITH_ETCD=OFF']
-        tarsservices: ['-DWITH_TARS_SERVICES=ON', '-DWITH_TARS_SERVICES=OFF']
     steps:
       - uses: actions/checkout@v2
         with:
@@ -35,10 +30,6 @@ jobs:
         with:
           toolchain: nightly-2022-07-28
           override: true
-      - name: Prepare vcpkg
-        if: runner.os != 'Windows'
-        uses: friendlyanon/setup-vcpkg@v1
-        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -52,6 +43,7 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
+            ${{ env.VCPKG_INSTALLATION_ROOT }}/vcpkg_installed
           key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -60,7 +52,7 @@ jobs:
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for linux
         if: runner.os == 'Linux'
@@ -69,14 +61,14 @@ jobs:
           export GCC='gcc-11'
           export CXX='g++-11'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{ matrix.lightnode }} ${{ matrix.cppsdk }} ${{ matrix.etcd }} ${{ matrix.tarsservices }} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
           brew install ccache gmp
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{ matrix.lightnode }} ${{ matrix.cppsdk }} ${{ matrix.etcd }} ${{ matrix.tarsservices }} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
         if: runner.os != 'Windows'
@@ -133,7 +125,7 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 3
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
