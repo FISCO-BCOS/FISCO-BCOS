@@ -10,7 +10,7 @@
 
     ; run without tars framework
     ; without_tars_framework = true
-    ; tars_proxy_file = conf/tars_proxy.json
+    ; tars_proxy_conf = conf/tars_proxy.ini
 
 [storage]
     enable_cache=true

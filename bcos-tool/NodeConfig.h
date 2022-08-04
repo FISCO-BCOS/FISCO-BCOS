@@ -62,8 +62,10 @@ public:
     virtual void loadNodeServiceConfig(
         std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
 
-    virtual void loadTarsProxyConfig(const std::string& _tarsJson);
-    virtual void loadTarsProxyConfig(const std::string& _tarsFile, bool);
+    virtual void loadTarsProxyConfig(const std::string& _tarsProxyConf);
+
+    virtual void loadServiceTarsProxyConfig(
+        const std::string& _serviceSectionName, boost::property_tree::ptree const& _pt);
 
     virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
     {

@@ -118,7 +118,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             }
 
             std::string errorMessage =
-                "RocksDB get failed!, " + boost::lexical_cast<std::string>(status.subcode());
+                "RocksDB get failed!, " + boost::lexical_cast<std::string>(status.ToString());
             if (status.getState())
             {
                 errorMessage.append(" ").append(status.getState());
@@ -144,6 +144,10 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     }
     catch (const std::exception& e)
     {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("asyncGetRow exception") << LOG_KV("table", _table)
+            << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
+            << LOG_KV("exception", boost::diagnostic_information(e));
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get row failed!", e), {});
     }
 }
@@ -216,7 +220,8 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                                 }
                                 else
                                 {
-                                    STORAGE_LOG(WARNING) << "Multi get rows unknown error";
+                                    STORAGE_LOG(WARNING)
+                                        << "Multi get rows error:" << status.ToString();
                                 }
                             }
                         }
@@ -277,7 +282,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
         if (!status.ok())
         {
             checkStatus(status);
-            std::string errorMessage = "Set row failed!";
+            std::string errorMessage = "Set row failed! " + status.ToString();
             if (status.getState())
             {
                 errorMessage.append(" ").append(status.getState());
@@ -360,7 +365,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
                 m_writeBatch = nullptr;
             }
-            STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
+            STORAGE_ROCKSDB_LOG(ERROR)
+                << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
             callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
             return;
         }
