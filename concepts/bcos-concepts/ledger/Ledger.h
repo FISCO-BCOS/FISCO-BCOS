@@ -7,10 +7,6 @@
 namespace bcos::concepts::ledger
 {
 
-#ifndef LEDGER_LOG
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
-#endif
-
 template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;

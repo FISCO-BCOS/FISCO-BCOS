@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Log.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
 #include <bcos-concepts/Receipt.h>
