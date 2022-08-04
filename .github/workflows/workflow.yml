@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-12]
+        os: [ubuntu-22.04, windows-2019, macos-12]
         buildtype: ['Debug', 'Release']
         lightnode: ['-DWITH_LIGHTNODE=ON', '-DWITH_LIGHTNODE=OFF']
         cppsdk: ['-DWITH_CPPSDK=ON', '-DWITH_CPPSDK=OFF']
