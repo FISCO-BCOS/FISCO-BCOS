@@ -22,6 +22,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-12]
+        buildtype: ['Debug', 'Release']
+        lightnode: ['-DWITH_LIGHTNODE=ON', '-DWITH_LIGHTNODE=OFF']
+        cppsdk: ['-DWITH_CPPSDK=ON', '-DWITH_CPPSDK=OFF']
+        etcd: ['-DWITH_ETCD=ON', '-DWITH_ETCD=OFF']
+        tarsservices: ['-DWITH_TARS_SERVICES=ON', '-DWITH_TARS_SERVICES=OFF']
     steps:
       - uses: actions/checkout@v2
         with:
@@ -47,31 +52,31 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-          key: build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
-            build-v8-notest-${{ matrix.os }}-
+            build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            build-${{ matrix.os }}-${{ github.base_ref }}-
+            build-${{ matrix.os }}-
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
-          sudo apt install -y lcov ccache openssl libssl-dev wget libgmp-dev
-          export GCC='gcc-10'
-          export CXX='g++-10'
+          sudo apt install -y lcov ccache wget libgmp-dev
+          export GCC='gcc-11'
+          export CXX='g++-11'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{lightnode}} ${{cppsdk}} ${{etcd}} ${{tarsservices}} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
           brew install ccache gmp
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{lightnode}} ${{cppsdk}} ${{etcd}} ${{tarsservices}} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
         if: runner.os != 'Windows'
@@ -108,7 +113,7 @@ jobs:
       - name: Prepare centos tools
         run: |
           yum install -y epel-release centos-release-scl flex bison patch gmp-static
-          yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
+          yum install -y devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
       - name: Prepare vcpkg
@@ -121,7 +126,7 @@ jobs:
       - name: Build
         run: |
           alias cmake='cmake3'
-          . /opt/rh/devtoolset-10/enable
+          . /opt/rh/devtoolset-11/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
@@ -129,7 +134,7 @@ jobs:
           mkdir -p build
           cd build
           cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-          cmake3 --build . --parallel 4
+          cmake3 --build . --parallel 3
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
         run: |
