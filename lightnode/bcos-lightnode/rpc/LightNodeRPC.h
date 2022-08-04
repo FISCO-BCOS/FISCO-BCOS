@@ -297,7 +297,7 @@ private:
     auto& remoteTransactionPool() { return bcos::concepts::getRef(m_remoteTransactionPool); }
     auto& scheduler() { return bcos::concepts::getRef(m_scheduler); }
 
-    void decodeData(std::string_view _data, bcos::concepts::ByteBuffer auto& out)
+    void decodeData(std::string_view _data, bcos::concepts::bytebuffer::ByteBuffer auto& out)
     {
         auto begin = _data.begin();
         auto end = _data.end();
@@ -314,7 +314,7 @@ private:
             length -= 2;
         }
 
-        bcos::concepts::resizeTo(out, length / 2);
+        bcos::concepts::bytebuffer::resizeTo(out, length / 2);
         boost::algorithm::unhex(begin, end, RANGES::begin(out));
     }
 

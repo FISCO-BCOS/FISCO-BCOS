@@ -87,13 +87,13 @@ private:
         bcos::concepts::serialize::decode(responseBuffer, response);
         if constexpr (bcos::concepts::transaction::Transaction<DataType>)
         {
-            bcos::concepts::resizeTo(out, response.transactions.size());
+            bcos::concepts::bytebuffer::resizeTo(out, response.transactions.size());
             std::move(RANGES::begin(response.transactions), RANGES::end(response.transactions),
                 RANGES::begin(out));
         }
         else
         {
-            bcos::concepts::resizeTo(out, response.receipts.size());
+            bcos::concepts::bytebuffer::resizeTo(out, response.receipts.size());
             std::move(RANGES::begin(response.receipts), RANGES::end(response.receipts),
                 RANGES::begin(out));
         }

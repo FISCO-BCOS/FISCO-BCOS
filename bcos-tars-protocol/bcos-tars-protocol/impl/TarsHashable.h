@@ -2,6 +2,7 @@
 #include "../Common.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-concepts/Basic.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
@@ -12,10 +13,14 @@ namespace bcos::concepts::hash
 {
 
 template <bcos::crypto::hasher::Hasher Hasher>
-void impl_calculate(bcostars::Transaction const& transaction, bcos::concepts::ByteBuffer auto& out)
+void impl_calculate(
+    bcostars::Transaction const& transaction, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
-        out.assign(RANGES::begin(transaction.dataHash), RANGES::end(transaction.dataHash));
+    {
+        bcos::concepts::bytebuffer::assignTo(transaction.dataHash, out);
+        return;
+    }
 
     Hasher hasher;
     auto const& hashFields = transaction.data;
@@ -38,10 +43,13 @@ void impl_calculate(bcostars::Transaction const& transaction, bcos::concepts::By
 
 template <bcos::crypto::hasher::Hasher Hasher>
 void impl_calculate(
-    bcostars::TransactionReceipt const& receipt, bcos::concepts::ByteBuffer auto& out)
+    bcostars::TransactionReceipt const& receipt, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!receipt.dataHash.empty())
-        out.assign(RANGES::begin(receipt.dataHash), RANGES::end(receipt.dataHash));
+    {
+        bcos::concepts::bytebuffer::assignTo(receipt.dataHash, out);
+        return;
+    }
 
     Hasher hasher;
     auto const& hashFields = receipt.data;
@@ -69,11 +77,13 @@ void impl_calculate(
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::Block const& block, bcos::concepts::ByteBuffer auto& out)
+auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!block.blockHeader.dataHash.empty())
-        out.assign(
-            RANGES::begin(block.blockHeader.dataHash), RANGES::end(block.blockHeader.dataHash));
+    {
+        bcos::concepts::bytebuffer::assignTo(block.blockHeader.dataHash, out);
+        return;
+    }
 
     Hasher hasher;
     auto const& hashFields = block.blockHeader.data;

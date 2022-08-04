@@ -26,6 +26,7 @@
 #include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -167,7 +168,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // hash 2 number
     Entry hash2NumberEntry;
     hash2NumberEntry.importFields({blockNumberStr});
-    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::toView(header->hash()),
+    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()),
         std::move(hash2NumberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
@@ -248,7 +249,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
                 Entry receiptEntry;
                 receiptEntry.importFields({std::move(receiptBuffer)});
-                storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::toView(hash),
+                storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash),
                     std::move(receiptEntry), [setRowCallback](auto&& error) {
                         setRowCallback(std::forward<decltype(error)>(error));
                     });
@@ -563,7 +564,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
     auto key = _blockHash;
     LEDGER_LOG(INFO) << "GetBlockNumberByHash request" << LOG_KV("hash", key);
 
-    asyncGetSystemTableEntry(SYS_HASH_2_NUMBER, concepts::toView(key),
+    asyncGetSystemTableEntry(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(key),
         [callback = std::move(_onGetBlock)](
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             try
@@ -700,7 +701,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 
     LEDGER_LOG(INFO) << "GetTransactionReceiptByHash" << LOG_KV("hash", key);
 
-    asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, concepts::toView(key),
+    asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(key),
         [this, callback = std::move(_onGetTx), key, _withProof](
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)

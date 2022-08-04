@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Log.h"
+#include "bcos-concepts/Hash.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
 #include <bcos-concepts/Receipt.h>
@@ -50,7 +51,7 @@ private:
 
     auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
-        bcos::concepts::resizeTo(out, RANGES::size(hashes));
+        bcos::concepts::bytebuffer::resizeTo(out, RANGES::size(hashes));
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
 
         constexpr auto tableName =
@@ -60,7 +61,7 @@ private:
                          << RANGES::size(hashes);
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
-        bcos::concepts::resizeTo(out, RANGES::size(hashes));
+        bcos::concepts::bytebuffer::resizeTo(out, RANGES::size(hashes));
 #pragma omp parallel for
         for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
@@ -154,12 +155,32 @@ private:
 
         if (onlyHeader)
         {
+            std::optional<BlockType> parentBlock;
             for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
                  ++blockNumber)
             {
                 BlockType block;
                 sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
+
+                if (!parentBlock)
+                {
+                    parentBlock = {};
+                    impl_getBlock<bcos::concepts::ledger::HEADER>(blockNumber - 1, *parentBlock);
+                }
+                std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
+
+                if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                    (block.blockHeader.data.parentInfo[0].blockNumber !=
+                        parentBlock->blockHeader.data.blockNumber) ||
+                    bcos::concepts::bytebuffer::equalTo(
+                        block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                {
+                    BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                }
+
                 impl_setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
+                parentBlock = std::move(block);
             }
         }
         else
