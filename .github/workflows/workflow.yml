@@ -57,7 +57,7 @@ jobs:
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_ETCD=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_ETCD=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for linux
         if: runner.os == 'Linux'
