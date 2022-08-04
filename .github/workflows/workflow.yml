@@ -69,14 +69,14 @@ jobs:
           export GCC='gcc-11'
           export CXX='g++-11'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{lightnode}} ${{cppsdk}} ${{etcd}} ${{tarsservices}} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{ matrix.lightnode }} ${{ matrix.cppsdk }} ${{ matrix.etcd }} ${{ matrix.tarsservices }} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
           brew install ccache gmp
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{lightnode}} ${{cppsdk}} ${{etcd}} ${{tarsservices}} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.buildtype }} -DTESTS=ON ${{ matrix.lightnode }} ${{ matrix.cppsdk }} ${{ matrix.etcd }} ${{ matrix.tarsservices }} -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
         if: runner.os != 'Windows'
