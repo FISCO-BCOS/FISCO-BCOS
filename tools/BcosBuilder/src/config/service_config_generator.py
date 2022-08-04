@@ -38,7 +38,7 @@ class ServiceConfigGenerator:
                 return False
             if is_build_opr:
                 self.__copy_tars_conf_file(rpc_service_config, "rpc", "BcosRpcService")
-                self.__generate_tars_proxy_config(rpc_service_config)
+                self.__generate_and_store_tars_proxy_config(rpc_service_config)
         utilities.log_info("* generate config for the rpc service success")
         return True
 
@@ -53,57 +53,66 @@ class ServiceConfigGenerator:
                 return False
             if is_build_opr:
                 self.__copy_tars_conf_file(gateway_service_config, "gateway", "BcosGatewayService")
-                self.__generate_tars_proxy_config(gateway_service_config)
+                self.__generate_and_store_tars_proxy_config(gateway_service_config)
 
         utilities.log_info("* generate config for the gateway service success")
         return True
     
-    def copy_tars_proxy_file(self):
+    def copy_tars_proxy_conf(self):
         if self.service_type == ServiceInfo.gateway_service_type:
-            return self.__copy_service_tars_proxy_file(self.config.gateway_service_list)
+            return self.__copy_service_tars_proxy_conf(self.config.gateway_service_list)
         else:
-            return self.__copy_service_tars_proxy_file(self.config.rpc_service_list)
+            return self.__copy_service_tars_proxy_conf(self.config.rpc_service_list)
 
-    def __copy_service_tars_proxy_file(self, service_list):
+    def __copy_service_tars_proxy_conf(self, service_list):
         for service_name in service_list.keys():
             service_config = service_list[service_name]
             for deploy_ip in service_config.deploy_ip_list:
                 conf_dir = self.__get_service_config_base_path(service_config, deploy_ip, True)
                 agency_name = service_config.agency_config.name
-                tars_proxy_file = os.path.join(self.output_dir, service_config.agency_config.chain_id, agency_name + "_tars_proxy.json")
-                copy_cmd = "cp " + tars_proxy_file + " " + conf_dir + "/tars_proxy.json"
+                tars_proxy_conf = os.path.join(self.output_dir, service_config.agency_config.chain_id, agency_name + "_tars_proxy.ini")
+                copy_cmd = "cp " + tars_proxy_conf + " " + conf_dir + "/tars_proxy.ini"
                 utilities.execute_command(copy_cmd)
-                utilities.log_info("* copy tars_proxy.json: " + tars_proxy_file + " ,dir: " + conf_dir)
+                utilities.log_info("* copy tars_proxy.ini: " + tars_proxy_conf + " ,dir: " + conf_dir)
 
-                
-    def __generate_tars_proxy_config(self, service_config):
+
+    def __get_tars_proxy_conf_section_index(self, section, config):
+        if not config.has_section(section):
+            config.add_section(section)
+            return 0
+        
+        index = 0
+        while True:
+            proxy_index_str = "proxy." + str(index)
+            if proxy_index_str in config[section]:
+                index += 1
+                continue
+            return index
+    
+    def __generate_and_store_tars_proxy_config(self, service_config):
         agency_name = service_config.agency_config.name
         chain_id = service_config.agency_config.chain_id
-        service_endpoints = []
-        for deploy_ip in service_config.deploy_ip_list:
-            service_endpoints.append(deploy_ip + ":" + str(service_config.tars_listen_port))
-        
         tars_conf_dir = os.path.join(self.output_dir, chain_id)
-        agency_tars_conf_path = os.path.join(tars_conf_dir, agency_name + "_tars_proxy.json")
+        agency_tars_proxy_conf = os.path.join(tars_conf_dir, agency_name + "_tars_proxy.ini")
 
-        if os.path.exists(agency_tars_conf_path):
-            with open(agency_tars_conf_path, 'r') as f:
-                content = json.load(f)
+        tars_proxy_config = configparser.ConfigParser(
+            comment_prefixes='/', allow_no_value=True)
 
-            if self.service_type in content:
-                content[self.service_type] += service_endpoints
-            else:
-                content[self.service_type] = []
-                content[self.service_type] += service_endpoints
-        else:
-            if not os.path.exists(tars_conf_dir):
-                os.mkdir(tars_conf_dir)
-            content = {}
-            content[self.service_type] = []
-            content[self.service_type] += service_endpoints
+        if os.path.exists(agency_tars_proxy_conf):
+            tars_proxy_config.read(agency_tars_proxy_conf)
         
-        with open(agency_tars_conf_path, 'w') as f:
-            json.dump(content, f)
+        index = self.__get_tars_proxy_conf_section_index(self.service_type, tars_proxy_config)
+
+        section = self.service_type
+        for deploy_ip in service_config.deploy_ip_list:
+            tars_proxy_config[section]['proxy.' + str(index)] = deploy_ip + ":" + str(service_config.tars_listen_port)
+            index += 1
+
+        if os.path.exists(os.path.dirname(agency_tars_proxy_conf)) is False:
+            utilities.mkdir(os.path.dirname(agency_tars_proxy_conf))
+
+        with open(agency_tars_proxy_conf, 'w') as f:
+            tars_proxy_config.write(f)
 
         return
 
@@ -256,7 +265,7 @@ class ServiceConfigGenerator:
             "." + service_config.agency_config.rpc_service_name
 
         ini_config["service"]['without_tars_framework'] = "true" if is_build_opr else "false"
-        ini_config["service"]['tars_proxy_file'] = 'conf/tars_proxy.json'
+        ini_config["service"]['tars_proxy_conf'] = 'conf/tars_proxy.ini'
 
         ini_config["chain"]['chain_id'] = service_config.agency_config.chain_id
         # generate failover config
