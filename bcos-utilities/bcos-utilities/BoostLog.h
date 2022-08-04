@@ -21,6 +21,10 @@
  */
 #pragma once
 
+#ifdef _MSC_VER_
+#include <sdkddkver.h>
+#endif
+
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>

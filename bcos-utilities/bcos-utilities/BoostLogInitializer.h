@@ -19,6 +19,11 @@
  * @author: yujiechen
  */
 #pragma once
+
+#ifdef _MSC_VER_
+#include <sdkddkver.h>
+#endif
+
 #include "Common.h"
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
@@ -32,10 +37,6 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/shared_ptr.hpp>
-
-#ifdef _MSC_VER_
-#include <sdkddkver.h>
-#endif
 
 namespace bcos
 {
