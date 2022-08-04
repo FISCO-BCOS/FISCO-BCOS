@@ -20,10 +20,6 @@
  */
 #pragma once
 
-#ifdef _MSC_VER_
-#include <sdkddkver.h>
-#endif
-
 #include "Common.h"
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
