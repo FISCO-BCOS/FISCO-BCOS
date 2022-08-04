@@ -30,8 +30,11 @@ jobs:
         with:
           toolchain: nightly-2022-07-28
           override: true
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Prepare vcpkg
+        if: runner.os != 'Windows'
+        uses: friendlyanon/setup-vcpkg@v1
+        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
+      - uses: hendrikmuhs/ccache-action@v1.2
         with:
           max-size: 5G
       - uses: actions/cache@v2
@@ -43,11 +46,11 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-            ${VCPKG_INSTALLATION_ROOT}
-            !${VCPKG_INSTALLATION_ROOT}/.git
-            !${VCPKG_INSTALLATION_ROOT}/buildtrees
-            !${VCPKG_INSTALLATION_ROOT}/packages
-            !${VCPKG_INSTALLATION_ROOT}/downloads
+            c:/vcpkg
+            !c:/vcpkg/.git
+            !c:/vcpkg/buildtrees
+            !c:/vcpkg/packages
+            !c:/vcpkg/downloads
             ${{ github.workspace }}/build/vcpkg_installed
           key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
@@ -66,14 +69,14 @@ jobs:
           export GCC='gcc-11'
           export CXX='g++-11'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
           brew install ccache gmp
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
         if: runner.os != 'Windows'
@@ -102,12 +105,6 @@ jobs:
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-            ${VCPKG_INSTALLATION_ROOT}
-            !${VCPKG_INSTALLATION_ROOT}/.git
-            !${VCPKG_INSTALLATION_ROOT}/buildtrees
-            !${VCPKG_INSTALLATION_ROOT}/packages
-            !${VCPKG_INSTALLATION_ROOT}/downloads
-            ${{ github.workspace }}/build/vcpkg_installed
           key: centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -119,6 +116,10 @@ jobs:
           yum install -y devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
+      - name: Prepare vcpkg
+        if: runner.os != 'Windows'
+        uses: friendlyanon/setup-vcpkg@v1
+        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
@@ -133,7 +134,7 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 3
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
