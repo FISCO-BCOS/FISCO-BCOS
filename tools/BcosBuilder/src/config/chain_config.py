@@ -14,7 +14,7 @@ class TarsConfig:
         section = "tars"
         self.tars_pkg_dir = utilities.get_value(
             self.config, section, "tars_pkg_dir", "binary", False)
-        self.tars_pkg_dir.strip()
+        self.tars_pkg_dir = self.tars_pkg_dir.strip()
 
         if not requireUrl:
             utilities.log_info("* Don't load tars token and url")
@@ -22,10 +22,10 @@ class TarsConfig:
 
         self.tars_url = utilities.get_value(
             self.config, section, "tars_url", None, True)
-        self.tars_url.strip()
+        self.tars_url = self.tars_url.strip()
         self.tars_token = utilities.get_value(
             self.config, section, "tars_token", None, True)
-        self.tars_token.strip()
+        self.tars_token = self.tars_token.strip()
 
         if len(self.tars_token) == 0:
             utilities.log_error("Must config 'tars.tars_token'")
@@ -135,6 +135,8 @@ class NodeConfig:
         self.desc = "[[agency.group.node]]."
         self.node_name = utilities.get_item_value(
             self.config, "node_name", None, True, self.desc)
+        self.node_name = self.node_name.strip()
+        
         # parse key_page_size
         self.key_page_size = utilities.get_item_value(
             self.config, "key_page_size", 10240, False, self.desc)
@@ -169,6 +171,7 @@ class NodeConfig:
         # the max_node service config
         self.node_service_name = self.get_service_name(
             self.node_service_base_name)
+
         node_deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True, self.desc)
         self.node_config_file_list = [
@@ -345,6 +348,12 @@ class ChainConfig:
             if should_load_node_config is True:
                 self.__load_node_config(agency, agency_config)
 
+    def __check_duplicate_node_name(self, service_name):
+        for key, _ in self.node_list.items():
+            if service_name == key:
+                return True
+        return False
+
     def __load_node_config(self, agency_config_section, agency_config):
         agency_group_list = utilities.get_item_value(
             agency_config_section, "group", [], False, "[[agency.group]]")
@@ -367,6 +376,9 @@ class ChainConfig:
                 else:
                     node_service = ProNodeConfig(
                         node, self.chain_id, group_id, agency_config, group_config_obj.sm_crypto)
+                if self.__check_duplicate_node_name(node_service.node_service_name):
+                    utilities.log_error("The duplicate node name: " + node_service.node_name + " appears in group: " + group_id + " of the agency: " + agency_config.name)
+                    sys.exit(-1)
                 self.node_list[node_service.node_service_name] = node_service
                 group_node_list.append(node_service)
             self.group_list[group_id].append_node_list(group_node_list)
