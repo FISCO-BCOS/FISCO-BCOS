@@ -79,7 +79,7 @@ public:
     {
         SCHEDULER_LOG(DEBUG) << LOG_KV("inputs size ", inputs.size());
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
-        for (auto i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
             SCHEDULER_LOG(DEBUG) << "begin  dmcExecute" << LOG_KV("input type ", inputs[i]->type());
             results.at(i) = std::move(inputs[i]);
@@ -115,10 +115,32 @@ public:
     {}
 
 
-    void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr,
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>)
-        override
-    {}
+    void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override
+    {
+        if (input->to() == "0xaabbccdd")
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
+            return;
+        }
+
+        // Always success
+        BOOST_CHECK(input);
+        if (input->type() == bcos::protocol::ExecutionMessage::TXHASH)
+        {
+            BOOST_CHECK_NE(input->transactionHash(), bcos::crypto::HashType());
+        }
+
+        input->setStatus(0);
+        input->setMessage("");
+
+        std::string data = "Hello world!";
+        input->setData(bcos::bytes(data.begin(), data.end()));
+        input->setType(bcos::protocol::ExecutionMessage::FINISHED);
+
+        callback(nullptr, std::move(input));
+    }
 
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>,
         std::function<void(bcos::Error::UniquePtr,
