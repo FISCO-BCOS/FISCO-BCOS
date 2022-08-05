@@ -24,7 +24,8 @@ std::string generateTestData(int count)
         for (int i = 0; i < count; ++i)
         {
             hasher.update(i);
-            hasher.final(std::span<char>(&buffer[i * Hasher::HASH_SIZE], Hasher::HASH_SIZE));
+            std::span<char> view(&buffer[i * Hasher::HASH_SIZE], Hasher::HASH_SIZE);
+            hasher.final(view);
         }
     }
 
@@ -41,29 +42,16 @@ void testOldMerkle(const std::vector<bcos::bytes>& datas)
 
     auto duration = std::chrono::high_resolution_clock::now() - timePoint;
     std::cout << "Root[old]: " << root << " "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
+              << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms"
               << std::endl;
 }
 
 void testNewMerkle(const std::vector<bcos::bytes>& datas)
 {
-    std::vector<std::array<std::byte, Hasher::HASH_SIZE>> hashDatas(datas.size());
-
     auto timePoint = std::chrono::high_resolution_clock::now();
-#pragma omp parallel
-    {
-        Hasher hasher;
-#pragma omp for
-        for (auto i = 0u; i < datas.size(); ++i)
-        {
-            Hasher hasher;
-            hasher.update(datas[i]);
-            hasher.final(hashDatas[i]);
-        }
-    }
 
-    bcos::tool::merkle::Merkle<Hasher, std::array<std::byte, Hasher::HASH_SIZE>, 16> merkle;
-    merkle.import(hashDatas);
+    bcos::tool::merkle::Merkle<Hasher, bcos::bytes, 16> merkle;
+    merkle.import(datas);
 
     auto root = merkle.root();
     std::string rootString;
@@ -72,7 +60,7 @@ void testNewMerkle(const std::vector<bcos::bytes>& datas)
 
     auto duration = std::chrono::high_resolution_clock::now() - timePoint;
     std::cout << "Root[new]: " << rootString << " "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
+              << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms"
               << std::endl;
 }
 

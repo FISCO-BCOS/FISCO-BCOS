@@ -5,8 +5,10 @@
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <cstdint>
 #include <exception>
 #include <iterator>
+#include <memory>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
@@ -139,7 +141,7 @@ public:
         return *m_nodes.rbegin();
     }
 
-    void import(InputRange<HashType> auto&& input)
+    void import(InputRange<HashType> auto input)
     {
         if (std::empty(input)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
@@ -150,7 +152,7 @@ public:
         auto inputSize = RANGES::size(input);
         m_nodes.resize(getNodeSize(inputSize));
 
-        std::copy_n(RANGES::begin(input), inputSize, m_nodes.begin());
+        std::move(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
         std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
 
         auto inputRange =
@@ -178,6 +180,7 @@ public:
     auto empty() const { return m_nodes.empty() || m_levels.empty(); }
 
     std::vector<HashType> m_nodes;
+    std::vector<typename decltype(m_nodes)::difference_type> m_indexes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
 
 private:

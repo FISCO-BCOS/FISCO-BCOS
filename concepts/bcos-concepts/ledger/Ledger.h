@@ -12,8 +12,7 @@ concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType>
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 // clang-format off
-struct DataFlagBase {
-};
+struct DataFlagBase {};
 struct ALL: public DataFlagBase {};
 struct HEADER: public DataFlagBase {};
 struct TRANSACTIONS: public DataFlagBase {};
