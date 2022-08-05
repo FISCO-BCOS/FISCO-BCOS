@@ -566,6 +566,7 @@ void BlockSync::maintainDownloadingQueue()
     while (topBlock && topBlock->blockHeader()->number() <= executedBlock)
     {
         m_downloadingQueue->pop();
+        topBlock = m_downloadingQueue->top();
     }
     if (!m_downloadingQueue->top())
     {
