@@ -55,13 +55,13 @@ protected:
     using ByteType = typename Container::value_type;
     using SizeType = typename Container::size_type;
 
-private:
     mutable Container _buffer;
     ByteType* _buf;
     SizeType _len;
     SizeType _buf_len;
     std::function<ByteType*(BufferWriter&, size_t)> _reserve;
 
+private:
     BufferWriter(const BufferWriter&);
     BufferWriter& operator=(const BufferWriter& buf);
 
