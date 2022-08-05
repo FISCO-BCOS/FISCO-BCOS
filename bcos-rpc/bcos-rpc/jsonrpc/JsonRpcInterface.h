@@ -181,7 +181,6 @@ private:
 
     void getBlockNumberI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getBlockNumber(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
@@ -197,31 +196,26 @@ private:
 
     void getSealerListI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getSealerList(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getObserverListI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getObserverList(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getPbftViewI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getPbftView(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getPendingTxSizeI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getPendingTxSize(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
     void getSyncStatusI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getSyncStatus(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 
@@ -238,7 +232,6 @@ private:
 
     void getTotalTransactionCountI(const Json::Value& req, RespFunc _respFunc)
     {
-        boost::ignore_unused(req);
         getTotalTransactionCount(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
     }
 

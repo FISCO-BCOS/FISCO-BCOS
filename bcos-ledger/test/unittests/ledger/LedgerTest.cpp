@@ -489,16 +489,18 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
+
     m_storage->asyncGetRow(
         SYS_NUMBER_2_HASH, "0", [&](auto&& error, std::optional<Entry>&& hashEntry) {
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromHex);
+                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromBinary);
 
             Entry numberEntry;
-            m_storage->asyncSetRow(
-                SYS_HASH_2_NUMBER, hash.hex(), std::move(numberEntry), [&](auto&& error) {
+            m_storage->asyncSetRow(SYS_HASH_2_NUMBER,
+                std::string_view((const char*)hash.data(), hash.size()), std::move(numberEntry),
+                [&](auto&& error) {
                     BOOST_CHECK(!error);
 
                     m_ledger->asyncGetBlockNumberByHash(

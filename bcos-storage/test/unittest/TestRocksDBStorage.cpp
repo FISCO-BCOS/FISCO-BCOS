@@ -1,7 +1,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-storage/src/RocksDBStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
+#include <bcos-storage/RocksDBStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
@@ -223,42 +223,31 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
     prepareTestTableData();
 
-    tbb::concurrent_vector<std::function<void()>> checks;
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, 1050), [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i != range.end(); ++i)
-            {
-                std::string key = "key" + boost::lexical_cast<std::string>(i);
-                rocksDBStorage->asyncGetRow(
-                    testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
-                        BOOST_CHECK(!error);
-                        if (error)
-                        {
-                            std::cout << boost::diagnostic_information(*error);
-                        }
 
-                        checks.push_back([i, entry]() {
-                            if (i < 1000)
-                            {
-                                BOOST_CHECK_NE(entry.has_value(), false);
-                                auto data = entry->get();
-                                BOOST_CHECK_EQUAL(
-                                    data, "value_" + boost::lexical_cast<std::string>(i));
-                            }
-                            else
-                            {
-                                BOOST_CHECK_EQUAL(entry.has_value(), false);
-                            }
-                        });
-                    });
-            }
-        });
-
-    for (auto& it : checks)
+// #pragma omp parallel for
+    for (size_t i = 0; i < 1050; ++i)
     {
-        it();
+        std::string key = "key" + boost::lexical_cast<std::string>(i);
+        rocksDBStorage->asyncGetRow(
+            testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
+// #pragma omp critical
+                BOOST_REQUIRE(!error);
+                if (error)
+                {
+                    std::cout << boost::diagnostic_information(*error);
+                }
+                if (i < 1000)
+                {
+                    BOOST_CHECK_NE(entry.has_value(), false);
+                    auto data = entry->get();
+                    BOOST_CHECK_EQUAL(data, "value_" + boost::lexical_cast<std::string>(i));
+                }
+                else
+                {
+                    BOOST_CHECK_EQUAL(entry.has_value(), false);
+                }
+            });
     }
-
     cleanupTestTableData();
 }
 
@@ -697,7 +686,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         params.number = i;
         rocksDBStorage->asyncPrepare(
             params, *state, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
-        rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+        rocksDBStorage->asyncCommit(
+            params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

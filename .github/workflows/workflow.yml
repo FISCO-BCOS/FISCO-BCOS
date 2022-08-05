@@ -22,7 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-12]
-        # os: [ubuntu-20.04, macos-12]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -108,7 +107,7 @@ jobs:
             centos-v8-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
-          yum install yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static
           yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git

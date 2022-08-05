@@ -25,12 +25,12 @@ void impl_encode(
 }
 
 void impl_decode(
-    bcostars::protocol::impl::TarsStruct auto& object, bcos::concepts::ByteBuffer auto const& in)
+    bcos::concepts::ByteBuffer auto const& in, bcostars::protocol::impl::TarsStruct auto& out)
 {
     tars::TarsInputStream<tars::BufferReader> input;
     input.setBuffer((const char*)std::data(in), RANGES::size(in));
 
-    object.readFrom(input);
+    out.readFrom(input);
 }
 
 }  // namespace bcos::concepts::serialize

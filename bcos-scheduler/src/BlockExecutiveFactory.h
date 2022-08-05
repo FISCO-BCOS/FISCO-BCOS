@@ -37,7 +37,7 @@ class BlockExecutiveFactory
 public:
     using Ptr = std::shared_ptr<BlockExecutiveFactory>;
     BlockExecutiveFactory(bool isSerialExecute) : m_isSerialExecute(isSerialExecute) {}
-    ~BlockExecutiveFactory() {}
+    virtual ~BlockExecutiveFactory() {}
 
     virtual std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
         SchedulerImpl* scheduler, size_t startContextID,

@@ -1,5 +1,5 @@
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-storage/src/TiKVStorage.h"
+#include "bcos-storage/TiKVStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
 #include <bcos-utilities/DataConvertUtility.h>
@@ -198,45 +198,35 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
     prepareTestTableData();
 
-    tbb::concurrent_vector<std::function<void()>> checks;
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, 1050), [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i != range.end(); ++i)
-            {
-                std::string key = "key" + boost::lexical_cast<std::string>(i);
-                storage->asyncGetRow(
-                    testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
-                        BOOST_CHECK_EQUAL(error.get(), nullptr);
-                        if (i < total)
-                        {
-                            BOOST_CHECK_EQUAL(entry.has_value(), true);
-                        }
-                        else
-                        {
-                            BOOST_CHECK_EQUAL(entry.has_value(), false);
-                        }
-                        checks.push_back([i, entry]() {
-                            if (i < total)
-                            {
-                                BOOST_CHECK_NE(entry.has_value(), false);
-                                auto data = entry->get();
-                                auto fields =
-                                    std::string("value_" + boost::lexical_cast<std::string>(i));
-
-                                BOOST_CHECK_EQUAL(data, fields);
-                            }
-                            else
-                            {
-                                BOOST_CHECK_EQUAL(entry.has_value(), false);
-                            }
-                        });
-                    });
-            }
-        });
-
-    for (auto& it : checks)
+#pragma omp parallel for
+    for (size_t i = 0; i < 1050; ++i)
     {
-        it();
+        std::string key = "key" + boost::lexical_cast<std::string>(i);
+        storage->asyncGetRow(
+            testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
+#pragma omp critical
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                if (i < total)
+                {
+                    BOOST_CHECK_EQUAL(entry.has_value(), true);
+                }
+                else
+                {
+                    BOOST_CHECK_EQUAL(entry.has_value(), false);
+                }
+                if (i < total)
+                {
+                    BOOST_CHECK_NE(entry.has_value(), false);
+                    auto data = entry->get();
+                    auto fields = std::string("value_" + boost::lexical_cast<std::string>(i));
+
+                    BOOST_CHECK_EQUAL(data, fields);
+                }
+                else
+                {
+                    BOOST_CHECK_EQUAL(entry.has_value(), false);
+                }
+            });
     }
 
     cleanupTestTableData();

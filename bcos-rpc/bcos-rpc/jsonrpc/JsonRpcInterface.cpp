@@ -126,11 +126,11 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
     }
 
     auto strResp = toStringResponse(response);
-    // error response
-    _sender(strResp);
 
-    // RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
-    //                     << LOG_KV("response", strResp);
+    RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+                        << LOG_KV("response",
+                               std::string_view((const char*)strResp.data(), strResp.size()));
+    _sender(strResp);
 }
 
 void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import configparser
-import json
+import platform
 import shutil
 from common import utilities
 from common.utilities import ConfigInfo
@@ -132,7 +132,7 @@ class NodeConfigGenerator:
         service_section = "service"
         ini_config[service_section]["node_name"] = node_name
         ini_config["service"]['without_tars_framework'] = "true" if is_build_opr else "false"
-        ini_config["service"]['tars_proxy_file'] = 'conf/tars_proxy.json'
+        ini_config["service"]['tars_proxy_conf'] = 'conf/tars_proxy.ini'
         ini_config[service_section]["rpc"] = self.config.chain_id + \
             "." + node_config.agency_config.rpc_service_name
         ini_config[service_section]["gateway"] = self.config.chain_id + \
@@ -239,7 +239,7 @@ class NodeConfigGenerator:
                 return False
             if is_build_opr:
                 self.__copy_tars_conf_and_bin_file(node_config, "BcosNodeService")
-                self.__generate_tars_proxy_config(node_config)
+                self.__generate_and_store_tars_proxy_config(node_config)
         return True
 
     def _generate_all_node_pem(self, group_config, is_build_opr):
@@ -338,18 +338,18 @@ class NodeConfigGenerator:
                                (config_type, desc))
         return True
     
-    def copy_tars_proxy_file(self):
-        self.__copy_service_tars_proxy_file()
+    def copy_tars_proxy_conf(self):
+        self.__copy_service_tars_proxy_conf()
         
-    def __copy_service_tars_proxy_file(self):
+    def __copy_service_tars_proxy_conf(self):
         for group_config in self.config.group_list.values():
             for node_config in group_config.node_list:
                 conf_dir = self.__get_and_generate_node_base_path(node_config, True)
                 agency_name = node_config.agency_config.name
-                tars_proxy_file = os.path.join(self.output_dir, node_config.agency_config.chain_id, agency_name + "_tars_proxy.json")
-                copy_cmd = "cp " + tars_proxy_file + " " + conf_dir + "/tars_proxy.json"
+                tars_proxy_conf = os.path.join(self.output_dir, node_config.agency_config.chain_id, agency_name + "_tars_proxy.ini")
+                copy_cmd = "cp " + tars_proxy_conf + " " + conf_dir + "/tars_proxy.ini"
                 utilities.execute_command(copy_cmd)
-                utilities.log_info("* copy tars_proxy.json: " + tars_proxy_file + " ,dir: " + conf_dir)
+                utilities.log_info("* copy tars_proxy.ini: " + tars_proxy_conf + " ,dir: " + conf_dir)
                 
 
     def __generate_and_store_ini_config(self, node_config, group_config, is_build_opr):
@@ -366,50 +366,48 @@ class NodeConfigGenerator:
         ini_config_path = os.path.join(node_path, self.ini_tmp_config_file)
         return self.store_config(ini_config_content, "ini", ini_config_path, node_config.node_service.service_name, False)
 
-    def __generate_tars_proxy_config(self, service_config):
+    def __get_tars_proxy_conf_section_index(self, section, config):
+        if not config.has_section(section):
+            config.add_section(section)
+            return 0
+        
+        index = 0
+        while True:
+            proxy_index_str = "proxy." + str(index)
+            if proxy_index_str in config[section]:
+                index += 1
+                continue
+            return index
+    
+    def __generate_and_store_tars_proxy_config(self, service_config):
         agency_name = service_config.agency_config.name
         chain_id = service_config.agency_config.chain_id
         tars_conf_dir = os.path.join(self.output_dir, chain_id)
-        agency_tars_conf_path = os.path.join(tars_conf_dir, agency_name + "_tars_proxy.json")
+        agency_tars_conf_path = os.path.join(tars_conf_dir, agency_name + "_tars_proxy.ini")
+
+        tars_proxy_config = configparser.ConfigParser(
+            comment_prefixes='/', allow_no_value=True)
 
         if os.path.exists(agency_tars_conf_path):
-            with open(agency_tars_conf_path, 'r') as f:
-                content = json.load(f)
-        else:
-            content = {}
+            tars_proxy_config.read(agency_tars_conf_path)
         
-        if "txpool" in content:
-            content["txpool"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port))
-        else:
-            content["txpool"] = []
-            content["txpool"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port))
+        index = self.__get_tars_proxy_conf_section_index("txpool", tars_proxy_config)
+        tars_proxy_config["txpool"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port)
         
-        if "scheduler" in content:
-            content["scheduler"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 1))
-        else:
-            content["scheduler"] = []
-            content["scheduler"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 1))
+        index = self.__get_tars_proxy_conf_section_index("scheduler", tars_proxy_config)
+        tars_proxy_config["scheduler"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 1)
         
-        if "pbft" in content:
-            content["pbft"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2))
-        else:
-            content["pbft"] = []
-            content["pbft"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2))
+        index = self.__get_tars_proxy_conf_section_index("pbft", tars_proxy_config)
+        tars_proxy_config["pbft"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2)
         
-        if "ledger" in content:
-            content["ledger"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3))
-        else:
-            content["ledger"] = []
-            content["ledger"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3))
+        index = self.__get_tars_proxy_conf_section_index("ledger", tars_proxy_config)
+        tars_proxy_config["ledger"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3)
         
-        if "front" in content:
-            content["front"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4))
-        else:
-            content["front"] = []
-            content["front"].append(service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4))
+        index = self.__get_tars_proxy_conf_section_index("front", tars_proxy_config)
+        tars_proxy_config["front"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4)
         
         with open(agency_tars_conf_path, 'w') as f:
-            json.dump(content, f)
+            tars_proxy_config.write(f)
 
         return
 
@@ -446,31 +444,42 @@ class NodeConfigGenerator:
         # copy service binary exec
         shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name), base_dir)
 
-        sed_cmd = "sed -i .bak s/@SERVICE_NAME@/" + service_name + "/g " + start_file
+        sys_name = platform.system()
+        if sys_name.lower() == "darwin":
+            sed = "sed -i .bak "
+        else:
+            sed = "sed -i "
+
+        sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + start_file
         execute_command_and_getoutput(sed_cmd)
 
-        sed_cmd = "sed -i .bak s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
+        sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
         execute_command_and_getoutput(sed_cmd)
 
-        sed_cmd = "sed -i .bak s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
+        sed_cmd = sed + "s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@TARS_SERVER@/" + node_config.node_service.service_name + "/g " + conf_file
+        sed_cmd = sed + "s/@TARS_SERVER@/" + node_config.node_service.service_name + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
 
         # tars config
-        sed_cmd = "sed -i .bak s/@TARS_LISTEN_IP@/" + node_config.deploy_ip + "/g " + conf_file
+        sed_cmd = sed + "s/@TARS_LISTEN_IP@/" + node_config.deploy_ip + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@TXPOOL_LISTEN_PORT@/" + str(node_config.tars_listen_port + 0) + "/g " + conf_file
+        sed_cmd = sed + "s/@TXPOOL_LISTEN_PORT@/" + str(node_config.tars_listen_port + 0) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@SCHEDULER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 1) + "/g " + conf_file
+        sed_cmd = sed + "s/@SCHEDULER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 1) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@PBFT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 2) + "/g " + conf_file
+        sed_cmd = sed + "s/@PBFT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 2) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@LEDGER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 3) + "/g " + conf_file
+        sed_cmd = sed + "s/@LEDGER_LISTEN_PORT@/" + str(node_config.tars_listen_port + 3) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
-        sed_cmd = "sed -i .bak s/@FRONT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 4) + "/g " + conf_file
+        sed_cmd = sed + "s/@FRONT_LISTEN_PORT@/" + str(node_config.tars_listen_port + 4) + "/g " + conf_file
         execute_command_and_getoutput(sed_cmd)
 
-        os.remove(start_file + ".bak")
-        os.remove(stop_file + ".bak")
-        os.remove(conf_file + ".bak")
+        if os.path.exists(start_file + ".bak"):
+            os.remove(start_file + ".bak")
+
+        if os.path.exists(stop_file + ".bak"):
+            os.remove(stop_file + ".bak")
+        
+        if os.path.exists(conf_file + ".bak"):
+            os.remove(conf_file + ".bak")

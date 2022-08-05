@@ -87,7 +87,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     input->contextID = m_contextID;
 
     std::string newAddress;
-    if (isCreate)
+    if (isCreate && !m_blockContext.lock()->isWasm())
     {
         if (input->createSalt)
         {
@@ -940,7 +940,6 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         callResults->gas = _result.gasLeft();
         break;
     }
-
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
     case EVMC_UNDEFINED_INSTRUCTION:
     {
@@ -1017,7 +1016,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_WASM_UNREACHABLE_INSTRUCTION:
     {
         EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("WASM Unreachable Instruction");
+                               << LOG_DESC("WASM Unreachable/Trap Instruction")
+                                << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
         revert();
         break;
@@ -1027,7 +1027,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     {
         EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
                                << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
-                               << LOG_KV("errCode", _result.status());
+                               << LOG_KV("status", _result.status());
         revert();
         if (_result.status() <= EVMC_INTERNAL_ERROR)
         {

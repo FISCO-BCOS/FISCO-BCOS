@@ -15,7 +15,7 @@ template <bcos::crypto::hasher::Hasher Hasher>
 void impl_calculate(bcostars::Transaction const& transaction, bcos::concepts::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
-        out = transaction.dataHash;
+        out.assign(RANGES::begin(transaction.dataHash), RANGES::end(transaction.dataHash));
 
     Hasher hasher;
     auto const& hashFields = transaction.data;
@@ -40,37 +40,43 @@ template <bcos::crypto::hasher::Hasher Hasher>
 void impl_calculate(
     bcostars::TransactionReceipt const& receipt, bcos::concepts::ByteBuffer auto& out)
 {
-    // if (!transaction.dataHash.empty())
-    //     out = transaction.dataHash;
+    if (!receipt.dataHash.empty())
+        out.assign(RANGES::begin(receipt.dataHash), RANGES::end(receipt.dataHash));
 
-    // Hasher hasher;
-    // auto const& hashFields = transaction.data;
-
-    // long version =
-    //     boost::asio::detail::socket_ops::host_to_network_long((int32_t)hashFields.version);
-    // hasher.update(version);
-    // hasher.update(hashFields.chainID);
-    // hasher.update(hashFields.groupID);
-    // long blockLimit =
-    // boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockLimit);
-    // hasher.update(blockLimit);
-    // hasher.update(hashFields.nonce);
-    // hasher.update(hashFields.to);
-    // hasher.update(hashFields.input);
-    // hasher.update(hashFields.abi);
-
-    // decltype(transaction.dataHash) hash(Hasher::HASH_SIZE);
-    // hasher.final(out);
+    Hasher hasher;
+    auto const& hashFields = receipt.data;
+    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    hasher.update(version);
+    hasher.update(hashFields.gasUsed);
+    hasher.update(hashFields.contractAddress);
+    long status = boost::asio::detail::socket_ops::host_to_network_long(hashFields.status);
+    hasher.update(status);
+    hasher.update(hashFields.output);
+    // vector<LogEntry> logEntries: 6
+    for (auto const& log : hashFields.logEntries)
+    {
+        hasher.update(log.address);
+        for (auto const& topicItem : log.topic)
+        {
+            hasher.update(topicItem);
+        }
+        hasher.update(log.data);
+    }
+    long blockNumber =
+        boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    hasher.update(blockNumber);
+    hasher.final(out);
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::BlockHeader const& blockHeader, bcos::concepts::ByteBuffer auto& out)
+auto impl_calculate(bcostars::Block const& block, bcos::concepts::ByteBuffer auto& out)
 {
-    if (!blockHeader.dataHash.empty())
-        out = blockHeader.dataHash;
+    if (!block.blockHeader.dataHash.empty())
+        out.assign(
+            RANGES::begin(block.blockHeader.dataHash), RANGES::end(block.blockHeader.dataHash));
 
     Hasher hasher;
-    auto const& hashFields = blockHeader.data;
+    auto const& hashFields = block.blockHeader.data;
 
     long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
     hasher.update(version);

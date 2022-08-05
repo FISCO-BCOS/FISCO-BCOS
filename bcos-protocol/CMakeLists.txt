@@ -22,7 +22,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment ver
 add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-protocol/protobuf)
 
-find_package(protobuf REQUIRED)
+find_package(Protobuf REQUIRED)
 
 add_library(bcos-protocol INTERFACE)
 target_include_directories(bcos-protocol INTERFACE

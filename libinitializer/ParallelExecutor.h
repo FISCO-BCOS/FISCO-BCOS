@@ -34,7 +34,6 @@ public:
                 if (m_executor)
                 {
                     m_executor->stop();
-                    m_oldExecutor = m_executor;  // TODO: remove this
                 }
 
                 // TODO: check cycle reference in executor to avoid memory leak
@@ -60,9 +59,21 @@ public:
     {
         refreshExecutor(schedulerTermId);
 
-        m_pool.enqueue([this, schedulerTermId, blockHeader = std::move(blockHeader),
-                           callback = std::move(callback)]() {
-            m_executor->nextBlockHeader(schedulerTermId, blockHeader, std::move(callback));
+
+        m_pool.enqueue([executor = m_executor, schedulerTermId,
+                           blockHeader = std::move(blockHeader), callback = std::move(callback)]() {
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::UniquePtr error) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error));
+            };
+
+            // execute the function
+            executor->nextBlockHeader(
+                schedulerTermId, blockHeader, std::move(_holdExecutorCallback));
         });
     }
 
@@ -70,7 +81,8 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        m_pool.enqueue([this, inputRaw = input.release(), callback = std::move(callback)] {
+        m_pool.enqueue([this, executor = m_executor, inputRaw = input.release(),
+                           callback = std::move(callback)] {
             if (!hasNextBlockHeaderDone())
             {
                 callback(
@@ -79,8 +91,20 @@ public:
                     nullptr);
                 return;
             }
-            m_executor->executeTransaction(
-                bcos::protocol::ExecutionMessage::UniquePtr(inputRaw), std::move(callback));
+
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::UniquePtr error,
+                                             bcos::protocol::ExecutionMessage::UniquePtr output) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(output));
+            };
+
+            // execute the function
+            executor->executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr(inputRaw),
+                std::move(_holdExecutorCallback));
         });
     }
 
@@ -97,8 +121,8 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, contractAddress = std::move(contractAddress), inputsVec,
-                           callback = std::move(callback)] {
+        m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
+                           inputsVec, callback = std::move(callback)] {
             if (!hasNextBlockHeaderDone())
             {
                 callback(
@@ -108,7 +132,19 @@ public:
                 return;
             }
 
-            m_executor->dmcExecuteTransactions(contractAddress, *inputsVec, std::move(callback));
+            // create a holder
+            auto _holdExecutorCallback =
+                [executorHolder = executor, callback = std::move(callback)](
+                    bcos::Error::UniquePtr error,
+                    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error), std::move(outputs));
+                };
+
+            // execute the function
+            executor->dmcExecuteTransactions(
+                contractAddress, *inputsVec, std::move(_holdExecutorCallback));
         });
     }
 
@@ -123,7 +159,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, inputsVec, callback = std::move(callback)] {
+        m_pool.enqueue([this, executor = m_executor, inputsVec, callback = std::move(callback)] {
             if (!hasNextBlockHeaderDone())
             {
                 callback(
@@ -133,7 +169,18 @@ public:
                 return;
             }
 
-            m_executor->dagExecuteTransactions(*inputsVec, std::move(callback));
+            // create a holder
+            auto _holdExecutorCallback =
+                [executorHolder = executor, callback = std::move(callback)](
+                    bcos::Error::UniquePtr error,
+                    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error), std::move(outputs));
+                };
+
+            // execute the function
+            executor->dagExecuteTransactions(*inputsVec, std::move(_holdExecutorCallback));
         });
     }
 
@@ -143,15 +190,37 @@ public:
     {
         // Note: In order to ensure that the call is in the context of the life cycle of
         // BlockExecutive, the executor call cannot be put into m_pool
-        m_executor->call(
-            bcos::protocol::ExecutionMessage::UniquePtr(input.release()), std::move(callback));
+
+        // create a holder
+        auto executor = m_executor;
+        auto _holdExecutorCallback = [executorHolder = executor, callback = std::move(callback)](
+                                         bcos::Error::UniquePtr error,
+                                         bcos::protocol::ExecutionMessage::UniquePtr output) {
+            EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                << LOG_KV("ptr count", executorHolder.use_count());
+            callback(std::move(error), std::move(output));
+        };
+
+        // execute the function
+        executor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+            std::move(_holdExecutorCallback));
     }
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
     {
-        m_pool.enqueue([this, number, callback = std::move(callback)] {
-            m_executor->getHash(number, std::move(callback));
+        m_pool.enqueue([this, executor = m_executor, number, callback = std::move(callback)] {
+            // create a holder
+            auto _holdExecutorCallback =
+                [executorHolder = executor, callback = std::move(callback)](
+                    bcos::Error::UniquePtr error, crypto::HashType hashType) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error), std::move(hashType));
+                };
+
+            // execute the function
+            executor->getHash(number, std::move(_holdExecutorCallback));
         });
     }
 
@@ -161,54 +230,84 @@ public:
     void prepare(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue(
-            [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
-                if (!hasNextBlockHeaderDone())
-                {
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                            "Executor has just inited, need to switch"));
-                    return;
-                }
+        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+                           callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"));
+                return;
+            }
 
-                m_executor->prepare(params, std::move(callback));
-            });
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::Ptr error) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error));
+            };
+
+            // execute the function
+            executor->prepare(params, std::move(_holdExecutorCallback));
+        });
     }
 
     // Commit uncommitted data
     void commit(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue(
-            [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
-                if (!hasNextBlockHeaderDone())
-                {
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                            "Executor has just inited, need to switch"));
-                    return;
-                }
+        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+                           callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"));
+                return;
+            }
 
-                m_executor->commit(params, std::move(callback));
-            });
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::Ptr error) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error));
+            };
+
+            // execute the function
+            executor->commit(params, std::move(_holdExecutorCallback));
+        });
     }
 
     // Rollback the changes
     void rollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue(
-            [this, params = bcos::protocol::TwoPCParams(params), callback = std::move(callback)] {
-                if (!hasNextBlockHeaderDone())
-                {
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                            "Executor has just inited, need to switch"));
-                    return;
-                }
+        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+                           callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"));
+                return;
+            }
 
-                m_executor->rollback(params, std::move(callback));
-            });
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::Ptr error) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error));
+            };
+
+            // execute the function
+            executor->rollback(params, std::move(_holdExecutorCallback));
+        });
     }
 
     /* ----- XA Transaction interface End ----- */
@@ -216,29 +315,61 @@ public:
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override
     {
-        m_pool.enqueue(
-            [this, callback = std::move(callback)] { m_executor->reset(std::move(callback)); });
+        m_pool.enqueue([executor = m_executor, callback = std::move(callback)] {
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::Ptr error) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error));
+            };
+
+            // execute the function
+            executor->reset(std::move(_holdExecutorCallback));
+        });
     }
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
-        m_pool.enqueue([this, contract = std::string(contract), callback = std::move(callback)] {
-            m_executor->getCode(contract, std::move(callback));
+        m_pool.enqueue([this, executor = m_executor, contract = std::string(contract),
+                           callback = std::move(callback)] {
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::Ptr error, bcos::bytes bytes) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(bytes));
+            };
+
+            // execute the function
+            executor->getCode(contract, std::move(_holdExecutorCallback));
         });
     }
 
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
-        m_pool.enqueue([this, contract = std::string(contract), callback = std::move(callback)] {
-            m_executor->getABI(contract, std::move(callback));
+        m_pool.enqueue([this, executor = m_executor, contract = std::string(contract),
+                           callback = std::move(callback)] {
+            // create a holder
+            auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                         std::move(callback)](
+                                             bcos::Error::Ptr error, std::string str) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(str));
+            };
+
+            // execute the function
+            executor->getABI(contract, std::move(_holdExecutorCallback));
         });
     }
 
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
-    bcos::executor::TransactionExecutor::Ptr m_oldExecutor;
     int64_t m_schedulerTermId = -1;
 
     mutable bcos::SharedMutex m_mutex;
