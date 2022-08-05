@@ -37,7 +37,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 5G
+          max-size: 4G
       - uses: actions/cache@v2
         id: deps_cache
         with:
@@ -69,7 +69,7 @@ jobs:
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
-          brew install ccache gmp
+          brew install ccache gmp lcov
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
