@@ -351,11 +351,11 @@ def build_package_operation(args, node_type):
 
     # copy tars proxy json file
     if is_rpc_build:
-        rpc_config_gen.copy_tars_proxy_file()
+        rpc_config_gen.copy_tars_proxy_conf()
     if is_gateway_build:
-        gateway_config_gen.copy_tars_proxy_file()
+        gateway_config_gen.copy_tars_proxy_conf()
     if is_node_build:
-        node_config_gen.copy_tars_proxy_file()
+        node_config_gen.copy_tars_proxy_conf()
 
 
     utilities.print_split_info()

@@ -162,6 +162,7 @@ public:
     void stop() override
     {
         m_isRunning = false;
+        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         for (auto& blockExecutive : *m_blocks)
         {
             blockExecutive->stop();
