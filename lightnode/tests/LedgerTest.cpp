@@ -142,6 +142,15 @@ struct LedgerImplFixture
         bcos::storage::Entry txsEntry;
         txsEntry.setField(0, std::move(txsBuffer));
         data.emplace(std::tuple{SYS_NUMBER_2_TXS, "10086"}, std::move(txsEntry));
+
+        bcostars::Block nonceBlock;
+        nonceBlock.nonceList.emplace_back(std::string("i am a nonce"));
+
+        std::vector<bcos::byte> nonceBuffer;
+        bcos::concepts::serialize::encode(nonceBlock, nonceBuffer);
+        bcos::storage::Entry nonceEntry;
+        nonceEntry.setField(0, std::move(nonceBuffer));
+        data.emplace(std::tuple{SYS_BLOCK_NUMBER_2_NONCES, "10086"}, std::move(nonceEntry));
     }
 
     std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>> data;
