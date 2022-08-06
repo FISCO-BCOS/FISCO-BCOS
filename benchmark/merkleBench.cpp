@@ -34,10 +34,10 @@ std::string generateTestData(int count)
 
 void testOldMerkle(const std::vector<bcos::bytes>& datas)
 {
-    auto timePoint = std::chrono::high_resolution_clock::now();
-
     auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
         std::make_shared<bcos::crypto::SM3>(), nullptr, nullptr);
+    auto timePoint = std::chrono::high_resolution_clock::now();
+
     auto root = bcos::protocol::calculateMerkleProofRoot(cryptoSuite, datas);
 
     auto duration = std::chrono::high_resolution_clock::now() - timePoint;

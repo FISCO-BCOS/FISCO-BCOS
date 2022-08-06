@@ -89,24 +89,35 @@ public:
         return true;
     }
 
-    ProofType generateProof(const HashType& hash) const
+    ProofType generateProof(HashType const& hash) const
+    {
+        // Find the hash in merkle first
+        auto levelRange = RANGES::subrange<decltype(m_nodes.begin())>{
+            m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+
+        auto it = RANGES::find(levelRange, hash);
+        if (it != RANGES::end(levelRange))
+        {
+            return generateProof(RANGES::distance(RANGES::begin(levelRange), it));
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
+        }
+    }
+
+    ProofType generateProof(size_t index) const
     {
         if (empty()) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
 
-        // Query the first level hashes(ordered)
+        if (index >= m_levels[0]) [[unlikely]]
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Out of range!"});
+
         auto levelRange = RANGES::subrange<decltype(m_nodes.begin())>{
             m_nodes.begin(), m_nodes.begin() + m_levels[0]};
-        auto it = std::lower_bound(m_indexes.begin(), m_indexes.end(), hash,
-            [this](typename decltype(m_indexes)::value_type lhs, const HashType& rhs) {
-                return m_nodes[lhs] < rhs;
-            });
-        if (it == m_indexes.end() || m_nodes[*it] != hash) [[unlikely]]
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
-        assert(hash == m_nodes[*it]);
-
-        auto index = indexAlign(*it);  // Align
+        index = indexAlign(index);  // Align
         auto start = levelRange.begin() + index;
         auto end = (static_cast<size_t>(levelRange.end() - start) < width) ? levelRange.end() :
                                                                              start + width;
@@ -147,7 +158,7 @@ public:
         return *m_nodes.rbegin();
     }
 
-    void import(InputRange<HashType> auto input)
+    void import(InputRange<HashType> auto const& input)
     {
         if (std::empty(input)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
@@ -158,36 +169,20 @@ public:
         auto inputSize = RANGES::size(input);
         m_nodes.resize(getNodeSize(inputSize));
 
-        std::move(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
-        tbb::parallel_invoke(
-            [this, inputSize]() {  // Sort the indexes
-                m_indexes.reserve(inputSize);
-                for (auto i = 0u; i < inputSize; ++i)
-                {
-                    m_indexes.emplace_back(i);
-                }
-                tbb::parallel_sort(m_indexes.begin(), m_indexes.end(),
-                    [this](RANGES::range_value_t<decltype(m_indexes)> lhs,
-                        RANGES::range_value_t<decltype(m_indexes)> rhs) {
-                        return m_nodes[lhs] < m_nodes[rhs];
-                    });
-            },
-            [this, inputSize]() {  // Calculate the merkle trie
-                auto calculateSize = inputSize;
-                auto inputRange =
-                    RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
-                m_levels.push_back(calculateSize);
-                while (calculateSize > 1)  // Ignore only root
-                {
-                    inputRange = {inputRange.end(), inputRange.end() + calculateSize};
-                    assert(inputRange.end() <= m_nodes.end());
-                    auto outputRange = RANGES::subrange<decltype(inputRange.end())>{
-                        inputRange.end(), m_nodes.end()};
+        std::copy(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
+        auto inputRange =
+            RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
+        m_levels.push_back(inputSize);
+        while (inputSize > 1)  // Ignore only root
+        {
+            inputRange = {inputRange.end(), inputRange.end() + inputSize};
+            assert(inputRange.end() <= m_nodes.end());
+            auto outputRange =
+                RANGES::subrange<decltype(inputRange.end())>{inputRange.end(), m_nodes.end()};
 
-                    calculateSize = calculateLevelHashes(inputRange, outputRange);
-                    m_levels.push_back(calculateSize);
-                }
-            });
+            inputSize = calculateLevelHashes(inputRange, outputRange);
+            m_levels.push_back(inputSize);
+        }
     }
 
     auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
@@ -195,14 +190,12 @@ public:
     void clear()
     {
         m_nodes.clear();
-        m_indexes.clear();
         m_levels.clear();
     }
 
     auto empty() const { return m_nodes.empty() || m_levels.empty(); }
 
     std::vector<HashType> m_nodes;
-    std::vector<typename decltype(m_nodes)::difference_type> m_indexes;
     std::vector<typename decltype(m_nodes)::size_type> m_levels;
 
 private:

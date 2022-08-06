@@ -14,7 +14,6 @@ void serialize(Archive& ar, bcos::tool::merkle::Merkle<T1, T2, T3>& merkle,
     [[maybe_unused]] unsigned int version)
 {
     ar& merkle.m_nodes;
-    ar& merkle.m_indexes;
     ar& merkle.m_levels;
 }
 
