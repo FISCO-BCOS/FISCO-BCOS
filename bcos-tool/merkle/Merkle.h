@@ -2,14 +2,8 @@
 
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-utilities/Ranges.h>
-#include <bits/ranges_algo.h>
-#include <bits/ranges_base.h>
 #include <tbb/blocked_range.h>
-#include <tbb/enumerable_thread_specific.h>
-#include <tbb/parallel_invoke.h>
-#include <tbb/parallel_sort.h>
-#include <tbb/partitioner.h>
-#include <tbb/task_arena.h>
+#include <tbb/parallel_for.h>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -96,14 +90,10 @@ public:
             m_nodes.begin(), m_nodes.begin() + m_levels[0]};
 
         auto it = RANGES::find(levelRange, hash);
-        if (it != RANGES::end(levelRange))
-        {
-            return generateProof(RANGES::distance(RANGES::begin(levelRange), it));
-        }
-        else
-        {
+        if (it == RANGES::end(levelRange)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
-        }
+
+        return generateProof(RANGES::distance(RANGES::begin(levelRange), it));
     }
 
     ProofType generateProof(size_t index) const
@@ -158,7 +148,7 @@ public:
         return *m_nodes.rbegin();
     }
 
-    void import(InputRange<HashType> auto const& input)
+    void import(InputRange<HashType> auto input)
     {
         if (std::empty(input)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
@@ -169,7 +159,7 @@ public:
         auto inputSize = RANGES::size(input);
         m_nodes.resize(getNodeSize(inputSize));
 
-        std::copy(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
+        std::move(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
         auto inputRange =
             RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
         m_levels.push_back(inputSize);
