@@ -74,7 +74,7 @@ jobs:
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
-        if: runner.os == 'Linux'
+        if: runner.os == 'Windows'
         run: |
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest 
           make cov
