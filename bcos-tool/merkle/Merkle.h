@@ -2,6 +2,14 @@
 
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-utilities/Ranges.h>
+#include <bits/ranges_algo.h>
+#include <bits/ranges_base.h>
+#include <tbb/blocked_range.h>
+#include <tbb/enumerable_thread_specific.h>
+#include <tbb/parallel_invoke.h>
+#include <tbb/parallel_sort.h>
+#include <tbb/partitioner.h>
+#include <tbb/task_arena.h>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -9,6 +17,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
@@ -46,8 +55,6 @@ public:
     Merkle& operator=(Merkle&&) = default;
     ~Merkle() = default;
 
-    auto operator<=>(const Merkle& rhs) const = default;
-
     static bool verifyProof(const ProofType& proof, HashType hash, const HashType& root)
     {
         if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
@@ -66,7 +73,7 @@ public:
             if (RANGES::find(range, hash) == RANGES::end(range)) [[unlikely]]
                 return false;
 
-            if (std::next(it) != proof.levels.end())
+            if (RANGES::next(it) != RANGES::end(proof.levels))
             {
                 for (auto& rangeHash : range)
                 {
@@ -77,9 +84,7 @@ public:
         }
 
         if (hash != root) [[unlikely]]
-        {
             return false;
-        }
 
         return true;
     }
@@ -92,17 +97,19 @@ public:
         // Query the first level hashes(ordered)
         auto levelRange = RANGES::subrange<decltype(m_nodes.begin())>{
             m_nodes.begin(), m_nodes.begin() + m_levels[0]};
-
-        auto it = RANGES::lower_bound(levelRange, hash);
-        if (it == levelRange.end() || *it != hash) [[unlikely]]
+        auto it = std::lower_bound(m_indexes.begin(), m_indexes.end(), hash,
+            [this](typename decltype(m_indexes)::value_type lhs, const HashType& rhs) {
+                return m_nodes[lhs] < rhs;
+            });
+        if (it == m_indexes.end() || m_nodes[*it] != hash) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash in merkle!"});
 
-        auto index = indexAlign(it - RANGES::begin(levelRange));  // Align
+        assert(hash == m_nodes[*it]);
+
+        auto index = indexAlign(*it);  // Align
         auto start = levelRange.begin() + index;
         auto end = (static_cast<size_t>(levelRange.end() - start) < width) ? levelRange.end() :
                                                                              start + width;
-        // auto end = std::min(start + width, levelRange.end());
-
         ProofType proof;
         proof.hashes.reserve(m_levels.size() * width);
         proof.levels.reserve(m_levels.size());
@@ -119,7 +126,6 @@ public:
                 levelRange.end(), levelRange.end() + length};
 
             start = levelRange.begin() + index;
-            // end = std::min(start + width, levelRange.end());
             end = (levelRange.end() - start <
                       (RANGES::range_difference_t<decltype(levelRange)>)width) ?
                       levelRange.end() :
@@ -153,20 +159,35 @@ public:
         m_nodes.resize(getNodeSize(inputSize));
 
         std::move(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
-        std::sort(m_nodes.begin(), m_nodes.begin() + inputSize);
+        tbb::parallel_invoke(
+            [this, inputSize]() {  // Sort the indexes
+                m_indexes.reserve(inputSize);
+                for (auto i = 0u; i < inputSize; ++i)
+                {
+                    m_indexes.emplace_back(i);
+                }
+                tbb::parallel_sort(m_indexes.begin(), m_indexes.end(),
+                    [this](RANGES::range_value_t<decltype(m_indexes)> lhs,
+                        RANGES::range_value_t<decltype(m_indexes)> rhs) {
+                        return m_nodes[lhs] < m_nodes[rhs];
+                    });
+            },
+            [this, inputSize]() {  // Calculate the merkle trie
+                auto calculateSize = inputSize;
+                auto inputRange =
+                    RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
+                m_levels.push_back(calculateSize);
+                while (calculateSize > 1)  // Ignore only root
+                {
+                    inputRange = {inputRange.end(), inputRange.end() + calculateSize};
+                    assert(inputRange.end() <= m_nodes.end());
+                    auto outputRange = RANGES::subrange<decltype(inputRange.end())>{
+                        inputRange.end(), m_nodes.end()};
 
-        auto inputRange =
-            RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
-        m_levels.push_back(inputSize);
-        while (inputSize > 1)  // Ignore only root
-        {
-            inputRange = {inputRange.end(), inputRange.end() + inputSize};
-            assert(inputRange.end() <= m_nodes.end());
-
-            inputSize = calculateLevelHashes(inputRange,
-                RANGES::subrange<decltype(inputRange.end())>{inputRange.end(), m_nodes.end()});
-            m_levels.push_back(inputSize);
-        }
+                    calculateSize = calculateLevelHashes(inputRange, outputRange);
+                    m_levels.push_back(calculateSize);
+                }
+            });
     }
 
     auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
@@ -174,6 +195,7 @@ public:
     void clear()
     {
         m_nodes.clear();
+        m_indexes.clear();
         m_levels.clear();
     }
 
@@ -202,7 +224,7 @@ private:
     }
 
     size_t calculateLevelHashes(
-        InputRange<HashType> auto&& input, OutputRange<HashType> auto&& output) const
+        InputRange<HashType> auto const& input, OutputRange<HashType> auto& output) const
     {
         auto inputSize = RANGES::size(input);
         [[maybe_unused]] auto outputSize = RANGES::size(output);
@@ -211,18 +233,26 @@ private:
         assert(inputSize > 0);
         assert(outputSize >= expectOutputSize);
 
-        HasherType hasher;
-        for (decltype(inputSize) i = 0; i < inputSize; i += width)
-        {
-            for (auto j = i; j < i + width && j < inputSize; ++j)
-            {
-                hasher.update(input[j]);
-            }
-            auto outputOffset = i / width;
-            assert(outputOffset < outputSize);
+        auto rangeSize = (inputSize + width - 1) / width;
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, rangeSize),
+            [this, &input, inputSize, &output, outputSize](
+                const tbb::blocked_range<size_t>& range) {
+                HasherType hasher;
 
-            hasher.final(output[outputOffset]);
-        }
+                auto start = range.begin() * width;
+                auto end = range.end() * width;
+                for (auto i = start; i < end; i += width)
+                {
+                    for (auto j = i; j < i + width && j < inputSize; ++j)
+                    {
+                        hasher.update(input[j]);
+                    }
+                    auto outputOffset = i / width;
+                    assert(outputOffset < outputSize);
+
+                    hasher.final(output[outputOffset]);
+                }
+            });
 
         return expectOutputSize;
     }

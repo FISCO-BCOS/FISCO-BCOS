@@ -90,6 +90,8 @@ void testFixedWidthMerkle(bcos::tool::merkle::InputRange<HashType> auto const& i
             {
                 auto proof = trie.generateProof(hash);
 
+                std::cout << width << " " << hash << std::endl;
+                std::cout << proof << std::endl;
                 BOOST_CHECK(trie.verifyProof(proof, hash, trie.root()));
                 BOOST_CHECK(!trie.verifyProof(proof, emptyHash, trie.root()));
 
@@ -131,7 +133,6 @@ BOOST_AUTO_TEST_CASE(serializeMerkle)
             4>;
     MerkleType trie1;
     BOOST_CHECK_NO_THROW(trie1.import(hashes));
-    // std::cout << trie1 << std::endl;
 
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
@@ -149,7 +150,9 @@ BOOST_AUTO_TEST_CASE(serializeMerkle)
     MerkleType trie2;
     iarchive >> trie2;
 
-    BOOST_CHECK_EQUAL(trie1, trie2);
+    BOOST_CHECK(trie1.m_nodes == trie2.m_nodes);
+    BOOST_CHECK(trie1.m_indexes == trie2.m_indexes);
+    BOOST_CHECK(trie1.m_levels == trie2.m_levels);
 }
 
 BOOST_AUTO_TEST_CASE(serializeProof)
