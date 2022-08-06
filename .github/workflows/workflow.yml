@@ -79,10 +79,10 @@ jobs:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest 
           make cov
       - name: Generate covreage report
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v3
         with:
-          file: coverage.info
+          file: ./build/coverage.info
           name: FISCO BCOS 3.0.0 coverage
           fail_ci_if_error: true
   build_centos:
@@ -136,7 +136,7 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 4
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
@@ -156,11 +156,3 @@ jobs:
         run: |
           export OMP_NUM_THREADS=1
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
-          make cov
-      - name: Generate coverage report
-        if: matrix.tikv == 'WITH_TIKV=OFF'
-        uses: codecov/codecov-action@v3
-        with:
-          file: coverage.info
-          name: FISCO BCOS 3.0.0 coverage
-          fail_ci_if_error: true
