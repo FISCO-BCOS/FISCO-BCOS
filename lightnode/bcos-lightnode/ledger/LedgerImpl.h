@@ -15,6 +15,7 @@
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 #include <ranges>
 #include <stdexcept>
 #include <tuple>
@@ -326,17 +327,14 @@ private:
             if (std::empty(block.transactionsMetaData))
             {
                 block.transactionsMetaData.resize(block.transactions.size());
-#pragma omp parallel for
-                for (auto i = 0u; i < block.transactions.size(); ++i)
-                {
-                    if (RANGES::size(block.transactionsMetaData[i].hash) < Hasher::HASH_SIZE)
-                    {
-                        block.transactionsMetaData[i].hash.resize(Hasher::HASH_SIZE);
-                    }
-
-                    bcos::concepts::hash::calculate<Hasher>(
-                        block.transactions[i], block.transactionsMetaData[i].hash);
-                }
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
+                    [&block](const tbb::blocked_range<size_t>& range) {
+                        for (auto i = range.begin(); i < range.end(); ++i)
+                        {
+                            bcos::concepts::hash::calculate<Hasher>(
+                                block.transactions[i], block.transactionsMetaData[i].hash);
+                        }
+                    });
             }
 
             if (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
@@ -361,24 +359,26 @@ private:
                     BOOST_THROW_EXCEPTION(std::runtime_error{"Transaction meta data mismatch!"});
                 }
 
-                size_t totalTransactionCount = 0;
-                size_t failedTransactionCount = 0;
+                std::atomic_size_t totalTransactionCount = 0;
+                std::atomic_size_t failedTransactionCount = 0;
                 std::vector<std::vector<bcos::byte>> receiptBuffers(block.receipts.size());
-#pragma omp parallel for
-                for (auto i = 0u; i < block.receipts.size(); ++i)
-                {
-                    auto& hash = block.transactionsMetaData[i].hash;
-                    auto& receipt = block.receipts[i];
-                    if (receipt.data.status != 0)
-                    {
-#pragma omp atomic
-                        ++failedTransactionCount;
-                    }
-#pragma omp atomic
-                    ++totalTransactionCount;
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, block.receipts.size()),
+                    [&block, &totalTransactionCount, &failedTransactionCount, &receiptBuffers](
+                        const tbb::blocked_range<size_t>& range) {
+                        for (auto i = range.begin(); i < range.end(); ++i)
+                        {
+                            auto& hash = block.transactionsMetaData[i].hash;
+                            auto& receipt = block.receipts[i];
+                            if (receipt.data.status != 0)
+                            {
+                                ++failedTransactionCount;
+                            }
+                            ++totalTransactionCount;
 
-                    bcos::concepts::serialize::encode(receipt, receiptBuffers[i]);
-                }
+                            bcos::concepts::serialize::encode(receipt, receiptBuffers[i]);
+                        }
+                    });
+
                 auto hashView =
                     block.transactionsMetaData |
                     RANGES::views::transform([](auto& metaData) { return metaData.hash; });
@@ -428,10 +428,7 @@ private:
         }
     }
 
-    auto& storage()
-    {
-        return bcos::concepts::getRef(m_storage);
-    }
+    auto& storage() { return bcos::concepts::getRef(m_storage); }
 
     Storage m_storage;
 };
