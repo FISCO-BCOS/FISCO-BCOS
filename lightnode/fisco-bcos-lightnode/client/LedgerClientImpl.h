@@ -9,7 +9,6 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
-#include <bits/ranges_base.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>

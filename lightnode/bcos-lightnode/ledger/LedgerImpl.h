@@ -11,6 +11,8 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-utilities/Ranges.h>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <ranges>
@@ -62,14 +64,17 @@ private:
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
         bcos::concepts::bytebuffer::resizeTo(out, RANGES::size(hashes));
-#pragma omp parallel for
-        for (auto i = 0u; i < RANGES::size(entries); ++i)
-        {
-            if (!entries[i]) [[unlikely]]
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
-            auto field = entries[i]->getField(0);
-            bcos::concepts::serialize::decode(field, out[i]);
-        }
+        tbb::parallel_for(tbb::blocked_range<size_t>(0u, RANGES::size(entries)),
+            [&entries, &out](const tbb::blocked_range<size_t>& range) {
+                for (auto index = range.begin(); index != range.end(); ++index)
+                {
+                    if (!entries[index]) [[unlikely]]
+                        BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
+                    auto field = entries[index]->getField(0);
+                    bcos::concepts::serialize::decode(field, out[index]);
+                }
+            });
+
         return out;
     }
 
@@ -249,6 +254,14 @@ private:
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
         {
             // TODO: add get nonce logic
+            auto entry = storage().getRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey);
+            if (!entry) [[unlikely]]
+                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found nonce data!"});
+
+            std::remove_reference_t<decltype(block)> nonceBlock;
+            auto field = entry->getField(0);
+            bcos::concepts::serialize::decode(field, nonceBlock);
+            block.nonceList = std::move(nonceBlock.nonceList);
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {
