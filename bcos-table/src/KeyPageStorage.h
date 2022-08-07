@@ -292,7 +292,8 @@ public:
                 if (lastPageInfo->getPageData())
                 {
                     auto page = &std::get<0>(lastPageInfo->getPageData()->data);
-                    if (page->startKey() <= key && key <= page->endKey())
+                    if (!page->startKey().empty() && page->startKey() <= key &&
+                        key <= page->endKey())
                     {
                         hit += 1;
                         return lastPageInfo;
@@ -361,19 +362,20 @@ public:
                 {
                     oldPageKey = p->getPageKey();
                     p->setPageKey(pageKey);
-                    if (c_fileLogLevel >= TRACE)
+                    if (pageKey.empty())
                     {
-                        KeyPage_LOG(TRACE) << LOG_DESC("updatePageInfo")
-                                           << LOG_KV("oldPageKey", toHex(oldPageKey.value()))
-                                           << LOG_KV("newPageKey", toHex(pageKey))
-                                           << LOG_KV("count", count) << LOG_KV("size", size);
+                        p->setPageData(nullptr);
                     }
                 }
                 if (c_fileLogLevel >= TRACE)
                 {
                     KeyPage_LOG(TRACE)
-                        << LOG_DESC("updatePageInfo") << LOG_KV("pageKey", toHex(pageKey))
-                        << LOG_KV("count", count) << LOG_KV("size", size);
+                        << LOG_DESC("updatePageInfo")
+                        << LOG_KV("oldPageKey",
+                               oldPageKey.has_value() ? toHex(oldPageKey.value()) : "")
+                        << LOG_KV("oldEndKey", toHex(oldEndKey))
+                        << LOG_KV("newPageKey", toHex(pageKey)) << LOG_KV("count", count)
+                        << LOG_KV("size", size);
                 }
                 p->setCount(count);
                 p->setSize(size);
@@ -473,16 +475,17 @@ public:
             //     }
             //     ar & pages->at(i);
             // }
-
-            for (auto it = pages->begin(); it < pages->end();)
+            int invalid = 0;
+            for (auto it = pages->begin(); it != pages->end();)
             {
-                if (it->getCount() == 0)
+                if (it->getCount() == 0 || it->getPageKey().empty())
                 {
                     KeyPage_LOG(DEBUG)
                         << LOG_DESC("TableMeta empty page")
                         << LOG_KV("pageKey", toHex(it->getPageKey()))
                         << LOG_KV("count", it->getCount()) << LOG_KV("size", it->getSize());
                     it = pages->erase(it);
+                    ++invalid;
                 }
                 else
                 {
@@ -491,7 +494,7 @@ public:
             }
             ar << *pages;
             KeyPage_LOG(DEBUG) << LOG_DESC("Serialize TableMeta")
-                               << LOG_KV("validCount", pages->size());
+                               << LOG_KV("validCount", pages->size()) << LOG_KV("invalid", invalid);
         }
         template <class Archive>
         void load(Archive& ar, const unsigned int version)
@@ -1122,22 +1125,25 @@ private:
         return hash % m_buckets.size();
     }
 
-    Data* changePageKey(
-        std::string table, const std::string& oldPageKey, const std::string& newPageKey)
+    Data* changePageKey(std::string table, const std::string& oldPageKey,
+        const std::string& newPageKey, bool isRevert = false)
     {
-        if (newPageKey.empty())
+        if (newPageKey.empty() && !isRevert)
         {
-            KeyPage_LOG(ERROR) << LOG_DESC("changePageKey to empty") << LOG_KV("table", table)
+            KeyPage_LOG(FATAL) << LOG_DESC("changePageKey to empty") << LOG_KV("table", table)
                                << LOG_KV("oldPageKey", toHex(oldPageKey))
                                << LOG_KV("newPageKey", toHex(newPageKey));
             return nullptr;
         }
+
         auto [bucket, lock] = getMutBucket(table, oldPageKey);
         boost::ignore_unused(lock);
         auto n = bucket->container.extract(std::make_pair(table, oldPageKey));
+        auto page = &std::get<0>(n.mapped()->data);
         KeyPage_LOG(DEBUG) << LOG_DESC("changePageKey") << LOG_KV("table", table)
                            << LOG_KV("oldPageKey", toHex(oldPageKey))
-                           << LOG_KV("newPageKey", toHex(newPageKey));
+                           << LOG_KV("newPageKey", toHex(newPageKey))
+                           << LOG_KV("validCount", page->validCount());
         n.key().second = newPageKey;
         n.mapped()->key = newPageKey;
         if (newPageKey.empty())

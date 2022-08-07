@@ -41,7 +41,7 @@ using namespace std;
 
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
-RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
+RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>&& db,
     const bcos::security::DataEncryptInterface::Ptr dataEncryption)
   : m_db(std::move(db)), m_dataEncryption(dataEncryption)
 {

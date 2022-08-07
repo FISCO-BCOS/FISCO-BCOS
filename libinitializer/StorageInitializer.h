@@ -24,11 +24,12 @@
  */
 #pragma once
 #include "boost/filesystem.hpp"
+#include "rocksdb/convenience.h"
+#include "rocksdb/write_batch.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-storage/TiKVStorage.h>
-#include <rocksdb/write_batch.h>
 
 namespace bcos::initializer
 {
@@ -48,7 +49,6 @@ public:
         // create the DB if it's not already present
         options.create_if_missing = true;
         options.enable_blob_files = keyPageSize > 1 ? true : false;
-        // FIXME: enable compress
         options.compression = rocksdb::kZSTD;
         options.max_open_files = 512;
         // options.min_blob_size = 1024;
@@ -66,8 +66,12 @@ public:
             BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", s.ToString());
             throw std::runtime_error("open rocksDB failed, err:" + s.ToString());
         }
-        return std::make_shared<bcos::storage::RocksDBStorage>(
-            std::unique_ptr<rocksdb::DB>(db), _dataEncrypt);
+        auto unique_db = std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
+            db, [](rocksdb::DB* db) {
+                CancelAllBackgroundWork(db, true);
+                delete db;
+            });
+        return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
     }
 
 #ifdef WITH_TIKV

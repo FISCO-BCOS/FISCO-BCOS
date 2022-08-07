@@ -433,7 +433,50 @@ BOOST_AUTO_TEST_CASE(rollback2)
 
 BOOST_AUTO_TEST_CASE(rollback3)
 {
-    // Test rollback multi state storage
+    auto hash0 = tableFactory->hash(hashImpl);
+    // auto savePoint0 = tableFactory->savepoint();
+    auto savePoint0 = std::make_shared<Recoder>();
+    tableFactory->setRecoder(savePoint0);
+    BOOST_REQUIRE(hash0 == crypto::HashType(0));
+    auto ret = createDefaultTable();
+    BOOST_REQUIRE(ret);
+    auto table = tableFactory->openTable(testTableName);
+    auto entry = table->newEntry();
+    entry.set("value");
+    table->setRow("name", entry);
+    auto hash = tableFactory->hash(hashImpl);
+    // first rollback
+    tableFactory->rollback(*savePoint0);
+
+    savePoint0 = std::make_shared<Recoder>();
+    tableFactory->setRecoder(savePoint0);
+    ret = createDefaultTable();
+    BOOST_REQUIRE(ret);
+    table = tableFactory->openTable(testTableName);
+    entry = table->newEntry();
+    entry.set("value");
+    table->setRow("name", entry);
+    // second rollback
+    tableFactory->rollback(*savePoint0);
+
+    tableFactory->setReadOnly(true);
+    std::promise<Entry> getRow;
+    tableFactory->asyncGetRow(
+        testTableName, "", [&](Error::UniquePtr error, std::optional<Entry> e) {
+            BOOST_REQUIRE(!error);
+            getRow.set_value(e.value());
+        });
+    KeyPageStorage::TableMeta meta(getRow.get_future().get().get());
+    auto pageInfo = meta.getAllPageInfoNoLock();
+    BOOST_REQUIRE(pageInfo.empty());
+    tableFactory->setReadOnly(false);
+
+    ret = createDefaultTable();
+    BOOST_REQUIRE(ret);
+    table = tableFactory->openTable(testTableName);
+    entry = table->newEntry();
+    entry.set("value");
+    table->setRow("name", entry);
 }
 
 BOOST_AUTO_TEST_CASE(hash)
