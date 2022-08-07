@@ -130,6 +130,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+
+    m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     if (m_isWasm)
     {
         initWasmEnvironment();
@@ -1915,11 +1917,13 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
         if (!useCoroutine)
         {
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
+            executiveFlow->setThreadPool(m_threadPool);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
         }
         else
         {
             executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
+            executiveFlow->setThreadPool(m_threadPool);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
         }
     }
