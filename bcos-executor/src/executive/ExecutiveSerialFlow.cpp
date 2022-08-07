@@ -1,6 +1,7 @@
 
 #include "ExecutiveSerialFlow.h"
 #include "TransactionExecutive.h"
+#include <bcos-framework/executor/ExecuteError.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -35,7 +36,15 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
     asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
-        run(onTxReturn, onFinished);
+        try
+        {
+            run(onTxReturn, onFinished);
+        }
+        catch (std::exception& e)
+        {
+            onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                "ExecutiveSerialFlow asyncRun exception:" + std::string(e.what())));
+        }
     });
 }
 
