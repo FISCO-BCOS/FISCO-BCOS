@@ -100,12 +100,12 @@ public:
 
         index = indexAlign(index);
         auto count = std::min(RANGES::size(originHashes) - index, width);
-        setNumberToHash((*outIt)++, count);
+        setNumberToHash(*(outIt++), count);
 
         for (auto it = RANGES::begin(originHashes) + index;
              it < RANGES::begin(originHashes) + index + count; ++it)
         {
-            bcos::concepts::bytebuffer::assignTo(*it, (*outIt)++);
+            bcos::concepts::bytebuffer::assignTo(*it, *(outIt++));
         }
 
         // Query next level hashes
@@ -113,20 +113,20 @@ public:
         while (inputIt != RANGES::end(merkle))
         {
             index = indexAlign(index / width);
-            auto levelLength = getNumberFromHash((*inputIt)++);
+            auto levelLength = getNumberFromHash(*(inputIt++));
             assert(index < levelLength);
 
-            setNumberToHash((*outIt)++, count);
+            setNumberToHash(*(outIt++), count);
             auto count = std::min(levelLength - index, width);
             for (auto it = inputIt + index; it < inputIt + index + count; ++it)
             {
-                bcos::concepts::bytebuffer::assignTo(*it, (*outIt)++);
+                bcos::concepts::bytebuffer::assignTo(*it, *(outIt++));
             }
             RANGES::advance(inputIt, levelLength);
         }
     }
 
-    void generateMerkle(HashRange auto const& originHashes, MerkleRange auto& out)
+    void generateMerkle(HashRange auto const& originHashes, MerkleRange auto& out) const
     {
         if (RANGES::empty(originHashes)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
@@ -161,12 +161,12 @@ public:
 private:
     auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
 
-    void setNumberToHash(bcos::concepts::bytebuffer::Hash auto& input, uint32_t number)
+    void setNumberToHash(bcos::concepts::bytebuffer::Hash auto& input, uint32_t number) const
     {
         *((uint32_t*)input.data()) = boost::endian::native_to_big(number);
     }
 
-    uint32_t getNumberFromHash(bcos::concepts::bytebuffer::Hash auto const& input)
+    uint32_t getNumberFromHash(bcos::concepts::bytebuffer::Hash auto const& input) const
     {
         return boost::endian::big_to_native(*((uint32_t*)input.data()));
     }
