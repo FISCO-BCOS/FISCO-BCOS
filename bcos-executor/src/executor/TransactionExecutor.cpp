@@ -432,6 +432,216 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     }
 }
 
+void TransactionExecutor::dmcExecuteTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
+    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        callback)
+{
+    EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
+                             << LOG_KV("ContextID", input->contextID())
+                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
+                             << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
+
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
+        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::STOPPED, "TransactionExecutor is not running"),
+            nullptr);
+        return;
+    }
+
+    if (!m_blockContext)
+    {
+        callback(BCOS_ERROR_UNIQUE_PTR(
+                     ExecuteError::EXECUTE_ERROR, "Execute failed with empty blockContext!"),
+            nullptr);
+        return;
+    }
+
+    asyncExecute(m_blockContext, std::move(input), true,
+        [this, callback = std::move(callback)](
+            Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            if (error)
+            {
+                std::string errorMessage = "ExecuteTransaction failed: " + error->errorMessage();
+                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
+                return;
+            }
+
+            callback(std::move(error), std::move(result));
+        });
+}
+
+void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
+    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        callback)
+{
+    EXECUTOR_NAME_LOG(TRACE) << "dmcCall request" << LOG_KV("ContextID", input->contextID())
+                             << LOG_KV("seq", input->seq()) << LOG_KV("Message type", input->type())
+                             << LOG_KV("To", input->to()) << LOG_KV("Create", input->create());
+
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
+        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::STOPPED, "TransactionExecutor is not running"),
+            nullptr);
+        return;
+    }
+
+    BlockContext::Ptr blockContext;
+    switch (input->type())
+    {
+    case protocol::ExecutionMessage::MESSAGE:
+    {
+        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
+        storage::StorageInterface::Ptr prev;
+
+        if (m_cachedStorage)
+        {
+            prev = m_cachedStorage;
+        }
+        else
+        {
+            prev = m_backendStorage;
+        }
+
+        // Create a temp storage
+        auto storage = createStateStorage(std::move(prev));
+
+        // Create a temp block context
+        // TODO: pass blockHash, version here
+        blockContext = createBlockContext(
+            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
+        initPrecompiledByBlockContext(blockContext);
+
+        auto inserted = m_calledContext->emplace(
+            std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
+
+        if (!inserted)
+        {
+            auto message = "dmcCall error, contextID: " +
+                           boost::lexical_cast<std::string>(input->contextID()) +
+                           " seq: " + boost::lexical_cast<std::string>(input->seq()) + " exists";
+            EXECUTOR_NAME_LOG(ERROR) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
+            return;
+        }
+
+        break;
+    }
+    case protocol::ExecutionMessage::FINISHED:
+    case protocol::ExecutionMessage::REVERT:
+    {
+        tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
+        m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
+
+        if (it.empty())
+        {
+            auto message = "dmcCall error, contextID: " +
+                           boost::lexical_cast<std::string>(input->contextID()) +
+                           " seq: " + boost::lexical_cast<std::string>(input->seq()) +
+                           " does not exists";
+            EXECUTOR_NAME_LOG(ERROR) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
+            return;
+        }
+
+        blockContext = it->second.blockContext;
+
+        break;
+    }
+    default:
+    {
+        auto message =
+            "dmcCall error, Unknown call type: " + boost::lexical_cast<std::string>(input->type());
+        EXECUTOR_NAME_LOG(ERROR) << message;
+        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
+        return;
+
+        break;
+    }
+    }
+
+    asyncExecute(std::move(blockContext), std::move(input), true,
+        [this, callback = std::move(callback)](
+            Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            if (error)
+            {
+                std::string errorMessage = "Call failed: " + error->errorMessage();
+                EXECUTOR_NAME_LOG(WARNING)
+                    << LOG_DESC("Call error") << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
+                return;
+            }
+
+            if (result->type() == protocol::ExecutionMessage::FINISHED ||
+                result->type() == protocol::ExecutionMessage::REVERT)
+            {
+                auto erased =
+                    m_calledContext->erase(std::tuple{result->contextID(), result->seq()});
+
+                if (!erased)
+                {
+                    auto message = "dmcCall error, erase contextID: " +
+                                   boost::lexical_cast<std::string>(result->contextID()) +
+                                   " seq: " + boost::lexical_cast<std::string>(result->seq()) +
+                                   " does not exists";
+                    EXECUTOR_NAME_LOG(ERROR) << message;
+
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
+                    return;
+                }
+            }
+
+            EXECUTOR_NAME_LOG(TRACE)
+                << "dmcCall success" << LOG_KV("staticCall", result->staticCall())
+                << LOG_KV("from", result->from()) << LOG_KV("to", result->to())
+                << LOG_KV("context", result->contextID());
+            callback(std::move(error), std::move(result));
+        });
+}
+
+void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
+    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        callback)
+{
+    EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
+                             << LOG_KV("ContextID", input->contextID())
+                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
+                             << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
+
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
+        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::STOPPED, "TransactionExecutor is not running"),
+            nullptr);
+        return;
+    }
+
+    if (!m_blockContext)
+    {
+        callback(BCOS_ERROR_UNIQUE_PTR(
+                     ExecuteError::EXECUTE_ERROR, "Execute failed with empty blockContext!"),
+            nullptr);
+        return;
+    }
+
+    asyncExecute(m_blockContext, std::move(input), false,
+        [this, callback = std::move(callback)](
+            Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            if (error)
+            {
+                std::string errorMessage = "ExecuteTransaction failed: " + error->errorMessage();
+                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
+                return;
+            }
+
+            callback(std::move(error), std::move(result));
+        });
+}
+
 void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input,
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
         callback)
@@ -521,7 +731,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     }
     }
 
-    asyncExecute(std::move(blockContext), std::move(input),
+    asyncExecute(std::move(blockContext), std::move(input), false,
         [this, callback = std::move(callback)](
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
@@ -560,49 +770,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         });
 }
 
-void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
-    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-        callback)
-{
-    EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
-                             << LOG_KV("ContextID", input->contextID())
-                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
-                             << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
-
-    if (!m_isRunning)
-    {
-        EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
-        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::STOPPED, "TransactionExecutor is not running"),
-            nullptr);
-        return;
-    }
-
-    if (!m_blockContext)
-    {
-        callback(BCOS_ERROR_UNIQUE_PTR(
-                     ExecuteError::EXECUTE_ERROR, "Execute failed with empty blockContext!"),
-            nullptr);
-        return;
-    }
-
-    asyncExecute(m_blockContext, std::move(input),
-        [this, callback = std::move(callback)](
-            Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            if (error)
-            {
-                std::string errorMessage = "ExecuteTransaction failed: " + error->errorMessage();
-                EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, errorMessage, *error), nullptr);
-                return;
-            }
-
-            callback(std::move(error), std::move(result));
-        });
-}
-
-
-void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
-    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+void TransactionExecutor::executeTransactionsInternal(std::string contractAddress,
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,
     std::function<void(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
@@ -618,15 +787,18 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
-    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockNumber) << "dmcExecuteTransactions request"
-                            << LOG_KV("txNum", txNum) << LOG_KV("contractAddress", contractAddress)
+    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockNumber) << "executeTransactionsInternal request"
+                            << LOG_KV("useCoroutine", useCoroutine) << LOG_KV("txNum", txNum)
+                            << LOG_KV("contractAddress", contractAddress)
                             << LOG_KV("requestTimestamp", requestTimestamp);
 
-    auto callback = [this, _callback = _callback, requestTimestamp, blockNumber, txNum,
-                        contractAddress](bcos::Error::UniquePtr error,
+    auto callback = [this, useCoroutine, _callback = _callback, requestTimestamp, blockNumber,
+                        txNum, contractAddress](bcos::Error::UniquePtr error,
                         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "dmcExecuteTransactions response"
-                                 << LOG_KV("txNum", txNum) << LOG_KV("outputNum", outputs.size())
+        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber)
+                                 << "executeTransactionsInternal response"
+                                 << LOG_KV("useCoroutine", useCoroutine) << LOG_KV("txNum", txNum)
+                                 << LOG_KV("outputNum", outputs.size())
                                  << LOG_KV("contractAddress", contractAddress)
                                  << LOG_KV("requestTimestamp", requestTimestamp)
                                  << LOG_KV("msg", error ? error->errorMessage() : "ok")
@@ -699,7 +871,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     if (isStaticCall)
     {
         EXECUTOR_NAME_LOG(FATAL)
-            << "dmcExecuteTransactions() only handle non static transactions but "
+            << "executeTransactionsInternal() only handle non static transactions but "
                "receive static call";
         assert(false);
     }
@@ -710,7 +882,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
-            [this, startT, contractAddress, indexes = std::move(indexes),
+            [this, startT, useCoroutine, contractAddress, indexes = std::move(indexes),
                 fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
                 txHashes,
@@ -747,7 +919,8 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                 auto prepareT = utcTime() - recordT;
                 recordT = utcTime();
 
-                auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress);
+                auto executiveFlow =
+                    getExecutiveFlow(m_blockContext, contractAddress, useCoroutine);
                 executiveFlow->submit(callParametersList);
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -758,14 +931,14 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 
                 EXECUTOR_NAME_LOG(INFO)
                     << BLOCK_NUMBER(blockNumber)
-                    << LOG_DESC("dmcExecuteTransactionsInternal after fillblock")
-                    << LOG_KV("fillTxsT", fillTxsT) << LOG_KV("prepareT", prepareT)
-                    << LOG_KV("dmcT", (utcTime() - recordT));
+                    << LOG_DESC("executeTransactionsInternal after fillblock")
+                    << LOG_KV("useCoroutine", useCoroutine) << LOG_KV("fillTxsT", fillTxsT)
+                    << LOG_KV("prepareT", prepareT) << LOG_KV("dmcT", (utcTime() - recordT));
             });
     }
     else
     {
-        auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress);
+        auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress, useCoroutine);
         executiveFlow->submit(callParametersList);
 
         asyncExecuteExecutiveFlow(executiveFlow,
@@ -775,8 +948,29 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
             });
     }
 
-    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("dmcExecuteTransactions") << LOG_KV("prepareT", prepareT)
+    EXECUTOR_NAME_LOG(TRACE) << LOG_DESC("executeTransactionsInternal")
+                             << LOG_KV("useCoroutine", useCoroutine) << LOG_KV("prepareT", prepareT)
                              << LOG_KV("total", (utcTime() - recoredT));
+}
+
+void TransactionExecutor::executeTransactions(std::string contractAddress,
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    std::function<void(
+        bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        _callback)
+{
+    executeTransactionsInternal(
+        std::move(contractAddress), std::move(inputs), false, std::move(_callback));
+}
+
+void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    std::function<void(
+        bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        _callback)
+{
+    executeTransactionsInternal(
+        std::move(contractAddress), std::move(inputs), true, std::move(_callback));
 }
 
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
@@ -1709,7 +1903,7 @@ void TransactionExecutor::getABI(
 }
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
-    std::shared_ptr<BlockContext> blockContext, std::string codeAddress)
+    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine)
 {
     EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
     bcos::RecursiveGuard lock(x_executiveFlowLock);
@@ -1718,7 +1912,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
             m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
-        if (codeAddress == bcos::protocol::SERIAL_EXECUTIVE_FLOW_ADDRESS)
+        if (!useCoroutine)
         {
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
@@ -1782,7 +1976,7 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
 }
 
 void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContext,
-    bcos::protocol::ExecutionMessage::UniquePtr input,
+    bcos::protocol::ExecutionMessage::UniquePtr input, bool useCoroutine,
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
         callback)
 {
@@ -1802,8 +1996,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
         (*txHashes)[0] = (input->transactionHash());
 
         m_txpool->asyncFillBlock(std::move(txHashes),
-            [this, inputPtr = input.release(), blockContext = std::move(blockContext), callback](
-                Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+            [this, useCoroutine, inputPtr = input.release(), blockContext = std::move(blockContext),
+                callback](Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
                 if (!m_isRunning)
                 {
                     callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1843,7 +2037,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 auto callParameters = createCallParameters(*input, *tx);
 
                 ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(blockContext, callParameters->codeAddress);
+                    getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -1881,7 +2075,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
         ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(blockContext, callParameters->codeAddress);
+            getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr&& error,

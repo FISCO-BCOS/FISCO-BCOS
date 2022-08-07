@@ -51,8 +51,16 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             blockTxs = std::move(m_txInputs);
         }
 
-        for (auto& txInput : *blockTxs)
+
+        for (size_t id = 0; id < blockTxs->size(); id++)
         {
+            auto& txInput = (*blockTxs)[id];
+            if (!txInput)
+            {
+                EXECUTIVE_LOG(WARNING) << "Ignore tx[" << id << "] with empty message";
+                continue;
+            }
+
             auto contextID = txInput->contextID;
             auto seq = txInput->seq;
             // build executive

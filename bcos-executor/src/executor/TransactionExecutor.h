@@ -108,13 +108,27 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void executeTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override;
+
     void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcExecuteTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
@@ -154,6 +168,12 @@ public:
     void stop() override;
 
 protected:
+    void executeTransactionsInternal(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
@@ -175,7 +195,7 @@ protected:
         int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
-        bcos::protocol::ExecutionMessage::UniquePtr input,
+        bcos::protocol::ExecutionMessage::UniquePtr input, bool useCoroutine,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback);
 
@@ -204,7 +224,7 @@ protected:
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
     std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine);
 
 
     void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,

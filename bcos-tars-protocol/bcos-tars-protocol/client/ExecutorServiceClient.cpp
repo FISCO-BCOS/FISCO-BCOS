@@ -127,6 +127,91 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
     m_prx->async_executeTransaction(new Callback(std::move(callback)), executionMsgImpl->inner());
 }
 
+void ExecutorServiceClient
+  ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback)
+{
+    class Callback : public ExecutorServicePrxCallback
+    {
+    public:
+        Callback(std::function<void(
+                bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
+          : m_callback(std::move(_callback))
+        {}
+        ~Callback() override {}
+
+        void callback_call(
+            const bcostars::Error& ret, bcostars::ExecutionMessage const& executionMessage) override
+        {
+            auto bcosExecutionMessage = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
+                [m_executionMessage = executionMessage]() mutable { return &m_executionMessage; });
+            m_callback(toUniqueBcosError(ret), std::move(bcosExecutionMessage));
+        }
+
+        void callback_call_exception(tars::Int32 ret) override
+        {
+            m_callback(toUniqueBcosError(ret), nullptr);
+        }
+
+    private:
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            m_callback;
+    };
+    auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
+    m_prx->async_call(new Callback(std::move(callback)), executionMsgImpl->inner());
+}
+
+void ExecutorServiceClient::executeTransactions(std::string contractAddress,
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    std::function<void(
+        bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        callback)
+{
+    class Callback : public ExecutorServicePrxCallback
+    {
+    public:
+        Callback(std::function<void(bcos::Error::UniquePtr,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
+          : m_callback(std::move(_callback))
+        {}
+        ~Callback() override {}
+
+        void callback_executeTransactions(const bcostars::Error& ret,
+            std::vector<bcostars::ExecutionMessage> const& executionMessages) override
+        {
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr> inputList;
+            for (auto const& it : executionMessages)
+            {
+                auto bcosExecutionMessage =
+                    std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
+                        [m_executionMessage = it]() mutable { return &m_executionMessage; });
+                inputList.emplace_back(std::move(bcosExecutionMessage));
+            }
+            m_callback(toUniqueBcosError(ret), std::move(inputList));
+        }
+
+        void callback_executeTransactions_exception(tars::Int32 ret) override
+        {
+            m_callback(
+                toUniqueBcosError(ret), std::vector<bcos::protocol::ExecutionMessage::UniquePtr>());
+        }
+
+    private:
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            m_callback;
+    };
+    std::vector<bcostars::ExecutionMessage> tarsInputs;
+    for (auto const& it : inputs)
+    {
+        auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
+        tarsInputs.emplace_back(executionMsgImpl->inner());
+    }
+    m_prx->async_executeTransactions(
+        new Callback(std::move(callback)), contractAddress, tarsInputs);
+}
+
 void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(
@@ -226,7 +311,7 @@ void ExecutorServiceClient::dagExecuteTransactions(
     m_prx->async_dagExecuteTransactions(new Callback(std::move(callback)), tarsInput);
 }
 
-void ExecutorServiceClient::call(bcos::protocol::ExecutionMessage::UniquePtr input,
+void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
         callback)
 {
@@ -239,7 +324,7 @@ void ExecutorServiceClient::call(bcos::protocol::ExecutionMessage::UniquePtr inp
         {}
         ~Callback() override {}
 
-        void callback_call(
+        void callback_dmcCall(
             const bcostars::Error& ret, bcostars::ExecutionMessage const& executionMessage) override
         {
             auto bcosExecutionMessage = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
@@ -247,7 +332,7 @@ void ExecutorServiceClient::call(bcos::protocol::ExecutionMessage::UniquePtr inp
             m_callback(toUniqueBcosError(ret), std::move(bcosExecutionMessage));
         }
 
-        void callback_call_exception(tars::Int32 ret) override
+        void callback_dmcCall_exception(tars::Int32 ret) override
         {
             m_callback(toUniqueBcosError(ret), nullptr);
         }
@@ -257,7 +342,7 @@ void ExecutorServiceClient::call(bcos::protocol::ExecutionMessage::UniquePtr inp
             m_callback;
     };
     auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
-    m_prx->async_call(new Callback(std::move(callback)), executionMsgImpl->inner());
+    m_prx->async_dmcCall(new Callback(std::move(callback)), executionMsgImpl->inner());
 }
 
 void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,

@@ -212,6 +212,7 @@ private:
 
     // remove prepared all block <= oldBlockNumber
     void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
+    void removeAllPreparedBlock();
 
     bcos::protocol::BlockNumber getBlockNumberFromStorage();
 

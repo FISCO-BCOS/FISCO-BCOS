@@ -108,6 +108,68 @@ public:
         });
     }
 
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override
+    {
+        // Note: In order to ensure that the call is in the context of the life cycle of
+        // BlockExecutive, the executor call cannot be put into m_pool
+
+        // create a holder
+        auto executor = m_executor;
+        auto _holdExecutorCallback = [executorHolder = executor, callback = std::move(callback)](
+                                         bcos::Error::UniquePtr error,
+                                         bcos::protocol::ExecutionMessage::UniquePtr output) {
+            EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                << LOG_KV("ptr count", executorHolder.use_count());
+            callback(std::move(error), std::move(output));
+        };
+
+        // execute the function
+        executor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+            std::move(_holdExecutorCallback));
+    }
+
+    void executeTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override
+    {
+        // Note: copy the inputs here in case of inputs has been released
+        auto inputsVec =
+            std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
+        for (auto i = 0u; i < inputs.size(); i++)
+        {
+            inputsVec->emplace_back(std::move(inputs[i]));
+        }
+        m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
+                           inputsVec, callback = std::move(callback)] {
+            if (!hasNextBlockHeaderDone())
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                        "Executor has just inited, need to switch"),
+                    {});
+                return;
+            }
+
+            // create a holder
+            auto _holdExecutorCallback =
+                [executorHolder = executor, callback = std::move(callback)](
+                    bcos::Error::UniquePtr error,
+                    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error), std::move(outputs));
+                };
+
+            // execute the function
+            executor->executeTransactions(
+                contractAddress, *inputsVec, std::move(_holdExecutorCallback));
+        });
+    }
+
     void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
@@ -184,7 +246,7 @@ public:
         });
     }
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
@@ -202,14 +264,14 @@ public:
         };
 
         // execute the function
-        executor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+        executor->dmcCall(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
             std::move(_holdExecutorCallback));
     }
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
     {
-        m_pool.enqueue([this, executor = m_executor, number, callback = std::move(callback)] {
+        m_pool.enqueue([executor = m_executor, number, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -332,7 +394,7 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
-        m_pool.enqueue([this, executor = m_executor, contract = std::string(contract),
+        m_pool.enqueue([executor = m_executor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -351,7 +413,7 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
-        m_pool.enqueue([this, executor = m_executor, contract = std::string(contract),
+        m_pool.enqueue([executor = m_executor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
