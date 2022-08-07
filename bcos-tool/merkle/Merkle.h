@@ -1,9 +1,13 @@
 #pragma once
 
+#include "bcos-concepts/Basic.h"
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-utilities/Ranges.h>
+#include <bits/ranges_base.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
+#include <boost/endian.hpp>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -19,62 +23,47 @@
 namespace bcos::tool::merkle
 {
 
-template <class Range, class HashType>
-concept InputRange = RANGES::random_access_range<Range> &&
-    std::is_same_v<std::remove_cvref_t<RANGES::range_value_t<Range>>, HashType>;
+template <class Range>
+concept HashRange = RANGES::random_access_range<Range> &&
+    bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<RANGES::range_value_t<Range>>>;
 
-template <class Range, class HashType>
-concept OutputRange = RANGES::random_access_range<Range> && RANGES::output_range<Range, HashType>;
+template <class Range>
+concept MerkleRange = HashRange<Range>;
 
-template <class HashType>
-struct Proof
-{
-    std::vector<HashType> hashes;
-    std::vector<size_t> levels;
+template <class Range>
+concept ProofRange = HashRange<Range>;
 
-    auto operator<=>(const Proof& rhs) const = default;
-};
-
-template <bcos::crypto::hasher::Hasher HasherType, class HashType, size_t width = 2>
+template <bcos::crypto::hasher::Hasher HasherType, size_t width = 2>
 class Merkle
 {
-public:
     static_assert(width >= 2, "Width too short, at least 2");
-    using ProofType = Proof<HashType>;
+    static_assert(HasherType::HASH_SIZE >= 4, "Hash size too short!");
 
-    Merkle() = default;
-    Merkle(const Merkle&) = default;
-    Merkle(Merkle&&) = default;
-    Merkle& operator=(const Merkle&) = default;
-    Merkle& operator=(Merkle&&) = default;
-    ~Merkle() = default;
+    using HashType = std::array<std::byte, HasherType::HASH_SIZE>;
 
-    static bool verifyProof(const ProofType& proof, HashType hash, const HashType& root)
+public:
+    bool verifyMerkleProof(ProofRange auto const& proof,
+        bcos::concepts::bytebuffer::Hash auto const& hash,
+        bcos::concepts::bytebuffer::Hash auto const& root)
     {
-        if (proof.hashes.empty() || proof.levels.empty()) [[unlikely]]
+        if (RANGES::empty(proof)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
 
-        auto range = RANGES::subrange<decltype(proof.hashes.begin())>{
-            proof.hashes.begin(), proof.hashes.begin()};
-
-        HasherType hasher;
-        for (auto it = proof.levels.begin(); it != proof.levels.end(); ++it)
+        auto it = RANGES::begin(proof);
+        while (it != RANGES::end(proof))
         {
-            range = {RANGES::end(range), RANGES::end(range) + *it};
-            if (RANGES::end(range) > proof.hashes.end() || RANGES::size(range) > width) [[unlikely]]
-                BOOST_THROW_EXCEPTION(std::invalid_argument{"Proof level length out of range!"});
+            auto count = getNumberFromHash(*it);
+            auto range = RANGES::subrange<decltype(it)>{it, it + count};
 
             if (RANGES::find(range, hash) == RANGES::end(range)) [[unlikely]]
                 return false;
 
-            if (RANGES::next(it) != RANGES::end(proof.levels))
+            HasherType hasher;
+            for (auto& merkleHash : range)
             {
-                for (auto& rangeHash : range)
-                {
-                    hasher.update(rangeHash);
-                }
-                hasher.final(hash);
+                hasher.update(merkleHash);
             }
+            hasher.final(hash);
         }
 
         if (hash != root) [[unlikely]]
@@ -83,161 +72,147 @@ public:
         return true;
     }
 
-    ProofType generateProof(HashType const& hash) const
+    void generateMerkleProof(HashRange auto const& originHashes, MerkleRange auto const& merkle,
+        bcos::concepts::bytebuffer::Hash auto const& hash, ProofRange auto& out) const
     {
-        // Find the hash in merkle first
-        auto levelRange = RANGES::subrange<decltype(m_nodes.begin())>{
-            m_nodes.begin(), m_nodes.begin() + m_levels[0]};
-
-        auto it = RANGES::find(levelRange, hash);
-        if (it == RANGES::end(levelRange)) [[unlikely]]
+        // Find the hash in originHashes first
+        auto it = RANGES::find(originHashes, hash);
+        if (it == RANGES::end(originHashes)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
 
-        return generateProof(RANGES::distance(RANGES::begin(levelRange), it));
+        generateMerkleProof(
+            originHashes, merkle, RANGES::distance(RANGES::begin(originHashes), it), out);
     }
 
-    ProofType generateProof(size_t index) const
+    void generateMerkleProof(HashRange auto const& originHashes, MerkleRange auto const& merkle,
+        std::integral auto index, ProofRange auto& out) const
     {
-        if (empty()) [[unlikely]]
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
-
-        if (index >= m_levels[0]) [[unlikely]]
+        if (index >= RANGES::size(originHashes)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Out of range!"});
 
-        auto levelRange = RANGES::subrange<decltype(m_nodes.begin())>{
-            m_nodes.begin(), m_nodes.begin() + m_levels[0]};
+        auto [merkleNodes, merkleLevels] = getMerkleSize(RANGES::size(originHashes));
+        if (merkleNodes != RANGES::size(merkle))
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismitch!"});
 
-        index = indexAlign(index);  // Align
-        auto start = levelRange.begin() + index;
-        auto end = (static_cast<size_t>(levelRange.end() - start) < width) ? levelRange.end() :
-                                                                             start + width;
-        ProofType proof;
-        proof.hashes.reserve(m_levels.size() * width);
-        proof.levels.reserve(m_levels.size());
+        concepts::resizeTo(out, merkleLevels * width);
 
-        proof.hashes.insert(proof.hashes.end(), start, end);
-        proof.levels.push_back(end - start);
+        auto outIt = RANGES::begin(out);
+
+        index = indexAlign(index);
+        auto count = std::min(RANGES::size(originHashes) - index, width);
+        setNumberToHash((*outIt)++, count);
+
+        for (auto it = RANGES::begin(originHashes) + index;
+             it < RANGES::begin(originHashes) + index + count; ++it)
+        {
+            bcos::concepts::bytebuffer::assignTo(*it, (*outIt)++);
+        }
 
         // Query next level hashes
-        for (auto depth : RANGES::views::iota(1u, m_levels.size()))
+        auto inputIt = RANGES::begin(merkle);
+        while (inputIt != RANGES::end(merkle))
         {
-            auto length = m_levels[depth];
             index = indexAlign(index / width);
-            levelRange = RANGES::subrange<decltype(levelRange.end())>{
-                levelRange.end(), levelRange.end() + length};
+            auto levelLength = getNumberFromHash((*inputIt)++);
+            assert(index < levelLength);
 
-            start = levelRange.begin() + index;
-            end = (levelRange.end() - start <
-                      (RANGES::range_difference_t<decltype(levelRange)>)width) ?
-                      levelRange.end() :
-                      start + width;
-
-            assert(levelRange.end() <= m_nodes.end());
-            proof.hashes.insert(proof.hashes.end(), start, end);
-            proof.levels.push_back(end - start);
+            setNumberToHash((*outIt)++, count);
+            auto count = std::min(levelLength - index, width);
+            for (auto it = inputIt + index; it < inputIt + index + count; ++it)
+            {
+                bcos::concepts::bytebuffer::assignTo(*it, (*outIt)++);
+            }
+            RANGES::advance(inputIt, levelLength);
         }
-
-        return proof;
     }
 
-    HashType root() const
+    void generateMerkle(HashRange auto const& originHashes, MerkleRange auto& out)
     {
-        if (empty()) [[unlikely]]
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Empty merkle!"});
-
-        return *m_nodes.rbegin();
-    }
-
-    void import(InputRange<HashType> auto input)
-    {
-        if (std::empty(input)) [[unlikely]]
+        if (RANGES::empty(originHashes)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
 
-        if (!empty()) [[unlikely]]
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle already imported"});
+        [[maybe_unused]] auto [merkleNodes, merkleLevels] =
+            getMerkleSize(RANGES::size(originHashes));
+        bcos::concepts::resizeTo(out, merkleNodes);
 
-        auto inputSize = RANGES::size(input);
-        m_nodes.resize(getNodeSize(inputSize));
+        // Calculate first level from originHashes
+        auto it = RANGES::begin(out);
+        setNumberToHash(*(it++), RANGES::size(originHashes));
 
-        std::move(RANGES::begin(input), RANGES::end(input), RANGES::begin(m_nodes));
-        auto inputRange =
-            RANGES::subrange<decltype(m_nodes.begin())>{m_nodes.begin(), m_nodes.begin()};
-        m_levels.push_back(inputSize);
-        while (inputSize > 1)  // Ignore only root
+        auto nextNodes = getNextLevelSize(RANGES::size(originHashes));
+        auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
+        calculateLevelHashes(originHashes, outputRange);
+
+        while (nextNodes > 1)  // Calculate next level from out, ignore only root
         {
-            inputRange = {inputRange.end(), inputRange.end() + inputSize};
-            assert(inputRange.end() <= m_nodes.end());
-            auto outputRange =
-                RANGES::subrange<decltype(inputRange.end())>{inputRange.end(), m_nodes.end()};
+            auto inputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
 
-            inputSize = calculateLevelHashes(inputRange, outputRange);
-            m_levels.push_back(inputSize);
+            RANGES::advance(it, nextNodes);
+            nextNodes = getNextLevelSize(nextNodes);
+
+            setNumberToHash(*(it++), nextNodes);
+            auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
+            calculateLevelHashes(inputRange, outputRange);
+
+            assert(it <= RANGES::end(out));
         }
     }
-
-    auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
-
-    void clear()
-    {
-        m_nodes.clear();
-        m_levels.clear();
-    }
-
-    auto empty() const { return m_nodes.empty() || m_levels.empty(); }
-
-    std::vector<HashType> m_nodes;
-    std::vector<typename decltype(m_nodes)::size_type> m_levels;
 
 private:
-    auto getNodeSize(std::integral auto inputSize) const
+    auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
+
+    void setNumberToHash(bcos::concepts::bytebuffer::Hash auto& input, uint32_t number)
     {
-        auto nodeSize = inputSize;
+        *((uint32_t*)input.data()) = boost::endian::native_to_big(number);
+    }
+
+    uint32_t getNumberFromHash(bcos::concepts::bytebuffer::Hash auto const& input)
+    {
+        return boost::endian::big_to_native(*((uint32_t*)input.data()));
+    }
+
+    std::tuple<unsigned, unsigned> getMerkleSize(std::integral auto inputSize) const
+    {
+        if (inputSize == 1)
+            return std::make_tuple(0, 0);
+
+        auto nodeSize = 0u;
+        auto levels = 0u;
         while (inputSize > 1)
         {
-            inputSize = getLevelSize(inputSize);
-            nodeSize += inputSize;
+            inputSize = getNextLevelSize(inputSize);
+            nodeSize += (inputSize + 1);  // Extra 1 for length record
+            ++levels;
         }
 
-        return nodeSize;
+        return std::make_tuple(nodeSize, levels);
     }
 
-    auto getLevelSize(std::integral auto inputSize) const
+    auto getNextLevelSize(std::integral auto inputSize) const
     {
-        return inputSize == 1 ? 0 : (inputSize + (width - 1)) / width;
+        return (inputSize + (width - 1)) / width;
     }
 
-    size_t calculateLevelHashes(
-        InputRange<HashType> auto const& input, OutputRange<HashType> auto& output) const
+    void calculateLevelHashes(HashRange auto const& input, HashRange auto& output) const
     {
-        auto inputSize = RANGES::size(input);
-        [[maybe_unused]] auto outputSize = RANGES::size(output);
-        auto expectOutputSize = getLevelSize(inputSize);
+        assert(RANGES::size(input) > 0);
 
-        assert(inputSize > 0);
-        assert(outputSize >= expectOutputSize);
+        auto outputSize = RANGES::size(output);
+        bcos::concepts::resizeTo(output, outputSize);
 
-        auto rangeSize = (inputSize + width - 1) / width;
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, rangeSize),
-            [this, &input, inputSize, &output, outputSize](
-                const tbb::blocked_range<size_t>& range) {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, outputSize),
+            [this, &input, &output](const tbb::blocked_range<size_t>& range) {
                 HasherType hasher;
 
-                auto start = range.begin() * width;
-                auto end = range.end() * width;
-                for (auto i = start; i < end; i += width)
+                for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    for (auto j = i; j < i + width && j < inputSize; ++j)
+                    for (auto j = i * width; j < (i + 1) + width && j < RANGES::size(input); ++j)
                     {
                         hasher.update(input[j]);
                     }
-                    auto outputOffset = i / width;
-                    assert(outputOffset < outputSize);
-
-                    hasher.final(output[outputOffset]);
+                    hasher.final(output[i]);
                 }
             });
-
-        return expectOutputSize;
     }
 };
 

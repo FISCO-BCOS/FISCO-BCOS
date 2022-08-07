@@ -50,11 +50,12 @@ void testOldMerkle(const std::vector<bcos::bytes>& datas)
 void testNewMerkle(const std::vector<bcos::bytes>& datas)
 {
     auto timePoint = std::chrono::high_resolution_clock::now();
+    std::vector<bcos::bytes> out;
 
-    bcos::tool::merkle::Merkle<Hasher, bcos::bytes, 16> merkle;
-    merkle.import(datas);
+    bcos::tool::merkle::Merkle<Hasher, 16> merkle;
+    merkle.generateMerkle(datas, out);
 
-    auto root = merkle.root();
+    auto root = *(out.rbegin());
     std::string rootString;
     boost::algorithm::hex_lower(
         (char*)root.data(), (char*)(root.data() + root.size()), std::back_inserter(rootString));

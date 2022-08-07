@@ -30,7 +30,7 @@ find_package(TBB REQUIRED)
 file(GLOB SRCS *.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
 target_include_directories(${TOOL_TARGET} PUBLIC ${CMAKE_BINARY_DIR}/bcos-protocol)
-target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework bcos-concepts jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
     enable_testing()

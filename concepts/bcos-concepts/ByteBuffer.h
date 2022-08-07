@@ -24,19 +24,6 @@ std::string_view toView(ByteBuffer auto const& buffer)
     return std::string_view((const char*)RANGES::data(buffer), RANGES::size(buffer));
 }
 
-void resizeTo(RANGES::range auto& out, std::integral auto size)
-{
-    if (RANGES::size(out) < size)
-    {
-        if constexpr (bcos::concepts::DynamicRange<std::remove_cvref_t<decltype(out)>>)
-        {
-            out.resize(size);
-            return;
-        }
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
-    }
-}
-
 void assignTo(ByteBuffer auto const& from, ByteBuffer auto& to)
 {
     resizeTo(to, RANGES::size(from));

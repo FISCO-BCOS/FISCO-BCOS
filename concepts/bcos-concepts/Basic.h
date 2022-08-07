@@ -42,4 +42,17 @@ concept DynamicRange = requires(Range range, size_t newSize)
     range.reserve(newSize);
 };
 
+void resizeTo(RANGES::range auto& out, std::integral auto size)
+{
+    if (RANGES::size(out) < size)
+    {
+        if constexpr (bcos::concepts::DynamicRange<std::remove_cvref_t<decltype(out)>>)
+        {
+            out.resize(size);
+            return;
+        }
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
+    }
+}
+
 }  // namespace bcos::concepts

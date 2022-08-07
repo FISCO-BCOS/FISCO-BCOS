@@ -54,7 +54,7 @@ private:
 
     auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
-        bcos::concepts::bytebuffer::resizeTo(out, RANGES::size(hashes));
+        bcos::concepts::resizeTo(out, RANGES::size(hashes));
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
 
         constexpr auto tableName =
@@ -64,7 +64,7 @@ private:
                          << RANGES::size(hashes);
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
-        bcos::concepts::bytebuffer::resizeTo(out, RANGES::size(hashes));
+        bcos::concepts::resizeTo(out, RANGES::size(hashes));
         tbb::parallel_for(tbb::blocked_range<size_t>(0u, RANGES::size(entries)),
             [&entries, &out](const tbb::blocked_range<size_t>& range) {
                 for (auto index = range.begin(); index != range.end(); ++index)
