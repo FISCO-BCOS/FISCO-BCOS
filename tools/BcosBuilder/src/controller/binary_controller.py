@@ -42,6 +42,7 @@ class BinaryController:
             download_url = self.get_binary_download_url(binary)
             if self.download_binary(binary + ".tgz", download_url) is False:
                 return False
+            self.un_tar_gz(self.get_required_binary_path(binary + ".tgz"))
         if self.download_binary(self.mtail_binary_name, self.mtail_download_url) is False:
             return False
         binary_file_path = os.path.join(

@@ -210,7 +210,7 @@ void SerialBlockExecutive::serialExecute(
     }
     else
     {
-        m_executor->dmcExecuteTransactions(bcos::protocol::SERIAL_EXECUTIVE_FLOW_ADDRESS,
+        m_executor->executeTransactions(bcos::protocol::SERIAL_EXECUTIVE_FLOW_ADDRESS,
             m_transactions,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {

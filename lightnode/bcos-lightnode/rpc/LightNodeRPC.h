@@ -314,7 +314,7 @@ private:
             length -= 2;
         }
 
-        bcos::concepts::bytebuffer::resizeTo(out, length / 2);
+        bcos::concepts::resizeTo(out, length / 2);
         boost::algorithm::unhex(begin, end, RANGES::begin(out));
     }
 

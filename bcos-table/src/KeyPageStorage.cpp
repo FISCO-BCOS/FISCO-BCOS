@@ -262,7 +262,6 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     KeyPage_LOG(DEBUG)
                         << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
                         << LOG_KV("count", meta->size()) << LOG_KV("size", entry.size())
-                        << LOG_KV("count", meta->size())
                         << LOG_KV("payloadRate",
                                sizeof(PageInfo) * meta->size() / (double)entry.size())
                         << LOG_KV("predictHit", meta->hitRate());
@@ -470,13 +469,26 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 if (page->count() == 0)
                 {  // page is empty because of rollback, means it it first created
                     pageData->entry.setStatus(Entry::Status::EMPTY);
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("revert page to empty") << LOG_KV("table", change.table)
+                        << LOG_KV("key", toHex(change.key));
+                }
+                if (c_fileLogLevel >= TRACE)
+                {
+                    KeyPage_LOG(TRACE)
+                        << LOG_DESC("revert page entry") << LOG_KV("table", change.table)
+                        << LOG_KV("key", toHex(change.key)) << LOG_KV("page", (uint64_t)page)
+                        << LOG_KV("pageKey", toHex(pageKey))
+                        << LOG_KV("pageEndKey", toHex(page->endKey()))
+                        << LOG_KV("count", page->count())
+                        << LOG_KV("validCount", page->validCount());
                 }
                 // revert also need update pageInfo
                 auto oldStartKey = meta->updatePageInfoNoLock(
                     pageKey, page->endKey(), page->validCount(), page->size(), pageInfoOp);
                 if (oldStartKey)
                 {
-                    changePageKey(change.table, oldStartKey.value(), page->endKey());
+                    changePageKey(change.table, oldStartKey.value(), page->endKey(), true);
                 }
             }
             else

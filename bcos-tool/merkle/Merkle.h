@@ -42,28 +42,30 @@ class Merkle
     using HashType = std::array<std::byte, HasherType::HASH_SIZE>;
 
 public:
-    bool verifyMerkleProof(ProofRange auto const& proof,
-        bcos::concepts::bytebuffer::Hash auto const& hash,
+    bool verifyMerkleProof(ProofRange auto const& proof, bcos::concepts::bytebuffer::Hash auto hash,
         bcos::concepts::bytebuffer::Hash auto const& root)
     {
         if (RANGES::empty(proof)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input proof!"});
 
-        auto it = RANGES::begin(proof);
-        while (it != RANGES::end(proof))
+        if (RANGES::size(proof) > 1)
         {
-            auto count = getNumberFromHash(*it);
-            auto range = RANGES::subrange<decltype(it)>{it, it + count};
-
-            if (RANGES::find(range, hash) == RANGES::end(range)) [[unlikely]]
-                return false;
-
-            HasherType hasher;
-            for (auto& merkleHash : range)
+            auto it = RANGES::begin(proof);
+            auto count = getNumberFromHash(*(it++));
+            do
             {
-                hasher.update(merkleHash);
-            }
-            hasher.final(hash);
+                auto range = RANGES::subrange<decltype(it)>{it, it + count};
+
+                if (RANGES::find(range, hash) == RANGES::end(range)) [[unlikely]]
+                    return false;
+
+                HasherType hasher;
+                for (auto& merkleHash : range)
+                {
+                    hasher.update(merkleHash);
+                }
+                hasher.final(hash);
+            } while (count > 1);
         }
 
         if (hash != root) [[unlikely]]
@@ -87,8 +89,15 @@ public:
     void generateMerkleProof(HashRange auto const& originHashes, MerkleRange auto const& merkle,
         std::integral auto index, ProofRange auto& out) const
     {
-        if (index >= RANGES::size(originHashes)) [[unlikely]]
+        if ((size_t)index >= (size_t)RANGES::size(originHashes)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Out of range!"});
+
+        if (RANGES::size(originHashes) == 1)
+        {
+            concepts::resizeTo(out, 1);
+            bcos::concepts::bytebuffer::assignTo(*RANGES::begin(merkle), *RANGES::begin(out));
+            return;
+        }
 
         auto [merkleNodes, merkleLevels] = getMerkleSize(RANGES::size(originHashes));
         if (merkleNodes != RANGES::size(merkle))
@@ -116,8 +125,8 @@ public:
             auto levelLength = getNumberFromHash(*(inputIt++));
             assert(index < levelLength);
 
+            auto count = std::min((decltype(width))(levelLength - index), width);
             setNumberToHash(*(outIt++), count);
-            auto count = std::min(levelLength - index, width);
             for (auto it = inputIt + index; it < inputIt + index + count; ++it)
             {
                 bcos::concepts::bytebuffer::assignTo(*it, *(outIt++));
@@ -131,15 +140,21 @@ public:
         if (RANGES::empty(originHashes)) [[unlikely]]
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
 
+        if (RANGES::size(originHashes) == 1)
+        {
+            bcos::concepts::resizeTo(out, 1);
+            bcos::concepts::bytebuffer::assignTo(*RANGES::begin(originHashes), *RANGES::begin(out));
+            return;
+        }
+
         [[maybe_unused]] auto [merkleNodes, merkleLevels] =
             getMerkleSize(RANGES::size(originHashes));
         bcos::concepts::resizeTo(out, merkleNodes);
 
         // Calculate first level from originHashes
         auto it = RANGES::begin(out);
-        setNumberToHash(*(it++), RANGES::size(originHashes));
-
         auto nextNodes = getNextLevelSize(RANGES::size(originHashes));
+        setNumberToHash(*(it++), nextNodes);
         auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
         calculateLevelHashes(originHashes, outputRange);
 
@@ -173,9 +188,6 @@ private:
 
     std::tuple<unsigned, unsigned> getMerkleSize(std::integral auto inputSize) const
     {
-        if (inputSize == 1)
-            return std::make_tuple(0, 0);
-
         auto nodeSize = 0u;
         auto levels = 0u;
         while (inputSize > 1)

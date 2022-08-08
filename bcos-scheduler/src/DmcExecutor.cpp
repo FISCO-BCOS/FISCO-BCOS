@@ -203,7 +203,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                        << LOG_KV("internalCall", (*messages)[0]->internalCall())
                        << LOG_KV("type", (*messages)[0]->type());
         // is static call
-        m_executor->call(std::move((*messages)[0]),
+        m_executor->dmcCall(std::move((*messages)[0]),
             [this, callback = std::move(callback)](
                 bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
                 if (error)

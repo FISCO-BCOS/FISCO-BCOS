@@ -442,7 +442,7 @@ class NodeConfigGenerator:
             shutil.copy(tars_stop__all_file, stop_all_file)
 
         # copy service binary exec
-        shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name), base_dir)
+        shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name, service_name), base_dir)
 
         sys_name = platform.system()
         if sys_name.lower() == "darwin":

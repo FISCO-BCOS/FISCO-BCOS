@@ -78,6 +78,46 @@ bcostars::Error ExecutorServiceServer::executeTransaction(bcostars::ExecutionMes
     return bcostars::Error();
 }
 
+bcostars::Error ExecutorServiceServer::call(bcostars::ExecutionMessage const& _input,
+    bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    auto msg = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
+        [m_message = _input]() mutable { return &m_message; });
+    m_executor->call(std::move(msg), [_current](bcos::Error::UniquePtr _error,
+                                         bcos::protocol::ExecutionMessage::UniquePtr _output) {
+        async_response_call(_current, toTarsError(std::move(_error)), toTarsMessage(_output));
+    });
+    return bcostars::Error();
+}
+
+bcostars::Error ExecutorServiceServer::executeTransactions(std::string const& _contractAddress,
+    std::vector<bcostars::ExecutionMessage> const& _inputs,
+    std::vector<bcostars::ExecutionMessage>&, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    auto executionMessages =
+        std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
+    for (auto const& input : _inputs)
+    {
+        auto msg = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
+            [m_message = input]() mutable { return &m_message; });
+        executionMessages->emplace_back(std::move(msg));
+    }
+    m_executor->executeTransactions(_contractAddress, *executionMessages,
+        [_current](bcos::Error::UniquePtr _error,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr> _outputs) {
+            std::vector<bcostars::ExecutionMessage> tarsOutputs;
+            for (auto const& it : _outputs)
+            {
+                tarsOutputs.emplace_back(toTarsMessage(it));
+            }
+            async_response_executeTransactions(
+                _current, toTarsError(std::move(_error)), std::move(tarsOutputs));
+        });
+    return bcostars::Error();
+}
+
 bcostars::Error ExecutorServiceServer::dmcExecuteTransactions(std::string const& _contractAddress,
     std::vector<bcostars::ExecutionMessage> const& _inputs,
     std::vector<bcostars::ExecutionMessage>&, tars::TarsCurrentPtr _current)
@@ -131,15 +171,15 @@ bcostars::Error ExecutorServiceServer::dagExecuteTransactions(
     return bcostars::Error();
 }
 
-bcostars::Error ExecutorServiceServer::call(bcostars::ExecutionMessage const& _input,
+bcostars::Error ExecutorServiceServer::dmcCall(bcostars::ExecutionMessage const& _input,
     bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
     auto msg = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
         [m_message = _input]() mutable { return &m_message; });
-    m_executor->call(std::move(msg), [_current](bcos::Error::UniquePtr _error,
-                                         bcos::protocol::ExecutionMessage::UniquePtr _output) {
-        async_response_call(_current, toTarsError(std::move(_error)), toTarsMessage(_output));
+    m_executor->dmcCall(std::move(msg), [_current](bcos::Error::UniquePtr _error,
+                                            bcos::protocol::ExecutionMessage::UniquePtr _output) {
+        async_response_dmcCall(_current, toTarsError(std::move(_error)), toTarsMessage(_output));
     });
     return bcostars::Error();
 }

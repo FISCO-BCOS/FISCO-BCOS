@@ -21,6 +21,7 @@
 
 #include "ExecutiveStackFlow.h"
 #include "../Common.h"
+#include <bcos-framework/executor/ExecuteError.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -63,7 +64,7 @@ void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::Uniq
     WriteGuard lock(x_lock);
 
     // from back to front, push in stack, so stack's tx can be executed from top
-    for (unsigned long i = 0; i < txInputs->size(); i++)
+    for (std::size_t i = 0; i < txInputs->size(); i++)
     {
         submit(std::move((*txInputs)[i]));
     }
@@ -73,7 +74,15 @@ void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)>
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
     asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
-        run(onTxReturn, onFinished);
+        try
+        {
+            run(onTxReturn, onFinished);
+        }
+        catch (std::exception& e)
+        {
+            onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                "ExecutiveStackFlow asyncRun exception:" + std::string(e.what())));
+        }
     });
 }
 

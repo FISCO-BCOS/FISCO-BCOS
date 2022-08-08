@@ -7,7 +7,6 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
@@ -82,6 +81,8 @@ void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
         {
             std::vector<HashType> outMerkle;
             BOOST_CHECK_NO_THROW(trie.generateMerkle(std::as_const(hashes), outMerkle));
+            std::cout << "Merkle: " << std::endl;
+            std::cout << outMerkle << std::endl;
 
             std::vector<HashType> outProof;
             BOOST_CHECK_THROW(trie.generateMerkleProof(hashes, outMerkle, emptyHash, outProof),
@@ -94,7 +95,9 @@ void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
             {
                 trie.generateMerkleProof(hashes, outMerkle, hash, outProof);
 
-                std::cout << width << " " << hash << std::endl;
+                std::cout << "Width: " << width << " Hash: " << hash << std::endl;
+
+                std::cout << "Proof: " << std::endl;
                 std::cout << outProof << std::endl;
                 BOOST_CHECK(trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
                 BOOST_CHECK(!trie.verifyMerkleProof(outProof, emptyHash, *(outMerkle.rbegin())));
@@ -103,7 +106,10 @@ void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
                 std::mt19937 prng{seed};
                 outProof[dis(prng)] = emptyHash;
 
-                BOOST_CHECK(!trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
+                if (outProof.size() > 1)
+                {
+                    BOOST_CHECK(!trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
+                }
 
                 outProof.clear();
                 BOOST_CHECK_THROW(

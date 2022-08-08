@@ -44,7 +44,7 @@ concept DynamicRange = requires(Range range, size_t newSize)
 
 void resizeTo(RANGES::range auto& out, std::integral auto size)
 {
-    if (RANGES::size(out) < size)
+    if ((size_t)RANGES::size(out) < (size_t)size)
     {
         if constexpr (bcos::concepts::DynamicRange<std::remove_cvref_t<decltype(out)>>)
         {

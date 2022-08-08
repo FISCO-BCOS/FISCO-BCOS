@@ -6,6 +6,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
+#include <boost/endian/conversion.hpp>
 #include <string>
 #include <vector>
 
@@ -25,12 +26,11 @@ void impl_calculate(
     Hasher hasher;
     auto const& hashFields = transaction.data;
 
-    long version =
-        boost::asio::detail::socket_ops::host_to_network_long((int32_t)hashFields.version);
+    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     hasher.update(hashFields.chainID);
     hasher.update(hashFields.groupID);
-    long blockLimit = boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockLimit);
+    int64_t blockLimit = boost::endian::native_to_big((int64_t)hashFields.blockLimit);
     hasher.update(blockLimit);
     hasher.update(hashFields.nonce);
     hasher.update(hashFields.to);
@@ -53,11 +53,11 @@ void impl_calculate(
 
     Hasher hasher;
     auto const& hashFields = receipt.data;
-    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     hasher.update(hashFields.gasUsed);
     hasher.update(hashFields.contractAddress);
-    long status = boost::asio::detail::socket_ops::host_to_network_long(hashFields.status);
+    int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
     hasher.update(status);
     hasher.update(hashFields.output);
     // vector<LogEntry> logEntries: 6
@@ -70,8 +70,7 @@ void impl_calculate(
         }
         hasher.update(log.data);
     }
-    long blockNumber =
-        boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    int64_t blockNumber = boost::endian::native_to_big((int64_t)hashFields.blockNumber);
     hasher.update(blockNumber);
     hasher.final(out);
 }
@@ -88,12 +87,11 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::By
     Hasher hasher;
     auto const& hashFields = block.blockHeader.data;
 
-    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     for (auto const& parent : hashFields.parentInfo)
     {
-        long blockNumber =
-            boost::asio::detail::socket_ops::host_to_network_long(parent.blockNumber);
+        int64_t blockNumber = boost::endian::native_to_big((int64_t)parent.blockNumber);
         hasher.update(blockNumber);
         hasher.update(parent.blockHash);
     }
@@ -101,14 +99,14 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::By
     hasher.update(hashFields.receiptRoot);
     hasher.update(hashFields.stateRoot);
 
-    long number = boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    int64_t number = boost::endian::native_to_big((int64_t)hashFields.blockNumber);
     hasher.update(number);
     hasher.update(hashFields.gasUsed);
 
-    long timestamp = boost::asio::detail::socket_ops::host_to_network_long(hashFields.timestamp);
+    int64_t timestamp = boost::endian::native_to_big((int64_t)hashFields.timestamp);
     hasher.update(timestamp);
 
-    long sealer = boost::asio::detail::socket_ops::host_to_network_long(hashFields.sealer);
+    int64_t sealer = boost::endian::native_to_big((int64_t)hashFields.sealer);
     hasher.update(sealer);
 
     for (auto const& nodeID : hashFields.sealerList)
@@ -120,7 +118,7 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::By
     // update consensusWeights to hashBuffer: 13
     for (auto weight : hashFields.consensusWeights)
     {
-        long networkWeight = boost::asio::detail::socket_ops::host_to_network_long(weight);
+        int64_t networkWeight = boost::endian::native_to_big((int64_t)weight);
         hasher.update(networkWeight);
     }
 
