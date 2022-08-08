@@ -64,7 +64,7 @@ void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::Uniq
     WriteGuard lock(x_lock);
 
     // from back to front, push in stack, so stack's tx can be executed from top
-    for (unsigned long i = 0; i < txInputs->size(); i++)
+    for (std::size_t i = 0; i < txInputs->size(); i++)
     {
         submit(std::move((*txInputs)[i]));
     }
