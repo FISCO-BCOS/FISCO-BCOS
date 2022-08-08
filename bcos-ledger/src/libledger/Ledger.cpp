@@ -1004,8 +1004,8 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                 auto effectNumber = blockNumber + 1;
                 for (auto& it : nodeList)
                 {
-                    if (it.type == type &&
-                        boost::lexical_cast<long>(it.enableNumber) <= effectNumber)
+                    if (it.type == type && boost::lexical_cast<bcos::protocol::BlockNumber>(
+                                               it.enableNumber) <= effectNumber)
                     {
                         crypto::NodeIDPtr nodeID =
                             m_blockFactory->cryptoSuite()->keyFactory()->createKey(

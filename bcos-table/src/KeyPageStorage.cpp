@@ -488,7 +488,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                     pageKey, page->endKey(), page->validCount(), page->size(), pageInfoOp);
                 if (oldStartKey)
                 {
-                    changePageKey(change.table, oldStartKey.value(), page->endKey());
+                    changePageKey(change.table, oldStartKey.value(), page->endKey(), true);
                 }
             }
             else
