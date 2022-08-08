@@ -122,7 +122,7 @@ class ServiceConfigGenerator:
             base_dir = os.path.dirname(conf_dir)
 
             # copy service binary exec
-            shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name), base_dir)
+            shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name, service_name), base_dir)
 
             # copy ssl/ca.crt ssl/ssl.crt ssl/ssl.key
             cert_dir = os.path.join(conf_dir, "ssl", "*")
