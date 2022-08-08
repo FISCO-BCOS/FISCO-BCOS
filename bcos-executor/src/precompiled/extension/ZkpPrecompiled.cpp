@@ -141,6 +141,7 @@ void ZkpPrecompiled::verifyEitherEqualityProof(
                                << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEitherEqualityProof: ") << verifyResult;
 }
 
 void ZkpPrecompiled::verifyKnowledgeProof(
@@ -163,6 +164,7 @@ void ZkpPrecompiled::verifyKnowledgeProof(
                                << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyKnowledgeProof: ") << verifyResult;
 }
 
 void ZkpPrecompiled::verifyFormatProof(
@@ -188,6 +190,7 @@ void ZkpPrecompiled::verifyFormatProof(
                                << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyFormatProof: ") << verifyResult;
 }
 
 void ZkpPrecompiled::verifySumProof(
@@ -213,6 +216,7 @@ void ZkpPrecompiled::verifySumProof(
                                << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("verifySumProof: ") << verifyResult;
 }
 
 void ZkpPrecompiled::verifyProductProof(
@@ -238,6 +242,7 @@ void ZkpPrecompiled::verifyProductProof(
                                << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyProductProof: ") << verifyResult;
 }
 
 void ZkpPrecompiled::verifyEqualityProof(
@@ -261,6 +266,7 @@ void ZkpPrecompiled::verifyEqualityProof(
                                << LOG_KV("error", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEqualityProof: ") << verifyResult;
 }
 
 void ZkpPrecompiled::aggregateRistrettoPoint(
