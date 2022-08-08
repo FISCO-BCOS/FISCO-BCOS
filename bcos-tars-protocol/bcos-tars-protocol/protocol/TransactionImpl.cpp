@@ -20,7 +20,7 @@
  */
 #include "TransactionImpl.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
-#include <boost/asio/detail/socket_ops.hpp>
+#include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -58,12 +58,11 @@ bcos::crypto::HashType TransactionImpl::hash(bool _useCache) const
 
     auto const& hashFields = m_inner()->data;
     // encode version
-    long version =
-        boost::asio::detail::socket_ops::host_to_network_long((int32_t)hashFields.version);
+    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     hasher.update(hashFields.chainID);
     hasher.update(hashFields.groupID);
-    long blockLimit = boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockLimit);
+    int64_t blockLimit = boost::endian::native_to_big((int64_t)hashFields.blockLimit);
     hasher.update(blockLimit);
     hasher.update(hashFields.nonce);
     hasher.update(hashFields.to);

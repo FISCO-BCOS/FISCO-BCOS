@@ -19,6 +19,7 @@
  * @date 2021-04-20
  */
 #include "TransactionReceiptImpl.h"
+#include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -48,11 +49,11 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
     auto hashImpl = m_cryptoSuite->hashImpl();
     auto hasher = hashImpl->hasher();
     auto const& hashFields = m_inner()->data;
-    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     hasher.update(hashFields.gasUsed);
     hasher.update(hashFields.contractAddress);
-    long status = boost::asio::detail::socket_ops::host_to_network_long(hashFields.status);
+    int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
     hasher.update(status);
     hasher.update(hashFields.output);
     // vector<LogEntry> logEntries: 6
@@ -65,8 +66,7 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
         }
         hasher.update(log.data);
     }
-    long blockNumber =
-        boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    int64_t blockNumber = boost::endian::native_to_big((int64_t)hashFields.blockNumber);
     hasher.update(blockNumber);
     // calculate the hash
     bcos::crypto::HashType hashResult;

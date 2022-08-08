@@ -39,7 +39,7 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
-    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
+    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>&& db,
         const bcos::security::DataEncryptInterface::Ptr dataEncryption);
 
     ~RocksDBStorage() {}
@@ -76,7 +76,7 @@ private:
     Error::Ptr checkStatus(rocksdb::Status const& status);
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
     tbb::spin_mutex m_writeBatchMutex;
-    std::unique_ptr<rocksdb::DB> m_db;
+    std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>> m_db;
 
     // Security Storage
     bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};

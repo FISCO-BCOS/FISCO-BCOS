@@ -46,6 +46,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -113,7 +114,7 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables()
         });
 }
 
-StorageInterface::Ptr createKeyPageStorage(StorageInterface::Ptr backend, size_t keyPageSize)
+StateStorageInterface::Ptr createKeyPageStorage(StorageInterface::Ptr backend, size_t keyPageSize)
 {
     auto keyPageIgnoreTables = getKeyPageIgnoreTables();
     return std::make_shared<bcos::storage::KeyPageStorage>(
@@ -123,13 +124,13 @@ StorageInterface::Ptr createKeyPageStorage(StorageInterface::Ptr backend, size_t
 void print(
     std::string_view tableName, std::string_view key, std::string_view value, bool hex = false)
 {
-    cout << "[" << tableName << "]"
-         << " [" << key << "] [" << (hex ? toHex(value) : value) << "]" << endl;
+    cout << "[tableName=" << tableName << "]"
+         << " [key=" << key << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
 }
 
 void writeKV(std::ofstream& output, std::string_view key, std::string_view value, bool hex = false)
 {
-    output << "[" << key << "] [" << (hex ? toHex(value) : value) << "]" << endl;
+    output << "[key=" << key << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
 }
 
 DB* createSecondaryRocksDB(
@@ -213,7 +214,9 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage = createKeyPageStorage(rocksdbStorage, keyPageSize);
+            auto keyPageStorage = createKeyPageStorage(rocksdbStorage, keyPageSize);
+            keyPageStorage->setReadOnly(true);
+            storage = keyPageStorage;
         }
         std::promise<std::pair<Error::UniquePtr, std::optional<Entry>>> getPromise;
         storage->asyncGetRow(
@@ -233,7 +236,15 @@ int main(int argc, const char* argv[])
                  << endl;
             return -1;
         }
-        print(tableName, key, ret.second->get(), hexEncoded);
+        if (key.empty())
+        {  // print table meta
+            KeyPageStorage::TableMeta meta(ret.second->get());
+            cout << meta << std::endl;
+        }
+        else
+        {
+            print(tableName, key, ret.second->get(), hexEncoded);
+        }
     }
     else if (params.count("write"))
     {  // write

@@ -20,7 +20,7 @@
  */
 #include "BlockHeaderImpl.h"
 #include <bcos-utilities/Common.h>
-#include <boost/asio/detail/socket_ops.hpp>
+#include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -52,12 +52,11 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
     auto hasher = hashImpl->hasher();
 
     auto const& hashFields = m_inner()->data;
-    long version = boost::asio::detail::socket_ops::host_to_network_long(hashFields.version);
+    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     for (auto const& parent : hashFields.parentInfo)
     {
-        long blockNumber =
-            boost::asio::detail::socket_ops::host_to_network_long(parent.blockNumber);
+        int64_t blockNumber = boost::endian::native_to_big((int64_t)parent.blockNumber);
         hasher.update(blockNumber);
         hasher.update(parent.blockHash);
     }
@@ -65,14 +64,14 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
     hasher.update(hashFields.receiptRoot);
     hasher.update(hashFields.stateRoot);
 
-    long number = boost::asio::detail::socket_ops::host_to_network_long(hashFields.blockNumber);
+    int64_t number = boost::endian::native_to_big((int64_t)hashFields.blockNumber);
     hasher.update(number);
     hasher.update(hashFields.gasUsed);
 
-    long timestamp = boost::asio::detail::socket_ops::host_to_network_long(hashFields.timestamp);
+    int64_t timestamp = boost::endian::native_to_big((int64_t)hashFields.timestamp);
     hasher.update(timestamp);
 
-    long sealer = boost::asio::detail::socket_ops::host_to_network_long(hashFields.sealer);
+    int64_t sealer = boost::endian::native_to_big((int64_t)hashFields.sealer);
     hasher.update(sealer);
 
     for (auto const& nodeID : hashFields.sealerList)
@@ -84,7 +83,7 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
     // update consensusWeights to hashBuffer: 13
     for (auto weight : hashFields.consensusWeights)
     {
-        long networkWeight = boost::asio::detail::socket_ops::host_to_network_long(weight);
+        int64_t networkWeight = boost::endian::native_to_big((int64_t)weight);
         hasher.update(networkWeight);
     }
     // calculate the hash
