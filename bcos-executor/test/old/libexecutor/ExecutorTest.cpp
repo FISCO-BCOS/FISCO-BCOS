@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
     auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
     auto sender = string_view((char*)tx->sender().data(), tx->sender().size());
     auto executive = std::make_shared<TransactionExecutive>(executiveContext);
-    auto receipt = executor->executeTransaction(tx, executive);
+    auto receipt = executor->dmcExecuteTransaction(tx, executive);
     BOOST_TEST(receipt->status() == (int32_t)TransactionStatus::None);
     BOOST_TEST(receipt->gasUsed() == 430575);
     // std::cout << "##### hash:" << receipt->hash().hexPrefixed() << std::endl;
@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
     // call helloworld get
     input = *fromHexString("0x6d4ce63c");
     auto getTx = fakeTransaction(cryptoSuite, keyPair, newAddress, input, 101, 100001, "1", "1");
-    receipt = executor->executeTransaction(getTx, executive);
+    receipt = executor->dmcExecuteTransaction(getTx, executive);
     BOOST_TEST(receipt->status() == (int32_t)TransactionStatus::None);
     BOOST_TEST(receipt->gasUsed() == 22742);
     // std::cout << "##### hash:" << receipt->hash().hexPrefixed() << std::endl;
@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
         "0000000000000000000000");
     // cout << "##### newAddress: " << newAddress << endl;
     auto setTx = fakeTransaction(cryptoSuite, keyPair, newAddress, input, 101, 100001, "1", "1");
-    receipt = executor->executeTransaction(setTx, executive);
+    receipt = executor->dmcExecuteTransaction(setTx, executive);
     BOOST_TEST(receipt->status() == (int32_t)TransactionStatus::None);
     BOOST_TEST(receipt->gasUsed() == 30791);
     // std::cout << "##### hash:" << receipt->hash().hexPrefixed() << std::endl;
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
     BOOST_TEST(*toHexString(receipt->output()) == "");
     BOOST_TEST(receipt->blockNumber() == 1);
     // get
-    receipt = executor->executeTransaction(getTx, executive);
+    receipt = executor->dmcExecuteTransaction(getTx, executive);
     // Hello, World! == 666973636f
     BOOST_TEST(*toHexString(receipt->output()) ==
                "00000000000000000000000000000000000000000000000000000000000000200000000000000000000"
@@ -206,10 +206,10 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
     nonce = executiveContext->getState()->getNonce(sender);
     BOOST_TEST(nonce == executiveContext->getState()->accountStartNonce() + 1);
 
-    executor->executeTransaction(tx, executive);
+    executor->dmcExecuteTransaction(tx, executive);
     nonce = executiveContext->getState()->getNonce(sender);
     BOOST_TEST(nonce == executiveContext->getState()->accountStartNonce() + 2);
-    executor->executeTransaction(tx, executive);
+    executor->dmcExecuteTransaction(tx, executive);
     nonce = executiveContext->getState()->getNonce(sender);
     BOOST_TEST(nonce == executiveContext->getState()->accountStartNonce() + 3);
 }
@@ -248,7 +248,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
     // asyncExecuteTransaction should has no affect on state
     promise<Error::Ptr> prom;
-    executor->asyncExecuteTransaction(
+    executor->asyncdmcExecuteTransaction(
         tx, [&prom](const Error::Ptr& err, const protocol::TransactionReceipt::ConstPtr&) {
             prom.set_value(err);
         });

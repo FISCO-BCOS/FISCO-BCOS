@@ -1,6 +1,7 @@
 
 #include "ExecutiveSerialFlow.h"
 #include "TransactionExecutive.h"
+#include <bcos-framework/executor/ExecuteError.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -35,7 +36,15 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
     asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
-        run(onTxReturn, onFinished);
+        try
+        {
+            run(onTxReturn, onFinished);
+        }
+        catch (std::exception& e)
+        {
+            onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                "ExecutiveSerialFlow asyncRun exception:" + std::string(e.what())));
+        }
     });
 }
 
@@ -51,8 +60,16 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             blockTxs = std::move(m_txInputs);
         }
 
-        for (auto& txInput : *blockTxs)
+
+        for (size_t id = 0; id < blockTxs->size(); id++)
         {
+            auto& txInput = (*blockTxs)[id];
+            if (!txInput)
+            {
+                EXECUTIVE_LOG(WARNING) << "Ignore tx[" << id << "] with empty message";
+                continue;
+            }
+
             auto contextID = txInput->contextID;
             auto seq = txInput->seq;
             // build executive

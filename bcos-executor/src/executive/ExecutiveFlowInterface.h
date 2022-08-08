@@ -52,6 +52,12 @@ public:
         }
     }
 
+    void setThreadPool(bcos::ThreadPool::Ptr pool)
+    {
+        bcos::RecursiveGuard lock(x_pool);
+        m_pool = pool;
+    }
+
 protected:
     template <class S, class F>
     void asyncTo(S self, F f)
@@ -61,20 +67,22 @@ protected:
     }
 
 private:
-    bcos::ThreadPool* getPoolInstance()
+    bcos::ThreadPool::Ptr getPoolInstance()
     {
-        static bcos::ThreadPool* m_pool;
         if (!m_pool)
         {
-            static bcos::RecursiveMutex x_pool;
             bcos::RecursiveGuard lock(x_pool);
             if (!m_pool)
             {
-                m_pool = new bcos::ThreadPool("ExecutiveFlow", std::thread::hardware_concurrency());
+                m_pool = std::make_shared<bcos::ThreadPool>(
+                    "ExecutiveFlow", std::thread::hardware_concurrency());
             }
         }
         return m_pool;
     }
+
+    bcos::ThreadPool::Ptr m_pool;
+    bcos::RecursiveMutex x_pool;
 };
 
 }  // namespace executor

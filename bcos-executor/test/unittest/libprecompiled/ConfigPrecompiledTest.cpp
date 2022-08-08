@@ -77,7 +77,7 @@ public:
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->executeTransaction(
+        executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -354,7 +354,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -365,7 +365,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -419,7 +419,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
