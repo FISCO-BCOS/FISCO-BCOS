@@ -103,14 +103,14 @@ void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
                 BOOST_CHECK(trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
                 BOOST_CHECK(!trie.verifyMerkleProof(outProof, emptyHash, *(outMerkle.rbegin())));
 
-                // auto dis = std::uniform_int_distribution<size_t>(0lu, outProof.size() - 1);
-                // std::mt19937 prng{seed};
-                // outProof[dis(prng)] = emptyHash;
+                auto dis = std::uniform_int_distribution<size_t>(0lu, outProof.size() - 1);
+                std::mt19937 prng{seed};
+                outProof[dis(prng)] = emptyHash;
 
-                // if (outProof.size() > 1)
-                // {
-                // BOOST_CHECK(!trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
-                // }
+                if (outProof.size() > 1)
+                {
+                    BOOST_CHECK(!trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
+                }
 
                 outProof.clear();
                 BOOST_CHECK_THROW(trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())),

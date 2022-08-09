@@ -194,6 +194,7 @@ private:
 
     void setNumberToHash(uint32_t number, bcos::concepts::bytebuffer::Hash auto& output) const
     {
+        bcos::concepts::resizeTo(output, sizeof(uint32_t));
         *((uint32_t*)output.data()) = boost::endian::native_to_big(number);
     }
 

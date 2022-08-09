@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerDefaultConfig)
 
 BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
 {
-    std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
+    std::string configIni("data/config/config_ipv4.ini");
 
     boost::property_tree::ptree pt;
     boost::property_tree::ini_parser::read_ini(configIni, pt);
@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
 
 BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
 {
-    std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
+    std::string configIni("data/config/config_ipv6.ini");
 
     boost::property_tree::ptree pt;
     boost::property_tree::ini_parser::read_ini(configIni, pt);
