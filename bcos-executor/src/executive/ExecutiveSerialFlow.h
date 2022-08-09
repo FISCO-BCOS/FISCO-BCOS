@@ -53,6 +53,9 @@ public:
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
 private:
+    using SerialMap = std::map<int64_t, CallParameters::UniquePtr, std::less<>>;
+    using SerialMapPtr = std::shared_ptr<SerialMap>;
+
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
 
@@ -66,7 +69,7 @@ private:
 
 
     // <ContextID> -> Executive
-    std::shared_ptr<std::vector<CallParameters::UniquePtr>> m_txInputs;
+    SerialMapPtr m_txInputs;
 
     ExecutiveFactory::Ptr m_executiveFactory;
 

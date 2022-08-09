@@ -127,10 +127,9 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
     m_prx->async_executeTransaction(new Callback(std::move(callback)), executionMsgImpl->inner());
 }
 
-void ExecutorServiceClient
-  ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-            callback)
+void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        callback)
 {
     class Callback : public ExecutorServicePrxCallback
     {
@@ -393,7 +392,10 @@ void ExecutorServiceClient::prepare(
     private:
         std::function<void(bcos::Error::Ptr)> m_callback;
     };
-    m_prx->async_prepare(new Callback(std::move(callback)), toTarsTwoPCParams(params));
+
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_prepare(
+        new Callback(std::move(callback)), toTarsTwoPCParams(params));
 }
 
 void ExecutorServiceClient::commit(

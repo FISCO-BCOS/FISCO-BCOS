@@ -14,12 +14,7 @@ void ExecutiveSerialFlow::submit(CallParameters::UniquePtr txInput)
 
     if (m_txInputs == nullptr)
     {
-        m_txInputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
-    }
-
-    if (m_txInputs->size() <= contextID)
-    {
-        m_txInputs->resize(contextID + 1);
+        m_txInputs = std::make_shared<SerialMap>();
     }
 
     (*m_txInputs)[contextID] = std::move(txInput);
@@ -28,8 +23,16 @@ void ExecutiveSerialFlow::submit(CallParameters::UniquePtr txInput)
 void ExecutiveSerialFlow::submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
 {
     WriteGuard lock(x_lock);
+    if (m_txInputs == nullptr)
+    {
+        m_txInputs = std::make_shared<SerialMap>();
+    }
 
-    m_txInputs = txInputs;
+    for (auto& txInput : *txInputs)
+    {
+        auto contextID = txInput->contextID;
+        (*m_txInputs)[contextID] = std::move(txInput);
+    }
 }
 
 void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxReturn,
@@ -53,24 +56,23 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
 {
     try
     {
-        std::shared_ptr<std::vector<CallParameters::UniquePtr>> blockTxs = nullptr;
+        std::shared_ptr<SerialMap> blockTxs = nullptr;
 
         {
             bcos::WriteGuard lock(x_lock);
             blockTxs = std::move(m_txInputs);
         }
 
-
-        for (size_t id = 0; id < blockTxs->size(); id++)
+        for (auto it = blockTxs->begin(); it != blockTxs->end(); it++)
         {
-            auto& txInput = (*blockTxs)[id];
+            auto contextID = it->first;
+            auto& txInput = it->second;
             if (!txInput)
             {
-                EXECUTIVE_LOG(WARNING) << "Ignore tx[" << id << "] with empty message";
+                EXECUTIVE_LOG(WARNING) << "Ignore tx[" << contextID << "] with empty message";
                 continue;
             }
 
-            auto contextID = txInput->contextID;
             auto seq = txInput->seq;
             // build executive
             auto executive = m_executiveFactory->build(
