@@ -369,11 +369,10 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
                 // check storage block Number
                 auto storageBlockNumber = getBlockNumberInStorage();
-                EXECUTOR_NAME_LOG(DEBUG)
-                    << LOG_BADGE("Switch")
-                    << "Executor load from backend storage, check storage blockNumber"
-                    << LOG_KV("storageBlockNumber", storageBlockNumber)
-                    << LOG_KV("requestBlockNumber", blockHeader->number());
+                EXECUTOR_NAME_LOG(DEBUG) << "NextBlockHeader, executor load from backend storage, "
+                                            "check storage blockNumber"
+                                         << LOG_KV("storageBlockNumber", storageBlockNumber)
+                                         << LOG_KV("requestBlockNumber", blockHeader->number());
                 // Note: skip check for sys contract deploy
                 if (blockHeader->number() - storageBlockNumber != 1 &&
                     !isSysContractDeploy(blockHeader->number()))
