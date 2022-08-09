@@ -20,6 +20,8 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include <variant>
+
 namespace bcos::tool::merkle
 {
 
@@ -31,7 +33,8 @@ template <class Range>
 concept MerkleRange = HashRange<Range>;
 
 template <class Range>
-concept ProofRange = HashRange<Range>;
+concept ProofRange = bcos::concepts::DynamicRange<Range> &&
+    bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<RANGES::range_value_t<Range>>>;
 
 template <bcos::crypto::hasher::Hasher HasherType, size_t width = 2>
 class Merkle
@@ -51,9 +54,10 @@ public:
         if (RANGES::size(proof) > 1)
         {
             auto it = RANGES::begin(proof);
-            auto count = getNumberFromHash(*(it++));
-            do
+
+            while (it != RANGES::end(proof))
             {
+                auto count = getNumberFromHash(*(it++));
                 auto range = RANGES::subrange<decltype(it)>{it, it + count};
 
                 if (RANGES::find(range, hash) == RANGES::end(range)) [[unlikely]]
@@ -65,7 +69,9 @@ public:
                     hasher.update(merkleHash);
                 }
                 hasher.final(hash);
-            } while (count > 1);
+
+                std::advance(it, count);
+            }
         }
 
         if (hash != root) [[unlikely]]
@@ -99,22 +105,25 @@ public:
             return;
         }
 
+        using OutValueType = std::remove_cvref_t<RANGES::range_value_t<decltype(out)>>;
+
         auto [merkleNodes, merkleLevels] = getMerkleSize(RANGES::size(originHashes));
         if (merkleNodes != RANGES::size(merkle))
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismitch!"});
 
-        concepts::resizeTo(out, merkleLevels * width);
-
-        auto outIt = RANGES::begin(out);
-
         index = indexAlign(index);
-        auto count = std::min(RANGES::size(originHashes) - index, width);
-        setNumberToHash(*(outIt++), count);
+        auto count = std::min((size_t)(RANGES::size(originHashes) - index), (size_t)width);
+
+        OutValueType number;
+        setNumberToHash(count, number);
+        out.emplace_back(std::move(number));
 
         for (auto it = RANGES::begin(originHashes) + index;
              it < RANGES::begin(originHashes) + index + count; ++it)
         {
-            bcos::concepts::bytebuffer::assignTo(*it, *(outIt++));
+            OutValueType hash;
+            bcos::concepts::bytebuffer::assignTo(*it, hash);
+            out.emplace_back(std::move(hash));
         }
 
         // Query next level hashes
@@ -124,12 +133,19 @@ public:
             index = indexAlign(index / width);
             auto levelLength = getNumberFromHash(*(inputIt++));
             assert(index < levelLength);
+            if (levelLength == 1)  // Ignore merkle root
+                break;
 
-            auto count = std::min((decltype(width))(levelLength - index), width);
-            setNumberToHash(*(outIt++), count);
+            auto count = std::min((size_t)(levelLength - index), (size_t)width);
+
+            OutValueType number;
+            setNumberToHash(count, number);
+            out.emplace_back(std::move(number));
             for (auto it = inputIt + index; it < inputIt + index + count; ++it)
             {
-                bcos::concepts::bytebuffer::assignTo(*it, *(outIt++));
+                OutValueType hash;
+                bcos::concepts::bytebuffer::assignTo(*it, hash);
+                out.emplace_back(hash);
             }
             RANGES::advance(inputIt, levelLength);
         }
@@ -154,7 +170,7 @@ public:
         // Calculate first level from originHashes
         auto it = RANGES::begin(out);
         auto nextNodes = getNextLevelSize(RANGES::size(originHashes));
-        setNumberToHash(*(it++), nextNodes);
+        setNumberToHash(nextNodes, *(it++));
         auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
         calculateLevelHashes(originHashes, outputRange);
 
@@ -165,7 +181,7 @@ public:
             RANGES::advance(it, nextNodes);
             nextNodes = getNextLevelSize(nextNodes);
 
-            setNumberToHash(*(it++), nextNodes);
+            setNumberToHash(nextNodes, *(it++));
             auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
             calculateLevelHashes(inputRange, outputRange);
 
@@ -176,9 +192,9 @@ public:
 private:
     auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
 
-    void setNumberToHash(bcos::concepts::bytebuffer::Hash auto& input, uint32_t number) const
+    void setNumberToHash(uint32_t number, bcos::concepts::bytebuffer::Hash auto& output) const
     {
-        *((uint32_t*)input.data()) = boost::endian::native_to_big(number);
+        *((uint32_t*)output.data()) = boost::endian::native_to_big(number);
     }
 
     uint32_t getNumberFromHash(bcos::concepts::bytebuffer::Hash auto const& input) const
@@ -210,15 +226,13 @@ private:
         assert(RANGES::size(input) > 0);
 
         auto outputSize = RANGES::size(output);
-        bcos::concepts::resizeTo(output, outputSize);
-
         tbb::parallel_for(tbb::blocked_range<size_t>(0, outputSize),
             [this, &input, &output](const tbb::blocked_range<size_t>& range) {
                 HasherType hasher;
 
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    for (auto j = i * width; j < (i + 1) + width && j < RANGES::size(input); ++j)
+                    for (auto j = i * width; j < (i + 1) * width && j < RANGES::size(input); ++j)
                     {
                         hasher.update(input[j]);
                     }
