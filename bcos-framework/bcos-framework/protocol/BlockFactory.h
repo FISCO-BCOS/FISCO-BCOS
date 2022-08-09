@@ -28,6 +28,7 @@ namespace bcos
 {
 namespace protocol
 {
+
 class BlockFactory
 {
 public:

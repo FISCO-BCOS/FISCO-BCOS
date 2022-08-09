@@ -20,8 +20,6 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include <variant>
-
 namespace bcos::tool::merkle
 {
 
@@ -105,8 +103,6 @@ public:
             return;
         }
 
-        using OutValueType = std::remove_cvref_t<RANGES::range_value_t<decltype(out)>>;
-
         auto [merkleNodes, merkleLevels] = getMerkleSize(RANGES::size(originHashes));
         if (merkleNodes != RANGES::size(merkle))
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismitch!"});
@@ -114,16 +110,14 @@ public:
         index = indexAlign(index);
         auto count = std::min((size_t)(RANGES::size(originHashes) - index), (size_t)width);
 
-        OutValueType number;
-        setNumberToHash(count, number);
-        out.emplace_back(std::move(number));
+        std::vector<int> a;
+
+        setNumberToHash(count, out.emplace_back());
 
         for (auto it = RANGES::begin(originHashes) + index;
              it < RANGES::begin(originHashes) + index + count; ++it)
         {
-            OutValueType hash;
-            bcos::concepts::bytebuffer::assignTo(*it, hash);
-            out.emplace_back(std::move(hash));
+            bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
         }
 
         // Query next level hashes
@@ -138,14 +132,10 @@ public:
 
             auto count = std::min((size_t)(levelLength - index), (size_t)width);
 
-            OutValueType number;
-            setNumberToHash(count, number);
-            out.emplace_back(std::move(number));
+            setNumberToHash(count, out.emplace_back());
             for (auto it = inputIt + index; it < inputIt + index + count; ++it)
             {
-                OutValueType hash;
-                bcos::concepts::bytebuffer::assignTo(*it, hash);
-                out.emplace_back(hash);
+                bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
             }
             RANGES::advance(inputIt, levelLength);
         }

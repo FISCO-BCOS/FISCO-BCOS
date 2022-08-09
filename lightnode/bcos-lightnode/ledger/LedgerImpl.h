@@ -10,6 +10,7 @@
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-tool/merkle/Merkle.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -155,7 +156,7 @@ private:
         auto status = impl_getStatus();
         auto sourceStatus = sourceLedger.getStatus();
 
-        LEDGER_LOG(INFO) << "sync onlyHeader: " << onlyHeader
+        LEDGER_LOG(INFO) << "Sync onlyHeader: " << onlyHeader
                          << " local block number: " << status.blockNumber
                          << " remote block number: " << sourceStatus.blockNumber;
 
@@ -237,7 +238,7 @@ private:
                 block.transactionsMetaData |
                 RANGES::views::transform(
                     [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
-                        return std::string_view{metaData.hash.data(), metaData.hash.size()};
+                        return std::span<byte const>{metaData.hash.data(), metaData.hash.size()};
                     });
             auto outputSize = RANGES::size(block.transactionsMetaData);
 
@@ -341,6 +342,13 @@ private:
             {
                 std::remove_cvref_t<decltype(block)> transactionsBlock;
                 std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
+                auto hashesView =
+                    transactionsBlock.transactionsMetaData |
+                    RANGES::views::transform(
+                        [](RANGES::range_value_t<
+                            decltype(transactionsBlock.transactionsMetaData)> const&
+                                transactionMetaData) { return transactionMetaData.hash; });
+                m_merkle.generateMerkle(hashesView, block.transactionsMerkle);
 
                 bcos::storage::Entry number2TransactionHashesEntry;
                 std::vector<bcos::byte> number2TransactionHashesBuffer;
@@ -431,6 +439,7 @@ private:
     auto& storage() { return bcos::concepts::getRef(m_storage); }
 
     Storage m_storage;
+    tool::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2
 };
 
 }  // namespace bcos::ledger
