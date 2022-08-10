@@ -10,7 +10,7 @@ find_package(Protobuf REQUIRED)
 # set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git
-  GIT_TAG        ffbfd3050c121845f9fc81a76ad00b1921539b0d
+  GIT_TAG        a2e5c1b582009340c782cb8d80239310cc84e7f2
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  git submodule foreach --recursive git reset --hard #COMMAND export PATH=${GRPC_ROOT}/bin:\$PATH
   # LOG_BUILD true
