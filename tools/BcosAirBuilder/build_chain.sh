@@ -1668,9 +1668,9 @@ generate_genesis_config_by_nodeids()
 
     local nodeid_list=""
     local node_index=0
-    local nodeid_files=$(ls ${nodeid_dir}/*.nodeid)
+    local nodeid_files=$(ls "${nodeid_dir}/*.nodeid")
     # gen node.N=xxxx first
-    for nodeid_file in ${nodeid_files}
+    for nodeid_file in "${nodeid_files}"
     do
         local nodeid=$(cat ${nodeid_file})
         nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1

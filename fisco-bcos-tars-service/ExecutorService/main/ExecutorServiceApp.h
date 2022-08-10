@@ -38,7 +38,13 @@ public:
     ExecutorServiceApp() = default;
     ~ExecutorServiceApp() override {}
     void initialize() override;
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        // terminate the network client
+        tars::Application::getCommunicator()->terminate();
+        // terminate the network threads
+        Application::terminate();
+    }
 
 protected:
     virtual void createAndInitExecutor();
