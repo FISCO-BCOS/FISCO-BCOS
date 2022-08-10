@@ -19,6 +19,7 @@
  */
 
 #include "CryptoPrecompiled.h"
+#include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-codec/abi/ContractABICodec.h>
@@ -40,8 +41,8 @@ const char* const CRYPTO_METHOD_SM3_STR = "sm3(bytes)";
 // Note: the interface here can't be keccak256k1 for naming conflict
 const char* const CRYPTO_METHOD_KECCAK256_STR = "keccak256Hash(bytes)";
 // precompiled interfaces related to verify
-// sm2 verify: (message, sign)
-const char* const CRYPTO_METHOD_SM2_VERIFY_STR = "sm2Verify(bytes,bytes)";
+// sm2 verify: (message, publicKey, r, s)
+const char* const CRYPTO_METHOD_SM2_VERIFY_STR = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
 // the params are (vrfInput, vrfPublicKey, vrfProof)
 const char* const CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR =
     "curve25519VRFVerify(bytes,bytes,bytes)";
@@ -158,13 +159,17 @@ void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExe
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     try
     {
-        bytes message;
-        bytes sm2Sign;
-        codec.decode(_paramData, message, sm2Sign);
-        auto msgHash = HashType(message.data(), message.size());
+        string32 message;
+        bytes inputPublicKey;
+        string32 r;
+        string32 s;
+        codec.decode(_paramData, message, inputPublicKey, r, s);
+        auto msgHash = fromString32(message);
         Address account;
         bool verifySuccess = true;
-        auto publicKey = crypto::sm2Recover(msgHash, ref(sm2Sign));
+        auto signatureData = std::make_shared<SignatureDataWithPub>(
+            fromString32(r), fromString32(s), ref(inputPublicKey));
+        auto publicKey = crypto::sm2Recover(msgHash, ref(*(signatureData->encode())));
         if (!publicKey)
         {
             PRECOMPILED_LOG(DEBUG)
