@@ -159,6 +159,18 @@ else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
 endif()
 
+if(ALLOCATOR STREQUAL "tcmalloc")
+    include(FindPkgConfig)
+    pkg_check_modules(tcmalloc REQUIRED libtcmalloc)
+    link_libraries(${tcmalloc_LINK_LIBRARIES})
+elseif(ALLOCATOR STREQUAL "jemalloc")
+    find_package(jemalloc REQUIRED)
+    link_libraries(jemalloc)
+elseif(ALLOCATOR STREQUAL "mimalloc")
+    find_package(mimalloc REQUIRED)
+    link_libraries(mimalloc)
+endif()
+
 # rust static library linking requirements for macos
 if(APPLE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Security")

@@ -79,6 +79,29 @@
       "dependencies": [
         "etcd-cpp-apiv3"
       ]
+    },
+    "tcmalloc": {
+      "description": "tcmalloc dependencies",
+      "dependencies": [
+        {
+          "name": "gperftools",
+          "features": [
+            "override"
+          ]
+        }
+      ]
+    },
+    "jemalloc": {
+      "description": "jemalloc dependencies",
+      "dependencies": [
+        "jemalloc"
+      ]
+    },
+    "mimalloc": {
+      "description": "mimalloc dependencies",
+      "dependencies": [
+        "mimalloc"
+      ]
     }
   },
   "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"

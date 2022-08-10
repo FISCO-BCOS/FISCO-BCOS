@@ -80,10 +80,6 @@ if(WITH_BENCHMARK)
     add_subdirectory(benchmark)
 endif()
 
-if(WITH_TCMALLOC)
-    include(ProjectTCMalloc)
-endif()
-
 # for code coverage
 if(COVERAGE)
     include(Coverage)

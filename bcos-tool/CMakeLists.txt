@@ -29,7 +29,9 @@ find_package(TBB REQUIRED)
 
 file(GLOB SRCS *.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
-target_include_directories(${TOOL_TARGET} PUBLIC ${CMAKE_BINARY_DIR}/bcos-protocol)
+target_include_directories(${TOOL_TARGET} PUBLIC 
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-protocol>
+)
 target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework bcos-concepts jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
@@ -42,3 +44,6 @@ if (COVERAGE)
     include(Coverage)
     config_coverage("tool-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
 endif ()
+
+include(GNUInstallDirs)
+install(TARGETS ${TOOL_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
