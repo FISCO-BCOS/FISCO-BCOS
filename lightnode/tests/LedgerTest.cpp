@@ -1,6 +1,7 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/storage/Storage.h>
@@ -66,7 +67,7 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
         output.reserve(RANGES::size(keys));
         for (auto&& key : keys)
         {
-            output.emplace_back(getRow(table, key));
+            output.emplace_back(getRow(table, bcos::concepts::bytebuffer::toView(key)));
         }
         return output;
     }

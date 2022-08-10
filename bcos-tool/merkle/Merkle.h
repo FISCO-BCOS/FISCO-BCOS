@@ -110,8 +110,6 @@ public:
         index = indexAlign(index);
         auto count = std::min((size_t)(RANGES::size(originHashes) - index), (size_t)width);
 
-        std::vector<int> a;
-
         setNumberToHash(count, out.emplace_back());
 
         for (auto it = RANGES::begin(originHashes) + index;

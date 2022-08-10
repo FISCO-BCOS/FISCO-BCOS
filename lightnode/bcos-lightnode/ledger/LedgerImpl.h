@@ -238,7 +238,8 @@ private:
                 block.transactionsMetaData |
                 RANGES::views::transform(
                     [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
-                        return std::span<byte const>{metaData.hash.data(), metaData.hash.size()};
+                        return std::span<byte const>{
+                            (byte const*)metaData.hash.data(), metaData.hash.size()};
                     });
             auto outputSize = RANGES::size(block.transactionsMetaData);
 
