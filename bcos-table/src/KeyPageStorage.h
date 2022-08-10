@@ -90,13 +90,14 @@ public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
     explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024,
-        std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr)
+        std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr, bool _ignoreNotExist = false)
       : storage::StateStorageInterface(_prev),
         m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
         m_splitSize(m_pageSize / 3 * 2),
         m_mergeSize(m_pageSize / 4),
         m_buckets(std::thread::hardware_concurrency()),
-        m_ignoreTables(_ignoreTables)
+        m_ignoreTables(_ignoreTables),
+        m_ignoreNotExist(_ignoreNotExist)
     {
         if (!m_ignoreTables.get())
         {
@@ -1221,6 +1222,7 @@ private:
     std::atomic_uint64_t m_writeLength{0};
     std::vector<Bucket> m_buckets;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
+    bool m_ignoreNotExist = false;
 };
 
 }  // namespace bcos::storage

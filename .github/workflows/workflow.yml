@@ -23,6 +23,13 @@ jobs:
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-12]
     steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        if: runner.os == 'Linux'
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
@@ -76,7 +83,7 @@ jobs:
       - name: Test
         if: runner.os != 'Windows'
         run: |
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest 
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
           make cov
       - name: Generate covreage report
         if: runner.os == 'Linux'
