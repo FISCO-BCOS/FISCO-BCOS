@@ -32,12 +32,7 @@ add_library(${TOOL_TARGET} ${SRCS})
 target_include_directories(${TOOL_TARGET} PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-protocol>
 )
-target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework bcos-concepts jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
-
-if(TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 # for code coverage
 if (COVERAGE)

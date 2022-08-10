@@ -9,15 +9,14 @@
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-tool/merkle/Merkle.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
-#include <ranges>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -440,7 +439,7 @@ private:
     auto& storage() { return bcos::concepts::getRef(m_storage); }
 
     Storage m_storage;
-    tool::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2
+    crypto::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2
 };
 
 }  // namespace bcos::ledger

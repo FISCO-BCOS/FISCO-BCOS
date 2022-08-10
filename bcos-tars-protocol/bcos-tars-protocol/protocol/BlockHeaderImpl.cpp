@@ -18,7 +18,11 @@
  * @author: ancelmo
  * @date 2021-04-20
  */
+
+#include "../impl/TarsHashable.h"
+
 #include "BlockHeaderImpl.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-utilities/Common.h>
 #include <boost/endian/conversion.hpp>
 
@@ -49,48 +53,18 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
         return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
     }
     auto hashImpl = m_cryptoSuite->hashImpl();
-    auto hasher = hashImpl->hasher();
+    auto anyHasher = hashImpl->hasher();
 
-    auto const& hashFields = m_inner()->data;
-    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
-    hasher.update(version);
-    for (auto const& parent : hashFields.parentInfo)
-    {
-        int64_t blockNumber = boost::endian::native_to_big((int64_t)parent.blockNumber);
-        hasher.update(blockNumber);
-        hasher.update(parent.blockHash);
-    }
-    hasher.update(hashFields.txsRoot);
-    hasher.update(hashFields.receiptRoot);
-    hasher.update(hashFields.stateRoot);
-
-    int64_t number = boost::endian::native_to_big((int64_t)hashFields.blockNumber);
-    hasher.update(number);
-    hasher.update(hashFields.gasUsed);
-
-    int64_t timestamp = boost::endian::native_to_big((int64_t)hashFields.timestamp);
-    hasher.update(timestamp);
-
-    int64_t sealer = boost::endian::native_to_big((int64_t)hashFields.sealer);
-    hasher.update(sealer);
-
-    for (auto const& nodeID : hashFields.sealerList)
-    {
-        hasher.update(nodeID);
-    }
-    // update extraData to hashBuffer: 12
-    hasher.update(hashFields.extraData);
-    // update consensusWeights to hashBuffer: 13
-    for (auto weight : hashFields.consensusWeights)
-    {
-        int64_t networkWeight = boost::endian::native_to_big((int64_t)weight);
-        hasher.update(networkWeight);
-    }
-    // calculate the hash
     bcos::crypto::HashType hashResult;
-    hasher.final(hashResult);
-    bcos::UpgradeGuard ul(l);
-    m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+    std::visit(
+        [this, &hashResult, &l](auto& hasher) {
+            using Hasher = std::remove_cvref_t<decltype(hasher)>;
+            bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
+
+            bcos::UpgradeGuard ul(l);
+            m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+        },
+        anyHasher);
     return hashResult;
 }
 

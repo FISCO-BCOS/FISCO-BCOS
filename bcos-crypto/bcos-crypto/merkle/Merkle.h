@@ -1,26 +1,23 @@
 #pragma once
 
-#include "bcos-concepts/Basic.h"
+#include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-utilities/Ranges.h>
-#include <bits/ranges_base.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/endian.hpp>
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <cstdint>
 #include <exception>
 #include <iterator>
 #include <memory>
-#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
 
-namespace bcos::tool::merkle
+namespace bcos::crypto::merkle
 {
 
 template <class Range>
@@ -231,4 +228,4 @@ private:
     }
 };
 
-}  // namespace bcos::tool::merkle
+}  // namespace bcos::crypto::merkle

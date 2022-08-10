@@ -4,7 +4,7 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <variant>
 
-namespace bcos::tool::merkle
+namespace bcos::crypto::merkle
 {
 class AnyMerkle
 {
@@ -12,6 +12,10 @@ public:
     template <class Merkle>
     AnyMerkle(Merkle merkle) : m_merkle(std::move(merkle))
     {}
+    AnyMerkle(const AnyMerkle&) = default;
+    AnyMerkle(AnyMerkle&&) = default;
+    AnyMerkle& operator=(const AnyMerkle&) = default;
+    AnyMerkle& operator=(AnyMerkle&&) = default;
 
     bool verifyMerkleProof(ProofRange auto const& proof, bcos::concepts::bytebuffer::Hash auto hash,
         bcos::concepts::bytebuffer::Hash auto const& root)
@@ -53,8 +57,8 @@ public:
     }
 
 private:
-    std::variant<bcos::tool::merkle::Merkle<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, 2>,
-        bcos::tool::merkle::Merkle<crypto::hasher::openssl::OpenSSL_SM3_Hasher, 2>>
+    std::variant<bcos::crypto::merkle::Merkle<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, 2>,
+        bcos::crypto::merkle::Merkle<crypto::hasher::openssl::OpenSSL_SM3_Hasher, 2>>
         m_merkle;
 };
-}  // namespace bcos::tool::merkle
+}  // namespace bcos::crypto::merkle

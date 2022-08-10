@@ -1,5 +1,5 @@
-#include "../merkle/Merkle.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/archive/basic_archive.hpp>
@@ -34,7 +34,7 @@ std::ostream& operator<<(std::ostream& stream, const HashType& hash)
 namespace bcos::test
 {
 
-using namespace bcos::tool::merkle;
+using namespace bcos::crypto::merkle;
 
 struct TestBinaryMerkleTrieFixture
 {
@@ -56,7 +56,7 @@ struct TestBinaryMerkleTrieFixture
 BOOST_FIXTURE_TEST_SUITE(TestBinaryMerkleTrie, TestBinaryMerkleTrieFixture)
 
 template <size_t width>
-void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
+void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashes)
 {
     HashType emptyHash;
     emptyHash.fill(std::byte(0));
@@ -66,7 +66,7 @@ void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
     {
         std::span<HashType const> hashes(inputHashes.data(), count);
 
-        bcos::tool::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, width>
+        bcos::crypto::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, width>
             trie;
         std::vector<HashType> out;
         BOOST_CHECK_THROW(trie.generateMerkle(std::vector<HashType>{}, out),
@@ -121,7 +121,7 @@ void testFixedWidthMerkle(bcos::tool::merkle::HashRange auto const& inputHashes)
 }
 
 template <size_t i>
-constexpr void loopWidthTest(bcos::tool::merkle::HashRange auto const& inputHashes)
+constexpr void loopWidthTest(bcos::crypto::merkle::HashRange auto const& inputHashes)
 {
     testFixedWidthMerkle<i>(inputHashes);
 

@@ -37,7 +37,6 @@ void impl_calculate(
     hasher.update(hashFields.input);
     hasher.update(hashFields.abi);
 
-    decltype(transaction.dataHash) hash(Hasher::HASH_SIZE);
     hasher.final(out);
 }
 
@@ -76,16 +75,17 @@ void impl_calculate(
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+auto impl_calculate(
+    bcostars::BlockHeader const& blockHeader, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
-    if (!block.blockHeader.dataHash.empty())
+    if (!blockHeader.dataHash.empty())
     {
-        bcos::concepts::bytebuffer::assignTo(block.blockHeader.dataHash, out);
+        bcos::concepts::bytebuffer::assignTo(blockHeader.dataHash, out);
         return;
     }
 
     Hasher hasher;
-    auto const& hashFields = block.blockHeader.data;
+    auto const& hashFields = blockHeader.data;
 
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
@@ -123,6 +123,18 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::By
     }
 
     hasher.final(out);
+}
+
+template <bcos::crypto::hasher::Hasher Hasher>
+auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
+    if (!block.blockHeader.dataHash.empty())
+    {
+        bcos::concepts::bytebuffer::assignTo(block.blockHeader.dataHash, out);
+        return;
+    }
+
+    impl_calculate<Hasher>(block.blockHeader, out);
 }
 
 }  // namespace bcos::concepts::hash

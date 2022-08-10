@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
@@ -88,6 +89,7 @@ void ProtocolInitializer::createCryptoSuite()
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto encryptImpl = std::make_shared<AESCrypto>();
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+    m_cryptoSuite->setSMCrypto(false);
 }
 
 void ProtocolInitializer::createSMCryptoSuite()
@@ -97,6 +99,7 @@ void ProtocolInitializer::createSMCryptoSuite()
     auto signatureImpl = std::make_shared<SM2Crypto>();
     auto encryptImpl = std::make_shared<SM4Crypto>();
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+    m_cryptoSuite->setSMCrypto(true);
 }
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
