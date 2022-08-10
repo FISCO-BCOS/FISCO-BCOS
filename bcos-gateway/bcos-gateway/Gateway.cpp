@@ -548,13 +548,13 @@ bool Gateway::checkBWRateLimit(ratelimit::RateLimiterManager::Ptr _rateLimiterMa
         }
 
         m_rateStatistics->updateOutGoing(endPoint, msgLength, true);
-        m_rateStatistics->updateOutGoing(groupID, moduleID, msgLength);
+        m_rateStatistics->updateOutGoing(groupID, moduleID, msgLength, true);
 
         return true;
     } while (0);
 
-
     m_rateStatistics->updateOutGoing(endPoint, msgLength, false);
+    m_rateStatistics->updateOutGoing(groupID, moduleID, msgLength, false);
 
     // TODO: use thread pool
     if (_callback)
