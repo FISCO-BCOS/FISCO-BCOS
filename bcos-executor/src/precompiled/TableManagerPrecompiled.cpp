@@ -287,10 +287,6 @@ void TableManagerPrecompiled::openTable(
         _callParameters->setExecResult(codec.encode(Address()));
         return;
     }
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
-                          << LOG_DESC(
-                                 "can't open table of file path, because this table not exist.")
-                          << LOG_KV("path", absolutePath);
     _callParameters->setExecResult(codec.encode(Address()));
 }
 
