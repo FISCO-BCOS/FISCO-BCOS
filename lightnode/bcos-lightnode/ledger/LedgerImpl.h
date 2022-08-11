@@ -139,7 +139,7 @@ private:
             int64_t value = 0;
             if (!entry) [[unlikely]]
             {
-                LEDGER_LOG(INFO) << "GetStatus error" << LOG_KV("index", i) << " empty";
+                // LEDGER_LOG(INFO) << "GetStatus error" << LOG_KV("index", i) << " empty";
             }
             else
             {

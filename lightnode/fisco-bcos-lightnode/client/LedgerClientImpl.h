@@ -57,6 +57,10 @@ private:
 
         bcostars::ResponseBlock response;
         bcos::concepts::serialize::decode(responseBuffer, response);
+
+        if (response.error.errorCode)
+            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+
         std::swap(response.block, block);
     }
 
@@ -67,6 +71,9 @@ private:
             bcostars::RequestTransactions, bcostars::RequestReceipts>;
         using ResponseType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
             bcostars::ResponseTransactions, bcostars::ResponseReceipts>;
+        auto moduleID = bcos::concepts::transaction::Transaction<DataType> ?
+                            protocol::LIGHTNODE_GETTRANSACTIONS :
+                            protocol::LIGHTNODE_GETRECEIPTS;
 
         RequestType request;
         request.hashes.reserve(RANGES::size(hashes));
@@ -80,11 +87,14 @@ private:
         bcos::concepts::serialize::encode(request, requestBuffer);
 
         auto nodeID = p2p().randomSelectNode();
-        auto responseBuffer = p2p().sendMessageByNodeID(
-            protocol::LIGHTNODE_GETTRANSACTIONS, std::move(nodeID), bcos::ref(requestBuffer));
+        auto responseBuffer =
+            p2p().sendMessageByNodeID(moduleID, std::move(nodeID), bcos::ref(requestBuffer));
 
         ResponseType response;
         bcos::concepts::serialize::decode(responseBuffer, response);
+        if (response.error.errorCode)
+            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+
         if constexpr (bcos::concepts::transaction::Transaction<DataType>)
         {
             bcos::concepts::resizeTo(out, response.transactions.size());
@@ -111,6 +121,8 @@ private:
 
         bcostars::ResponseGetStatus response;
         bcos::concepts::serialize::decode(responseBuffer, response);
+        if (response.error.errorCode)
+            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
 
         bcos::concepts::ledger::Status status;
         status.total = response.total;

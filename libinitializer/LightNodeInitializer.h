@@ -18,6 +18,8 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <exception>
 #include <iterator>
 
 namespace bcos::initializer {
@@ -124,19 +126,24 @@ public:
         bcos::protocol::LIGHTNODE_GETBLOCK,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
-          bcostars::RequestBlock request;
-          bcos::concepts::serialize::decode(data, request);
-
-          LIGHTNODE_LOG(INFO) << "P2P get block:" << request.blockNumber;
-
-          // bcostars::Block block;
           bcostars::ResponseBlock response;
-          if (request.onlyHeader) {
-            anyLedger->getBlock<bcos::concepts::ledger::HEADER>(
-                request.blockNumber, response.block);
-          } else {
-            anyLedger->getBlock<bcos::concepts::ledger::ALL>(
-                request.blockNumber, response.block);
+
+          try {
+            bcostars::RequestBlock request;
+            bcos::concepts::serialize::decode(data, request);
+
+            LIGHTNODE_LOG(INFO) << "P2P get block:" << request.blockNumber;
+
+            if (request.onlyHeader) {
+              anyLedger->getBlock<bcos::concepts::ledger::HEADER>(
+                  request.blockNumber, response.block);
+            } else {
+              anyLedger->getBlock<bcos::concepts::ledger::ALL>(
+                  request.blockNumber, response.block);
+            }
+          } catch (std::exception &e) {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
           }
 
           bcos::bytes responseBuffer;
@@ -152,12 +159,18 @@ public:
         bcos::protocol::LIGHTNODE_GETTRANSACTIONS,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
-          bcostars::RequestTransactions request;
-          bcos::concepts::serialize::decode(data, request);
-
           bcostars::ResponseTransactions response;
-          anyLedger->getTransactionsOrReceipts(request.hashes,
-                                               response.transactions);
+
+          try {
+            bcostars::RequestTransactions request;
+            bcos::concepts::serialize::decode(data, request);
+
+            anyLedger->getTransactionsOrReceipts(request.hashes,
+                                                 response.transactions);
+          } catch (std::exception &e) {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+          }
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
@@ -172,12 +185,18 @@ public:
         bcos::protocol::LIGHTNODE_GETRECEIPTS,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
-          bcostars::RequestReceipts request;
-          bcos::concepts::serialize::decode(data, request);
-
           bcostars::ResponseReceipts response;
-          anyLedger->getTransactionsOrReceipts(request.hashes,
-                                               response.receipts);
+
+          try {
+            bcostars::RequestReceipts request;
+            bcos::concepts::serialize::decode(data, request);
+
+            anyLedger->getTransactionsOrReceipts(request.hashes,
+                                                 response.receipts);
+          } catch (std::exception &e) {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+          }
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
@@ -192,14 +211,20 @@ public:
         bcos::protocol::LIGHTNODE_GETSTATUS,
         [anyLedger, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
-          bcostars::RequestGetStatus request;
-          bcos::concepts::serialize::decode(data, request);
-
           bcostars::ResponseGetStatus response;
-          auto status = anyLedger->getStatus();
-          response.total = status.total;
-          response.failed = status.failed;
-          response.blockNumber = status.blockNumber;
+
+          try {
+            bcostars::RequestGetStatus request;
+            bcos::concepts::serialize::decode(data, request);
+
+            auto status = anyLedger->getStatus();
+            response.total = status.total;
+            response.failed = status.failed;
+            response.blockNumber = status.blockNumber;
+          } catch (std::exception &e) {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+          }
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
@@ -215,18 +240,24 @@ public:
         [transactionPool, front](bcos::crypto::NodeIDPtr nodeID,
                                  const std::string &id, bytesConstRef data) {
           bcostars::ResponseSendTransaction response;
-          bcostars::RequestSendTransaction request;
-          bcos::concepts::serialize::decode(data, request);
 
-          std::string transactionHash;
-          boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
-                                      request.transaction.dataHash.end(),
-                                      std::back_inserter(transactionHash));
+          try {
+            bcostars::RequestSendTransaction request;
+            bcos::concepts::serialize::decode(data, request);
 
-          LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
+            std::string transactionHash;
+            boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
+                                        request.transaction.dataHash.end(),
+                                        std::back_inserter(transactionHash));
 
-          transactionPool->submitTransaction(std::move(request.transaction),
-                                             response.receipt);
+            LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
+
+            transactionPool->submitTransaction(std::move(request.transaction),
+                                               response.receipt);
+          } catch (std::exception &e) {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+          }
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
@@ -241,18 +272,24 @@ public:
         bcos::protocol::LIGHTNODE_CALL,
         [scheduler, front](bcos::crypto::NodeIDPtr nodeID,
                            const std::string &id, bytesConstRef data) {
-          bcostars::RequestSendTransaction request;
-          bcos::concepts::serialize::decode(data, request);
-
-          std::string transactionHash;
-          boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
-                                      request.transaction.dataHash.end(),
-                                      std::back_inserter(transactionHash));
-
-          LIGHTNODE_LOG(INFO) << "Call: " << transactionHash;
-
           bcostars::ResponseSendTransaction response;
-          scheduler->call(request.transaction, response.receipt);
+
+          try {
+            bcostars::RequestSendTransaction request;
+            bcos::concepts::serialize::decode(data, request);
+
+            std::string transactionHash;
+            boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
+                                        request.transaction.dataHash.end(),
+                                        std::back_inserter(transactionHash));
+
+            LIGHTNODE_LOG(INFO) << "Call: " << transactionHash;
+
+            scheduler->call(request.transaction, response.receipt);
+          } catch (std::exception &e) {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+          }
 
           bcos::bytes responseBuffer;
           bcos::concepts::serialize::encode(response, responseBuffer);
