@@ -2,23 +2,27 @@
 set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
-listen_ip="0.0.0.0"
-output_dir="cert"
+cd "${dirpath}"
+
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
+
+command=""
+output_dir="cert"
 
 # for cert generation
 sm_cert_conf='sm_cert.cnf'
 days=36500
 rsa_key_length=2048
-sm_mode='false'
+
 macOS=""
 x86_64_arch="true"
+
+sm_mode='false'
 sm2_params="sm_sm2.param"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
-file_dir="./"
-command=""
+
 ca_cert_path=""
-logfile="build.log"
+ip_param=""
 
 LOG_WARN() {
     local content=${1}
@@ -119,7 +123,7 @@ x509_extensions	= usr_cert		# The extensions to add to the cert
 name_opt 	= ca_default		# Subject Name options
 cert_opt 	= ca_default		# Certificate field options
 
-default_days	= 365			# how long to certify for
+default_days	= 36500			# how long to certify for
 default_crl_days= 30			# how long before next CRL
 default_md	= default		# use public key default MD
 preserve	= no			# keep passed DN ordering
@@ -209,7 +213,7 @@ generate_cert_conf() {
 [ca]
 default_ca=default_ca
 [default_ca]
-default_days = 3650
+default_days = 36500
 default_md = sha256
 
 [req]
@@ -333,10 +337,90 @@ gen_sm_node_cert_with_ext() {
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key"
     "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr"
 
-    echo "use $(basename "$capath") to sign $(basename $certpath) ${type}" >>"${logfile}"
+    echo "use $(basename "$capath") to sign $(basename $certpath) ${type}"
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
 
     rm -f "$certpath/sm_${type}.csr"
+}
+
+generate_multi_nodes_cert_impl() 
+{
+    local capath="${1}"
+    local type="${2}"
+    local output="${3}"
+
+    if [[ -z ${ip_param}  ]];then
+        LOG_FALT "ip param is empty, please use \'-l\' command to set ip param."
+    fi
+
+    local ip_array=(${ip_param//,/ })
+    # check params
+    for line in ${ip_array[*]}; do
+        ip=${line%:*}
+        num=${line#*:}
+
+        # check ip format
+        if [ -z $(echo ${ip} | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
+            LOG_FALT "Invalid ip address, please check the IP address: ${ip}"
+        fi
+    done
+
+    # generate rsa node cert for every server
+    for line in ${ip_array[*]}; do
+        ip=${line%:*}
+        num=${line#*:}
+
+        for ((i = 0; i < num; ++i)); do
+            if [[ "${sm_mode}" == "false" ]]; then
+                gen_rsa_node_cert "${capath}" "${output}/${ip}_${i}/" "${type}"
+            else 
+                gen_sm_node_cert "${capath}" "${output}/${ip}_${i}/" "${type}"
+            fi  
+        done
+    done
+
+}
+
+generate_multi_nodes_private_key_impl() 
+{
+    local output="${1}"
+    local nodeids_dir="${output}/nodeids"
+
+    if [[ -z ${ip_param}  ]];then
+        LOG_FALT "ip param is empty, please use \'-l\' command to set ip param."
+    fi
+
+    local ip_array=(${ip_param//,/ })
+    # check params
+    for line in ${ip_array[*]}; do
+        ip=${line%:*}
+        num=${line#*:}
+
+        # check ip format
+        if [ -z $(echo ${ip} | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
+            LOG_FALT "Invalid ip address, please check the IP address: ${ip}"
+        fi
+    done
+
+    mkdir -p "${nodeids_dir}"
+
+    # generate rsa node cert for every server
+    for line in ${ip_array[*]}; do
+        ip=${line%:*}
+        num=${line#*:}
+
+        for ((i = 0; i < num; ++i)); do
+            if [[ "${sm_mode}" == "false" ]]; then
+                generate_node_account "${output}/${ip}_${i}/"
+            else 
+                generate_sm_node_account "${output}/${ip}_${i}/"
+            fi
+
+            file_must_exists "${output}/${ip}_${i}/node.nodeid"
+            cp "${output}/${ip}_${i}/node.nodeid" "${nodeids_dir}/${ip}_${i}.nodeid"
+        done
+    done
+
 }
 
 gen_sm_node_cert() {
@@ -422,6 +506,17 @@ exit_with_clean()
     exit 1
 }
 
+check_openssl() 
+{
+    # Notice: The OpenSSL path is specified, OpenSSL 1.1.x is required
+    local openssl_cmd="${1}"
+    [ ! -z "$(${openssl_cmd} version | grep 1.1)" ] || {
+        LOG_FALT "Openssl 1.1.x is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
+       #echo "download openssl from https://www.openssl.org."
+      exit 1
+    }
+}
+
 check_and_install_tassl(){
     if [ -f "${OPENSSL_CMD}" ];then
         return
@@ -461,16 +556,19 @@ help() {
     echo $1
     cat <<EOF
 Usage:
-    -c <commands>                       [Required] the operation command, support generate_all_cert/generate_ca_cert/generate_node_cert/generate_sdk_cert and generate_private_key now
-    -o <output dir>                     [Optional] output directory, default ./nodes
-    -s <SM model>                       [Optional] SM SSL connection or not, default no
+    -c <commands>                       [Required] the operation command, support generate_all_cert/generate_ca_cert/generate_node_cert/generate_multi_nodes_cert/generate_sdk_cert and generate_private_key/generate_multi_private_key now
+    -o <output dir>                     [Optional] output directory default ./cert
+    -s <SM model>                       [Optional] SM SSL connection ,or not, default no
+    -d <ca cert path>                   [Optional] ca certificate path, specify ca certificate path to generate node/sdk certificate
+    -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_multi_nodes_cert/generate_multi_private_key
+    -O <OpenSSL path>                   [Optional] specify the OpenSSL path(Notice: OpenSSL 1.1.x is required), default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
     -h Help
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "o:d:c:sh" option; do
+    while getopts "o:O:d:c:sl:h" option; do
         case $option in
         c) command="$OPTARG";;
         d) 
@@ -483,6 +581,12 @@ parse_params() {
             dir_must_exists "${output_dir}"
             ;;
         s) sm_mode="true" ;;
+        l) ip_param="$OPTARG" ;;
+        O) 
+            OPENSSL_CMD="$OPTARG"
+            check_openssl "${OPENSSL_CMD}"
+            LOG_INFO "The OpenSSL path is specified: ${OPENSSL_CMD}"
+            ;;
         h) help ;;
         *) help ;;
         esac
@@ -519,6 +623,13 @@ generate_node_cert()
     LOG_INFO "generate node cert success"
 }
 
+generate_multi_nodes_cert() 
+{
+    LOG_INFO "generate multi nodes cert, ip param: ${ip_param}"
+    generate_multi_nodes_cert_impl "${ca_cert_path}" "ssl" "${output_dir}"
+    LOG_INFO "generate multi nodes cert success"
+}
+
 generate_sdk_cert()
 {
     LOG_INFO "generate sdk cert"
@@ -539,6 +650,13 @@ generate_cert_node_private_key()
     LOG_INFO "Generate node private key success"
 }
 
+generate_multi_nodes_private_key() 
+{
+    LOG_INFO "generate multi nodes private key, ip param: ${ip_param}"
+    generate_multi_nodes_private_key_impl "${output_dir}"
+    LOG_INFO "generate multi nodes private key success"
+}
+
 main() {
     parse_params "$@"
     # FIXME: use openssl 1.1 to generate gm certificates
@@ -554,10 +672,16 @@ main() {
         generate_ca_cert
     elif [[ "${command}" == "generate_node_cert" ]]; then
         generate_node_cert
+    elif [[ "${command}" == "generate_multi_nodes_cert" ]]; then
+        generate_multi_nodes_cert
     elif [[ "${command}" == "generate_sdk_cert" ]]; then
         generate_sdk_cert
     elif [[ "${command}" == "generate_private_key" ]]; then
         generate_cert_node_private_key
+    elif [[ "${command}" == "generate_multi_private_key" ]]; then
+        generate_multi_nodes_private_key
+    else
+        LOG_FALT "Unsupported command"
     fi
 }
 
