@@ -25,9 +25,9 @@ concept DataFlag = std::derived_from<FlagType, DataFlagBase>;
 
 struct Status
 {
-    uint64_t total = 0;
-    uint64_t failed = 0;
-    uint64_t blockNumber = 0;
+    int64_t total = 0;
+    int64_t failed = 0;
+    int64_t blockNumber = 0;
 };
 
 // All method in ledger is uncacheed

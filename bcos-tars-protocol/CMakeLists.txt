@@ -18,7 +18,7 @@ if(TARS_INPUT)
         add_custom_command(
             OUTPUT ${TARS_HEADER_DIR}/${TARS_NAME}.h
             WORKING_DIRECTORY ${TARS_PATH}
-            COMMAND ${TARS_TARS2CPP} ${TARS_FILE} --dir=${TARS_HEADER_DIR}
+            COMMAND ${TARS_TARS2CPP} ${TARS_FILE} --unjson --without-trace --dir=${TARS_HEADER_DIR}
             COMMENT "generating ${TARS_FILE} to ${TARS_HEADER_DIR}"
             VERBATIM
         )

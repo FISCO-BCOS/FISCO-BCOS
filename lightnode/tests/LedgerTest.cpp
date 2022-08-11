@@ -1,5 +1,6 @@
 #include "bcos-concepts/Hash.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
+#include <bcos-tars-protocol/impl/TarsOutput.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
 #include <bcos-concepts/ByteBuffer.h>
@@ -344,19 +345,19 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
         BOOST_CHECK_NO_THROW(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block));
     }
 
-    // toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false);
+    toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false);
 
-    // // get all block
-    // std::vector<bcostars::Block> fromBlocks(blockCount);
-    // std::vector<bcostars::Block> toBlocks(blockCount);
-    // for (auto i = 1u; i < blockCount; ++i)
-    // {
-    //     fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]);
-    //     toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]);
-    // }
+    // get all block
+    std::vector<bcostars::Block> fromBlocks(blockCount);
+    std::vector<bcostars::Block> toBlocks(blockCount);
+    for (auto i = 1u; i < blockCount; ++i)
+    {
+        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]);
+        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]);
+    }
 
-    // BOOST_CHECK_EQUAL_COLLECTIONS(
-    //     fromBlocks.begin(), fromBlocks.end(), toBlocks.begin(), toBlocks.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        fromBlocks.begin(), fromBlocks.end(), toBlocks.begin(), toBlocks.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
