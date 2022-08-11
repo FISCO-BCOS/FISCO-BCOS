@@ -7,6 +7,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -66,7 +67,6 @@ public:
                 transactions->push_back(nullptr);
             }
         }
-        SCHEDULER_LOG(DEBUG) << LOG_KV("Transactions size()", Transactions.size());
         _onBlockFilled(nullptr, std::move(transactions));
     }
 
@@ -74,26 +74,26 @@ public:
         const bcos::crypto::NodeIDSet&, std::function<void(std::shared_ptr<bcos::Error>)>) override
     {}
 
-    protocol::HashList generateTransaction(std::size_t number)
-    {
-        auto txHashes = std::make_shared<protocol::HashList>();
-        for (size_t i = 0; i < number; ++i)
-        {
-            hashImpl = std::make_shared<Keccak256>();
-            assert(hashImpl);
-            signatureImpl = std::make_shared<Secp256k1Crypto>();
-            assert(signatureImpl);
-            cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-            keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    // protocol::HashList generateTransaction(std::size_t number)
+    // {
+    //     auto txHashes = std::make_shared<protocol::HashList>();
+    //     for (size_t i = 0; i < number; ++i)
+    //     {
+    //         hashImpl = std::make_shared<Keccak256>();
+    //         assert(hashImpl);
+    //         signatureImpl = std::make_shared<Sep256k1Crypto>();
+    //         assert(signatureImpl);
+    //         cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    //         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
 
-            // Generate fakeTransaction
-            auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", 101, 100001, "1", "1");
-            auto hash = tx->hash();
-            hash2Transaction.emplace(hash, tx);
-            txHashes.emplace_back(hash);
-        }
-        return txHashes;
-    }
+    //         // Generate fakeTransaction
+    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", 101, 100001, "1", "1");
+    //         auto hash = tx->hash();
+    //         hash2Transaction.emplace(hash, tx);
+    //         txHashes.emplace_back(hash);
+    //     }
+    //     return txHashes;
+    // }
 
 public:
     std::map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr> hash2Transaction;

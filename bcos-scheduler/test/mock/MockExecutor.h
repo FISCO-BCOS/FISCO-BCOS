@@ -72,7 +72,7 @@ public:
             callback) override
     {
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
-        for (auto i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
             executeTransaction(std::move(inputs[i]),
                 [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {
