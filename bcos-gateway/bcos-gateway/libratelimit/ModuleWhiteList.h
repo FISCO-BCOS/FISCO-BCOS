@@ -95,7 +95,7 @@ public:
     }
 
 private:
-    std::array<uint32_t, UINT16_MAX / BIT_NUMBER_PER_UINT32 + 1> m_moduleIDsBitMap;
+    std::array<uint32_t, UINT16_MAX / BIT_NUMBER_PER_UINT32 + 1> m_moduleIDsBitMap = {0};
 };
 
 }  // namespace ratelimit
