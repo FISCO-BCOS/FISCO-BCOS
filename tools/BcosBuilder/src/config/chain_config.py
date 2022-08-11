@@ -31,21 +31,21 @@ class TarsConfig:
             utilities.log_error("Must config 'tars.tars_token'")
             sys.exit(-1)
 
+
 class GenesisConfig:
     def __init__(self, config):
         self.config = config
-        section = "group"
         self.desc = "[[group]]"
-        self.leader_period = utilities.get_value(
-            self.config, section, "leader_period", 1, False)
-        self.block_tx_count_limit = utilities.get_value(
-            self.config, section, "block_tx_count_limit", 1000, False)
-        self.consensus_type = utilities.get_value(
-            self.config, section, "consensus_type", "pbft", False)
-        self.gas_limit = utilities.get_value(
-            self.config, section, "gas_limit", "3000000000", False)
-        self.compatibility_version = utilities.get_value(
-            self.config, section, "compatibility_version", "3.0.0-rc4", False)
+        self.leader_period = utilities.get_item_value(
+            self.config, "leader_period", 1, False, self.desc)
+        self.block_tx_count_limit = utilities.get_item_value(
+            self.config, "block_tx_count_limit", 1000, False, self.desc)
+        self.consensus_type = utilities.get_item_value(
+            self.config, "consensus_type", "pbft", False, self.desc)
+        self.gas_limit = utilities.get_item_value(
+            self.config, "gas_limit", "3000000000", False, self.desc)
+        self.compatibility_version = utilities.get_item_value(
+            self.config, "compatibility_version", "3.0.0", False, self.desc)
         self.vm_type = utilities.get_item_value(
             self.config, "vm_type", "evm", False, self.desc)
         self.auth_check = utilities.get_item_value(
@@ -114,7 +114,6 @@ class ServiceInfoConfig:
             self.config, "tars_listen_port", 40400, False, self.desc)
 
 
-
 class NodeServiceConfig:
     def __init__(self, app_name, base_service_name, service_name, service_obj_list, deploy_ip_list, config_file_list):
         self.app_name = app_name
@@ -136,7 +135,7 @@ class NodeConfig:
         self.node_name = utilities.get_item_value(
             self.config, "node_name", None, True, self.desc)
         self.node_name = self.node_name.strip()
-        
+
         # parse key_page_size
         self.key_page_size = utilities.get_item_value(
             self.config, "key_page_size", 10240, False, self.desc)
@@ -305,13 +304,15 @@ class ChainConfig:
             self.config, "chain", "chain_id", "chain", False)
         # check the chain_id
         utilities.check_service_name("chain_id", self.chain_id)
-        default_rpc_ca_cert = os.path.join(self.output_dir, "rpc", self.chain_id, "ca")
+        default_rpc_ca_cert = os.path.join(
+            self.output_dir, "rpc", self.chain_id, "ca")
 
         self.rpc_ca_cert_path = utilities.get_value(
             self.config, "chain", "rpc_ca_cert_path", default_rpc_ca_cert, False)
 
-        default_gateway_ca_cert = os.path.join(self.output_dir, "gateway", self.chain_id, "ca")
-        
+        default_gateway_ca_cert = os.path.join(
+            self.output_dir, "gateway", self.chain_id, "ca")
+
         self.gateway_ca_cert_path = utilities.get_value(
             self.config, "chain", "gateway_ca_cert_path", default_gateway_ca_cert, False)
         self.rpc_sm_ssl = utilities.get_value(
@@ -377,7 +378,8 @@ class ChainConfig:
                     node_service = ProNodeConfig(
                         node, self.chain_id, group_id, agency_config, group_config_obj.sm_crypto)
                 if self.__check_duplicate_node_name(node_service.node_service_name):
-                    utilities.log_error("The duplicate node name: " + node_service.node_name + " appears in group: " + group_id + " of the agency: " + agency_config.name)
+                    utilities.log_error("The duplicate node name: " + node_service.node_name +
+                                        " appears in group: " + group_id + " of the agency: " + agency_config.name)
                     sys.exit(-1)
                 self.node_list[node_service.node_service_name] = node_service
                 group_node_list.append(node_service)
