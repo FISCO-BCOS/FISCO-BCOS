@@ -421,7 +421,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
-        EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader success"
+        EXECUTOR_NAME_LOG(INFO) <<BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                 << LOG_KV("number", blockHeader->number());
         callback(nullptr);
     }
@@ -1180,7 +1180,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
 {
     if (functionAbi.conflictFields.empty())
     {
-        EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+        EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields")
                                  << LOG_DESC("conflictFields is empty")
                                  << LOG_KV("address", params.senderAddress)
                                  << LOG_KV("functionName", functionAbi.name);
@@ -1203,7 +1203,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             slot += static_cast<size_t>(conflictField.slot.value());
         }
         criticalKey.insert(criticalKey.end(), (uint8_t*)&slot, (uint8_t*)&slot + sizeof(slot));
-        EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_KV("to", to)
+        EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_KV("to", to)
                                  << LOG_KV("functionName", functionAbi.name)
                                  << LOG_KV("addressHash", toHash) << LOG_KV("slot", slot);
 
@@ -1211,12 +1211,12 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         {
         case All:
         {
-            EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `All`");
+            EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `All`");
             return nullptr;
         }
         case Len:
         {
-            EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Len`");
+            EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Len`");
             break;
         }
         case Env:
@@ -1231,7 +1231,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 const auto& sender = params.senderAddress;
                 criticalKey.insert(criticalKey.end(), sender.begin(), sender.end());
 
-                EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+                EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields")
                                          << LOG_DESC("use `Caller`") << LOG_KV("caller", sender);
                 break;
             }
@@ -1240,7 +1240,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 const auto& sender = params.origin;
                 criticalKey.insert(criticalKey.end(), sender.begin(), sender.end());
 
-                EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+                EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields")
                                          << LOG_DESC("use `Origin`") << LOG_KV("origin", sender);
                 break;
             }
@@ -1250,7 +1250,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&now));
                 criticalKey.insert(criticalKey.end(), bytes, bytes + sizeof(now));
 
-                EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+                EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields")
                                          << LOG_DESC("use `Now`") << LOG_KV("now", now);
                 break;
             }

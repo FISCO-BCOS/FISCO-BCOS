@@ -213,14 +213,14 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
         else
         {
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
-                                  << LOG_DESC("get sys config error") << LOG_KV("configKey", _key);
+                                  << LOG_DESC("get sys config failed") << LOG_KV("configKey", _key);
             return {"", -1};
         }
     }
     catch (std::exception const& e)
     {
         auto errorMsg =
-            "getSysConfigByKey for " + _key + "failed, error:" + boost::diagnostic_information(e);
+            "getSysConfigByKey for " + _key + "failed, e:" + boost::diagnostic_information(e);
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;
         return {errorMsg, -1};
     }

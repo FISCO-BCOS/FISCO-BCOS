@@ -53,7 +53,7 @@ public:
                 createPromise.set_value(std::move(_e));
             });
         Error::UniquePtr _e = createPromise.get_future().get();
-        BCOS_LOG(DEBUG) << LOG_BADGE("DAG TRANSFER") << "create DAG Transfer table"
+        BCOS_LOG(TRACE) << LOG_BADGE("DAG TRANSFER") << "create DAG Transfer table"
                         << LOG_KV("table", _tableName)
                         << (_e == nullptr ? "" : " withError: " + _e->errorMessage());
     }

@@ -211,7 +211,7 @@ void AuthManagerPrecompiled::getAdmin(
     }
 
     std::string adminStr = getContractAdmin(_executive, path, _callParameters);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
                            << LOG_KV("contractPath", path) << LOG_KV("admin", adminStr);
     _callParameters->setExecResult(
         blockContext->isWasm() ? codec.encode(adminStr) : codec.encode(Address(adminStr)));
@@ -432,7 +432,7 @@ void AuthManagerPrecompiled::setContractStatus(
         codec.decode(data, contractAddress, isFreeze);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
                           << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
                           << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
 
@@ -477,7 +477,7 @@ void AuthManagerPrecompiled::contractAvailable(
         codec.decode(data, contractAddress);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
                            << LOG_KV("address", address);
 
     auto newParams =
