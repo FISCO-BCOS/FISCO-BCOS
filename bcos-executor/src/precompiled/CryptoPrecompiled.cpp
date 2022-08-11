@@ -19,6 +19,7 @@
  */
 
 #include "CryptoPrecompiled.h"
+#include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-codec/abi/ContractABICodec.h>
@@ -27,6 +28,7 @@
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/sm2.h>
+#include <bcos-framework/protocol/Protocol.h>
 
 using namespace bcos;
 using namespace bcos::codec;
@@ -39,12 +41,11 @@ const char* const CRYPTO_METHOD_SM3_STR = "sm3(bytes)";
 // Note: the interface here can't be keccak256k1 for naming conflict
 const char* const CRYPTO_METHOD_KECCAK256_STR = "keccak256Hash(bytes)";
 // precompiled interfaces related to verify
-// sm2 verify: (message, sign)
-const char* const CRYPTO_METHOD_SM2_VERIFY_STR = "sm2Verify(bytes,bytes)";
-// FIXME: add precompiled interfaces related to VRF verify
+// sm2 verify: (message, publicKey, r, s)
+const char* const CRYPTO_METHOD_SM2_VERIFY_STR = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
 // the params are (vrfInput, vrfPublicKey, vrfProof)
-// const char* const CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR =
-// "curve25519VRFVerify(string,string,string)";
+const char* const CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR =
+    "curve25519VRFVerify(bytes,bytes,bytes)";
 
 CryptoPrecompiled::CryptoPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -53,6 +54,8 @@ CryptoPrecompiled::CryptoPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(
         getFuncSelector(CRYPTO_METHOD_KECCAK256_STR, _hashImpl);
     name2Selector[CRYPTO_METHOD_SM2_VERIFY_STR] =
         getFuncSelector(CRYPTO_METHOD_SM2_VERIFY_STR, _hashImpl);
+    name2Selector[CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR] =
+        getFuncSelector(CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
@@ -65,6 +68,8 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
+    auto version = blockContext->blockVersion();
+
     if (funcSelector == name2Selector[CRYPTO_METHOD_SM3_STR])
     {
         bytes inputData;
@@ -90,6 +95,12 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     {
         sm2Verify(_executive, paramData, _callParameters);
     }
+    // curve25519VRFVerify
+    else if (funcSelector == name2Selector[CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR] &&
+             (version >= (uint32_t)(bcos::protocol::Version::V3_0_VERSION)))
+    {
+        curve25519VRFVerify(_executive, paramData, _callParameters);
+    }
     else
     {
         // no defined function
@@ -103,6 +114,44 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     return _callParameters;
 }
 
+void CryptoPrecompiled::curve25519VRFVerify(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _paramData,
+    PrecompiledExecResult::Ptr _callResult)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    bool verifySuccess = false;
+    u256 randomValue = 0;
+    try
+    {
+        bytes message;
+        bytes publicKey;
+        bytes proof;
+        codec.decode(_paramData, message, publicKey, proof);
+        CInputBuffer rawPublicKey{(const char*)publicKey.data(), publicKey.size()};
+        CInputBuffer rawMsg{(const char*)message.data(), message.size()};
+        CInputBuffer rawProof{(const char*)proof.data(), proof.size()};
+        HashType vrfHash;
+        COutputBuffer outputHash{(char*)vrfHash.data(), vrfHash.size()};
+        if ((wedpr_curve25519_vrf_is_valid_public_key(&rawPublicKey) == WEDPR_SUCCESS) &&
+            (wedpr_curve25519_vrf_verify_utf8(&rawPublicKey, &rawMsg, &rawProof) ==
+                WEDPR_SUCCESS) &&
+            (wedpr_curve25519_vrf_proof_to_hash(&rawProof, &outputHash) == WEDPR_SUCCESS))
+        {
+            verifySuccess = true;
+            randomValue = (u256)(vrfHash);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("CryptoPrecompiled: curve25519VRFVerify exception")
+                              << LOG_KV("e", boost::diagnostic_information(e));
+    }
+    PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: curve25519VRFVerify ") << verifySuccess
+                           << LOG_KV("randomValue", randomValue);
+    _callResult->setExecResult(codec.encode(verifySuccess, randomValue));
+}
+
 void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult)
 {
@@ -110,13 +159,17 @@ void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExe
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     try
     {
-        bytes message;
-        bytes sm2Sign;
-        codec.decode(_paramData, message, sm2Sign);
-        auto msgHash = HashType(message.data(), message.size());
+        string32 message;
+        bytes inputPublicKey;
+        string32 r;
+        string32 s;
+        codec.decode(_paramData, message, inputPublicKey, r, s);
+        auto msgHash = fromString32(message);
         Address account;
         bool verifySuccess = true;
-        auto publicKey = crypto::sm2Recover(msgHash, ref(sm2Sign));
+        auto signatureData = std::make_shared<SignatureDataWithPub>(
+            fromString32(r), fromString32(s), ref(inputPublicKey));
+        auto publicKey = crypto::sm2Recover(msgHash, ref(*(signatureData->encode())));
         if (!publicKey)
         {
             PRECOMPILED_LOG(DEBUG)

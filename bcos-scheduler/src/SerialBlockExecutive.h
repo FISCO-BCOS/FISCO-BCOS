@@ -28,6 +28,8 @@
 namespace bcos::scheduler
 {
 
+static const std::string SERIAL_EXECUTOR_NAME = "serial_executor";
+
 class SerialBlockExecutive : public BlockExecutive
 {
 public:

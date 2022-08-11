@@ -180,7 +180,6 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_KV("ls", absolutePath);
     std::vector<BfsTuple> files = {};
     if (!checkPathValid(absolutePath))
     {
@@ -291,11 +290,6 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
             abiEntry.importFields({contractAbi});
             _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
             _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
-                                  << LOG_DESC("overwrite link successfully")
-                                  << LOG_KV("contractName", contractName)
-                                  << LOG_KV("contractVersion", contractVersion)
-                                  << LOG_KV("contractAddress", contractAddress);
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
             return;
         }
@@ -341,7 +335,6 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_KV("readlink", absolutePath);
     bytes emptyResult =
         blockContext->isWasm() ? codec.encode(std::string("")) : codec.encode(Address());
     if (!checkPathValid(absolutePath))
@@ -447,8 +440,6 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
     _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("touch new file")
-                          << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
 
@@ -479,7 +470,7 @@ bool BFSPrecompiled::recursiveBuildDir(
         auto table = _executive->storage().openTable(root);
         if (!table)
         {
-            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
+            EXECUTIVE_LOG(TRACE) << LOG_BADGE("recursiveBuildDir")
                                  << LOG_DESC("can not open path table")
                                  << LOG_KV("tableName", root);
             return false;
@@ -544,7 +535,7 @@ bool BFSPrecompiled::recursiveBuildDir(
         }
         else
         {
-            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
+            EXECUTIVE_LOG(TRACE) << LOG_BADGE("recursiveBuildDir")
                                  << LOG_DESC("parent type not found") << LOG_KV("parentDir", root)
                                  << LOG_KV("dir", dir);
             return false;

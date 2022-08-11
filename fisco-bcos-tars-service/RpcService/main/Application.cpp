@@ -54,10 +54,20 @@ public:
 
     void destroyApp() override
     {
+        if (m_rpcInitializer)
+        {
+            m_rpcInitializer->stop();
+        }
+
         // terminate the network threads
         Application::terminate();
-        // stop the nodeService
-        m_rpcInitializer->stop();
+        // terminate the network client
+        tars::Application::getCommunicator()->terminate();
+
+        if (m_logInitializer)
+        {
+            m_logInitializer->stopLogging();
+        }
     }
 
 protected:

@@ -75,9 +75,6 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(param.size());
 
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("TablePrecompiled")
-                          << LOG_DESC("call dynamic table") << LOG_KV("tableName", tableName);
-
     auto table = _executive->storage().openTable(tableName);
     if (!table.has_value())
     {
@@ -169,7 +166,6 @@ void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyC
     }
     if (conditions.empty())
     {
-        PRECOMPILED_LOG(INFO) << LOG_DESC("Condition is empty");
         BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
     }
     for (const auto& condition : conditions)
@@ -208,7 +204,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("tableName", tableName);
 
     auto entry = _executive->storage().getRow(tableName, key);
@@ -225,7 +221,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(values.size());
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
 
     EntryTuple entryTuple = {key, std::move(values)};
@@ -252,12 +248,6 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limit));
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
-    {
-        PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
-                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
-    }
-
     // merge keys from storage and eqKeys
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
@@ -268,7 +258,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
         EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
         entries.emplace_back(std::move(entryTuple));
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("entries.size", entries.size());
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(entries.size());
@@ -294,14 +284,8 @@ void TablePrecompiled::count(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), {});
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
-    {
-        PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
-                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
-    }
-
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("entries.size", tableKeyList.size());
     // update the memory gas and the computation gas
     gasPricer->appendOperation(InterfaceOpcode::Select);
@@ -500,7 +484,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         entry->setObject(std::move(values));
         _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
     }
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                           << LOG_KV("selectKeySize", tableKeyList.size())
                           << LOG_KV("affectedRows", entries.size());
     gasPricer->setMemUsed(tableKeyList.size() * columns.size());

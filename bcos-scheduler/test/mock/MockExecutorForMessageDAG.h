@@ -49,6 +49,29 @@ public:
         callback(nullptr, std::move(input));
     }
 
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override
+    {}
+
+    void executeTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override
+    {
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
+        for (auto i = 0u; i < inputs.size(); i++)
+        {
+            executeTransaction(std::move(inputs[i]),
+                [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {
+                    results[i] = std::move(result);
+                });
+        }
+        callback(nullptr, std::move(results));
+    };
+
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
@@ -89,7 +112,7 @@ public:
         callback(nullptr, std::move(results));
     };
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {}

@@ -31,7 +31,7 @@ public:
         override
     {}
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
@@ -141,6 +141,16 @@ public:
 
         callback(nullptr, std::move(input));
     }
+
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override
+    {}
+
+    void executeTransactions(std::string, gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>,
+        std::function<void(bcos::Error::UniquePtr,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>) override
+    {}
 
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>,
         std::function<void(bcos::Error::UniquePtr,

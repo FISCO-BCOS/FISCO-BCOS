@@ -220,11 +220,13 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
     if (c_fileLogLevel >= TRACE)
     {
         auto sealerList = _header->sealerList();
+        sealerListStr << ", sealer list: ";
         for (auto const& sealer : sealerList)
         {
             sealerListStr << *toHexString(sealer) << ", ";
         }
         auto signatureList = _header->signatureList();
+        signatureListStr << ", sign list: ";
         for (auto const& signatureData : signatureList)
         {
             signatureListStr << (*toHexString(signatureData.signature)) << ":"

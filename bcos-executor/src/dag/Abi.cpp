@@ -198,7 +198,5 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
             new FunctionAbi{functionName.asString(), inputs, selector, conflictFields, flatInputs});
     }
 
-    BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("expected selector not found")
-                    << LOG_KV("expected", toHexStringWithPrefix(expected));
     return nullptr;
 }

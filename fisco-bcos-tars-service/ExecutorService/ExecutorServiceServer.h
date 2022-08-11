@@ -45,12 +45,17 @@ public:
         bcostars::BlockHeader const& _blockHeader, tars::TarsCurrentPtr _current) override;
     bcostars::Error executeTransaction(bcostars::ExecutionMessage const& _input,
         bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current) override;
+    bcostars::Error call(bcostars::ExecutionMessage const& _input,
+                            bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current) override;
+    bcostars::Error executeTransactions(std::string const& _contractAddress,
+        std::vector<bcostars::ExecutionMessage> const& _inputs,
+        std::vector<bcostars::ExecutionMessage>& _ouptputs, tars::TarsCurrentPtr _current) override;
     bcostars::Error dmcExecuteTransactions(std::string const& _contractAddress,
         std::vector<bcostars::ExecutionMessage> const& _inputs,
         std::vector<bcostars::ExecutionMessage>& _ouptputs, tars::TarsCurrentPtr _current) override;
     bcostars::Error dagExecuteTransactions(std::vector<bcostars::ExecutionMessage> const& _inputs,
         std::vector<bcostars::ExecutionMessage>& _ouptputs, tars::TarsCurrentPtr _current) override;
-    bcostars::Error call(bcostars::ExecutionMessage const& _input,
+    bcostars::Error dmcCall(bcostars::ExecutionMessage const& _input,
         bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current) override;
 
     bcostars::Error getHash(tars::Int64 _blockNumber, std::vector<tars::Char>& _hash,

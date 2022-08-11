@@ -1,3 +1,6 @@
+[tars]
+tars_pkg_dir = "binary/"
+
 [chain]
 chain_id="chain0"
 # the rpc-service enable sm-ssl or not, default disable sm-ssl
@@ -32,7 +35,7 @@ consensus_type = "pbft"
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
 # the default is 3.0.0-rc4
-compatibility_version="3.0.0-rc4"
+compatibility_version="3.0.0"
 
 [[agency]]
 name = "agencyA"
@@ -44,26 +47,38 @@ enable_storage_security = false
 
     [agency.rpc]
     deploy_ip=["127.0.0.1"]
+    # rpc listen ip
     listen_ip="0.0.0.0"
+    # rpc listen port
     listen_port=20200
     thread_count=4
+    # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
+    # rpc tars server listen port
     tars_listen_port=40400
 
     [agency.gateway]
     deploy_ip=["127.0.0.1"]
+    # gateway listen ip
     listen_ip="0.0.0.0"
+    # gateway listen port
     listen_port=30300
+    # gateway connected peers, should be all of the gateway peers info
     peers=["127.0.0.1:30300", "127.0.0.1:30301"]
+    # gateway tars server listen ip
     tars_listen_ip="0.0.0.0"
+    # gateway tars server listen port
     tars_listen_port=40401
 
     [[agency.group]]
         group_id = "group0"
         [[agency.group.node]]
+        # node name, Notice: node_name in the same agency and group must be unique
         node_name = "node0"
         deploy_ip = "127.0.0.1"
+        # node tars server listen ip
         tars_listen_ip="0.0.0.0"
+        # node tars server listen port, Notice: the tars server of the node will cost five ports, then the port tars_listen_port ~ tars_listen_port + 4 should be in free
         tars_listen_port=40402
         # enable data disk encryption for bcos node or not, default is false
         enable_storage_security = false
@@ -84,27 +99,39 @@ enable_storage_security = false
 
     [agency.rpc]
     deploy_ip=["127.0.0.1"]
+    # rpc listen ip
     listen_ip="0.0.0.0"
+    # rpc listen port
     listen_port=20201
     thread_count=4
+    # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
+    # rpc tars server listen port
     tars_listen_port=40410
 
     [agency.gateway]
     deploy_ip=["127.0.0.1"]
+    # gateway listen ip
     listen_ip="0.0.0.0"
+    # gateway listen port
     listen_port=30301
+    # gateway connected peers, should be all of the gateway peers info
     peers=["127.0.0.1:30300", "127.0.0.1:30301"]
+    # gateway rpc server listen ip
     tars_listen_ip="0.0.0.0"
+    # gateway rpc server listen port
     tars_listen_port=40411
 
     [[agency.group]]
         group_id = "group0"
         
         [[agency.group.node]]
+        # node name, Notice: node_name in the same agency and group must be unique
         node_name = "node0"
         deploy_ip = "127.0.0.1"
+        # node tars server listen ip
         tars_listen_ip="0.0.0.0"
+        # node tars server listen port, Notice: the tars server of the node will cost five ports, then the port tars_listen_port ~ tars_listen_port + 4 should be in free
         tars_listen_port=40412
         # enable data disk encryption for bcos node or not, default is false
         enable_storage_security = false

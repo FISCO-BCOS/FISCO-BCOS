@@ -17,13 +17,14 @@
  * @author: kyonRay
  * @date 2021-07-05
  */
-
 #include "precompiled/CryptoPrecompiled.h"
+#include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/sm2.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -82,7 +83,7 @@ public:
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->executeTransaction(
+        executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -107,7 +108,7 @@ public:
 
         paramsBak.setSeq(1001);
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::make_unique<decltype(paramsBak)>(paramsBak),
+        executor->dmcExecuteTransaction(std::make_unique<decltype(paramsBak)>(paramsBak),
             [&](bcos::Error::UniquePtr&& error,
                 bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -219,7 +220,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -263,7 +264,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -283,10 +284,35 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
     }
 }
 
+class SM2VerifyPrecompiledFixture
+{
+public:
+    SM2VerifyPrecompiledFixture()
+    {
+        clearName2SelectCache();
+        m_cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+            std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
+        m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
+        m_blockContext = std::make_shared<BlockContext>(nullptr, m_cryptoSuite->hashImpl(), 0,
+            h256(), utcTime(), (uint32_t)(bcos::protocol::Version::V3_0_VERSION),
+            FiscoBcosScheduleV4, false, false);
+        std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
+        m_executive = std::make_shared<TransactionExecutive>(
+            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
+        m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
+    }
+
+    ~SM2VerifyPrecompiledFixture() {}
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    BlockContext::Ptr m_blockContext;
+    TransactionExecutive::Ptr m_executive;
+    CryptoPrecompiled::Ptr m_cryptoPrecompiled;
+    std::string m_sm2VerifyFunction = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
+    std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
+};
+
 BOOST_AUTO_TEST_CASE(testSM2Verify)
 {
-    deployTest();
-
     // case Verify success
     h256 fixedSec1("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");
     auto sec1 = std::make_shared<KeyImpl>(fixedSec1.asBytes());
@@ -297,94 +323,34 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
     HashType hash = HashType("82ec580fe6d36ae4f81cae3c73f4a5b3b5a09c943172dc9053c69fd8e18dca1e");
     auto signature = sm2Sign(*keyPair, hash, true);
     h256 mismatchHash = h256("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+    SM2VerifyPrecompiledFixture fixture;
+
     // verify the signature
-    bytes encodedData = codec->encodeWithSig("sm2Verify(bytes,bytes)", hash.asBytes(), *signature);
+    auto signatureStruct = std::make_shared<SignatureDataWithPub>(ref(*signature));
+    bytes in = fixture.m_abi->abiIn(fixture.m_sm2VerifyFunction, codec::toString32(hash),
+        *signatureStruct->pub(), codec::toString32(signatureStruct->r()),
+        codec::toString32(signatureStruct->s()));
+    auto parameters = std::make_shared<PrecompiledExecResult>();
+    parameters->m_input = bytesConstRef(in.data(), in.size());
+    auto execResult = fixture.m_cryptoPrecompiled->call(fixture.m_executive, parameters);
+    auto out = execResult->execResult();
+    bool verifySucc;
+    Address accountAddress;
+    fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, accountAddress);
+    BOOST_CHECK(verifySucc == true);
+    BOOST_CHECK(accountAddress.hex() == keyPair->address(smHashImpl).hex());
 
-    // verify
-    {
-        nextBlock(2);
-
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto txHash = tx->hash();
-        txpool->hash2Transaction.emplace(txHash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(txHash);
-        params2->setContextID(100);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(cryptoAddress);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(encodedData));
-        params2->setType(NativeExecutionMessage::TXHASH);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-
-        bytes out = result2->data().toBytes();
-        bool verifySucc;
-        Address accountAddress;
-        codec->decode(ref(out), verifySucc, accountAddress);
-        std::cout << "== testSM2Verify-normalCase, verifySucc: " << verifySucc << std::endl;
-        std::cout << "== testSM2Verify-normalCase, accountAddress: " << accountAddress.hex()
-                  << std::endl;
-        std::cout << "== realAccountAddress:" << keyPair->address(smHashImpl).hex() << std::endl;
-        BOOST_CHECK(verifySucc == true);
-        BOOST_CHECK(accountAddress.hex() == keyPair->address(smHashImpl).hex());
-        commitBlock(2);
-    }
-
-    // mismatch
-    {
-        nextBlock(3);
-
-        encodedData =
-            codec->encodeWithSig("sm2Verify(bytes,bytes)", mismatchHash.asBytes(), *signature);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto txHash = tx->hash();
-        txpool->hash2Transaction.emplace(txHash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(txHash);
-        params2->setContextID(101);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(cryptoAddress);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(encodedData));
-        params2->setType(NativeExecutionMessage::TXHASH);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-
-        bytes out = result2->data().toBytes();
-        bool verifySucc;
-        Address accountAddress;
-        codec->decode(ref(out), verifySucc, accountAddress);
-        std::cout << "== testSM2Verify-mismatchHashCase, verifySucc: " << verifySucc << std::endl;
-        std::cout << "== testSM2Verify-mismatchHashCase, accountAddress: " << accountAddress.hex()
-                  << std::endl;
-        std::cout << "== realAccountAddress:" << keyPair->address(smHashImpl).hex() << std::endl;
-        BOOST_CHECK(verifySucc == false);
-        BOOST_CHECK(accountAddress.hex() == Address().hex());
-        commitBlock(3);
-    }
+    // mismatch case
+    in = fixture.m_abi->abiIn(fixture.m_sm2VerifyFunction, codec::toString32(mismatchHash),
+        *signatureStruct->pub(), codec::toString32(signatureStruct->r()),
+        codec::toString32(signatureStruct->s()));
+    parameters = std::make_shared<PrecompiledExecResult>();
+    parameters->m_input = bytesConstRef(in.data(), in.size());
+    execResult = fixture.m_cryptoPrecompiled->call(fixture.m_executive, parameters);
+    out = execResult->execResult();
+    fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, accountAddress);
+    BOOST_CHECK(verifySucc == false);
+    BOOST_CHECK(accountAddress.hex() == Address().hex());
 }
 
 BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
@@ -416,7 +382,7 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
