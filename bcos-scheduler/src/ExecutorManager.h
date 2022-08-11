@@ -59,7 +59,11 @@ public:
         }
     }
 
-    size_t size() const { return m_name2Executors.size(); }
+    size_t size() const
+    {
+        ReadGuard lock(m_mutex);
+        return m_name2Executors.size();
+    }
 
     void clear()
     {
@@ -72,6 +76,7 @@ public:
 
     virtual void stop()
     {
+        WriteGuard lock(m_mutex);
         for (auto it : m_name2Executors)
         {
             it.second->executor->stop();
