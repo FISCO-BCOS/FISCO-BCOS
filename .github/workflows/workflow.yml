@@ -23,13 +23,6 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-2019, macos-12]
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        if: runner.os == 'Linux'
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
@@ -41,17 +34,10 @@ jobs:
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
-      - uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: 4G
       - uses: actions/cache@v2
         id: deps_cache
         with:
           path: |
-            /home/runner/.cargo
-            /Users/runner/.cargo/
-            /home/runner/.ccache
-            /Users/runner/.ccache/
             deps/src
             c:/vcpkg
             !c:/vcpkg/.git
@@ -115,8 +101,6 @@ jobs:
         id: deps_cache
         with:
           path: |
-            /home/runner/.cargo
-            /Users/runner/.cargo/
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
