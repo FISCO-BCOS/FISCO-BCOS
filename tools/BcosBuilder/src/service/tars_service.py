@@ -393,9 +393,6 @@ class TarsService:
                 return (True, item["id"])
         return (False, 0)
 
-        server_id = result["data"][0]["id"]
-        return (True, server_id)
-
     def upload_and_publish_package(self, service_name, package_path):
         """
         upload and publish the tars package

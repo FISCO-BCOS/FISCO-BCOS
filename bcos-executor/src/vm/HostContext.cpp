@@ -247,7 +247,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         return preResult;
     }
 
-    preResult.gas_left = _request->gas - callResults->gas;
+    preResult.gas_left = callResults->gas;
     if (preResult.gas_left < 0)
     {
         callResults->type = CallParameters::REVERT;
