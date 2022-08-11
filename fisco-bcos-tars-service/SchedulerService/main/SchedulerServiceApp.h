@@ -39,7 +39,13 @@ public:
     SchedulerServiceApp() = default;
     ~SchedulerServiceApp() override {}
     void initialize() override;
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        // terminate the network threads
+        Application::terminate();
+        // terminate the network client
+        tars::Application::getCommunicator()->terminate();
+    }
 
 protected:
     virtual void createAndInitSchedulerService();

@@ -236,8 +236,6 @@ int ConsensusPrecompiled::addObserver(
 
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                           << LOG_DESC("addObserver successfully insert");
     return 0;
 }
 
@@ -296,7 +294,6 @@ int ConsensusPrecompiled::removeNode(
 
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
     return 0;
 }
 
@@ -358,8 +355,6 @@ int ConsensusPrecompiled::setWeight(
 
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                           << LOG_DESC("setWeight successfully");
     return 0;
 }
 

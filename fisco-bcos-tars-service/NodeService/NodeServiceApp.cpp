@@ -39,10 +39,21 @@ using namespace bcos::protocol;
 
 void NodeServiceApp::destroyApp()
 {
+    if (m_nodeInitializer)
+    {
+        // stop the nodeService
+        m_nodeInitializer->stop();
+    }
+
     // terminate the network threads
     Application::terminate();
-    // stop the nodeService
-    m_nodeInitializer->stop();
+    // terminate the network client
+    tars::Application::getCommunicator()->terminate();
+
+    if (m_logInitializer)
+    {
+        m_logInitializer->stopLogging();
+    }
 }
 
 void NodeServiceApp::initialize()
