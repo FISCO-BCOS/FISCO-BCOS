@@ -86,10 +86,11 @@ public:
 
 public:
     void updateInComing(const std::string& _endPoint, uint64_t _dataSize);
-    void updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc);
-
     void updateInComing(const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize);
-    void updateOutGoing(const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize);
+
+    void updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc);
+    void updateOutGoing(
+        const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc);
 
 public:
     std::string toGroupKey(const std::string& _groupID);

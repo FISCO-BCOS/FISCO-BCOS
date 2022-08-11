@@ -14,7 +14,23 @@ public:
     GatewayServiceApp() {}
     ~GatewayServiceApp() override{};
 
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        if (m_gatewayInitializer)
+        {
+            m_gatewayInitializer->stop();
+        }
+
+        // terminate the network threads
+        Application::terminate();
+        // terminate the network client
+        tars::Application::getCommunicator()->terminate();
+
+        if (m_logInitializer)
+        {
+            m_logInitializer->stopLogging();
+        }
+    }
     void initialize() override
     {
         // Note: since tars Application catch the exception and output the error message with
@@ -52,6 +68,7 @@ protected:
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
         gatewayConfig->initP2PConfig(pt, true);
+        gatewayConfig->initRatelimitConfig(pt);
         gatewayConfig->setCertPath(tars::ServerConfig::BasePath);
         gatewayConfig->setNodePath(tars::ServerConfig::BasePath);
         if (gatewayConfig->smSSL())

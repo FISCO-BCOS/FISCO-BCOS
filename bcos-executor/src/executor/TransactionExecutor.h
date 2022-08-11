@@ -235,7 +235,7 @@ protected:
 
 
     bcos::storage::StateStorageInterface::Ptr createStateStorage(
-        bcos::storage::StorageInterface::Ptr storage);
+        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
 
     protocol::BlockNumber getBlockNumberInStorage();
 

@@ -45,6 +45,9 @@ binary_path=""
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="false"
+nodeids_dir=""
+# if the config.genesis path has been set, don't generate genesis file, use the config instead
+genesis_conf_path=""
 lightnode_exec=""
 download_timeout=240
 
@@ -72,7 +75,7 @@ dir_must_exists() {
 
 dir_must_not_exists() {
     if [  -d "$1" ]; then
-        LOG_FATAL "$1 DIR does not exist, please check!"
+        LOG_FATAL "$1 DIR already exist, please check!"
     fi
 }
 
@@ -507,7 +510,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:L:C:c:o:e:t:p:d:v:i:M:k:wDshmARa:" option; do
+    while getopts "l:L:C:c:o:e:t:p:d:g:v:i:M:k:wDshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -539,8 +542,14 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
+        g) genesis_conf_path="${OPTARG}"
+            ;;
         m)
            monitor_mode="true"
+           ;;
+        n)
+           nodeids_dir="${OPTARG}"
+           dir_must_exists "${nodeids_dir}"
            ;;
         i)
            mtail_ip_param="${OPTARG}"
@@ -1606,6 +1615,93 @@ deploy_nodes()
     print_result
 }
 
+generate_template_package()
+{
+    local node_name="${1}"
+    local binary_path="${2}"
+    local genesis_conf_path="${3}"
+    local output_dir="${4}"
+
+    # check if node.nodid dir exist
+    file_must_exists "${genesis_conf_path}"
+    file_must_exists "${binary_path}"
+    # dir_must_not_exists "${output_dir}"
+
+    # do not support docker 
+    if [ -n "${docker_mode}" ];then
+        LOG_FATAL "Docker mode is not supported on building template install package"
+    fi
+
+    # do not support monitor 
+    if "${monitor_mode}" ;then
+        LOG_FATAL "Monitor mode is not support on building template install package"
+    fi
+
+    mkdir -p "${output_dir}"
+    dir_must_exists "${output_dir}"
+
+    # mkdir node dir
+    node_dir="${output_dir}/${node_name}"
+    mkdir -p "${node_dir}"
+    mkdir -p "${node_dir}/conf"
+
+    # TODO:
+    p2p_listen_ip="[#P2P_LISTEN_IP]"
+    rpc_listen_ip="[#RPC_LISTEN_IP]"
+
+    p2p_listen_port="[#P2P_LISTEN_PORT]"
+    rpc_listen_port="[#RPC_LISTEN_PORT]"
+
+    # copy binary file
+    cp "${binary_path}" "${node_dir}/../"
+    # copy config.genesis
+    cp "${genesis_conf_path}" "${node_dir}/"
+
+    # generate start_all.sh and stop_all.sh
+    # generate_all_node_scripts "${node_dir}"
+
+    # generate node start.sh stop.sh
+    generate_node_scripts "${node_dir}"
+
+    local connected_nodes="[#P2P_CONNECTED_NODES]"
+    # generate config for node
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${node_dir}" "${connected_nodes}" "${p2p_listen_port}" "${rpc_listen_port}"
+
+    LOG_INFO "Building template intstall package"
+    # TODO: auth mode handle
+    LOG_INFO "Auth mode            : ${auth_mode}"
+    if ${auth_mode} ; then
+        LOG_INFO "Auth account     : ${auth_admin_account}"
+    fi
+    LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "All completed. Files in ${output_dir}"
+}
+
+generate_genesis_config_by_nodeids()
+{
+    local nodeid_dir="${1}"
+    local output_dir="${2}"
+
+    if [ ! -d "${output_dir}" ]; then
+        mkdir -p "${output_dir}"
+    fi
+
+    local nodeid_list=""
+    local node_index=0
+    local nodeid_files=$(ls "${nodeid_dir}/*.nodeid")
+    # gen node.N=xxxx first
+    for nodeid_file in "${nodeid_files}"
+    do
+        local nodeid=$(cat ${nodeid_file})
+        nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1
+        "
+
+        ((node_index += 1))
+    done
+
+    generate_genesis_config "${output_dir}/config.genesis" "${nodeid_list}"
+}
+
 check_auth_account()
 {
   if ${auth_mode} ; then
@@ -1641,6 +1737,25 @@ main() {
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
         expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
+    elif [[ "${command}" == "generate-template-package"  ]]; then
+        local node_name="node0"
+        if [[ -n "${genesis_conf_path}" ]]; then
+            dir_must_not_exists "${output_dir}"
+            # config.genesis is set
+            file_must_exists "${genesis_conf_path}"
+            generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}"
+        elif [[ -n "${nodeids_dir}" ]] && [[ -d "${nodeids_dir}" ]]; then
+            dir_must_not_exists "${output_dir}"
+            generate_genesis_config_by_nodeids "${nodeids_dir}" "${output_dir}/"
+            file_must_exists "${output_dir}/config.genesis"
+            generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}"
+        else
+            echo "bash build_chain.sh generate-template-package -h "
+            echo "  eg:"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -g ./config.genesis "
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -g ./config.genesis -s"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -n nodeids -s -R"
+        fi
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi
