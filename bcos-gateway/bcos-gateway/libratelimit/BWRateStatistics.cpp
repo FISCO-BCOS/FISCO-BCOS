@@ -105,9 +105,6 @@ void BWRateStatistics::updateOutGoing(const std::string& _endPoint, uint64_t _da
     std::string epKey = toEndPointKey(_endPoint);
     std::string totalKey = TOTAL_OUTGOING;
 
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateOutGoing") << LOG_KV("endPoint", _endPoint)
-    //                     << LOG_KV("dataSize", _dataSize);
-
     std::lock_guard<std::mutex> l(m_outLock);
     auto& totalOutStat = m_outStat[totalKey];
     auto& epOutStat = m_outStat[epKey];
@@ -123,6 +120,7 @@ void BWRateStatistics::updateOutGoing(const std::string& _endPoint, uint64_t _da
     else
     {
         totalOutStat.updateFailed();
+
         epOutStat.updateFailed();
     }
 }
@@ -158,22 +156,25 @@ void BWRateStatistics::updateInComing(
 }
 
 void BWRateStatistics::updateOutGoing(
-    const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize)
+    const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
     std::ignore = _moduleID;
-    if (_groupID.empty())
+    if (!_groupID.empty())
     {
-        return;
+        std::string groupKey = toGroupKey(_groupID);
+        std::lock_guard<std::mutex> l(m_outLock);
+
+        auto& groupOutStat = m_outStat[groupKey];
+        if (suc)
+        {
+            // update total outgoing
+            groupOutStat.update(_dataSize);
+        }
+        else
+        {
+            groupOutStat.updateFailed();
+        }
     }
-
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateOutGoing") << LOG_KV("_groupID", _groupID)
-    //                     << LOG_KV("moduleID", _moduleID) << LOG_KV("dataSize", _dataSize);
-
-    std::string groupKey = toGroupKey(_groupID);
-    std::lock_guard<std::mutex> l(m_outLock);
-
-    auto& groupOutStat = m_outStat[groupKey];
-    groupOutStat.update(_dataSize);
 
     /*
     if (_moduleID != 0)
@@ -183,6 +184,16 @@ void BWRateStatistics::updateOutGoing(
 
         auto& moduleOutStat = m_outStat[moduleKey];
         moduleOutStat.update(_dataSize);
+
+        if (suc)
+        {
+            // update total outgoing
+            moduleOutStat.update(_dataSize);
+        }
+        else
+        {
+            moduleOutStat.updateFailed();
+        }
     }
     */
 }

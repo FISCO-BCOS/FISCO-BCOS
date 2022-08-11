@@ -42,8 +42,6 @@ namespace bcostars
 namespace test
 {
 
-# if 0
-
 BOOST_FIXTURE_TEST_SUITE(TarsServantProxyCallbackTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 {
@@ -151,10 +149,11 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 
     BOOST_CHECK_EQUAL(activeEndpoints.size(), 0);
     BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 3);
+
+    c->terminate();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 
-#endif
 }  // namespace test
 }  // namespace bcostars
