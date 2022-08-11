@@ -109,6 +109,7 @@ public:
         {
             m_scheduler->stop();
         }
+        m_remoteExecutorManager->stop();
     }
 
 private:
