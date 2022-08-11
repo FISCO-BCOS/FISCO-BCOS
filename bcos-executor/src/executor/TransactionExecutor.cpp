@@ -677,7 +677,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev));
+        auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
         // TODO: pass blockHash, version here
@@ -2410,12 +2410,12 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 }
 
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
-    bcos::storage::StorageInterface::Ptr storage)
+    bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist)
 {
     if (m_keyPageSize > 0)
     {
         return std::make_shared<bcos::storage::KeyPageStorage>(
-            storage, m_keyPageSize, m_keyPageIgnoreTables);
+            storage, m_keyPageSize, m_keyPageIgnoreTables, ignoreNotExist);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }
