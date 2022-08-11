@@ -406,7 +406,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     std::string tableName;
     std::string codeString;
     codec.decode(ref(callParameters->data), tableName, codeString);
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
+    EXECUTIVE_LOG(TRACE) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
                          << LOG_KV("codeString", codeString);
 
     if (blockContext->isWasm())
@@ -777,7 +777,6 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
 {
     auto blockContext = m_blockContext.lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled") << LOG_KV("code", code);
     std::vector<std::string> codeParameters{};
     boost::split(codeParameters, code, boost::is_any_of(","));
     if (codeParameters.size() < 3)
@@ -790,18 +789,12 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
     // enc([call precompiled parameters],[user call parameters])
     auto newParams = codec.encode(codeParameters, callParameters->data);
-    if (c_fileLogLevel >= TRACE)
-    {
-        EXECUTIVE_LOG(TRACE) << LOG_DESC("callDynamicPrecompiled")
-                             << LOG_KV("inputDataSize", callParameters->data.size())
-                             << LOG_KV("newParamsSize", newParams.size());
-    }
 
     callParameters->data = std::move(newParams);
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled")
+    EXECUTIVE_LOG(TRACE) << LOG_DESC("callDynamicPrecompiled")
                          << LOG_KV("codeAddr", callParameters->codeAddress)
                          << LOG_KV("recvAddr", callParameters->receiveAddress)
-                         << LOG_KV("datasize", callParameters->data.size());
+                         << LOG_KV("code", code);
     auto callResult = callPrecompiled(std::move(callParameters));
 
     callResult->receiveAddress = callResult->codeAddress;
@@ -1100,7 +1093,7 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
 {
     /// this method only write bfs metadata, not create final table
     /// you should create locally, after external call successfully
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
+    EXECUTIVE_LOG(TRACE) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
                          << LOG_KV("type", _type);
     auto response =
         externalTouchNewFile(shared_from_this(), _origin, _sender, _absoluteDir, _type, gasLeft);
@@ -1119,7 +1112,7 @@ bool TransactionExecutive::checkAuth(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     std::string address = callParameters->origin;
     auto path = callParameters->codeAddress;
-    EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
                          << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
     bool result = true;
     if (_isCreate)
@@ -1139,7 +1132,7 @@ bool TransactionExecutive::checkAuth(
         result = contractAuthPrecompiled->checkMethodAuth(
             shared_from_this(), std::move(path), func, address);
     }
-    EXECUTIVE_LOG(DEBUG) << "check auth finished" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
                          << LOG_KV("result", result);
     return result;
 }
@@ -1150,7 +1143,7 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     auto path = callParameters->codeAddress;
-    EXECUTIVE_LOG(DEBUG) << "check contract status" << LOG_KV("codeAddress", path);
+    EXECUTIVE_LOG(TRACE) << "check contract status" << LOG_KV("codeAddress", path);
 
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }

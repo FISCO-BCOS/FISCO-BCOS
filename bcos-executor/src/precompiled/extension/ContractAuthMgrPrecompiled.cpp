@@ -176,7 +176,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
         codec.decode(_callParameters->params(), contractAddress);
         path = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("getAdmin")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("getAdmin")
                            << LOG_KV("path", path);
     path = getAuthTableName(path);
 
@@ -196,7 +196,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract Admin row not found."));
     }
     std::string adminStr = std::string(entry->getField(0));
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("getAdmin success") << LOG_KV("admin", adminStr);
     _callParameters->setExecResult(codec.encode(adminStr));
 }
@@ -345,7 +345,7 @@ bool ContractAuthMgrPrecompiled::checkMethodAuth(
     if (!table)
     {
         // only precompiled contract in /sys/, or pre-built-in contract
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found, auth pass through by default.")
                                << LOG_KV("path", path);
         return true;
@@ -362,7 +362,7 @@ bool ContractAuthMgrPrecompiled::checkMethodAuth(
 
         if (authMap.empty())
         {
-            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+            PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                    << LOG_DESC("auth row not found, no method set acl")
                                    << LOG_KV("path", path) << LOG_KV("authType", getMethodType);
             // if entry still empty
@@ -426,7 +426,7 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
     if (getMethodType < 0)
     {
         // no acl strategy
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("no acl strategy") << LOG_KV("path", path);
         _callParameters->setExecResult(
             codec.encode(uint8_t(0), std::move(accessList), std::move(blockList)));
@@ -437,7 +437,7 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
     auto it = authMap.find(funcBytes);
     if (it == authMap.end())
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth row not found, no method set acl")
                                << LOG_KV("path", path);
         // func not set acl, return empty
@@ -519,7 +519,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     auto entry = table->getRow(getTypeStr);
     if (!entry)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth row not found, try to set new one")
                                << LOG_KV("path", path) << LOG_KV("Type", getTypeStr);
         entry = table->newEntry();
@@ -575,7 +575,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     auto entry = table->getRow(METHOD_AUTH_TYPE);
     if (!entry || entry->getField(SYS_VALUE).empty())
     {
-        PRECOMPILED_LOG(DEBUG)
+        PRECOMPILED_LOG(TRACE)
             << LOG_BADGE("ContractAuthMgrPrecompiled")
             << LOG_DESC("no acl strategy exist, should set the method access auth type firstly");
         return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
@@ -610,7 +610,7 @@ MethodAuthMap ContractAuthMgrPrecompiled::getMethodAuth(
     if (!table)
     {
         // only precompiled contract in /sys/, or pre-built-in contract
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found.") << LOG_KV("path", path);
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth table not found"));
     }
@@ -621,7 +621,7 @@ MethodAuthMap ContractAuthMgrPrecompiled::getMethodAuth(
     MethodAuthMap authMap = {};
     if (!entry || entry->getField(SYS_VALUE).empty())
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth row not found, no method set acl")
                                << LOG_KV("path", path) << LOG_KV("authType", getTypeStr);
         return authMap;
@@ -692,7 +692,7 @@ void ContractAuthMgrPrecompiled::contractAvailable(
         codec.decode(_callParameters->params(), contractAddress);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("contractAvailable") << LOG_KV("address", address);
     auto result = getContractStatus(_executive, address);
     // result !=0 && result != 1
@@ -711,7 +711,7 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
     if (!table)
     {
         // only precompiled contract in /sys/, or pre-built-in contract
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found, auth pass through by default.")
                                << LOG_KV("path", path);
         return (int)CODE_TABLE_NOT_EXIST;
@@ -719,13 +719,13 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
     auto entry = table->getRow(STATUS_FIELD);
     if (!entry)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC(
                                       "auth status row not found, auth pass through by default.");
         return (int)CODE_TABLE_AUTH_ROW_NOT_EXIST;
     }
     auto status = entry->get();
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("get contract status success") << LOG_KV("contract", path)
                            << LOG_KV("status", status);
     return status == CONTRACT_NORMAL;

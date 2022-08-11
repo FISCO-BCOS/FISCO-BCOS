@@ -635,8 +635,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
                      Error::Ptr&& error, std::vector<protocol::Transaction::Ptr>&& transactions) {
             if (error)
             {
-                LEDGER_LOG(DEBUG) << "GetBatchTxsByHashList error: "
-                                  << boost::diagnostic_information(error);
+                LEDGER_LOG(ERROR) << "GetBatchTxsByHashList error: " << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_PTR(
                              LedgerError::GetStorageError, "GetBatchTxsByHashList error", *error),
                     nullptr, nullptr);
@@ -1145,7 +1144,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
 {
     m_storage->asyncOpenTable(
         SYS_HASH_2_TX, [this, hashes, callback](auto&& error, std::optional<Table>&& table) {
-            auto validError = checkTableValid(std::move(error), table, SYS_HASH_2_TX);
+            auto validError = checkTableValid(std::forward<decltype(error)>(error), table, SYS_HASH_2_TX);
             if (validError)
             {
                 callback(std::move(validError), std::vector<protocol::Transaction::Ptr>());
@@ -1193,7 +1192,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 }
                 if (transactions.size() != hashes->size())
                 {
-                    LEDGER_LOG(TRACE)
+                    LEDGER_LOG(DEBUG)
                         << "Batch get transaction error, transactions size not match hashesSize"
                         << LOG_KV("txsSize", transactions.size())
                         << LOG_KV("hashesSize", hashes->size());
