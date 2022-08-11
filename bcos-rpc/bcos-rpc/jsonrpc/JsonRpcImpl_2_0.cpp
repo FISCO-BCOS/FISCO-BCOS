@@ -559,32 +559,27 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
             if (_requireProof && _merkleProofPtr)
             {
                 addProofToResponse(jResp, "receiptProof", _merkleProofPtr);
-
-                // fetch transaction proof
-                rpc->getTransaction(m_group, m_nodeName, m_txHash, _requireProof,
-                    [m_jResp = std::move(jResp), m_txHash, m_respFunc = std::move(m_respFunc)](
-                        bcos::Error::Ptr _error, Json::Value& _jTx) mutable {
-                        if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
-                        {
-                            RPC_IMPL_LOG(WARNING)
-                                << LOG_BADGE("getTransactionReceipt") << LOG_DESC("getTransaction")
-                                << LOG_KV("hexPreTxHash", m_txHash)
-                                << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
-                                << LOG_KV(
-                                       "errorMessage", _error ? _error->errorMessage() : "success");
-                        }
-                        m_jResp["input"] = _jTx["input"];
-                        m_jResp["from"] = _jTx["from"];
-                        m_jResp["to"] = _jTx["to"];
-                        m_jResp["transactionProof"] = _jTx["transactionProof"];
-
-                        m_respFunc(nullptr, m_jResp);
-                    });
             }
-            else
-            {
-                m_respFunc(nullptr, jResp);
-            }
+
+            // fetch transaction proof
+            rpc->getTransaction(m_group, m_nodeName, m_txHash, _requireProof,
+                [m_jResp = std::move(jResp), m_txHash, m_respFunc = std::move(m_respFunc)](
+                    bcos::Error::Ptr _error, Json::Value& _jTx) mutable {
+                    if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
+                    {
+                        RPC_IMPL_LOG(WARNING)
+                            << LOG_BADGE("getTransactionReceipt") << LOG_DESC("getTransaction")
+                            << LOG_KV("hexPreTxHash", m_txHash)
+                            << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                            << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+                    }
+                    m_jResp["input"] = _jTx["input"];
+                    m_jResp["from"] = _jTx["from"];
+                    m_jResp["to"] = _jTx["to"];
+                    m_jResp["transactionProof"] = _jTx["transactionProof"];
+
+                    m_respFunc(nullptr, m_jResp);
+                });
         });
 }
 
