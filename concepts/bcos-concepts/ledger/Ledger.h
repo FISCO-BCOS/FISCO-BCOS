@@ -15,6 +15,7 @@ concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType>
 struct DataFlagBase {};
 struct ALL: public DataFlagBase {};
 struct HEADER: public DataFlagBase {};
+struct TRANSACTIONS_METADATA: public DataFlagBase {};
 struct TRANSACTIONS: public DataFlagBase {};
 struct RECEIPTS: public DataFlagBase {};
 struct NONCES: public DataFlagBase {};
@@ -45,6 +46,18 @@ public:
     void setBlock(bcos::concepts::block::Block auto block)
     {
         impl().template impl_setBlock<Flags...>(std::move(block));
+    }
+
+    void getBlockNumberByHash(
+        bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
+    {
+        impl().impl_getBlockNumberByHash(hash, number);
+    }
+
+    void getBlockHashByNumber(
+        std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
+    {
+        impl().impl_getBlockHashByNumber(number, hash);
     }
 
     void getTransactionsOrReceipts(

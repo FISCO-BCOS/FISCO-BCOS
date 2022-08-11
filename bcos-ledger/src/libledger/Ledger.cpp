@@ -562,7 +562,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
     std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock)
 {
     auto key = _blockHash;
-    LEDGER_LOG(INFO) << "GetBlockNumberByHash request" << LOG_KV("hash", key);
+    LEDGER_LOG(INFO) << "GetBlockNumberByHash request" << LOG_KV("hash", key.hex());
 
     asyncGetSystemTableEntry(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(key),
         [callback = std::move(_onGetBlock)](
@@ -1144,7 +1144,8 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
 {
     m_storage->asyncOpenTable(
         SYS_HASH_2_TX, [this, hashes, callback](auto&& error, std::optional<Table>&& table) {
-            auto validError = checkTableValid(std::forward<decltype(error)>(error), table, SYS_HASH_2_TX);
+            auto validError =
+                checkTableValid(std::forward<decltype(error)>(error), table, SYS_HASH_2_TX);
             if (validError)
             {
                 callback(std::move(validError), std::vector<protocol::Transaction::Ptr>());

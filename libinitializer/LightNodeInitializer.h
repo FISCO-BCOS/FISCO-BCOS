@@ -14,6 +14,7 @@
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
 #include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
+#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
@@ -213,6 +214,7 @@ public:
         bcos::protocol::LIGHTNODE_SENDTRANSACTION,
         [transactionPool, front](bcos::crypto::NodeIDPtr nodeID,
                                  const std::string &id, bytesConstRef data) {
+          bcostars::ResponseSendTransaction response;
           bcostars::RequestSendTransaction request;
           bcos::concepts::serialize::decode(data, request);
 
@@ -223,7 +225,6 @@ public:
 
           LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
 
-          bcostars::ResponseSendTransaction response;
           transactionPool->submitTransaction(std::move(request.transaction),
                                              response.receipt);
 

@@ -51,7 +51,7 @@ void resizeTo(RANGES::range auto& out, std::integral auto size)
             out.resize(size);
             return;
         }
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
+        BOOST_THROW_EXCEPTION(std::runtime_error{"No enough output space!"});
     }
 }
 

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "../Log.h"
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
 #include <bcos-concepts/Receipt.h>
@@ -52,6 +54,49 @@ private:
         (setBlockData<Flags>(blockNumberStr, block), ...);
     }
 
+    void impl_getBlockNumberByHash(
+        bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
+    {
+        LEDGER_LOG(INFO) << "GetBlockNumberByHash request";
+
+        auto entry = storage().getRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash));
+
+        if (!entry)
+        {
+            number = -1;
+            return;
+        }
+
+        try
+        {
+            number = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            // Ignore the exception
+            LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
+                             << LOG_KV("blockNumber str", entry->getField(0));
+            number = -1;
+        }
+    }
+
+    void impl_getBlockHashByNumber(
+        std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
+    {
+        LEDGER_LOG(INFO) << "GetBlockHashByNumber request" << LOG_KV("blockNumber", number);
+
+        auto key = boost::lexical_cast<std::string>(number);
+        auto entry = storage().getRow(SYS_NUMBER_2_HASH, key);
+        if (!entry)
+        {
+            LEDGER_LOG(WARNING) << "Not found block number: " << number;
+            return;
+        }
+
+        auto hashStr = entry->getField(0);
+        bcos::concepts::bytebuffer::assignTo(hashStr, hash);
+    }
+
     auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
@@ -86,6 +131,7 @@ private:
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
         bcos::concepts::ledger::Status status;
+        status.blockNumber = -1;
         auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
         for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
@@ -155,49 +201,44 @@ private:
         auto status = impl_getStatus();
         auto sourceStatus = sourceLedger.getStatus();
 
-        LEDGER_LOG(INFO) << "Sync onlyHeader: " << onlyHeader
-                         << " local block number: " << status.blockNumber
-                         << " remote block number: " << sourceStatus.blockNumber;
+        LEDGER_LOG(INFO) << "Sync block from remote: " << onlyHeader << " | " << status.blockNumber
+                         << " | " << sourceStatus.blockNumber;
 
-        if (onlyHeader)
+        std::optional<BlockType> parentBlock;
+        for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
+             ++blockNumber)
         {
-            std::optional<BlockType> parentBlock;
-            for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
-                 ++blockNumber)
-            {
-                BlockType block;
+            LEDGER_LOG(DEBUG) << "Syncing block header: " << blockNumber;
+            BlockType block;
+            if (onlyHeader)
                 sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
+            else
+                sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
 
+            if (blockNumber > 0)  // Ignore verify genesis block
+            {
                 if (!parentBlock)
                 {
-                    parentBlock = {};
+                    parentBlock = BlockType();
                     impl_getBlock<bcos::concepts::ledger::HEADER>(blockNumber - 1, *parentBlock);
                 }
+
                 std::array<std::byte, Hasher::HASH_SIZE> parentHash;
                 bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
 
                 if (RANGES::empty(block.blockHeader.data.parentInfo) ||
                     (block.blockHeader.data.parentInfo[0].blockNumber !=
                         parentBlock->blockHeader.data.blockNumber) ||
-                    bcos::concepts::bytebuffer::equalTo(
+                    !bcos::concepts::bytebuffer::equalTo(
                         block.blockHeader.data.parentInfo[0].blockHash, parentHash))
                 {
+                    LEDGER_LOG(ERROR) << "No match parentHash!";
                     BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
                 }
+            }
 
-                impl_setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
-                parentBlock = std::move(block);
-            }
-        }
-        else
-        {
-            for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
-                 ++blockNumber)
-            {
-                BlockType block;
-                sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
-                impl_setBlock<bcos::concepts::ledger::ALL>(std::move(block));
-            }
+            impl_setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
+            parentBlock = std::move(block);
         }
     }
 
@@ -217,29 +258,30 @@ private:
             auto field = entry->getField(0);
             bcos::concepts::serialize::decode(field, block.blockHeader);
         }
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS_METADATA>)
+        {
+            auto entry = storage().getRow(SYS_NUMBER_2_TXS, blockNumberKey);
+            if (!entry) [[unlikely]]
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error{"GetBlock not found transaction meta data!"});
+
+            auto field = entry->getField(0);
+            std::remove_reference_t<decltype(block)> metadataBlock;
+            bcos::concepts::serialize::decode(field, metadataBlock);
+            block.transactionsMetaData = std::move(metadataBlock.transactionsMetaData);
+            block.transactionsMerkle = std::move(metadataBlock.transactionsMerkle);
+            block.receiptsMerkle = std::move(metadataBlock.receiptsMerkle);
+        }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
                            std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
             if (RANGES::empty(block.transactionsMetaData))
-            {
-                auto entry = storage().getRow(SYS_NUMBER_2_TXS, blockNumberKey);
-                if (!entry) [[unlikely]]
-                    BOOST_THROW_EXCEPTION(
-                        std::runtime_error{"GetBlock not found transaction meta data!"});
+                BOOST_THROW_EXCEPTION(std::runtime_error{"Transaction meta data mismatch!"});
 
-                auto field = entry->getField(0);
-                std::remove_reference_t<decltype(block)> metadataBlock;
-                bcos::concepts::serialize::decode(field, metadataBlock);
-                block.transactionsMetaData = std::move(metadataBlock.transactionsMetaData);
-            }
-
-            auto hashesRange =
-                block.transactionsMetaData |
-                RANGES::views::transform(
-                    [](typename decltype(block.transactionsMetaData)::value_type const& metaData) {
-                        return std::span<byte const>{
-                            (byte const*)metaData.hash.data(), metaData.hash.size()};
-                    });
+            auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
+            ](typename decltype(block.transactionsMetaData)::value_type const& metaData) -> auto& {
+                return metaData.hash;
+            });
             auto outputSize = RANGES::size(block.transactionsMetaData);
 
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
@@ -268,6 +310,7 @@ private:
         else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {
             getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
             getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
             getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
             getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
@@ -322,33 +365,28 @@ private:
             storage().setRow(
                 SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey, std::move(number2NonceEntry));
         }
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS_METADATA>)
+        {
+            block.transactionsMetaData.resize(block.transactions.size());
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
+                [&block](const tbb::blocked_range<size_t>& range) {
+                    for (auto i = range.begin(); i < range.end(); ++i)
+                    {
+                        bcos::concepts::hash::calculate<Hasher>(
+                            block.transactions[i], block.transactionsMetaData[i].hash);
+                    }
+                });
+        }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
                            std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
             if (std::empty(block.transactionsMetaData))
-            {
-                block.transactionsMetaData.resize(block.transactions.size());
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
-                    [&block](const tbb::blocked_range<size_t>& range) {
-                        for (auto i = range.begin(); i < range.end(); ++i)
-                        {
-                            bcos::concepts::hash::calculate<Hasher>(
-                                block.transactions[i], block.transactionsMetaData[i].hash);
-                        }
-                    });
-            }
+                BOOST_THROW_EXCEPTION(std::runtime_error{"Transaction meta data mismatch!"});
 
             if (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 std::remove_cvref_t<decltype(block)> transactionsBlock;
                 std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
-                auto hashesView =
-                    transactionsBlock.transactionsMetaData |
-                    RANGES::views::transform(
-                        [](RANGES::range_value_t<
-                            decltype(transactionsBlock.transactionsMetaData)> const&
-                                transactionMetaData) { return transactionMetaData.hash; });
-                m_merkle.generateMerkle(hashesView, block.transactionsMerkle);
 
                 bcos::storage::Entry number2TransactionHashesEntry;
                 std::vector<bcos::byte> number2TransactionHashesBuffer;
@@ -362,11 +400,6 @@ private:
             }
             else
             {
-                if (RANGES::size(block.transactionsMetaData) != RANGES::size(block.receipts))
-                {
-                    BOOST_THROW_EXCEPTION(std::runtime_error{"Transaction meta data mismatch!"});
-                }
-
                 std::atomic_size_t totalTransactionCount = 0;
                 std::atomic_size_t failedTransactionCount = 0;
                 std::vector<std::vector<bcos::byte>> receiptBuffers(block.receipts.size());
@@ -426,6 +459,7 @@ private:
         else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {
             setBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            setBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
             setBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
             setBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
             setBlockData<concepts::ledger::NONCES>(blockNumberKey, block);

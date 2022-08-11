@@ -1,16 +1,39 @@
 #pragma once
 
 #include <bcos-concepts/Block.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Receipt.h>
 #include <bcos-concepts/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bits/ranges_util.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <iterator>
 
 namespace bcos::rpc
 {
+
+void hex2Bin(bcos::concepts::bytebuffer::ByteBuffer auto const& hex,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
+    auto view =
+        RANGES::subrange<decltype(RANGES::begin(hex))>(RANGES::begin(hex), RANGES::end(hex));
+
+    if (RANGES::size(view) >= 2 && (view[0] == '0' && view[1] == 'x'))
+    {
+        view = RANGES::subrange<decltype(RANGES::begin(hex))>(
+            RANGES::begin(hex) + 2, RANGES::end(hex));
+    }
+
+    if ((RANGES::size(view) % 2 != 0)) [[unlikely]]
+        BOOST_THROW_EXCEPTION(std::invalid_argument{"Invalid input hex string!"});
+
+    bcos::concepts::resizeTo(out, RANGES::size(view) / 2);
+    boost::algorithm::unhex(RANGES::begin(view), RANGES::end(view),
+        (RANGES::range_value_t<decltype(view)>*)RANGES::data(out));
+}
+
 template <bcos::crypto::hasher::Hasher Hasher>
 void toJsonResp(bcos::concepts::transaction::Transaction auto const& transaction, Json::Value& resp)
 {
