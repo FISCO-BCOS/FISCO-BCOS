@@ -131,7 +131,6 @@ private:
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
         bcos::concepts::ledger::Status status;
-        status.blockNumber = -1;
         auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
         for (auto i = 0u; i < RANGES::size(entries); ++i)
         {
@@ -140,8 +139,7 @@ private:
             int64_t value = 0;
             if (!entry) [[unlikely]]
             {
-                LEDGER_LOG(WARNING)
-                    << "GetTotalTransactionCount error" << LOG_KV("index", i) << " empty";
+                LEDGER_LOG(INFO) << "GetStatus error" << LOG_KV("index", i) << " empty";
             }
             else
             {
@@ -237,7 +235,11 @@ private:
                 }
             }
 
-            impl_setBlock<bcos::concepts::ledger::HEADER>(std::move(block));
+            if (onlyHeader)
+                impl_setBlock<bcos::concepts::ledger::HEADER>(block);
+            else
+                impl_setBlock<bcos::concepts::ledger::ALL>(block);
+
             parentBlock = std::move(block);
         }
     }
@@ -262,8 +264,10 @@ private:
         {
             auto entry = storage().getRow(SYS_NUMBER_2_TXS, blockNumberKey);
             if (!entry) [[unlikely]]
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error{"GetBlock not found transaction meta data!"});
+            {
+                LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
+                return;
+            }
 
             auto field = entry->getField(0);
             std::remove_reference_t<decltype(block)> metadataBlock;
@@ -276,7 +280,10 @@ private:
                            std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
             if (RANGES::empty(block.transactionsMetaData))
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Transaction meta data mismatch!"});
+            {
+                LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
+                return;
+            }
 
             auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
             ](typename decltype(block.transactionsMetaData)::value_type const& metaData) -> auto& {
@@ -299,8 +306,11 @@ private:
         {
             // TODO: add get nonce logic
             auto entry = storage().getRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey);
-            if (!entry) [[unlikely]]
-                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found nonce data!"});
+            if (!entry)
+            {
+                LEDGER_LOG(INFO) << "GetBlock not found nonce data!";
+                return;
+            }
 
             std::remove_reference_t<decltype(block)> nonceBlock;
             auto field = entry->getField(0);
@@ -367,36 +377,48 @@ private:
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS_METADATA>)
         {
-            block.transactionsMetaData.resize(block.transactions.size());
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
-                [&block](const tbb::blocked_range<size_t>& range) {
-                    for (auto i = range.begin(); i < range.end(); ++i)
-                    {
-                        bcos::concepts::hash::calculate<Hasher>(
-                            block.transactions[i], block.transactionsMetaData[i].hash);
-                    }
-                });
+            if (RANGES::empty(block.transactionsMetaData) && !RANGES::empty(block.transactions))
+            {
+                block.transactionsMetaData.resize(block.transactions.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
+                    [&block](const tbb::blocked_range<size_t>& range) {
+                        for (auto i = range.begin(); i < range.end(); ++i)
+                        {
+                            bcos::concepts::hash::calculate<Hasher>(
+                                block.transactions[i], block.transactionsMetaData[i].hash);
+                        }
+                    });
+            }
+
+            if (std::empty(block.transactionsMetaData))
+            {
+                LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+                return;
+            }
+
+            std::remove_cvref_t<decltype(block)> transactionsBlock;
+            std::swap(block.transactionsMetaData, transactionsBlock.transactionsMetaData);
+
+            bcos::storage::Entry number2TransactionHashesEntry;
+            std::vector<bcos::byte> number2TransactionHashesBuffer;
+            bcos::concepts::serialize::encode(transactionsBlock, number2TransactionHashesBuffer);
+            number2TransactionHashesEntry.importFields({std::move(number2TransactionHashesBuffer)});
+            storage().setRow(
+                SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
+            std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
                            std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
             if (std::empty(block.transactionsMetaData))
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Transaction meta data mismatch!"});
+            {
+                LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+                return;
+            }
 
             if (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
-                std::remove_cvref_t<decltype(block)> transactionsBlock;
-                std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
-
-                bcos::storage::Entry number2TransactionHashesEntry;
-                std::vector<bcos::byte> number2TransactionHashesBuffer;
-                bcos::concepts::serialize::encode(
-                    transactionsBlock, number2TransactionHashesBuffer);
-                number2TransactionHashesEntry.importFields(
-                    {std::move(number2TransactionHashesBuffer)});
-                storage().setRow(
-                    SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
-                std::swap(block.transactionsMetaData, transactionsBlock.transactionsMetaData);
+                // NEED TO WRITE TRANSACTIONS WHILE SYNC BLOCK
             }
             else
             {
@@ -468,6 +490,23 @@ private:
         {
             static_assert(!sizeof(block), "Wrong input flag!");
         }
+    }
+
+    void impl_setupGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        try
+        {
+            decltype(block) currentBlock;
+
+            impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
+            return;
+        }
+        catch (...)
+        {
+            LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
+        }
+
+        impl_setBlock<concepts::ledger::HEADER>(std::move(block));
     }
 
     auto& storage() { return bcos::concepts::getRef(m_storage); }

@@ -106,6 +106,11 @@ public:
         impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
     }
 
+    void setupGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        impl().template impl_setupGenesisBlock(std::move(block));
+    }
+
 private:
     friend Impl;
     auto& impl() { return static_cast<Impl&>(*this); }
