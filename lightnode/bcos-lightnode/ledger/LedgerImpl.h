@@ -1,11 +1,10 @@
 #pragma once
 
 #include "../Log.h"
-#include "bcos-concepts/ByteBuffer.h"
-#include "bcos-concepts/Hash.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Receipt.h>
 #include <bcos-concepts/Transaction.h>
 #include <bcos-concepts/ledger/Ledger.h>
@@ -13,6 +12,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
