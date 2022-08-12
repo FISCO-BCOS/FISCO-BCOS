@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
 
     EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size());
     bool flag = true;
-    for (int i = 0; i < sequence->size(); ++i)
+    for (int i = 0u; i < sequence->size(); ++i)
     {
         if (i <= 10)
         {

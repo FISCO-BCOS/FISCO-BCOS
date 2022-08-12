@@ -20,9 +20,11 @@
  */
 
 #include "../impl/TarsHashable.h"
+#include "../impl/TarsSerializable.h"
 
 #include "TransactionImpl.h"
 #include <bcos-concepts/Hash.h>
+#include <bcos-concepts/Serialize.h>
 #include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
@@ -30,23 +32,12 @@ using namespace bcostars::protocol;
 
 void TransactionImpl::decode(bcos::bytesConstRef _txData)
 {
-    m_buffer.assign(_txData.begin(), _txData.end());
-
-    tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)m_buffer.data(), m_buffer.size());
-
-    m_inner()->readFrom(input);
+    bcos::concepts::serialize::decode(_txData, *m_inner());
 }
 
-bcos::bytesConstRef TransactionImpl::encode() const
+void TransactionImpl::encode(bcos::bytes& txData) const
 {
-    if (m_buffer.empty())
-    {
-        tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-        m_inner()->writeTo(output);
-        output.getByteBuffer().swap(m_buffer);
-    }
-    return bcos::ref(m_buffer);
+    bcos::concepts::serialize::encode(*m_inner(), txData);
 }
 
 bcos::crypto::HashType TransactionImpl::hash(bool _useCache) const

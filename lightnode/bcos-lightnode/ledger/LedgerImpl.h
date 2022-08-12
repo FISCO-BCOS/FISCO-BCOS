@@ -97,7 +97,7 @@ private:
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
     }
 
-    void impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
+    void impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
@@ -286,13 +286,13 @@ private:
 
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
-                block.transactions.resize(outputSize);
-                impl_getTransactionsOrReceipts(std::move(hashesRange), block.transactions);
+                bcos::concepts::resizeTo(block.transactions, outputSize);
+                impl_getTransactions(std::move(hashesRange), block.transactions);
             }
             else
             {
-                block.receipts.resize(outputSize);
-                impl_getTransactionsOrReceipts(std::move(hashesRange), block.receipts);
+                bcos::concepts::resizeTo(block.receipts, outputSize);
+                impl_getTransactions(std::move(hashesRange), block.receipts);
             }
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
