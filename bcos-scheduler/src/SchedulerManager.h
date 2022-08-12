@@ -105,6 +105,7 @@ public:
     std::pair<bool, std::string> checkAndInit();
     void stop() override
     {
+        SCHEDULER_LOG(INFO) << "Try to stop SchedulerManager";
         if (m_scheduler)
         {
             m_scheduler->stop();

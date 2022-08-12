@@ -421,7 +421,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
-        EXECUTOR_NAME_LOG(INFO) <<BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
+        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                 << LOG_KV("number", blockHeader->number());
         callback(nullptr);
     }
@@ -2441,6 +2441,7 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 
 void TransactionExecutor::stop()
 {
+    EXECUTOR_NAME_LOG(INFO) << "Try to stop executor";
     m_isRunning = false;
     if (m_blockContext)
     {

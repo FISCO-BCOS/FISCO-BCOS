@@ -98,6 +98,10 @@ macro(configure_project)
         add_compile_definitions(WITH_SM2_OPTIMIZE)
     endif()
 
+    if(NOT ALLOCATOR)
+        set(ALLOCATOR "tcmalloc")
+    endif()
+
     if(ALLOCATOR STREQUAL "tcmalloc")
         list(APPEND VCPKG_MANIFEST_FEATURES "tcmalloc")
     elseif(ALLOCATOR STREQUAL "jemalloc")

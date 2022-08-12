@@ -161,6 +161,7 @@ public:
     }
     void stop() override
     {
+        SCHEDULER_LOG(INFO) << "Try to stop SchedulerImpl";
         m_isRunning = false;
         std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         for (auto& blockExecutive : *m_blocks)
