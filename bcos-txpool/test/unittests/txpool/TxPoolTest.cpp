@@ -542,7 +542,8 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         importedTxNum);
 
     // case10: malformed transaction
-    auto encodedData = tx->encode();
+    bcos::bytes encodedData;
+    tx->encode(encodedData);
     auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
     // fake invalid txData
     for (size_t i = 0; i < txData->size(); i++)

@@ -81,7 +81,8 @@ BOOST_AUTO_TEST_CASE(transaction)
 
     tx->verify();
     BOOST_CHECK(!tx->sender().empty());
-    auto buffer = tx->encode();
+    bcos::bytes buffer;
+    tx->encode(buffer);
 
     auto decodedTx = factory.createTransaction(buffer, true);
 
@@ -309,7 +310,8 @@ BOOST_AUTO_TEST_CASE(block)
             auto rhs = decodedBlock->transaction(i);
 
             // check if transaction hash re-encode
-            auto reencodeBuffer = rhs->encode();
+            bcos::bytes reencodeBuffer;
+            rhs->encode(reencodeBuffer);
             auto redecodeBlock = transactionFactory->createTransaction(reencodeBuffer, false);
             BOOST_CHECK_EQUAL(redecodeBlock->hash().hex(), lhs->hash().hex());
 

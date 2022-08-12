@@ -61,7 +61,8 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         {
             auto tx = fakeTransaction(_cryptoSuite, 1000 + i,
                 ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
-            auto encodedData = tx->encode();
+            bcos::bytes encodedData;
+            tx->encode(encodedData);
             auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
             txpool->asyncSubmit(txData, [](Error::Ptr, TransactionSubmitResult::Ptr) {});
             auto result = std::make_shared<TransactionSubmitResultImpl>();

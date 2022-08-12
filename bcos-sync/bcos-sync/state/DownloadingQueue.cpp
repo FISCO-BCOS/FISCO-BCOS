@@ -491,8 +491,9 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
             {
                 // maintain lifetime for tx
                 auto tx = _block->transaction(i);
-                auto encodedData = tx->encode();
-                (*txsData)[i] = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
+                bcos::bytes encodedData;
+                tx->encode(encodedData);
+                (*txsData)[i] = std::make_shared<bytes>(std::move(encodedData));
                 (*txsHashList)[i] = tx->hash();
             }
         });
