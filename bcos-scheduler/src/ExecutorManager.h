@@ -17,6 +17,9 @@
 
 namespace bcos::scheduler
 {
+#define EXECUTOR_MANAGER_LOG(LEVEL) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
+
 class ExecutorManager
 {
 public:
@@ -76,6 +79,7 @@ public:
 
     virtual void stop()
     {
+        EXECUTOR_MANAGER_LOG(INFO) << "Try to stop ExecutorManager";
         WriteGuard lock(m_mutex);
         for (auto it : m_name2Executors)
         {

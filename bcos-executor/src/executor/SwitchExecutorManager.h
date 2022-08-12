@@ -448,6 +448,7 @@ public:
 
     void stop() override
     {
+        EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
         WriteGuard l(m_mutex);
         if (m_executor)
         {
