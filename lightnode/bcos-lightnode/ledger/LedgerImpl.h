@@ -61,6 +61,12 @@ private:
 
         auto entry = storage().getRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash));
 
+        if (!entry)
+        {
+            number = -1;
+            return;
+        }
+
         try
         {
             number = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
