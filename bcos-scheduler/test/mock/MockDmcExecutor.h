@@ -187,29 +187,41 @@ public:
         callback(nullptr, std::move(messages));
     }
 
-    void getHash(bcos::protocol::BlockNumber,
-        std::function<void(bcos::Error::UniquePtr, crypto::HashType)>) override
-    {}
+    void getHash(bcos::protocol::BlockNumber number,
+        std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
+    {
+        callback(nullptr, h256(12345));
+    }
 
-    void prepare(const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
-    {}
+    void prepare(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
+    {
+        callback(nullptr);
+    }
 
-    void commit(const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
-    {}
+    void commit(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
+    {
+        callback(nullptr);
+    }
 
-    void rollback(
-        const bcos::protocol::TwoPCParams&, std::function<void(bcos::Error::Ptr)>) override
-    {}
+    void rollback(const bcos::protocol::TwoPCParams& params,
+        std::function<void(bcos::Error::Ptr)> callback) override
+    {
+        callback(nullptr);
+    }
 
-    void getCode(
-        std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
+    void getCode(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
         callback(nullptr, {});
     }
-    void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)>) override {}
-    void reset(std::function<void(bcos::Error::Ptr)>) override {}
-    // void start() override() {}
-    // void stop() override() {}
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override
+    {
+        callback(nullptr, {});
+    }
+    void reset(std::function<void(bcos::Error::Ptr)> callback) override { callback(nullptr); }
 
 
     std::string m_name;
