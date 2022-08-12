@@ -213,7 +213,7 @@ private:
 
         auto outputSize = RANGES::size(output);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, outputSize),
-            [this, &input, &output](const tbb::blocked_range<size_t>& range) {
+            [&input, &output](const tbb::blocked_range<size_t>& range) {
                 HasherType hasher;
 
                 for (auto i = range.begin(); i < range.end(); ++i)

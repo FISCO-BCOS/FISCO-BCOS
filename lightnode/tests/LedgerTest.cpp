@@ -1,5 +1,3 @@
-#include "bcos-concepts/Hash.h"
-#include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/impl/TarsOutput.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
@@ -14,6 +12,7 @@
 #include <bcos-lightnode/ledger/LedgerImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
+#include <bcos-tars-protocol/tars/TransactionMetaData.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/hex.hpp>
