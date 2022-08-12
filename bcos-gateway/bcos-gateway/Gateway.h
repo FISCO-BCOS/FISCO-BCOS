@@ -65,8 +65,8 @@ public:
         m_rateStatisticsTimer->registerTimeoutHandler(
             [rateStatisticsTimer, _rateStatisticsPeriodMS, _rateStatistics, _rateLimiterManager]() {
                 auto io = _rateStatistics->inAndOutStat(_rateStatisticsPeriodMS);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate reporter]") << LOG_DESC(io.first);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate reporter]") << LOG_DESC(io.second);
+                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate stat]") << LOG_DESC(io.first);
+                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate stat]") << LOG_DESC(io.second);
                 _rateStatistics->flushStat();
                 rateStatisticsTimer->restart();
             });
