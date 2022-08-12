@@ -6,7 +6,6 @@
 #include <bcos-concepts/Receipt.h>
 #include <bcos-concepts/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bits/ranges_util.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <iterator>
