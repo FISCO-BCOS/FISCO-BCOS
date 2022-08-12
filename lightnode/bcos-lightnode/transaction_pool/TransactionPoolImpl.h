@@ -6,6 +6,7 @@
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <memory>
@@ -35,17 +36,19 @@ private:
         auto transactionData = std::make_shared<bcos::bytes>();
         bcos::concepts::serialize::encode(transaction, *transactionData);
 
+        bool withReceipt = false;
         std::promise<Error::Ptr> promise;
         transactionPool().asyncSubmit(std::move(transactionData),
-            [&promise, &receipt](Error::Ptr error,
+            [&promise, &receipt, &withReceipt](Error::Ptr error,
                 bcos::protocol::TransactionSubmitResult::Ptr transactionSubmitResult) mutable {
-                if (!error)
+                if (transactionSubmitResult && transactionSubmitResult->transactionReceipt())
                 {
                     auto receiptImpl =
                         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
                             transactionSubmitResult->transactionReceipt());
                     receipt =
                         std::move(const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
+                    withReceipt = true;
                 }
 
                 promise.set_value(std::move(error));
@@ -53,7 +56,15 @@ private:
 
         auto error = promise.get_future().get();
         if (error)
-            BOOST_THROW_EXCEPTION(*error);
+        {
+            TRANSACTIONPOOL_LOG(ERROR)
+                << "submitTransaction error! " << boost::diagnostic_information(*error);
+
+            if (!withReceipt)
+            {
+                BOOST_THROW_EXCEPTION(*error);
+            }
+        }
     }
 
     auto& transactionPool() { return bcos::concepts::getRef(m_transactionPool); }

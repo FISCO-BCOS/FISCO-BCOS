@@ -21,9 +21,9 @@
 #include "ExecutorServiceApp.h"
 #include "../../Common/TarsUtils.h"
 #include "../ExecutorServiceServer.h"
+#include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/ExecutorInitializer.h"
-#include "libinitializer/ParallelExecutor.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -142,7 +142,7 @@ void ExecutorServiceApp::createAndInitExecutor()
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
 
-    m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
+    m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 
     ExecutorServiceParam param;
     param.executor = m_executor;

@@ -103,6 +103,7 @@ BOOST_AUTO_TEST_CASE(testGuards)
     // uint64_t end_time = end.tv_sec * 1000000 + end.tv_usec;
     // uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
     // BOOST_CHECK((end_time - begin_time) >= (uint64_t(max) * 1000));
+    delete[] t;
 }
 
 BOOST_AUTO_TEST_CASE(testWriteGuard)
@@ -139,6 +140,7 @@ BOOST_AUTO_TEST_CASE(testWriteGuard)
 
     // BOOST_CHECK((end_time - begin_time) > (uint64_t(max) * 1000));
     BOOST_CHECK(count == max);
+    delete[] t;
 }
 
 BOOST_AUTO_TEST_CASE(testRecursiveGuard)
@@ -180,6 +182,7 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
     // uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
     // BOOST_CHECK((end_time - begin_time) >= (uint64_t(max) * 1000));
     BOOST_CHECK(count == 2 * max);
+    delete[] t;
 }
 BOOST_AUTO_TEST_CASE(testError)
 {

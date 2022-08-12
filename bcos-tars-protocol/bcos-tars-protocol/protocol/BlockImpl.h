@@ -20,20 +20,28 @@
  */
 #pragma once
 
+#include "../impl/TarsHashable.h"
+
 #include "../Common.h"
 #include "BlockHeaderImpl.h"
 #include "TransactionImpl.h"
 #include "TransactionMetaDataImpl.h"
 #include "TransactionReceiptImpl.h"
+#include "bcos-concepts/Hash.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Block.h"
+#include "bcos-tars-protocol/tars/Transaction.h"
+#include "bcos-tars-protocol/tars/TransactionMetaData.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-protocol/Common.h>
-#include <bcos-protocol/ParallelMerkleProof.h>
 #include <gsl/span>
 #include <memory>
+#include <ranges>
+#include <type_traits>
 
 namespace bcostars
 {
@@ -123,20 +131,43 @@ public:
             return txsRoot;
         }
 
-        std::vector<bcos::bytes> transactionsList;
-        if (transactionsSize() > 0)
-        {
-            transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsSize(),
-                [this](uint64_t _index) { return transaction(_index)->hash(); });
-        }
-        else if (transactionsMetaDataSize() > 0)
-        {
-            transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsHashSize(),
-                [this](uint64_t _index) { return transactionMetaData(_index)->hash(); });
-        }
+        std::optional<bcos::crypto::hasher::AnyHasher> anyHasher;
+        if (m_transactionFactory->cryptoSuite()->smCrypto())
+            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher();
+        else
+            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher();
 
-        txsRoot = bcos::protocol::calculateMerkleProofRoot(
-            m_transactionFactory->cryptoSuite(), transactionsList);
+        std::visit(
+            [this, &txsRoot](auto& hasher) {
+                using Hasher = std::remove_reference_t<decltype(hasher)>;
+                if (transactionsSize() > 0)
+                {
+                    auto hashesRange =
+                        m_inner->transactions |
+                        RANGES::views::transform([](const bcostars::Transaction& transaction) {
+                            std::array<std::byte, Hasher::HASH_SIZE> hash;
+                            bcos::concepts::hash::calculate<Hasher>(transaction, hash);
+                            return hash;
+                        });
+                    bcos::crypto::merkle::Merkle<Hasher> merkle;
+                    merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
+                }
+                else if (transactionsMetaDataSize() > 0)
+                {
+                    auto hashesRange =
+                        m_inner->transactionsMetaData |
+                        RANGES::views::transform(
+                            [](const bcostars::TransactionMetaData& transactionMetaData) {
+                                return transactionMetaData.hash;
+                            });
+                    bcos::crypto::merkle::Merkle<Hasher> merkle;
+                    merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
+                }
+                bcos::concepts::bytebuffer::assignTo(
+                    *RANGES::rbegin(m_inner->transactionsMerkle), txsRoot);
+            },
+            *anyHasher);
+
         return txsRoot;
     }
 
@@ -148,10 +179,29 @@ public:
         {
             return receiptsRoot;
         }
-        auto receiptsList = bcos::protocol::encodeToCalculateRoot(
-            receiptsSize(), [this](uint64_t _index) { return receipt(_index)->hash(); });
-        receiptsRoot =
-            bcos::protocol::calculateMerkleProofRoot(m_receiptFactory->cryptoSuite(), receiptsList);
+        std::optional<bcos::crypto::hasher::AnyHasher> anyHasher;
+        if (m_transactionFactory->cryptoSuite()->smCrypto())
+            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher();
+        else
+            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher();
+
+        std::visit(
+            [this, &receiptsRoot](auto& hasher) {
+                using Hasher = std::remove_reference_t<decltype(hasher)>;
+                auto hashesRange =
+                    m_inner->receipts |
+                    RANGES::views::transform([](const bcostars::TransactionReceipt& receipt) {
+                        std::array<std::byte, Hasher::HASH_SIZE> hash;
+                        bcos::concepts::hash::calculate<Hasher>(receipt, hash);
+                        return hash;
+                    });
+                bcos::crypto::merkle::Merkle<Hasher> merkle;
+                merkle.generateMerkle(hashesRange, m_inner->receiptsMerkle);
+                bcos::concepts::bytebuffer::assignTo(
+                    *RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
+            },
+            *anyHasher);
+
         return receiptsRoot;
     }
 

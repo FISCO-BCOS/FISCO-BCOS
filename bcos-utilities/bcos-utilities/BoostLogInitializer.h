@@ -19,6 +19,7 @@
  * @author: yujiechen
  */
 #pragma once
+
 #include "Common.h"
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>

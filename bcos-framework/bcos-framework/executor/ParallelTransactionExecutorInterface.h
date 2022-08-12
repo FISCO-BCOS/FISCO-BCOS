@@ -88,8 +88,10 @@ public:
             callback) = 0;
 
 
-    virtual void dmcExecuteTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+    virtual void dmcExecuteTransaction(
+        [[maybe_unused]] bcos::protocol::ExecutionMessage::UniquePtr input,
+        [[maybe_unused]] std::function<void(
+            bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback)
     {
         BCOS_LOG(FATAL) << "dmcExecuteTransaction is not available";

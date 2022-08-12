@@ -65,6 +65,12 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
 
         for (auto it = blockTxs->begin(); it != blockTxs->end(); it++)
         {
+            if (!m_isRunning)
+            {
+                EXECUTOR_LOG(DEBUG) << "ExecutiveSerialFlow has stopped during running";
+                return;
+            }
+
             auto contextID = it->first;
             auto& txInput = it->second;
             if (!txInput)

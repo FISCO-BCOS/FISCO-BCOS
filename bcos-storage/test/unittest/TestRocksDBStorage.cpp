@@ -224,13 +224,13 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
     prepareTestTableData();
 
 
-// #pragma omp parallel for
+    // #pragma omp parallel for
     for (size_t i = 0; i < 1050; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         rocksDBStorage->asyncGetRow(
             testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
-// #pragma omp critical
+                // #pragma omp critical
                 BOOST_REQUIRE(!error);
                 if (error)
                 {
@@ -580,6 +580,8 @@ BOOST_AUTO_TEST_CASE(rocksDBiter)
     {
         boost::filesystem::remove_all(testPath);
     }
+
+    delete db;
 }
 
 BOOST_AUTO_TEST_CASE(writeReadDelete_1Table)

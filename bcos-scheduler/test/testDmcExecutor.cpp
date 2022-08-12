@@ -78,7 +78,7 @@ bcos::protocol::ExecutionMessage::UniquePtr createMessage(
     message->setSeq(seq);
     message->setFrom("0xeeffaabb");
     message->setTo(toAddress);
-    return std::move(message);
+    return message;
 }
 
 BOOST_AUTO_TEST_CASE(stateSwitchTest)

@@ -33,6 +33,9 @@ private:
 
         bcostars::ResponseSendTransaction response;
         bcos::concepts::serialize::decode(responseBuffer, response);
+        if (response.error.errorCode)
+            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+
         std::swap(response.receipt, receipt);
     }
 

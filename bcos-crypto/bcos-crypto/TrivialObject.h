@@ -23,6 +23,7 @@
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <span>
+#include <stdexcept>
 
 namespace bcos::crypto::trivial
 {
@@ -97,7 +98,7 @@ void resizeTo(RANGES::range auto& out, size_t size)
             return;
         }
 
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough output space!"});
+        BOOST_THROW_EXCEPTION(std::runtime_error("Not enough output space!"));
     }
 }
 
