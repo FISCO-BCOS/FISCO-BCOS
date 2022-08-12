@@ -1,5 +1,6 @@
 #pragma once
 
+#include "TransactionExecutorFactory.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include <bcos-framework/executor/ExecuteError.h>
@@ -7,20 +8,20 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <thread>
 
-namespace bcos::initializer
+namespace bcos::executor
 {
-class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
+class SwitchExecutorManager : public executor::ParallelTransactionExecutorInterface
 {
 public:
     const int64_t INIT_SCHEDULER_TERM_ID = 0;
 
-    ParallelExecutor(bcos::executor::TransactionExecutorFactory::Ptr factory)
+    SwitchExecutorManager(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
     {
         refreshExecutor(INIT_SCHEDULER_TERM_ID);
     }
 
-    ~ParallelExecutor() noexcept override {}
+    ~SwitchExecutorManager() noexcept override {}
 
     void refreshExecutor(int64_t schedulerTermId)
     {
@@ -59,7 +60,6 @@ public:
     {
         refreshExecutor(schedulerTermId);
 
-
         m_pool.enqueue([executor = m_executor, schedulerTermId,
                            blockHeader = std::move(blockHeader), callback = std::move(callback)]() {
             // create a holder
@@ -81,17 +81,16 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                         "Executor has just inited, need to switch"),
+                nullptr);
+            return;
+        }
+
         m_pool.enqueue([this, executor = m_executor, inputRaw = input.release(),
                            callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"),
-                    nullptr);
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -112,8 +111,10 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        // Note: In order to ensure that the call is in the context of the life cycle of
-        // BlockExecutive, the executor call cannot be put into m_pool
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
 
         // create a holder
         auto executor = m_executor;
@@ -137,6 +138,14 @@ public:
             callback) override
     {
         // Note: copy the inputs here in case of inputs has been released
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                         "Executor has just inited, need to switch"),
+                {});
+            return;
+        }
+
         auto inputsVec =
             std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
         for (auto i = 0u; i < inputs.size(); i++)
@@ -145,15 +154,6 @@ public:
         }
         m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"),
-                    {});
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -176,6 +176,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                         "Executor has just inited, need to switch"),
+                {});
+            return;
+        }
+
         // Note: copy the inputs here in case of inputs has been released
         auto inputsVec =
             std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
@@ -185,15 +193,6 @@ public:
         }
         m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"),
-                    {});
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -215,6 +214,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                         "Executor has just inited, need to switch"),
+                {});
+            return;
+        }
+
         auto inputsVec =
             std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
         for (auto i = 0u; i < inputs.size(); i++)
@@ -222,15 +229,6 @@ public:
             inputsVec->emplace_back(std::move(inputs[i]));
         }
         m_pool.enqueue([this, executor = m_executor, inputsVec, callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"),
-                    {});
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -250,8 +248,10 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        // Note: In order to ensure that the call is in the context of the life cycle of
-        // BlockExecutive, the executor call cannot be put into m_pool
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
 
         // create a holder
         auto executor = m_executor;
@@ -271,6 +271,11 @@ public:
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
     {
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
+
         m_pool.enqueue([executor = m_executor, number, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
@@ -292,16 +297,15 @@ public:
     void prepare(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                "Executor has just inited, need to switch"));
+            return;
+        }
+
         m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"));
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -320,16 +324,15 @@ public:
     void commit(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                "Executor has just inited, need to switch"));
+            return;
+        }
+
         m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"));
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -348,16 +351,15 @@ public:
     void rollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (!hasNextBlockHeaderDone())
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                "Executor has just inited, need to switch"));
+            return;
+        }
+
         m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
-            if (!hasNextBlockHeaderDone())
-            {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
-                        "Executor has just inited, need to switch"));
-                return;
-            }
-
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -377,6 +379,11 @@ public:
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
+
         m_pool.enqueue([executor = m_executor, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -394,6 +401,11 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
+
         m_pool.enqueue([executor = m_executor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
@@ -413,6 +425,11 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
+
         m_pool.enqueue([executor = m_executor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
@@ -429,6 +446,19 @@ public:
         });
     }
 
+    void stop() override
+    {
+        WriteGuard l(m_mutex);
+        if (m_executor)
+        {
+            m_executor->stop();
+        }
+
+        m_executor = nullptr;
+
+        m_schedulerTermId = -1;
+    }
+
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
@@ -438,4 +468,4 @@ private:
 
     bcos::executor::TransactionExecutorFactory::Ptr m_factory;
 };
-}  // namespace bcos::initializer
+}  // namespace bcos::executor

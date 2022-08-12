@@ -52,6 +52,12 @@ public:
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
+    void stop() override
+    {
+        m_isRunning = false;
+        ExecutiveFlowInterface::stop();
+    };
+
 private:
     using SerialMap = std::map<int64_t, CallParameters::UniquePtr, std::less<>>;
     using SerialMapPtr = std::shared_ptr<SerialMap>;
@@ -74,6 +80,8 @@ private:
     ExecutiveFactory::Ptr m_executiveFactory;
 
     mutable SharedMutex x_lock;
+
+    bool m_isRunning = true;
 };
 
 
