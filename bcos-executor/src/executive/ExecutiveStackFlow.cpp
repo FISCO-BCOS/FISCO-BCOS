@@ -143,6 +143,12 @@ void ExecutiveStackFlow::runWaitingFlow(std::function<void(CallParameters::Uniqu
 
     for (auto contextIDAndSeq : m_waitingFlow)
     {
+        if (!m_isRunning)
+        {
+            EXECUTOR_LOG(DEBUG) << "ExecutiveStackFlow has stopped during running waiting flow";
+            return;
+        }
+
         auto executiveState = m_executives[contextIDAndSeq];
         executiveState->appendKeyLocks(std::move(lastKeyLocks));
 
@@ -156,6 +162,12 @@ void ExecutiveStackFlow::runOriginFlow(std::function<void(CallParameters::Unique
 {
     while (!m_originFlow.empty())
     {
+        if (!m_isRunning)
+        {
+            EXECUTOR_LOG(DEBUG) << "ExecutiveStackFlow has stopped during running origin flow";
+            return;
+        }
+
         auto executiveState = m_originFlow.front();
         m_originFlow.pop();
         runOne(executiveState, onTxReturn);

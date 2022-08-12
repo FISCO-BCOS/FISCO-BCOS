@@ -63,6 +63,12 @@ public:
         }
     };
 
+    void stop() override
+    {
+        m_isRunning = false;
+        ExecutiveFlowInterface::stop();
+    };
+
 private:
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
@@ -96,6 +102,8 @@ private:
     ExecutiveFactory::Ptr m_executiveFactory;
 
     mutable SharedMutex x_lock;
+
+    bool m_isRunning = true;
 };
 
 
