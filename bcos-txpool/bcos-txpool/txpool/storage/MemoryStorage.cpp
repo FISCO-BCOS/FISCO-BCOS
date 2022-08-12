@@ -278,10 +278,10 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             {
                 return;
             }
-            bcos::bytes encodedData;
-            _tx->encode(encodedData);
+            bcos::bytes encodeData;
+            _tx->encode(encodeData);
             auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
-            txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodedData)));
+            txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodeData)));
             auto txsHash = std::make_shared<HashList>();
             auto txHash = _tx->hash();
             txsHash->emplace_back(txHash);
