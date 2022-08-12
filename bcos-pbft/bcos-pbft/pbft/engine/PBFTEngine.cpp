@@ -1101,6 +1101,13 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
     // check the precommmitted proposals
     for (auto precommitMsg : _viewChangeMsg->preparedProposals())
     {
+        if (precommitMsg->view() > _viewChangeMsg->view())
+        {
+            PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid view")
+                           << printPBFTMsgInfo(precommitMsg) << printPBFTMsgInfo(_viewChangeMsg)
+                           << m_config->printCurrentState();
+            return false;
+        }
         if (!m_cacheProcessor->checkPrecommitMsg(precommitMsg))
         {
             PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid proposal")

@@ -730,7 +730,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
 bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitMsg)
 {
     // check the view(the first started node no need to check the view)
-    if (m_config->startRecovered() && (_precommitMsg->view() > m_config->view()))
+    if (m_config->startRecovered() && (_precommitMsg->view() > m_config->toView()))
     {
         return false;
     }
