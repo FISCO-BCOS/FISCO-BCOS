@@ -287,7 +287,8 @@ BOOST_AUTO_TEST_CASE(notExistsBlock)
     LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> ledger{
         storage};
 
-    std::array<std::byte, 32> hash{std::byte('0')};
+    std::array<std::byte, bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher::HASH_SIZE> hash;
+    hash.fill(std::byte('0'));
     auto oldHash = hash;
     ledger.getBlockHashByNumber(50, hash);
     BOOST_CHECK_EQUAL(hash, oldHash);
