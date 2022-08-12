@@ -13,7 +13,7 @@ set(TCMALLOC_MAKE make install)
 
 ExternalProject_Add(gperftools
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps/
-    DOWNLOAD_NAME gperftools-2.7.tar.gz
+    DOWNLOAD_NAME gperftools-2.10.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/gperftools/gperftools/releases/download/gperftools-2.10/gperftools-2.10.tar.gz
        # https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/gperftools-2.7.tar.gz
