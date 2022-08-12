@@ -51,7 +51,7 @@ public:
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry&) = default;
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
-    auto operator<=>(const Entry&) const = default;
+    // auto operator<=>(const Entry&) const = default;
 
     ~Entry() noexcept {}
 
