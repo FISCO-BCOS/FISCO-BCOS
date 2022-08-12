@@ -44,16 +44,6 @@ void NodeServiceApp::destroyApp()
         // stop the nodeService
         m_nodeInitializer->stop();
     }
-
-    // terminate the network threads
-    Application::terminate();
-    // terminate the network client
-    tars::Application::getCommunicator()->terminate();
-
-    if (m_logInitializer)
-    {
-        m_logInitializer->stopLogging();
-    }
 }
 
 void NodeServiceApp::initialize()
