@@ -24,9 +24,6 @@
 #include <bcos-utilities/Worker.h>
 #include <atomic>
 
-#define EXECUTOR_MANAGER_LOG(LEVEL) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
-
 
 namespace bcos::scheduler
 {
@@ -79,6 +76,7 @@ public:
 
     void stop() override
     {
+        EXECUTOR_MANAGER_LOG(INFO) << "Try to stop TarsRemoteExecutorManager";
         if (isWorking())
         {
             stopWorking();
