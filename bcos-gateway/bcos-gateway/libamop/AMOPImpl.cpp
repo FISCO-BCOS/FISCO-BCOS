@@ -376,8 +376,8 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                             << LOG_BADGE("RetrySender::sendMessage")
                             << LOG_DESC("asyncSendMessageByNodeID callback response error")
                             << LOG_KV("nodeID", choosedNodeID)
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("msg", _error->errorMessage());
                         self->sendMessage();
                         return;
                     }

@@ -125,10 +125,8 @@ void WsService::stop()
     }
 
 
-
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
 }
-
 
 
 void WsService::reportConnectedNodes()
@@ -617,7 +615,7 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
             auto session = *ss.begin();
             ss.erase(ss.begin());
 
- 
+
             session->asyncSendMessage(msg, options);
         }
 
@@ -654,13 +652,10 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMessage", _error->errorMessage());
 
-                        if (notRetryAgain(_error->errorCode()))
+                        if (self->respFunc)
                         {
                             return self->respFunc(_error, _msg, _session);
                         }
-
-                        // retry
-                        return self->trySendMessageWithCB();
                     }
 
                     callback(_error, _msg, _session);
