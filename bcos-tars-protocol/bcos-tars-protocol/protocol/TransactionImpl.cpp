@@ -18,8 +18,11 @@
  * @author: ancelmo
  * @date 2021-04-20
  */
+
+#include "../impl/TarsHashable.h"
+
 #include "TransactionImpl.h"
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include <bcos-concepts/Hash.h>
 #include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
@@ -54,25 +57,18 @@ bcos::crypto::HashType TransactionImpl::hash(bool _useCache) const
         return *(reinterpret_cast<bcos::crypto::HashType*>(m_inner()->dataHash.data()));
     }
     auto hashImpl = m_cryptoSuite->hashImpl();
-    auto hasher = hashImpl->hasher();
-
-    auto const& hashFields = m_inner()->data;
-    // encode version
-    int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
-    hasher.update(version);
-    hasher.update(hashFields.chainID);
-    hasher.update(hashFields.groupID);
-    int64_t blockLimit = boost::endian::native_to_big((int64_t)hashFields.blockLimit);
-    hasher.update(blockLimit);
-    hasher.update(hashFields.nonce);
-    hasher.update(hashFields.to);
-    hasher.update(hashFields.input);
-    hasher.update(hashFields.abi);
+    auto anyHasher = hashImpl->hasher();
 
     bcos::crypto::HashType hashResult;
-    hasher.final(hashResult);
-    bcos::UpgradeGuard ul(l);
-    m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+    std::visit(
+        [this, &hashResult, &l](auto& hasher) {
+            using Hasher = std::remove_cvref_t<decltype(hasher)>;
+            bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
+
+            bcos::UpgradeGuard ul(l);
+            m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
+        },
+        anyHasher);
     return hashResult;
 }
 

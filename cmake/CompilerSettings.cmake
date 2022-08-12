@@ -92,7 +92,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        # Check that we've got GCC 7.0 or newer.
+        # Check that we've got GCC 10.0 or newer.
         set(GCC_MIN_VERSION "10.0")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
@@ -123,13 +123,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if(SANITIZE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize=leak -fsanitize-recover=all")
-
-        if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/sanitizer-blacklist.txt")
-        endif()
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fsanitize-address-use-after-scope -fsanitize-recover=all")
     endif()
-
 
     if(COVERAGE)
         set(TESTS ON)
@@ -158,6 +153,18 @@ elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     link_libraries(ws2_32 Crypt32 userenv)
 else()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
+endif()
+
+if(ALLOCATOR STREQUAL "tcmalloc")
+    include(FindPkgConfig)
+    pkg_check_modules(tcmalloc REQUIRED libtcmalloc)
+    link_libraries(${tcmalloc_LINK_LIBRARIES})
+elseif(ALLOCATOR STREQUAL "jemalloc")
+    find_package(jemalloc REQUIRED)
+    link_libraries(jemalloc)
+elseif(ALLOCATOR STREQUAL "mimalloc")
+    find_package(mimalloc REQUIRED)
+    link_libraries(mimalloc)
 endif()
 
 # rust static library linking requirements for macos

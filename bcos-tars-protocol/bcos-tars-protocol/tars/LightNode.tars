@@ -1,6 +1,7 @@
 #include "Block.tars"
 #include "Transaction.tars"
 #include "TransactionReceipt.tars"
+#include "CommonProtocol.tars"
 
 module bcostars {
 
@@ -12,6 +13,7 @@ struct RequestBlock
 
 struct ResponseBlock
 {
+    1 optional Error error;
     2 optional Block block;
 };
 
@@ -23,7 +25,8 @@ struct RequestTransactions
 
 struct ResponseTransactions
 {
-    1 optional vector<Transaction> transactions;
+    1 optional Error error;
+    2 optional vector<Transaction> transactions;
 };
 
 struct RequestReceipts
@@ -34,7 +37,8 @@ struct RequestReceipts
 
 struct ResponseReceipts
 {
-    1 optional vector<TransactionReceipt> receipts;
+    1 optional Error error;
+    2 optional vector<TransactionReceipt> receipts;
 };
 
 struct RequestGetStatus
@@ -44,9 +48,10 @@ struct RequestGetStatus
 
 struct ResponseGetStatus
 {
-    1 optional unsigned int total;
-    2 optional unsigned int failed;
-    3 optional unsigned int blockNumber; 
+    1 optional Error error;
+    2 optional unsigned int total;
+    3 optional unsigned int failed;
+    4 optional unsigned int blockNumber; 
 };
 
 struct RequestSendTransaction
@@ -56,7 +61,8 @@ struct RequestSendTransaction
 
 struct ResponseSendTransaction
 {
-    1 optional TransactionReceipt receipt;
+    1 optional Error error;
+    2 optional TransactionReceipt receipt;
 };
 
 };

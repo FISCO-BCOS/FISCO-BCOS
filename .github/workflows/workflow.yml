@@ -21,15 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-12]
+        os: [ubuntu-22.04, windows-2019, macos-12]
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        if: runner.os == 'Linux'
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
@@ -45,34 +38,36 @@ jobs:
         id: deps_cache
         with:
           path: |
-            /home/runner/.cargo
-            /Users/runner/.cargo/
-            /home/runner/.ccache
-            /Users/runner/.ccache/
             deps/src
-          key: build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            c:/vcpkg
+            !c:/vcpkg/.git
+            !c:/vcpkg/buildtrees
+            !c:/vcpkg/packages
+            !c:/vcpkg/downloads
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
-            build-v8-notest-${{ matrix.os }}-
+            build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            build-${{ matrix.os }}-${{ github.base_ref }}-
+            build-${{ matrix.os }}-
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_ETCD=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=c:/vcpkg/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
-          sudo apt install -y lcov ccache openssl libssl-dev wget libgmp-dev
-          export GCC='gcc-10'
-          export CXX='g++-10'
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          sudo apt install -y lcov ccache wget libgmp-dev
+          export GCC='gcc-11'
+          export CXX='g++-11'
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_ETCD=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
           brew install ccache gmp lcov
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_ETCD=ON -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
         if: runner.os != 'Windows'
@@ -104,23 +99,22 @@ jobs:
         id: deps_cache
         with:
           path: |
-            /home/runner/.cargo
-            /Users/runner/.cargo/
             /home/runner/.ccache
             /Users/runner/.ccache/
             deps/src
-          key: centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            centos-v8-notest-${{ matrix.os }}-${{ github.base_ref }}-
-            centos-v8-notest-${{ matrix.os }}-
+            centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            centos-notest-${{ matrix.os }}-${{ github.base_ref }}-
+            centos-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
           yum install -y epel-release centos-release-scl flex bison patch gmp-static
-          yum install -y devtoolset-10 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov
+          yum install -y devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
       - name: Prepare vcpkg
+        if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - uses: actions-rs/toolchain@v1
@@ -130,15 +124,15 @@ jobs:
       - name: Build
         run: |
           alias cmake='cmake3'
-          . /opt/rh/devtoolset-10/enable
+          . /opt/rh/devtoolset-11/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-          cmake3 --build . --parallel 4
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
+          cmake3 --build . --parallel 3
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
         run: |

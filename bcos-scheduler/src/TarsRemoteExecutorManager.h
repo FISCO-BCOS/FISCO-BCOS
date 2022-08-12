@@ -77,7 +77,14 @@ public:
 
     bool checkAllExecutorSeq();
 
-    void stop() override {}
+    void stop() override
+    {
+        if (isWorking())
+        {
+            stopWorking();
+        }
+        ExecutorManager::stop();
+    }
 
 private:
     std::function<void()> m_onRemoteExecutorChange;

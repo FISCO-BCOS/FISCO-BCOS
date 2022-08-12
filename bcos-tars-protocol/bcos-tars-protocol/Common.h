@@ -18,12 +18,9 @@
  * @date 2021-04-20
  */
 
-#include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #pragma once
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
@@ -69,7 +66,7 @@ private:
     BufferWriter& operator=(const BufferWriter& buf);
 
 public:
-    BufferWriter() : _buf(NULL), _len(0), _buf_len(0)
+    BufferWriter() : _buf(NULL), _len(0), _buf_len(0), _reserve({})
     {
 #ifndef GEN_PYTHON_MASK
         _reserve = [](BufferWriter& os, size_t len) {

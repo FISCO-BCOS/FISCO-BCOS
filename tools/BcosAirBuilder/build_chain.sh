@@ -1592,6 +1592,26 @@ deploy_nodes()
             ((++count))
         done
     done
+
+    # Generate lightnode cert
+    if [ -e "${lightnode_exec}" ]; then
+        local lightnode_dir="${output_dir}/lightnode"
+        mkdir -p ${lightnode_dir}
+        generate_genesis_config "${lightnode_dir}/config.genesis" "${nodeid_list}"
+
+        generate_node_cert "${sm_mode}" "${ca_dir}" "${lightnode_dir}/conf"
+        generate_node_scripts "${node_dir}" "${docker_mode}"
+        local lightnode_account_dir="${lightnode_dir}/conf"
+        generate_node_account "${sm_mode}" "${lightnode_account_dir}" ${count}
+
+        local node_count=$(get_value ${ip//./}_count)
+        local p2p_port=$((p2p_listen_port + node_count))
+        local rpc_port=$((rpc_listen_port + node_count))
+        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${lightnode_dir}" "${connected_nodes}" "${p2p_port}" "${rpc_port}"
+
+        cp "${lightnode_exec}" ${lightnode_dir}/
+    fi
+
     print_result
 }
 

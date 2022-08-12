@@ -167,7 +167,6 @@ public:
         {
             blockExecutive->stop();
         }
-        m_executorManager->stop();
     }
 
     void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory)

@@ -41,10 +41,20 @@ public:
     void initialize() override;
     void destroyApp() override
     {
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+
         // terminate the network threads
         Application::terminate();
         // terminate the network client
         tars::Application::getCommunicator()->terminate();
+
+        if (m_logInitializer)
+        {
+            m_logInitializer->stopLogging();
+        }
     }
 
 protected:

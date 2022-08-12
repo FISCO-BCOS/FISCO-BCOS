@@ -1,5 +1,6 @@
 #pragma once
 #include "Basic.h"
+#include "ByteBuffer.h"
 #include <vector>
 
 namespace bcos::concepts::serialize
@@ -14,13 +15,13 @@ concept Serializable = requires(
 };
 
 template <class ObjectType>
-auto encode(ObjectType const& in, bcos::concepts::ByteBuffer auto& out)
+auto encode(ObjectType const& in, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     impl_encode(in, out);
 }
 
 template <class ObjectType>
-void decode(bcos::concepts::ByteBuffer auto const& in, ObjectType& out)
+void decode(bcos::concepts::bytebuffer::ByteBuffer auto const& in, ObjectType& out)
 {
     impl_decode(in, out);
 }
