@@ -18,7 +18,7 @@ if(TARS_INPUT)
         add_custom_command(
             OUTPUT ${TARS_HEADER_DIR}/${TARS_NAME}.h
             WORKING_DIRECTORY ${TARS_PATH}
-            COMMAND ${TARS_TARS2CPP} ${TARS_FILE} --dir=${TARS_HEADER_DIR}
+            COMMAND ${TARS_TARS2CPP} ${TARS_FILE} --unjson --without-trace --dir=${TARS_HEADER_DIR}
             COMMENT "generating ${TARS_FILE} to ${TARS_HEADER_DIR}"
             VERBATIM
         )
@@ -40,7 +40,7 @@ target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto ${PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto ${PROTOCOL_TARGET} ${TOOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
     enable_testing()

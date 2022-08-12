@@ -2,6 +2,7 @@
 #include "../Common.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-concepts/Basic.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
@@ -13,10 +14,14 @@ namespace bcos::concepts::hash
 {
 
 template <bcos::crypto::hasher::Hasher Hasher>
-void impl_calculate(bcostars::Transaction const& transaction, bcos::concepts::ByteBuffer auto& out)
+void impl_calculate(
+    bcostars::Transaction const& transaction, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
-        out.assign(RANGES::begin(transaction.dataHash), RANGES::end(transaction.dataHash));
+    {
+        bcos::concepts::bytebuffer::assignTo(transaction.dataHash, out);
+        return;
+    }
 
     Hasher hasher;
     auto const& hashFields = transaction.data;
@@ -32,16 +37,18 @@ void impl_calculate(bcostars::Transaction const& transaction, bcos::concepts::By
     hasher.update(hashFields.input);
     hasher.update(hashFields.abi);
 
-    decltype(transaction.dataHash) hash(Hasher::HASH_SIZE);
     hasher.final(out);
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
 void impl_calculate(
-    bcostars::TransactionReceipt const& receipt, bcos::concepts::ByteBuffer auto& out)
+    bcostars::TransactionReceipt const& receipt, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!receipt.dataHash.empty())
-        out.assign(RANGES::begin(receipt.dataHash), RANGES::end(receipt.dataHash));
+    {
+        bcos::concepts::bytebuffer::assignTo(receipt.dataHash, out);
+        return;
+    }
 
     Hasher hasher;
     auto const& hashFields = receipt.data;
@@ -68,14 +75,17 @@ void impl_calculate(
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::Block const& block, bcos::concepts::ByteBuffer auto& out)
+auto impl_calculate(
+    bcostars::BlockHeader const& blockHeader, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
-    if (!block.blockHeader.dataHash.empty())
-        out.assign(
-            RANGES::begin(block.blockHeader.dataHash), RANGES::end(block.blockHeader.dataHash));
+    if (!blockHeader.dataHash.empty())
+    {
+        bcos::concepts::bytebuffer::assignTo(blockHeader.dataHash, out);
+        return;
+    }
 
     Hasher hasher;
-    auto const& hashFields = block.blockHeader.data;
+    auto const& hashFields = blockHeader.data;
 
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
@@ -113,6 +123,18 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::ByteBuffer aut
     }
 
     hasher.final(out);
+}
+
+template <bcos::crypto::hasher::Hasher Hasher>
+auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
+    if (!block.blockHeader.dataHash.empty())
+    {
+        bcos::concepts::bytebuffer::assignTo(block.blockHeader.dataHash, out);
+        return;
+    }
+
+    impl_calculate<Hasher>(block.blockHeader, out);
 }
 
 }  // namespace bcos::concepts::hash

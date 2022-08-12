@@ -35,7 +35,6 @@ if(FULLNODE)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
     include(ProjectGroupSig)
-    include(ProjectTCMalloc)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)

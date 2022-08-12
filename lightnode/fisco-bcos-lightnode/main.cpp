@@ -283,6 +283,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
         std::move(storageWrapper));
 
+    // Prepare genesis block
+    bcostars::Block genesisBlock;
+    genesisBlock.blockHeader.data.blockNumber = 0;
+    bcos::concepts::bytebuffer::assignTo(
+        nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
+    localLedger->setupGenesisBlock(std::move(genesisBlock));
 
     // rpc
     auto wsService = initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger, remoteLedger,

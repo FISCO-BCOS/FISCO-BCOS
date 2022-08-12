@@ -22,6 +22,9 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <openssl/asn1.h>
+#include <openssl/evp.h>
+#include <openssl/x509.h>
 #include <memory>
 
 using namespace bcos::rpc;
@@ -78,7 +81,7 @@ void GatewayFactory::initCert2PubHexHandler()
             }
 
             ASN1_BIT_STRING* pubKey = X509_get0_pubkey_bitstr(x509Ptr.get());
-            if (pubKey == NULL)
+            if (!pubKey)
             {
                 errorMessage = "X509_get0_pubkey_bitstr error";
                 break;

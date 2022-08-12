@@ -24,10 +24,12 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceiptFactory.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+
 namespace bcos
 {
 namespace protocol
 {
+
 class BlockFactory
 {
 public:

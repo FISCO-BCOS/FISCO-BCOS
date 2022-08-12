@@ -43,5 +43,8 @@ module bcostars {
         6 optional vector<TransactionMetaData> transactionsMetaData;
         7 optional vector<vector<byte>> receiptsHash;
         8 optional vector<string> nonceList;
+        
+        9 optional vector<vector<byte>> transactionsMerkle;
+        10 optional vector<vector<byte>> receiptsMerkle;
     };
 };

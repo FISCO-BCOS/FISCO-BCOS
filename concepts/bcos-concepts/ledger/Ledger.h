@@ -7,19 +7,15 @@
 namespace bcos::concepts::ledger
 {
 
-#ifndef LEDGER_LOG
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
-#endif
-
 template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
     bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 // clang-format off
-struct DataFlagBase {
-};
+struct DataFlagBase {};
 struct ALL: public DataFlagBase {};
 struct HEADER: public DataFlagBase {};
+struct TRANSACTIONS_METADATA: public DataFlagBase {};
 struct TRANSACTIONS: public DataFlagBase {};
 struct RECEIPTS: public DataFlagBase {};
 struct NONCES: public DataFlagBase {};
@@ -29,9 +25,9 @@ concept DataFlag = std::derived_from<FlagType, DataFlagBase>;
 
 struct Status
 {
-    uint64_t total = 0;
-    uint64_t failed = 0;
-    uint64_t blockNumber = 0;
+    int64_t total = 0;
+    int64_t failed = 0;
+    int64_t blockNumber = 0;
 };
 
 // All method in ledger is uncacheed
@@ -50,6 +46,18 @@ public:
     void setBlock(bcos::concepts::block::Block auto block)
     {
         impl().template impl_setBlock<Flags...>(std::move(block));
+    }
+
+    void getBlockNumberByHash(
+        bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
+    {
+        impl().impl_getBlockNumberByHash(hash, number);
+    }
+
+    void getBlockHashByNumber(
+        std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
+    {
+        impl().impl_getBlockHashByNumber(number, hash);
     }
 
     void getTransactionsOrReceipts(
@@ -96,6 +104,11 @@ public:
     void sync(LedgerType& source, bool onlyHeader)
     {
         impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
+    }
+
+    void setupGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        impl().template impl_setupGenesisBlock(std::move(block));
     }
 
 private:

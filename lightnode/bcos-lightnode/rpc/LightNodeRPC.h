@@ -5,12 +5,16 @@
 #include "../Log.h"
 #include "Converter.h"
 #include "bcos-concepts/Basic.h"
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
+#include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-crypto/hasher/Hasher.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
@@ -18,6 +22,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <ranges>
 #include <stdexcept>
 #include <type_traits>
 
@@ -135,34 +140,101 @@ public:
     }
 
     void getBlockByHash([[maybe_unused]] std::string_view _groupID,
-        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view _blockHash,
+        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view blockHash,
         [[maybe_unused]] bool _onlyHeader, [[maybe_unused]] bool _onlyTxHash,
         RespFunc _respFunc) override
     {
-        Json::Value value;
-        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+        int64_t blockNumber = -1;
+        std::array<std::byte, Hasher::HASH_SIZE> hash;
+        hex2Bin(blockHash, hash);
+
+        localLedger().getBlockNumberByHash(hash, blockNumber);
+
+        LIGHTNODE_LOG(INFO) << "RPC get block by hash request: " << blockHash << " " << blockNumber
+                            << " " << _onlyHeader;
+        if (blockNumber < 0)
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Unable to find block hash!"});
+
+        getBlockByNumber(
+            _groupID, _nodeName, blockNumber, _onlyHeader, _onlyTxHash, std::move(_respFunc));
     }
 
     void getBlockByNumber([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, int64_t _blockNumber, bool _onlyHeader,
         bool _onlyTxHash, RespFunc _respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber;
+        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber << " "
+                            << _onlyHeader;
 
         bcostars::Block block;
-        remoteLedger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber, block);
+        if (_onlyHeader)
+        {
+            localLedger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber, block);
+        }
+        else
+        {
+            remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(_blockNumber, block);
+
+            if (!RANGES::empty(block.transactionsMetaData))
+            {
+                // Check transaction merkle
+                crypto::merkle::Merkle<Hasher> merkle;
+                auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
+                ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
+                    return transactionMetaData.hash;
+                });
+                std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
+                merkle.generateMerkle(hashesRange, merkles);
+
+                if (RANGES::empty(merkles))
+                    BOOST_THROW_EXCEPTION(
+                        std::runtime_error{"Unable to generate transaction merkle root!"});
+
+                if (!bcos::concepts::bytebuffer::equalTo(
+                        block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
+                    BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
+            }
+
+            // Check parentBlock
+            if (_blockNumber > 0)
+            {
+                decltype(block) parentBlock;
+                localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                    _blockNumber - 1, parentBlock);
+
+                std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
+
+                if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                    (block.blockHeader.data.parentInfo[0].blockNumber !=
+                        parentBlock.blockHeader.data.blockNumber) ||
+                    !bcos::concepts::bytebuffer::equalTo(
+                        block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                {
+                    LIGHTNODE_LOG(ERROR) << "No match parentHash!";
+                    BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                }
+            }
+        }
 
         Json::Value resp;
-        toJsonResp<Hasher>(block, resp);
+        toJsonResp<Hasher>(block, resp, _onlyHeader);
 
         _respFunc(nullptr, resp);
     }
 
-    void getBlockHashByNumber(std::string_view _groupID, std::string_view _nodeName,
-        int64_t _blockNumber, RespFunc _respFunc) override
+    void getBlockHashByNumber([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, int64_t blockNumber,
+        RespFunc respFunc) override
     {
-        Json::Value value;
-        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+        LIGHTNODE_LOG(INFO) << "RPC get block hash by number request: " << blockNumber;
+
+        bcos::h256 hash;
+        localLedger().getBlockHashByNumber(blockNumber, hash);
+
+        Json::Value resp = bcos::toHexStringWithPrefix(hash);
+
+        respFunc(nullptr, resp);
     }
 
     void getBlockNumber(
@@ -170,8 +242,7 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block number request";
 
-        // auto count = localLedger().getStatus();
-        auto count = remoteLedger().getStatus();
+        auto count = localLedger().getStatus();
 
         Json::Value resp = count.blockNumber;
 
@@ -296,7 +367,7 @@ private:
     auto& remoteTransactionPool() { return bcos::concepts::getRef(m_remoteTransactionPool); }
     auto& scheduler() { return bcos::concepts::getRef(m_scheduler); }
 
-    void decodeData(std::string_view _data, bcos::concepts::ByteBuffer auto& out)
+    void decodeData(std::string_view _data, bcos::concepts::bytebuffer::ByteBuffer auto& out)
     {
         auto begin = _data.begin();
         auto end = _data.end();
