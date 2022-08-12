@@ -183,7 +183,7 @@ void SmallBankPrecompiled::updateBalanceCall(
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret));
 }
@@ -294,7 +294,7 @@ void SmallBankPrecompiled::sendPaymentCall(
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret));
 }
