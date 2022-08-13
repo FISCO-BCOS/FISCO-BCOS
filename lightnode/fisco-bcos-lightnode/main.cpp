@@ -22,29 +22,9 @@
 
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
-#include "client/LedgerClientImpl.h"
-#include "client/P2PClientImpl.h"
-#include "client/SchedulerClientImpl.h"
-#include "client/TransactionPoolClientImpl.h"
-#include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/protocol/GlobalConfig.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-front/FrontServiceFactory.h>
-#include <bcos-gateway/GatewayFactory.h>
-#include <bcos-lightnode/ledger/LedgerImpl.h>
-#include <bcos-lightnode/rpc/LightNodeRPC.h>
-#include <bcos-lightnode/storage/StorageImpl.h>
-#include <bcos-rpc/Common.h>
-#include <bcos-rpc/RpcFactory.h>
-#include <bcos-storage/RocksDBStorage.h>
-#include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
+#include "RPCInitializer.h"
 #include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <json/forwards.h>
-#include <json/value.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -94,131 +74,6 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
     });
 
     return worker;
-}
-
-static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
-    bcos::gateway::Gateway::Ptr gateway, bcos::crypto::KeyFactory::Ptr keyFactory,
-    bcos::concepts::ledger::Ledger auto localLedger,
-    bcos::concepts::ledger::Ledger auto remoteLedger,
-    bcos::concepts::transacton_pool::TransactionPool auto transactionPool,
-    bcos::concepts::scheduler::Scheduler auto scheduler)
-{
-    bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), gateway, keyFactory, nullptr);
-    auto wsConfig = rpcFactory.initConfig(nodeConfig);
-    auto wsService = rpcFactory.buildWsService(wsConfig);
-    auto jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
-        decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(localLedger, remoteLedger,
-        transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId());
-    wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
-        [nodeConfig, nodeID](std::shared_ptr<bcos::boostssl::MessageFace> msg,
-            std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
-            RPC_LOG(INFO) << "LightNode handshake request";
-            Json::Value handshakeResponse(Json::objectValue);
-            Json::Value groupBlockNumberArray(Json::arrayValue);
-            Json::Value group0(Json::objectValue);
-            group0[nodeConfig->groupId()] = 0;
-            groupBlockNumberArray.append(std::move(group0));
-
-            // Generate genesis info
-            Json::Value genesisConfig;
-            genesisConfig["consensusType"] = nodeConfig->consensusType();
-            genesisConfig["blockTxCountLimit"] = nodeConfig->ledgerConfig()->blockTxCountLimit();
-            genesisConfig["txGasLimit"] = (int64_t)(nodeConfig->txGasLimit());
-            genesisConfig["consensusLeaderPeriod"] =
-                nodeConfig->ledgerConfig()->leaderSwitchPeriod();
-            Json::Value sealerList(Json::arrayValue);
-            auto consensusNodeList = nodeConfig->ledgerConfig()->consensusNodeList();
-            for (auto const& node : consensusNodeList)
-            {
-                Json::Value sealer;
-                sealer["nodeID"] = node->nodeID()->hex();
-                sealer["weight"] = node->weight();
-                sealerList.append(sealer);
-            }
-            genesisConfig["sealerList"] = sealerList;
-            Json::FastWriter fastWriter;
-            std::string genesisConfigStr = fastWriter.write(genesisConfig);
-            // Generate genesis info end
-
-            Json::Value groupInfoListArray(Json::arrayValue);
-            Json::Value group0Info(Json::objectValue);
-            group0Info["chainID"] = nodeConfig->chainId();
-            group0Info["genesisConfig"] = genesisConfigStr;
-            group0Info["groupID"] = nodeConfig->groupId();
-            group0Info["iniConfig"] = "";
-
-            Json::Value nodeList(Json::arrayValue);
-            Json::Value node0(Json::objectValue);
-
-            Json::Value iniConfig;
-            iniConfig["isWasm"] = nodeConfig->isWasm();
-            iniConfig["smCryptoType"] = nodeConfig->smCryptoType();
-            iniConfig["chainID"] = nodeConfig->chainId();
-            std::string iniStr = fastWriter.write(iniConfig);
-
-            node0["iniConfig"] = iniStr;
-            node0["microService"] = false;
-            node0["name"] = nodeConfig->nodeName();
-            node0["nodeID"] = nodeID;
-            node0["protocol"]["compatibilityVersion"] = 4;
-            node0["protocol"]["maxSupportedVersion"] = 1;
-            node0["protocol"]["minSupportedVersion"] = 0;
-            node0["serviceInfo"] = Json::Value(Json::arrayValue);
-            node0["type"] = 0;
-            nodeList.append(std::move(node0));
-
-            group0Info["nodeList"] = std::move(nodeList);
-            groupInfoListArray.append(std::move(group0Info));
-
-            handshakeResponse["groupBlockNumber"] = std::move(groupBlockNumberArray);
-            handshakeResponse["groupInfoList"] = std::move(groupInfoListArray);
-            handshakeResponse["protocolVersion"] = 1;
-
-            Json::FastWriter writer;
-            auto response = writer.write(handshakeResponse);
-
-            msg->setPayload(std::make_shared<bcos::bytes>(response.begin(), response.end()));
-            session->asyncSendMessage(msg);
-            RPC_LOG(INFO) << LOG_DESC("LightNode handshake success")
-                          << LOG_KV("version", session->version())
-                          << LOG_KV("endpoint", session ? session->endPoint() : "unknown")
-                          << LOG_KV("handshakeResponse", response);
-        });
-    wsService->registerMsgHandler(bcos::rpc::AMOPClientMessageType::AMOP_SUBTOPIC,
-        [](std::shared_ptr<bcos::boostssl::MessageFace> msg,
-            std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
-            RPC_LOG(INFO) << "LightNode amop topic request";
-        });
-    wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [jsonrpc = std::move(jsonrpc)](std::shared_ptr<bcos::boostssl::MessageFace> msg,
-            std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
-            auto buffer = msg->payload();
-            auto req = std::string_view((const char*)buffer->data(), buffer->size());
-
-            jsonrpc->onRPCRequest(req, [m_buffer = std::move(buffer), msg = std::move(msg),
-                                           session = std::move(session)](bcos::bytes resp) {
-                if (session && session->isConnected())
-                {
-                    // TODO: no need to copy resp
-                    auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
-                    msg->setPayload(buffer);
-                    session->asyncSendMessage(msg);
-                }
-                else
-                {
-                    // remove the callback
-                    RPC_LOG(WARNING)
-                        << LOG_DESC("Unable to send response for session has been inactive")
-                        << LOG_KV("req",
-                               std::string_view((const char*)m_buffer->data(), m_buffer->size()))
-                        << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
-                        << LOG_KV("seq", msg->seq())
-                        << LOG_KV("endpoint", session ? session->endPoint() : std::string(""));
-                }
-            });
-        });
-    return wsService;
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
@@ -291,8 +146,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     localLedger->setupGenesisBlock(std::move(genesisBlock));
 
     // rpc
-    auto wsService = initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger, remoteLedger,
-        transactionPool, scheduler);
+    auto wsService = bcos::lightnode::initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger,
+        remoteLedger, transactionPool, scheduler);
     wsService->start();
 
     auto stopToken = false;

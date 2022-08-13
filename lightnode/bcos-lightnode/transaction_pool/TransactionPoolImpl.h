@@ -60,10 +60,7 @@ private:
             TRANSACTIONPOOL_LOG(ERROR)
                 << "submitTransaction error! " << boost::diagnostic_information(*error);
 
-            if (!withReceipt)
-            {
-                BOOST_THROW_EXCEPTION(*error);
-            }
+            BOOST_THROW_EXCEPTION(*error);
         }
     }
 

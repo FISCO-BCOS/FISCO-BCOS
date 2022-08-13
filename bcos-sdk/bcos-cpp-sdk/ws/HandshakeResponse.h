@@ -53,6 +53,10 @@ public:
     {
         return m_groupBlockNumber;
     }
+    std::unordered_map<std::string, int64_t>& mutableGroupBlockNumber()
+    {
+        return m_groupBlockNumber;
+    }
 
     void setProtocolVersion(int _protocolVersion) { m_protocolVersion = _protocolVersion; }
     void setGroupInfoList(const std::vector<bcos::group::GroupInfo::Ptr>& _groupInfoList)

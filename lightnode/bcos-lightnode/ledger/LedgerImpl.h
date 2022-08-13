@@ -125,7 +125,7 @@ private:
 
     auto impl_getStatus()
     {
-        LEDGER_LOG(INFO) << "getStatus";
+        LEDGER_LOG(TRACE) << "getStatus";
         constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
@@ -155,6 +155,8 @@ private:
                 break;
             }
         }
+        LEDGER_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed << " | "
+                          << status.blockNumber;
 
         return status;
     }
