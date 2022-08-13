@@ -1,11 +1,10 @@
 #pragma once
 
 #include "../Log.h"
-#include "bcos-concepts/ByteBuffer.h"
-#include "bcos-concepts/Hash.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Receipt.h>
 #include <bcos-concepts/Transaction.h>
 #include <bcos-concepts/ledger/Ledger.h>
@@ -13,6 +12,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -57,7 +57,7 @@ private:
     void impl_getBlockNumberByHash(
         bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
     {
-        LEDGER_LOG(INFO) << "GetBlockNumberByHash request";
+        LEDGER_LOG(INFO) << "getBlockNumberByHash request";
 
         auto entry = storage().getRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash));
 
@@ -83,7 +83,7 @@ private:
     void impl_getBlockHashByNumber(
         std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
     {
-        LEDGER_LOG(INFO) << "GetBlockHashByNumber request" << LOG_KV("blockNumber", number);
+        LEDGER_LOG(INFO) << "getBlockHashByNumber request" << LOG_KV("blockNumber", number);
 
         auto key = boost::lexical_cast<std::string>(number);
         auto entry = storage().getRow(SYS_NUMBER_2_HASH, key);
@@ -97,7 +97,7 @@ private:
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
     }
 
-    auto impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
+    void impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
@@ -116,12 +116,11 @@ private:
                 {
                     if (!entries[index]) [[unlikely]]
                         BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
+
                     auto field = entries[index]->getField(0);
                     bcos::concepts::serialize::decode(field, out[index]);
                 }
             });
-
-        return out;
     }
 
     auto impl_getStatus()
@@ -137,14 +136,8 @@ private:
             auto& entry = entries[i];
 
             int64_t value = 0;
-            if (!entry) [[unlikely]]
-            {
-                // LEDGER_LOG(INFO) << "GetStatus error" << LOG_KV("index", i) << " empty";
-            }
-            else
-            {
+            if (entry) [[likely]]
                 value = boost::lexical_cast<int64_t>(entry->getField(0));
-            }
 
             switch (i)
             {
@@ -185,7 +178,7 @@ private:
             bcos::storage::Entry entry;
             entry.importFields({std::move(buffers[i])});
 
-            auto&& hash = hashes[i];
+            auto const& hash = hashes[i];
             storage().setRow(
                 tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
         }
@@ -293,13 +286,13 @@ private:
 
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
-                block.transactions.resize(outputSize);
-                impl_getTransactionsOrReceipts(std::move(hashesRange), block.transactions);
+                bcos::concepts::resizeTo(block.transactions, outputSize);
+                impl_getTransactions(std::move(hashesRange), block.transactions);
             }
             else
             {
-                block.receipts.resize(outputSize);
-                impl_getTransactionsOrReceipts(std::move(hashesRange), block.receipts);
+                bcos::concepts::resizeTo(block.receipts, outputSize);
+                impl_getTransactions(std::move(hashesRange), block.receipts);
             }
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
@@ -407,8 +400,7 @@ private:
                 SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
             std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
         }
-        else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS> ||
-                           std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
         {
             if (std::empty(block.transactionsMetaData))
             {
@@ -416,67 +408,80 @@ private:
                 return;
             }
 
-            if (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
+            std::vector<std::vector<bcos::byte>> transactionBuffers(block.transactions.size());
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
+                [&block, &transactionBuffers](const tbb::blocked_range<size_t>& range) {
+                    for (auto i = range.begin(); i < range.end(); ++i)
+                    {
+                        auto& transaction = block.transactions[i];
+                        bcos::concepts::serialize::encode(transaction, transactionBuffers[i]);
+                    }
+                });
+
+            auto hashView = block.transactionsMetaData |
+                            RANGES::views::transform([](auto& metaData) { return metaData.hash; });
+            impl_setTransactionOrReceiptBuffers<false>(hashView, std::move(transactionBuffers));
+        }
+        else if constexpr (std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
+        {
+            if (std::empty(block.transactionsMetaData))
             {
-                // NEED TO WRITE TRANSACTIONS WHILE SYNC BLOCK
+                LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+                return;
             }
-            else
-            {
-                std::atomic_size_t totalTransactionCount = 0;
-                std::atomic_size_t failedTransactionCount = 0;
-                std::vector<std::vector<bcos::byte>> receiptBuffers(block.receipts.size());
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, block.receipts.size()),
-                    [&block, &totalTransactionCount, &failedTransactionCount, &receiptBuffers](
-                        const tbb::blocked_range<size_t>& range) {
-                        for (auto i = range.begin(); i < range.end(); ++i)
+
+            std::atomic_size_t totalTransactionCount = 0;
+            std::atomic_size_t failedTransactionCount = 0;
+            std::vector<std::vector<bcos::byte>> receiptBuffers(block.receipts.size());
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, block.receipts.size()),
+                [&block, &totalTransactionCount, &failedTransactionCount, &receiptBuffers](
+                    const tbb::blocked_range<size_t>& range) {
+                    for (auto i = range.begin(); i < range.end(); ++i)
+                    {
+                        auto& receipt = block.receipts[i];
+                        if (receipt.data.status != 0)
                         {
-                            auto& hash = block.transactionsMetaData[i].hash;
-                            auto& receipt = block.receipts[i];
-                            if (receipt.data.status != 0)
-                            {
-                                ++failedTransactionCount;
-                            }
-                            ++totalTransactionCount;
-
-                            bcos::concepts::serialize::encode(receipt, receiptBuffers[i]);
+                            ++failedTransactionCount;
                         }
-                    });
+                        ++totalTransactionCount;
 
-                auto hashView =
-                    block.transactionsMetaData |
-                    RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-                impl_setTransactionOrReceiptBuffers<false>(hashView, std::move(receiptBuffers));
+                        bcos::concepts::serialize::encode(receipt, receiptBuffers[i]);
+                    }
+                });
 
-                LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
-                                  << LOG_KV("number", blockNumberKey)
-                                  << LOG_KV("totalCount", totalTransactionCount)
-                                  << LOG_KV("failedCount", failedTransactionCount);
+            auto hashView = block.transactionsMetaData |
+                            RANGES::views::transform([](auto& metaData) { return metaData.hash; });
+            impl_setTransactionOrReceiptBuffers<false>(hashView, std::move(receiptBuffers));
 
-                auto transactionCount = impl_getStatus();
-                transactionCount.total += totalTransactionCount;
-                transactionCount.failed += failedTransactionCount;
+            LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
+                              << LOG_KV("number", blockNumberKey)
+                              << LOG_KV("totalCount", totalTransactionCount)
+                              << LOG_KV("failedCount", failedTransactionCount);
 
-                bcos::storage::Entry totalEntry;
-                totalEntry.importFields({boost::lexical_cast<std::string>(transactionCount.total)});
+            auto transactionCount = impl_getStatus();
+            transactionCount.total += totalTransactionCount;
+            transactionCount.failed += failedTransactionCount;
+
+            bcos::storage::Entry totalEntry;
+            totalEntry.importFields({boost::lexical_cast<std::string>(transactionCount.total)});
+            storage().setRow(
+                SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(totalEntry));
+
+            if (transactionCount.failed > 0)
+            {
+                bcos::storage::Entry failedEntry;
+                failedEntry.importFields(
+                    {boost::lexical_cast<std::string>(transactionCount.failed)});
                 storage().setRow(
-                    SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(totalEntry));
-
-                if (transactionCount.failed > 0)
-                {
-                    bcos::storage::Entry failedEntry;
-                    failedEntry.importFields(
-                        {boost::lexical_cast<std::string>(transactionCount.failed)});
-                    storage().setRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                        std::move(failedEntry));
-                }
-
-                LEDGER_LOG(INFO) << LOG_DESC("setBlock")
-                                 << LOG_KV("number", block.blockHeader.data.blockNumber)
-                                 << LOG_KV("totalTxs", transactionCount.total)
-                                 << LOG_KV("failedTxs", transactionCount.failed)
-                                 << LOG_KV("incTxs", totalTransactionCount)
-                                 << LOG_KV("incFailedTxs", failedTransactionCount);
+                    SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(failedEntry));
             }
+
+            LEDGER_LOG(INFO) << LOG_DESC("setBlock")
+                             << LOG_KV("number", block.blockHeader.data.blockNumber)
+                             << LOG_KV("totalTxs", transactionCount.total)
+                             << LOG_KV("failedTxs", transactionCount.failed)
+                             << LOG_KV("incTxs", totalTransactionCount)
+                             << LOG_KV("incFailedTxs", failedTransactionCount);
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {

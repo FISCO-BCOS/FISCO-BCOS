@@ -21,9 +21,6 @@
 
 #pragma once
 
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include "../Common.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -51,8 +48,7 @@ public:
     bool operator==(const Transaction& rhs) const { return this->hash() == rhs.hash(); }
 
     void decode(bcos::bytesConstRef _txData) override;
-    bcos::bytesConstRef encode() const override;
-    bcos::bytes takeEncoded() override { return std::move(m_buffer); }
+    void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash(bool _useCache = true) const override;
     int32_t version() const override { return m_inner()->data.version; }
@@ -98,7 +94,6 @@ public:
 
 private:
     std::function<bcostars::Transaction*()> m_inner;
-    mutable bcos::bytes m_buffer;
     mutable bcos::SharedMutex x_hash;
     mutable bcos::u256 m_nonce;
 };

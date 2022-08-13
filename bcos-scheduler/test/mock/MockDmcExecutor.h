@@ -178,7 +178,6 @@ public:
             else
             {
                 messages[i]->setType(protocol::ExecutionMessage::FINISHED);
-
                 std::string result = "OK!";
                 messages[i]->setData(bcos::bytes(result.begin(), result.end()));
             }
@@ -186,6 +185,7 @@ public:
 
         callback(nullptr, std::move(messages));
     }
+
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override

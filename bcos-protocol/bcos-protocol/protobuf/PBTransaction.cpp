@@ -92,15 +92,6 @@ void PBTransaction::encode(bytes& _encodedData) const
     encodePBObject(_encodedData, m_transaction);
 }
 
-bytesConstRef PBTransaction::encode() const
-{
-    if (m_dataCache->empty())
-    {
-        encode(*m_dataCache);
-    }
-    return bytesConstRef((byte const*)m_dataCache->data(), m_dataCache->size());
-}
-
 bcos::crypto::HashType PBTransaction::hash(bool _useCache) const
 {
     if (!m_transaction->hashfieldshash().empty() && _useCache)

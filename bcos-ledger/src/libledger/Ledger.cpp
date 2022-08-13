@@ -320,10 +320,11 @@ Ledger::needStoreUnsavedTxs(
         {
             continue;
         }
-        auto encodedData = tx->encode();
+        bcos::bytes encodeData;
+        tx->encode(encodeData);
         unstoredTxs++;
         txsHash->emplace_back(tx->hash());
-        txsToStore->emplace_back(std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
+        txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodeData)));
     }
     LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs")
                      << LOG_KV("txsSize", _blockTxs->size()) << LOG_KV("unstoredTxs", unstoredTxs)
@@ -373,7 +374,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                      << LOG_KV("blockFlag", _blockFlag);
     if (_blockNumber < 0 || _blockFlag < 0)
     {
-        LEDGER_LOG(INFO) << "GetBlockDataByNumber error, wrong argument";
+        LEDGER_LOG(INFO) << "GetBlockDataByNumber, wrong argument";
         _onGetBlock(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Wrong argument"), nullptr);
         return;
     }
@@ -394,7 +395,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
             // All finished
             if (std::get<0>(*result) != *total)
             {
-                LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request error, with errors!"
+                LEDGER_LOG(DEBUG) << "GetBlockDataByNumber request failed!"
                                   << LOG_KV("number", _blockNumber);
                 _onGetBlock(BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError,
                                 "Get block failed with errors!"),
@@ -490,7 +491,8 @@ void Ledger::asyncGetBlockNumber(
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)
             {
-                LEDGER_LOG(DEBUG) << "GetBlockNumber error" << boost::diagnostic_information(error);
+                LEDGER_LOG(DEBUG) << "GetBlockNumber failed"
+                                  << boost::diagnostic_information(error);
                 callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
                              "Get block number storage error", *error),
                     -1);
@@ -635,7 +637,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
                      Error::Ptr&& error, std::vector<protocol::Transaction::Ptr>&& transactions) {
             if (error)
             {
-                LEDGER_LOG(ERROR) << "GetBatchTxsByHashList error: " << error->errorMessage();
+                LEDGER_LOG(DEBUG) << "GetBatchTxsByHashList: " << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_PTR(
                              LedgerError::GetStorageError, "GetBatchTxsByHashList error", *error),
                     nullptr, nullptr);
@@ -705,7 +707,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)
             {
-                LEDGER_LOG(DEBUG) << "GetTransactionReceiptByHash error"
+                LEDGER_LOG(DEBUG) << "GetTransactionReceiptByHash: "
                                   << boost::diagnostic_information(error);
                 callback(BCOS_ERROR_WITH_PREV_PTR(
                              LedgerError::GetStorageError, "GetTransactionReceiptByHash", *error),
@@ -724,9 +726,9 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                     [receipt, _onGetTx = callback](Error::Ptr _error, MerkleProofPtr _proof) {
                         if (_error)
                         {
-                            LEDGER_LOG(DEBUG) << "GetTransactionReceiptByHash error"
-                                              << LOG_KV("errorCode", _error->errorCode())
-                                              << LOG_KV("errorMsg", _error->errorMessage())
+                            LEDGER_LOG(DEBUG) << "GetTransactionReceiptByHash"
+                                              << LOG_KV("code", _error->errorCode())
+                                              << LOG_KV("msg", _error->errorMessage())
                                               << boost::diagnostic_information(_error);
                             _onGetTx(std::move(_error), receipt, nullptr);
                             return;
@@ -756,7 +758,7 @@ void Ledger::asyncGetTotalTransactionCount(
             checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
         if (tableError)
         {
-            LEDGER_LOG(DEBUG) << "GetTotalTransactionCount error"
+            LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
                               << boost::diagnostic_information(*tableError);
             callback(std::move(tableError), -1, -1, -1);
             return;
@@ -766,7 +768,7 @@ void Ledger::asyncGetTotalTransactionCount(
                                       auto&& error, std::vector<std::optional<Entry>>&& entries) {
             if (error)
             {
-                LEDGER_LOG(DEBUG) << "GetTotalTransactionCount error"
+                LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
                                   << boost::diagnostic_information(*error);
                 callback(
                     BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row error", *error),
@@ -829,8 +831,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                             Error::Ptr error, bcos::protocol::BlockNumber blockNumber) {
         if (error)
         {
-            LEDGER_LOG(DEBUG) << "GetSystemConfigByKey error, "
-                              << boost::diagnostic_information(*error);
+            LEDGER_LOG(DEBUG) << "GetSystemConfigByKey, " << boost::diagnostic_information(*error);
             callback(std::move(error), "", -1);
             return;
         }
@@ -843,8 +844,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                     // Note: should considerate the case that the compatibility_version is not set
                     if (error)
                     {
-                        LEDGER_LOG(DEBUG) << "GetSystemConfigByKey error, "
-                                          << boost::diagnostic_information(*error);
+                        LEDGER_LOG(DEBUG)
+                            << "GetSystemConfigByKey, " << boost::diagnostic_information(*error);
                         callback(std::move(error), "", -1);
                         return;
                     }
@@ -867,7 +868,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                     auto effectNumber = blockNumber + 1;
                     if (number > effectNumber)
                     {
-                        LEDGER_LOG(INFO) << "GetSystemConfigByKey error, config not available"
+                        LEDGER_LOG(INFO) << "GetSystemConfigByKey, config not available"
                                          << LOG_KV("currentBlockNumber", effectNumber)
                                          << LOG_KV("available number", number);
                         callback(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Config not available"),
@@ -928,7 +929,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                                             std::vector<std::optional<Entry>>&& entries) {
             if (error)
             {
-                LEDGER_LOG(DEBUG) << "GetNonceList error" << boost::diagnostic_information(*error);
+                LEDGER_LOG(ERROR) << "GetNonceList error" << boost::diagnostic_information(*error);
                 callback(
                     BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "GetNonceList", *error),
                     nullptr);
@@ -980,7 +981,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                             Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) {
         if (error)
         {
-            LEDGER_LOG(DEBUG) << "GetNodeListByType error" << boost::diagnostic_information(*error);
+            LEDGER_LOG(DEBUG) << "GetNodeListByType" << boost::diagnostic_information(*error);
             callback(BCOS_ERROR_WITH_PREV_PTR(
                          LedgerError::GetStorageError, "GetNodeListByType error", *error),
                 nullptr);
@@ -1243,7 +1244,7 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
                 {
                     if (!entry.has_value())
                     {
-                        LEDGER_LOG(DEBUG) << "Get receipt error: " << (*hashes)[i];
+                        LEDGER_LOG(DEBUG) << "Get receipt: " << (*hashes)[i];
                         callback(BCOS_ERROR_PTR(
                                      LedgerError::GetStorageError, "Batch get transaction error!"),
                             std::vector<protocol::TransactionReceipt::Ptr>());
@@ -1300,7 +1301,7 @@ void Ledger::getTxProof(
             if (_error || !_receipt)
             {
                 LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof")
-                                  << LOG_DESC("getReceiptByTxHash from storage error")
+                                  << LOG_DESC("getReceiptByTxHash from storage failed")
                                   << LOG_KV("txHash", _txHash.hex());
                 _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
                 return;
@@ -1312,7 +1313,7 @@ void Ledger::getTxProof(
                     {
                         LEDGER_LOG(DEBUG)
                             << LOG_BADGE("getTxProof")
-                            << LOG_DESC("asyncGetBlockTransactionHashes from storage error")
+                            << LOG_DESC("asyncGetBlockTransactionHashes from storage failed")
                             << LOG_KV("txHash", _txHash.hex());
                         _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
                         return;
@@ -1324,9 +1325,9 @@ void Ledger::getTxProof(
                             if (_error || _txList.empty())
                             {
                                 LEDGER_LOG(DEBUG)
-                                    << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback error")
-                                    << LOG_KV("errorCode", _error->errorCode())
-                                    << LOG_KV("errorMsg", _error->errorMessage());
+                                    << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback failed")
+                                    << LOG_KV("code", _error->errorCode())
+                                    << LOG_KV("msg", _error->errorMessage());
                                 _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
                                 return;
                             }
@@ -1366,7 +1367,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                     if (_error || _receiptList.empty())
                     {
                         LEDGER_LOG(DEBUG) << LOG_BADGE("getReceiptProof")
-                                          << LOG_DESC("asyncBatchGetReceipts callback error");
+                                          << LOG_DESC("asyncBatchGetReceipts callback failed");
                         _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
                         return;
                     }

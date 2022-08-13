@@ -310,27 +310,30 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
-    std::shared_ptr<AnyLedger> anyLedger;
-    if (m_nodeConfig->smCryptoType())
-    {
-        AnyLedger::SM3Ledger sm3Ledger(std::move(storageWrapper));
-        anyLedger = std::make_shared<AnyLedger>(std::move(sm3Ledger));
-    }
-    else
-    {
-        AnyLedger::Keccak256Ledger keccak256Ledger(std::move(storageWrapper));
-        anyLedger = std::make_shared<AnyLedger>(std::move(keccak256Ledger));
-    }
-    auto txpool = m_txpoolInitializer->txpool();
-    auto transactionPool =
-        std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(txpool);
-    auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
-        m_scheduler, m_protocolInitializer->cryptoSuite());
 
-    LightNodeInitializer lightNodeInitializer;
-    lightNodeInitializer.initLedgerServer(
-        std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
-        anyLedger, transactionPool, scheduler);
+    auto anyHasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
+    std::visit(
+        [&](auto& hasher) {
+            using Hasher = std::remove_cvref_t<decltype(hasher)>;
+            auto ledger = std::make_shared<bcos::initializer::AnyLedger>(
+                bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>(
+                    std::move(storageWrapper)));
+
+            auto txpool = m_txpoolInitializer->txpool();
+            auto transactionPool =
+                std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
+                    txpool);
+            auto scheduler =
+                std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
+                    m_scheduler, m_protocolInitializer->cryptoSuite());
+
+            LightNodeInitializer lightNodeInitializer;
+            lightNodeInitializer.initLedgerServer(
+                std::dynamic_pointer_cast<bcos::front::FrontService>(
+                    m_frontServiceInitializer->front()),
+                ledger, transactionPool, scheduler);
+        },
+        anyHasher);
 #endif
 }
 

@@ -77,9 +77,6 @@ public:
         {
             m_timer->stop();
         }
-
-        BCOS_LOG(INFO) << LOG_BADGE("[DELOBJ][TarsServantProxyCallback]")
-                       << LOG_KV("_serviceName", m_serviceName) << LOG_KV("this", this);
     }
 
 public:
@@ -88,10 +85,6 @@ public:
     void onClose(const tars::TC_Endpoint& ep) override
     {
         auto p = addInactiveEndpoint(ep);
-        BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onClose") << LOG_KV("this", this)
-                       << LOG_KV("endPoint", ep.toString()) << LOG_KV("result", p.first)
-                       << LOG_KV("inactiveEndpoints size", p.second);
-
         if (p.first && m_onCloseHandler)
         {
             m_onCloseHandler(ep);
@@ -102,7 +95,7 @@ public:
     {
         auto p = addActiveEndpoint(ep);
         BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onConnect") << LOG_KV("this", this)
-                       << LOG_KV("endPoint", ep.toString()) << LOG_KV("result", p.first)
+                       << LOG_KV("endpoint", ep.toString()) << LOG_KV("result", p.first)
                        << LOG_KV("activeEndpoints size", p.second);
 
         if (p.first && m_onConnectHandler)
@@ -163,6 +156,10 @@ public:
             std::unique_lock l(x_endpoints);
             auto result = m_inactiveEndpoints.insert(ep);
             m_activeEndpoints.erase(ep);
+
+            BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::addInactiveEndpoint")
+                           << LOG_KV("this", this) << LOG_KV("result", result.second)
+                           << LOG_KV("endpoint", ep.toString());
 
             return std::make_pair(result.second, m_inactiveEndpoints.size());
         }

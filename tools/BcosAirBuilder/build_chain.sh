@@ -28,7 +28,7 @@ cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 nodeid_list=""
 file_dir="./"
-nodes_json_file_name="nodes.json"
+p2p_connected_conf_name="nodes.json"
 command="deploy"
 ca_dir=""
 prometheus_dir=""
@@ -50,6 +50,9 @@ nodeids_dir=""
 genesis_conf_path=""
 lightnode_exec=""
 download_timeout=240
+
+default_group="group0"
+default_chainid="chain0"
 
 LOG_WARN() {
     local content=${1}
@@ -156,7 +159,7 @@ x509_extensions	= usr_cert		# The extensions to add to the cert
 name_opt 	= ca_default		# Subject Name options
 cert_opt 	= ca_default		# Certificate field options
 
-default_days	= 365			# how long to certify for
+default_days	= 36500			# how long to certify for
 default_crl_days= 30			# how long before next CRL
 default_md	= default		# use public key default MD
 preserve	= no			# keep passed DN ordering
@@ -246,7 +249,7 @@ generate_cert_conf() {
 [ca]
 default_ca=default_ca
 [default_ca]
-default_days = 3650
+default_days = 36500
 default_md = sha256
 
 [req]
@@ -476,7 +479,9 @@ help() {
     cat <<EOF
 Usage:
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
-    -v <FISCO-BCOS binary version>      Default is the latest ${default_version}
+    -g <group id>                       [Optional] set the group id, default: group0
+    -I <chain id>                       [Optional] set the chain id, default: chain0
+    -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
@@ -510,7 +515,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:L:C:c:o:e:t:p:d:g:v:i:M:k:wDshmn:ARa:" option; do
+    while getopts "l:L:C:c:o:e:t:p:d:g:G:v:i:I:M:k:wDshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -542,7 +547,13 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
-        g) genesis_conf_path="${OPTARG}"
+        g) default_group="${OPTARG}"
+            check_name "group" "${default_group}"
+            ;;
+        G) genesis_conf_path="${OPTARG}"
+            ;;
+        I) default_chainid="${OPTARG}"
+            check_name "chain" "${default_chainid}"
             ;;
         m)
            monitor_mode="true"
@@ -577,6 +588,8 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
+    LOG_INFO "GroupID               : ${default_group}"
+    LOG_INFO "ChainID               : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
         LOG_INFO "${binary_name} path      : ${binary_path}"
     else
@@ -778,13 +791,13 @@ node = "${node}"
 
 #chain id
 hidden text chain
-chain = "chain0"
+chain = "${default_chainid}"
 
 
 
 #group id
 hidden text group
-group = "group0"
+group = "${default_group}"
 
 
 gauge p2p_session_actived by host , node
@@ -1046,25 +1059,35 @@ generate_chain_cert() {
 }
 generate_config_ini() {
     local output="${1}"
-    local p2p_listen_port="${2}"
-    local rpc_listen_port="${3}"
+    local p2p_listen_ip="${2}"
+    local p2p_listen_port="${3}"
+
+    local rpc_listen_ip="${4}"
+    local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
-    listen_ip=${listen_ip}
+    listen_ip=${p2p_listen_ip}
     listen_port=${p2p_listen_port}
     ; ssl or sm ssl
     sm_ssl=false
     nodes_path=${file_dir}
-    nodes_file=${nodes_json_file_name}
+    nodes_file=${p2p_connected_conf_name}
 
 [rpc]
-    listen_ip=${listen_ip}
+    listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -1090,9 +1113,9 @@ generate_common_ini() {
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_mode}
     ; the group id, should nerver be changed
-    group_id=group0
+    group_id=${default_group}
     ; the chain id, should nerver be changed
-    chain_id=chain0
+    chain_id=${default_chainid}
 
 [security]
     private_key_path=conf/node.pem
@@ -1128,7 +1151,7 @@ generate_common_ini() {
     enable=true
     log_path=./log
     ; info debug trace
-    level=DEBUG
+    level=info
     ; MB
     max_log_file_size=200
 
@@ -1165,25 +1188,34 @@ EOF
 
 generate_sm_config_ini() {
     local output=${1}
-    local p2p_listen_port="${2}"
-    local rpc_listen_port="${3}"
+    local p2p_listen_ip="${2}"
+    local p2p_listen_port="${3}"
+    local rpc_listen_ip="${4}"
+    local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
-    listen_ip=${listen_ip}
+    listen_ip=${p2p_listen_ip}
     listen_port=${p2p_listen_port}
     ; ssl or sm ssl
     sm_ssl=true
     nodes_path=${file_dir}
-    nodes_file=${nodes_json_file_name}
+    nodes_file=${p2p_connected_conf_name}
 
 [rpc]
-    listen_ip=${listen_ip}
+    listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
     thread_count=16
     ; ssl or sm ssl
     sm_ssl=true
     ;ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -1202,23 +1234,30 @@ EOF
     generate_common_ini "${output}"
 }
 
-generate_nodes_json() {
-    local output=${1}
-    local p2p_host_list=""
+generate_p2p_connected_conf() {
+    local output="${1}"
     local ip_params="${2}"
-    local ip_array=(${ip_params//,/ })
-    local ip_length=${#ip_array[@]}
-    local i=0
-    for (( ; i < ip_length; i++)); do
-        local ip=${ip_array[i]}
-        local delim=""
-        if [[ $i == $((ip_length - 1)) ]]; then
-            delim=""
-        else
-            delim=","
-        fi
-        p2p_host_list="${p2p_host_list}\"${ip}\"${delim}"
-    done
+    local template="${3}"
+
+    local p2p_host_list=""
+    if [[ "${template}" == "true" ]]; then
+        p2p_host_list="${ip_params}"
+    else
+        local ip_array=(${ip_params//,/ })
+        local ip_length=${#ip_array[@]}
+    
+        local i=0
+        for (( ; i < ip_length; i++)); do
+            local ip=${ip_array[i]}
+            local delim=""
+            if [[ $i == $((ip_length - 1)) ]]; then
+                delim=""
+            else
+                delim=","
+            fi
+            p2p_host_list="${p2p_host_list}\"${ip}\"${delim}"
+        done
+    fi
 
     cat <<EOF >"${output}"
 {"nodes":[${p2p_host_list}]}
@@ -1228,17 +1267,18 @@ EOF
 generate_config() {
     local sm_mode="${1}"
     local node_config_path="${2}"
-    local node_json_config_path="${3}"
-    local connected_nodes="${4}"
-    local p2p_listen_port="${5}"
+    local p2p_listen_ip="${3}"
+    local p2p_listen_port="${4}"
+    local rpc_listen_ip="${5}"
     local rpc_listen_port="${6}"
+    local disable_ssl="${7}"
+
     check_auth_account
     if [ "${sm_mode}" == "false" ]; then
-        generate_config_ini "${node_config_path}" "${p2p_listen_port}" "${rpc_listen_port}"
+        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     else
-        generate_sm_config_ini "${node_config_path}" "${p2p_listen_port}" "${rpc_listen_port}"
+        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     fi
-    generate_nodes_json "${node_json_config_path}/${nodes_json_file_name}" "${connected_nodes}"
 }
 
 generate_secp256k1_node_account() {
@@ -1586,7 +1626,8 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             local p2p_port=$((p2p_listen_port + node_count))
             local rpc_port=$((rpc_listen_port + node_count))
-            generate_config "${sm_mode}" "${node_dir}/config.ini" "${node_dir}" "${connected_nodes}" "${p2p_port}" "${rpc_port}"
+            generate_config "${sm_mode}" "${node_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+            generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
             generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
             set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
             ((++count))
@@ -1607,7 +1648,8 @@ deploy_nodes()
         local node_count=$(get_value ${ip//./}_count)
         local p2p_port=$((p2p_listen_port + node_count))
         local rpc_port=$((rpc_listen_port + node_count))
-        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${lightnode_dir}" "${connected_nodes}" "${p2p_port}" "${rpc_port}"
+        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+        generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
 
         cp "${lightnode_exec}" ${lightnode_dir}/
     fi
@@ -1622,11 +1664,6 @@ generate_template_package()
     local genesis_conf_path="${3}"
     local output_dir="${4}"
 
-    # check if node.nodid dir exist
-    file_must_exists "${genesis_conf_path}"
-    file_must_exists "${binary_path}"
-    # dir_must_not_exists "${output_dir}"
-
     # do not support docker 
     if [ -n "${docker_mode}" ];then
         LOG_FATAL "Docker mode is not supported on building template install package"
@@ -1637,6 +1674,11 @@ generate_template_package()
         LOG_FATAL "Monitor mode is not support on building template install package"
     fi
 
+    # check if node.nodid dir exist
+    file_must_exists "${genesis_conf_path}"
+    file_must_exists "${binary_path}"
+    # dir_must_not_exists "${output_dir}"
+
     mkdir -p "${output_dir}"
     dir_must_exists "${output_dir}"
 
@@ -1645,7 +1687,6 @@ generate_template_package()
     mkdir -p "${node_dir}"
     mkdir -p "${node_dir}/conf"
 
-    # TODO:
     p2p_listen_ip="[#P2P_LISTEN_IP]"
     rpc_listen_ip="[#RPC_LISTEN_IP]"
 
@@ -1658,14 +1699,15 @@ generate_template_package()
     cp "${genesis_conf_path}" "${node_dir}/"
 
     # generate start_all.sh and stop_all.sh
-    # generate_all_node_scripts "${node_dir}"
+    generate_all_node_scripts "${node_dir}/../"
 
     # generate node start.sh stop.sh
     generate_node_scripts "${node_dir}"
 
     local connected_nodes="[#P2P_CONNECTED_NODES]"
     # generate config for node
-    generate_config "${sm_mode}" "${node_dir}/config.ini" "${node_dir}" "${connected_nodes}" "${p2p_listen_port}" "${rpc_listen_port}"
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true"
+    generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
     # TODO: auth mode handle
@@ -1682,22 +1724,32 @@ generate_genesis_config_by_nodeids()
     local nodeid_dir="${1}"
     local output_dir="${2}"
 
-    if [ ! -d "${output_dir}" ]; then
-        mkdir -p "${output_dir}"
-    fi
-
     local nodeid_list=""
     local node_index=0
-    local nodeid_files=$(ls "${nodeid_dir}/*.nodeid")
+
+    local nodeid_file_list=$(ls "${nodeid_dir}" | tr "\n" " ")
+    local nodeid_file_array=(${nodeid_file_list})
     # gen node.N=xxxx first
-    for nodeid_file in "${nodeid_files}"
+    for nodeid_file in ${nodeid_file_array[@]}
     do
-        local nodeid=$(cat ${nodeid_file})
+        if [[ ! -f "${nodeid_dir}/${nodeid_file}" ]]; then
+            LOG_WARN " x.nodeid file not exist, ${nodeid_dir}/${nodeid_file}"
+            continue
+        fi
+        local nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
         nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1
         "
 
         ((node_index += 1))
     done
+
+    if [[ -z "${nodeid_list}" ]]; then
+        LOG_FATAL "generate config.genesis failed, please check if the nodeids directory correct"
+    fi
+
+    if [ ! -d "${output_dir}" ]; then
+        mkdir -p "${output_dir}"
+    fi
 
     generate_genesis_config "${output_dir}/config.genesis" "${nodeid_list}"
 }
@@ -1752,9 +1804,9 @@ main() {
         else
             echo "bash build_chain.sh generate-template-package -h "
             echo "  eg:"
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -g ./config.genesis "
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -g ./config.genesis -s"
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -n nodeids -s -R"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis "
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
         fi
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"

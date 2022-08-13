@@ -45,16 +45,6 @@ public:
         {
             m_executor->stop();
         }
-
-        // terminate the network client
-        tars::Application::getCommunicator()->terminate();
-        // terminate the network threads
-        Application::terminate();
-
-        if (m_logInitializer)
-        {
-            m_logInitializer->stopLogging();
-        }
     }
 
 protected:

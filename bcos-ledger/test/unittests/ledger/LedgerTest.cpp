@@ -220,7 +220,8 @@ public:
             auto txList = std::make_shared<std::vector<Transaction::Ptr>>();
             for (size_t j = 0; j < txSize; ++j)
             {
-                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode();
+                bcos::bytes txData;
+                m_fakeBlocks->at(i)->transaction(j)->encode(txData);
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->push_back(txPointer);
                 txHashList->push_back(m_fakeBlocks->at(i)->transaction(j)->hash());
@@ -926,8 +927,9 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
     auto hashList = std::make_shared<crypto::HashList>();
     for (size_t i = 0; i < m_fakeBlocks->at(3)->transactionsSize(); ++i)
     {
-        auto txData = m_fakeBlocks->at(3)->transaction(i)->encode();
-        auto txPointer = std::make_shared<bytes>(txData.toBytes());
+        bcos::bytes txData;
+        m_fakeBlocks->at(3)->transaction(i)->encode(txData);
+        auto txPointer = std::make_shared<bytes>(txData);
         auto hash = m_fakeBlocks->at(3)->transaction(i)->hash();
         txBytesList->emplace_back(txPointer);
         hashList->emplace_back(hash);
@@ -1068,7 +1070,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
 
     auto txs = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
-    auto encoded = tx->encode();
+    bcos::bytes encoded;
+    tx->encode(encoded);
     txs->emplace_back(std::make_shared<bytes>(encoded.begin(), encoded.end()));
     hashList->emplace_back(tx->hash());
 

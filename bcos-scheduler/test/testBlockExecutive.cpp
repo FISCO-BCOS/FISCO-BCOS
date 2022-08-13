@@ -43,7 +43,6 @@
 #include <future>
 #include <optional>
 
-
 using namespace std;
 using namespace bcos;
 using namespace rocksdb;
@@ -275,7 +274,6 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
         SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
     });
 }
-
 
 BOOST_AUTO_TEST_CASE(asyncNotify)
 {

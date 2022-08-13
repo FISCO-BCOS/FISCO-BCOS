@@ -41,6 +41,6 @@
     enable=true
     log_path=./log
     ; info debug trace
-    level=DEBUG
+    level=info
     ; MB
     max_log_file_size=200
