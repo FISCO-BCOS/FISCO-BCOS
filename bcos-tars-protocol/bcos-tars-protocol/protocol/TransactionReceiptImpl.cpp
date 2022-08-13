@@ -19,27 +19,23 @@
  * @date 2021-04-20
  */
 #include "../impl/TarsHashable.h"
+#include "../impl/TarsSerializable.h"
 
 #include "TransactionReceiptImpl.h"
 #include <bcos-concepts/Hash.h>
-#include <boost/endian/conversion.hpp>
+#include <bcos-concepts/Serialize.h>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
 
 void TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
 {
-    tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)_receiptData.data(), _receiptData.size());
-
-    m_inner()->readFrom(input);
+    bcos::concepts::serialize::decode(_receiptData, *m_inner());
 }
 
 void TransactionReceiptImpl::encode(bcos::bytes& _encodedData) const
 {
-    tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-    m_inner()->writeTo(output);
-    output.getByteBuffer().swap(_encodedData);
+    bcos::concepts::serialize::encode(*m_inner(), _encodedData);
 }
 
 // Note: not thread-safe

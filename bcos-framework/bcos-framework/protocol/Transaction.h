@@ -58,8 +58,7 @@ public:
     virtual ~Transaction() {}
 
     virtual void decode(bytesConstRef _txData) = 0;
-    virtual bytesConstRef encode() const = 0;
-    virtual bytes takeEncoded() = 0;
+    virtual void encode(bcos::bytes& txData) const = 0;
     virtual bcos::crypto::HashType hash(bool _useCache = true) const = 0;
 
     virtual void verify() const

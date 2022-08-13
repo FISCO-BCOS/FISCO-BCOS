@@ -215,7 +215,8 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     bool _maybeExpired = false)
 {
     std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    auto encodedData = _tx->encode();
+    bcos::bytes encodedData;
+    _tx->encode(encodedData);
     auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
     _txpool->asyncSubmit(txData, [verifyFinish, _expectedTxHash, _expectedStatus, _maybeExpired](
                                      Error::Ptr, TransactionSubmitResult::Ptr _result) {
