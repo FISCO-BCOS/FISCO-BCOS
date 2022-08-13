@@ -2,7 +2,7 @@
 set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
-cd "${dirpath}"
+# cd "${dirpath}"
 
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 
