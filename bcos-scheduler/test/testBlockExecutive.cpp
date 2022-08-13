@@ -8,7 +8,7 @@
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-scheduler/src/BlockExecutiveFactory.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
-#include "bcos-storage/src/RocksDBStorage.h"
+#include "bcos-storage/bcos-storage/RocksDBStorage.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
