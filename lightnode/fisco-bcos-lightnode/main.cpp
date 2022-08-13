@@ -53,21 +53,53 @@ static auto newStorage(const std::string& path)
 }
 
 static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
-    bcos::concepts::ledger::Ledger auto toLedger, std::atomic_bool const& stopToken)
+    bcos::concepts::ledger::Ledger auto toLedger,
+    std::shared_ptr<bcos::boostssl::ws::WsService> wsService, std::string groupID,
+    std::string nodeName, std::shared_ptr<std::atomic_bool> stopToken)
 {
     std::thread worker([fromLedger = std::move(fromLedger), toLedger = std::move(toLedger),
-                           &stopToken]() mutable {
-        while (!stopToken)
+                           wsService = std::move(wsService), groupID = std::move(groupID),
+                           nodeName = std::move(nodeName),
+                           stopToken = std::move(stopToken)]() mutable {
+        while (!(*stopToken))
         {
             try
             {
                 auto ledger = bcos::concepts::getRef(toLedger);
+
+                auto beforeStatus = ledger.getStatus();
                 ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
                     fromLedger, true);
+                auto afterStatus = ledger.getStatus();
+
+                // Notify the client if block number changed
+                if (afterStatus.blockNumber > beforeStatus.blockNumber)
+                {
+                    auto sessions = wsService->sessions();
+                    std::string group;
+                    Json::Value response;
+                    response["group"] = groupID;
+                    response["nodeName"] = nodeName;
+                    response["blockNumber"] = afterStatus.blockNumber;
+                    auto resp = response.toStyledString();
+
+                    for (auto& session : sessions)
+                    {
+                        if (session && session->isConnected())
+                        {
+                            auto message = wsService->messageFactory()->buildMessage();
+                            message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+                            message->setPayload(
+                                std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
+                            session->asyncSendMessage(message);
+                        }
+                    }
+                }
             }
             catch (std::exception& e)
             {
-                // std::cout << boost::diagnostic_information(e);
+                LIGHTNODE_LOG(INFO)
+                    << "Sync block fail, may be connecting" << boost::diagnostic_information(e);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
@@ -150,8 +182,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         remoteLedger, transactionPool, scheduler);
     wsService->start();
 
-    auto stopToken = false;
-    auto syncer = startSyncerThread(remoteLedger, localLedger, stopToken);
+    auto stopToken = std::make_shared<std::atomic_bool>(false);
+    auto syncer = startSyncerThread(remoteLedger, localLedger, wsService, nodeConfig->groupId(),
+        nodeConfig->nodeName(), stopToken);
     syncer.join();
 
     return 0;
