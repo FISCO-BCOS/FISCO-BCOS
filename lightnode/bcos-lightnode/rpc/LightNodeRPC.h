@@ -114,7 +114,7 @@ public:
 
         std::array<bcos::h256, 1> hashes{bcos::h256{_txHash, bcos::h256::FromHex}};
         std::vector<bcostars::Transaction> transactions;
-        remoteLedger().getTransactionsOrReceipts(hashes, transactions);
+        remoteLedger().getTransactions(hashes, transactions);
 
         Json::Value resp;
         toJsonResp<Hasher>(transactions[0], resp);
@@ -131,7 +131,7 @@ public:
 
         std::array<bcos::h256, 1> hashes{bcos::h256{_txHash, bcos::h256::FromHex}};
         std::vector<bcostars::TransactionReceipt> receipts;
-        remoteLedger().getTransactionsOrReceipts(hashes, receipts);
+        remoteLedger().getTransactions(hashes, receipts);
 
         Json::Value resp;
         toJsonResp<Hasher>(receipts[0], _txHash, resp);

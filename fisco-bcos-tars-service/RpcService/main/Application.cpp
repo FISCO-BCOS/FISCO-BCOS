@@ -58,16 +58,6 @@ public:
         {
             m_rpcInitializer->stop();
         }
-
-        // terminate the network threads
-        Application::terminate();
-        // terminate the network client
-        tars::Application::getCommunicator()->terminate();
-
-        if (m_logInitializer)
-        {
-            m_logInitializer->stopLogging();
-        }
     }
 
 protected:

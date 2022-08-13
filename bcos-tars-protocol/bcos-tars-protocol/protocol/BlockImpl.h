@@ -131,15 +131,12 @@ public:
             return txsRoot;
         }
 
-        std::optional<bcos::crypto::hasher::AnyHasher> anyHasher;
-        if (m_transactionFactory->cryptoSuite()->smCrypto())
-            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher();
-        else
-            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher();
-
+        auto anyHasher = m_transactionFactory->cryptoSuite()->hashImpl()->hasher();
         std::visit(
             [this, &txsRoot](auto& hasher) {
                 using Hasher = std::remove_reference_t<decltype(hasher)>;
+                bcos::crypto::merkle::Merkle<Hasher> merkle;
+
                 if (transactionsSize() > 0)
                 {
                     auto hashesRange =
@@ -149,7 +146,6 @@ public:
                             bcos::concepts::hash::calculate<Hasher>(transaction, hash);
                             return hash;
                         });
-                    bcos::crypto::merkle::Merkle<Hasher> merkle;
                     merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
                 }
                 else if (transactionsMetaDataSize() > 0)
@@ -160,13 +156,12 @@ public:
                             [](const bcostars::TransactionMetaData& transactionMetaData) {
                                 return transactionMetaData.hash;
                             });
-                    bcos::crypto::merkle::Merkle<Hasher> merkle;
                     merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
                 }
                 bcos::concepts::bytebuffer::assignTo(
                     *RANGES::rbegin(m_inner->transactionsMerkle), txsRoot);
             },
-            *anyHasher);
+            anyHasher);
 
         return txsRoot;
     }
@@ -179,12 +174,7 @@ public:
         {
             return receiptsRoot;
         }
-        std::optional<bcos::crypto::hasher::AnyHasher> anyHasher;
-        if (m_transactionFactory->cryptoSuite()->smCrypto())
-            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher();
-        else
-            anyHasher = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher();
-
+        auto anyHasher = m_transactionFactory->cryptoSuite()->hashImpl()->hasher();
         std::visit(
             [this, &receiptsRoot](auto& hasher) {
                 using Hasher = std::remove_reference_t<decltype(hasher)>;
@@ -200,7 +190,7 @@ public:
                 bcos::concepts::bytebuffer::assignTo(
                     *RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
             },
-            *anyHasher);
+            anyHasher);
 
         return receiptsRoot;
     }

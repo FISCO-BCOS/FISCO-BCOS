@@ -77,8 +77,9 @@ public:
             [submitCallback = std::move(submitCallback), txpool](
                 bcos::protocol::Transaction::Ptr tx) {
                 // std::cout << "sendtx: " << tx->nonce() << std::endl;
-                auto encodedData = tx->encode();
-                auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
+                bcos::bytes encodedData;
+                tx->encode(encodedData);
+                auto txData = std::make_shared<bytes>(std::move(encodedData));
                 txpool->asyncSubmit(txData, submitCallback);
             });
     }

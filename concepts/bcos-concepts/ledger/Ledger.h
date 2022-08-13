@@ -60,11 +60,10 @@ public:
         impl().impl_getBlockHashByNumber(number, hash);
     }
 
-    void getTransactionsOrReceipts(
-        RANGES::range auto const& hashes, RANGES::range auto& out) requires
+    void getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out) requires
         TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
-        impl().impl_getTransactionsOrReceipts(hashes, out);
+        impl().impl_getTransactions(hashes, out);
     }
 
     Status getStatus() { return impl().impl_getStatus(); }

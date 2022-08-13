@@ -19,24 +19,22 @@
  * @date 2021-04-20
  */
 
+#include "../impl/TarsSerializable.h"
+
 #include "BlockImpl.h"
+#include <bcos-concepts/Serialize.h>
+
 using namespace bcostars;
 using namespace bcostars::protocol;
 
 void BlockImpl::decode(bcos::bytesConstRef _data, bool, bool)
 {
-    tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)_data.data(), _data.size());
-
-    m_inner->readFrom(input);
+    bcos::concepts::serialize::decode(_data, *m_inner);
 }
 
 void BlockImpl::encode(bcos::bytes& _encodeData) const
 {
-    tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-
-    m_inner->writeTo(output);
-    output.getByteBuffer().swap(_encodeData);
+    bcos::concepts::serialize::encode(*m_inner, _encodeData);
 }
 
 bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()

@@ -320,10 +320,11 @@ Ledger::needStoreUnsavedTxs(
         {
             continue;
         }
-        auto encodedData = tx->encode();
+        bcos::bytes encodeData;
+        tx->encode(encodeData);
         unstoredTxs++;
         txsHash->emplace_back(tx->hash());
-        txsToStore->emplace_back(std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
+        txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodeData)));
     }
     LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs")
                      << LOG_KV("txsSize", _blockTxs->size()) << LOG_KV("unstoredTxs", unstoredTxs)

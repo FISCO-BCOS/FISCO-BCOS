@@ -64,7 +64,7 @@ private:
         std::swap(response.block, block);
     }
 
-    void impl_getTransactionsOrReceipts(RANGES::range auto const& hashes, RANGES::range auto& out)
+    void impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
         using RequestType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
