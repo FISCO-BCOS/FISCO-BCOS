@@ -1064,6 +1064,13 @@ generate_config_ini() {
 
     local rpc_listen_ip="${4}"
     local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
     listen_ip=${p2p_listen_ip}
@@ -1080,7 +1087,7 @@ generate_config_ini() {
     ; ssl or sm ssl
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -1185,6 +1192,13 @@ generate_sm_config_ini() {
     local p2p_listen_port="${3}"
     local rpc_listen_ip="${4}"
     local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
     listen_ip=${p2p_listen_ip}
@@ -1201,7 +1215,7 @@ generate_sm_config_ini() {
     ; ssl or sm ssl
     sm_ssl=true
     ;ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -1257,11 +1271,13 @@ generate_config() {
     local p2p_listen_port="${4}"
     local rpc_listen_ip="${5}"
     local rpc_listen_port="${6}"
+    local disable_ssl="${7}"
+
     check_auth_account
     if [ "${sm_mode}" == "false" ]; then
-        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}"
+        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     else
-        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}"
+        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     fi
 }
 
@@ -1690,7 +1706,7 @@ generate_template_package()
 
     local connected_nodes="[#P2P_CONNECTED_NODES]"
     # generate config for node
-    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}"
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true"
     generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
@@ -1788,9 +1804,9 @@ main() {
         else
             echo "bash build_chain.sh generate-template-package -h "
             echo "  eg:"
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -g ./config.genesis "
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -g ./config.genesis -s"
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./output -n nodeids -s -R"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis "
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
         fi
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
