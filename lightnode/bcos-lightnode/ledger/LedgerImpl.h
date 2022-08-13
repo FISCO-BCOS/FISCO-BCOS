@@ -192,14 +192,12 @@ private:
         auto status = impl_getStatus();
         auto sourceStatus = sourceLedger.getStatus();
 
-        LEDGER_LOG(INFO) << "Sync block from remote: " << onlyHeader << " | " << status.blockNumber
-                         << " | " << sourceStatus.blockNumber;
-
         std::optional<BlockType> parentBlock;
         for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
              ++blockNumber)
         {
-            LEDGER_LOG(DEBUG) << "Syncing block header: " << blockNumber;
+            LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
+                             << sourceStatus.blockNumber << " | " << onlyHeader;
             BlockType block;
             if (onlyHeader)
                 sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
