@@ -77,9 +77,6 @@ public:
         {
             m_timer->stop();
         }
-
-        BCOS_LOG(INFO) << LOG_BADGE("[DELOBJ][TarsServantProxyCallback]")
-                       << LOG_KV("_serviceName", m_serviceName) << LOG_KV("this", this);
     }
 
 public:

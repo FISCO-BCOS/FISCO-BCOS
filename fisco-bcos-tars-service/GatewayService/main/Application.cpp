@@ -20,16 +20,6 @@ public:
         {
             m_gatewayInitializer->stop();
         }
-
-        // terminate the network threads
-        Application::terminate();
-        // terminate the network client
-        tars::Application::getCommunicator()->terminate();
-
-        if (m_logInitializer)
-        {
-            m_logInitializer->stopLogging();
-        }
     }
     void initialize() override
     {
