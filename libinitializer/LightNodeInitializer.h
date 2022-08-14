@@ -58,7 +58,8 @@ public:
                     bcostars::RequestBlock request;
                     bcos::concepts::serialize::decode(data, request);
 
-                    LIGHTNODE_LOG(INFO) << "P2P get block:" << request.blockNumber;
+                    LIGHTNODE_LOG(INFO)
+                        << "Get block:" << request.blockNumber << " | " << request.onlyHeader;
 
                     std::visit(
                         [&request, &response](auto& ledger) {
@@ -98,6 +99,9 @@ public:
                 {
                     bcostars::RequestTransactions request;
                     bcos::concepts::serialize::decode(data, request);
+
+                    LIGHTNODE_LOG(INFO) << "Get transactions:" << request.hashes.size() << " | "
+                                        << request.withProof;
 
                     std::visit(
                         [&request, &response](auto& ledger) {
@@ -193,9 +197,9 @@ public:
                     bcos::concepts::serialize::decode(data, request);
 
                     std::string transactionHash;
+                    transactionHash.reserve(request.transaction.dataHash.size() * 2);
                     boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
                         request.transaction.dataHash.end(), std::back_inserter(transactionHash));
-
                     LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
 
                     transactionPool->submitTransaction(
@@ -225,11 +229,12 @@ public:
                     bcostars::RequestSendTransaction request;
                     bcos::concepts::serialize::decode(data, request);
 
-                    std::string transactionHash;
-                    boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
-                        request.transaction.dataHash.end(), std::back_inserter(transactionHash));
+                    std::string to;
+                    to.reserve(request.transaction.data.to.size() * 2);
+                    boost::algorithm::hex_lower(request.transaction.data.to.begin(),
+                        request.transaction.data.to.end(), std::back_inserter(to));
 
-                    LIGHTNODE_LOG(INFO) << "Call: " << transactionHash;
+                    LIGHTNODE_LOG(INFO) << "Call to: " << to;
 
                     scheduler->call(request.transaction, response.receipt);
                 }
