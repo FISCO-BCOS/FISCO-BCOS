@@ -82,11 +82,11 @@ public:
         std::vector<std::string> values) noexcept override;
 
 private:
-    int32_t m_maxRetry = 10;
+    int32_t m_maxRetry = 20;
     size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
-
+    uint64_t m_currentStartTS = 0;
     mutable RecursiveMutex x_committer;
 };
 }  // namespace storage

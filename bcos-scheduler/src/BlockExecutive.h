@@ -108,13 +108,14 @@ protected:
         std::atomic_size_t total;
         std::atomic_size_t success = 0;
         std::atomic_size_t failed = 0;
+        uint64_t startTS = 0;
         std::function<void(const CommitStatus&)> checkAndCommit;
         mutable SharedMutex x_lock;
     };
     void batchNextBlock(std::function<void(Error::UniquePtr)> callback);
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
     void batchBlockCommit(std::function<void(Error::UniquePtr)> callback);
-    void batchBlockRollback(std::function<void(Error::UniquePtr)> callback);
+    void batchBlockRollback(uint64_t version, std::function<void(Error::UniquePtr)> callback);
 
     struct BatchStatus  // Batch state per batch
     {

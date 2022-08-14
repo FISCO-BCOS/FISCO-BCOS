@@ -55,6 +55,8 @@ enum StorageError
     ReadOnly,
     DatabaseError,
     DatabaseRetryable,
+    TryLockFailed,
+    TimestampMismatch,
 };
 
 struct Condition
