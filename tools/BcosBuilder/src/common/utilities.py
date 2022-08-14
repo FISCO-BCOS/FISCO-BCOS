@@ -112,13 +112,15 @@ class CommandInfo:
         gen_config: "gen_executor_config", expand: "expand_executors"}
     service_command_impl = {gen_config: "gen_service_config", upload: "upload_service", deploy: "deploy_service",
                             upgrade: "upgrade_service", undeploy: "delete_service", start: "start_service", stop: "stop_service", expand: "expand_service"}
-
+    
+    build_package_parser_name = "build"
     build_command_type_list = ["rpc", "gateway", "node", "all"]
     build_command_type_list_str = ', '.join(build_command_type_list)
-    build_package_parser_name = "build"
-    build_package = "build-package"
-    build_expand_package = "build-expand-package"
-    build_command_impl = {build_package: "build_install_package", build_expand_package: "build_expand_install_package"}
+
+    merge_config_parser_name = "merge-config"
+    # merge_config_type_list = ["p2p", "tars"]
+    merge_config_type_list = ["tars"]
+    merge_config_type_str = ', '.join(merge_config_type_list)
 
 def log_error(error_msg):
     logging.error("\033[31m%s \033[0m" % error_msg)
