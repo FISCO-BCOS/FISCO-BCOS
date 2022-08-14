@@ -80,6 +80,12 @@ int main(int argc, char* argv[])
     boost::program_options::store(
         boost::program_options::parse_command_line(argc, argv, options), vm);
 
+    if (vm.empty())
+    {
+        options.print(std::cout);
+        return -1;
+    }
+
     auto filename = vm["filename"].as<std::string>();
     auto count = vm["prepare"].as<int>();
     if (count)

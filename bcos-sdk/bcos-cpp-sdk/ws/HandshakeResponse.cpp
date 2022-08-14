@@ -111,6 +111,18 @@ void HandshakeResponse::encode(std::string& _encodedData) const
         auto groupInfoResponse = m_groupInfoCodec->serialize(groupInfo);
         encodedJson["groupInfoList"].append(groupInfoResponse);
     }
+
+    // Encode group block number array
+    Json::Value groupBlockNumberArray(Json::arrayValue);
+    for (auto const& groupBlockNumber : m_groupBlockNumber)
+    {
+        Json::Value group0(Json::objectValue);
+        group0[groupBlockNumber.first] = groupBlockNumber.second;
+        groupBlockNumberArray.append(std::move(group0));
+    }
+
+    encodedJson["groupBlockNumber"] = std::move(groupBlockNumberArray);
+
     Json::FastWriter writer;
     _encodedData = writer.write(encodedJson);
 }

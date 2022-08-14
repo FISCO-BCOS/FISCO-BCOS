@@ -44,7 +44,6 @@ jobs:
             !c:/vcpkg/buildtrees
             !c:/vcpkg/packages
             !c:/vcpkg/downloads
-            ${{ github.workspace }}/build/vcpkg_installed
           key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
