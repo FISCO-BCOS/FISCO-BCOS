@@ -158,11 +158,11 @@ protected:
         std::shared_ptr<bcos::ledger::LedgerConfig> _ledgerConfig, bool _syncedBlock = false);
 
 
-    virtual void onProposalApplied(bool _execSuccess, PBFTProposalInterface::Ptr _proposal,
+    virtual void onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
         PBFTProposalInterface::Ptr _executedProposal);
     virtual void onProposalApplySuccess(
         PBFTProposalInterface::Ptr _proposal, PBFTProposalInterface::Ptr _executedProposal);
-    virtual void onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal);
+    virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal);
     virtual void onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposal);
     virtual void triggerTimeout(bool _incTimeout = true);
 

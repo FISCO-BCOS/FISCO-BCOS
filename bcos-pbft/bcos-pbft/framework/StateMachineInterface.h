@@ -34,7 +34,7 @@ public:
 
     virtual void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
-        std::function<void(bool)> _onExecuteFinished) = 0;
+        std::function<void(int64_t)> _onExecuteFinished) = 0;
 
     // (Not required): Just for performance, call this before "asyncApply" in the other thread.
     virtual void asyncPreApply(
