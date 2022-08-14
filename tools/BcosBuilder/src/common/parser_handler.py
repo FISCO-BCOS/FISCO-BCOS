@@ -18,6 +18,7 @@ from networkmgr.network_manager import NetworkManager
 from controller.node_controller import NodeController
 from config.service_config_generator import ServiceConfigGenerator
 from config.node_config_generator import NodeConfigGenerator
+from config.tars_config_generator import TarsConfigGenerator
 
 
 class _HelpAction(argparse._HelpAction):
@@ -74,20 +75,20 @@ def parse_command():
     chain_parser = sub_parsers.add_parser(description=utilities.format_info(description),
                                           name=subparser_name, help="chain operation", formatter_class=RawTextHelpFormatter)
     # command option
-    help_info = "[required] specify the command: \n* command list: %s\n" % (
+    help_info = "[Required] specify the command: \n* command list: %s\n" % (
         CommandInfo.service_command_list_str)
     chain_parser.add_argument(
         "-o", '--op', help=help_info, required=True)
     # config option
-    help_info = "[optional] the config file, default is config.toml:\n * config to deploy chain example: conf/config-deploy-example.toml\n * config to expand node example: conf/config-node-expand-example.toml\n * config to expand rpc/gateway example: conf/config-service-expand-example.toml"
+    help_info = "[Optional] the config file, default is config.toml:\n * config to deploy chain example: conf/config-deploy-example.toml\n * config to expand node example: conf/config-node-expand-example.toml\n * config to expand rpc/gateway example: conf/config-service-expand-example.toml"
     chain_parser.add_argument(
         "-c", "--config", help=help_info, default="config.toml")
     # service type option
     supported_service_type_str = ', '.join(ServiceInfo.supported_service_type)
-    help_info = "[required] the service type:\n* now support: %s \n" % (
+    help_info = "[Required] the service type:\n* now support: %s \n" % (
         supported_service_type_str)
     chain_parser.add_argument("-t", "--type", help=help_info, default="")
-    help_info = "[Optional] Specify the output dir, default is ./generated"
+    help_info = "[Optional] specify the output dir, default is ./generated"
     chain_parser.add_argument(
         "-O", "--output", default="./generated", help=help_info, required=False)
 
@@ -100,23 +101,48 @@ def parse_command():
 
     description = "e.g:\n%s\n%s\n%s\n%s" % (
         build_nodes_command, build_expand_node_command, build_expand_rpc_command, build_expand_gateway_command)
-    chain_parser = sub_parsers.add_parser(description=utilities.format_info(description),
+    build_parser = sub_parsers.add_parser(description=utilities.format_info(description),
                                           name=subparser_name, help="build operation", formatter_class=RawTextHelpFormatter)
     # command option
-    help_info = "[required] specify the type: \n* type list: %s\n" % (
+    help_info = "[Optional] specify the type: \n* type list: %s\n" % (
         CommandInfo.build_command_type_list_str)
     
-    chain_parser.add_argument(
+    build_parser.add_argument(
         "-t", '--type', help=help_info, required=False, default = "all")
 
     # config option
-    help_info = "[optional] the config file, default is config.toml:\n * config to build chain example: conf/config-build-example.toml"
-    chain_parser.add_argument(
-        "-c", "--config", help=help_info, default="config.toml")
+    help_info = "[Required] the config file, default is config.toml:\n * config to build chain example: conf/config-build-example.toml"
+    build_parser.add_argument(
+        "-c", "--config", help=help_info, required=True)
     
-    help_info = "[Optional] Specify the output dir, default is ./generated"
-    chain_parser.add_argument(
+    help_info = "[Optional] specify the output dir, default is ./generated"
+    build_parser.add_argument(
         "-O", "--output", default="./generated", help=help_info, required=False)
+    #---------------------------------------------------------------------------------------------------
+
+    #---------------------------------------------------------------------------------------------------
+    subparser_name = CommandInfo.merge_config_parser_name
+    merge_config_tars_command = "python3 build_chain.py merge-config -t tars -c tars0.conf tars1.conf -O output_dir"
+    merge_config_p2p_command = "python3 build_chain.py merge-config -t p2p -c nodes0.json nodes1.json -O output_dir"
+
+    description = "e.g:\n%s" % (merge_config_tars_command)
+    merge_config_parser = sub_parsers.add_parser(description=utilities.format_info(description),
+                                          name=subparser_name, help="merge config operation", formatter_class=RawTextHelpFormatter)
+    # command option
+    help_info = "[Required] specify the type: \n* type list: %s\n" % (
+        CommandInfo.merge_config_type_str)
+    
+    merge_config_parser.add_argument(
+        "-t", '--type', help=help_info, required=True)
+
+    # config option
+    help_info = "[Required] the config files to be\n"
+    merge_config_parser.add_argument(
+        "-c", "--config", nargs='+', help=help_info, required=True)
+    
+    help_info = "[Required] specify the output dir"
+    merge_config_parser.add_argument(
+        "-O", "--output", help=help_info, required=True)
     #---------------------------------------------------------------------------------------------------
 
     # create_subnet_parser parser
@@ -124,11 +150,11 @@ def parse_command():
         sys.argv[0])
     create_subnet_parser = sub_parsers.add_parser(description=utilities.format_info(description),
                                                   name=CommandInfo.network_create_subnet, help="create docker subnet", formatter_class=RawTextHelpFormatter)
-    help_info = "[optional] specified the network name, default is tars-network\n"
+    help_info = "[Optional] specified the network name, default is tars-network\n"
     create_subnet_parser.add_argument(
         "-n", "--name", help=help_info, default="tars-network")
 
-    help_info = "[required] specified the subnet, e.g. 172.25.0.0/16\n"
+    help_info = "[Required] specified the subnet, e.g. 172.25.0.0/16\n"
     create_subnet_parser.add_argument(
         "-s", "--subnet", help=help_info, default=None, required=True)
 
@@ -138,16 +164,16 @@ def parse_command():
     # add_vxlan_parser = sub_parsers.add_parser(description=utilities.format_info(description),
     #                                          name=CommandInfo.network_add_vxlan, help="add vxlan for docker subnet", formatter_class=RawTextHelpFormatter)
     # subnet option
-    #help_info = "[optional] specified the subnet, default is tars-network\n"
+    #help_info = "[Optional] specified the subnet, default is tars-network\n"
     # add_vxlan_parser.add_argument(
     #    "-n", "--network", help=help_info, default="tars-network")
     # remote ip
-    #help_info = "[required] specified the dstip to create vxlan network"
+    #help_info = "[Required] specified the dstip to create vxlan network"
     # add_vxlan_parser.add_argument(
     #    "-d", "--dstip", help=help_info, default=None, required=True)
 
     # vxlan network name
-    #help_info = "[required] specified the vxlan name to create vxlan network, e.g.: vxlan_docker"
+    #help_info = "[Required] specified the vxlan name to create vxlan network, e.g.: vxlan_docker"
     # add_vxlan_parser.add_argument(
     #    "-v", "--vxlan", help=help_info, default=None, required=True)
 
@@ -173,6 +199,8 @@ def is_add_vxlan_command(args):
 def is_download_binary_command(args):
     return (args.command == CommandInfo.download_binary)
 
+def is_merge_config_command(args):
+    return (args.command == CommandInfo.merge_config_parser_name)
 
 def chain_operations(args, node_type):
     if is_chain_command(args) is False:
@@ -288,6 +316,69 @@ def download_binary_operation(args, node_type):
     binary_controller.download_all_binary()
     utilities.print_split_info()
 
+def merge_config_operation(args):
+    if is_merge_config_command(args) is False:
+        return
+    
+    utilities.print_split_info()
+
+    utilities.log_info("* merge-config operation ")
+
+    output_dir = args.output
+    utilities.log_info("* output dir: " + output_dir)
+
+    type = args.type
+    utilities.log_info("* type: " + type)
+
+    if (type in ["tars"]) is False:
+        utilities.log_error("Unsupported types, only 'tars' type is supported")
+        sys.exit(-1)
+
+    if len(args.config) <= 1:
+        utilities.log_error("Merge operation is supported for more than two config files")
+        sys.exit(-1)
+
+    tars_proxy_conf_path = os.path.join(output_dir, "tars_proxy.ini")
+    p2p_conf_path = os.path.join(output_dir, "nodes.json")
+    if os.path.exists(tars_proxy_conf_path):
+        utilities.log_error(tars_proxy_conf_path + " is already exist, please change the output dir")
+        sys.exit(-1)
+
+    config = args.config
+    for c in config:
+        if os.path.exists(c) is False:
+            utilities.log_error("The config file '%s' not found!" % c)
+            sys.exit(-1)
+
+    if type == "tars":
+        merge_tars_config(config, tars_proxy_conf_path)
+    else:
+        merge_p2p_config(config, p2p_conf_path)
+
+    utilities.print_split_info()
+    utilities.log_info("* merge config output dir is %s" % output_dir)
+
+def merge_tars_config(config, store_tars_conf_path):
+
+    merged_tars_conf_gen = TarsConfigGenerator(store_tars_conf_path)
+    for c in config:
+        utilities.log_info("* tars config: " + str(c))
+        tars_conf = TarsConfigGenerator(c)
+        tars_service_names = ["gateway", "rpc", "txpool", "scheduler", "pbft", "ledger", "front"]
+        for service_name in tars_service_names:
+            conf_items = tars_conf.get_service_config_items(service_name)
+            if conf_items is None:
+                continue
+
+            for k in conf_items:
+                utilities.log_info(" service name: %s ,endpoint: %s" % (service_name, conf_items[k]))
+                merged_tars_conf_gen.append_config_item(service_name, conf_items[k])
+
+    merged_tars_conf_gen.restore_init_config(os.path.join(store_tars_conf_path))
+
+def merge_p2p_config(config, store_tars_conf_path):
+    # TODO: impl p2p config merge
+    return
 
 def build_package_operation(args, node_type):
     if is_build_package_command(args) is False:
