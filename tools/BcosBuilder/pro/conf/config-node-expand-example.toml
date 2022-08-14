@@ -21,6 +21,10 @@ name = "agencyA"
         [[agency.group.node]]
         node_name = "node1"
         deploy_ip = "172.25.0.5"
+        # node tars server listen ip
+        tars_listen_ip="0.0.0.0"
+        # node tars server listen port, Notice: the tars server of the node will cost five ports, then the port tars_listen_port ~ tars_listen_port + 4 should be in free
+        tars_listen_port=40402
         # enable data disk encryption for bcos node or not, default is false
         enable_storage_security = false
         # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
@@ -30,9 +34,14 @@ name = "agencyA"
         # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""
         
+        
         [[agency.group.node]]
         node_name = "node2"
         deploy_ip = "172.25.0.5"
+        # node tars server listen ip
+        tars_listen_ip="0.0.0.0"
+        # node tars server listen port, Notice: the tars server of the node will cost five ports, then the port tars_listen_port ~ tars_listen_port + 4 should be in free
+        tars_listen_port=40407
         # enable data disk encryption for bcos node or not, default is false
         enable_storage_security = false
         # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details

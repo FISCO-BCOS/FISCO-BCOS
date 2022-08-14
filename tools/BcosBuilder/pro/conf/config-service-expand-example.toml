@@ -27,9 +27,17 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     listen_port=10200
     thread_count=4
+    # gateway tars server listen ip
+    tars_listen_ip="0.0.0.0"
+    # gateway tars server listen port
+    tars_listen_port=40400
 
     [agency.gateway]
     deploy_ip=["172.25.0.5"]
     listen_ip="0.0.0.0"
     listen_port=40300
     peers=["172.25.0.3:30300", "172.25.0.3:30301", "172.25.0.5:40300"]
+    # gateway tars server listen ip
+    tars_listen_ip="0.0.0.0"
+    # gateway tars server listen port
+    tars_listen_port=40401
