@@ -401,7 +401,7 @@ void PBFTCacheProcessor::applyStateMachine(
     auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
     auto startT = utcTime();
     m_config->stateMachine()->asyncApply(m_config->timer()->timeout(), _lastAppliedProposal,
-        _proposal, executedProposal, [self, startT, _proposal, executedProposal](bool _ret) {
+        _proposal, executedProposal, [self, startT, _proposal, executedProposal](int64_t _ret) {
             try
             {
                 auto cache = self.lock();

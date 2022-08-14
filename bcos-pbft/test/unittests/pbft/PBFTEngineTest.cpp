@@ -133,18 +133,18 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
 }
 
 // TODO: Remove this test due to memory access violation
-// BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
-// {
-//     size_t consensusNodeSize = 10;
-//     // case1: all non-faulty
-//     std::cout << "testPBFTEngineWithFaulty with 10 non-faulty" << std::endl;
-//     testPBFTEngineWithFaulty(consensusNodeSize, consensusNodeSize);
-//     std::cout << "testPBFTEngineWithFaulty with 10 non-faulty success" << std::endl;
-//     // case2: with f=3 faulty
-//     std::cout << "testPBFTEngineWithFaulty with 7 non-faulty" << std::endl;
-//     testPBFTEngineWithFaulty(consensusNodeSize, 7);
-//     std::cout << "testPBFTEngineWithFaulty with 7 non-faulty success" << std::endl;
-// }
+BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
+{
+    size_t consensusNodeSize = 10;
+    // case1: all non-faulty
+    std::cout << "testPBFTEngineWithFaulty with 10 non-faulty" << std::endl;
+    testPBFTEngineWithFaulty(consensusNodeSize, consensusNodeSize);
+    std::cout << "testPBFTEngineWithFaulty with 10 non-faulty success" << std::endl;
+    // case2: with f=3 faulty
+    std::cout << "testPBFTEngineWithFaulty with 7 non-faulty" << std::endl;
+    testPBFTEngineWithFaulty(consensusNodeSize, 7);
+    std::cout << "testPBFTEngineWithFaulty with 7 non-faulty success" << std::endl;
+}
 
 BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
 {
