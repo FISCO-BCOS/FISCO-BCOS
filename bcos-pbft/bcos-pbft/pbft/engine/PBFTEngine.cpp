@@ -1504,22 +1504,32 @@ void PBFTEngine::recoverState()
 
 void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number)
 {
-    RecursiveGuard l(m_mutex);
-    if (!m_config->committedProposal())
+    try
     {
-        PBFT_LOG(WARNING) << LOG_DESC(
-            "clearExceptionProposalState return directly for the pbft module has not been inited");
-        return;
+        RecursiveGuard l(m_mutex);
+        if (!m_config->committedProposal())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                "clearExceptionProposalState return directly for the pbft module has not been "
+                "inited");
+            return;
+        }
+        // update the ledgerConfig when switch
+        fetchAndUpdatesLedgerConfig();
+        m_config->timer()->restart();
+        m_cacheProcessor->resetUnCommittedCacheState(_number);
+        m_config->setExpectedCheckPoint(_number);
+        m_cacheProcessor->checkAndPreCommit();
+        m_cacheProcessor->checkAndCommit();
+        m_cacheProcessor->tryToApplyCommitQueue();
+        recoverState();
     }
-    // update the ledgerConfig when switch
-    fetchAndUpdatesLedgerConfig();
-    m_config->timer()->restart();
-    m_cacheProcessor->resetUnCommittedCacheState(_number);
-    m_config->setExpectedCheckPoint(_number);
-    m_cacheProcessor->checkAndPreCommit();
-    m_cacheProcessor->checkAndCommit();
-    m_cacheProcessor->tryToApplyCommitQueue();
-    recoverState();
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("clearExceptionProposalState exception")
+                          << LOG_KV("number", _number)
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 }
 
 void PBFTEngine::fetchAndUpdatesLedgerConfig()
