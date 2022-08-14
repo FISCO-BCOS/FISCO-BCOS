@@ -467,24 +467,25 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     std::string errorMessage = "Prepare with errors, begin rollback, status: " +
                                                boost::lexical_cast<std::string>(status.failed);
                     SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << errorMessage;
-                    batchBlockRollback([this, callback, errorMessage](Error::UniquePtr&& error) {
-                        if (error)
-                        {
-                            SCHEDULER_LOG(ERROR)
-                                << BLOCK_NUMBER(number()) << "Rollback storage failed!"
-                                << LOG_KV("number", number()) << " " << error->errorMessage();
-                            // FATAL ERROR, NEED MANUAL FIX!
+                    batchBlockRollback(
+                        status.startTS, [this, callback, errorMessage](Error::UniquePtr&& error) {
+                            if (error)
+                            {
+                                SCHEDULER_LOG(ERROR)
+                                    << BLOCK_NUMBER(number()) << "Rollback storage failed!"
+                                    << LOG_KV("number", number()) << " " << error->errorMessage();
+                                // FATAL ERROR, NEED MANUAL FIX!
 
-                            callback(std::move(error));
-                            return;
-                        }
-                        else
-                        {
-                            callback(
-                                BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, errorMessage));
-                            return;
-                        }
-                    });
+                                callback(std::move(error));
+                                return;
+                            }
+                            else
+                            {
+                                callback(BCOS_ERROR_UNIQUE_PTR(
+                                    SchedulerError::CommitError, errorMessage));
+                                return;
+                            }
+                        });
 
                     return;
                 }
@@ -545,6 +546,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     executorParams.primaryTableName = SYS_CURRENT_STATE;
                     executorParams.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
                     executorParams.timestamp = startTimeStamp;
+                    status->startTS = startTimeStamp;
                     for (auto& executorIt : *(m_scheduler->m_executorManager))
                     {
                         executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
@@ -1166,6 +1168,7 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 
     bcos::protocol::TwoPCParams params;
     params.number = number();
+    params.timestamp = 0;
     m_scheduler->m_storage->asyncCommit(
         params, [status, this](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
@@ -1224,7 +1227,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
         });
 }
 
-void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> callback)
+void BlockExecutive::batchBlockRollback(
+    uint64_t version, std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
@@ -1250,6 +1254,7 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
     bcos::protocol::TwoPCParams params;
     params.number = number();
+    params.timestamp = version;
     m_scheduler->m_storage->asyncRollback(
         params, [number = params.number, status](Error::Ptr&& error) {
             {

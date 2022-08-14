@@ -89,7 +89,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, inputRaw = input.release(),
+        m_pool.enqueue([executor = m_executor, inputRaw = input.release(),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =

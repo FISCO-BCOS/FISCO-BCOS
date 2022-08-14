@@ -63,6 +63,8 @@ po::options_description main_options("storage tool used to read/write the data o
 po::variables_map initCommandLine(int argc, const char* argv[])
 {
     main_options.add_options()("help,h", "help of storage tool")(
+        "statistic,s", "statistic the data usage of the storage")(
+        "stateSize,S", "statistic the data usage of the contracts state")(
         "read,r", po::value<vector<string>>()->multitoken(), "[TableName] [Key]")("write,w",
         po::value<std::vector<std::string>>()->multitoken(),
         "[TableName] [Key] [Value]")("iterate,i", po::value<std::string>(), "[TableName]")("hex,H",
@@ -80,7 +82,8 @@ po::variables_map initCommandLine(int argc, const char* argv[])
     }
     catch (...)
     {
-        std::cout << "invalid input" << std::endl;
+        std::cout << "parse_command_line failed" << std::endl;
+        std::cout << main_options << std::endl;
         exit(0);
     }
     if (vm.count("help") || vm.count("h"))
@@ -137,14 +140,66 @@ DB* createSecondaryRocksDB(
     const std::string& path, const std::string& secondaryPath = "./rocksdb_secondary/")
 {
     Options options;
+    options.create_if_missing = false;
     options.max_open_files = -1;
     DB* db_secondary = nullptr;
     Status s = DB::OpenAsSecondary(options, path, secondaryPath, &db_secondary);
-    assert(!s.ok() || db_secondary);
+    if (!s.ok())
+    {
+        std::cout << "open rocksDB failed: " << s.ToString() << std::endl;
+        exit(1);
+    }
     s = db_secondary->TryCatchUpWithPrimary();
-    assert(s.ok());
+    if (!s.ok())
+    {
+        std::cout << "TryCatchUpWithPrimary failed: " << s.ToString() << std::endl;
+        exit(1);
+    }
     return db_secondary;
 }
+
+void getTableSize(DB* db, const string_view& table)
+{
+    std::string tableName(table);
+    double size = 0;
+    rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
+    it->Seek(tableName);
+    while (it->Valid())
+    {
+        if (it->key().starts_with(tableName))
+        {
+            size += it->value().size();
+            size += it->key().size();
+        }
+        else
+        {
+            break;
+        }
+        it->Next();
+    }
+    delete it;
+    auto setw = 30;
+    if (size < 1024)
+    {  // < 1MB
+        cout << std::left << std::setw(setw) << tableName << " size is " << size << "B" << endl;
+    }
+    else if (size < 1024 * 1024)
+    {  // < 1MB
+        cout << std::left << std::setw(setw) << tableName << " size is " << (size / 1024) << "KB"
+             << endl;
+    }
+    else if (size < 1024 * 1024 * 1024)
+    {  // < 1GB
+        cout << std::left << std::setw(setw) << tableName << " size is " << (size / 1024 / 1024)
+             << "MB" << endl;
+    }
+    else
+    {
+        cout << std::left << std::setw(setw) << tableName << " size is "
+             << (size / 1024 / 1024 / 1024) << "GB" << endl;
+    }
+}
+
 int main(int argc, const char* argv[])
 {
     boost::property_tree::ptree pt;
@@ -416,6 +471,38 @@ int main(int argc, const char* argv[])
         }
         cout << "result in ./" << outputFileName << endl;
         outfile.close();
+    }
+    else if (params.count("statistic") || params.count("s"))
+    {  // statistics
+        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+        // auto rocksdbStorage =
+        //     std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
+        // StorageInterface::Ptr storage = rocksdbStorage;
+        // if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
+        // {
+        //     auto keyPageStorage = createKeyPageStorage(rocksdbStorage, keyPageSize);
+        //     keyPageStorage->setReadOnly(true);
+        //     storage = keyPageStorage;
+        // }
+        getTableSize(db, storage::StorageInterface::SYS_TABLES);
+        getTableSize(db, ledger::SYS_CONSENSUS);
+        getTableSize(db, ledger::SYS_CONFIG);
+        getTableSize(db, ledger::SYS_CURRENT_STATE);
+        getTableSize(db, ledger::SYS_HASH_2_NUMBER);
+        getTableSize(db, ledger::SYS_NUMBER_2_HASH);
+        getTableSize(db, ledger::SYS_BLOCK_NUMBER_2_NONCES);
+        getTableSize(db, ledger::SYS_NUMBER_2_TXS);
+        getTableSize(db, ledger::SYS_NUMBER_2_BLOCK_HEADER);
+        // calculate transactions data size
+        getTableSize(db, ledger::SYS_HASH_2_TX);
+
+        // calculate receipts data size
+        getTableSize(db, ledger::SYS_HASH_2_RECEIPT);
+    }
+    else if (params.count("stateSize") || params.count("S"))
+    {  // calculate contract data size
+        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+        getTableSize(db, ledger::FS_APPS);
     }
     else
     {
