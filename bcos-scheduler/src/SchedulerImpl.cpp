@@ -199,12 +199,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         {
             if (verify && blockHeader->hash() != block->blockHeader()->hash())
             {
-                SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber)
-                                       << "ExecuteBlock failed. The executed block has been cached "
-                                          "but request header hash is not the same. Trigger switch."
-                                       << LOG_KV("cachedHeaderHash", blockHeader->hash())
-                                       << LOG_KV("requestHeaderHash", block->blockHeader()->hash())
-                                       << LOG_KV("verify", verify);
+                SCHEDULER_LOG(WARNING)
+                    << BLOCK_NUMBER(requestBlockNumber)
+                    << "ExecuteBlock failed. The executed block has been cached "
+                       "but request header hash is not the same. Trigger switch."
+                    << LOG_KV("cachedHeaderHash", blockHeader->hash().abridged())
+                    << LOG_KV("requestHeaderHash", block->blockHeader()->hash().abridged())
+                    << LOG_KV("verify", verify);
                 triggerSwitch();
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks,
                              "request header not the same with cached"),
