@@ -191,8 +191,15 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
     evmc_tx_context result;
-    auto origin = fromHex(hostContext.origin());
-    result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
+    if (hostContext.isWasm())
+    {
+        result.tx_origin = toEvmC(hostContext.origin());
+    }
+    else
+    {
+        auto origin = fromHex(hostContext.origin());
+        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
+    }
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
