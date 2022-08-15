@@ -8,7 +8,7 @@
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-scheduler/src/BlockExecutiveFactory.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
-#include "bcos-storage/bcos-storage/RocksDBStorage.h"
+#include "bcos-storage/RocksDBStorage.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
@@ -189,6 +189,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(1024);
+
     // Add Executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -197,6 +198,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     for (size_t j = 0; j < 10; j++)
     {
         std::string inputStr = "Hello world! request";
+
         auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
             bytes(inputStr.begin(), inputStr.end()), j, 300, "chain", "group", 500, keyPair);
         auto hash = tx->hash();
@@ -252,6 +254,7 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(1024);
+
     // Add Executor
     for (size_t i = 1; i <= 10; ++i)
     {
@@ -284,7 +287,6 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
         SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
     });
 }
-
 
 BOOST_AUTO_TEST_CASE(asyncNotify)
 {
@@ -370,8 +372,7 @@ BOOST_AUTO_TEST_CASE(dagTest2)
     for (size_t j = 0; j < 10; ++j)
     {
         std::string inputStr = "Hello world! request";
-        auto tx = blockFactory->transactionFactory()->createTransaction(0,
-            "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
             bytes(inputStr.begin(), inputStr.end()), j, 300, "chain", "group", 500, keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);

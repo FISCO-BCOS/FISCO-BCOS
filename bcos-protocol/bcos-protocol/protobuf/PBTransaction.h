@@ -55,8 +55,7 @@ public:
     }
 
     void decode(bytesConstRef _txData) override;
-    bytesConstRef encode() const override;
-    bytes takeEncoded() override { return bytes(); };  // FIXME: no impl!
+    void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash(bool _useCache = true) const override;
 
@@ -100,8 +99,6 @@ protected:
     }
 
 private:
-    void encode(bytes& _encodedData) const;
-
     std::shared_ptr<PBRawTransaction> m_transaction;
     std::shared_ptr<PBRawTransactionHashFields> m_transactionHashFields;
     bytesPointer m_dataCache;

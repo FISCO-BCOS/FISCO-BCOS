@@ -183,7 +183,6 @@ public:
             else
             {
                 messages[i]->setType(protocol::ExecutionMessage::FINISHED);
-
                 std::string result = "OK!";
                 messages[i]->setData(bcos::bytes(result.begin(), result.end()));
             }

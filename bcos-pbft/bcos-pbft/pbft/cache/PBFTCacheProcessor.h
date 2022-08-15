@@ -121,7 +121,8 @@ public:
     virtual bool shouldRequestCheckPoint(PBFTMessageInterface::Ptr _checkPointMsg);
 
     virtual void registerProposalAppliedHandler(
-        std::function<void(bool, PBFTProposalInterface::Ptr, PBFTProposalInterface::Ptr)> _callback)
+        std::function<void(int64_t, PBFTProposalInterface::Ptr, PBFTProposalInterface::Ptr)>
+            _callback)
     {
         m_proposalAppliedHandler = _callback;
     }
@@ -256,7 +257,7 @@ protected:
         PBFTProposalCmp>
         m_stableCheckPointQueue;
 
-    std::function<void(bool, PBFTProposalInterface::Ptr, PBFTProposalInterface::Ptr)>
+    std::function<void(int64_t, PBFTProposalInterface::Ptr, PBFTProposalInterface::Ptr)>
         m_proposalAppliedHandler;
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedProposalNotifier;

@@ -217,7 +217,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret));
 }
@@ -293,7 +293,7 @@ void DagTransferPrecompiled::userSaveCall(
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret));
 }
@@ -359,7 +359,7 @@ void DagTransferPrecompiled::userDrawCall(
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret));
 }
@@ -408,7 +408,7 @@ void DagTransferPrecompiled::userBalanceCall(
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret), balance);
 }
@@ -513,7 +513,7 @@ void DagTransferPrecompiled::userTransferCall(
     if (!strErrorMsg.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC(strErrorMsg)
-                               << LOG_KV("errorCode", ret);
+                               << LOG_KV("code", ret);
     }
     _out = codec.encode(u256(ret));
 }

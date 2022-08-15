@@ -132,6 +132,7 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     }
 }
 
+// TODO: Remove this test due to memory access violation
 BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
 {
     size_t consensusNodeSize = 10;

@@ -61,15 +61,11 @@ public:
     virtual void setKeyFactory(KeyFactory::Ptr _keyFactory) { m_keyFactory = _keyFactory; }
     virtual KeyFactory::Ptr keyFactory() { return m_keyFactory; }
 
-    virtual void setSMCrypto(bool smCrypto) { m_smCrypto = smCrypto; }
-    virtual bool smCrypto() const { return m_smCrypto; }
-
 private:
     Hash::Ptr m_hashImpl;
     SignatureCrypto::Ptr m_signatureImpl;
     SymmetricEncryption::Ptr m_symmetricEncryptionHandler;
     KeyFactory::Ptr m_keyFactory;
-    bool m_smCrypto = false;
 };
 }  // namespace crypto
 }  // namespace bcos

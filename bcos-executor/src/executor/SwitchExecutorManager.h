@@ -89,7 +89,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, inputRaw = input.release(),
+        m_pool.enqueue([executor = m_executor, inputRaw = input.release(),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -358,7 +358,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+        m_pool.enqueue([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -448,6 +448,7 @@ public:
 
     void stop() override
     {
+        EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
         WriteGuard l(m_mutex);
         if (m_executor)
         {

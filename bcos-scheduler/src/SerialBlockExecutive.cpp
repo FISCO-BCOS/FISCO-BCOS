@@ -122,7 +122,7 @@ void SerialBlockExecutive::asyncExecute(
                               bool isSysBlock) {
                 if (error)
                 {
-                    SERIAL_EXECUTE_LOG(INFO)
+                    SERIAL_EXECUTE_LOG(ERROR)
                         << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block failed")
                         << LOG_KV("createMsgT", createMsgT)
                         << LOG_KV("executeT", (utcTime() - startT))
