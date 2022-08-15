@@ -90,7 +90,8 @@ public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
     explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024,
-        std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr, bool _ignoreNotExist = false)
+        std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr,
+        bool _ignoreNotExist = false)
       : storage::StateStorageInterface(_prev),
         m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
         m_splitSize(m_pageSize / 3 * 2),
@@ -494,8 +495,8 @@ public:
                 }
             }
             ar << *pages;
-            KeyPage_LOG(DEBUG) << LOG_DESC("Serialize TableMeta")
-                               << LOG_KV("validCount", pages->size()) << LOG_KV("invalid", invalid);
+            KeyPage_LOG(DEBUG) << LOG_DESC("Serialize meta") << LOG_KV("valid", pages->size())
+                               << LOG_KV("invalid", invalid);
         }
         template <class Archive>
         void load(Archive& ar, const unsigned int version)
