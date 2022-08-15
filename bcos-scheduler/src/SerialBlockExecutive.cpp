@@ -149,7 +149,7 @@ void SerialBlockExecutive::asyncExecute(
 void SerialBlockExecutive::serialExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
-    SERIAL_EXECUTE_LOG(INFO) << "Send Transaction size " << m_transactions.size();
+    SERIAL_EXECUTE_LOG(INFO) << "Send Transaction, size: " << m_transactions.size();
     // handle create message, to generate address
     for (auto& tx : m_transactions)
     {
