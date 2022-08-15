@@ -2257,14 +2257,11 @@ void TransactionExecutor::removeCommittedState()
 
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
-        EXECUTOR_NAME_LOG(INFO) << "LatestStateStorage"
-                                << LOG_KV("storageNumber", m_stateStorages.back().number)
-                                << LOG_KV("commitNumber", number);
         it = m_stateStorages.erase(it);
         if (it != m_stateStorages.end())
         {
             EXECUTOR_NAME_LOG(INFO)
-                << "Set state number: " << it->number << " prev to cachedStorage";
+                << "Set state number, " << it->number << " prev to cachedStorage";
             it->storage->setPrev(m_cachedStorage);
         }
     }
@@ -2273,7 +2270,6 @@ void TransactionExecutor::removeCommittedState()
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
         EXECUTOR_NAME_LOG(DEBUG) << LOG_DESC("removeCommittedState")
-                                 << LOG_KV("LatestStateStorage", m_stateStorages.back().number)
                                  << LOG_KV("commitNumber", number)
                                  << LOG_KV("erasedStorage", it->number)
                                  << LOG_KV("stateStorageSize", m_stateStorages.size());
