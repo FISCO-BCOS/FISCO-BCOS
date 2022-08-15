@@ -504,5 +504,11 @@ std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
     (void)_assetName;
     return std::vector<uint64_t>();
 }
+
+bool HostContext::isWasm()
+{
+    return m_executive->isWasm();
+}
+
 }  // namespace executor
 }  // namespace bcos

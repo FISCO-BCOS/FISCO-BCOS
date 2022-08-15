@@ -146,6 +146,8 @@ public:
 
     VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
 
+    bool isWasm() { return m_blockContext.lock()->isWasm(); }
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
