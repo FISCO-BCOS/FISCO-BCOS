@@ -765,7 +765,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
     {
         // TODO: AUDIT: check that this can never reasonably happen. Consider what
         // to do if it does.
-        EXECUTIVE_LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
+        EXECUTIVE_LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? "
+                             << LOG_KV("what", _e.what())
+                             << LOG_KV("diagnostic", boost::diagnostic_information(_e));
         exit(1);
         // Another solution would be to reject this transaction, but that also
         // has drawbacks. Essentially, the amount of ram has to be increased here.
