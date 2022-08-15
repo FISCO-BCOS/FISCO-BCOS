@@ -5,6 +5,7 @@
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
+#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -169,7 +170,9 @@ public:
             BOOST_TEST(inserted);
             if (inputs[i]->to() == "aabbccdd")
             {
-                callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
+                callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                             "Execute failed with empty blockContext!"),
+                    {});
                 return;
             }
 

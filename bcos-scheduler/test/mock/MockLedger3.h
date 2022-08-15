@@ -8,12 +8,12 @@
 #include "bcos-framework/bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/bcos-framework/storage/StorageInterface.h"
+#include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
 #include <map>
-
 
 using namespace bcos::ledger;
 
@@ -31,7 +31,7 @@ public:
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback) override
     {
-        auto blockNumber = block->blockHeader()->number();
+        auto blockNumber = block->blockHeaderConst()->number();
         SCHEDULER_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber);
         if (blockNumber == 1024)
         {
