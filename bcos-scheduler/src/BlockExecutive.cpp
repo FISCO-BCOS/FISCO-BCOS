@@ -1281,10 +1281,11 @@ void BlockExecutive::batchBlockRollback(
 
     // for (auto& it : *(m_scheduler->m_executorManager))
     m_scheduler->m_executorManager->forEachExecutor(
-        [this, status](
+        [this, version, status](
             std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
             bcos::protocol::TwoPCParams executorParams;
             executorParams.number = number();
+            executorParams.timestamp = version;
             executor->rollback(executorParams, [this, status](bcos::Error::Ptr&& error) {
                 {
                     WriteGuard lock(status->x_lock);

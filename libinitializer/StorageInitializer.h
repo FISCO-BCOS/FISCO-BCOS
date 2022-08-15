@@ -48,7 +48,8 @@ public:
         // options.OptimizeLevelStyleCompaction();
         // create the DB if it's not already present
         options.create_if_missing = true;
-        options.enable_blob_files = keyPageSize > 1 ? true : false;
+        // FIXME: enable blob support when space amplification is acceptable
+        // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.compression = rocksdb::kZSTD;
         options.max_open_files = 512;
         // options.min_blob_size = 1024;
