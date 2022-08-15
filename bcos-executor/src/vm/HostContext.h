@@ -141,6 +141,8 @@ public:
     uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
     uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
 
+    bool isWasm();
+
 private:
     void depositFungibleAsset(
         const std::string_view& _to, const std::string& _assetName, uint64_t _amount);

@@ -48,16 +48,14 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 private:
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }
+    {}
     // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
     //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
 
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }                                               \
+    {}                                              \
     // log("SET", (table), (key), (entry), (desc))
 
     // for debug
@@ -96,7 +94,10 @@ public:
     BaseStorage(BaseStorage&&) = delete;
     BaseStorage& operator=(BaseStorage&&) = delete;
 
-    ~BaseStorage() override { m_recoder.clear(); }
+    ~BaseStorage() override
+    {
+        m_recoder.clear();
+    }
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,
@@ -440,7 +441,7 @@ public:
                 return true;
             });
 
-        STORAGE_LOG(INFO) << "Successful merged " << count << " records";
+        STORAGE_LOG(INFO) << "Successful merged records" << LOG_KV("count", count);
     }
 
     crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
@@ -543,9 +544,15 @@ public:
         }
     }
 
-    void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
+    void setEnableTraverse(bool enableTraverse)
+    {
+        m_enableTraverse = enableTraverse;
+    }
 
-    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
+    void setMaxCapacity(ssize_t capacity)
+    {
+        m_maxCapacity = capacity;
+    }
 
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry)

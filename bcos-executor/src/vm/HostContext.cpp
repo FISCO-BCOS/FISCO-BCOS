@@ -286,7 +286,7 @@ bool HostContext::setCode(bytes code)
 
 void HostContext::setCodeAndAbi(bytes code, string abi)
 {
-    EXECUTOR_LOG(DEBUG) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
+    EXECUTOR_LOG(TRACE) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
                         << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
     if (setCode(std::move(code)))
     {
@@ -504,5 +504,11 @@ std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
     (void)_assetName;
     return std::vector<uint64_t>();
 }
+
+bool HostContext::isWasm()
+{
+    return m_executive->isWasm();
+}
+
 }  // namespace executor
 }  // namespace bcos

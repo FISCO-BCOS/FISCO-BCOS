@@ -596,7 +596,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
                     " limit: " +
                     boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
-                EXECUTIVE_LOG(WARNING)
+                EXECUTIVE_LOG(DEBUG)
                     << "Revert transaction: " << LOG_DESC("deploy failed code too large")
                     << LOG_KV("message", callResults->message);
                 return callResults;
@@ -745,9 +745,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
     }
     catch (InternalVMError const& _e)
     {
-        EXECUTIVE_LOG(WARNING) << "Internal VM Error ("
-                               << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
-                               << diagnostic_information(_e);
+        EXECUTIVE_LOG(ERROR) << "Internal VM Error ("
+                             << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
+                             << diagnostic_information(_e);
         exit(1);
     }
     catch (Exception const& _e)
@@ -899,9 +899,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT")
-                               << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_KV("gasLeft", callResults->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_REVERT") << LOG_KV("to", callResults->receiveAddress)
+                            << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
@@ -917,9 +916,9 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_OUT_OF_GAS:
     {
         revert();
-        EXECUTIVE_LOG(WARNING) << "Revert transaction: " << LOG_DESC("OutOfGas")
-                               << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_KV("gas", _result.gasLeft());
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("OutOfGas")
+                            << LOG_KV("to", callResults->receiveAddress)
+                            << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
         break;
@@ -927,8 +926,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_FAILURE:
     {
         revert();
-        EXECUTIVE_LOG(WARNING) << "Revert transaction: "
-                               << LOG_KV("to", callResults->receiveAddress) << LOG_DESC("WASMTrap");
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("WASMTrap")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
         break;
@@ -936,8 +935,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
     case EVMC_UNDEFINED_INSTRUCTION:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0; //TODO: why set remainGas to 0?
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
@@ -945,8 +944,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_BAD_JUMP_DESTINATION:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("EVMC_BAD_JUMP_DESTINATION");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
         revert();
@@ -954,8 +953,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_OVERFLOW:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("EVMC_STACK_OVERFLOW");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_OVERFLOW")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
         revert();
@@ -963,8 +962,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_UNDERFLOW:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("EVMC_STACK_UNDERFLOW");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_UNDERFLOW")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         revert();
@@ -973,8 +972,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INVALID_MEMORY_ACCESS:
     {
         // m_remainGas = 0;
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("VM error, BufferOverrun");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         revert();
         break;
@@ -982,25 +981,25 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_STATIC_MODE_VIOLATION:
     {
         // m_remainGas = 0;
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("VM error, DisallowedStateChange");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::Unknown;
         revert();
         break;
     }
     case EVMC_CONTRACT_VALIDATION_FAILURE:
     {
-        EXECUTIVE_LOG(WARNING)
-            << LOG_KV("to", callResults->receiveAddress)
-            << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.");
+        EXECUTIVE_LOG(INFO)
+            << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.")
+            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
         revert();
         break;
     }
     case EVMC_ARGUMENT_OUT_OF_RANGE:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("WASM Argument Out Of Range");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Argument Out Of Range")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
         revert();
         break;
@@ -1008,9 +1007,9 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_WASM_TRAP:
     case EVMC_WASM_UNREACHABLE_INSTRUCTION:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("WASM Unreachable/Trap Instruction")
-                                << LOG_KV("status", _result.status());
+        EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Unreachable/Trap Instruction")
+                            << LOG_KV("to", callResults->receiveAddress)
+                            << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
         revert();
         break;
@@ -1018,8 +1017,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INTERNAL_ERROR:
     default:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
+                               << LOG_KV("to", callResults->receiveAddress)
                                << LOG_KV("status", _result.status());
         revert();
         if (_result.status() <= EVMC_INTERNAL_ERROR)
