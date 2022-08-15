@@ -31,6 +31,13 @@ public:
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback) override
     {
+        auto blockNumber = block->blockHeader()->number();
+        SCHEDULER_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber);
+        if (blockNumber == 1024)
+        {
+            callback(BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
+            return;
+        }
         callback(nullptr);
     }
 

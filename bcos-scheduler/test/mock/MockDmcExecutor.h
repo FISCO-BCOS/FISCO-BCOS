@@ -167,6 +167,11 @@ public:
             auto [it, inserted] = m_dagHashes.emplace(inputs[i]->transactionHash());
             boost::ignore_unused(it);
             BOOST_TEST(inserted);
+            if (inputs[i]->to() == "aabbccdd")
+            {
+                callback(BCOS_ERROR_UNIQUE_PTR(-1, "i am an error!!!!"), nullptr);
+                return;
+            }
 
             // SCHEDULER_LOG(TRACE) << "Executing: " << inputs[i].get();
             BOOST_TEST(inputs[i].get());
