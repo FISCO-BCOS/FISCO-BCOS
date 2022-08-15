@@ -184,7 +184,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr, false);
     };
 
-    auto whenInQueue = [callback, requestBlockNumber, &signature, verify](
+    auto whenInQueue = [this, callback, block, requestBlockNumber, &signature, verify](
                            BlockExecutive::Ptr blockExecutive) {
         auto blockHeader = blockExecutive->result();
 
@@ -197,11 +197,27 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         }
         else
         {
-            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber)
-                                << "ExecuteBlock success, return executed block"
-                                << LOG_KV("signatureSize", signature.size())
-                                << LOG_KV("verify", verify);
-            callback(nullptr, std::move(blockHeader), blockExecutive->sysBlock());
+            if (verify && blockHeader->hash() != block->blockHeader()->hash())
+            {
+                SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber)
+                                       << "ExecuteBlock failed. The executed block has been cached "
+                                          "but request header hash is not the same. Trigger switch."
+                                       << LOG_KV("cachedHeaderHash", blockHeader->hash())
+                                       << LOG_KV("requestHeaderHash", block->blockHeader()->hash())
+                                       << LOG_KV("verify", verify);
+                triggerSwitch();
+                callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks,
+                             "request header not the same with cached"),
+                    nullptr, false);
+            }
+            else
+            {
+                SCHEDULER_LOG(INFO)
+                    << BLOCK_NUMBER(requestBlockNumber)
+                    << "ExecuteBlock success, return executed block"
+                    << LOG_KV("signatureSize", signature.size()) << LOG_KV("verify", verify);
+                callback(nullptr, std::move(blockHeader), blockExecutive->sysBlock());
+            }
         }
     };
 
