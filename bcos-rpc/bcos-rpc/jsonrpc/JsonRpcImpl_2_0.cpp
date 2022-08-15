@@ -70,7 +70,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session](bcos::bytes resp) {
         if (_session && _session->isConnected())
         {
-            // TODO: no need to cppy resp
+            // TODO: no need to copy resp
             auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
             _msg->setPayload(buffer);
             _session->asyncSendMessage(_msg);
@@ -95,10 +95,8 @@ bcos::bytes JsonRpcImpl_2_0::decodeData(std::string_view _data)
     auto end = _data.end();
     auto length = _data.size();
 
-    if ((length == 0) || (length % 2 != 0)) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
-    }
+    if ((length == 0) || (length % 2 != 0))
+        [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"}); }
 
     if (*begin == '0' && *(begin + 1) == 'x')
     {
@@ -1014,13 +1012,19 @@ void JsonRpcImpl_2_0::getTotalTransactionCount(
 void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
 {
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getPeers");
-    m_gatewayInterface->asyncGetPeers([this, m_respFunc = std::move(_respFunc)](Error::Ptr _error,
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    m_gatewayInterface->asyncGetPeers([m_respFunc = std::move(_respFunc), self](Error::Ptr _error,
                                           bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
                                           bcos::gateway::GatewayInfosPtr _peersInfo) {
+        auto rpc = self.lock();
+        if (!rpc)
+        {
+            return;
+        }
         Json::Value jResp;
         if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
         {
-            gatewayInfoToJson(jResp, _localP2pInfo, _peersInfo);
+            rpc->gatewayInfoToJson(jResp, _localP2pInfo, _peersInfo);
         }
         else
         {
@@ -1202,7 +1206,8 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
 
 void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFunc)
 {
-    m_gatewayInterface->asyncGetPeers([_respFunc, group = std::string(_groupID), this](
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    m_gatewayInterface->asyncGetPeers([_respFunc, group = std::string(_groupID), self](
                                           Error::Ptr _error,
                                           bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
                                           bcos::gateway::GatewayInfosPtr _peersInfo) {
@@ -1214,7 +1219,12 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
             _respFunc(_error, jResp);
             return;
         }
-        getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
+        auto rpc = self.lock();
+        if (!rpc)
+        {
+            return;
+        }
+        rpc->getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
         _respFunc(_error, jResp);
     });
 }

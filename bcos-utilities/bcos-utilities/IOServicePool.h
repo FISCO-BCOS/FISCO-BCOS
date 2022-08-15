@@ -59,7 +59,8 @@ public:
         // one io_context per thread
         for (size_t i = 0; i < m_ioServices.size(); ++i)
         {
-            m_threads.emplace_back([this, i]() { (m_ioServices[i])->run(); });
+            auto ioService = m_ioServices[i];
+            m_threads.emplace_back([ioService]() { ioService->run(); });
         }
     }
 
