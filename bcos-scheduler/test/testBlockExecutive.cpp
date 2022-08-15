@@ -8,7 +8,7 @@
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-scheduler/src/BlockExecutiveFactory.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
-#include "bcos-storage/bcos-storage/RocksDBStorage.h"
+#include "bcos-storage/RocksDBStorage.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
@@ -42,6 +42,7 @@
 #include <filesystem>
 #include <future>
 #include <optional>
+
 
 using namespace std;
 using namespace bcos;
@@ -179,6 +180,10 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest1)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
+    blockExecutive->stop();
+    blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+                                     bool) { BOOST_CHECK(error); });
+    blockExecutive->start();
     blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                      bool) { BOOST_CHECK(!error); });
 }
@@ -187,7 +192,8 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     SCHEDULER_LOG(DEBUG) << "----------asyncExecuteTest----------------";
     // Generate Block
     auto block = blockFactory->createBlock();
-    block->blockHeader()->setNumber(99);
+    block->blockHeader()->setNumber(1024);
+
     // Add Executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -196,8 +202,8 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     for (size_t j = 0; j < 10; j++)
     {
         std::string inputStr = "Hello world! request";
-        auto tx = blockFactory->transactionFactory()->createTransaction(0,
-            "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
+
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
             bytes(inputStr.begin(), inputStr.end()), j, 300, "chain", "group", 500, keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);
@@ -209,8 +215,12 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
+    blockExecutive->stop();
     blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(!error); });
+                                     bool) { BOOST_CHECK(error); });
+    blockExecutive->start();
+    blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+                                     bool) { BOOST_CHECK(error); });
 }
 
 BOOST_AUTO_TEST_CASE(asyncCommitTest1)
@@ -239,6 +249,9 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest1)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
+    blockExecutive->stop();
+    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_CHECK(error); });
+    blockExecutive->start();
     blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_CHECK(!error); });
 }
 
@@ -247,7 +260,8 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
     SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2----------------";
     // Generate Block
     auto block = blockFactory->createBlock();
-    block->blockHeader()->setNumber(999);
+    block->blockHeader()->setNumber(1024);
+
     // Add Executor
     for (size_t i = 1; i <= 10; ++i)
     {
@@ -269,8 +283,14 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
+    blockExecutive->stop();
     blockExecutive->asyncCommit([&](Error::UniquePtr error) {
-        BOOST_CHECK(!error);
+        BOOST_CHECK(error);
+        SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
+    });
+    blockExecutive->start();
+    blockExecutive->asyncCommit([&](Error::UniquePtr error) {
+        BOOST_CHECK(error);
         SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
     });
 }
@@ -339,11 +359,54 @@ BOOST_AUTO_TEST_CASE(dagTest)
     }
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
-
+    blockExecutive->stop();
+    blockExecutive->asyncExecute(
+        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+            BOOST_CHECK(error);
+            SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
+        });
+    blockExecutive->start();
     blockExecutive->asyncExecute(
         [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(!error);
-            SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
+            SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
+        });
+}
+
+BOOST_AUTO_TEST_CASE(dagTest2)
+{
+    // Add executor
+    executorManager->addExecutor("executor1", std::make_shared<MockDmcExecutor>("executor1"));
+
+    // Generate a test block
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(1024);
+
+    for (size_t j = 0; j < 10; ++j)
+    {
+        std::string inputStr = "Hello world! request";
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
+            bytes(inputStr.begin(), inputStr.end()), j, 300, "chain", "group", 500, keyPair);
+        auto hash = tx->hash();
+        txPool->hash2Transaction.emplace(hash, tx);
+        block->appendTransaction(std::move(tx));
+        auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+            hash, "contract" + boost::lexical_cast<std::string>((j + 1) % 10));
+        metaTx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
+        block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
+    blockExecutive->stop();
+    blockExecutive->asyncExecute(
+        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+            BOOST_CHECK(error);
+            SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
+        });
+    blockExecutive->start();
+    blockExecutive->asyncExecute(
+        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+            BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
 }
@@ -370,7 +433,10 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     }
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
-    std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
+    blockExecutive->stop();
+    blockExecutive->asyncExecute([this](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+                                     bool) { BOOST_CHECK(error); });
+    blockExecutive->start();
     blockExecutive->asyncExecute([this](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                      bool) { BOOST_CHECK(!error); });
 }
@@ -410,13 +476,6 @@ BOOST_AUTO_TEST_CASE(callTest)
             BOOST_CHECK(receiptResponse);
             receipt = std::move(receiptResponse);
         });
-        // BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
-        // BOOST_CHECK_EQUAL(receipt->status(), 0);
-        // BOOST_CHECK_GT(receipt->gasUsed(), 0);
-        // auto output = receipt->output();
-        // std::string outputStr((char*)output.data(), output.size());
-        // SCHEDULER_LOG(DEBUG) << LOG_KV("outputStr", outputStr);
-        // BOOST_CHECK_EQUAL(outputStr, "Hello world! response");
     }
 }
 BOOST_AUTO_TEST_CASE(executeWithSystemError)
