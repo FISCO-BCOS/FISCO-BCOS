@@ -223,6 +223,11 @@ std::pair<bool, std::string> SchedulerManager::checkAndInit()
 void SchedulerManager::asyncSwitchTerm(
     int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback)
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     // Will update scheduler session, clear all scheduler & executor block pipeline cache and
     // re-dispatch executor
     m_pool.enqueue([this, callback = std::move(callback), schedulerSeq]() {
@@ -336,6 +341,11 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
 
 void SchedulerManager::switchTerm(int64_t schedulerSeq)
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     m_status.store(SWITCHING);
     m_schedulerTerm = SchedulerTerm(schedulerSeq);
     updateScheduler(m_schedulerTerm.getSchedulerTermID());
@@ -346,6 +356,11 @@ void SchedulerManager::switchTerm(int64_t schedulerSeq)
 
 void SchedulerManager::selfSwitchTerm()
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     if (m_status == SWITCHING)
     {
         // is self-switching, just return
@@ -367,6 +382,11 @@ void SchedulerManager::asyncSelfSwitchTerm()
 
 void SchedulerManager::onSwitchTermNotify()
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     m_factory->getLedger()->asyncGetBlockNumber(
         [this](Error::Ptr error, protocol::BlockNumber blockNumber) {
             if (error)

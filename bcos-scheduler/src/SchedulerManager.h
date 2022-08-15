@@ -100,12 +100,16 @@ public:
         INITIALING = 1,
         RUNNING = 2,
         SWITCHING = 3,
+        STOPPED = 4,
     };
 
     std::pair<bool, std::string> checkAndInit();
     void stop() override
     {
         SCHEDULER_LOG(INFO) << "Try to stop SchedulerManager";
+
+        m_status.store(STOPPED);
+
         if (m_scheduler)
         {
             m_scheduler->stop();
