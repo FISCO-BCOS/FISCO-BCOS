@@ -224,9 +224,9 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     {
         codec.decode(_callParameters->params(), path, admin);
     }
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
-                          << LOG_KV("path", path) << LOG_KV("admin", admin);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
+                           << LOG_KV("path", path) << LOG_KV("admin", admin);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table || !table->getRow(ADMIN_FIELD))
@@ -266,11 +266,11 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     uint8_t type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("ContractAuthMgrPrecompiled")
-                          << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
-                          << LOG_KV("func", toHexStringWithPrefix(func))
-                          << LOG_KV("type", (uint32_t)type);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("ContractAuthMgrPrecompiled")
+                           << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
+                           << LOG_KV("func", toHexStringWithPrefix(func))
+                           << LOG_KV("type", (uint32_t)type);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
@@ -488,10 +488,10 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         codec.decode(_callParameters->params(), path, _func, account);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
-                          << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
-                          << LOG_KV("account", account);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
+                           << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
+                           << LOG_KV("account", account);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)

@@ -485,8 +485,8 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                          << LOG_KV("selectKeySize", tableKeyList.size())
-                          << LOG_KV("affectedRows", entries.size());
+                           << LOG_KV("selectKeySize", tableKeyList.size())
+                           << LOG_KV("affectedRows", entries.size());
     gasPricer->setMemUsed(tableKeyList.size() * columns.size());
     gasPricer->appendOperation(InterfaceOpcode::Update, tableKeyList.size());
     _callParameters->setExecResult(codec.encode((int32_t)tableKeyList.size()));

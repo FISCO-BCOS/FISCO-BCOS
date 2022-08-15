@@ -239,9 +239,9 @@ void AuthManagerPrecompiled::resetAdmin(
     {
         codec.decode(data, path, admin);
     }
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
-                          << LOG_KV("path", path) << LOG_KV("admin", admin);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
+                           << LOG_KV("path", path) << LOG_KV("admin", admin);
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
@@ -433,8 +433,8 @@ void AuthManagerPrecompiled::setContractStatus(
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
-                          << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
+                           << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
+                           << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
 
     /// check sender is contract admin
     auto admin = getContractAdmin(_executive, address, _callParameters);
@@ -570,8 +570,8 @@ void AuthManagerPrecompiled::setDeployType(
         return;
     }
     u256 type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
-                          << LOG_KV("type", type);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
+                           << LOG_KV("type", type);
     if (type > 2)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled")
@@ -611,8 +611,8 @@ void AuthManagerPrecompiled::setDeployAuth(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
-                          << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
+                           << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
     auto table = _executive->storage().openTable("/apps");
     auto type = getDeployAuthType(_executive);
     auto getAclStr = (type == (int)AuthType::BLACK_LIST_MODE) ? FS_ACL_BLACK : FS_ACL_WHITE;

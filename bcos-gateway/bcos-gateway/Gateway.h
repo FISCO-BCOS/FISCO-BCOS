@@ -238,7 +238,7 @@ private:
     ratelimit::BWRateStatistics::Ptr m_rateStatistics;
 
     //
-    uint32_t m_rateStatisticsPeriodMS = 5000;  // ms
+    uint32_t m_rateStatisticsPeriodMS = 60000;  // ms
     // the timer that periodically prints the rate
     std::shared_ptr<Timer> m_rateStatisticsTimer;
 };
