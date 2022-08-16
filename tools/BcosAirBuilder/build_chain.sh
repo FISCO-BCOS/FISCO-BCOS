@@ -484,8 +484,8 @@ Usage:
     -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
-    -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
-    -t <mtail exec>                     [Required] mtail binary exec
+    -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
+    -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
     -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
