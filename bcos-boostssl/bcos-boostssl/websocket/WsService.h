@@ -127,7 +127,6 @@ public:
     }
 
 
-
     int32_t waitConnectFinishTimeout() const { return m_waitConnectFinishTimeout; }
     void setWaitConnectFinishTimeout(int32_t _timeout) { m_waitConnectFinishTimeout = _timeout; }
 
@@ -229,8 +228,6 @@ private:
     std::shared_ptr<boost::asio::io_context> m_ioc;
     // ssl context
     std::shared_ptr<boost::asio::ssl::context> m_ctx = nullptr;
-    // thread for ioc
-    std::shared_ptr<std::vector<std::thread>> m_iocThreads;
     // reconnect timer
     std::shared_ptr<boost::asio::deadline_timer> m_reconnect;
     // heartbeat timer
