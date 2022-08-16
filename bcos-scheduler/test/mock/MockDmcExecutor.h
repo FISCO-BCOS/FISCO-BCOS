@@ -5,6 +5,7 @@
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
+#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -167,6 +168,13 @@ public:
             auto [it, inserted] = m_dagHashes.emplace(inputs[i]->transactionHash());
             boost::ignore_unused(it);
             BOOST_TEST(inserted);
+            if (inputs[i]->to() == "aabbccdd")
+            {
+                callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                             "Execute failed with empty blockContext!"),
+                    {});
+                return;
+            }
 
             // SCHEDULER_LOG(TRACE) << "Executing: " << inputs[i].get();
             BOOST_TEST(inputs[i].get());
@@ -185,7 +193,6 @@ public:
 
         callback(nullptr, std::move(messages));
     }
-
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
