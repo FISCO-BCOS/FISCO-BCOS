@@ -484,8 +484,8 @@ Usage:
     -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
-    -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
-    -t <mtail exec>                     [Required] mtail binary exec
+    -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
+    -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
     -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
@@ -496,7 +496,7 @@ Usage:
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is false
-    -k <key page size>                  [Optional] key page size, default is 0 means not use key page
+    -k <key page size>                  [Optional] key page size, default is 10240
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
