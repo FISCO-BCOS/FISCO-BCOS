@@ -216,8 +216,7 @@ void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRe
 bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
 {
     auto jResp = toJsonResponse(std::move(_jsonResponse));
-    auto writer = Json::StreamWriterBuilder().newStreamWriter();
-
+    std::unique_ptr<Json::StreamWriter> writer(Json::StreamWriterBuilder().newStreamWriter());
     class JsonSink
     {
     public:
@@ -240,6 +239,7 @@ bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
     boost::iostreams::stream<JsonSink> outputStream(out);
 
     writer->write(jResp, &outputStream);
+    writer.reset();
     return out;
 }
 
