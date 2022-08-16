@@ -96,10 +96,14 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             iniConfig["chainID"] = nodeConfig->chainId();
             std::string iniStr = fastWriter.write(iniConfig);
 
+            nodeInfo->setWasm(nodeConfig->isWasm());
+            nodeInfo->setSmCryptoType(nodeConfig->smCryptoType());
+
             nodeInfo->setIniConfig(iniStr);
             nodeInfo->setMicroService(false);
             nodeInfo->setNodeName(nodeConfig->nodeName());
             nodeInfo->setNodeID(nodeID);
+            nodeInfo->setNodeCryptoType((nodeConfig->smCryptoType() ? group::NodeCryptoType::SM_NODE : group::NodeCryptoType::NON_SM_NODE));
 
             auto protocol = bcos::protocol::ProtocolInfo();
             protocol.setMinVersion(4);
