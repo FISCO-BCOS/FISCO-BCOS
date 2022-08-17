@@ -25,6 +25,7 @@
 #include "bcos-utilities/Timer.h"
 #include "servant/ServantProxy.h"
 #include <boost/exception/detail/type_info.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -84,10 +85,18 @@ public:
 
     void onClose(const tars::TC_Endpoint& ep) override
     {
-        auto p = addInactiveEndpoint(ep);
-        if (p.first && m_onCloseHandler)
+        try
         {
-            m_onCloseHandler(ep);
+            auto p = addInactiveEndpoint(ep);
+            if (p.first && m_onCloseHandler)
+            {
+                m_onCloseHandler(ep);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "[TarsServantProxyCallback::onClose] "
+                      << "exception: " << boost::diagnostic_information(e) << std::endl;
         }
     }
 

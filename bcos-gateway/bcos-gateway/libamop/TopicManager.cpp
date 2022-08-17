@@ -26,6 +26,7 @@
 #include <json/json.h>
 #include <servant/Application.h>
 #include <algorithm>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::amop;
@@ -405,12 +406,19 @@ bcos::rpc::RPCInterface::Ptr TopicManager::createAndGetServiceByClient(std::stri
 
         auto serviceName = m_rpcServiceName;
 
+        auto topicManagerWeakPtr = std::weak_ptr<TopicManager>(shared_from_this());
         auto servicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
             tars::Application::getCommunicator().get(), _clientID,
             bcostars::TarsServantProxyOnConnectHandler(),
-            [serviceName, this](const tars::TC_Endpoint& ep) {
+            [serviceName, topicManagerWeakPtr](const tars::TC_Endpoint& ep) {
+                auto topicManager = topicManagerWeakPtr.lock();
+                if (!topicManager)
+                {
+                    return;
+                }
+
                 auto endPointUrl = bcostars::endPointToString(serviceName, ep);
-                removeTopicsByClient(endPointUrl);
+                topicManager->removeTopicsByClient(endPointUrl);
             });
 
         auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
