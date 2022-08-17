@@ -155,7 +155,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(block->blockHeaderConst()->number())
                              << "fetchGasLimit exception: " << boost::diagnostic_information(e);
         _callback(BCOS_ERROR_WITH_PREV_PTR(
-                      SchedulerError::fetchGasLimitError, "etchGasLimit exception", e),
+                      SchedulerError::fetchGasLimitError, "fetchGasLimitError exception", e),
             nullptr, false);
         return;
     }

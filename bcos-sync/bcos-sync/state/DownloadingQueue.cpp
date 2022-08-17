@@ -559,7 +559,6 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             }
             if (_error != nullptr)
             {
-                downloadingQueue->onCommitFailed(_error, _block);
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("commitBlockState failed")
                     << LOG_KV("executedBlock", downloadingQueue->m_config->executedBlock())
@@ -567,6 +566,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
                     << LOG_KV("hash", blockHeader->hash().abridged())
                     << LOG_KV("code", _error->errorCode())
                     << LOG_KV("message", _error->errorMessage());
+                downloadingQueue->onCommitFailed(_error, _block);
                 return;
             }
             _ledgerConfig->setTxsSize(_block->transactionsSize());
@@ -634,6 +634,20 @@ void DownloadingQueue::onCommitFailed(
     bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _failedBlock)
 {
     auto blockHeader = _failedBlock->blockHeader();
+    // case invalidBlocks
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC(
+                                    "onCommitFailed: the block has already been committed, return "
+                                    "directly")
+                             << LOG_KV("executedBlock", m_config->executedBlock())
+                             << LOG_KV("number", blockHeader->number())
+                             << LOG_KV("hash", blockHeader->hash().abridged())
+                             << LOG_KV("code", _error->errorCode())
+                             << LOG_KV("message", _error->errorMessage());
+        fetchAndUpdatesLedgerConfig();
+        return;
+    }
     if (blockHeader->number() <= m_config->blockNumber())
     {
         BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: drop the expired block")
@@ -697,10 +711,12 @@ void DownloadingQueue::onCommitFailed(
             m_commitQueue.pop();
         }
     }
+    auto blocksTop = m_blocks.top();
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: update commitQueue and executingQueue")
                       << LOG_KV("commitQueueSize", m_commitQueue.size())
                       << LOG_KV("blocksQueueSize", m_blocks.size())
                       << LOG_KV("topNumber", topNumber)
+                      << LOG_KV("topBlock", blocksTop ? (blocksTop->blockHeader()->number()) : -1)
                       << LOG_KV("rePushedBlockCount", rePushedBlockCount)
                       << LOG_KV("executedBlock", m_config->executedBlock());
 }
