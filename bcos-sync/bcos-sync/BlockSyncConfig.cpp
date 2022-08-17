@@ -141,7 +141,9 @@ void BlockSyncConfig::setExecutedBlock(BlockNumber _executedBlock)
     if (m_blockNumber <= _executedBlock)
     {
         m_executedBlock = _executedBlock;
+        return;
     }
+    m_executedBlock.store(m_blockNumber);
 }
 
 bcos::protocol::NodeType BlockSyncConfig::determineNodeType()

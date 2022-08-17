@@ -1484,7 +1484,15 @@ void PBFTEngine::onStableCheckPointCommitFailed(
         m_cacheProcessor->updateStableCheckPointQueue(_stableProposal);
         return;
     }
-
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "onStableCheckPointCommitFailed for InvalidBlocks: "
+                                 "fetchAndUpdatesLedgerConfig")
+                          << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
+        fetchAndUpdatesLedgerConfig();
+        return;
+    }
     clearExceptionProposalState(_stableProposal->index());
 }
 
