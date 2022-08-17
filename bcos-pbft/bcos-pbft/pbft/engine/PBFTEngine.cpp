@@ -115,7 +115,7 @@ void PBFTEngine::start()
 void PBFTEngine::restart()
 {
     PBFT_LOG(INFO) << LOG_DESC("restart the consensus module");
-    m_config->enableAsMaterNode(true);
+    m_config->enableAsMasterNode(true);
     triggerTimeout(false);
 }
 

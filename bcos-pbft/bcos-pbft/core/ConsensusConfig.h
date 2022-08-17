@@ -115,7 +115,7 @@ public:
     void setObserverNodeList(ConsensusNodeList& _observerNodeList);
 
     bool asMasterNode() const { return m_asMasterNode.load(); }
-    virtual void enableAsMaterNode(bool _isMasterNode)
+    virtual void enableAsMasterNode(bool _isMasterNode)
     {
         m_asMasterNode.store(_isMasterNode);
         if (m_versionNotification)

@@ -79,6 +79,12 @@ void BlockSync::init()
 void BlockSync::enableAsMaster(bool _masterNode)
 {
     BLKSYNC_LOG(INFO) << LOG_DESC("enableAsMaster:") << _masterNode;
+    if (m_masterNode == _masterNode)
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("enableAsMasterNode: The masterNodeState is not changed")
+                          << LOG_KV("master", _masterNode);
+        return;
+    }
     m_config->setMasterNode(_masterNode);
     m_masterNode = _masterNode;
     if (!_masterNode)
@@ -496,6 +502,8 @@ void BlockSync::tryToRequestBlocks()
 
 void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
 {
+    BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("requestBlocks")
+                      << LOG_KV("from", _from) << LOG_KV("to", _to);
     m_state = SyncState::Downloading;
     m_downloadingTimer->start();
 
@@ -534,6 +542,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
                               << LOG_DESC("Request blocks") << LOG_KV("from", from)
                               << LOG_KV("to", to) << LOG_KV("curNum", m_config->blockNumber())
                               << LOG_KV("peer", _p->nodeId()->shortHex())
+                              << LOG_KV("maxRequestNumber", m_maxRequestNumber)
                               << LOG_KV("node", m_config->nodeID()->shortHex());
 
             ++shard;  // shard move
@@ -568,7 +577,8 @@ void BlockSync::maintainDownloadingQueue()
         m_downloadingQueue->pop();
         topBlock = m_downloadingQueue->top();
     }
-    if (!m_downloadingQueue->top())
+    topBlock = m_downloadingQueue->top();
+    if (!topBlock)
     {
         return;
     }
@@ -584,18 +594,20 @@ void BlockSync::maintainDownloadingQueue()
     }
 
     auto expectedBlock = executedBlock + 1;
-    auto topNumber = m_downloadingQueue->top()->blockHeader()->number();
+    auto topNumber = topBlock->blockHeader()->number();
     if (topNumber > (expectedBlock))
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
                              << LOG_KV("curNumber", m_config->blockNumber())
                              << LOG_KV("expectedBlock", expectedBlock)
+                             << LOG_KV("commitQueueSize", m_downloadingQueue->commitQueueSize())
+                             << LOG_KV("isSyncing", isSyncing())
+                             << LOG_KV("knownHighestNumber", m_config->knownHighestNumber())
                              << LOG_KV("node", m_config->nodeID()->shortHex());
         return;
     }
     // execute the expected block
-    topBlock = m_downloadingQueue->top();
-    if (topBlock && topBlock->blockHeader()->number() == (executedBlock + 1))
+    if (topBlock->blockHeader()->number() == (executedBlock + 1))
     {
         auto block = m_downloadingQueue->top();
         // Note: the block maybe cleared here

@@ -127,7 +127,7 @@ public:
             _onResponse(nullptr);
         }
     }
-    virtual void enableAsMaterNode(bool _isMasterNode);
+    virtual void enableAsMasterNode(bool _isMasterNode);
 
     virtual bool masterNode() const { return m_masterNode.load(); }
 
