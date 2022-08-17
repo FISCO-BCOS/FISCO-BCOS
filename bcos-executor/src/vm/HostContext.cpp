@@ -154,9 +154,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         break;
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Unsupported opcode EVM_DELEGATECALL or EVM_CALLCODE"));
-        break;
+        // TODO: implement this, don't forget the compatibility
+        evmc_result result;
+        result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
+        result.release = nullptr;  // no output to release
+        result.gas_left = 0;
+        return result;
     case EVMC_CREATE:
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
