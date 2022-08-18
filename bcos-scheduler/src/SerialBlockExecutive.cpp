@@ -149,6 +149,15 @@ void SerialBlockExecutive::asyncExecute(
 void SerialBlockExecutive::serialExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
+    // if is empty block just return
+    if (m_transactions.empty())
+    {
+        SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << "Empty block, just return.";
+        onExecuteFinish(std::move(callback));
+        return;
+    }
+
+
     SERIAL_EXECUTE_LOG(INFO) << "Send Transaction, size: " << m_transactions.size();
     // handle create message, to generate address
     for (auto& tx : m_transactions)
