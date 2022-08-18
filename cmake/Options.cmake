@@ -54,7 +54,7 @@ macro(configure_project)
         set(ARCH_NATIVE ON)
     endif()
     if(NATIVE)
-        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
+        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden")
     endif()
 
     default_option(SANITIZE OFF)
