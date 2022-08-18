@@ -366,7 +366,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 m_writeBatch = nullptr;
             }
             STORAGE_ROCKSDB_LOG(ERROR)
-                << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
+                << LOG_DESC("asyncPrepare invalidTable") << LOG_KV("number", param.number);
             callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
             return;
         }

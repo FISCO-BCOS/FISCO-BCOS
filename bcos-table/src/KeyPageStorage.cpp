@@ -252,9 +252,9 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     Entry entry;
                     entry.setObject(*meta);
                     readLock.unlock();
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel >= bcos::LogLevel::TRACE || meta->size() < 3)
                     {  // FIXME: this log is only for debug, comment it when release
-                        KeyPage_LOG(TRACE)
+                        KeyPage_LOG(DEBUG)
                             << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
                             << LOG_KV("key", toHex(it.first.second)) << LOG_KV("meta", *meta);
                     }
@@ -596,8 +596,8 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
         }
         if (m_ignoreNotExist)
         {
-            KeyPage_LOG(INFO) << LOG_DESC("data should exist but ignore not exist") << LOG_KV("table", tableView)
-                               << LOG_KV("key", toHex(key));
+            KeyPage_LOG(INFO) << LOG_DESC("data should exist but ignore not exist")
+                              << LOG_KV("table", tableView) << LOG_KV("key", toHex(key));
         }
         if (c_fileLogLevel >= TRACE)
         {

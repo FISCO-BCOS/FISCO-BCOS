@@ -345,13 +345,10 @@ public:
             }
             auto it = lower_bound(pageInfo.getPageKey());
             auto newIt = pages->insert(it, std::move(pageInfo));
-            if (c_fileLogLevel >= TRACE)
-            {
-                KeyPage_LOG(TRACE)
-                    << LOG_DESC("insert new pageInfo")
-                    << LOG_KV("pageKey", toHex(newIt->getPageKey()))
-                    << LOG_KV("valid", newIt->getCount()) << LOG_KV("size", newIt->getSize());
-            }
+            KeyPage_LOG(DEBUG) << LOG_DESC("insert new pageInfo")
+                               << LOG_KV("pageKey", toHex(newIt->getPageKey()))
+                               << LOG_KV("valid", newIt->getCount())
+                               << LOG_KV("size", newIt->getSize());
         }
 
         std::optional<std::string> updatePageInfoNoLock(std::string_view oldEndKey,
@@ -431,9 +428,20 @@ public:
 
         void clean()
         {
-            for (auto& p : *pages)
+            for (auto it = pages->begin(); it != pages->end();)
             {
-                p.setPageData(nullptr);
+                it->setPageData(nullptr);
+                if (it->getCount() == 0 || it->getPageKey().empty())
+                {
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta clean empty page")
+                        << LOG_KV("pageKey", toHex(it->getPageKey()));
+                    it = pages->erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
             }
         }
         std::unique_lock<std::shared_mutex> lock() const { return std::unique_lock(mutex); }
