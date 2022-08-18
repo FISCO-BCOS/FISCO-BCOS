@@ -371,7 +371,7 @@ public:
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("updatePageInfo")
                         << LOG_KV("oldPageKey",
-                               oldPageKey.has_value() ? toHex(oldPageKey.value()) : "")
+                               oldPageKey.has_value() ? toHex(oldPageKey.value()) : "not changed")
                         << LOG_KV("oldEndKey", toHex(oldEndKey))
                         << LOG_KV("newPageKey", toHex(pageKey)) << LOG_KV("count", count)
                         << LOG_KV("size", size);
@@ -433,9 +433,8 @@ public:
                 it->setPageData(nullptr);
                 if (it->getCount() == 0 || it->getPageKey().empty())
                 {
-                    KeyPage_LOG(DEBUG)
-                        << LOG_DESC("TableMeta clean empty page")
-                        << LOG_KV("pageKey", toHex(it->getPageKey()));
+                    KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta clean empty page")
+                                       << LOG_KV("pageKey", toHex(it->getPageKey()));
                     it = pages->erase(it);
                 }
                 else

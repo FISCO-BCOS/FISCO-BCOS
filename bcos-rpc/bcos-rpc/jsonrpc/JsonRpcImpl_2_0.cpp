@@ -67,7 +67,9 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto buffer = _msg->payload();
     auto req = std::string_view((const char*)buffer->data(), buffer->size());
 
-    onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session](bcos::bytes resp) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session, start](bcos::bytes resp) {
         if (_session && _session->isConnected())
         {
             // TODO: no need to copy resp
@@ -77,13 +79,16 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         }
         else
         {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
             // remove the callback
             BCOS_LOG(WARNING)
                 << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
                 << LOG_DESC("unable to send response for session has been inactive")
                 << LOG_KV("req", std::string_view((const char*)m_buffer->data(), m_buffer->size()))
                 << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
-                << LOG_KV("seq", _msg->seq())
+                << LOG_KV("seq", _msg->seq()) << LOG_KV("totalTime", total)
                 << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
         }
     });
@@ -95,8 +100,10 @@ bcos::bytes JsonRpcImpl_2_0::decodeData(std::string_view _data)
     auto end = _data.end();
     auto length = _data.size();
 
-    if ((length == 0) || (length % 2 != 0))
-        [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"}); }
+    if ((length == 0) || (length % 2 != 0)) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
+    }
 
     if (*begin == '0' && *(begin + 1) == 'x')
     {
