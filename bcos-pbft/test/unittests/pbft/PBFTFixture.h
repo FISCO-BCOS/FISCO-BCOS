@@ -135,7 +135,7 @@ public:
         m_cacheProcessor->registerOnLoadAndVerifyProposalSucc(boost::bind(
             &FakePBFTEngine::onLoadAndVerifyProposalSucc, this, boost::placeholders::_1));
         initSendResponseHandler();
-        _config->enableAsMaterNode(true);
+        _config->enableAsMasterNode(true);
     }
     ~FakePBFTEngine() override {}
 

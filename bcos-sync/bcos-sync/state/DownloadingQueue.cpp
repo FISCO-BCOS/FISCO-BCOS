@@ -332,9 +332,13 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 auto executedBlock = config->executedBlock();
                 if (orgBlockHeader->number() > executedBlock + 1)
                 {
+                    {
+                        WriteGuard lock(downloadQueue->x_blocks);
+                        downloadQueue->m_blocks.push(_block);
+                    }
                     BLKSYNC_LOG(WARNING)
                         << LOG_BADGE("Download")
-                        << LOG_DESC("BlockSync: drop the appliedBlock for discontinuous")
+                        << LOG_DESC("BlockSync: re-push the appliedBlock for discontinuous")
                         << LOG_KV("executedBlock", executedBlock)
                         << LOG_KV("nextBlock", downloadQueue->m_config->nextBlock())
                         << LOG_KV("number", orgBlockHeader->number())

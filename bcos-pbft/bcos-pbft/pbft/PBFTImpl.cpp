@@ -154,28 +154,28 @@ void PBFTImpl::asyncGetConsensusStatus(
     _onGetConsensusStatus(nullptr, statusStr);
 }
 
-void PBFTImpl::enableAsMaterNode(bool _isMasterNode)
+void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
 {
     if (m_masterNode == _isMasterNode)
     {
-        PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: The masterNodeState is not changed")
+        PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: The masterNodeState is not changed")
                        << LOG_KV("master", _isMasterNode);
         return;
     }
     if (!m_masterNode)
     {
         PBFT_LOG(INFO) << LOG_DESC(
-            "enableAsMaterNode: clearAllCache for the node switch into backup node");
+            "enableAsMasterNode: clearAllCache for the node switch into backup node");
         m_pbftEngine->clearAllCache();
     }
-    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: ") << _isMasterNode;
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: ") << _isMasterNode;
     m_masterNode.store(_isMasterNode);
-    m_pbftEngine->pbftConfig()->enableAsMaterNode(_isMasterNode);
+    m_pbftEngine->pbftConfig()->enableAsMasterNode(_isMasterNode);
     if (!_isMasterNode)
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: init and start the consensus module");
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: init and start the consensus module");
     init();
     m_pbftEngine->recoverState();
     m_pbftEngine->restart();

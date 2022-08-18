@@ -114,8 +114,13 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         Entry numberEntry;
         numberEntry.importFields({"0"});
         storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
-            [callback](auto&& error) {
-                LEDGER_LOG(ERROR) << "System contract write ledger storage error!";
+            [callback](Error::Ptr&& error) {
+                if (error)
+                {
+                    LEDGER_LOG(ERROR) << "System contract write ledger storage error "
+                                      << LOG_KV("msg", error->errorMessage())
+                                      << LOG_KV("code", error->errorCode());
+                }
                 callback(std::forward<decltype(error)>(error));
             });
         return;

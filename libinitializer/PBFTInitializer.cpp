@@ -179,9 +179,9 @@ void PBFTInitializer::start()
     if (!m_nodeConfig->enableFailOver())
     {
         m_blockSync->enableAsMaster(true);
-        // Note: since enableAsMaterNode will recover pbftState and execute the recovered proposal,
+        // Note: since enableAsMasterNode will recover pbftState and execute the recovered proposal,
         // should call this after every module and handlers has been inited completed
-        m_pbft->enableAsMaterNode(true);
+        m_pbft->enableAsMasterNode(true);
     }
     m_sealer->start();
     m_blockSync->start();
@@ -516,7 +516,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
     // register the handler
     m_leaderElection->registerOnCampaignHandler(
         [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
-            m_pbft->enableAsMaterNode(_success);
+            m_pbft->enableAsMasterNode(_success);
             m_blockSync->enableAsMaster(_success);
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
