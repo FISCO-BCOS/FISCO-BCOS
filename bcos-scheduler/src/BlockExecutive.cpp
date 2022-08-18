@@ -755,10 +755,9 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                     }
                 }
 
-                totalCount->fetch_sub(messages->size());
-                // TODO: must wait more response
-                if (*totalCount == 0)
+                if (totalCount->fetch_sub(messages->size()) == messages->size())
                 {
+                    // only one thread can get in this field
                     SCHEDULER_LOG(DEBUG)
                         << LOG_BADGE("DAG") << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
                         << "DAGExecute.3:\t<<< Joint all contract result\t"
