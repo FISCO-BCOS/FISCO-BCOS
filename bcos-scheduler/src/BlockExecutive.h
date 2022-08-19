@@ -102,6 +102,8 @@ public:
         }
     }
 
+    bool isSysBlock() { return m_isSysBlock; }
+
 protected:
     struct CommitStatus
     {

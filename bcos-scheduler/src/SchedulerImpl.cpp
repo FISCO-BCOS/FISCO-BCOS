@@ -517,6 +517,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 if (std::get<1>(gasNumber) <= (blockNumber + 1))
                 {
                     m_gasLimit = std::get<0>(gasNumber);
+                }
+
+                if (blockExecutive->isSysBlock())
+                {
                     removeAllPreparedBlock();  // must clear prepared cacche
                 }
 
