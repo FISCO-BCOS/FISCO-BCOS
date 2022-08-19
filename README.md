@@ -15,4 +15,6 @@ ps:视频表达可能有所不成熟，其中错误，欢迎指正。如果该�
 项目介绍:       
 此仓库用于放置关于fisco-bcos联盟链的视频教学<p>
 01目录:录制搭建fisco-bcos单机运行单群组四节点的联盟链<p>
-02目录:录制搭建fisco的控制台sdk,并简单讲解solidity文件代码
+  视频网址:  https://www.bilibili.com/video/BV1fW4y1h7pa?spm_id_from=333.999.0.0
+02目录:录制搭建fisco的控制台sdk,并简单讲解solidity文件代码<p>
+  视频网址:  https://www.bilibili.com/video/BV19W4y1b74a?spm_id_from=333.999.0.0
