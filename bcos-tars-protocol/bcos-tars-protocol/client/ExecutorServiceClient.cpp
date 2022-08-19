@@ -59,7 +59,8 @@ void ExecutorServiceClient::status(
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
             m_callback;
     };
-    m_prx->async_status(new Callback(std::move(callback)));
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_status(new Callback(std::move(callback)));
 }
 
 void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
@@ -89,7 +90,8 @@ void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
     };
     auto blockHeaderImpl =
         std::dynamic_pointer_cast<const bcostars::protocol::BlockHeaderImpl>(blockHeader);
-    m_prx->async_nextBlockHeader(
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_nextBlockHeader(
         new Callback(std::move(callback)), schedulerTermId, blockHeaderImpl->inner());
 }
 
@@ -124,7 +126,9 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
             m_callback;
     };
     auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
-    m_prx->async_executeTransaction(new Callback(std::move(callback)), executionMsgImpl->inner());
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_executeTransaction(
+        new Callback(std::move(callback)), executionMsgImpl->inner());
 }
 
 void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -158,7 +162,9 @@ void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr in
             m_callback;
     };
     auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
-    m_prx->async_call(new Callback(std::move(callback)), executionMsgImpl->inner());
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_call(
+        new Callback(std::move(callback)), executionMsgImpl->inner());
 }
 
 void ExecutorServiceClient::executeTransactions(std::string contractAddress,
@@ -207,7 +213,8 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
         auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
         tarsInputs.emplace_back(executionMsgImpl->inner());
     }
-    m_prx->async_executeTransactions(
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_executeTransactions(
         new Callback(std::move(callback)), contractAddress, tarsInputs);
 }
 
@@ -257,7 +264,8 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
         auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
         tarsInputs.emplace_back(executionMsgImpl->inner());
     }
-    m_prx->async_dmcExecuteTransactions(
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_dmcExecuteTransactions(
         new Callback(std::move(callback)), contractAddress, tarsInputs);
 }
 
@@ -307,7 +315,9 @@ void ExecutorServiceClient::dagExecuteTransactions(
         auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
         tarsInput.emplace_back(executionMsgImpl->inner());
     }
-    m_prx->async_dagExecuteTransactions(new Callback(std::move(callback)), tarsInput);
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_dagExecuteTransactions(
+        new Callback(std::move(callback)), tarsInput);
 }
 
 void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -341,7 +351,9 @@ void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr 
             m_callback;
     };
     auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
-    m_prx->async_dmcCall(new Callback(std::move(callback)), executionMsgImpl->inner());
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_dmcCall(
+        new Callback(std::move(callback)), executionMsgImpl->inner());
 }
 
 void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
@@ -371,7 +383,8 @@ void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
     private:
         std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)> m_callback;
     };
-    m_prx->async_getHash(new Callback(std::move(callback)), number);
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_getHash(new Callback(std::move(callback)), number);
 }
 
 void ExecutorServiceClient::prepare(
@@ -416,7 +429,9 @@ void ExecutorServiceClient::commit(
     private:
         std::function<void(bcos::Error::Ptr)> m_callback;
     };
-    m_prx->async_commit(new Callback(std::move(callback)), toTarsTwoPCParams(params));
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_commit(
+        new Callback(std::move(callback)), toTarsTwoPCParams(params));
 }
 
 void ExecutorServiceClient::rollback(
@@ -440,7 +455,8 @@ void ExecutorServiceClient::rollback(
     private:
         std::function<void(bcos::Error::Ptr)> m_callback;
     };
-    m_prx->async_rollback(new Callback(std::move(callback)), toTarsTwoPCParams(params));
+    m_prx->tars_set_timeout(30000)->async_rollback(
+        new Callback(std::move(callback)), toTarsTwoPCParams(params));
 }
 
 void ExecutorServiceClient::reset(std::function<void(bcos::Error::Ptr)> callback)
@@ -460,7 +476,7 @@ void ExecutorServiceClient::reset(std::function<void(bcos::Error::Ptr)> callback
     private:
         std::function<void(bcos::Error::Ptr)> m_callback;
     };
-    m_prx->async_reset(new Callback(std::move(callback)));
+    m_prx->tars_set_timeout(30000)->async_reset(new Callback(std::move(callback)));
 }
 
 void ExecutorServiceClient::getCode(
@@ -489,7 +505,9 @@ void ExecutorServiceClient::getCode(
     private:
         std::function<void(bcos::Error::Ptr, bcos::bytes)> m_callback;
     };
-    m_prx->async_getCode(new Callback(std::move(callback)), std::string(contract));
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_getCode(
+        new Callback(std::move(callback)), std::string(contract));
 }
 
 void ExecutorServiceClient::getABI(
@@ -516,5 +534,7 @@ void ExecutorServiceClient::getABI(
     private:
         std::function<void(bcos::Error::Ptr, std::string)> m_callback;
     };
-    m_prx->async_getABI(new Callback(std::move(callback)), std::string(contract));
+    // timeout is 30s
+    m_prx->tars_set_timeout(30000)->async_getABI(
+        new Callback(std::move(callback)), std::string(contract));
 }
