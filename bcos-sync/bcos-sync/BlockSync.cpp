@@ -616,7 +616,6 @@ void BlockSync::maintainDownloadingQueue()
             return;
         }
         m_downloadingQueue->pop();
-        m_state = SyncState::Downloading;
         auto blockHeader = block->blockHeader();
         auto header = block->blockHeader();
         auto signature = header->signatureList();
