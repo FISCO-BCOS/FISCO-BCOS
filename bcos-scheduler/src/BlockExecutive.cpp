@@ -1113,31 +1113,30 @@ void BlockExecutive::batchGetHashes(
     m_scheduler->m_executorManager->forEachExecutor(
         [this, status, totalHash](
             std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-            executor->getHash(number(), [status, totalHash](
-                                            bcos::Error::Ptr&& error, crypto::HashType&& hash) {
-                {
-                    WriteGuard lock(status->x_lock);
-                    if (error)
+            executor->getHash(
+                number(), [status, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
                     {
-                        SCHEDULER_LOG(ERROR) << "Commit executor error!" << error->errorMessage();
-                        ++status->failed;
-                    }
-                    else
-                    {
-                        ++status->success;
-                        SCHEDULER_LOG(DEBUG)
-                            << "GetHash executor success, success: " << status->success;
+                        WriteGuard lock(status->x_lock);
+                        if (error)
+                        {
+                            SCHEDULER_LOG(ERROR) << "GetHash error!" << error->errorMessage();
+                            ++status->failed;
+                        }
+                        else
+                        {
+                            ++status->success;
+                            SCHEDULER_LOG(DEBUG) << "GetHash success, success: " << status->success;
 
-                        *totalHash ^= hash;
-                    }
+                            *totalHash ^= hash;
+                        }
 
-                    if (status->success + status->failed < status->total)
-                    {
-                        return;
+                        if (status->success + status->failed < status->total)
+                        {
+                            return;
+                        }
                     }
-                }
-                status->checkAndCommit(*status);
-            });
+                    status->checkAndCommit(*status);
+                });
         });
 }
 
@@ -1199,7 +1198,11 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
                                 SCHEDULER_LOG(ERROR)
                                     << BLOCK_NUMBER(number()) << "Commit executor error!"
                                     << error->errorMessage();
-                                ++status->failed;
+
+                                // executor failed is also success++
+                                // because commit has been successful after ledger commit
+                                // this executorIt->commit is just for clear storage cache.
+                                ++status->success;
 
                                 if (error->errorCode() ==
                                     bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
