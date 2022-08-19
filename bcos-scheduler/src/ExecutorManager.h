@@ -80,10 +80,26 @@ public:
     virtual void stop()
     {
         EXECUTOR_MANAGER_LOG(INFO) << "Try to stop ExecutorManager";
-        WriteGuard lock(m_mutex);
-        for (auto it : m_name2Executors)
+
+
+        std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors;
         {
-            it.second->executor->stop();
+            if (m_name2Executors.empty())
+            {
+                return;
+            }
+
+            WriteGuard lock(m_mutex);
+            for (auto it : m_name2Executors)
+            {
+                executors.push_back(it.second->executor);
+            }
+        }
+
+        // no lock blocking to stop
+        for (auto executor : executors)
+        {
+            executor->stop();
         }
     }
 
