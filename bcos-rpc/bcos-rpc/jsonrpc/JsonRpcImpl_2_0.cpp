@@ -19,6 +19,8 @@
  * @date: 2021-07-09
  */
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/Common.h>
@@ -376,11 +378,15 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_vie
     jResp["input"] = toHexStringWithPrefix(tx->input());
     RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
+
+    auto start = utcTime();
+    auto sendTxTimeout = m_sendTxTimeout;
+
     // Note: In order to avoid taking up too much memory at runtime, it is not recommended to pass
     // tx to lamba expressions for the tx will only be released when submitCallback is called
     auto submitCallback =
-        [m_jResp = std::move(jResp), _requireProof, respFunc = std::move(_respFunc), self](
-            Error::Ptr _error,
+        [m_jResp = std::move(jResp), _requireProof, respFunc = std::move(_respFunc), start,
+            sendTxTimeout, self](Error::Ptr _error,
             bcos::protocol::TransactionSubmitResult::Ptr _transactionSubmitResult) mutable {
             auto rpc = self.lock();
             if (!rpc)
@@ -409,10 +415,23 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_vie
                 auto txHash = _transactionSubmitResult->txHash();
                 auto hexPreTxHash = txHash.hexPrefixed();
 
-                RPC_IMPL_LOG(TRACE)
-                    << LOG_BADGE("sendTransaction") << LOG_DESC("getTransactionReceipt")
-                    << LOG_KV("hexPreTxHash", hexPreTxHash)
-                    << LOG_KV("requireProof", _requireProof);
+                auto end = utcTime();
+                auto totalTime = end - start;  // ms
+                if (sendTxTimeout > 0 && totalTime > sendTxTimeout)
+                {
+                    RPC_IMPL_LOG(WARNING)
+                        << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
+                        << LOG_KV("hexPreTxHash", hexPreTxHash)
+                        << LOG_KV("requireProof", _requireProof) << LOG_KV("txCostTime", totalTime);
+                }
+                else
+                {
+                    RPC_IMPL_LOG(TRACE)
+                        << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
+                        << LOG_KV("hexPreTxHash", hexPreTxHash)
+                        << LOG_KV("requireProof", _requireProof) << LOG_KV("txCostTime", totalTime);
+                }
+
                 if (_transactionSubmitResult->status() !=
                     (int32_t)bcos::protocol::TransactionStatus::None)
                 {
