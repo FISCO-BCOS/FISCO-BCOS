@@ -320,13 +320,14 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     return wsService;
 }
 
-bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
+bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
     //*
     auto jsonRpcInterface =
         std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
+    jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
     /*/
         auto jsonRpcInterface =
             std::make_shared<bcos::rpc::DupTestTxJsonRpcImpl_2_0>(_groupManager, m_gateway,
@@ -367,7 +368,7 @@ Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
                   << LOG_KV("listenPort", config->listenPort())
                   << LOG_KV("threadCount", config->threadPoolSize())
                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
-    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
     return rpc;
 }
 
@@ -378,23 +379,18 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto wsService = buildWsService(config);
     auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildAirAMOPClient(wsService);
-    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
     return rpc;
 }
 
-/**
- * @brief: Rpc
- * @param _config: WsConfig
- * @param _nodeInfo: node info
- * @return Rpc::Ptr:
- */
-Rpc::Ptr RpcFactory::buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
-    GroupManager::Ptr _groupManager, AMOPClient::Ptr _amopClient)
+Rpc::Ptr RpcFactory::buildRpc(int sendTxTimeout,
+    std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager,
+    AMOPClient::Ptr _amopClient)
 {
     // JsonRpc
-    auto jsonRpc = buildJsonRpc(_wsService, _groupManager);
+    auto jsonRpc = buildJsonRpc(sendTxTimeout, _wsService, _groupManager);
     // EventSub
     auto es = buildEventSub(_wsService, _groupManager);
     return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient);
