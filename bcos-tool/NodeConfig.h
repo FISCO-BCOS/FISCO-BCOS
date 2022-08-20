@@ -201,6 +201,8 @@ public:
     unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
+    int sendTxTimeout() const { return m_sendTxTimeout; }
+
     bool withoutTarsFramework() const { return m_withoutTarsFramework; }
     void setWithoutTarsFramework(bool _withoutTarsFramework)
     {
@@ -224,6 +226,7 @@ protected:
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadFailOverConfig(
         boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
+    virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -347,6 +350,9 @@ private:
     bool m_enableFailOver = false;
     // etcd/zookeeper/consual url
     std::string m_failOverClusterUrl;
+
+    // others config
+    int m_sendTxTimeout = -1;
 };
 }  // namespace tool
 }  // namespace bcos

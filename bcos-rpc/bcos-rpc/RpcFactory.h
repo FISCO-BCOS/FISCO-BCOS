@@ -66,12 +66,7 @@ public:
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     Rpc::Ptr buildLocalRpc(bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
-    /**
-     * @brief: Rpc
-     * @param _config: WsConfig
-     * @return Rpc::Ptr:
-     */
-    Rpc::Ptr buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
+    Rpc::Ptr buildRpc(int sendTxTimeout, std::shared_ptr<boostssl::ws::WsService> _wsService,
         GroupManager::Ptr _groupManager, AMOPClient::Ptr _amopClient);
 
     bcos::tool::NodeConfig::Ptr nodeConfig() const { return m_nodeConfig; }
@@ -90,7 +85,7 @@ protected:
     AMOPClient::Ptr buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService);
 
 
-    bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(
+    bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(int sendTxTimeout,
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
     bcos::event::EventSub::Ptr buildEventSub(
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);

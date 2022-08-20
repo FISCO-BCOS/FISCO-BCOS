@@ -67,6 +67,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadSealerConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
+    loadOthersConfig(_pt);
 }
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
@@ -600,6 +601,15 @@ void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool
                          << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
                          << LOG_KV("leaseTTL", m_leaseTTL)
                          << LOG_KV("enableFailOver", m_enableFailOver);
+}
+
+void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
+{
+    //
+    m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig")
+                         << LOG_KV("sendTxTimeout", m_sendTxTimeout);
 }
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
