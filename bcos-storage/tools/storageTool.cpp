@@ -262,6 +262,11 @@ int main(int argc, const char* argv[])
             key = readParameters[1];
         }
         cout << "read " << tableName << ", key is " << key << endl;
+        if (hexEncoded)
+        {
+            auto keyBytes = fromHexString(key);
+            key = std::string((char*)keyBytes->data(), keyBytes->size());
+        }
         // create secondary instance
         auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
         auto rocksdbStorage =
