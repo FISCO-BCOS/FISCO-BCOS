@@ -1,5 +1,0 @@
-hunter_add_package(bcos-crypto)
-find_package(bcos-utilities CONFIG REQUIRED)
-find_package(bcos-crypto CONFIG REQUIRED)
-get_target_property(BCOS_CRYPTO_INCLUDE bcos-crypto::bcos-crypto INTERFACE_INCLUDE_DIRECTORIES)
-include_directories(${BCOS_CRYPTO_INCLUDE}/bcos-crypto)
