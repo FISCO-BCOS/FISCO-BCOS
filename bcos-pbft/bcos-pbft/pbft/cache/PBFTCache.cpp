@@ -335,6 +335,7 @@ void PBFTCache::resetCache(ViewType _curView)
         m_config->notifyResetSealing(m_prePrepare->consensusProposal()->index());
         // reset the exceptioned txs to unsealed
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
+        m_prePrepare = nullptr;
     }
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);

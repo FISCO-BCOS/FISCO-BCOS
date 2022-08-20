@@ -53,14 +53,7 @@ public:
 public:
     WsSession(std::string _moduleName = "DEFAULT");
 
-    virtual ~WsSession()
-    {
-        WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
-        if (m_reporter)
-        {
-            m_reporter->stop();
-        }
-    }
+    virtual ~WsSession() { WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this); }
 
     void drop(uint32_t _reason);
 
