@@ -121,6 +121,9 @@ public:
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
+    int sendTxTimeout() { return m_sendTxTimeout; }
+    void setSendTxTimeout(int _sendTxTimeout) { m_sendTxTimeout = _sendTxTimeout; }
+
 protected:
     static bcos::bytes decodeData(std::string_view _data);
 
@@ -163,6 +166,9 @@ private:
     void getGroupPeers(std::string_view _groupID, RespFunc _respFunc) override;
 
 private:
+    // ms
+    int m_sendTxTimeout = -1;
+
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
