@@ -28,7 +28,10 @@ class PBFTTimer : public Timer
 {
 public:
     using Ptr = std::shared_ptr<PBFTTimer>;
-    explicit PBFTTimer(uint64_t _timeout) : Timer(_timeout) { updateAdjustedTimeout(); }
+    explicit PBFTTimer(uint64_t _timeout, std::string const& _name) : Timer(_timeout, _name)
+    {
+        updateAdjustedTimeout();
+    }
 
     ~PBFTTimer() override {}
 

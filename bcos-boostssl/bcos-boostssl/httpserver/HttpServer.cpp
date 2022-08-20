@@ -93,7 +93,6 @@ void HttpServer::stop()
     }
 
 
-
     HTTP_SERVER(INFO) << LOG_BADGE("stop") << LOG_DESC("http server");
 }
 
@@ -110,6 +109,8 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     {
         HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("error", ec)
                              << LOG_KV("message", ec.message());
+        // retry to accept after waiting for 1s
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return doAccept();
     }
 

@@ -44,30 +44,6 @@ WsSession::WsSession(std::string _moduleName) : m_moduleName(_moduleName)
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 }
-
-void WsSession::startReporter()
-{
-    // print the queueSize every 10s
-    m_reporter = std::make_shared<bcos::Timer>(10000, "queueReporter");
-    auto self = std::weak_ptr<WsSession>(shared_from_this());
-    m_reporter->registerTimeoutHandler([self]() {
-        auto session = self.lock();
-        if (!session)
-        {
-            return;
-        }
-        session->report();
-    });
-    m_reporter->start();
-}
-
-void WsSession::report()
-{
-    m_reporter->restart();
-    ReadGuard lock(x_writeQueue);
-    WEBSOCKET_SESSION(INFO) << m_endPoint << LOG_DESC(" queueSize: ") << m_writeQueue.size();
-}
-
 void WsSession::drop(uint32_t _reason)
 {
     if (m_isDrop)
@@ -138,7 +114,6 @@ void WsSession::startAsClient()
         auto session = shared_from_this();
         m_connectHandler(nullptr, session);
     }
-    startReporter();
     // read message
     asyncRead();
 
@@ -152,7 +127,6 @@ void WsSession::startAsServer(HttpRequest _httpRequest)
 {
     WEBSOCKET_SESSION(INFO) << LOG_BADGE("startAsServer") << LOG_DESC("start websocket handshake")
                             << LOG_KV("endPoint", m_endPoint) << LOG_KV("session", this);
-    startReporter();
     m_wsStreamDelegate->asyncAccept(
         _httpRequest, std::bind(&WsSession::onWsAccept, shared_from_this(), std::placeholders::_1));
 }
@@ -452,7 +426,6 @@ void WsSession::addRespCallback(const std::string& _seq, CallBack::Ptr _callback
 WsSession::CallBack::Ptr WsSession::getAndRemoveRespCallback(
     const std::string& _seq, bool _remove, std::shared_ptr<MessageFace> _message)
 {
-
     // Sesseion need check response packet and message isn't a respond packet, so message don't have
     // a callback. Otherwise message has a callback.
     if (needCheckRspPacket() && _message && !_message->isRespPacket())

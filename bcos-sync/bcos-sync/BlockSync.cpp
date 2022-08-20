@@ -38,7 +38,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
 {
     m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
-    m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout());
+    m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
     m_downloadingTimer->registerTimeoutHandler(boost::bind(&BlockSync::onDownloadTimeout, this));
     m_downloadingQueue->registerNewBlockHandler(
         boost::bind(&BlockSync::onNewBlock, this, boost::placeholders::_1));

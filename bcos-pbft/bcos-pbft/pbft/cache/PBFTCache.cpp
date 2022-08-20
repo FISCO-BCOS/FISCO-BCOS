@@ -29,7 +29,7 @@ PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
   : m_config(_config), m_index(_index)
 {
     // Timer is used to manage checkpoint timeout
-    m_timer = std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval());
+    m_timer = std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "pbftCacheTimer");
 }
 void PBFTCache::init()
 {
