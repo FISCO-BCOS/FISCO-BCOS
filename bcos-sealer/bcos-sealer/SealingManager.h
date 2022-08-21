@@ -85,13 +85,19 @@ public:
             m_startSealingNumber = _startSealingNumber;
             m_sealingNumber = _startSealingNumber;
             m_lastSealTime = utcSteadyTime();
+            if (m_waitUntil >= m_startSealingNumber)
+            {
+                SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo: reset waitUntil for reseal");
+                m_waitUntil.store(m_startSealingNumber - 1);
+            }
         }
         m_endSealingNumber = _endSealingNumber;
         m_maxTxsPerBlock = _maxTxsPerBlock;
         m_onReady();
         SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo") << LOG_KV("start", m_startSealingNumber)
                        << LOG_KV("end", m_endSealingNumber)
-                       << LOG_KV("sealingNumber", m_sealingNumber);
+                       << LOG_KV("sealingNumber", m_sealingNumber)
+                       << LOG_KV("waitUntil", m_waitUntil);
     }
 
     virtual void resetCurrentNumber(int64_t _currentNumber) { m_currentNumber = _currentNumber; }
