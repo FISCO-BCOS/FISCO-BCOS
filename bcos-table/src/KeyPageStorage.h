@@ -538,11 +538,11 @@ public:
             archive >> *this;
             if (pageKey != entries.rbegin()->first)
             {
-                KeyPage_LOG(WARNING)
-                    << LOG_DESC("load page with invalid pageKey")
-                    << LOG_KV("pageKey", toHex(pageKey))
-                    << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
-                    << LOG_KV("valid", m_validCount) << LOG_KV("count", entries.size());
+                KeyPage_LOG(INFO) << LOG_DESC("load page with invalid pageKey")
+                                  << LOG_KV("pageKey", toHex(pageKey))
+                                  << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                                  << LOG_KV("valid", m_validCount)
+                                  << LOG_KV("count", entries.size());
                 m_invalidPageKeys.insert(std::string(pageKey));
             }
         }
@@ -689,8 +689,8 @@ public:
                     if (it != m_invalidPageKeys.end())
                     {
                         m_invalidPageKeys.erase(it);
-                        KeyPage_LOG(WARNING) << LOG_DESC("invalid pageKey become valid")
-                                             << LOG_KV("pageKey", toHex(key));
+                        KeyPage_LOG(DEBUG) << LOG_DESC("invalid pageKey become valid")
+                                           << LOG_KV("pageKey", toHex(key));
                     }
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
@@ -762,7 +762,7 @@ public:
                     --m_validCount;
                     ++page.m_validCount;
                 }
-                if (!m_invalidPageKeys.empty() && iter->first == *m_invalidPageKeys.begin())
+                if (!m_invalidPageKeys.empty() && iter->first >= *m_invalidPageKeys.begin())
                 {
                     page.m_invalidPageKeys.insert(
                         m_invalidPageKeys.extract(m_invalidPageKeys.begin()));
@@ -775,10 +775,20 @@ public:
                     break;
                 }
             }
-            if (!page.m_invalidPageKeys.empty() &&
-                page.entries.rbegin()->first == *page.m_invalidPageKeys.rbegin())
-            {  // if new pageKey has been pageKey, remove it from m_invalidPageKeys
-                page.m_invalidPageKeys.erase(std::prev(page.m_invalidPageKeys.end()));
+            // if new pageKey has been pageKey, remove it from m_invalidPageKeys
+            auto it = m_invalidPageKeys.find(page.entries.rbegin()->first);
+            if (it != m_invalidPageKeys.end())
+            {
+                m_invalidPageKeys.erase(it);
+                KeyPage_LOG(DEBUG) << LOG_DESC("invalid pageKey become valid because of split")
+                                   << LOG_KV("pageKey", toHex(page.entries.rbegin()->first));
+            }
+            it = page.m_invalidPageKeys.find(page.entries.rbegin()->first);
+            if (it != page.m_invalidPageKeys.end())
+            {
+                page.m_invalidPageKeys.erase(it);
+                KeyPage_LOG(DEBUG) << LOG_DESC("invalid pageKey become valid because of split")
+                                   << LOG_KV("pageKey", toHex(page.entries.rbegin()->first));
             }
             return page;
         }

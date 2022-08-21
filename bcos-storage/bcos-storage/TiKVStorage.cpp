@@ -145,7 +145,8 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     }
     catch (const pingcap::Exception& e)
     {
-        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow failed")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow failed")<< LOG_KV("table", _table)
+                                  << LOG_KV("key", toHex(_key))
                                   << LOG_KV("message", e.message()) << LOG_KV("code", e.code())
                                   << LOG_KV("what", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRow failed!", e), {});

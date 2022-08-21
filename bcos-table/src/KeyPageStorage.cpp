@@ -252,7 +252,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     Entry entry;
                     entry.setObject(*meta);
                     readLock.unlock();
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE || meta->size() < 3)
+                    if (meta->size() < 5)
                     {  // FIXME: this log is only for debug, comment it when release
                         KeyPage_LOG(DEBUG)
                             << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
@@ -310,12 +310,10 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     auto invalidKeys = page->invalidKeySet();
                     for (auto& k : invalidKeys)
                     {
-                        if (c_fileLogLevel >= TRACE)
-                        {
-                            KeyPage_LOG(TRACE)
-                                << LOG_DESC("Traverse Page delete invalid key")
-                                << LOG_KV("table", it.first.first) << LOG_KV("key", toHex(k));
-                        }
+                        KeyPage_LOG(DEBUG)
+                            << LOG_DESC("Traverse Page delete invalid key")
+                            << LOG_KV("currentKey", toHex(page->endKey()))
+                            << LOG_KV("table", it.first.first) << LOG_KV("key", toHex(k));
                         Entry e;
                         e.setStatus(Entry::Status::DELETED);
                         callback(it.first.first, k, std::move(e));
@@ -558,7 +556,7 @@ std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>> KeyPageStorag
                     {
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("import TableMeta") << LOG_KV("table", tableView)
-                            << LOG_KV("size", meta->size()) << LOG_KV("meta", *meta);
+                            << LOG_KV("size", meta->size());
                     }
                 }
                 d->entry.setStatus(Entry::Status::NORMAL);
