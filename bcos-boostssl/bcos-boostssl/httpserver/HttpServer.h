@@ -60,8 +60,6 @@ public:
     HttpReqHandler httpReqHandler() const { return m_httpReqHandler; }
     void setHttpReqHandler(HttpReqHandler _httpReqHandler) { m_httpReqHandler = _httpReqHandler; }
 
-
-
     std::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor() const { return m_acceptor; }
     void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
     {
@@ -109,7 +107,6 @@ private:
     WsUpgradeHandler m_wsUpgradeHandler;
 
     std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
-
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
     std::shared_ptr<bcos::ThreadPool> m_threadPool;

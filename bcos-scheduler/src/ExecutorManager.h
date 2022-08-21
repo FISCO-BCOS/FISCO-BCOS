@@ -25,6 +25,8 @@ class ExecutorManager
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
 
+    virtual ~ExecutorManager() = default;
+
     void addExecutor(
         std::string name, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor);
 

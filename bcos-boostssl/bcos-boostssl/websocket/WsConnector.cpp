@@ -84,7 +84,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
 
             // async connect
             rawStream->async_connect(_results,
-                [this, _host, _port, _disableSsl, endpoint, connector, builder, rawStream,
+                [this, _host, _port, _disableSsl, endpoint, ctx, connector, builder, rawStream,
                     _callback](boost::beast::error_code _ec,
                     boost::asio::ip::tcp::resolver::results_type::endpoint_type _ep) mutable {
                     if (_ec)
@@ -101,7 +101,8 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                         << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect success")
                         << LOG_KV("endpoint", endpoint);
 
-                    auto wsStreamDelegate = builder->build(_disableSsl, rawStream, m_moduleName);
+                    auto wsStreamDelegate =
+                        builder->build(_disableSsl, ctx, rawStream, m_moduleName);
 
                     std::shared_ptr<std::string> nodeId = std::make_shared<std::string>();
                     wsStreamDelegate->setVerifyCallback(
