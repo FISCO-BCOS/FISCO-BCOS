@@ -99,9 +99,9 @@ void SealingManager::clearPendingTxs()
         }
         catch (std::exception const& e)
         {
-            SEAL_LOG(WARNING)
-                << LOG_DESC("shouldGenerateProposal: return back the unhandled txs exception")
-                << LOG_KV("error", boost::diagnostic_information(e));
+            SEAL_LOG(WARNING) << LOG_DESC(
+                                     "clearPendingTxs: return back the unhandled txs exception")
+                              << LOG_KV("error", boost::diagnostic_information(e));
         }
     });
     UpgradeGuard ul(l);
