@@ -78,52 +78,59 @@ public:
 
     void onRead(boost::beast::error_code ec, std::size_t bytes_transferred)
     {
-        boost::ignore_unused(bytes_transferred);
-
-        // the peer client closed the connection
-        if (ec == boost::beast::http::error::end_of_stream)
+        try
         {
-            HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("end of stream");
-            // return doClose();
-            return;
-        }
-
-        if (ec)
-        {
-            HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
-                                  << LOG_KV("error", ec);
-            // return doClose();
-            return;
-        }
-
-        auto self = std::weak_ptr<HttpSession>(shared_from_this());
-        if (boost::beast::websocket::is_upgrade(m_parser->get()))
-        {
-            HTTP_SESSION(INFO) << LOG_BADGE("onRead") << LOG_DESC("websocket upgrade");
-            if (m_wsUpgradeHandler)
+            // the peer client closed the connection
+            if (ec == boost::beast::http::error::end_of_stream)
             {
-                auto httpSession = self.lock();
-                if (!httpSession)
-                {
-                    return;
-                }
-                m_wsUpgradeHandler(m_httpStream, m_parser->release(), httpSession->nodeId());
-            }
-            else
-            {
-                HTTP_SESSION(WARNING) << LOG_BADGE("onRead")
-                                      << LOG_DESC(
-                                             "the session will be closed for "
-                                             "unsupported websocket upgrade");
-                // doClose();
+                HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("end of stream");
+                // return doClose();
                 return;
             }
-            return;
+
+            if (ec)
+            {
+                HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
+                                      << LOG_KV("error", ec);
+                // return doClose();
+                return;
+            }
+
+            auto self = std::weak_ptr<HttpSession>(shared_from_this());
+            if (boost::beast::websocket::is_upgrade(m_parser->get()))
+            {
+                HTTP_SESSION(INFO) << LOG_BADGE("onRead") << LOG_DESC("websocket upgrade");
+                if (m_wsUpgradeHandler)
+                {
+                    auto httpSession = self.lock();
+                    if (!httpSession)
+                    {
+                        return;
+                    }
+                    m_wsUpgradeHandler(m_httpStream, m_parser->release(), httpSession->nodeId());
+                }
+                else
+                {
+                    HTTP_SESSION(WARNING) << LOG_BADGE("onRead")
+                                          << LOG_DESC(
+                                                 "the session will be closed for "
+                                                 "unsupported websocket upgrade");
+                    // doClose();
+                    return;
+                }
+                return;
+            }
+
+            HTTP_SESSION(INFO) << LOG_BADGE("onRead") << LOG_DESC("receive http request");
+
+            handleRequest(m_parser->release());
         }
-
-        HTTP_SESSION(INFO) << LOG_BADGE("onRead") << LOG_DESC("receive http request");
-
-        handleRequest(m_parser->release());
+        catch (std::exception const& e)
+        {
+            HTTP_SESSION(WARNING) << LOG_DESC("onRead exception")
+                                  << LOG_KV("bytesSize", bytes_transferred)
+                                  << LOG_KV("error", boost::diagnostic_information(e));
+        }
 
         if (!m_queue->isFull())
         {

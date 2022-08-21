@@ -93,7 +93,6 @@ void HttpServer::stop()
     }
 
 
-
     HTTP_SERVER(INFO) << LOG_BADGE("stop") << LOG_DESC("http server");
 }
 

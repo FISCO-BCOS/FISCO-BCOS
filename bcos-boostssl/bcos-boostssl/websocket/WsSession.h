@@ -53,14 +53,7 @@ public:
 public:
     WsSession(std::string _moduleName = "DEFAULT");
 
-    virtual ~WsSession()
-    {
-        WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
-        if (m_reporter)
-        {
-            m_reporter->stop();
-        }
-    }
+    virtual ~WsSession() { WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this); }
 
     void drop(uint32_t _reason);
 
@@ -187,9 +180,6 @@ protected:
     virtual void onReadPacket(boost::beast::flat_buffer& _buffer);
     void onWritePacket();
 
-    virtual void report();
-    virtual void startReporter();
-
 protected:
     // flag for message that need to check respond packet like p2pmessage
     bool m_needCheckRspPacket = false;
@@ -232,15 +222,12 @@ protected:
     struct Message
     {
         std::shared_ptr<bcos::bytes> buffer;
-
     };
 
     // send message queue
     mutable bcos::SharedMutex x_writeQueue;
     std::priority_queue<std::shared_ptr<Message>> m_writeQueue;
     std::atomic_bool m_writing = {false};
-
-    std::shared_ptr<bcos::Timer> m_reporter;
 };
 
 class WsSessionFactory
