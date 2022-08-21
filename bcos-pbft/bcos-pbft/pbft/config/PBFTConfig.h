@@ -54,7 +54,7 @@ public:
         m_frontService = _frontService;
         m_stateMachine = _stateMachine;
         m_storage = _storage;
-        m_timer = std::make_shared<PBFTTimer>(consensusTimeout());
+        m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
     }
 
     ~PBFTConfig() override {}

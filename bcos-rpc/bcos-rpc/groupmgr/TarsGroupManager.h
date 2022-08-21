@@ -34,7 +34,7 @@ public:
         NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
       : GroupManager(_rpcServiceName, _chainID, _nodeServiceFactory, _nodeConfig)
     {
-        m_groupStatusUpdater = std::make_shared<Timer>(c_tarsAdminRefreshTime);
+        m_groupStatusUpdater = std::make_shared<Timer>(c_tarsAdminRefreshTime, "gmrTimer");
         m_groupStatusUpdater->start();
         m_groupStatusUpdater->registerTimeoutHandler(
             boost::bind(&TarsGroupManager::updateGroupStatus, this));
