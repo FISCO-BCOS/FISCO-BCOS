@@ -53,7 +53,7 @@ void Host::startAccept(boost::system::error_code boost_error)
     {
         HOST_LOG(INFO) << LOG_DESC("P2P StartAccept") << LOG_KV("Host", m_listenHost) << ":"
                        << m_listenPort;
-        auto socket = m_asioInterface->newSocket(NodeIPEndpoint());
+        auto socket = m_asioInterface->newSocket(true, NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
         /// define callback after accept connections
         m_asioInterface->asyncAccept(
@@ -183,7 +183,7 @@ P2PInfo Host::p2pInfo()
         if (m_p2pInfo.p2pID.empty())
         {
             /// get certificate
-            auto sslContext = m_asioInterface->sslContext()->native_handle();
+            auto sslContext = m_asioInterface->srvContext()->native_handle();
             X509* cert = SSL_CTX_get0_certificate(sslContext);
 
             /// get issuer name
@@ -394,7 +394,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         }
     }
 
-    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
+    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
     auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
         *(socket->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));

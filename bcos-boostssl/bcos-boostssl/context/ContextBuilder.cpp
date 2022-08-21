@@ -176,6 +176,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     if (!SSL_CTX_check_enc_private_key(sslContext->native_handle()))
     {
         fprintf(stderr, "Private key does not match the certificate public key\n");
+        ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key error"));
     }
 
@@ -275,6 +276,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
     /* Check if the server encrypt certificate and private-key matches */
     if (!SSL_CTX_check_enc_private_key(sslContext->native_handle()))
     {
+        ERR_print_errors_fp(stderr);
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key error"));
     }
 

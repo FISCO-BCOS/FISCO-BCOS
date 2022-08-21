@@ -46,10 +46,16 @@ public:
         m_timerIOService = m_ioServicePool->getIOService();
     }
 
-    virtual std::shared_ptr<ba::ssl::context> sslContext() { return m_sslContext; }
-    virtual void setSSLContext(std::shared_ptr<ba::ssl::context> sslContext)
+    virtual std::shared_ptr<ba::ssl::context> srvContext() { return m_srvContext; }
+    virtual std::shared_ptr<ba::ssl::context> clientContext() { return m_clientContext; }
+
+    virtual void setSrvContext(std::shared_ptr<ba::ssl::context> _srvContext)
     {
-        m_sslContext = sslContext;
+        m_srvContext = _srvContext;
+    }
+    virtual void setClientContext(std::shared_ptr<ba::ssl::context> _clientContext)
+    {
+        m_clientContext = _clientContext;
     }
 
     virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
@@ -58,10 +64,12 @@ public:
             *(m_timerIOService), boost::posix_time::milliseconds(timeout));
     }
 
-    virtual std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
+    virtual std::shared_ptr<SocketFace> newSocket(
+        bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
     {
-        std::shared_ptr<SocketFace> m_socket = std::make_shared<Socket>(
-            m_ioServicePool->getIOService(), *m_sslContext, nodeIPEndpoint);
+        std::shared_ptr<SocketFace> m_socket =
+            std::make_shared<Socket>(m_ioServicePool->getIOService(),
+                _server ? *m_srvContext : *m_clientContext, nodeIPEndpoint);
         return m_socket;
     }
 
@@ -170,7 +178,9 @@ protected:
     std::shared_ptr<ba::io_context::strand> m_strand;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;
     std::shared_ptr<bi::tcp::resolver> m_resolver;
-    std::shared_ptr<ba::ssl::context> m_sslContext;
+
+    std::shared_ptr<ba::ssl::context> m_srvContext;
+    std::shared_ptr<ba::ssl::context> m_clientContext;
     int m_type = 0;
 };
 }  // namespace gateway
