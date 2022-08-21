@@ -218,8 +218,6 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, _moduleName);
     auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>((*_ioc));
     auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
-
-
     server->setCtx(_ctx);
     server->setAcceptor(acceptor);
     server->setHttpStreamFactory(httpStreamFactory);

@@ -78,10 +78,6 @@ public:
     void syncConnectToEndpoints(EndPointsPtr _peers);
 
 public:
-    void startIocThread();
-    void stopIocThread();
-
-public:
     std::shared_ptr<WsSession> newSession(
         std::shared_ptr<WsStreamDelegate> _wsStreamDelegate, std::string const& _nodeId);
     std::shared_ptr<WsSession> getSession(const std::string& _endPoint);
@@ -125,8 +121,6 @@ public:
     {
         m_sessionFactory = _sessionFactory;
     }
-
-
     int32_t waitConnectFinishTimeout() const { return m_waitConnectFinishTimeout; }
     void setWaitConnectFinishTimeout(int32_t _timeout) { m_waitConnectFinishTimeout = _timeout; }
 
@@ -144,9 +138,6 @@ public:
         m_ioservicePool = _ioservicePool;
         m_timerIoc = m_ioservicePool->getIOService();
     }
-
-    std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
-    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
 
     std::shared_ptr<WsConnector> connector() const { return m_connector; }
     void setConnector(std::shared_ptr<WsConnector> _connector) { m_connector = _connector; }
@@ -224,10 +215,6 @@ private:
 
     // ws connector
     std::shared_ptr<WsConnector> m_connector;
-    // io context
-    std::shared_ptr<boost::asio::io_context> m_ioc;
-    // ssl context
-    std::shared_ptr<boost::asio::ssl::context> m_ctx = nullptr;
     // reconnect timer
     std::shared_ptr<boost::asio::deadline_timer> m_reconnect;
     // heartbeat timer
@@ -236,7 +223,6 @@ private:
     std::shared_ptr<bcos::boostssl::http::HttpServer> m_httpServer;
 
 private:
-    std::size_t m_iocThreadCount;
     // mutex for m_sessions
     mutable boost::shared_mutex x_mutex;
     // all active sessions
@@ -255,6 +241,7 @@ private:
     std::vector<HandshakeHandler> m_handshakeHandlers;
     // sessionFactory
     WsSessionFactory::Ptr m_sessionFactory;
+
     IOServicePool::Ptr m_ioservicePool;
 
     std::shared_ptr<boost::asio::io_context> m_timerIoc;

@@ -55,15 +55,15 @@ std::shared_ptr<std::string> ContextBuilder::readFileContent(boost::filesystem::
 }
 
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
-    const std::string& _configPath)
+    bool _server, const std::string& _configPath)
 {
     auto config = std::make_shared<ContextConfig>();
     config->initConfig(_configPath);
-    return buildSslContext(*config);
+    return buildSslContext(_server, *config);
 }
 
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
-    const ContextConfig& _contextConfig)
+    bool _server, const ContextConfig& _contextConfig)
 {
     if (_contextConfig.isCertPath())
     {
@@ -71,7 +71,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
         {
             return buildSslContext(_contextConfig.certConfig());
         }
-        return buildSslContext(_contextConfig.smCertConfig());
+        return buildSslContext(_server, _contextConfig.smCertConfig());
     }
     else
     {
@@ -79,7 +79,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
         {
             return buildSslContextByCertContent(_contextConfig.certConfig());
         }
-        return buildSslContextByCertContent(_contextConfig.smCertConfig());
+        return buildSslContextByCertContent(_server, _contextConfig.smCertConfig());
     }
 }
 
@@ -114,60 +114,85 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
 }
 
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
-    const ContextConfig::SMCertConfig& _smCertConfig)
+    bool _server, const ContextConfig::SMCertConfig& _smCertConfig)
 {
+    SSL_CTX* ctx = NULL;
+    if (_server)
+    {
+        const SSL_METHOD* meth = SSLv23_server_method();
+        ctx = SSL_CTX_new(meth);
+    }
+    else
+    {
+        const SSL_METHOD* meth = CNTLS_client_method();
+        ctx = SSL_CTX_new(meth);
+    }
+
     std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+        std::make_shared<boost::asio::ssl::context>(ctx);
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
-    auto keyContent =
-        readFileContent(boost::filesystem::path(_smCertConfig.nodeKey));  // node.key content
-
-    boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-    sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
-
-    int ret = 0;
-    ret = SSL_CTX_use_enc_certificate_file(
-        sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM);
-    if (ret <= 0)
+    /* Load the server certificate into the SSL_CTX structure */
+    if (SSL_CTX_use_certificate_file(
+            sslContext->native_handle(), _smCertConfig.nodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
-        CONTEXT_LOG(WARNING) << LOG_BADGE("buildSslContext")
-                             << LOG_DESC("SSL_CTX_use_enc_certificate_file")
-                             << LOG_KV("error", ret);
-
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("SSL_CTX_use_enc_certificate_file, error: " + std::to_string(ret)));
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file error"));
     }
 
-    ret = SSL_CTX_use_enc_PrivateKey_file(
-        sslContext->native_handle(), _smCertConfig.enNodeKey.c_str(), SSL_FILETYPE_PEM);
-    if (ret <= 0)
+    /* Load the private-key corresponding to the server certificate */
+    if (SSL_CTX_use_PrivateKey_file(
+            sslContext->native_handle(), _smCertConfig.nodeKey.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
-        CONTEXT_LOG(WARNING) << LOG_BADGE("buildSslContext")
-                             << LOG_DESC("SSL_CTX_use_enc_PrivateKey_file") << LOG_KV("error", ret);
-
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("SSL_CTX_use_enc_PrivateKey_file, error: " + std::to_string(ret)));
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_PrivateKey_file error"));
     }
 
-    sslContext->use_certificate_chain_file(_smCertConfig.nodeCert);
+    /* Check if the server certificate and private-key matches */
+    if (!SSL_CTX_check_private_key(sslContext->native_handle()))
+    {
+        fprintf(stderr, "Private key does not match the certificate public key\n");
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key error"));
+    }
 
-    auto caContent =
-        readFileContent(boost::filesystem::path(_smCertConfig.caCert));  // node.key content
+    /* Load the server encrypt certificate into the SSL_CTX structure */
+    if (SSL_CTX_use_enc_certificate_file(
+            sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file error"));
+    }
 
+    /* Load the private-key corresponding to the server encrypt certificate */
+    if (SSL_CTX_use_enc_PrivateKey_file(
+            sslContext->native_handle(), _smCertConfig.enNodeKey.c_str(), SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file error"));
+    }
+
+    /* Check if the server encrypt certificate and private-key matches */
+    if (!SSL_CTX_check_enc_private_key(sslContext->native_handle()))
+    {
+        fprintf(stderr, "Private key does not match the certificate public key\n");
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key error"));
+    }
+
+    /* Load the RSA CA certificate into the SSL_CTX structure
+    if (!SSL_CTX_load_verify_locations(
+            sslContext->native_handle(), _smCertConfig.caCert.c_str(), NULL))
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_load_verify_locations error"));
+    }
+    */
+    auto caCertContent = readFileContent(boost::filesystem::path(_smCertConfig.caCert));  // ca.crt
     sslContext->add_certificate_authority(
-        boost::asio::const_buffer(caContent->data(), caContent->size()));
-
-    std::string caPath;
-    if (!caPath.empty())
-    {
-        sslContext->add_verify_path(caPath);
-    }
+        boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
                                 boost::asio::ssl::verify_fail_if_no_peer_cert);
-
     return sslContext;
 }
 
@@ -199,52 +224,73 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
 }
 
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCertContent(
-    const ContextConfig::SMCertConfig& _smCertConfig)
+    bool _server, const ContextConfig::SMCertConfig& _smCertConfig)
 {
+    SSL_CTX* ctx = NULL;
+    if (_server)
+    {
+        const SSL_METHOD* meth = SSLv23_server_method();
+        ctx = SSL_CTX_new(meth);
+    }
+    else
+    {
+        const SSL_METHOD* meth = CNTLS_client_method();
+        ctx = SSL_CTX_new(meth);
+    }
+
     std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+        std::make_shared<boost::asio::ssl::context>(ctx);
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
+
+    sslContext->use_certificate_chain(boost::asio::const_buffer(
+        _smCertConfig.nodeCert.data(), _smCertConfig.nodeCert.size()));  // node.crt
 
     sslContext->use_private_key(
         boost::asio::const_buffer(_smCertConfig.nodeKey.data(), _smCertConfig.nodeKey.size()),
         boost::asio::ssl::context::file_format::pem);  // node.key
 
-    int ret = 0;
-
-    ret = SSL_CTX_use_enc_certificate(
-        sslContext->native_handle(), toX509(_smCertConfig.enNodeCert.c_str()));
-    if (ret <= 0)  // en_node.crt
+    /* Check if the server certificate and private-key matches */
+    if (!SSL_CTX_check_private_key(sslContext->native_handle()))
     {
-        CONTEXT_LOG(WARNING) << LOG_BADGE("buildSslContext")
-                             << LOG_DESC("SSL_CTX_use_enc_certificate") << LOG_KV("error", ret);
-        BOOST_THROW_EXCEPTION(std::runtime_error(
-            "SSL_CTX_use_enc_certificate failed, error: " + std::to_string(ret)));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key error"));
     }
 
-    ret = SSL_CTX_use_enc_PrivateKey(
-        sslContext->native_handle(), toEvpPkey(_smCertConfig.enNodeKey.c_str()));
-    if (ret <= 0)  // en_node.key
+    /* Load the server encrypt certificate into the SSL_CTX structure */
+    if (!SSL_CTX_use_enc_certificate(
+            sslContext->native_handle(), toX509(_smCertConfig.enNodeCert.c_str())))
     {
-        CONTEXT_LOG(WARNING) << LOG_BADGE("buildSslContext")
-                             << LOG_DESC("SSL_CTX_use_enc_PrivateKey") << LOG_KV("error", ret);
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("SSL_CTX_use_enc_PrivateKey, error: " + std::to_string(ret)));
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file error"));
     }
 
-    sslContext->use_certificate_chain(boost::asio::const_buffer(
-        _smCertConfig.nodeCert.data(), _smCertConfig.nodeCert.size()));  // node.crt
+    /* Load the private-key corresponding to the server encrypt certificate */
+    if (!SSL_CTX_use_enc_PrivateKey(
+            sslContext->native_handle(), toEvpPkey(_smCertConfig.enNodeKey.c_str())))
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file error"));
+    }
+
+    /* Check if the server encrypt certificate and private-key matches */
+    if (!SSL_CTX_check_enc_private_key(sslContext->native_handle()))
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key error"));
+    }
+
     sslContext->add_certificate_authority(boost::asio::const_buffer(
         _smCertConfig.caCert.data(), _smCertConfig.caCert.size()));  // ca.crt
 
-    std::string caPath;
-    if (!caPath.empty())
+    /* Load the RSA CA certificate into the SSL_CTX structure
+    if (!SSL_CTX_load_verify_locations(
+            sslContext->native_handle(), _smCertConfig.caCert.c_str(), NULL))
     {
-        sslContext->add_verify_path(caPath);
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_load_verify_locations error"));
     }
+    */
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
                                 boost::asio::ssl::verify_fail_if_no_peer_cert);
-
     return sslContext;
 }

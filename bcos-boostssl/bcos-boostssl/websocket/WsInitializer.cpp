@@ -62,8 +62,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     {
         threadPoolSize = 16;
     }
-
-
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
     auto ioServicePool = std::make_shared<IOServicePool>();
     _wsService->setIOServicePool(ioServicePool);
@@ -81,7 +79,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     NodeInfoTools::setModuleName(m_moduleName);
     connector->setModuleName(m_moduleName);
 
-    std::shared_ptr<boost::asio::ssl::context> ctx = nullptr;
+    std::shared_ptr<boost::asio::ssl::context> srvCtx = nullptr;
+    std::shared_ptr<boost::asio::ssl::context> clientCtx = nullptr;
     if (!_config->disableSsl())
     {
         auto contextBuilder = std::make_shared<ContextBuilder>();
@@ -90,7 +89,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         contextBuilder->setModuleName(m_moduleName);
         _config->contextConfig()->setModuleName(m_moduleName);
 
-        ctx = contextBuilder->buildSslContext(*_config->contextConfig());
+        srvCtx = contextBuilder->buildSslContext(true, *_config->contextConfig());
+        clientCtx = contextBuilder->buildSslContext(false, *_config->contextConfig());
     }
 
     if (_config->asServer())
@@ -113,7 +113,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
         auto httpServerFactory = std::make_shared<HttpServerFactory>();
         auto httpServer = httpServerFactory->buildHttpServer(_config->listenIP(),
-            _config->listenPort(), ioServicePool->getIOService(), ctx, m_moduleName);
+            _config->listenPort(), ioServicePool->getIOService(), srvCtx, m_moduleName);
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
         httpServer->setThreadPool(threadPool);
@@ -168,12 +168,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         }
     }
 
-    builder->setCtx(ctx);
-    connector->setCtx(ctx);
+    connector->setCtx(clientCtx);
     connector->setBuilder(builder);
-
-
-    _wsService->setCtx(ctx);
 
     _wsService->setConfig(_config);
     _wsService->setConnector(connector);
@@ -187,7 +183,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         << LOG_KV("disableSsl", _config->disableSsl()) << LOG_KV("server", _config->asServer())
         << LOG_KV("client", _config->asClient())
         << LOG_KV("threadPoolSize", _config->threadPoolSize())
-
         << LOG_KV("maxMsgSize", _config->maxMsgSize())
         << LOG_KV("msgTimeOut", _config->sendMsgTimeout())
         << LOG_KV("connected peers", _config->connectPeers() ? _config->connectPeers()->size() : 0);

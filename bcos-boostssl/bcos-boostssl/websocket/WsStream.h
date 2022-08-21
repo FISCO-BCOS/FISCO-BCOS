@@ -299,9 +299,6 @@ public:
     using Ptr = std::shared_ptr<WsStreamDelegateBuilder>;
     using ConstPtr = std::shared_ptr<const WsStreamDelegateBuilder>;
 
-    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
-    std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
-
 public:
     WsStreamDelegate::Ptr build(
         std::shared_ptr<boost::beast::tcp_stream> _tcpStream, std::string _moduleName)
@@ -328,7 +325,7 @@ public:
         return std::make_shared<WsStreamDelegate>(sslWsStream);
     }
 
-    WsStreamDelegate::Ptr build(bool _disableSsl,
+    WsStreamDelegate::Ptr build(bool _disableSsl, std::shared_ptr<boost::asio::ssl::context> _ctx,
         std::shared_ptr<boost::beast::tcp_stream> _tcpStream, std::string _moduleName)
     {
         if (_disableSsl)
@@ -337,12 +334,9 @@ public:
         }
 
         auto sslStream = std::make_shared<boost::beast::ssl_stream<boost::beast::tcp_stream>>(
-            std::move(*_tcpStream), *m_ctx);
+            std::move(*_tcpStream), *_ctx);
         return build(sslStream, _moduleName);
     }
-
-private:
-    std::shared_ptr<boost::asio::ssl::context> m_ctx;
 };
 
 }  // namespace ws

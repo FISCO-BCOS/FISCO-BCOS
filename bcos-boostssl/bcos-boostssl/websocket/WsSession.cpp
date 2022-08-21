@@ -313,7 +313,6 @@ void WsSession::send(std::shared_ptr<bytes> _buffer)
 {
     auto msg = std::make_shared<Message>();
     msg->buffer = _buffer;
-
     {
         WriteGuard l(x_writeQueue);
         // data to be sent is always enqueue first
