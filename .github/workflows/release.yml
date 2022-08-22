@@ -22,23 +22,10 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - uses: actions/cache@v2
-        id: cache
-        with:
-          path: |
-            /home/runner/.hunter
-            /Users/runner/.hunter/
-            deps/src
-            ccache
-          key: hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-clang-v1-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON
       - name: compile
         run: make -j2 && make tar
       - name: tar BcosBuilder
@@ -122,8 +109,8 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 patch ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel wget
-          source /opt/rh/devtoolset-7/enable
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 patch ccache llvm-toolset-7 devtoolset-11 libzstd-devel zlib-devel flex bison python-devel python3-devel wget devtoolset-11 rh-perl530-perl
+          source /opt/rh/devtoolset-11/enable
           alias cmake='cmake3'
           yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
           yum install -y git
@@ -136,25 +123,13 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - uses: actions/cache@v2
-        id: cache
-        with:
-          path: |
-            /home/runner/.hunter
-            /github/home/.hunter
-            deps/src
-            ccache
-          key: hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-centos-v1-notest-${{ runner.temp }}-
       - name: configure and compile
         run: |
-          source /opt/rh/devtoolset-7/enable
+          source /opt/rh/devtoolset-11/enable
+          source /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           source /opt/rh/llvm-toolset-7/enable
-          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF -DHUNTER_CONFIGURATION_TYPES=Release
+          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF
           make -j4
           make tar
       - name: tar fisco-bcos for CentOS

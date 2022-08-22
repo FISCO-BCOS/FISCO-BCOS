@@ -376,9 +376,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     };
 
     auto whenAfterFront = [this, requestBlockNumber, callback]() {
-        auto message = "A smaller block need to commit, requestBlockNumber " +
-                       std::to_string(requestBlockNumber) +
-                       +", need to commit blockNumber: " + std::to_string(getCurrentBlockNumber());
+        auto message =
+            "A smaller block need to commit, requestBlockNumber " +
+            std::to_string(requestBlockNumber) +
+            +", need to commit blockNumber: " + std::to_string(getCurrentBlockNumber() + 1);
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
                              << message;
 
