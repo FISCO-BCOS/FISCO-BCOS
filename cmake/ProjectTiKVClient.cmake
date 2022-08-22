@@ -1,42 +1,79 @@
-include(FetchContent)
+include(ExternalProject)
+include(GNUInstallDirs)
 
-if (APPLE)
-    set(SED_CMMAND sed -i .bkp)
-else()
-    set(SED_CMMAND sed -i)
-endif()
-find_package(Protobuf REQUIRED)
-
-# set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
-FetchContent_Declare(tikv_client_project
+ExternalProject_Add(tikv_client_project
+  PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git
-  GIT_TAG        a2e5c1b582009340c782cb8d80239310cc84e7f2
+  GIT_TAG        26380e0933c6588430e66495ad972492367d3675
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
-  PATCH_COMMAND  git submodule foreach --recursive git reset --hard #COMMAND export PATH=${GRPC_ROOT}/bin:\$PATH
+  PATCH_COMMAND  git submodule foreach --recursive git reset --hard #COMMAND export PATH=${PROTOC_EXECUTABLE_PATH}:\$PATH #COMMAND protoc --version
+  CMAKE_ARGS -DHUNTER_ROOT=${CMAKE_BINARY_DIR}/hunter -DENABLE_TESTS=off -DBUILD_GMOCK=off -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DHUNTER_CONFIGURATION_TYPES=Release
+  INSTALL_COMMAND bash <SOURCE_DIR>/create_link.sh ${CMAKE_SOURCE_DIR}/deps/Install
+  BUILD_BYPRODUCTS <BINARY_DIR>/src/libkvclient.a
   # LOG_BUILD true
 )
 
-if(NOT tikv_client_project_POPULATED)
-  FetchContent_Populate(tikv_client_project)
-  list(APPEND CMAKE_MODULE_PATH ${tikv_client_project_SOURCE_DIR}/cmake/)
-  set(BUILD_SHARED_LIBS OFF)
-  set(ENABLE_TESTS OFF)
-  add_subdirectory(${tikv_client_project_SOURCE_DIR} ${tikv_client_project_BINARY_DIR})
-  target_include_directories(kvproto PUBLIC ${GRPC_ROOT}/include)
-  # target_compile_options(fiu PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)
-  # target_compile_options(kvproto PRIVATE -Wno-all  -Wno-error -Wno-unused-parameter)
-  # target_compile_options(kv_client PRIVATE -Wno-all -Wno-error -Wno-unused-parameter)
-endif()
+ExternalProject_Get_Property(tikv_client_project SOURCE_DIR)
+ExternalProject_Get_Property(tikv_client_project BINARY_DIR)
+set(KVCLIENT_INCLUDE_DIRS ${SOURCE_DIR}/include)
+file(MAKE_DIRECTORY ${KVCLIENT_INCLUDE_DIRS})  # Must exist.
 
-# add_library(bcos::tikv_client INTERFACE IMPORTED)
-# set_property(TARGET bcos::tikv_client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${tikv_client_project_SOURCE_DIR}/include ${GRPC_ROOT}/include)
-# set_property(TARGET bcos::tikv_client PROPERTY INTERFACE_LINK_LIBRARIES kv_client gRPC::grpc++ Poco::Foundation)
+set(HUNTER_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/deps/Install")
+file(MAKE_DIRECTORY ${HUNTER_INSTALL_PREFIX}/include)  # Must exist.
 
-install(
-  TARGETS kv_client fiu kvproto
-  EXPORT "${TARGETS_EXPORT_NAME}"
-  # LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  # RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-  INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+file(MAKE_DIRECTORY ${SOURCE_DIR}/third_party/libfiu/libfiu)  # Must exist.
+file(MAKE_DIRECTORY ${SOURCE_DIR}/third_party/kvproto/cpp/)  # Must exist.
+
+find_package(Boost REQUIRED context)
+find_package(Protobuf CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
+add_library(grpc_deps INTERFACE IMPORTED GLOBAL)
+set_property(TARGET grpc_deps PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HUNTER_INSTALL_PREFIX}/include)
+set_property(TARGET grpc_deps PROPERTY INTERFACE_LINK_LIBRARIES ${HUNTER_INSTALL_PREFIX}/lib/libgrpc++.a ${HUNTER_INSTALL_PREFIX}/lib/libgrpc.a protobuf::libprotobuf
+OpenSSL::SSL OpenSSL::Crypto Boost::context
+${HUNTER_INSTALL_PREFIX}/lib/libcares.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libre2.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_hash.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_bad_variant_access.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_city.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_raw_hash_set.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_hashtablez_sampler.a
+${HUNTER_INSTALL_PREFIX}/lib/libaddress_sorting.a
+${HUNTER_INSTALL_PREFIX}/lib/libupb.a
+${HUNTER_INSTALL_PREFIX}/lib/libgpr.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_status.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_cord.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_cordz_info.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_cordz_handle.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_cord_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_cordz_functions.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_exponential_biased.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_bad_optional_access.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_synchronization.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_stacktrace.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_symbolize.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_debugging_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_demangle_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_graphcycles_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_time.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_civil_time.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_time_zone.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_malloc_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_str_format_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_strings.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_strings_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_int128.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_throw_delegate.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_base.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_raw_logging_internal.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_log_severity.a
+${HUNTER_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libabsl_spinlock_wait.a
+${HUNTER_INSTALL_PREFIX}/lib/libz.a
 )
+
+add_library(kv_client INTERFACE IMPORTED)
+set_property(TARGET kv_client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HUNTER_INSTALL_PREFIX}/include ${KVCLIENT_INCLUDE_DIRS} ${SOURCE_DIR}/third_party/libfiu/libfiu ${SOURCE_DIR}/third_party/kvproto/cpp/)
+set_property(TARGET kv_client PROPERTY INTERFACE_LINK_LIBRARIES ${BINARY_DIR}/src/libkv_client.a ${BINARY_DIR}/third_party/kvproto/cpp/libkvproto.a ${HUNTER_INSTALL_PREFIX}/lib/libPocoFoundation.a
+grpc_deps)
+
+add_dependencies(kv_client tikv_client_project)

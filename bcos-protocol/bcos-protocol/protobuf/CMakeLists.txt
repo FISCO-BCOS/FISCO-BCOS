@@ -25,7 +25,7 @@ foreach(proto_file ${MESSAGES_PROTOS})
   )
 endforeach()
 
-add_library(${PBPROTOCOL_TARGET} ${SRC_LIST} ${MESSAGES_SRCS} ${HEADERS})
+add_library(${PBPROTOCOL_TARGET} ${SRC_LIST} ${MESSAGES_SRCS} ${MESSAGES_HDRS} ${HEADERS})
 # target_compile_options(${PBPROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(Protobuf CONFIG REQUIRED)

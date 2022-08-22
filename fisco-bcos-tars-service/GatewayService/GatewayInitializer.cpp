@@ -27,7 +27,7 @@
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 
-#ifdef WITH_ETCD
+#ifdef WITH_TIKV
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif
 
@@ -53,7 +53,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
-#ifdef WITH_ETCD
+#ifdef WITH_TIKV
     if (nodeConfig->enableFailOver())
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");

@@ -18,7 +18,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
         CACHE STRING "Vcpkg toolchain file")
 endif()
 
-project(PROJECT_NAME VERSION ${VERSION})
+project(FISCO-BCOS VERSION ${VERSION})
 
 include(CompilerSettings)
 include(BuildInfoGenerator)

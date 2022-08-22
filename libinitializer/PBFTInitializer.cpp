@@ -23,7 +23,7 @@
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 
-#ifdef WITH_ETCD
+#ifdef WITH_TIKV
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
 #endif
 
@@ -497,7 +497,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 {
     m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
 
-#ifdef WITH_ETCD
+#ifdef WITH_TIKV
     auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
 #endif
     // leader key: /${chainID}/consensus/${nodeID}
@@ -507,7 +507,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
     std::string nodeConfig;
     m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
 
-#ifdef WITH_ETCD
+#ifdef WITH_TIKV
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
         m_nodeConfig->leaseTTL());
