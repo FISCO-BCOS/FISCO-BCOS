@@ -61,6 +61,9 @@ set(TOOL_TARGET "tool")
 # bcos-leader-election
 set(LEADER_ELECTION_TARGET "leader_election")
 
+# light node
+set(LIGHTNODE_TARGET "bcos-lightnode")
+
 # libinitializer
 set(PROTOCOL_INIT_LIB protocol_init)
 set(FRONTSERVICE_INIT_LIB front_init)

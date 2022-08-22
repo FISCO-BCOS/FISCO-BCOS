@@ -668,6 +668,76 @@ EOF
     chmod +x ${filepath}
 }
 
+generate_lightnode_scripts() {
+    local output=${1}
+    local lightnode_binary_name=${2}
+
+    generate_script_template "$output/start.sh"      
+    generate_script_template "$output/stop.sh"
+    chmod u+x "${output}/stop.sh"
+
+    local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini -g config.genesis >>nohup.out 2>&1 &"
+    local stop_cmd="kill \${node_pid}"
+
+     cat <<EOF >> "${output}/start.sh"
+fisco_bcos=\${SHELL_FOLDER}/${lightnode_binary_name}
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+ulimit -n 1024
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+    exit 0
+else
+    ${start_cmd}
+    sleep 1.5
+fi
+try_times=4
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    node_pid=${ps_cmd}
+    if [[ ! -z \${node_pid} ]];then
+        echo -e "\033[32m \${node} start successfully pid=\${node_pid}\033[0m"
+        exit 0
+    fi
+    sleep 0.5
+    ((i=i+1))
+done
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
+${log_cmd}
+EOF
+    chmod u+x "${output}/start.sh"
+    generate_script_template "$output/stop.sh"
+    cat <<EOF >> "${output}/stop.sh"
+fisco_bcos=\${SHELL_FOLDER}/${lightnode_binary_name}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+try_times=10
+i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
+while [ \$i -lt \${try_times} ]
+do
+    sleep 1
+    node_pid=${ps_cmd}
+    if [ -z \${node_pid} ];then
+        echo -e "\033[32m stop \${node} success.\033[0m"
+        exit 0
+    fi
+    ((i=i+1))
+done
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
+exit 1
+EOF
+    chmod u+x "${output}/stop.sh"
+}
+
 generate_node_scripts() {
     local output=${1}
     local docker_mode="${2}"
@@ -1641,7 +1711,7 @@ deploy_nodes()
         generate_genesis_config "${lightnode_dir}/config.genesis" "${nodeid_list}"
 
         generate_node_cert "${sm_mode}" "${ca_dir}" "${lightnode_dir}/conf"
-        generate_node_scripts "${node_dir}" "${docker_mode}"
+        generate_lightnode_scripts "${lightnode_dir}" "fisco-bcos-lightnode"
         local lightnode_account_dir="${lightnode_dir}/conf"
         generate_node_account "${sm_mode}" "${lightnode_account_dir}" ${count}
 
