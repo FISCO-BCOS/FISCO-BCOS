@@ -23,6 +23,7 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
 #include "RPCInitializer.h"
+#include "bcos-lightnode/ledger/LedgerImpl.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -109,6 +110,37 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
     return worker;
 }
 
+
+void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto front, auto gateway,
+    auto keyFactory, auto nodeID)
+{
+    // clients
+    auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(front, gateway, keyFactory);
+    auto remoteLedger = std::make_shared<bcos::ledger::LedgerClientImpl>(p2pClient);
+    auto remoteTransactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
+    auto transactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
+    auto scheduler = std::make_shared<bcos::scheduler::SchedulerClientImpl>(p2pClient);
+
+    // Prepare genesis block
+    bcostars::Block genesisBlock;
+    genesisBlock.blockHeader.data.blockNumber = 0;
+    bcos::concepts::bytebuffer::assignTo(
+        nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
+    ledger->setupGenesisBlock(std::move(genesisBlock));
+
+    // rpc
+    auto wsService = bcos::lightnode::initRPC(
+        nodeConfig, nodeID, gateway, keyFactory, ledger, remoteLedger, transactionPool, scheduler);
+    wsService->start();
+
+    auto stopToken = std::make_shared<std::atomic_bool>(false);
+    auto syncer = startSyncerThread(
+        remoteLedger, ledger, wsService, nodeConfig->groupId(), nodeConfig->nodeName(), stopToken);
+    syncer.join();
+}
+
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 {
     auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
@@ -158,38 +190,26 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         [](bcos::crypto::NodeIDPtr, const std::string&, bcos::bytesConstRef) {});
     front->start();
 
-    // clients
-    auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(front, gateway, keyFactory);
-    auto remoteLedger = std::make_shared<bcos::ledger::LedgerClientImpl>(p2pClient);
-    auto remoteTransactionPool =
-        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
-    auto transactionPool =
-        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
-    auto scheduler = std::make_shared<bcos::scheduler::SchedulerClientImpl>(p2pClient);
-
     // local ledger
     auto storage = newStorage(nodeConfig->storagePath());
     bcos::storage::StorageImpl storageWrapper(std::move(storage));
-    auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
-        std::move(storageWrapper));
 
-    // Prepare genesis block
-    bcostars::Block genesisBlock;
-    genesisBlock.blockHeader.data.blockNumber = 0;
-    bcos::concepts::bytebuffer::assignTo(
-        nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
-    localLedger->setupGenesisBlock(std::move(genesisBlock));
+    if (nodeConfig->smCryptoType())
+    {
+        auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
+            std::move(storageWrapper));
 
-    // rpc
-    auto wsService = bcos::lightnode::initRPC(nodeConfig, nodeID, gateway, keyFactory, localLedger,
-        remoteLedger, transactionPool, scheduler);
-    wsService->start();
+        starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
+    }
+    else
+    {
+        auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
+            bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
+            std::move(storageWrapper));
 
-    auto stopToken = std::make_shared<std::atomic_bool>(false);
-    auto syncer = startSyncerThread(remoteLedger, localLedger, wsService, nodeConfig->groupId(),
-        nodeConfig->nodeName(), stopToken);
-    syncer.join();
+        starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
+    }
 
     return 0;
 }
