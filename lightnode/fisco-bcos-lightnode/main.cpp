@@ -23,6 +23,7 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
 #include "RPCInitializer.h"
+#include "libinitializer/CommandHelper.h"
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
@@ -110,8 +111,11 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 {
-    std::string configFile = "config.ini";
-    std::string genesisFile = "config.genesis";
+    auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
+    bcos::initializer::showNodeVersionMetric();
+
+    std::string configFile = param.configFilePath;
+    std::string genesisFile = param.genesisFilePath;
 
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(configFile, pt);
