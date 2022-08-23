@@ -231,7 +231,7 @@ bool EventSubRequest::fromJson(const std::string& _request)
                     {
                         address = address.substr(2);
                     }
-                    std::transform(address.begin(), address.end(), address.begin(), ::tolower);
+                    // std::transform(address.begin(), address.end(), address.begin(), ::tolower);
                     params->addAddress(address);
                 }
             }

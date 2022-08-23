@@ -376,9 +376,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     };
 
     auto whenAfterFront = [this, requestBlockNumber, callback]() {
-        auto message = "A smaller block need to commit, requestBlockNumber " +
-                       std::to_string(requestBlockNumber) +
-                       +", need to commit blockNumber: " + std::to_string(getCurrentBlockNumber());
+        auto message =
+            "A smaller block need to commit, requestBlockNumber " +
+            std::to_string(requestBlockNumber) +
+            +", need to commit blockNumber: " + std::to_string(getCurrentBlockNumber() + 1);
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
                              << message;
 
@@ -773,31 +774,41 @@ void SchedulerImpl::preExecuteBlock(
         _callback(error == nullptr ? nullptr : std::move(error));
     };
 
-    auto blockNumber = block->blockHeaderConst()->number();
-    int64_t timestamp = block->blockHeaderConst()->timestamp();
-    BlockExecutive::Ptr blockExecutive = getPreparedBlock(blockNumber, timestamp);
-    if (blockExecutive != nullptr)
+    try
     {
-        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << LOG_BADGE("prepareBlockExecutive")
-                             << "Duplicate block to prepare, dropped."
-                             << LOG_KV("blockHeader.timestamp", timestamp);
-        callback(nullptr);  // also success
-        return;
+        auto blockNumber = block->blockHeaderConst()->number();
+        int64_t timestamp = block->blockHeaderConst()->timestamp();
+        BlockExecutive::Ptr blockExecutive = getPreparedBlock(blockNumber, timestamp);
+        if (blockExecutive != nullptr)
+        {
+            SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << LOG_BADGE("prepareBlockExecutive")
+                                 << "Duplicate block to prepare, dropped."
+                                 << LOG_KV("blockHeader.timestamp", timestamp);
+            callback(nullptr);  // also success
+            return;
+        }
+
+        // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
+        //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
+        //     verify);
+
+        blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
+            m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+
+        blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
+
+        setPreparedBlock(blockNumber, timestamp, blockExecutive);
+
+        blockExecutive->prepare();
+
+        callback(nullptr);
     }
-
-    // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
-    //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
-
-    blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
-        m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
-
-    blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
-
-    setPreparedBlock(blockNumber, timestamp, blockExecutive);
-
-    blockExecutive->prepare();
-
-    callback(nullptr);
+    catch (bcos::Error& e)
+    {
+        SCHEDULER_LOG(WARNING) << "preExecuteBlock exception: " << LOG_KV("code", e.errorCode())
+                               << LOG_KV("message", e.errorMessage());
+        callback(std::make_shared<bcos::Error>(e.errorCode(), e.errorMessage()));
+    }
 }
 
 template <class... Ts>

@@ -370,10 +370,6 @@ inline bytes toBytes(const std::string_view& _addr)
 inline std::string getContractTableName(const std::string_view& _address, bool _isWasm)
 {
     std::string formatAddress(_address);
-    if (!_isWasm)
-    {
-        boost::algorithm::to_lower(formatAddress);
-    }
 
     std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
 

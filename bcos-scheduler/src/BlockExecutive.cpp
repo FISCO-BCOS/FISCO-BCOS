@@ -783,89 +783,8 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 void BlockExecutive::DMCExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
-    if (!m_isRunning)
+    try
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
-            nullptr, m_isSysBlock);
-        return;
-    }
-
-    // update DMC recorder for debugging
-    m_dmcRecorder->nextDmcRound();
-
-    auto lastT = utcTime();
-    DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                  << "DMCExecute.0:\t [+] Start\t\t\t" << LOG_KV("round", m_dmcRecorder->getRound())
-                  << LOG_KV("checksum", m_dmcRecorder->getChecksum());
-
-    // prepare all dmcExecutor
-    serialPrepareExecutor();
-    DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                  << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
-                  << LOG_KV("round", m_dmcRecorder->getRound())
-                  << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                  << LOG_KV("cost", utcTime() - lastT);
-    lastT = utcTime();
-
-    // dump address for omp parallelization
-    std::vector<std::string> contractAddress;
-    contractAddress.reserve(m_dmcExecutors.size());
-    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
-    {
-        contractAddress.push_back(it->first);
-    }
-    auto batchStatus = std::make_shared<BatchStatus>();
-    batchStatus->total = contractAddress.size();
-
-    // if is empty block, just return
-    if (contractAddress.size() == 0)
-    {
-        onDmcExecuteFinish(std::move(callback));
-        return;
-    }
-
-    auto executorCallback = [this, lastT, batchStatus = std::move(batchStatus),
-                                callback = std::move(callback)](
-                                bcos::Error::UniquePtr error, DmcExecutor::Status status) {
-        if (error || status == DmcExecutor::Status::ERROR)
-        {
-            batchStatus->error++;
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("DmcExecutor")
-                                 << "dmcExecutor->go() with error"
-                                 << LOG_KV("code", error ? error->errorCode() : -1)
-                                 << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
-        }
-        else if (status == DmcExecutor::Status::PAUSED ||
-                 status == DmcExecutor::Status::NEED_PREPARE)
-        {
-            batchStatus->paused++;
-        }
-        else if (status == DmcExecutor::Status::FINISHED)
-        {
-            batchStatus->finished++;
-        }
-
-        // check batch
-        if ((batchStatus->error + batchStatus->paused + batchStatus->finished) !=
-            batchStatus->total)
-        {
-            return;
-        }
-
-        // block many threads
-        if (batchStatus->callbackExecuted)
-        {
-            return;
-        }
-        {
-            WriteGuard lock(batchStatus->x_lock);
-            if (batchStatus->callbackExecuted)
-            {
-                return;
-            }
-            batchStatus->callbackExecuted = true;
-        }
-
         if (!m_isRunning)
         {
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
@@ -873,51 +792,144 @@ void BlockExecutive::DMCExecute(
             return;
         }
 
-        // handle batch result(only one thread can get in here)
+        // update DMC recorder for debugging
+        m_dmcRecorder->nextDmcRound();
+
+        auto lastT = utcTime();
         DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                      << "DMCExecute.5:\t <<< Joint all executor result\t"
+                      << "DMCExecute.0:\t [+] Start\t\t\t"
+                      << LOG_KV("round", m_dmcRecorder->getRound())
+                      << LOG_KV("checksum", m_dmcRecorder->getChecksum());
+
+        // prepare all dmcExecutor
+        serialPrepareExecutor();
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                      << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
                       << LOG_KV("round", m_dmcRecorder->getRound())
                       << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                      << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
-                      << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
-                      << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
+                      << LOG_KV("cost", utcTime() - lastT);
+        lastT = utcTime();
 
-        if (batchStatus->error != 0)
+        // dump address for omp parallelization
+        std::vector<std::string> contractAddress;
+        contractAddress.reserve(m_dmcExecutors.size());
+        for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
         {
-            DMC_LOG(ERROR) << BLOCK_NUMBER(number())
-                           << "DMCExecute with errors: " << error->errorMessage();
-            callback(std::move(error), nullptr, m_isSysBlock);
+            contractAddress.push_back(it->first);
         }
-        else if (batchStatus->paused != 0)  // new contract
-        {
-            // Start next DMC round
-            DMCExecute(std::move(callback));
-        }
-        else if (batchStatus->finished == batchStatus->total)
+        auto batchStatus = std::make_shared<BatchStatus>();
+        batchStatus->total = contractAddress.size();
+
+        // if is empty block, just return
+        if (contractAddress.size() == 0)
         {
             onDmcExecuteFinish(std::move(callback));
+            return;
         }
-        else
-        {
-            // assume never goes here
-            SCHEDULER_LOG(FATAL) << "Invalid type";
-            assert(false);
-        }
-    };
 
-    DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                  << "DMCExecute.2:\t >>> Start send to executors\t"
-                  << LOG_KV("round", m_dmcRecorder->getRound())
-                  << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                  << LOG_KV("cost", utcTime() - lastT)
-                  << LOG_KV("contractNum", contractAddress.size());
+        auto executorCallback = [this, lastT, batchStatus = std::move(batchStatus),
+                                    callback = std::move(callback)](
+                                    bcos::Error::UniquePtr error, DmcExecutor::Status status) {
+            if (error || status == DmcExecutor::Status::ERROR)
+            {
+                batchStatus->error++;
+                SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("DmcExecutor")
+                                     << "dmcExecutor->go() with error"
+                                     << LOG_KV("code", error ? error->errorCode() : -1)
+                                     << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
+            }
+            else if (status == DmcExecutor::Status::PAUSED ||
+                     status == DmcExecutor::Status::NEED_PREPARE)
+            {
+                batchStatus->paused++;
+            }
+            else if (status == DmcExecutor::Status::FINISHED)
+            {
+                batchStatus->finished++;
+            }
+
+            // check batch
+            if ((batchStatus->error + batchStatus->paused + batchStatus->finished) !=
+                batchStatus->total)
+            {
+                return;
+            }
+
+            // block many threads
+            if (batchStatus->callbackExecuted)
+            {
+                return;
+            }
+            {
+                WriteGuard lock(batchStatus->x_lock);
+                if (batchStatus->callbackExecuted)
+                {
+                    return;
+                }
+                batchStatus->callbackExecuted = true;
+            }
+
+            if (!m_isRunning)
+            {
+                callback(
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
+                    nullptr, m_isSysBlock);
+                return;
+            }
+
+            // handle batch result(only one thread can get in here)
+            DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                          << "DMCExecute.5:\t <<< Joint all executor result\t"
+                          << LOG_KV("round", m_dmcRecorder->getRound())
+                          << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                          << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
+                          << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
+                          << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
+
+            if (batchStatus->error != 0)
+            {
+                DMC_LOG(ERROR) << BLOCK_NUMBER(number())
+                               << "DMCExecute with errors: " << error->errorMessage();
+                callback(std::move(error), nullptr, m_isSysBlock);
+            }
+            else if (batchStatus->paused != 0)  // new contract
+            {
+                // Start next DMC round
+                DMCExecute(std::move(callback));
+            }
+            else if (batchStatus->finished == batchStatus->total)
+            {
+                onDmcExecuteFinish(std::move(callback));
+            }
+            else
+            {
+                // assume never goes here
+                SCHEDULER_LOG(FATAL) << "Invalid type";
+                assert(false);
+            }
+        };
+
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                      << "DMCExecute.2:\t >>> Start send to executors\t"
+                      << LOG_KV("round", m_dmcRecorder->getRound())
+                      << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                      << LOG_KV("cost", utcTime() - lastT)
+                      << LOG_KV("contractNum", contractAddress.size());
 
 // for each dmcExecutor
 #pragma omp parallel for
-    for (size_t i = 0; i < contractAddress.size(); i++)
+        for (size_t i = 0; i < contractAddress.size(); i++)
+        {
+            auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
+            dmcExecutor->go(executorCallback);
+        }
+    }
+    catch (bcos::Error& e)
     {
-        auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
-        dmcExecutor->go(executorCallback);
+        DMC_LOG(WARNING) << "DMCExecute exception: " << LOG_KV("code", e.errorCode())
+                         << LOG_KV("message", e.errorMessage());
+        callback(
+            std::make_unique<bcos::Error>(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
     }
 }
 
@@ -1346,6 +1358,12 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         auto executor = m_scheduler->executorManager()->dispatchExecutor(contractAddress);
         auto executorInfo = m_scheduler->executorManager()->getExecutorInfo(contractAddress);
 
+        if (executor == nullptr || executorInfo == nullptr)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"));
+        }
+
         if (!m_dmcRecorder)
         {
             m_dmcRecorder = std::make_shared<DmcStepRecorder>();
@@ -1495,6 +1513,6 @@ std::string BlockExecutive::preprocessAddress(const std::string_view& address)
         out = std::string(address);
     }
 
-    boost::to_lower(out);
+    // boost::to_lower(out); no need to be lower
     return out;
 }

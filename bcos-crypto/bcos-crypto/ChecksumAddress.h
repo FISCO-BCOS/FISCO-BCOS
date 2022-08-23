@@ -61,7 +61,8 @@ inline void toChecksumAddress(std::string& _addr, const std::string_view& addres
 inline void toChecksumAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashImpl)
 {
     boost::algorithm::to_lower(_hexAddress);
-    toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
+    // toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex()); notice :
+    // toChecksumAddress must be used before rpc return
 }
 
 inline std::string toChecksumAddressFromBytes(
