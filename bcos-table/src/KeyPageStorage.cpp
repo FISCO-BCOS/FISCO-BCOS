@@ -463,6 +463,12 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                     pageData = pageDataOp.value();
                 }
                 auto page = &std::get<0>(pageData->data);
+                if (page->validCount() != pageInfoOp.value()->getCount())
+                {
+                    KeyPage_LOG(FATAL) << LOG_DESC("page valid count mismatch")
+                                       << LOG_KV("count", pageInfoOp.value()->getCount())
+                                       << LOG_KV("realCount", page->validCount());
+                }
                 page->rollback(change);
                 if (page->count() == 0)
                 {  // page is empty because of rollback, means it it first created
@@ -680,6 +686,12 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
             return std::make_pair(nullptr, std::nullopt);
         }
         auto page = &std::get<0>(pageData->data);
+        if (page->validCount() != pageInfoOp.value()->getCount())
+        {
+            KeyPage_LOG(FATAL) << LOG_DESC("getEntryFromPage page valid count mismatch")
+                               << LOG_KV("count", pageInfoOp.value()->getCount())
+                               << LOG_KV("realCount", page->validCount());
+        }
         if (m_readOnly)
         {  // TODO: check condition, if key is pageKey, return page
             if (pageInfoOp.value()->getPageKey() != key)
@@ -755,6 +767,13 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         if (pageInfoOption)
         {
             pageInfoOption.value()->setPageData(pageData);
+        }
+        auto page = &std::get<0>(pageData->data);
+        if (shouldExist && page->validCount() != pageInfoOption.value()->getCount())
+        {
+            KeyPage_LOG(FATAL) << LOG_DESC("page valid count mismatch")
+                               << LOG_KV("count", pageInfoOption.value()->getCount())
+                               << LOG_KV("realCount", page->validCount());
         }
     }
     // if new entry is too big, it will trigger split
