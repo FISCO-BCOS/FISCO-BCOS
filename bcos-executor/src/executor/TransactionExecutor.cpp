@@ -224,6 +224,10 @@ void TransactionExecutor::initEvmEnvironment()
 
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
+
+    // create the zkp-precompiled
+    m_constantPrecompiled->insert(
+        {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -253,11 +257,10 @@ void TransactionExecutor::initWasmEnvironment()
     m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
 
-    // TODO: enable it after update wedpr
-    // m_constantPrecompiled->insert(
-    //     {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
-    // m_constantPrecompiled->insert(
-    //     {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
+        {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
     if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert(
@@ -274,41 +277,7 @@ void TransactionExecutor::initWasmEnvironment()
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
-        {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
-}
-
-void TransactionExecutor::initPrecompiledByBlockContext(std::shared_ptr<BlockContext> _blockContext)
-{
-    // TODO: use blockHash, version when call
-    // call
-    UpgradableGuard l(x_constantPrecompiled);
-    if (_blockContext->hash() == bcos::crypto::HashType())
-    {
-        if (!m_constantPrecompiled->count(DISCRETE_ZKP_ADDRESS))
-        {
-            UpgradeGuard ul(l);
-            m_constantPrecompiled->insert({DISCRETE_ZKP_ADDRESS,
-                std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
-        }
-        return;
-    }
-    // transaction: with version smaller than 3.0
-    if (_blockContext->blockVersion() < (uint32_t)bcos::protocol::Version::V3_0_VERSION)
-    {
-        if (m_constantPrecompiled->count(DISCRETE_ZKP_ADDRESS))
-        {
-            UpgradeGuard ul(l);
-            m_constantPrecompiled->erase(DISCRETE_ZKP_ADDRESS);
-        }
-        return;
-    }
-    // transaction: with version no more than 3.0
-    if (!m_constantPrecompiled->count(DISCRETE_ZKP_ADDRESS))
-    {
-        UpgradeGuard ul(l);
-        m_constantPrecompiled->insert({DISCRETE_ZKP_ADDRESS,
-            std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
-    }
+        {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
 }
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
@@ -415,7 +384,6 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage);
-            initPrecompiledByBlockContext(m_blockContext);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
@@ -511,7 +479,6 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         // TODO: pass blockHash, version here
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
-        initPrecompiledByBlockContext(blockContext);
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -681,7 +648,6 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         // TODO: pass blockHash, version here
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
-        initPrecompiledByBlockContext(blockContext);
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});

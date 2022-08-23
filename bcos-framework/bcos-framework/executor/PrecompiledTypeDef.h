@@ -44,6 +44,7 @@ constexpr const char* const DAG_TRANSFER_NAME = "/sys/dag_test";
 constexpr const char* const BFS_NAME = "/sys/bfs";
 constexpr const char* const GROUP_SIG_NAME = "/sys/group_sig";
 constexpr const char* const RING_SIG_NAME = "/sys/ring_sig";
+constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
 
 /// precompiled contract for solidity
 constexpr const char* const SYS_CONFIG_ADDRESS = "0000000000000000000000000000000000001000";

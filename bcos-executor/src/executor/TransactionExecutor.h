@@ -239,8 +239,6 @@ protected:
 
     protocol::BlockNumber getBlockNumberInStorage();
 
-    void initPrecompiledByBlockContext(std::shared_ptr<BlockContext> _blockContext);
-
     std::string m_name;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
