@@ -120,7 +120,7 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
     }
 
     auto [error, entry] = getEntryFromPage(tableView, keyView);
-    if (!m_readOnly)
+    if (!m_readOnly && entry.has_value())
     {
         m_readLength += entry->size();
     }
@@ -299,7 +299,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         }
                         if (it.first.second != page->endKey())
                         {
-                            KeyPage_LOG(WARNING)
+                            KeyPage_LOG(FATAL)
                                 << LOG_DESC("Traverse Page pageKey not equal to map key")
                                 << LOG_KV("table", it.first.first)
                                 << LOG_KV("pageKey", page->endKey())
@@ -686,11 +686,19 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
             return std::make_pair(nullptr, std::nullopt);
         }
         auto page = &std::get<0>(pageData->data);
-        if (page->validCount() != pageInfoOp.value()->getCount())
+        if (page->validCount() != pageInfoOp.value()->getCount() && !m_ignoreNotExist)
         {
             KeyPage_LOG(FATAL) << LOG_DESC("getEntryFromPage page valid count mismatch")
+                               << LOG_KV("key", toHex(key))
                                << LOG_KV("count", pageInfoOp.value()->getCount())
                                << LOG_KV("realCount", page->validCount());
+        }
+        if (m_ignoreNotExist)
+        {
+            KeyPage_LOG(INFO) << LOG_DESC("getEntryFromPage page count mismatch ignore")
+                              << LOG_KV("key", toHex(key))
+                              << LOG_KV("count", pageInfoOp.value()->getCount())
+                              << LOG_KV("realCount", page->validCount());
         }
         if (m_readOnly)
         {  // TODO: check condition, if key is pageKey, return page
@@ -794,18 +802,15 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
             }
             else
             {
-                auto oldStartKey = meta->updatePageInfoNoLock(
+                auto oldPageKey = meta->updatePageInfoNoLock(
                     pageKey, page->endKey(), page->validCount(), page->size(), pageInfoOption);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
-                if (oldStartKey)
-                {  // the page key is changed, 1. delete the first key, 2. insert a smaller key
-                    // if the startKey of page changed, the container also need to be updated
-                    if (page->validCount() > 0)
-                    {
-                        pageData = changePageKey(table, oldStartKey.value(), page->endKey());
-                        page = &std::get<0>(pageData->data);
-                    }
-                    else
+                if (oldPageKey)
+                {  // the page key is changed, 1. delete the last key, 2. insert a bigger key
+                   // the container need to be updated
+                    pageData = changePageKey(table, oldPageKey.value(), page->endKey());
+                    page = &std::get<0>(pageData->data);
+                    if (page->validCount() == 0)
                     {  // page is empty because delete, not update startKey and mark as deleted
                         pageData->entry.setStatus(Entry::Status::DELETED);
                     }
