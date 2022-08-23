@@ -1026,6 +1026,105 @@ BOOST_AUTO_TEST_CASE(deleteAndGetRows)
         });
 }
 
+
+BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndModifyNotChangePageKey)
+{
+    createDefaultTable();
+    // write a page but the pageKey k0 is deleted, suppose the real pageKey is k1
+    auto table = tableFactory->openTable(testTableName);
+    auto entry = std::make_optional(table->newEntry());
+    entry->setField(0, "fruit999");
+    BOOST_REQUIRE_NO_THROW(table->setRow("999", *entry));
+    entry = table->getRow("999");
+    BOOST_REQUIRE(entry.has_value());
+    entry = std::make_optional(table->newEntry());
+    entry->setField(0, "fruit99");
+    BOOST_REQUIRE_NO_THROW(table->setRow("99", *entry));
+    entry = table->getRow("99");
+    BOOST_REQUIRE(entry.has_value());
+    entry = std::make_optional(table->newDeletedEntry());
+    BOOST_REQUIRE_NO_THROW(table->setRow("999", *entry));
+    entry = table->getRow("999");
+    BOOST_REQUIRE(!entry.has_value());
+    tableFactory->setReadOnly(true);
+
+    // read the page whose pageKey is invalid but not modify it
+    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory);
+    table = tableFactory0->openTable(testTableName);
+    entry = table->getRow("999");
+
+    // delete the the pageKey k1, insert entry less than k1
+    entry = std::make_optional(table->newDeletedEntry());
+    BOOST_REQUIRE_NO_THROW(table->setRow("99", *entry));
+    entry = std::make_optional(table->newEntry());
+    entry->setField(0, "fruit98");
+    BOOST_REQUIRE_NO_THROW(table->setRow("98", *entry));
+    entry = std::make_optional(table->newEntry());
+    entry->setField(0, "fruit97");
+    BOOST_REQUIRE_NO_THROW(table->setRow("97", *entry));
+
+    // commit the page, if has bug it will commit the page use invalid pageKey k0, otherwise it
+    // commit use k1 as the pageKey
+    tableFactory0->parallelTraverse(true, [&](auto& table, auto& key, auto& entry) {
+        if (entry.status() != Entry::DELETED)
+        {
+            BOOST_REQUIRE_NE(string(key), "999");
+        }
+        if (table != "s_tables" && !key.empty() && entry.status() != Entry::Status::DELETED)
+        {
+            BOOST_REQUIRE_EQUAL(string(key), "99");
+        }
+        return true;
+    });
+}
+
+BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndDeleteNotChangePageKey)
+{
+    createDefaultTable();
+    // write a page but the pageKey k0 is deleted, suppose the real pageKey is k1
+    auto table = tableFactory->openTable(testTableName);
+    auto entry = std::make_optional(table->newEntry());
+    entry->setField(0, "fruit999");
+    BOOST_REQUIRE_NO_THROW(table->setRow("999", *entry));
+    entry = table->getRow("999");
+    BOOST_REQUIRE(entry.has_value());
+    entry = std::make_optional(table->newEntry());
+    entry->setField(0, "fruit99");
+    BOOST_REQUIRE_NO_THROW(table->setRow("99", *entry));
+    entry = table->getRow("99");
+    BOOST_REQUIRE(entry.has_value());
+    entry = std::make_optional(table->newDeletedEntry());
+    BOOST_REQUIRE_NO_THROW(table->setRow("999", *entry));
+    entry = table->getRow("999");
+    BOOST_REQUIRE(!entry.has_value());
+    tableFactory->setReadOnly(true);
+
+    // read the page whose pageKey is invalid but not modify it
+    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory);
+    table = tableFactory0->openTable(testTableName);
+    entry = table->getRow("88");
+
+    // delete entry less than k1 and not change the pageKey, keep the pageKey is k1
+    entry = std::make_optional(table->newDeletedEntry());
+    BOOST_REQUIRE_NO_THROW(table->setRow("98", *entry));
+    entry = std::make_optional(table->newDeletedEntry());
+    BOOST_REQUIRE_NO_THROW(table->setRow("97", *entry));
+
+    // commit the page, if has bug it will commit the page use invalid pageKey k0, otherwise it
+    // commit use k1 as the pageKey
+    tableFactory0->parallelTraverse(true, [&](auto& table, auto& key, auto& entry) {
+        if (entry.status() != Entry::DELETED)
+        {
+            BOOST_REQUIRE_NE(string(key), "999");
+        }
+        if (table != "s_tables" && !key.empty() && entry.status() != Entry::Status::DELETED)
+        {
+            BOOST_REQUIRE_EQUAL(string(key), "99");
+        }
+        return true;
+    });
+}
+
 BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 {
     KeyPageStorage::Ptr storage1 =
