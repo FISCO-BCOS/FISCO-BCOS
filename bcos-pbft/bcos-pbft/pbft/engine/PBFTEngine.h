@@ -163,7 +163,8 @@ protected:
     virtual void onProposalApplySuccess(
         PBFTProposalInterface::Ptr _proposal, PBFTProposalInterface::Ptr _executedProposal);
     virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal);
-    virtual void onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposal);
+    virtual void onLoadAndVerifyProposalFinish(
+        bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal);
     virtual void triggerTimeout(bool _incTimeout = true);
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);

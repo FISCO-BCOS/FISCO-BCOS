@@ -56,8 +56,9 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
         this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
 
-    m_cacheProcessor->registerOnLoadAndVerifyProposalSucc(
-        boost::bind(&PBFTEngine::onLoadAndVerifyProposalSucc, this, boost::placeholders::_1));
+    m_cacheProcessor->registerOnLoadAndVerifyProposalFinish(
+        boost::bind(&PBFTEngine::onLoadAndVerifyProposalFinish, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
     initSendResponseHandler();
     // when the node first setup, set timeout to be true for view recovery
     // set timeout to be true to in case of notify-seal before the PBFTEngine
@@ -143,8 +144,16 @@ void PBFTEngine::stop()
     PBFT_LOG(INFO) << LOG_DESC("stop the PBFTEngine");
 }
 
-void PBFTEngine::onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposal)
+void PBFTEngine::onLoadAndVerifyProposalFinish(
+    bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal)
 {
+    // loadAnadVerify proposal failed
+    if (_error || !_verifyResult)
+    {
+        RecursiveGuard l(m_mutex);
+        m_cacheProcessor->clearCacheAfterRecoverStateFailed();
+        return;
+    }
     // must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->updateCommitQueue(_proposal);
