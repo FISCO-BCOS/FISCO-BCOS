@@ -533,7 +533,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result4->contextID(), 101);
     BOOST_CHECK_EQUAL(result4->seq(), 1001);
     BOOST_CHECK_EQUAL(result4->from(), std::string(address));
-    BOOST_CHECK_EQUAL(result4->to(), boost::algorithm::to_lower_copy(std::string(addressString2)));
+    BOOST_CHECK_EQUAL(result4->to(), std::string(addressString2));
     BOOST_CHECK_EQUAL(result4->keyLocks().size(), 1);
     BOOST_CHECK_EQUAL(toHex(result4->keyLocks()[0]), h256(0).hex());  // first member
 
@@ -566,8 +566,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK(result5->data().toBytes() == param);
     BOOST_CHECK_EQUAL(result5->contextID(), 101);
     BOOST_CHECK_EQUAL(result5->seq(), 1003);
-    BOOST_CHECK_EQUAL(
-        result5->from(), boost::algorithm::to_lower_copy(std::string(addressString2)));
+    BOOST_CHECK_EQUAL(result5->from(), std::string(addressString2));
     BOOST_CHECK_EQUAL(result5->to(), std::string(address));
     BOOST_CHECK_EQUAL(result5->status(), 0);
     BOOST_CHECK(result5->message().empty());
@@ -618,7 +617,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     callParam->setSeq(7778);
     callParam->setDepth(0);
     callParam->setFrom(std::string(sender));
-    callParam->setTo(boost::algorithm::to_lower_copy(std::string(addressString2)));
+    callParam->setTo(std::string(addressString2));
     callParam->setData(codec->encodeWithSig("value()"));
     callParam->setOrigin(std::string(sender));
     callParam->setStaticCall(true);
@@ -653,7 +652,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     callParam2->setSeq(7779);
     callParam2->setDepth(0);
     callParam2->setFrom(std::string(sender));
-    callParam2->setTo(boost::algorithm::to_lower_copy(std::string(addressString2)));
+    callParam2->setTo(std::string(addressString2));
     callParam2->setData(codec->encodeWithSig("value()"));
     callParam2->setOrigin(std::string(sender));
     callParam2->setStaticCall(true);

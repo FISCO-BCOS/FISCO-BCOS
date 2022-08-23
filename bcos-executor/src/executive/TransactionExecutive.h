@@ -186,12 +186,7 @@ protected:
 
 
         std::string formatAddress(_address);
-        if (!isWasm)
-        {
-            // evm address needs to be lower
-            boost::algorithm::to_lower(formatAddress);
-        }
-        else
+        if (isWasm)
         {
             if (_address.find(USER_TABLE_PREFIX) == 0)
             {

@@ -1513,6 +1513,6 @@ std::string BlockExecutive::preprocessAddress(const std::string_view& address)
         out = std::string(address);
     }
 
-    boost::to_lower(out);
+    // boost::to_lower(out); no need to be lower
     return out;
 }

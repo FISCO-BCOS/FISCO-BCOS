@@ -253,7 +253,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         _callParameters->params(), contractName, contractVersion, contractAddress, contractAbi);
     if (!blockContext->isWasm())
     {
-        contractAddress = boost::algorithm::to_lower_copy(trimHexPrefix(contractAddress));
+        contractAddress = trimHexPrefix(contractAddress);
     }
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
