@@ -156,10 +156,11 @@ public:
 
     virtual size_t executingProposalSize() { return m_executingProposals.size(); }
     virtual void clearExpiredExecutingProposal();
-    virtual void registerOnLoadAndVerifyProposalSucc(
-        std::function<void(PBFTProposalInterface::Ptr)> _onLoadAndVerifyProposalSucc)
+    virtual void registerOnLoadAndVerifyProposalFinish(
+        std::function<void(bool, Error::Ptr _error, PBFTProposalInterface::Ptr)>
+            _onLoadAndVerifyProposalFinish)
     {
-        m_onLoadAndVerifyProposalSucc = _onLoadAndVerifyProposalSucc;
+        m_onLoadAndVerifyProposalFinish = _onLoadAndVerifyProposalFinish;
     }
 
     virtual void addRecoverReqCache(PBFTMessageInterface::Ptr _recoverResponse);
@@ -173,6 +174,13 @@ public:
     bool proposalCommitted(bcos::protocol::BlockNumber _index)
     {
         return m_committedProposalList.count(_index);
+    }
+
+    void clearCacheAfterRecoverStateFailed()
+    {
+        // since request checkPoint will insert requested-proposal into m_committedProposalList,
+        // must clear the cache when loadAndVerifyBlock failed
+        m_committedProposalList.clear();
     }
 
     virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }
@@ -261,7 +269,8 @@ protected:
         m_proposalAppliedHandler;
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedProposalNotifier;
-    std::function<void(PBFTProposalInterface::Ptr)> m_onLoadAndVerifyProposalSucc;
+    std::function<void(bool, Error::Ptr _error, PBFTProposalInterface::Ptr)>
+        m_onLoadAndVerifyProposalFinish;
 
     // the recover message cache
     std::map<ViewType, std::map<IndexType, PBFTMessageInterface::Ptr>> m_recoverReqCache;
