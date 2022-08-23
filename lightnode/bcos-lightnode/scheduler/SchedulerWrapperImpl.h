@@ -45,7 +45,7 @@ private:
         auto future = promise.get_future();
         if (future.wait_for(std::chrono::seconds(c_callTimeout)) == std::future_status::timeout)
         {
-            auto errorMsg = "call timeout" + LOG_KV("hash", transaction.hash());
+            auto errorMsg = "call timeout";
             BCOS_LOG(ERROR) << LOG_DESC("SchedulerWrapperImpl") << errorMsg;
             auto error = std::make_shared<Error>(-1, errorMsg);
             BOOST_THROW_EXCEPTION(*error);

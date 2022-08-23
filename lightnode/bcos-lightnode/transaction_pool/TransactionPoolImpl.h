@@ -55,7 +55,7 @@ private:
         if (future.wait_for(std::chrono::seconds(c_sumitTransactionTimeout)) ==
             std::future_status::timeout)
         {
-            auto errorMsg = "submitTransaction timeout" + LOG_KV("hash", transaction.hash());
+            auto errorMsg = "submitTransaction timeout";
             TRANSACTIONPOOL_LOG(ERROR) << errorMsg;
             auto error = std::make_shared<Error>(-1, errorMsg);
             BOOST_THROW_EXCEPTION(*error);

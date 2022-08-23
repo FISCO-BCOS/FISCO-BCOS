@@ -185,9 +185,9 @@ public:
                 init->submitTransaction(weakFront, transactionPool, nodeID, id, data);
             });
 
-        front->registerModuleMessageDispatcher(
-            bcos::protocol::LIGHTNODE_CALL, [scheduler, weakFront](bcos::crypto::NodeIDPtr nodeID,
-                                                const std::string& id, bytesConstRef data) {
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_CALL,
+            [self, scheduler, weakFront](
+                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
                 auto init = self.lock();
                 if (!init)
                 {
@@ -275,7 +275,9 @@ private:
     }
 
     void submitTransaction(std::weak_ptr<bcos::front::FrontService> weakFront,
-        std::shared_ptr<bcos::txpool::TxPoolInterface> >> transactionPool,
+        std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
+            std::shared_ptr<bcos::txpool::TxPoolInterface>>>
+            transactionPool,
         bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data)
     {
         auto front = weakFront.lock();
@@ -283,15 +285,16 @@ private:
         {
             return;
         }
-        bcostars::ResponseSendTransaction response;
-        bcostars::RequestSendTransaction request;
+        bcostars::ResponseSendTransaction sendTxsResponse;
+        bcostars::RequestSendTransaction sendTxsRequest;
         auto moduleID = bcos::protocol::LIGHTNODE_SENDTRANSACTION;
-        if (!decodeRequest(request, response, front, moduleID, nodeID, id, data))
+        if (!decodeRequest(sendTxsRequest, sendTxsResponse, front, moduleID, nodeID, id, data))
         {
             return;
         }
         m_lightNodePool->enqueue(
-            [&response, &request, nodeID, id, transactionPool, weakFront, moduleID] mutable() {
+            [response = std::move(sendTxsResponse), request = std::move(sendTxsRequest), nodeID, id,
+                transactionPool, weakFront, moduleID]() mutable {
                 auto front = weakFront.lock();
                 if (!front)
                 {
@@ -336,15 +339,16 @@ private:
         {
             return;
         }
-        bcostars::ResponseSendTransaction response;
-        bcostars::RequestSendTransaction request;
+        bcostars::ResponseSendTransaction sendTxResponse;
+        bcostars::RequestSendTransaction sendTxsRequest;
         auto moduleID = bcos::protocol::LIGHTNODE_CALL;
-        if (!decodeRequest(request, response, front, moduleID, nodeID, id, data))
+        if (!decodeRequest(sendTxsRequest, sendTxResponse, front, moduleID, nodeID, id, data))
         {
             return;
         }
         m_lightNodePool->enqueue(
-            [&request, &response, weakFront, scheduler, nodeID, id, moduleID] mutable() {
+            [request = std::move(sendTxsRequest), response = std::move(sendTxResponse), weakFront,
+                scheduler, nodeID, id, moduleID]() mutable {
                 auto front = weakFront.lock();
                 if (!front)
                 {

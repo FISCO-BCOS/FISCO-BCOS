@@ -55,10 +55,6 @@
 #include <util/tc_clientsocket.h>
 #include <vector>
 
-#ifdef WITH_LIGHTNODE
-#include "LightNodeInitializer.h"
-#endif
-
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::protocol;
@@ -327,8 +323,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
                     m_scheduler, m_protocolInitializer->cryptoSuite());
 
-            LightNodeInitializer lightNodeInitializer;
-            lightNodeInitializer.initLedgerServer(
+            m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
+            m_lightNodeInitializer->initLedgerServer(
                 std::dynamic_pointer_cast<bcos::front::FrontService>(
                     m_frontServiceInitializer->front()),
                 ledger, transactionPool, scheduler);
