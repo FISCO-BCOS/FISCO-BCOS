@@ -26,6 +26,9 @@
 #include "TxPoolInitializer.h"
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <memory>
+#ifdef WITH_LIGHTNODE
+#include "LightNodeInitializer.h"
+#endif
 
 namespace bcos
 {
@@ -85,6 +88,9 @@ private:
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
+    // Note: since LightNodeInitializer use weak_ptr of shared_from_this, this object must be exists
+    // for the whole life time
+    std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     std::string const c_consensusStorageDBName = "consensus_log";
