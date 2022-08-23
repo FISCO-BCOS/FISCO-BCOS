@@ -26,10 +26,10 @@
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/election/LeaderEntryPointInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -66,12 +66,7 @@ public:
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     Rpc::Ptr buildLocalRpc(bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
-    /**
-     * @brief: Rpc
-     * @param _config: WsConfig
-     * @return Rpc::Ptr:
-     */
-    Rpc::Ptr buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
+    Rpc::Ptr buildRpc(int sendTxTimeout, std::shared_ptr<boostssl::ws::WsService> _wsService,
         GroupManager::Ptr _groupManager, AMOPClient::Ptr _amopClient);
 
     bcos::tool::NodeConfig::Ptr nodeConfig() const { return m_nodeConfig; }
@@ -90,7 +85,7 @@ protected:
     AMOPClient::Ptr buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService);
 
 
-    bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(
+    bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(int sendTxTimeout,
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
     bcos::event::EventSub::Ptr buildEventSub(
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);

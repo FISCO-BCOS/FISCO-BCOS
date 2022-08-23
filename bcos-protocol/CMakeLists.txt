@@ -19,11 +19,18 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
-project(bcos-protocol VERSION ${VERSION})
-
 add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-protocol/protobuf)
+
+find_package(Protobuf REQUIRED)
+
+add_library(bcos-protocol INTERFACE)
+target_include_directories(bcos-protocol INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:include/bcos-protocol>
+)
+target_link_libraries(bcos-protocol INTERFACE protobuf::libprotobuf ${CODEC_TARGET})
 
 if (TESTS)
     # fetch bcos-test    
@@ -31,3 +38,7 @@ if (TESTS)
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
+
+include(GNUInstallDirs)
+install(TARGETS bcos-protocol EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(DIRECTORY "bcos-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

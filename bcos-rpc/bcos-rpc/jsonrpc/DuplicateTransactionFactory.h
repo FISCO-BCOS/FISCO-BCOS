@@ -2,11 +2,11 @@
 // Created by Jimmy Shi on 2022/6/11.
 //
 #pragma once
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/interfaces/protocol/TransactionFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/protocol/TransactionFactory.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/ThreadPool.h>
 
 namespace bcos

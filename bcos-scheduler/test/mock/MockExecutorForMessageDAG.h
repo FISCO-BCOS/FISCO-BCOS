@@ -1,8 +1,8 @@
 #pragma once
 #include "Common.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -49,6 +49,29 @@ public:
         callback(nullptr, std::move(input));
     }
 
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override
+    {}
+
+    void executeTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override
+    {
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
+        for (auto i = 0u; i < inputs.size(); i++)
+        {
+            executeTransaction(std::move(inputs[i]),
+                [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {
+                    results[i] = std::move(result);
+                });
+        }
+        callback(nullptr, std::move(results));
+    };
+
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
@@ -57,7 +80,7 @@ public:
         BOOST_CHECK_EQUAL(inputs.size(), 100);
 
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> messages(inputs.size());
-        for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+        for (auto i = 0u; i < inputs.size(); ++i)
         {
             BOOST_TEST(inputs[i].get());
             BOOST_CHECK_EQUAL(inputs[i]->type(), protocol::ExecutionMessage::MESSAGE);
@@ -79,7 +102,7 @@ public:
             callback) override
     {
         std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results(inputs.size());
-        for (auto i = 0; i < inputs.size(); i++)
+        for (auto i = 0u; i < inputs.size(); i++)
         {
             executeTransaction(std::move(inputs[i]),
                 [&](bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr result) {
@@ -89,7 +112,7 @@ public:
         callback(nullptr, std::move(results));
     };
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {}

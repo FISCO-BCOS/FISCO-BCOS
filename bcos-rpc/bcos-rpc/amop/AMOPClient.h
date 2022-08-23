@@ -20,11 +20,11 @@
  */
 #pragma once
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/protocol/AMOPRequest.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/protocol/AMOPRequest.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-utilities/Timer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
 namespace bcos
@@ -151,11 +151,6 @@ protected:
 
     virtual void subscribeTopicToAllNodes();
     virtual void removeTopicFromAllNodes(std::vector<std::string> const& _topicName);
-    std::string endPointToString(std::string const& _serviceName, TC_Endpoint const& _endPoint)
-    {
-        return _serviceName + "@tcp -h " + _endPoint.getHost() + " -p " +
-               boost::lexical_cast<std::string>(_endPoint.getPort());
-    }
 
     virtual void initMsgHandler();
 

@@ -21,9 +21,9 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerTypeDef.h>
-#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/bind/bind.hpp>
 using namespace bcos;
@@ -82,7 +82,7 @@ void PBFTEngine::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        PBFT_LOG(WARNING) << LOG_DESC("sendResonse failed") << LOG_KV("uuid", _id)
+                        PBFT_LOG(WARNING) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
                                           << LOG_KV("module", std::to_string(_moduleID))
                                           << LOG_KV("dst", _dstNode->shortHex())
                                           << LOG_KV("code", _error->errorCode())
@@ -92,7 +92,7 @@ void PBFTEngine::initSendResponseHandler()
         }
         catch (std::exception const& e)
         {
-            PBFT_LOG(WARNING) << LOG_DESC("sendResonse exception")
+            PBFT_LOG(WARNING) << LOG_DESC("sendResponse exception")
                               << LOG_KV("error", boost::diagnostic_information(e))
                               << LOG_KV("uuid", _id) << LOG_KV("moduleID", _moduleID)
                               << LOG_KV("peer", _dstNode->shortHex());
@@ -115,7 +115,7 @@ void PBFTEngine::start()
 void PBFTEngine::restart()
 {
     PBFT_LOG(INFO) << LOG_DESC("restart the consensus module");
-    m_config->enableAsMaterNode(true);
+    m_config->enableAsMasterNode(true);
     triggerTimeout(false);
 }
 
@@ -157,12 +157,17 @@ void PBFTEngine::onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposa
     m_config->timer()->restart();
 }
 
-void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
+void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal)
 {
     PBFT_LOG(WARNING) << LOG_DESC("proposal execute failed") << printPBFTProposal(_proposal)
                       << m_config->printCurrentState();
     // Note: must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
+    if (_errorCode == bcos::scheduler::SchedulerError::InvalidBlocks)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig for InvalidBlocks");
+        fetchAndUpdatesLedgerConfig();
+    }
     // re-push the proposal into the queue
     if (_proposal->index() >= m_config->committedProposal()->index() ||
         _proposal->index() >= m_config->syncingHighestNumber())
@@ -235,11 +240,11 @@ void PBFTEngine::onProposalApplySuccess(
 }
 
 // called after proposal executed successfully
-void PBFTEngine::onProposalApplied(bool _execSuccess, PBFTProposalInterface::Ptr _proposal,
+void PBFTEngine::onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
     PBFTProposalInterface::Ptr _executedProposal)
 {
     auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
-    m_worker->enqueue([self, _execSuccess, _proposal, _executedProposal]() {
+    m_worker->enqueue([self, _errorCode, _proposal, _executedProposal]() {
         try
         {
             auto engine = self.lock();
@@ -247,9 +252,9 @@ void PBFTEngine::onProposalApplied(bool _execSuccess, PBFTProposalInterface::Ptr
             {
                 return;
             }
-            if (!_execSuccess)
+            if (_errorCode != 0)
             {
-                engine->onProposalApplyFailed(_proposal);
+                engine->onProposalApplyFailed(_errorCode, _proposal);
                 return;
             }
             engine->onProposalApplySuccess(_proposal, _executedProposal);
@@ -1092,15 +1097,22 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
         _viewChangeMsg->committedProposal()->hash() != m_config->committedProposal()->hash())
     {
         PBFT_LOG(WARNING) << LOG_DESC("InvalidViewChangeReq: conflict with local committedProposal")
-                          << LOG_DESC("received proposal")
+                          << LOG_DESC(", received proposal: ")
                           << printPBFTProposal(_viewChangeMsg->committedProposal())
-                          << LOG_DESC("local committedProposal")
+                          << LOG_DESC(", local committedProposal:")
                           << printPBFTProposal(m_config->committedProposal());
         return false;
     }
     // check the precommmitted proposals
     for (auto precommitMsg : _viewChangeMsg->preparedProposals())
     {
+        if (precommitMsg->view() > _viewChangeMsg->view())
+        {
+            PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid view")
+                           << printPBFTMsgInfo(precommitMsg) << printPBFTMsgInfo(_viewChangeMsg)
+                           << m_config->printCurrentState();
+            return false;
+        }
         if (!m_cacheProcessor->checkPrecommitMsg(precommitMsg))
         {
             PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid proposal")
@@ -1472,7 +1484,15 @@ void PBFTEngine::onStableCheckPointCommitFailed(
         m_cacheProcessor->updateStableCheckPointQueue(_stableProposal);
         return;
     }
-
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "onStableCheckPointCommitFailed for InvalidBlocks: "
+                                 "fetchAndUpdatesLedgerConfig")
+                          << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
+        fetchAndUpdatesLedgerConfig();
+        return;
+    }
     clearExceptionProposalState(_stableProposal->index());
 }
 
@@ -1497,22 +1517,32 @@ void PBFTEngine::recoverState()
 
 void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number)
 {
-    RecursiveGuard l(m_mutex);
-    if (!m_config->committedProposal())
+    try
     {
-        PBFT_LOG(WARNING) << LOG_DESC(
-            "clearExceptionProposalState return directly for the pbft module has not been inited");
-        return;
+        RecursiveGuard l(m_mutex);
+        if (!m_config->committedProposal())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                "clearExceptionProposalState return directly for the pbft module has not been "
+                "inited");
+            return;
+        }
+        // update the ledgerConfig when switch
+        fetchAndUpdatesLedgerConfig();
+        m_config->timer()->restart();
+        m_cacheProcessor->resetUnCommittedCacheState(_number);
+        m_config->setExpectedCheckPoint(_number);
+        m_cacheProcessor->checkAndPreCommit();
+        m_cacheProcessor->checkAndCommit();
+        m_cacheProcessor->tryToApplyCommitQueue();
+        recoverState();
     }
-    // update the ledgerConfig when switch
-    fetchAndUpdatesLedgerConfig();
-    m_config->timer()->restart();
-    m_cacheProcessor->resetUnCommittedCacheState(_number);
-    m_config->setExpectedCheckPoint(_number);
-    m_cacheProcessor->checkAndPreCommit();
-    m_cacheProcessor->checkAndCommit();
-    m_cacheProcessor->tryToApplyCommitQueue();
-    recoverState();
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("clearExceptionProposalState exception")
+                          << LOG_KV("number", _number)
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 }
 
 void PBFTEngine::fetchAndUpdatesLedgerConfig()

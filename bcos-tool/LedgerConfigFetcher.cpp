@@ -21,8 +21,8 @@
 #include "LedgerConfigFetcher.h"
 #include "Exceptions.h"
 #include "VersionConverter.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/Common.h>
 #include <future>
 using namespace bcos::protocol;
@@ -87,7 +87,7 @@ HashType LedgerConfigFetcher::fetchBlockHash(BlockNumber _blockNumber)
 }
 
 
-std::string LedgerConfigFetcher::fetchSystemConfig(std::string const& _key)
+std::string LedgerConfigFetcher::fetchSystemConfig(std::string_view _key)
 {
     std::promise<std::tuple<Error::Ptr, std::string, BlockNumber>> systemConfigPromise;
     m_ledger->asyncGetSystemConfigByKey(_key,
@@ -103,12 +103,12 @@ std::string LedgerConfigFetcher::fetchSystemConfig(std::string const& _key)
                           << LOG_KV("errorMessage", error->errorMessage()) << LOG_KV("key", _key);
         BOOST_THROW_EXCEPTION(
             LedgerConfigFetcherException()
-            << errinfo_comment("LedgerConfigFetcher: fetchSystemConfig for " + _key + " failed"));
+            << errinfo_comment("LedgerConfigFetcher: fetchSystemConfig for " + std::string{_key} + " failed"));
     }
     return std::get<1>(ret);
 }
 
-ConsensusNodeListPtr LedgerConfigFetcher::fetchNodeListByNodeType(std::string const& _type)
+ConsensusNodeListPtr LedgerConfigFetcher::fetchNodeListByNodeType(std::string_view _type)
 {
     std::promise<std::pair<Error::Ptr, ConsensusNodeListPtr>> nodeListPromise;
     m_ledger->asyncGetNodeListByType(
@@ -124,7 +124,7 @@ ConsensusNodeListPtr LedgerConfigFetcher::fetchNodeListByNodeType(std::string co
                           << LOG_KV("msg", error->errorMessage());
         BOOST_THROW_EXCEPTION(
             LedgerConfigFetcherException() << errinfo_comment(
-                "LedgerConfigFetcher: fetchNodeListByNodeType of type " + _type + " failed"));
+                "LedgerConfigFetcher: fetchNodeListByNodeType of type " + std::string{_type} + " failed"));
     }
     return ret.second;
 }

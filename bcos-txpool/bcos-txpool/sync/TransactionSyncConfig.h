@@ -19,12 +19,12 @@
  * @date 2021-05-11
  */
 #pragma once
-#include "bcos-txpool/sync/interfaces/TxsSyncMsgFactory.h"
-#include "bcos-txpool/txpool/interfaces/TxPoolStorageInterface.h"
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/sync/SyncConfig.h>
+#include "../txpool/interfaces/TxPoolStorageInterface.h"
+#include "interfaces/TxsSyncMsgFactory.h"
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/sync/SyncConfig.h>
 namespace bcos
 {
 namespace sync

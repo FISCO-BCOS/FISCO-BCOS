@@ -6,7 +6,5 @@ set(BINARY_NAME BcosSchedulerService)
 aux_source_directory(../ SRC_LIST)
 add_executable(${BINARY_NAME} ${SRC_LIST} ${HEADERS})
 
-find_package(tarscpp CONFIG REQUIRED)
-
-target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
+# target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 target_link_libraries(${BINARY_NAME} PUBLIC ${PROTOCOL_INIT_LIB} ${COMMAND_HELPER_LIB} ${SCHEDULER_TARGET} ${LEDGER_TARGET} ${STORAGE_TARGET})

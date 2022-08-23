@@ -38,12 +38,10 @@ public:
         memcpy(hash_result, &h, sizeof(h));
         return HashType(hash_result, 32);
     }
-    // init a hashContext
-    void* init() override { return nullptr; }
-    // update the hashContext
-    void* update(void*, bytesConstRef) override { return nullptr; }
-    // final the hashContext
-    bcos::crypto::HashType final(void*) override { return bcos::crypto::HashType(); }
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
+    };
 };
 
 }  // namespace crypto

@@ -19,7 +19,7 @@
  * @date 2021-10-11
  */
 #include "TarsGroupManager.h"
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <cstdint>
 using namespace bcos;
 using namespace bcos::group;

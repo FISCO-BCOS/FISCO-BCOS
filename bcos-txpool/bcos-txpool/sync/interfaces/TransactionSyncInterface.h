@@ -19,9 +19,9 @@
  * @date 2021-05-10
  */
 #pragma once
-#include "bcos-txpool/sync/TransactionSyncConfig.h"
+#include "../TransactionSyncConfig.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
+#include <bcos-framework/protocol/Block.h>
 
 namespace bcos
 {

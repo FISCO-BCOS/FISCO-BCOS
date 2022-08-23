@@ -19,8 +19,8 @@
  * @date 2021-04-21
  */
 #include "PBFTCacheProcessor.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/bind/bind.hpp>
 
 using namespace bcos;
@@ -401,7 +401,7 @@ void PBFTCacheProcessor::applyStateMachine(
     auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
     auto startT = utcTime();
     m_config->stateMachine()->asyncApply(m_config->timer()->timeout(), _lastAppliedProposal,
-        _proposal, executedProposal, [self, startT, _proposal, executedProposal](bool _ret) {
+        _proposal, executedProposal, [self, startT, _proposal, executedProposal](int64_t _ret) {
             try
             {
                 auto cache = self.lock();
@@ -730,7 +730,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
 bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitMsg)
 {
     // check the view(the first started node no need to check the view)
-    if (m_config->startRecovered() && (_precommitMsg->view() > m_config->view()))
+    if (m_config->startRecovered() && (_precommitMsg->view() > m_config->toView()))
     {
         return false;
     }

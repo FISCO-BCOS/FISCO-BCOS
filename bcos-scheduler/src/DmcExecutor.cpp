@@ -1,7 +1,8 @@
 #include "DmcExecutor.h"
-#include "ChecksumAddress.h"
-#include "bcos-framework/interfaces/executor/ExecuteError.h"
+#include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
+#include "bcos-framework/executor/ExecuteError.h"
 #include <boost/format.hpp>
+
 
 using namespace bcos::scheduler;
 
@@ -67,7 +68,7 @@ bool DmcExecutor::unlockPrepare()
                 assert(false);
             }
 
-            // Try acquire key lock
+            // Try to acquire key lock
             if (!m_keyLocks->acquireKeyLock(
                     message->from(), message->keyLockAcquired(), contextID, seq))
             {
@@ -152,7 +153,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     /*
      this code may lead to inconsistency, because in parallel for go(),
      some message sent by other DMCExecutor will be executed in executor and return before this
-     instance go(), so some need send messages will be ignored in the code below
+     instance go(), so some needs send messages will be ignored in the code below
 
     if (!m_executivePool.empty(MessageHint::NEED_PREPARE))
     {
@@ -202,7 +203,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                        << LOG_KV("internalCall", (*messages)[0]->internalCall())
                        << LOG_KV("type", (*messages)[0]->type());
         // is static call
-        m_executor->call(std::move((*messages)[0]),
+        m_executor->dmcCall(std::move((*messages)[0]),
             [this, callback = std::move(callback)](
                 bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
                 if (error)
@@ -256,7 +257,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                         triggerSwitch();
                     }
 
-                    callback(std::move(error), ERROR);
+                    callback(std::move(error), Status::ERROR);
                 }
                 else
                 {
@@ -420,38 +421,13 @@ void DmcExecutor::scheduleOut(ExecutiveState::Ptr executiveState)
     f_onSchedulerOut(std::move(executiveState));  // schedule out
 }
 
-inline void toChecksumAddress(std::string& _hexAddress, bcos::crypto::Hash::Ptr _hashImpl)
-{
-    boost::algorithm::to_lower(_hexAddress);
-    bcos::toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
-}
-
 std::string DmcExecutor::newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq)
 {
-    auto hash = m_hashImpl->hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
-                                 boost::lexical_cast<std::string>(contextID) + "_" +
-                                 boost::lexical_cast<std::string>(seq));
-
-    std::string hexAddress;
-    hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
-
-    toChecksumAddress(hexAddress, m_hashImpl);
-
-    return hexAddress;
+    return bcos::newEVMAddress(m_hashImpl, blockNumber, contextID, seq);
 }
 
 std::string DmcExecutor::newEVMAddress(
     const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
 {
-    auto hash =
-        m_hashImpl->hash(bytes{0xff} + _sender + toBigEndian(_salt) + m_hashImpl->hash(_init));
-
-    std::string hexAddress;
-    hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
-
-    toChecksumAddress(hexAddress, m_hashImpl);
-
-    return hexAddress;
+    return bcos::newEVMAddress(m_hashImpl, _sender, _init, _salt);
 }

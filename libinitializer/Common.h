@@ -19,8 +19,8 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>

@@ -2,8 +2,8 @@
 
 #include "Common.h"
 #include "MockExecutor.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <boost/lexical_cast.hpp>
 #include <tuple>
 
@@ -14,6 +14,7 @@ namespace bcos::test
 class MockParallelExecutorForCall : public MockParallelExecutor
 {
 public:
+    using Ptr = std::shared_ptr<MockParallelExecutorForCall>();
     MockParallelExecutorForCall(const std::string& name) : MockParallelExecutor(name) {}
 
     ~MockParallelExecutorForCall() override {}
@@ -32,7 +33,7 @@ public:
         BOOST_FAIL("Unexpected execute!");
     }
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {

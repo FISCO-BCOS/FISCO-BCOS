@@ -20,7 +20,7 @@
  */
 #include "PBTransaction.h"
 #include "../Common.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework/protocol/Exceptions.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -57,7 +57,7 @@ PBTransaction::PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_
     m_transaction->set_hashfieldsdata(encodedHashFieldsData->data(), encodedHashFieldsData->size());
 
     auto hash = m_cryptoSuite->hash(*encodedHashFieldsData);
-    m_transaction->set_hashfieldshash(hash.data(), hash.size);
+    m_transaction->set_hashfieldshash(hash.data(), hash.SIZE);
     // set import time
     m_transaction->set_import_time(_importTime);
 }
@@ -92,15 +92,6 @@ void PBTransaction::encode(bytes& _encodedData) const
     encodePBObject(_encodedData, m_transaction);
 }
 
-bytesConstRef PBTransaction::encode() const
-{
-    if (m_dataCache->empty())
-    {
-        encode(*m_dataCache);
-    }
-    return bytesConstRef((byte const*)m_dataCache->data(), m_dataCache->size());
-}
-
 bcos::crypto::HashType PBTransaction::hash(bool _useCache) const
 {
     if (!m_transaction->hashfieldshash().empty() && _useCache)
@@ -111,7 +102,7 @@ bcos::crypto::HashType PBTransaction::hash(bool _useCache) const
     auto data = bytesConstRef((bcos::byte*)m_transaction->hashfieldsdata().data(),
         m_transaction->hashfieldsdata().size());
     auto hash = m_cryptoSuite->hash(data);
-    m_transaction->set_hashfieldshash(hash.data(), HashType::size);
+    m_transaction->set_hashfieldshash(hash.data(), HashType::SIZE);
     return hash;
 }
 

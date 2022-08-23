@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief interface definition of ExecutiveFlow
+ * @brief Executive flow for DMC execution
  * @file ExecutiveStackFlow.h
  * @author: jimmyshi
  * @date: 2022-03-22
@@ -32,7 +32,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class ExecutiveStackFlow : public virtual ExecutiveFlowInterface,
                            public std::enable_shared_from_this<ExecutiveStackFlow>
 {
@@ -62,6 +61,12 @@ public:
             return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) :
                                                       std::get<0>(a) > std::get<0>(b);
         }
+    };
+
+    void stop() override
+    {
+        m_isRunning = false;
+        ExecutiveFlowInterface::stop();
     };
 
 private:
@@ -97,6 +102,8 @@ private:
     ExecutiveFactory::Ptr m_executiveFactory;
 
     mutable SharedMutex x_lock;
+
+    bool m_isRunning = true;
 };
 
 

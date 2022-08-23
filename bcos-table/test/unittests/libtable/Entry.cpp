@@ -17,7 +17,7 @@
  * @file Entry.cpp
  */
 
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>

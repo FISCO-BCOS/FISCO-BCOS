@@ -20,14 +20,14 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/rpc/RPCInterface.h"
+#include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Log.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define SCHEDULER_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_DESC("SchedulerServiceApp")
 
@@ -39,7 +39,13 @@ public:
     SchedulerServiceApp() = default;
     ~SchedulerServiceApp() override {}
     void initialize() override;
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+    }
 
 protected:
     virtual void createAndInitSchedulerService();

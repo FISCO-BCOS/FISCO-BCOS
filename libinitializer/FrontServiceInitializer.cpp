@@ -19,14 +19,16 @@
  * @date 2021-06-10
  */
 #include "FrontServiceInitializer.h"
-#include "Common/TarsUtils.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/gateway/GroupNodeInfo.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontServiceFactory.h>
+#include <bcos-tars-protocol/tars/LightNode.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 using namespace bcos;
 using namespace bcos::initializer;
@@ -104,6 +106,21 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
     m_front->registerModuleMessageDispatcher(
         bcos::protocol::ModuleID::TxsSync, [_txpool](bcos::crypto::NodeIDPtr _nodeID,
                                                std::string const& _id, bcos::bytesConstRef _data) {
+            _txpool->asyncNotifyTxsSyncMessage(
+                nullptr, _id, _nodeID, _data, [_id](bcos::Error::Ptr _error) {
+                    if (_error)
+                    {
+                        FRONTSERVICE_LOG(WARNING) << LOG_DESC("asyncNotifyTxsSyncMessage failed")
+                                                  << LOG_KV("code", _error->errorCode())
+                                                  << LOG_KV("msg", _error->errorMessage());
+                    }
+                });
+        });
+
+    // register the message dispatcher for the consensus txs sync module
+    m_front->registerModuleMessageDispatcher(bcos::protocol::ModuleID::ConsTxsSync,
+        [_txpool](
+            bcos::crypto::NodeIDPtr _nodeID, std::string const& _id, bcos::bytesConstRef _data) {
             _txpool->asyncNotifyTxsSyncMessage(
                 nullptr, _id, _nodeID, _data, [_id](bcos::Error::Ptr _error) {
                     if (_error)

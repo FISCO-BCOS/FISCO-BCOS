@@ -20,7 +20,7 @@
 #pragma once
 #include "SealerConfig.h"
 #include "SealingManager.h"
-#include "bcos-framework/interfaces/sealer/SealerInterface.h"
+#include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
 
 namespace bcos
@@ -35,7 +35,7 @@ public:
       : Worker("Sealer", 0), m_sealerConfig(_sealerConfig)
     {
         m_sealingManager = std::make_shared<SealingManager>(_sealerConfig);
-        m_sealingManager->onReady([=]() { this->noteGenerateProposal(); });
+        m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
     }
     virtual ~Sealer() {}
 

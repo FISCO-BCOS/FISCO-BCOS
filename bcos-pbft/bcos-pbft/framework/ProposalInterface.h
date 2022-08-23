@@ -19,7 +19,7 @@
  * @date 2021-04-09
  */
 #pragma once
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace consensus

@@ -21,17 +21,22 @@
 #include "SchedulerServiceApp.h"
 #include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
+#include "bcos-utilities/BoostLog.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include "generated/bcos-tars-protocol/tars/TxPoolService.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/SchedulerInitializer.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
+#include <util/tc_clientsocket.h>
+#include <vector>
 
 using namespace bcostars;
 using namespace bcos::initializer;
@@ -61,19 +66,32 @@ void SchedulerServiceApp::createAndInitSchedulerService()
     bcos::initializer::showNodeVersionMetric();
 
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create RpcServiceClient")
-                                << LOG_KV("rpcServiceName", rpcServiceName);
-    auto rpcServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+                                << LOG_KV("rpcServiceName", rpcServiceName)
+                                << LOG_KV("withoutTarsFramework", withoutTarsFramework);
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
+
+    // TODO: tars
+    auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
+        withoutTarsFramework, rpcServiceName, endPoints);
+
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
 
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
                                 << LOG_KV("txpoolServiceName", txpoolServiceName);
-    auto txpoolServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
-            txpoolServiceName);
+
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
+
+    // TODO: tars
+    auto txpoolServicePrx = bcostars::createServantProxy<bcostars::TxPoolServicePrx>(
+        withoutTarsFramework, txpoolServiceName, endPoints);
+
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
@@ -82,6 +100,7 @@ void SchedulerServiceApp::createAndInitSchedulerService()
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("createScheduler success");
 
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("addServant for scheduler");
+
     SchedulerServiceParam param;
     param.scheduler = m_scheduler;
     param.cryptoSuite = m_protocolInitializer->cryptoSuite();
@@ -134,9 +153,10 @@ void SchedulerServiceApp::createScheduler()
         m_nodeConfig->executorServiceName());
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()), executionMessageFactory, blockFactory,
-        m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()), executionMessageFactory,
+        blockFactory, m_protocolInitializer->txResultFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+        m_nodeConfig->isWasm());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {

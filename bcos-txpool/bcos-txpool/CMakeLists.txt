@@ -25,8 +25,10 @@ include_directories(./sync/protocol/PB)
 
 add_library(${TXPOOL_TARGET} ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS})
 
-target_compile_options(${TXPOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+# target_compile_options(${TXPOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
-target_link_libraries(${TXPOOL_TARGET} PUBLIC TBB::tbb protobuf::libprotobuf ${UTILITIES_TARGET} ${TOOL_TARGET})
+target_include_directories(${TXPOOL_TARGET} PUBLIC .)
+target_include_directories(${TXPOOL_TARGET} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/bcos-txpool)
+target_link_libraries(${TXPOOL_TARGET} PUBLIC TBB::tbb protobuf::libprotobuf bcos-protocol ${UTILITIES_TARGET} ${TOOL_TARGET})

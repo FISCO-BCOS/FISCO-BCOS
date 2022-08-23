@@ -23,6 +23,8 @@
 #pragma once
 #include "Common.h"
 #include "Executive.h"
+
+#define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <string>

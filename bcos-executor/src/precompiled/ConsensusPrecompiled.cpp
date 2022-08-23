@@ -21,9 +21,9 @@
 #include "ConsensusPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/lexical_cast.hpp>
@@ -64,7 +64,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
     if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("sender is not from sys")
                                << LOG_KV("sender", _callParameters->m_sender);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
@@ -94,8 +94,8 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled")
+                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(
             bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
     }
@@ -116,20 +116,21 @@ int ConsensusPrecompiled::addSealer(
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer func")
-                           << LOG_KV("nodeID", nodeID);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer")
+                          << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),
             [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
     if (weight == 0)
     {
         // u256 weight be then 0
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
                                << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_WEIGHT;
     }
@@ -157,7 +158,7 @@ int ConsensusPrecompiled::addSealer(
     }
     else
     {
-        consensusList.emplace_back(nodeID, weight, ledger::CONSENSUS_SEALER,
+        consensusList.emplace_back(nodeID, weight, std::string{ledger::CONSENSUS_SEALER},
             boost::lexical_cast<std::string>(blockContext->number() + 1));
     }
 
@@ -181,14 +182,15 @@ int ConsensusPrecompiled::addObserver(
     codec.decode(_data, nodeID);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
-                           << LOG_KV("nodeID", nodeID);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver")
+                          << LOG_KV("nodeID", nodeID);
 
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),
             [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
@@ -216,7 +218,7 @@ int ConsensusPrecompiled::addObserver(
     }
     else
     {
-        consensusList.emplace_back(nodeID, 0, ledger::CONSENSUS_OBSERVER,
+        consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
             boost::lexical_cast<std::string>(blockContext->number() + 1));
     }
 
@@ -234,8 +236,6 @@ int ConsensusPrecompiled::addObserver(
 
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                           << LOG_DESC("addObserver successfully insert");
     return 0;
 }
 
@@ -249,11 +249,11 @@ int ConsensusPrecompiled::removeNode(
     codec.decode(_data, nodeID);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove")
                            << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
@@ -294,7 +294,6 @@ int ConsensusPrecompiled::removeNode(
 
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
     return 0;
 }
 
@@ -309,18 +308,18 @@ int ConsensusPrecompiled::setWeight(
     codec.decode(_data, nodeID, weight);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight func")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight")
                            << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
     if (weight == 0)
     {
         // u256 weight must greater then 0
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
                                << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_WEIGHT;
     }
@@ -356,8 +355,6 @@ int ConsensusPrecompiled::setWeight(
 
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                           << LOG_DESC("setWeight successfully");
     return 0;
 }
 

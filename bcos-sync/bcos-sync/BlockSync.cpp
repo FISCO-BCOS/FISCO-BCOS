@@ -38,7 +38,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
 {
     m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
-    m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout());
+    m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
     m_downloadingTimer->registerTimeoutHandler(boost::bind(&BlockSync::onDownloadTimeout, this));
     m_downloadingQueue->registerNewBlockHandler(
         boost::bind(&BlockSync::onNewBlock, this, boost::placeholders::_1));
@@ -79,6 +79,12 @@ void BlockSync::init()
 void BlockSync::enableAsMaster(bool _masterNode)
 {
     BLKSYNC_LOG(INFO) << LOG_DESC("enableAsMaster:") << _masterNode;
+    if (m_masterNode == _masterNode)
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("enableAsMasterNode: The masterNodeState is not changed")
+                          << LOG_KV("master", _masterNode);
+        return;
+    }
     m_config->setMasterNode(_masterNode);
     m_masterNode = _masterNode;
     if (!_masterNode)
@@ -106,7 +112,7 @@ void BlockSync::initSendResponseHandler()
                     if (_error)
                     {
                         BLKSYNC_LOG(WARNING)
-                            << LOG_DESC("sendResonse failed") << LOG_KV("uuid", _id)
+                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
                             << LOG_KV("module", std::to_string(_moduleID))
                             << LOG_KV("dst", _dstNode->shortHex())
                             << LOG_KV("code", _error->errorCode())
@@ -116,7 +122,7 @@ void BlockSync::initSendResponseHandler()
         }
         catch (std::exception const& e)
         {
-            BLKSYNC_LOG(WARNING) << LOG_DESC("sendResonse exception")
+            BLKSYNC_LOG(WARNING) << LOG_DESC("sendResponse exception")
                                  << LOG_KV("error", boost::diagnostic_information(e));
         }
     };
@@ -242,7 +248,7 @@ bool BlockSync::shouldSyncing()
     {
         return false;
     }
-    // the node is consensusing the block
+    // the node is reaching consensus the block
     if (m_config->committedProposalNumber() >= m_config->knownHighestNumber())
     {
         return false;
@@ -496,6 +502,8 @@ void BlockSync::tryToRequestBlocks()
 
 void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
 {
+    BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("requestBlocks")
+                      << LOG_KV("from", _from) << LOG_KV("to", _to);
     m_state = SyncState::Downloading;
     m_downloadingTimer->start();
 
@@ -534,6 +542,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
                               << LOG_DESC("Request blocks") << LOG_KV("from", from)
                               << LOG_KV("to", to) << LOG_KV("curNum", m_config->blockNumber())
                               << LOG_KV("peer", _p->nodeId()->shortHex())
+                              << LOG_KV("maxRequestNumber", m_maxRequestNumber)
                               << LOG_KV("node", m_config->nodeID()->shortHex());
 
             ++shard;  // shard move
@@ -562,12 +571,14 @@ void BlockSync::maintainDownloadingQueue()
     m_downloadingQueue->tryToCommitBlockToLedger();
     auto executedBlock = m_config->executedBlock();
     // remove the expired block
-    while (m_downloadingQueue->top() &&
-           m_downloadingQueue->top()->blockHeader()->number() <= executedBlock)
+    auto topBlock = m_downloadingQueue->top();
+    while (topBlock && topBlock->blockHeader()->number() <= executedBlock)
     {
         m_downloadingQueue->pop();
+        topBlock = m_downloadingQueue->top();
     }
-    if (!m_downloadingQueue->top())
+    topBlock = m_downloadingQueue->top();
+    if (!topBlock)
     {
         return;
     }
@@ -583,24 +594,29 @@ void BlockSync::maintainDownloadingQueue()
     }
 
     auto expectedBlock = executedBlock + 1;
-    auto topNumber = m_downloadingQueue->top()->blockHeader()->number();
+    auto topNumber = topBlock->blockHeader()->number();
     if (topNumber > (expectedBlock))
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
                              << LOG_KV("curNumber", m_config->blockNumber())
                              << LOG_KV("expectedBlock", expectedBlock)
+                             << LOG_KV("commitQueueSize", m_downloadingQueue->commitQueueSize())
+                             << LOG_KV("isSyncing", isSyncing())
+                             << LOG_KV("knownHighestNumber", m_config->knownHighestNumber())
                              << LOG_KV("node", m_config->nodeID()->shortHex());
         return;
     }
     // execute the expected block
-    if (m_downloadingQueue->top() &&
-        m_downloadingQueue->top()->blockHeader()->number() == (executedBlock + 1))
+    if (topBlock->blockHeader()->number() == (executedBlock + 1))
     {
         auto block = m_downloadingQueue->top();
+        // Note: the block maybe cleared here
+        if (!block)
+        {
+            return;
+        }
         m_downloadingQueue->pop();
-        m_state = SyncState::Downloading;
         auto blockHeader = block->blockHeader();
-        auto blockNumber = blockHeader->number();
         auto header = block->blockHeader();
         auto signature = header->signatureList();
         BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_DESC("BlockSync: applyBlock")
@@ -800,7 +816,7 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
         Json::Value info;
         info["nodeID"] = *toHexString(_p->nodeId()->data());
         info["genesisHash"] = *toHexString(_p->genesisHash());
-        info["blockNumber"] = _p->number();
+        info["blockNumber"] = Json::UInt64(_p->number());
         info["latestHash"] = *toHexString(_p->hash());
         peersInfo.append(info);
         return true;

@@ -36,12 +36,13 @@ class BinaryController:
                 self.cdn_link_header, self.mtail_binary_name)
 
     def download_all_binary(self):
-        utilities.print_badage(
+        utilities.print_badge(
             "Download binary, use_cdn: %s, version: %s" % (self.use_cdn, self.version))
         for binary in self.binary_list:
             download_url = self.get_binary_download_url(binary)
             if self.download_binary(binary + ".tgz", download_url) is False:
                 return False
+            self.un_tar_gz(self.get_required_binary_path(binary + ".tgz"))
         if self.download_binary(self.mtail_binary_name, self.mtail_download_url) is False:
             return False
         binary_file_path = os.path.join(

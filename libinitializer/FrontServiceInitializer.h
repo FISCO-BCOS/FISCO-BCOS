@@ -19,7 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
 
@@ -49,6 +49,7 @@ class FrontService;
 namespace initializer
 {
 class ProtocolInitializer;
+
 class FrontServiceInitializer
 {
 public:

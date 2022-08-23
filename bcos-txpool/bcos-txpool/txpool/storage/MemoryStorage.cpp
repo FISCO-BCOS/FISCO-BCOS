@@ -36,7 +36,7 @@ MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
     m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
     m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
-    m_cleanUpTimer = std::make_shared<Timer>(3000);
+    m_cleanUpTimer = std::make_shared<Timer>(3000, "txpoolTimer");
     m_cleanUpTimer->registerTimeoutHandler(
         boost::bind(&MemoryStorage::cleanUpExpiredTransactions, this));
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
@@ -278,10 +278,10 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             {
                 return;
             }
-            auto encodedData = _tx->encode();
+            bcos::bytes encodeData;
+            _tx->encode(encodeData);
             auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
-            txsToStore->emplace_back(
-                std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
+            txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodeData)));
             auto txsHash = std::make_shared<HashList>();
             auto txHash = _tx->hash();
             txsHash->emplace_back(txHash);
@@ -495,7 +495,7 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
                      << LOG_KV("batchId", _batchId) << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
-                     << LOG_KV("updateLedgerNonceT", updateLedgerNonceT);
+                     << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
 TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)

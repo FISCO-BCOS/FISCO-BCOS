@@ -182,8 +182,8 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
+                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(
             bcos::protocol::PrecompiledError("AuthManagerPrecompiled call undefined function!"));
     }
@@ -209,12 +209,10 @@ void AuthManagerPrecompiled::getAdmin(
         codec.decode(data, contractAddress);
         path = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin")
-                           << LOG_KV("path", path);
 
     std::string adminStr = getContractAdmin(_executive, path, _callParameters);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
-                           << LOG_KV("admin", adminStr);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("getAdmin success")
+                           << LOG_KV("contractPath", path) << LOG_KV("admin", adminStr);
     _callParameters->setExecResult(
         blockContext->isWasm() ? codec.encode(adminStr) : codec.encode(Address(adminStr)));
 }
@@ -241,13 +239,14 @@ void AuthManagerPrecompiled::resetAdmin(
     {
         codec.decode(data, path, admin);
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("resetAdmin")
                            << LOG_KV("path", path) << LOG_KV("admin", admin);
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("sender is not from sys") << LOG_KV("path", path)
-                               << LOG_KV("sender", _callParameters->m_sender);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
+                              << LOG_DESC("sender is not from sys") << LOG_KV("path", path)
+                              << LOG_KV("sender", _callParameters->m_sender);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
@@ -285,10 +284,10 @@ void AuthManagerPrecompiled::setMethodAuthType(
     auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("Permission denied, only admin can set contract access.")
-                               << LOG_KV("address", path)
-                               << LOG_KV("sender", _callParameters->m_sender);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
+                              << LOG_DESC("Permission denied, only admin can set contract access.")
+                              << LOG_KV("address", path)
+                              << LOG_KV("sender", _callParameters->m_sender);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
@@ -395,10 +394,10 @@ void AuthManagerPrecompiled::setMethodAuth(
     auto admin = getContractAdmin(_executive, path, _callParameters);
     if (_callParameters->m_sender != admin)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("Permission denied, only admin can set contract access.")
-                               << LOG_KV("address", path)
-                               << LOG_KV("sender", _callParameters->m_sender);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
+                              << LOG_DESC("Permission denied, only admin can set contract access.")
+                              << LOG_KV("address", path)
+                              << LOG_KV("sender", _callParameters->m_sender);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
@@ -433,17 +432,18 @@ void AuthManagerPrecompiled::setContractStatus(
         codec.decode(data, contractAddress, isFreeze);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
                            << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
 
     /// check sender is contract admin
     auto admin = getContractAdmin(_executive, address, _callParameters);
     if (_callParameters->m_sender != admin)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("Permission denied, only admin can set contract access.")
-                               << LOG_KV("address", address)
-                               << LOG_KV("sender", _callParameters->m_sender);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
+                              << LOG_DESC("Permission denied, only admin can set contract access.")
+                              << LOG_KV("address", address)
+                              << LOG_KV("sender", _callParameters->m_sender);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
@@ -477,7 +477,7 @@ void AuthManagerPrecompiled::contractAvailable(
         codec.decode(data, contractAddress);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("contractAvailable")
                            << LOG_KV("address", address);
 
     auto newParams =
@@ -509,7 +509,7 @@ std::string AuthManagerPrecompiled::getContractAdmin(
 
     if (response->status != (int32_t)protocol::TransactionStatus::None)
     {
-        PRECOMPILED_LOG(ERROR) << "Can't get contract admin, check the contract existence."
+        PRECOMPILED_LOG(DEBUG) << "Can't get contract admin, check the contract existence."
                                << LOG_KV("address", _to);
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError("Please check the existence of contract."));
@@ -574,7 +574,7 @@ void AuthManagerPrecompiled::setDeployType(
                            << LOG_KV("type", type);
     if (type > 2)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("deploy auth type must be 1 or 2.");
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;

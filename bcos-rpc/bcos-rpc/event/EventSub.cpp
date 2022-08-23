@@ -19,9 +19,9 @@
  */
 
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/event/EventSubRequest.h>
@@ -269,9 +269,14 @@ void EventSub::reportEventSubTasks()
     //
     if (elapsedMs > 10 * 1000)
     {
-        EVENT_SUB(DEBUG) << LOG_BADGE("eventSubTasks")
-                         << LOG_DESC("all event sub tasks subscribed by client")
-                         << LOG_KV("count", m_tasks.size());
+        auto taskSize = m_tasks.size();
+        if (taskSize > 0)
+        {
+            EVENT_SUB(INFO) << LOG_BADGE("eventSubTasks")
+                            << LOG_DESC("all event sub tasks subscribed by client")
+                            << LOG_KV("count", m_tasks.size());
+        }
+
         start = std::chrono::high_resolution_clock::now();
     }
 }

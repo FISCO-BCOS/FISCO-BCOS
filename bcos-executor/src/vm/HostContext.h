@@ -22,8 +22,8 @@
 #pragma once
 
 #include "../Common.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/storage/Table.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
@@ -47,8 +47,7 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext()
-    {
+    ~HostContext(){
         // auto total = utcTimeUs() - m_startTime;
         // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
         //                      << LOG_KV("storageTimeProportion",
@@ -141,6 +140,8 @@ public:
 
     uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
     uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
+
+    bool isWasm();
 
 private:
     void depositFungibleAsset(

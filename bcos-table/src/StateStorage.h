@@ -24,8 +24,11 @@
  */
 #pragma once
 
-#include "bcos-table/src/StateStorageInterface.h"
-#include <bcos-utilities/BoostLog.h>
+#include "StateStorageInterface.h"
+#include "bcos-framework/storage/Table.h"
+#include "tbb/enumerable_thread_specific.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -45,16 +48,14 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 private:
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }
+    {}
     // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
     //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
 
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }                                               \
+    {}                                              \
     // log("SET", (table), (key), (entry), (desc))
 
     // for debug
@@ -93,7 +94,10 @@ public:
     BaseStorage(BaseStorage&&) = delete;
     BaseStorage& operator=(BaseStorage&&) = delete;
 
-    virtual ~BaseStorage() { m_recoder.clear(); }
+    ~BaseStorage() override
+    {
+        m_recoder.clear();
+    }
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,
@@ -180,7 +184,7 @@ public:
                     }
                 }
 
-                callback(nullptr, std::move(remoteKeys));
+                callback(nullptr, std::forward<decltype(remoteKeys)>(remoteKeys));
             });
     }
 
@@ -269,10 +273,10 @@ public:
                 auto missinges = std::tuple<std::vector<std::string_view>,
                     std::vector<std::tuple<std::string, size_t>>>();
 
-                std::atomic_long existsCount = 0;
+                std::atomic_ulong existsCount = 0;
 
 #pragma omp parallel for
-                for (gsl::index i = 0; i < _keys.size(); ++i)
+                for (auto i = 0u; i < _keys.size(); ++i)
                 {
                     auto [bucket, lock] = getBucket(tableView, _keys[i]);
                     boost::ignore_unused(lock);
@@ -437,7 +441,7 @@ public:
                 return true;
             });
 
-        STORAGE_LOG(INFO) << "Successful merged " << count << " records";
+        STORAGE_LOG(INFO) << "Successful merged records" << LOG_KV("count", count);
     }
 
     crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
@@ -540,9 +544,15 @@ public:
         }
     }
 
-    void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
+    void setEnableTraverse(bool enableTraverse)
+    {
+        m_enableTraverse = enableTraverse;
+    }
 
-    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
+    void setMaxCapacity(ssize_t capacity)
+    {
+        m_maxCapacity = capacity;
+    }
 
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry)

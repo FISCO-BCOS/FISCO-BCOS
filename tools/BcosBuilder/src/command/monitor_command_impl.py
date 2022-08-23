@@ -5,8 +5,8 @@ from common import utilities
 
 
 class MonitorCommandImpl:
-    def __init__(self, config, node_type):
-        self.Monitor_controller = MonitorController(config, node_type)
+    def __init__(self, config, node_type, output_dir):
+        self.Monitor_controller = MonitorController(config, node_type, output_dir)
 
     def deploy_monitor(self):
         function = "generate_and_deploy_monitor_services"
@@ -25,10 +25,10 @@ class MonitorCommandImpl:
 
     def execute_command(self, function, notice_info):
         utilities.print_split_info()
-        utilities.print_badage(notice_info)
+        utilities.print_badge(notice_info)
         ret = getattr(self.Monitor_controller, function)()
         if ret is True:
-            utilities.print_badage("%s success" % notice_info)
+            utilities.print_badge("%s success" % notice_info)
         else:
             utilities.log_error("%s failed" % notice_info)
         utilities.print_split_info()

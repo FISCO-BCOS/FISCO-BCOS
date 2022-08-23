@@ -21,7 +21,7 @@
 #pragma once
 #include "engine/BlockValidator.h"
 #include "engine/PBFTEngine.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
 namespace bcos
 {
 namespace consensus
@@ -127,7 +127,7 @@ public:
             _onResponse(nullptr);
         }
     }
-    virtual void enableAsMaterNode(bool _isMasterNode);
+    virtual void enableAsMasterNode(bool _isMasterNode);
 
     virtual bool masterNode() const { return m_masterNode.load(); }
 
@@ -140,6 +140,11 @@ public:
     uint32_t compatibilityVersion() const override
     {
         return m_pbftEngine->pbftConfig()->compatibilityVersion();
+    }
+
+    void clearExceptionProposalState(bcos::protocol::BlockNumber _number) override
+    {
+        m_pbftEngine->clearExceptionProposalState(_number);
     }
 
 protected:

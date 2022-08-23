@@ -20,14 +20,24 @@
  */
 #include "NodeConfig.h"
 #include "VersionConverter.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/ServiceDesc.h"
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/FileUtility.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <json/forwards.h>
+#include <json/reader.h>
+#include <json/value.h>
+#include <servant/RemoteLogger.h>
+#include <util/tc_clientsocket.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/throw_exception.hpp>
 #include <thread>
 
 #define MAX_BLOCK_LIMIT 5000
@@ -57,6 +67,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadSealerConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
+    loadOthersConfig(_pt);
 }
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
@@ -98,6 +109,25 @@ void NodeConfig::loadServiceConfig(boost::property_tree::ptree const& _pt)
 {
     loadGatewayServiceConfig(_pt);
     loadRpcServiceConfig(_pt);
+
+    /*
+    [service]
+        without_tars_framework = true
+        tars_proxy_conf = tars_proxy.ini
+     */
+
+    auto withoutTarsFramework = _pt.get<bool>("service.without_tars_framework", false);
+    m_withoutTarsFramework = withoutTarsFramework;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadServiceConfig")
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+
+    if (m_withoutTarsFramework)
+    {
+        std::string tarsProxyConf =
+            _pt.get<std::string>("service.tars_proxy_conf", "./tars_proxy.ini");
+        loadTarsProxyConfig(tarsProxyConf);
+    }
 }
 
 void NodeConfig::loadNodeServiceConfig(
@@ -113,6 +143,26 @@ void NodeConfig::loadNodeServiceConfig(
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The node name must be number or digit"));
     }
+
+    /*
+    [service]
+        without_tars_framework = true
+        tars_proxy_conf = conf/tars_proxy.ini
+     */
+
+    auto withoutTarsFramework = _pt.get<bool>("service.without_tars_framework", false);
+    m_withoutTarsFramework = withoutTarsFramework;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadNodeServiceConfig")
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+
+    if (m_withoutTarsFramework)
+    {
+        std::string tarsProxyConf =
+            _pt.get<std::string>("service.tars_proxy_conf", "conf/tars_proxy.ini");
+        loadTarsProxyConfig(tarsProxyConf);
+    }
+
     m_nodeName = nodeName;
     m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
         getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), _require);
@@ -122,9 +172,111 @@ void NodeConfig::loadNodeServiceConfig(
         getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), _require);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
                          << LOG_KV("executorServiceName", m_executorServiceName);
 }
+
+void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
+{
+    boost::property_tree::ptree pt;
+    try
+    {
+        boost::property_tree::read_ini(_tarsProxyConf, pt);
+
+        loadServiceTarsProxyConfig("front", pt);
+        loadServiceTarsProxyConfig("rpc", pt);
+        loadServiceTarsProxyConfig("gateway", pt);
+        loadServiceTarsProxyConfig("executor", pt);
+        loadServiceTarsProxyConfig("txpool", pt);
+        loadServiceTarsProxyConfig("scheduler", pt);
+        loadServiceTarsProxyConfig("pbft", pt);
+        loadServiceTarsProxyConfig("ledger", pt);
+
+        NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig")
+                             << LOG_KV("service endpoints size", m_tarsSN2EndPoints.size());
+    }
+    catch (const std::exception& e)
+    {
+        NodeConfig_LOG(ERROR) << LOG_BADGE("loadTarsProxyConfig")
+                              << LOG_DESC("load tars proxy config failed") << LOG_KV("e", e.what())
+                              << LOG_KV("tarsProxyConf", _tarsProxyConf);
+
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "Load tars proxy config failed, e: " + std::string(e.what())));
+    }
+}
+
+void NodeConfig::loadServiceTarsProxyConfig(
+    const std::string& _serviceName, boost::property_tree::ptree const& _pt)
+{
+    if (!_pt.get_child_optional(_serviceName))
+    {
+        NodeConfig_LOG(WARNING) << LOG_BADGE("loadServiceTarsProxyConfig")
+                                << LOG_DESC("service name not exist")
+                                << LOG_KV("serviceName", _serviceName);
+        return;
+    }
+
+    for (auto const& it : _pt.get_child(_serviceName))
+    {
+        if (it.first.find("proxy.") != 0)
+        {
+            continue;
+        }
+
+        std::string data = it.second.data();
+
+        // string to endpoint
+        tars::TC_Endpoint endpoint = bcostars::string2TarsEndPoint(data);
+        m_tarsSN2EndPoints[_serviceName].push_back(endpoint);
+
+        NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig") << LOG_DESC("add element")
+                             << LOG_KV("serviceName", _serviceName)
+                             << LOG_KV("endpoint", endpoint.toString());
+    }
+
+    NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig") << LOG_KV("serviceName", _serviceName)
+                         << LOG_KV("endpoints size", m_tarsSN2EndPoints[_serviceName].size());
+}
+
+//
+void NodeConfig::getTarsClientProxyEndpoints(
+    const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endpoints)
+{
+    if (!m_withoutTarsFramework)
+    {
+        NodeConfig_LOG(TRACE) << LOG_BADGE("getTarsClientProxyEndpoints")
+                              << "not work with tars rpc"
+                              << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+        return;
+    }
+
+    _endpoints.clear();
+
+    auto it = m_tarsSN2EndPoints.find(boost::to_lower_copy(_clientPrx));
+    if (it != m_tarsSN2EndPoints.end())
+    {
+        _endpoints = it->second;
+
+        NodeConfig_LOG(INFO) << LOG_BADGE("getTarsClientProxyEndpoints")
+                             << LOG_DESC("find tars client proxy endpoints")
+                             << LOG_KV("serviceName", _clientPrx)
+                             << LOG_KV("endpoints size", _endpoints.size());
+    }
+
+    if (_endpoints.empty())
+    {
+        NodeConfig_LOG(WARNING) << LOG_BADGE("getTarsClientProxyEndpoints")
+                                << LOG_DESC("can not find tars client proxy endpoints")
+                                << LOG_KV("serviceName", _clientPrx);
+
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                ("Can't find tars client proxy endpoints, serviceName : " + _clientPrx)));
+    }
+}
+
 void NodeConfig::checkService(std::string const& _serviceType, std::string const& _serviceName)
 {
     if (_serviceName.size() == 0)
@@ -451,6 +603,15 @@ void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool
                          << LOG_KV("enableFailOver", m_enableFailOver);
 }
 
+void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
+{
+    //
+    m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig")
+                         << LOG_KV("sendTxTimeout", m_sendTxTimeout);
+}
+
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 {
     m_checkPointTimeoutInterval = checkAndGetValue(
@@ -579,7 +740,7 @@ void NodeConfig::generateGenesisData()
 
     versionData = m_compatibilityVersionStr + "-";
     std::stringstream ss;
-    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-";
+    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-" << m_isSerialExecute;
     executorConfig = ss.str();
 
     std::stringstream s;
@@ -598,10 +759,12 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
     m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+    m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
     m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
-                         << LOG_KV("authAdminAccount", m_authAdminAddress);
+                         << LOG_KV("authAdminAccount", m_authAdminAddress)
+                         << LOG_KV("ismSerialExecute", m_isSerialExecute);
 }
 
 // Note: make sure the consensus param checker is consistent with the precompiled param checker

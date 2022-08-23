@@ -20,15 +20,15 @@
  */
 
 #pragma once
-#include "bcos-executor/src/CallParameters.h"
-#include "bcos-executor/src/Common.h"
-#include "bcos-executor/src/dag/DAG.h"
+#include <bcos-executor/src/CallParameters.h>
+#include <bcos-executor/src/Common.h>
+#include <bcos-executor/src/dag/DAG.h>
 #include "bcos-executor/src/dag/TxDAGInterface.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include <map>
 #include <memory>
 #include <queue>

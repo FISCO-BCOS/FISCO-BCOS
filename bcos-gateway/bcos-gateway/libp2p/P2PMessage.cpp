@@ -83,6 +83,10 @@ bool P2PMessageOptions::encode(bytes& _buffer)
         _buffer.insert(_buffer.end(), nodeID->begin(), nodeID->end());
     }
 
+    // moduleID
+    uint16_t moduleID = boost::asio::detail::socket_ops::host_to_network_short(m_moduleID);
+    _buffer.insert(_buffer.end(), (byte*)&moduleID, (byte*)&moduleID + 2);
+
     return true;
 }
 
@@ -142,6 +146,14 @@ ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
 
             offset += nodeIDLength;
         }
+
+        CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
+
+        uint16_t moduleID =
+            boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+        offset += 2;
+
+        m_moduleID = moduleID;
     }
     catch (const std::exception& e)
     {

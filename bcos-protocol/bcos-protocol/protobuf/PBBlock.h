@@ -19,12 +19,12 @@
  * @date: 2021-03-23
  */
 #pragma once
+#include "../Common.h"
+#include "../ParallelMerkleProof.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
-#include <bcos-protocol/Common.h>
-#include <bcos-protocol/ParallelMerkleProof.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-protocol/protobuf/proto/Block.pb.h>
 namespace bcos
 {
@@ -67,7 +67,11 @@ public:
     ~PBBlock() override
     {
         // return the ownership of rawProposal to the passed-in proposal
-        clearTransactionMetaDataCache();
+        auto allocatedMetaDataSize = m_pbRawBlock->transactionsmetadata_size();
+        for (int i = 0; i < allocatedMetaDataSize; i++)
+        {
+            m_pbRawBlock->mutable_transactionsmetadata()->UnsafeArenaReleaseLast();
+        }
     }
 
     void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
@@ -217,16 +221,6 @@ public:
 protected:
     virtual void encodeTransactionsMetaData() const;
     virtual void decodeTransactionsMetaData();
-
-    virtual void clearTransactionMetaDataCache() const
-    {
-        auto allocatedMetaDataSize = m_pbRawBlock->transactionsmetadata_size();
-        for (int i = 0; i < allocatedMetaDataSize; i++)
-        {
-            m_pbRawBlock->mutable_transactionsmetadata()->UnsafeArenaReleaseLast();
-        }
-        m_pbRawBlock->clear_transactionsmetadata();
-    }
 
 private:
     void decodeTransactions(bool _calculateHash, bool _checkSig);

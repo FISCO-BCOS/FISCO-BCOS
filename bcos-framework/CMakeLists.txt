@@ -19,12 +19,18 @@
 cmake_minimum_required(VERSION 3.12)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-set(VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc4")
 project(bcos-framework VERSION ${VERSION})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
+
+find_package(Microsoft.GSL CONFIG REQUIRED)
+
+add_library(bcos-framework INTERFACE)
+target_include_directories(bcos-framework INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/bcos-framework>)
+target_link_libraries(bcos-framework INTERFACE bcos-crypto Microsoft.GSL::GSL)
 
 if (TESTS)
     enable_testing()
@@ -37,3 +43,7 @@ if (COVERAGE)
     include(Coverage)
     config_coverage("framework-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
 endif ()
+
+include(GNUInstallDirs)
+install(TARGETS bcos-framework EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(DIRECTORY "bcos-framework" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

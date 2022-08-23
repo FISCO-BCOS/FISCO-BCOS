@@ -26,19 +26,20 @@
 
 #include "../Common.h"
 #include "../dag/CriticalFields.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>
 #include <boost/function.hpp>
@@ -108,13 +109,27 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void executeTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override;
+
     void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcExecuteTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
@@ -151,9 +166,15 @@ public:
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
     void start() override { m_isRunning = true; }
-    void stop() override { m_isRunning = false; }
+    void stop() override;
 
 protected:
+    void executeTransactionsInternal(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
@@ -175,7 +196,7 @@ protected:
         int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
-        bcos::protocol::ExecutionMessage::UniquePtr input,
+        bcos::protocol::ExecutionMessage::UniquePtr input, bool useCoroutine,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback);
 
@@ -204,7 +225,7 @@ protected:
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
     std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine);
 
 
     void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
@@ -214,9 +235,11 @@ protected:
 
 
     bcos::storage::StateStorageInterface::Ptr createStateStorage(
-        bcos::storage::StorageInterface::Ptr storage);
+        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
 
     protocol::BlockNumber getBlockNumberInStorage();
+
+    void initPrecompiledByBlockContext(std::shared_ptr<BlockContext> _blockContext);
 
     std::string m_name;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -277,6 +300,8 @@ protected:
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled =
             std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
+    mutable bcos::SharedMutex x_constantPrecompiled;
+
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
@@ -287,6 +312,8 @@ protected:
     std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
+
+    bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
 };

@@ -21,7 +21,7 @@
 #pragma once
 #include "../framework/ConsensusConfigInterface.h"
 #include "Common.h"
-#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
 
@@ -115,7 +115,7 @@ public:
     void setObserverNodeList(ConsensusNodeList& _observerNodeList);
 
     bool asMasterNode() const { return m_asMasterNode.load(); }
-    virtual void enableAsMaterNode(bool _isMasterNode)
+    virtual void enableAsMasterNode(bool _isMasterNode)
     {
         m_asMasterNode.store(_isMasterNode);
         if (m_versionNotification)

@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include <mutex>
 #include <string>
 

@@ -18,7 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/bind/bind.hpp>
@@ -39,6 +39,7 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
     m_timer = std::make_shared<Timer>(TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
+
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
         boost::bind(&AMOPImpl::onAMOPMessage, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
@@ -62,7 +63,7 @@ void AMOPImpl::broadcastTopicSeq()
     auto buffer = buildAndEncodeMessage(
         AMOPMessage::Type::TopicSeq, bytesConstRef((byte*)topicSeq.data(), topicSeq.size()));
     m_network->asyncBroadcastMessageToP2PNodes(
-        GatewayMessageType::AMOPMessageType, ref(*buffer), Options(0));
+        GatewayMessageType::AMOPMessageType, protocol::ModuleID::AMOP, ref(*buffer), Options(0));
     AMOP_LOG(TRACE) << LOG_BADGE("broadcastTopicSeq") << LOG_KV("topicSeq", topicSeq);
     m_timer->restart();
 }
@@ -375,8 +376,8 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                             << LOG_BADGE("RetrySender::sendMessage")
                             << LOG_DESC("asyncSendMessageByNodeID callback response error")
                             << LOG_KV("nodeID", choosedNodeID)
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("msg", _error->errorMessage());
                         self->sendMessage();
                         return;
                     }
@@ -455,7 +456,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
     }
 }
 
-void AMOPImpl::asyncSendBroadbastMessageByTopic(
+void AMOPImpl::asyncSendBroadcastMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)
 {
     std::vector<std::string> nodeIDs;

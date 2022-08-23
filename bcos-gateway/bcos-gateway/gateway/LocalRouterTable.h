@@ -22,8 +22,8 @@
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfo.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/multigroup/GroupInfo.h>
 #include <memory>
 namespace bcos
 {
@@ -47,7 +47,7 @@ public:
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
     bool removeNode(const std::string& _groupID, std::string const& _nodeID);
 
-    std::map<std::string, std::set<std::string>> nodeListInfo() const;
+    std::map<std::string, std::set<std::string>, std::less<>> nodeListInfo() const;
 
     bool updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupInfo);
     bool eraseUnreachableNodes();
@@ -60,7 +60,7 @@ public:
         return m_nodeList;
     }
 
-    bool asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID,
+    bool asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID, uint16_t _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
 
     bool sendMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,

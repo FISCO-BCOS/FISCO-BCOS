@@ -1,6 +1,6 @@
 #include "Executive.h"
 #include "ExecutivePool.h"
-#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-utilities/Common.h>
 #include <stdlib.h>
 #include <tbb/concurrent_set.h>

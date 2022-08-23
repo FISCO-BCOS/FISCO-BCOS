@@ -20,13 +20,16 @@
  */
 #pragma once
 #include "Exceptions.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
-#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <util/tc_clientsocket.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <optional>
+#include <unordered_map>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos
@@ -58,6 +61,11 @@ public:
 
     virtual void loadNodeServiceConfig(
         std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
+
+    virtual void loadTarsProxyConfig(const std::string& _tarsProxyConf);
+
+    virtual void loadServiceTarsProxyConfig(
+        const std::string& _serviceSectionName, boost::property_tree::ptree const& _pt);
 
     virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
     {
@@ -118,6 +126,7 @@ public:
 
     bool isWasm() const { return m_isWasm; }
     bool isAuthCheck() const { return m_isAuthCheck; }
+    bool isSerialExecute() const { return m_isSerialExecute; }
     std::string const& authAdminAddress() const { return m_authAdminAddress; }
 
     std::string const& rpcServiceName() const { return m_rpcServiceName; }
@@ -192,6 +201,17 @@ public:
     unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
+    int sendTxTimeout() const { return m_sendTxTimeout; }
+
+    bool withoutTarsFramework() const { return m_withoutTarsFramework; }
+    void setWithoutTarsFramework(bool _withoutTarsFramework)
+    {
+        m_withoutTarsFramework = _withoutTarsFramework;
+    }
+    //
+    void getTarsClientProxyEndpoints(
+        const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -206,6 +226,7 @@ protected:
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadFailOverConfig(
         boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
+    virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -215,6 +236,7 @@ protected:
         std::string const& _configSection, std::string const& _objName,
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
+
 
 private:
     bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
@@ -272,7 +294,14 @@ private:
     // executor config
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
+    bool m_isSerialExecute = false;
     std::string m_authAdminAddress;
+
+    // Pro and Max versions run do not apply to tars admin site
+    bool m_withoutTarsFramework = {false};
+
+    // service name to tars endpoints
+    std::unordered_map<std::string, std::vector<tars::TC_Endpoint>> m_tarsSN2EndPoints;
 
     std::string m_rpcServiceName;
     std::string m_gatewayServiceName;
@@ -321,6 +350,9 @@ private:
     bool m_enableFailOver = false;
     // etcd/zookeeper/consual url
     std::string m_failOverClusterUrl;
+
+    // others config
+    int m_sendTxTimeout = -1;
 };
 }  // namespace tool
 }  // namespace bcos

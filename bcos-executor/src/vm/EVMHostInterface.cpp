@@ -191,7 +191,15 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
     evmc_tx_context result;
-    result.tx_origin = toEvmC(hostContext.origin());
+    if (hostContext.isWasm())
+    {
+        result.tx_origin = toEvmC(hostContext.origin());
+    }
+    else
+    {
+        auto origin = fromHex(hostContext.origin());
+        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
+    }
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
@@ -235,7 +243,7 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     // * origin code: assert(_msg->gas >= 0)
     if (_msg->gas < 0)
     {
-        EXECUTIVE_LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
         BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 

@@ -22,7 +22,7 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-tars-protocol/tars/GatewayInfo.h>

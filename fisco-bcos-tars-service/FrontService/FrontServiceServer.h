@@ -2,12 +2,12 @@
 
 #include "libinitializer/FrontServiceInitializer.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/tars/FrontService.h>
 #include <bcos-utilities/Common.h>
-#include <tarscpp/servant/Communicator.h>
-#include <tarscpp/servant/Global.h>
+#include <servant/Communicator.h>
+#include <servant/Global.h>
 #include <boost/core/ignore_unused.hpp>
 namespace bcostars
 {

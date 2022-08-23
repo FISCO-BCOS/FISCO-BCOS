@@ -19,13 +19,13 @@
  * @date 2021-05-28
  */
 #pragma once
-#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/storage/KVStorageHelper.h"
 #include "bcos-pbft/core/StateMachine.h"
 #include "bcos-pbft/pbft/PBFTFactory.h"
 #include "bcos-pbft/pbft/PBFTImpl.h"
 #include "bcos-pbft/pbft/storage/LedgerStorage.h"
-#include "interfaces/crypto/KeyPairInterface.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
@@ -135,7 +135,7 @@ public:
         m_cacheProcessor->registerOnLoadAndVerifyProposalSucc(boost::bind(
             &FakePBFTEngine::onLoadAndVerifyProposalSucc, this, boost::placeholders::_1));
         initSendResponseHandler();
-        _config->enableAsMaterNode(true);
+        _config->enableAsMasterNode(true);
     }
     ~FakePBFTEngine() override {}
 
@@ -203,8 +203,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-      : PBFTFactory(bcos::protocol::NodeArchitectureType::AIR, _cryptoSuite, _keyPair,
-            _frontService, _storage, _ledger, _scheduler, _txpool, _blockFactory, _txResultFactory)
+      : PBFTFactory(_cryptoSuite, _keyPair, _frontService, _storage, _ledger, _scheduler, _txpool,
+            _blockFactory, _txResultFactory)
     {}
 
     PBFTImpl::Ptr createPBFT() override

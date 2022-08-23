@@ -19,16 +19,13 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.1" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-ledger VERSION "3.0")
-set(VERSION_SUFFIX "-rc2")
-
 aux_source_directory(src/libledger SRCS)
 aux_source_directory(src/libledger/utilities SRCS)
 
-find_package(Boost CONFIG REQUIRED serialization)
+find_package(Boost REQUIRED serialization)
 
 add_library(${LEDGER_TARGET} ${SRCS})
-target_link_libraries(${LEDGER_TARGET} PUBLIC ${CODEC_TARGET} ${TABLE_TARGET} Boost::serialization)
+target_link_libraries(${LEDGER_TARGET} PUBLIC ${CODEC_TARGET} ${TABLE_TARGET} ${PROTOCOL_TARGET} bcos-concepts Boost::serialization)
 
 # test related
 if (TESTS)

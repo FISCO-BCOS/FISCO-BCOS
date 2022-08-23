@@ -3,19 +3,18 @@
 #include "Executive.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/TransactionMetaData.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
@@ -62,22 +61,27 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void prepare();
-    void asyncExecute(
-        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
-    void asyncCall(
-        std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
-    void asyncCommit(std::function<void(Error::UniquePtr)> callback);
+    virtual ~BlockExecutive() { stop(); };
 
-    void asyncNotify(
+    virtual void prepare();
+    virtual void asyncExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
+    virtual void asyncCall(
+        std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
+    virtual void asyncCommit(std::function<void(Error::UniquePtr)> callback);
+
+    virtual void asyncNotify(
         std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
             std::function<void(Error::Ptr)>)>& notifier,
         std::function<void(Error::Ptr)> _callback);
 
-    bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    virtual void saveMessage(
+        std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
 
-    bcos::protocol::Block::Ptr block() { return m_block; }
-    bcos::protocol::BlockHeader::Ptr result() { return m_result; }
+    inline bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+
+    inline bcos::protocol::Block::Ptr block() { return m_block; }
+    inline bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
     bool sysBlock() const { return m_isSysBlock; }
@@ -98,19 +102,22 @@ public:
         }
     }
 
-private:
+    bool isSysBlock() { return m_isSysBlock; }
+
+protected:
     struct CommitStatus
     {
         std::atomic_size_t total;
         std::atomic_size_t success = 0;
         std::atomic_size_t failed = 0;
+        uint64_t startTS = 0;
         std::function<void(const CommitStatus&)> checkAndCommit;
         mutable SharedMutex x_lock;
     };
     void batchNextBlock(std::function<void(Error::UniquePtr)> callback);
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
     void batchBlockCommit(std::function<void(Error::UniquePtr)> callback);
-    void batchBlockRollback(std::function<void(Error::UniquePtr)> callback);
+    void batchBlockRollback(uint64_t version, std::function<void(Error::UniquePtr)> callback);
 
     struct BatchStatus  // Batch state per batch
     {
@@ -130,10 +137,12 @@ private:
 
     void DMCExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
-    std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    virtual std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
     void scheduleExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
+    virtual void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     bcos::protocol::ExecutionMessage::UniquePtr buildMessage(
@@ -141,7 +150,7 @@ private:
     void buildExecutivesFromMetaData();
     void buildExecutivesFromNormalTransaction();
 
-    void serialPrepareExecutor();
+    virtual void serialPrepareExecutor();
     bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);

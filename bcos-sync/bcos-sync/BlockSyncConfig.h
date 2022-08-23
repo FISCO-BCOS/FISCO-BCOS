@@ -21,14 +21,14 @@
 #pragma once
 #include "bcos-sync/interfaces/BlockSyncMsgFactory.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/interfaces/sync/SyncConfig.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/sync/SyncConfig.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
 namespace bcos
 {

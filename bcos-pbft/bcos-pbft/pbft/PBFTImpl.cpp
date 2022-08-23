@@ -122,18 +122,18 @@ void PBFTImpl::asyncGetConsensusStatus(
     auto config = m_pbftEngine->pbftConfig();
     Json::Value consensusStatus;
     consensusStatus["nodeID"] = *toHexString(config->nodeID()->data());
-    consensusStatus["index"] = config->nodeIndex();
-    consensusStatus["leaderIndex"] = config->getLeader();
-    consensusStatus["consensusNodesNum"] = config->consensusNodesNum();
-    consensusStatus["maxFaultyQuorum"] = config->maxFaultyQuorum();
-    consensusStatus["minRequiredQuorum"] = config->minRequiredQuorum();
+    consensusStatus["index"] = (Json::UInt64)config->nodeIndex();
+    consensusStatus["leaderIndex"] = (Json::UInt64)config->getLeader();
+    consensusStatus["consensusNodesNum"] = (Json::UInt64)config->consensusNodesNum();
+    consensusStatus["maxFaultyQuorum"] = (Json::UInt64)config->maxFaultyQuorum();
+    consensusStatus["minRequiredQuorum"] = (Json::UInt64)config->minRequiredQuorum();
     consensusStatus["isConsensusNode"] = config->isConsensusNode();
-    consensusStatus["blockNumber"] = config->committedProposal()->index();
+    consensusStatus["blockNumber"] = (Json::UInt64)config->committedProposal()->index();
     consensusStatus["hash"] = *toHexString(config->committedProposal()->hash());
     consensusStatus["timeout"] = config->timeout();
-    consensusStatus["changeCycle"] = config->timer()->changeCycle();
-    consensusStatus["view"] = config->view();
-    consensusStatus["connectedNodeList"] = (int64_t)((config->connectedNodeList()).size());
+    consensusStatus["changeCycle"] = (Json::UInt64)config->timer()->changeCycle();
+    consensusStatus["view"] = (Json::UInt64)config->view();
+    consensusStatus["connectedNodeList"] = (Json::UInt64)((config->connectedNodeList()).size());
 
     // print the nodeIndex of all other nodes
     auto nodeList = config->consensusNodeList();
@@ -143,8 +143,8 @@ void PBFTImpl::asyncGetConsensusStatus(
     {
         Json::Value info;
         info["nodeID"] = *toHexString(node->nodeID()->data());
-        info["weight"] = node->weight();
-        info["index"] = (int64_t)(i);
+        info["weight"] = (Json::UInt64)node->weight();
+        info["index"] = (Json::Int64)(i);
         consensusNodeInfo.append(info);
         i++;
     }
@@ -154,28 +154,28 @@ void PBFTImpl::asyncGetConsensusStatus(
     _onGetConsensusStatus(nullptr, statusStr);
 }
 
-void PBFTImpl::enableAsMaterNode(bool _isMasterNode)
+void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
 {
     if (m_masterNode == _isMasterNode)
     {
-        PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: The masterNodeState is not changed")
+        PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: The masterNodeState is not changed")
                        << LOG_KV("master", _isMasterNode);
         return;
     }
     if (!m_masterNode)
     {
         PBFT_LOG(INFO) << LOG_DESC(
-            "enableAsMaterNode: clearAllCache for the node switch into backup node");
+            "enableAsMasterNode: clearAllCache for the node switch into backup node");
         m_pbftEngine->clearAllCache();
     }
-    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: ") << _isMasterNode;
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: ") << _isMasterNode;
     m_masterNode.store(_isMasterNode);
-    m_pbftEngine->pbftConfig()->enableAsMaterNode(_isMasterNode);
+    m_pbftEngine->pbftConfig()->enableAsMasterNode(_isMasterNode);
     if (!_isMasterNode)
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("enableAsMaterNode: init and start the consensus module");
+    PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: init and start the consensus module");
     init();
     m_pbftEngine->recoverState();
     m_pbftEngine->restart();

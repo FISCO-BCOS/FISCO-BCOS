@@ -20,11 +20,11 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/Common.h"
-#include "bcos-framework/interfaces/protocol/CommonError.h"
-#include "bcos-framework/interfaces/protocol/Exceptions.h"
-#include "bcos-framework/interfaces/storage/Common.h"
-#include "bcos-framework/interfaces/storage/Entry.h"
+#include "bcos-framework/Common.h"
+#include "bcos-framework/protocol/CommonError.h"
+#include "bcos-framework/protocol/Exceptions.h"
+#include "bcos-framework/storage/Common.h"
+#include "bcos-framework/storage/Entry.h"
 #include <memory>
 #include <string>
 
@@ -32,7 +32,8 @@ namespace bcos
 {
 namespace precompiled
 {
-#define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[PRECOMPILED]"
+#define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
+#define PRECOMPILED_BLK_LOG(LEVEL, BLK_NUMBER) PRECOMPILED_LOG(LEVEL) << BLOCK_NUMBER(BLK_NUMBER)
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
@@ -78,7 +79,7 @@ const int TX_GAS_LIMIT_MIN = 100000;
 
 enum PrecompiledErrorCode : int
 {
-    // FileSystemPrecompiled -53099 ~ -53000
+    // BFSPrecompiled -53099 ~ -53000
     CODE_ADDRESS_OR_VERSION_ERROR = -51202,
     CODE_FILE_INVALID_TYPE = -53006,
     CODE_FILE_INVALID_PATH = -53005,

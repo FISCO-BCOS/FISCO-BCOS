@@ -23,7 +23,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework/protocol/Exceptions.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/throw_exception.hpp>
@@ -87,7 +87,7 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
@@ -107,9 +107,10 @@ void TableManagerPrecompiled::createTable(
     codec.decode(_callParameters->params(), tableName, tableInfoTuple);
     auto& [keyField, valueFields] = tableInfoTuple;
     auto valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
-                           << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
-                           << LOG_KV("valueField", valueField);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled")
+                          << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
+                          << LOG_KV("valueField", valueField);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -134,10 +135,9 @@ void TableManagerPrecompiled::createTable(
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TableManagerPrecompiled")
-                               << LOG_DESC("create table error")
-                               << LOG_KV("tableName", newTableName)
-                               << LOG_KV("valueField", valueField);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
+                              << LOG_DESC("create table error") << LOG_KV("tableName", newTableName)
+                              << LOG_KV("valueField", valueField);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
 
@@ -155,9 +155,10 @@ void TableManagerPrecompiled::createKVTable(
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), tableName, key, value);
     precompiled::checkCreateTableParam(tableName, key, value);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
-                           << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
-                           << LOG_KV("valueField", value);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled")
+                          << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
+                          << LOG_KV("valueField", value);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -180,9 +181,9 @@ void TableManagerPrecompiled::createKVTable(
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TableManagerPrecompiled")
-                               << LOG_DESC("create kv table error")
-                               << LOG_KV("tableName", newTableName) << LOG_KV("valueField", value);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
+                              << LOG_DESC("create kv table error")
+                              << LOG_KV("tableName", newTableName) << LOG_KV("valueField", value);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
 
@@ -204,9 +205,10 @@ void TableManagerPrecompiled::appendColumns(
     codec.decode(_callParameters->params(), tableName, newColumns);
     tableName = getActualTableName(getTableName(tableName));
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
-                           << LOG_KV("tableName", tableName)
-                           << LOG_KV("newColumns", boost::join(newColumns, ","));
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
+                          << LOG_KV("tableName", tableName)
+                          << LOG_KV("newColumns", boost::join(newColumns, ","));
     // 1. get origin table info
     auto table = _executive->storage().openTable(StorageInterface::SYS_TABLES);
     auto existEntry = table->getRow(tableName);
@@ -285,9 +287,6 @@ void TableManagerPrecompiled::openTable(
         _callParameters->setExecResult(codec.encode(Address()));
         return;
     }
-    PRECOMPILED_LOG(ERROR) << LOG_BADGE("TableManagerPrecompiled")
-                           << LOG_DESC("can't open table of file path")
-                           << LOG_KV("path", absolutePath);
     _callParameters->setExecResult(codec.encode(Address()));
 }
 

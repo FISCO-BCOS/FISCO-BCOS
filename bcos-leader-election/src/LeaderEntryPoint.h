@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "WatcherConfig.h"
-#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
+#include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <memory>
 
 namespace bcos

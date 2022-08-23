@@ -23,8 +23,8 @@
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Table.h>
 
 namespace bcos
 {
@@ -64,7 +64,7 @@ public:
         for (int id = 0; id < SMALLBANK_CONTRACT_NUM; id++)
         {
             std::string _tableName = std::to_string(id);
-            std::string path = bcos::ledger::SMALLBANK_TRANSFER;
+            std::string path = std::string{bcos::ledger::SMALLBANK_TRANSFER};
             _tableName = path + _tableName;
             // create table first
             std::promise<Error::UniquePtr> createPromise;

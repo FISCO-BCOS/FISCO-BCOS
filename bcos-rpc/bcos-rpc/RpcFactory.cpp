@@ -19,16 +19,16 @@
  * @date 2021-07-15
  */
 
-#include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-rpc/groupmgr/TarsGroupManager.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/AMOPRequest.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/AMOPRequest.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/DupTestTxJsonRpcImpl_2_0.h>
@@ -320,13 +320,14 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     return wsService;
 }
 
-bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
+bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
     //*
     auto jsonRpcInterface =
         std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
+    jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
     /*/
         auto jsonRpcInterface =
             std::make_shared<bcos::rpc::DupTestTxJsonRpcImpl_2_0>(_groupManager, m_gateway,
@@ -367,7 +368,7 @@ Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
                   << LOG_KV("listenPort", config->listenPort())
                   << LOG_KV("threadCount", config->threadPoolSize())
                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
-    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
     return rpc;
 }
 
@@ -378,23 +379,18 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto wsService = buildWsService(config);
     auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildAirAMOPClient(wsService);
-    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
     return rpc;
 }
 
-/**
- * @brief: Rpc
- * @param _config: WsConfig
- * @param _nodeInfo: node info
- * @return Rpc::Ptr:
- */
-Rpc::Ptr RpcFactory::buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
-    GroupManager::Ptr _groupManager, AMOPClient::Ptr _amopClient)
+Rpc::Ptr RpcFactory::buildRpc(int sendTxTimeout,
+    std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager,
+    AMOPClient::Ptr _amopClient)
 {
     // JsonRpc
-    auto jsonRpc = buildJsonRpc(_wsService, _groupManager);
+    auto jsonRpc = buildJsonRpc(sendTxTimeout, _wsService, _groupManager);
     // EventSub
     auto es = buildEventSub(_wsService, _groupManager);
     return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient);
@@ -409,11 +405,12 @@ GroupManager::Ptr RpcFactory::buildGroupManager(
     if (!_entryPoint)
     {
         RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-        return std::make_shared<TarsGroupManager>(_rpcServiceName, m_chainID, nodeServiceFactory);
+        return std::make_shared<TarsGroupManager>(
+            _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
     }
     RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
-    auto groupManager =
-        std::make_shared<GroupManager>(_rpcServiceName, m_chainID, nodeServiceFactory);
+    auto groupManager = std::make_shared<GroupManager>(
+        _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
     auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     _entryPoint->addMemberChangeNotificationHandler(
         [groupManager, groupInfoCodec](

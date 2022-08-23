@@ -20,14 +20,13 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Timer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 #define EXECUTOR_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("ExecutorServiceApp")
 
@@ -39,7 +38,14 @@ public:
     ExecutorServiceApp() = default;
     ~ExecutorServiceApp() override {}
     void initialize() override;
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        // stop executor
+        if (m_executor)
+        {
+            m_executor->stop();
+        }
+    }
 
 protected:
     virtual void createAndInitExecutor();

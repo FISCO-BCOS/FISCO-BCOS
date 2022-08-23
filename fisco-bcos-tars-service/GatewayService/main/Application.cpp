@@ -1,20 +1,26 @@
-#include "Common/TarsUtils.h"
-#include "GatewayService/GatewayInitializer.h"
-#include "GatewayService/GatewayServiceServer.h"
+#include "../../Common/TarsUtils.h"
+#include "../GatewayInitializer.h"
+#include "../GatewayServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 using namespace bcostars;
 
-class GatewayServiceApp : public Application
+class GatewayServiceApp : public tars::Application
 {
 public:
     GatewayServiceApp() {}
     ~GatewayServiceApp() override{};
 
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        if (m_gatewayInitializer)
+        {
+            m_gatewayInitializer->stop();
+        }
+    }
     void initialize() override
     {
         // Note: since tars Application catch the exception and output the error message with
@@ -22,7 +28,7 @@ public:
         // and output exception information here
         try
         {
-            m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
+            m_iniConfigPath = tars::ServerConfig::BasePath + "/config.ini";
             addConfig("config.ini");
             initService(m_iniConfigPath);
             GatewayServiceParam param;
@@ -52,8 +58,9 @@ protected:
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
         gatewayConfig->initP2PConfig(pt, true);
-        gatewayConfig->setCertPath(ServerConfig::BasePath);
-        gatewayConfig->setNodePath(ServerConfig::BasePath);
+        gatewayConfig->initRatelimitConfig(pt);
+        gatewayConfig->setCertPath(tars::ServerConfig::BasePath);
+        gatewayConfig->setNodePath(tars::ServerConfig::BasePath);
         if (gatewayConfig->smSSL())
         {
             addConfig("sm_ca.crt");

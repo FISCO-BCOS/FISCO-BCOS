@@ -19,11 +19,15 @@
  * @date 2021-10-15
  */
 #include "RpcInitializer.h"
-#include "Common/TarsUtils.h"
+#include "../Common/TarsUtils.h"
+#include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/BoostLog.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
+#include <bcos-framework/election/FailOverTypeDef.h>
+#ifdef WITH_ETCD
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
+#endif
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
@@ -50,6 +54,7 @@ void RpcInitializer::init(std::string const& _configDir)
         m_nodeConfig->setEnSmNodeCert(_configDir + "/" + "sm_enssl.crt");
         m_nodeConfig->setEnSmNodeKey(_configDir + "/" + "sm_enssl.key");
     }
+#ifdef WITH_ETCD
     if (m_nodeConfig->enableFailOver())
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("enable failover");
@@ -60,6 +65,7 @@ void RpcInitializer::init(std::string const& _configDir)
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
             m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
+#endif
     // init rpc config
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory");
     auto factory = initRpcFactory(m_nodeConfig);
@@ -89,16 +95,26 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     protocolInitializer->init(_nodeConfig);
     m_keyFactory = protocolInitializer->keyFactory();
 
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+    auto gatewayServiceName = _nodeConfig->gatewayServiceName();
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
+
+    // TODO: tars
     // get the gateway client
-    auto gatewayPrx = Application::getCommunicator()->stringToProxy<GatewayServicePrx>(
-        _nodeConfig->gatewayServiceName());
+    auto gatewayPrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
+        withoutTarsFramework, gatewayServiceName, endPoints);
+
     auto gateway = std::make_shared<GatewayServiceClient>(
-        gatewayPrx, _nodeConfig->gatewayServiceName(), protocolInitializer->keyFactory());
+        gatewayPrx, gatewayServiceName, protocolInitializer->keyFactory());
 
     auto factory = std::make_shared<bcos::rpc::RpcFactory>(_nodeConfig->chainId(), gateway,
         protocolInitializer->keyFactory(), protocolInitializer->dataEncryption());
     factory->setNodeConfig(_nodeConfig);
-    RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success");
+    RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success")
+                         << LOG_KV("withoutTarsFramework", withoutTarsFramework)
+                         << LOG_KV("gatewayServiceName", gatewayServiceName);
     return factory;
 }
 
@@ -110,11 +126,14 @@ void RpcInitializer::start()
         return;
     }
     m_running = true;
+
+#ifdef WITH_ETCD
     if (m_leaderEntryPoint)
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
         m_leaderEntryPoint->start();
     }
+#endif
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc");
     m_rpc->start();
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc success");
@@ -129,10 +148,14 @@ void RpcInitializer::stop()
     }
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
+
+#ifdef WITH_ETCD
     if (m_leaderEntryPoint)
     {
         m_leaderEntryPoint->stop();
     }
+#endif
+
     if (m_rpc)
     {
         m_rpc->stop();

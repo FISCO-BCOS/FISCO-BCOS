@@ -79,7 +79,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         gasPricer->appendOperation(InterfaceOpcode::CreateTable);
         if (!table)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
             getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
             return _callParameters;
@@ -97,7 +97,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
             gasPricer->appendOperation(InterfaceOpcode::Select, 1);
 
             retValue = entry->getField(0);
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
         _callParameters->setExecResult(codec.encode(retValue));
@@ -118,7 +118,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     }
     else
     {  // unknown function call
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled")
                                << LOG_DESC(" unknown function ") << LOG_KV("func", func);
         _callParameters->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
     }

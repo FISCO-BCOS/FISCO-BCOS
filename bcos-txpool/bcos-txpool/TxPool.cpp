@@ -21,7 +21,7 @@
 #include "TxPool.h"
 #include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <tbb/parallel_for.h>
 using namespace bcos;
@@ -146,7 +146,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
     TXPOOL_LOG(INFO) << LOG_DESC("begin asyncVerifyBlock")
                      << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                      << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null");
-    // Note: here must has thread pool for lock in the callback
+    // Note: here must have thread pool for lock in the callback
     // use single thread here to decrease thread competition
     auto self = std::weak_ptr<TxPool>(shared_from_this());
     m_verifier->enqueue([self, _generatedNodeID, blockHeader, block, _onVerifyFinished]() {
@@ -223,6 +223,8 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
         catch (std::exception const& e)
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("asyncVerifyBlock exception")
+                                << LOG_KV("fromNodeId", _generatedNodeID->shortHex())
+                                << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     });
@@ -444,7 +446,7 @@ void TxPool::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        TXPOOL_LOG(WARNING) << LOG_DESC("sendResonse failed") << LOG_KV("uuid", _id)
+                        TXPOOL_LOG(WARNING) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
                                             << LOG_KV("module", std::to_string(_moduleID))
                                             << LOG_KV("dst", _dstNode->shortHex())
                                             << LOG_KV("code", _error->errorCode())
@@ -454,7 +456,7 @@ void TxPool::initSendResponseHandler()
         }
         catch (std::exception const& e)
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC("sendResonse exception")
+            TXPOOL_LOG(WARNING) << LOG_DESC("sendResponse exception")
                                 << LOG_KV("error", boost::diagnostic_information(e))
                                 << LOG_KV("uuid", _id) << LOG_KV("moduleID", _moduleID)
                                 << LOG_KV("peer", _dstNode->shortHex());

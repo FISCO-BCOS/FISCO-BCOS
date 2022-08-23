@@ -18,9 +18,9 @@
  * @date: 2021-05-14
  */
 #pragma once
-#include "bcos-framework/interfaces/consensus/ConsensusInterface.h"
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
+#include "bcos-framework/consensus/ConsensusInterface.h"
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
 namespace bcos
 {
 namespace sealer

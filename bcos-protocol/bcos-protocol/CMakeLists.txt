@@ -6,7 +6,10 @@ aux_source_directory(./amop SRC_LIST)
 
 find_package(Threads REQUIRED)
 add_library(${PROTOCOL_TARGET} ${SRC_LIST} ${HEADERS})
-target_compile_options(${PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
-find_package(TBB)
-target_link_libraries(${PROTOCOL_TARGET} PUBLIC ${CRYPTO_TARGET} ${CODEC_TARGET} TBB::tbb)
+find_package(TBB CONFIG REQUIRED)
+target_link_libraries(${PROTOCOL_TARGET} PUBLIC ${CRYPTO_TARGET} ${CODEC_TARGET} bcos-framework TBB::tbb)
+
+include(GNUInstallDirs)
+install(TARGETS ${PROTOCOL_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+# install(DIRECTORY "bcos-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

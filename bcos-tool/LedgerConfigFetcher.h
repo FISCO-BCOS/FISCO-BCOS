@@ -19,9 +19,9 @@
  * @date 2021-05-19
  */
 #pragma once
-#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include <bcos-framework/interfaces/Common.h>
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include <bcos-framework/Common.h>
 
 #define TOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TOOL")
 
@@ -59,8 +59,8 @@ public:
 
 protected:
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
-    virtual std::string fetchSystemConfig(std::string const& _key);
-    virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string const& _type);
+    virtual std::string fetchSystemConfig(std::string_view _key);
+    virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string_view _type);
 
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;

@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include <bcos-framework/interfaces/executor/ExecutionMessage.h>
+#include <bcos-framework/executor/ExecutionMessage.h>
 #include <atomic>
 #include <sstream>
 #include <string>

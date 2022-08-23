@@ -20,7 +20,7 @@
 
  */
 #pragma once
-#include "bcos-framework/interfaces/dispatcher/DispatcherInterface.h"
+#include "bcos-framework/dispatcher/DispatcherInterface.h"
 #include <map>
 
 using namespace bcos;

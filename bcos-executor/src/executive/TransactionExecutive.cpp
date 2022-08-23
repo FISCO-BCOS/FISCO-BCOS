@@ -20,7 +20,7 @@
  */
 
 #include "TransactionExecutive.h"
-#include "../precompiled/FileSystemPrecompiled.h"
+#include "../precompiled/BFSPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/EVMHostInterface.h"
@@ -31,9 +31,11 @@
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Exceptions.h"
+#include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -57,119 +59,69 @@ using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc
 
 CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr input)
 {
-    m_pullMessage.emplace([this, inputPtr = input.release()](Coroutine::push_type& push) {
-        COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Create new coroutine";
+    EXECUTIVE_LOG(TRACE) << "Execute start\t" << input->toFullString();
 
-        // Take ownership from input
-        m_pushMessage.emplace(std::move(push));
 
-        auto callParameters = std::unique_ptr<CallParameters>(inputPtr);
-        auto blockContext = m_blockContext.lock();
-        if (!blockContext)
-        {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
-        }
-
-        m_storageWrapper = std::make_unique<SyncStorageWrapper>(blockContext->storage(),
-            std::bind(&TransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
-            m_recoder);
-
-        if (!callParameters->keyLocks.empty())
-        {
-            m_storageWrapper->importExistsKeyLocks(callParameters->keyLocks);
-        }
-
-        m_exchangeMessage = execute(std::move(callParameters));
-        // Execute is finished, erase the key locks
-        m_exchangeMessage->keyLocks.clear();
-
-        // Return the ownership to input
-        push = std::move(*m_pushMessage);
-
-        COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Finish coroutine executing";
-    });
-
-    return dispatcher();
-}
-
-CallParameters::UniquePtr TransactionExecutive::dispatcher()
-{
-    try
+    auto& callParameters = input;
+    auto blockContext = m_blockContext.lock();
+    if (!blockContext)
     {
-        for (auto it = std::begin(*m_pullMessage); it != std::end(*m_pullMessage); ++it)
-        {
-            if (*it)
-            {
-                COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
-                    << "Context switch to main coroutine to call func";
-                (*it)(ResumeHandler(*this));
-            }
-
-            if (m_exchangeMessage)
-            {
-                COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
-                    << "Context switch to main coroutine to return output";
-                return std::move(m_exchangeMessage);
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
-            << "Error while dispatch, " << boost::diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(-1, "Error while dispatch", e));
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
 
-    COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Context switch to main coroutine, Finished!";
-    return std::move(m_exchangeMessage);
+    m_storageWrapper = std::make_shared<StorageWrapper>(blockContext->storage(), m_recoder);
+
+    auto message = execute(std::move(callParameters));
+
+    EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
+
+    return message;
 }
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    input->keyLocks = m_storageWrapper->exportKeyLocks();
+    EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    auto newSeq = seq() + 1;
+    bool isCreate = input->create;
+    input->seq = newSeq;
+    input->contextID = m_contextID;
 
-    spawnAndCall([this, inputPtr = input.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
+    std::string newAddress;
+    if (isCreate && !m_blockContext.lock()->isWasm())
+    {
+        if (input->createSalt)
+        {
+            // TODO: Add sender in this process(consider compat with ethereum)
+            newAddress = bcos::newEVMAddress(m_hashImpl, input->senderAddress,
+                bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
+        }
+        else
+        {
+            // TODO: Add sender in this process(consider compat with ethereum)
+            newAddress = bcos::newEVMAddress(
+                m_hashImpl, m_blockContext.lock()->number(), m_contextID, newSeq);
+        }
 
-    // When resume, exchangeMessage set to output
-    auto output = std::move(m_exchangeMessage);
+        input->receiveAddress = newAddress;
+        input->codeAddress = newAddress;
+    }
 
-    // After coroutine switch, set the recoder
-    m_storageWrapper->setRecoder(m_recoder);
+    auto executive = std::make_shared<TransactionExecutive>(
+        m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
 
-    // Set the keyLocks
-    m_storageWrapper->importExistsKeyLocks(output->keyLocks);
+    executive->setConstantPrecompiled(m_constantPrecompiled);
+    executive->setEVMPrecompiled(m_evmPrecompiled);
+    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
+    auto output = executive->start(std::move(input));
+
+    // update seq
+    m_seq = executive->seq();
+
+    EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
     return output;
 }
 
-void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
-{
-    EXECUTOR_LOG(TRACE) << "Executor acquire key lock: " << acquireKeyLock;
-
-    auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
-    callParameters->senderAddress = m_contractAddress;
-    callParameters->keyLocks = m_storageWrapper->exportKeyLocks();
-    callParameters->acquireKeyLock = std::move(acquireKeyLock);
-
-    spawnAndCall([this, inputPtr = callParameters.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
-
-    // After coroutine switch, set the recoder, before the exception throw
-    m_storageWrapper->setRecoder(m_recoder);
-
-    auto output = std::move(m_exchangeMessage);
-    if (output->type == CallParameters::REVERT)
-    {
-        // Deadlock, revert
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-            ExecuteError::DEAD_LOCK, "Dead lock detected, revert transaction: " +
-                                         boost::lexical_cast<std::string>(output->type)));
-    }
-
-    // Set the keyLocks
-    m_storageWrapper->importExistsKeyLocks(output->keyLocks);
-}
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
@@ -218,6 +170,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
 
+    EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("executive call")
+                         << LOG_KV("contract", callParameters->codeAddress)
+                         << LOG_KV("sender", callParameters->senderAddress)
+                         << LOG_KV("internalCall", callParameters->internalCall);
+
     if (isPrecompiled(callParameters->codeAddress) || callParameters->internalCall)
     {
         return {nullptr, callPrecompiled(std::move(callParameters))};
@@ -233,9 +190,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Contract is frozen";
             callParameters->data.clear();
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << callParameters->message
-                                 << LOG_KV("tableName", tableName)
-                                 << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("tableName", tableName)
+                                << LOG_KV("origin", callParameters->origin);
             return {nullptr, std::move(callParameters)};
         }
         if (!checkAuth(callParameters, false))
@@ -245,9 +202,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Call permission denied";
             callParameters->data.clear();
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << callParameters->message
-                                 << LOG_KV("tableName", tableName)
-                                 << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("tableName", tableName)
+                                << LOG_KV("origin", callParameters->origin);
             return {nullptr, std::move(callParameters)};
         }
     }
@@ -277,7 +234,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
         if (precompiledCallParams->m_gas < 0)
         {
             revert();
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: call precompiled out of gas.";
+            EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
             return callParameters;
@@ -286,10 +243,10 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(ERROR) << "Revert transaction: "
-                             << "PrecompiledError"
-                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                             << LOG_KV("error", e.what());
+        EXECUTIVE_LOG(INFO) << "Revert transaction: "
+                            << "PrecompiledError"
+                            << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
+                            << LOG_KV("error", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
         // still needs to be written to the output
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -300,9 +257,9 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (Exception const& e)
     {
-        EXECUTIVE_LOG(ERROR) << "Exception"
-                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                             << LOG_KV("error", e.what());
+        EXECUTIVE_LOG(WARNING) << "Exception"
+                               << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
+                               << LOG_KV("error", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
         revert();
         callParameters->type = CallParameters::REVERT;
@@ -337,8 +294,10 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
 
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("deploy") << LOG_KV("tableName", tableName)
+    EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                         << LOG_DESC("executive deploy contract") << LOG_KV("tableName", tableName)
                          << LOG_KV("abi len", extraData->abi.size())
+                         << LOG_KV("sender", callParameters->senderAddress)
                          << LOG_KV("internalCreate", callParameters->internalCreate);
     if (callParameters->internalCreate)
     {
@@ -355,9 +314,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Create permission denied";
             callParameters->create = false;
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << callParameters->message
-                                 << LOG_KV("newAddress", newAddress)
-                                 << LOG_KV("origin", callParameters->origin);
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("newAddress", newAddress)
+                                << LOG_KV("origin", callParameters->origin);
             return {nullptr, std::move(callParameters)};
         }
     }
@@ -376,12 +335,13 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
     catch (exception const& e)
     {
+        // this exception will be frequent to happened in liquid
         revert();
         callParameters->status = (int32_t)TransactionStatus::ContractAddressAlreadyUsed;
         callParameters->type = CallParameters::REVERT;
         callParameters->message = e.what();
-        EXECUTIVE_LOG(ERROR) << "Revert transaction: " << LOG_DESC("createTable failed")
-                             << callParameters->message << LOG_KV("tableName", tableName);
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("createTable failed")
+                            << callParameters->message << LOG_KV("tableName", tableName);
         return {nullptr, std::move(callParameters)};
     }
 
@@ -401,7 +361,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->type = CallParameters::REVERT;
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "the code is not wasm bytecode";
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << callResults->message;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callResults->message;
             return {nullptr, std::move(callResults)};
         }
 
@@ -418,7 +378,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->type = CallParameters::REVERT;
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "wasm bytecode invalid or use unsupported opcode";
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << callResults->message;
+            // use wrong wasm code
+            EXECUTIVE_LOG(WARNING) << "Revert transaction: " << callResults->message;
             return {nullptr, std::move(callResults)};
         }
 
@@ -441,11 +402,12 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
     auto newAddress = string(callParameters->codeAddress);
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress);
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     std::string tableName;
     std::string codeString;
     codec.decode(ref(callParameters->data), tableName, codeString);
+    EXECUTIVE_LOG(TRACE) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
+                         << LOG_KV("codeString", codeString);
 
     if (blockContext->isWasm())
     {
@@ -458,8 +420,8 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << buildCallResults->message
-                                 << LOG_KV("newAddress", newAddress);
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
+                                << LOG_KV("newAddress", newAddress);
             return buildCallResults;
         }
         /// create contract table
@@ -480,8 +442,8 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
-            EXECUTIVE_LOG(ERROR) << "Revert transaction: " << buildCallResults->message
-                                 << LOG_KV("newAddress", newAddress);
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
+                                << LOG_KV("newAddress", newAddress);
             return buildCallResults;
         }
 
@@ -612,9 +574,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
-                EXECUTIVE_LOG(ERROR) << "Revert transaction: " << LOG_DESC("deploy failed")
-                                     << LOG_KV("sender", callResults->senderAddress)
-                                     << LOG_KV("address", callResults->codeAddress);
+                EXECUTIVE_LOG(INFO)
+                    << "Revert transaction: " << LOG_DESC("deploy failed due to status error")
+                    << LOG_KV("status", callResults->status)
+                    << LOG_KV("sender", callResults->senderAddress)
+                    << LOG_KV("address", callResults->codeAddress);
                 revert();
                 callResults->type = CallParameters::REVERT;
                 // Clear the creation flag
@@ -632,7 +596,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
                     " limit: " +
                     boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
-                EXECUTIVE_LOG(ERROR)
+                EXECUTIVE_LOG(DEBUG)
                     << "Revert transaction: " << LOG_DESC("deploy failed code too large")
                     << LOG_KV("message", callResults->message);
                 return callResults;
@@ -647,7 +611,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
                     callResults->message = "exceptionalFailedCodeDeposit";
-                    EXECUTIVE_LOG(ERROR)
+                    EXECUTIVE_LOG(INFO)
                         << "Revert transaction: " << LOG_DESC("deploy failed OutOfGas")
                         << LOG_KV("message", callResults->message);
                     return callResults;
@@ -666,7 +630,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     buildCallResults->type = CallParameters::REVERT;
                     buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
                     buildCallResults->message = "Error occurs in build BFS dir";
-                    EXECUTIVE_LOG(ERROR) << "Revert transaction: " << buildCallResults->message
+                    EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << buildCallResults->message
                                          << LOG_KV("tableName", tableName);
                     return buildCallResults;
                 }
@@ -681,7 +645,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::Unknown;
                     callResults->message = "Create contract with empty code, wrong code input.";
-                    EXECUTIVE_LOG(ERROR)
+                    EXECUTIVE_LOG(WARNING)
                         << "Revert transaction: " << LOG_DESC("deploy failed code empty")
                         << LOG_KV("message", callResults->message);
                     // Clear the creation flag
@@ -715,9 +679,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 callResult->type = CallParameters::REVERT;
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
                 callResult->message = "Error contract address.";
-                EXECUTIVE_LOG(ERROR) << "Revert transaction: " << LOG_DESC("call address error")
-                                     << LOG_KV("address", callResult->codeAddress)
-                                     << LOG_KV("sender", callResult->senderAddress);
+                EXECUTIVE_LOG(INFO) << "Revert transaction: "
+                                    << LOG_DESC("call address error, maybe address not exist")
+                                    << LOG_KV("address", callResult->codeAddress)
+                                    << LOG_KV("sender", callResult->senderAddress);
                 return callResult;
             }
             auto code = codeEntry->get();
@@ -780,9 +745,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
     }
     catch (InternalVMError const& _e)
     {
-        EXECUTIVE_LOG(WARNING) << "Internal VM Error ("
-                               << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
-                               << diagnostic_information(_e);
+        EXECUTIVE_LOG(ERROR) << "Internal VM Error ("
+                             << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
+                             << diagnostic_information(_e);
         exit(1);
     }
     catch (Exception const& _e)
@@ -800,7 +765,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
     {
         // TODO: AUDIT: check that this can never reasonably happen. Consider what
         // to do if it does.
-        EXECUTIVE_LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
+        EXECUTIVE_LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? "
+                             << LOG_KV("what", _e.what())
+                             << LOG_KV("diagnostic", boost::diagnostic_information(_e));
         exit(1);
         // Another solution would be to reject this transaction, but that also
         // has drawbacks. Essentially, the amount of ram has to be increased here.
@@ -812,7 +779,6 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
 {
     auto blockContext = m_blockContext.lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled") << LOG_KV("code", code);
     std::vector<std::string> codeParameters{};
     boost::split(codeParameters, code, boost::is_any_of(","));
     if (codeParameters.size() < 3)
@@ -825,27 +791,16 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
     codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
     // enc([call precompiled parameters],[user call parameters])
     auto newParams = codec.encode(codeParameters, callParameters->data);
-    if (c_fileLogLevel >= TRACE)
-    {
-        EXECUTIVE_LOG(TRACE) << LOG_DESC("callDynamicPrecompiled")
-                             << LOG_KV("inputDataSize", callParameters->data.size())
-                             << LOG_KV("newParamsSize", newParams.size());
-    }
 
     callParameters->data = std::move(newParams);
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("callDynamicPrecompiled")
+    EXECUTIVE_LOG(TRACE) << LOG_DESC("callDynamicPrecompiled")
                          << LOG_KV("codeAddr", callParameters->codeAddress)
                          << LOG_KV("recvAddr", callParameters->receiveAddress)
-                         << LOG_KV("datasize", callParameters->data.size());
+                         << LOG_KV("code", code);
     auto callResult = callPrecompiled(std::move(callParameters));
 
     callResult->receiveAddress = callResult->codeAddress;
     return callResult;
-}
-
-void TransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)
-{
-    (*m_pushMessage)(std::move(function));
 }
 
 std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPrecompiled(
@@ -860,7 +815,7 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
     }
     else
     {
-        EXECUTIVE_LOG(DEBUG) << LOG_DESC("[call]Can't find address")
+        EXECUTIVE_LOG(ERROR) << LOG_DESC("[call]Can't find precompiled address")
                              << LOG_KV("address", _precompiledParams->m_precompiledAddress);
         BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));
     }
@@ -896,7 +851,7 @@ int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef 
 void TransactionExecutive::setEVMPrecompiled(
     std::shared_ptr<const std::map<std::string, PrecompiledContract::Ptr>> precompiledContract)
 {
-    m_evmPrecompiled = std::move(precompiledContract);
+    m_evmPrecompiled = precompiledContract;
 }
 void TransactionExecutive::setConstantPrecompiled(
     const string& address, std::shared_ptr<precompiled::Precompiled> precompiled)
@@ -907,18 +862,17 @@ void TransactionExecutive::setConstantPrecompiled(
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         _constantPrecompiled)
 {
-    m_constantPrecompiled = std::move(_constantPrecompiled);
+    m_constantPrecompiled = _constantPrecompiled;
 }
 
 void TransactionExecutive::revert()
 {
-    EXECUTOR_LOG(INFO) << "Revert transaction";
-
     auto blockContext = m_blockContext.lock();
     if (!blockContext)
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null!"));
     }
+    EXECUTOR_BLK_LOG(INFO, blockContext->number()) << "Revert transaction";
 
     blockContext->storage()->rollback(*m_recoder);
     m_recoder->clear();
@@ -947,9 +901,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT")
-                               << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_KV("gasLeft", callResults->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_REVERT") << LOG_KV("to", callResults->receiveAddress)
+                            << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
@@ -965,9 +918,9 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_OUT_OF_GAS:
     {
         revert();
-        EXECUTIVE_LOG(WARNING) << "Revert transaction: " << LOG_DESC("OutOfGas")
-                               << LOG_KV("to", callResults->receiveAddress)
-                               << LOG_KV("gas", _result.gasLeft());
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("OutOfGas")
+                            << LOG_KV("to", callResults->receiveAddress)
+                            << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
         break;
@@ -975,17 +928,17 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_FAILURE:
     {
         revert();
-        EXECUTIVE_LOG(WARNING) << "Revert transaction: "
-                               << LOG_KV("to", callResults->receiveAddress) << LOG_DESC("WASMTrap");
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("WASMTrap")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
         break;
     }
-
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
     case EVMC_UNDEFINED_INSTRUCTION:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0; //TODO: why set remainGas to 0?
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
@@ -993,7 +946,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_BAD_JUMP_DESTINATION:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
         revert();
@@ -1001,7 +955,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_OVERFLOW:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_STACK_OVERFLOW");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_OVERFLOW")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
         revert();
@@ -1009,7 +964,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_UNDERFLOW:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_STACK_UNDERFLOW");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_UNDERFLOW")
+                            << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         revert();
@@ -1018,7 +974,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INVALID_MEMORY_ACCESS:
     {
         // m_remainGas = 0;
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("VM error, BufferOverrun");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         revert();
         break;
@@ -1026,29 +983,35 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_STATIC_MODE_VIOLATION:
     {
         // m_remainGas = 0;
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("VM error, DisallowedStateChange");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::Unknown;
         revert();
         break;
     }
     case EVMC_CONTRACT_VALIDATION_FAILURE:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC(
-            "WASM validation failed, contract hash algorithm dose not match host.");
+        EXECUTIVE_LOG(INFO)
+            << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.")
+            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
         revert();
         break;
     }
     case EVMC_ARGUMENT_OUT_OF_RANGE:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Argument Out Of Range");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Argument Out Of Range")
+                            << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
         revert();
         break;
     }
+    case EVMC_WASM_TRAP:
     case EVMC_WASM_UNREACHABLE_INSTRUCTION:
     {
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Unreachable Instruction");
+        EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Unreachable/Trap Instruction")
+                            << LOG_KV("to", callResults->receiveAddress)
+                            << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
         revert();
         break;
@@ -1057,7 +1020,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     default:
     {
         EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
-                               << LOG_KV("errCode", EVMC_INTERNAL_ERROR);
+                               << LOG_KV("to", callResults->receiveAddress)
+                               << LOG_KV("status", _result.status());
         revert();
         if (_result.status() <= EVMC_INTERNAL_ERROR)
         {
@@ -1130,7 +1094,8 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
 {
     /// this method only write bfs metadata, not create final table
     /// you should create locally, after external call successfully
-    EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
+    EXECUTIVE_LOG(TRACE) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
+                         << LOG_KV("type", _type);
     auto response =
         externalTouchNewFile(shared_from_this(), _origin, _sender, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
@@ -1148,7 +1113,7 @@ bool TransactionExecutive::checkAuth(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     std::string address = callParameters->origin;
     auto path = callParameters->codeAddress;
-    EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
                          << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
     bool result = true;
     if (_isCreate)
@@ -1168,7 +1133,7 @@ bool TransactionExecutive::checkAuth(
         result = contractAuthPrecompiled->checkMethodAuth(
             shared_from_this(), std::move(path), func, address);
     }
-    EXECUTIVE_LOG(DEBUG) << "check auth finished" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
                          << LOG_KV("result", result);
     return result;
 }
@@ -1179,7 +1144,7 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     auto path = callParameters->codeAddress;
-    EXECUTIVE_LOG(DEBUG) << "check contract status" << LOG_KV("codeAddress", path);
+    EXECUTIVE_LOG(TRACE) << "check contract status" << LOG_KV("codeAddress", path);
 
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }

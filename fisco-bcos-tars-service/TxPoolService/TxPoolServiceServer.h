@@ -1,8 +1,10 @@
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
@@ -10,7 +12,7 @@
 #include <bcos-tars-protocol/tars/TxPoolService.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <tarscpp/servant/Servant.h>
+#include <servant/Servant.h>
 #include <memory>
 
 namespace bcostars

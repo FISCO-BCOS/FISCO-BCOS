@@ -19,14 +19,16 @@
  * @date 2022-5-10
  */
 #include "ExecutorServiceApp.h"
-#include "Common/TarsUtils.h"
-#include "ExecutorService/ExecutorServiceServer.h"
+#include "../../Common/TarsUtils.h"
+#include "../ExecutorServiceServer.h"
+#include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/ExecutorInitializer.h"
-#include "libinitializer/ParallelExecutor.h"
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
+#include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
@@ -55,8 +57,8 @@ void ExecutorServiceApp::initialize()
 void ExecutorServiceApp::createAndInitExecutor()
 {
     // fetch config
-    m_iniConfigPath = ServerConfig::BasePath + "/config.ini";
-    m_genesisConfigPath = ServerConfig::BasePath + "/config.genesis";
+    m_iniConfigPath = tars::ServerConfig::BasePath + "/config.ini";
+    m_genesisConfigPath = tars::ServerConfig::BasePath + "/config.genesis";
     addConfig("config.ini");
     addConfig("config.genesis");
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor: fetch config success")
@@ -86,22 +88,31 @@ void ExecutorServiceApp::createAndInitExecutor()
     // for stat the nodeVersion
     bcos::initializer::showNodeVersionMetric();
 
+    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+
     // create txpool client
     auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
-                               << LOG_KV("txpoolServiceName", txpoolServiceName);
-    auto txpoolServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
-            txpoolServiceName);
+                               << LOG_KV("txpoolServiceName", txpoolServiceName)
+                               << LOG_KV("withoutTarsFramework", withoutTarsFramework);
+
+    std::vector<tars::TC_Endpoint> endPoints;
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
+
+    // TODO: tars
+    auto txpoolServicePrx = createServantProxy<bcostars::TxPoolServicePrx>(
+        withoutTarsFramework, txpoolServiceName, endPoints);
+
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
     auto schedulerServiceName = m_nodeConfig->schedulerServiceName();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create SchedulerServiceClient")
                                << LOG_KV("schedulerServiceName", schedulerServiceName);
-    auto schedulerPrx =
-        Application::getCommunicator()->stringToProxy<bcostars::SchedulerServicePrx>(
-            schedulerServiceName);
+
+    // TODO: tars
+    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(schedulerServiceName);
+
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(
         schedulerPrx, m_protocolInitializer->cryptoSuite());
 
@@ -126,11 +137,12 @@ void ExecutorServiceApp::createAndInitExecutor()
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
-    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger, m_txpool, cache, storage,
-        executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
+    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
+        m_txpool, cache, storage, executionMessageFactory,
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+        m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
 
-    m_executor = std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
+    m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 
     ExecutorServiceParam param;
     param.executor = m_executor;

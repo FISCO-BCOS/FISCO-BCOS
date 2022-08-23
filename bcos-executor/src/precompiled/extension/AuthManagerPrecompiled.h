@@ -22,11 +22,10 @@
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 
 namespace bcos::precompiled
 {
-
 class AuthManagerPrecompiled : public bcos::precompiled::Precompiled
 {
 public:

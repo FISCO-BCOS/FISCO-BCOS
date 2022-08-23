@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test
@@ -83,14 +83,14 @@ public:
     };
 
 
-    void asyncGetSystemConfigByKey(std::string const& _key,
+    void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override
     {
         BOOST_CHECK(false);  // Need implementations
     };
 
 
-    void asyncGetNodeListByType(std::string const& _type,
+    void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
     {
         BOOST_CHECK(false);  // Need implementations

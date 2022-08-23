@@ -18,7 +18,7 @@
  */
 
 #include "Hash.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -39,6 +39,10 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
+
+#if defined(__APPLE__)
+#undef __APPLE__
+#endif
 
 namespace std
 {

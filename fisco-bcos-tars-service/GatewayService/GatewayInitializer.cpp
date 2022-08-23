@@ -19,18 +19,23 @@
  * @date 2021-10-15
  */
 #include "GatewayInitializer.h"
-#include "Common/TarsUtils.h"
+#include "../Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/election/FailOverTypeDef.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+
+#ifdef WITH_ETCD
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
+#endif
+
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 
+using namespace tars;
 using namespace bcostars;
 
 void GatewayInitializer::init(std::string const& _configPath)
@@ -48,6 +53,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
+#ifdef WITH_ETCD
     if (nodeConfig->enableFailOver())
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
@@ -58,8 +64,11 @@ void GatewayInitializer::init(std::string const& _configPath)
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
             nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
+#endif
+
     auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
+
     bcos::gateway::GatewayFactory factory(
         nodeConfig->chainId(), nodeConfig->rpcServiceName(), protocolInitializer->dataEncryption());
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);

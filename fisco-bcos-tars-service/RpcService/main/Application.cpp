@@ -1,13 +1,13 @@
-#include "Common/TarsUtils.h"
-#include "RpcService/RpcInitializer.h"
-#include "RpcService/RpcServiceServer.h"
+#include "../../Common/TarsUtils.h"
+#include "../RpcInitializer.h"
+#include "../RpcServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <tarscpp/servant/Application.h>
+#include <servant/Application.h>
 
 using namespace bcostars;
-class RpcServiceApp : public Application
+class RpcServiceApp : public tars::Application
 {
 public:
     RpcServiceApp() {}
@@ -21,7 +21,7 @@ public:
         // and output exception information here
         try
         {
-            auto configDir = ServerConfig::BasePath;
+            auto configDir = tars::ServerConfig::BasePath;
             m_iniConfigPath = configDir + "/config.ini";
             addConfig("config.ini");
 
@@ -54,10 +54,10 @@ public:
 
     void destroyApp() override
     {
-        // terminate the network threads
-        Application::terminate();
-        // stop the nodeService
-        m_rpcInitializer->stop();
+        if (m_rpcInitializer)
+        {
+            m_rpcInitializer->stop();
+        }
     }
 
 protected:

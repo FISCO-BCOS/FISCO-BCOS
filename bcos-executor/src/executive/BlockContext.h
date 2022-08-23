@@ -24,11 +24,11 @@
 #include "../Common.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Block.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
@@ -84,7 +84,14 @@ public:
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
-
+    void stop()
+    {
+        bcos::ReadGuard l(x_executiveFlows);
+        for (auto it : m_executiveFlows)
+        {
+            it.second->stop();
+        }
+    }
     void clear()
     {
         bcos::WriteGuard l(x_executiveFlows);
@@ -94,7 +101,6 @@ public:
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
-
 
     bcos::protocol::BlockNumber m_blockNumber;
     h256 m_blockHash;

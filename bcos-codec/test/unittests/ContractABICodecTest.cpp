@@ -24,6 +24,7 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <typeinfo>
 
 using namespace std;
 using namespace bcos;

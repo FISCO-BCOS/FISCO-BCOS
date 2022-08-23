@@ -21,9 +21,9 @@
 #pragma once
 #include "../interfaces/PBFTMessageFactory.h"
 #include "../interfaces/PBFTStorage.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-utilities/ThreadPool.h>
 
 namespace bcos
@@ -45,7 +45,13 @@ public:
         createKVTable(m_pbftCommitDB);
         m_commitBlockWorker = std::make_shared<ThreadPool>("blockSubmit", 1);
     }
-
+    ~LedgerStorage() override
+    {
+        if (m_commitBlockWorker)
+        {
+            m_commitBlockWorker->stop();
+        }
+    }
     void createKVTable(std::string const& _dbName);
     PBFTProposalListPtr loadState(bcos::protocol::BlockNumber _stabledIndex) override;
 

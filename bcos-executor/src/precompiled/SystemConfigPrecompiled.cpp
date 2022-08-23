@@ -21,9 +21,9 @@
 #include "SystemConfigPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -43,14 +43,14 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
 {
     name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR, _hashImpl);
     name2Selector[SYSCONFIG_METHOD_GET_STR] = getFuncSelector(SYSCONFIG_METHOD_GET_STR, _hashImpl);
-    auto defaultCmp = [](std::string const& _key, int64_t _value, int64_t _minValue) {
+    auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue) {
         if (_value >= _minValue)
         {
             return;
         }
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("Invalid value " + std::to_string(_value) + " ,the value for " + _key +
-                             " must be no less than " + std::to_string(_minValue)));
+        BOOST_THROW_EXCEPTION(PrecompiledError(
+            "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
+            " must be no less than " + std::to_string(_minValue)));
     };
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT,
         [defaultCmp](int64_t _v) { defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _v, TX_GAS_LIMIT_MIN); }));
@@ -68,7 +68,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
             errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) +
                                  " failed for lower than min_supported_version")
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
-            PRECOMPILED_LOG(WARNING) << errorMsg.str() << LOG_KV("setValue", _v);
+            PRECOMPILED_LOG(INFO) << errorMsg.str() << LOG_KV("setValue", _v);
             BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
         }
     }));
@@ -92,9 +92,9 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
         // setValueByKey(string,string)
         if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
         {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
-                << LOG_KV("sender", _callParameters->m_sender);
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                                  << LOG_DESC("sender is not from sys")
+                                  << LOG_KV("sender", _callParameters->m_sender);
             _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
         }
         else
@@ -103,9 +103,10 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             codec.decode(_callParameters->params(), configKey, configValue);
             // Uniform lowercase configKey
             boost::to_lower(configKey);
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("setValueByKey func")
-                << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                                  << LOG_BADGE("SystemConfigPrecompiled")
+                                  << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
+                                  << LOG_KV("configValue", configValue);
 
             checkValueValid(configKey, configValue);
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
@@ -138,8 +139,8 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
-                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
     }
     return _callParameters;
@@ -177,16 +178,16 @@ void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string
             "the minimum version is optional. The major version must between " +
             std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
             std::to_string(bcos::protocol::MAX_MAJOR_VERSION);
-        PRECOMPILED_LOG(WARNING) << LOG_DESC("SystemConfigPrecompiled: invalid version")
-                                 << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
+                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
     }
     catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
-                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
-                               << LOG_KV("value", value)
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
+                              << LOG_KV("value", value)
+                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             PrecompiledError("The value for " + key + " must be a valid number."));
     }
@@ -211,16 +212,16 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
         }
         else
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
-                                   << LOG_DESC("get sys config error") << LOG_KV("configKey", _key);
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                                  << LOG_DESC("get sys config failed") << LOG_KV("configKey", _key);
             return {"", -1};
         }
     }
     catch (std::exception const& e)
     {
         auto errorMsg =
-            "getSysConfigByKey for " + _key + "failed, error:" + boost::diagnostic_information(e);
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;
+            "getSysConfigByKey for " + _key + "failed, e:" + boost::diagnostic_information(e);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;
         return {errorMsg, -1};
     }
 }

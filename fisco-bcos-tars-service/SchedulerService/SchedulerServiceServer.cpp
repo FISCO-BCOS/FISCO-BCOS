@@ -19,11 +19,14 @@
  * @date 2021-10-18
  */
 #include "SchedulerServiceServer.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
+
+using namespace tars;
 using namespace bcostars;
 
 bcostars::Error SchedulerServiceServer::call(
@@ -106,8 +109,9 @@ bcostars::Error SchedulerServiceServer::registerExecutor(
     std::string const& _name, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
-    auto executorServicePrx =
-        Application::getCommunicator()->stringToProxy<bcostars::ExecutorServicePrx>(_name);
+
+    auto executorServicePrx = bcostars::createServantProxy<bcostars::ExecutorServicePrx>(_name);
+
     auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);
     m_scheduler->registerExecutor(_name, executor, [_current](bcos::Error::Ptr&& _error) {
         async_response_registerExecutor(_current, toTarsError(_error));

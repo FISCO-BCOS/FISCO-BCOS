@@ -25,7 +25,7 @@
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
@@ -170,6 +170,16 @@ public:
         m_txpool->setTransactionSync(m_sync);
     }
 
+    void asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr _txsResult,
+        std::function<void(Error::Ptr)> _onNotifyFinished)
+    {
+        m_txpool->txpoolStorage()->batchRemove(_blockNumber, *_txsResult);
+        if (_onNotifyFinished)
+        {
+            _onNotifyFinished(nullptr);
+        }
+    }
+
 private:
     void updateConnectedNodeList()
     {
@@ -205,7 +215,8 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     bool _maybeExpired = false)
 {
     std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    auto encodedData = _tx->encode();
+    bcos::bytes encodedData;
+    _tx->encode(encodedData);
     auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
     _txpool->asyncSubmit(txData, [verifyFinish, _expectedTxHash, _expectedStatus, _maybeExpired](
                                      Error::Ptr, TransactionSubmitResult::Ptr _result) {

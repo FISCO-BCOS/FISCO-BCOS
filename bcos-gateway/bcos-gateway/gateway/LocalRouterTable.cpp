@@ -18,7 +18,8 @@
  * @date 2021-12-29
  */
 #include "LocalRouterTable.h"
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-gateway/Common.h>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -68,9 +69,9 @@ void LocalRouterTable::getGroupNodeInfoList(
     }
 }
 
-std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo() const
+std::map<std::string, std::set<std::string>, std::less<>> LocalRouterTable::nodeListInfo() const
 {
-    std::map<std::string, std::set<std::string>> nodeList;
+    std::map<std::string, std::set<std::string>, std::less<>> nodeList;
     ReadGuard l(x_nodeList);
     for (auto const& it : m_nodeList)
     {
@@ -179,12 +180,14 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         {
             continue;
         }
-        auto frontService =
-            createServiceClient<bcostars::FrontServiceClient, bcostars::FrontServicePrx>(
-                serviceName, m_keyFactory);
+
+        // TODO:: tars
+        auto frontPrx = bcostars::createServantProxy<bcostars::FrontServicePrx>(serviceName);
+        auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
+
         UpgradeGuard ul(l);
         auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
-            nodeInfo->nodeID(), frontService.first, nodeInfo->nodeType(), frontService.second);
+            nodeInfo->nodeID(), frontClient, nodeInfo->nodeType(), frontPrx);
         frontServiceInfo->setProtocolInfo(nodeInfo->nodeProtocol());
         m_nodeList[groupID][nodeID] = frontServiceInfo;
         ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")
@@ -230,8 +233,8 @@ bool LocalRouterTable::eraseUnreachableNodes()
     return updated;
 }
 
-bool LocalRouterTable::asyncBroadcastMsg(
-    uint16_t _nodeType, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID,
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.size() == 0)
@@ -253,14 +256,16 @@ bool LocalRouterTable::asyncBroadcastMsg(
         auto dstNodeID = it->nodeID();
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
-                          << LOG_KV("type", _nodeType) << LOG_KV("payloadSize", _payload.size())
+                          << LOG_KV("type", _nodeType) << LOG_KV("groupID", _groupID)
+                          << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", _payload.size())
                           << LOG_KV("dst", dstNodeID);
-        frontService->onReceiveMessage(
-            _groupID, _srcNodeID, _payload, [_srcNodeID, dstNodeID](Error::Ptr _error) {
+        frontService->onReceiveMessage(_groupID, _srcNodeID, _payload,
+            [_groupID, _moduleID, _srcNodeID, dstNodeID](Error::Ptr _error) {
                 if (_error)
                 {
                     GATEWAY_LOG(ERROR)
-                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("src", _srcNodeID->hex())
+                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
+                        << LOG_KV("moduleID", _moduleID) << LOG_KV("src", _srcNodeID->hex())
                         << LOG_KV("dst", dstNodeID) << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
                 }

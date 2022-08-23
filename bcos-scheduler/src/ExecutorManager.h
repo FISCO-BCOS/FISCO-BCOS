@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
@@ -17,10 +17,15 @@
 
 namespace bcos::scheduler
 {
+#define EXECUTOR_MANAGER_LOG(LEVEL) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
+
 class ExecutorManager
 {
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
+
+    virtual ~ExecutorManager() = default;
 
     void addExecutor(
         std::string name, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor);
@@ -43,7 +48,27 @@ public:
             std::bind(&ExecutorManager::executorView, this, std::placeholders::_1));
     }
 
-    size_t size() const { return m_name2Executors.size(); }
+    void forEachExecutor(
+        std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
+            handleExecutor)
+    {
+        ReadGuard lock(m_mutex);
+        if (m_name2Executors.empty())
+        {
+            return;
+        }
+
+        for (auto it : m_name2Executors)
+        {
+            handleExecutor(std::string(it.first), it.second->executor);
+        }
+    }
+
+    size_t size() const
+    {
+        ReadGuard lock(m_mutex);
+        return m_name2Executors.size();
+    }
 
     void clear()
     {
@@ -53,6 +78,32 @@ public:
         m_executorPriorityQueue = std::priority_queue<ExecutorInfo::Ptr,
             std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>();
     };
+
+    virtual void stop()
+    {
+        EXECUTOR_MANAGER_LOG(INFO) << "Try to stop ExecutorManager";
+
+
+        std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors;
+        {
+            if (m_name2Executors.empty())
+            {
+                return;
+            }
+
+            WriteGuard lock(m_mutex);
+            for (auto it : m_name2Executors)
+            {
+                executors.push_back(it.second->executor);
+            }
+        }
+
+        // no lock blocking to stop
+        for (auto executor : executors)
+        {
+            executor->stop();
+        }
+    }
 
     struct ExecutorInfo
     {

@@ -11,12 +11,22 @@ void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verif
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("executeBlock: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(
             BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {}, false);
         return;
     }
 
-    m_scheduler->executeBlock(block, verify, std::move(callback));
+    auto _holdSchedulerCallback =
+        [schedulerHolder = m_scheduler, callback = std::move(callback)](bcos::Error::Ptr&& error,
+            bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
+            SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                                 << LOG_KV("ptr count", schedulerHolder.use_count());
+            callback(std::move(error), std::move(blockHeader), _sysBlock);
+        };
+
+    m_scheduler->executeBlock(block, verify, std::move(_holdSchedulerCallback));
 }
 
 // by pbft & sync
@@ -27,14 +37,24 @@ void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("commitBlock: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
         return;
     }
 
-    m_scheduler->commitBlock(header, std::move(callback));
+    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
+                                      bcos::Error::Ptr&& error,
+                                      bcos::ledger::LedgerConfig::Ptr&& ledger) {
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                             << LOG_KV("ptr count", schedulerHolder.use_count());
+        callback(std::move(error), std::move(ledger));
+    };
+
+    m_scheduler->commitBlock(header, std::move(_holdSchedulerCallback));
 }
 
-// by console, query committed committing executing
+// by console, query committed and committing executing
 void SchedulerManager::status(
     std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback)
 {
@@ -42,10 +62,20 @@ void SchedulerManager::status(
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("status: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
         return;
     }
-    m_scheduler->status(std::move(callback));
+
+    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
+                                      bcos::Error::Ptr&& error,
+                                      bcos::protocol::Session::ConstPtr&& session) {
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                             << LOG_KV("ptr count", schedulerHolder.use_count());
+        callback(std::move(error), std::move(session));
+    };
+    m_scheduler->status(std::move(_holdSchedulerCallback));
 }
 
 // by rpc
@@ -56,11 +86,20 @@ void SchedulerManager::call(protocol::Transaction::Ptr tx,
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("call: checkAndInit not ok") << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
         return;
     }
 
-    m_scheduler->call(tx, std::move(callback));
+    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
+                                      bcos::Error::Ptr&& error,
+                                      protocol::TransactionReceipt::Ptr&& receipt) {
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                             << LOG_KV("ptr count", schedulerHolder.use_count());
+        callback(std::move(error), std::move(receipt));
+    };
+
+    m_scheduler->call(tx, std::move(_holdSchedulerCallback));
 }
 
 // by executor
@@ -86,6 +125,8 @@ void SchedulerManager::reset(std::function<void(Error::Ptr&&)> callback)
 
     if (!ok)
     {
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("reset: checkAndInit not ok")
+                             << LOG_KV("message", message);
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message));
         return;
     }
@@ -104,7 +145,15 @@ void SchedulerManager::getCode(
         return;
     }
 
-    m_scheduler->getCode(contract, std::move(callback));
+    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
+                                      bcos::Error::Ptr&& error, bcos::bytes bytes) {
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                             << LOG_KV("ptr count", schedulerHolder.use_count());
+        callback(std::move(error), std::move(bytes));
+    };
+
+
+    m_scheduler->getCode(contract, std::move(_holdSchedulerCallback));
 }
 
 void SchedulerManager::getABI(
@@ -118,7 +167,14 @@ void SchedulerManager::getABI(
         return;
     }
 
-    m_scheduler->getABI(contract, std::move(callback));
+    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
+                                      bcos::Error::Ptr&& error, std::string str) {
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                             << LOG_KV("ptr count", schedulerHolder.use_count());
+        callback(std::move(error), std::move(str));
+    };
+
+    m_scheduler->getABI(contract, std::move(_holdSchedulerCallback));
 }
 
 void SchedulerManager::preExecuteBlock(
@@ -132,7 +188,14 @@ void SchedulerManager::preExecuteBlock(
         return;
     }
 
-    m_scheduler->preExecuteBlock(block, verify, std::move(callback));
+    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
+                                      bcos::Error::Ptr&& error) {
+        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                             << LOG_KV("ptr count", schedulerHolder.use_count());
+        callback(std::move(error));
+    };
+
+    m_scheduler->preExecuteBlock(block, verify, std::move(_holdSchedulerCallback));
 }
 
 std::pair<bool, std::string> SchedulerManager::checkAndInit()
@@ -160,6 +223,11 @@ std::pair<bool, std::string> SchedulerManager::checkAndInit()
 void SchedulerManager::asyncSwitchTerm(
     int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback)
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     // Will update scheduler session, clear all scheduler & executor block pipeline cache and
     // re-dispatch executor
     m_pool.enqueue([this, callback = std::move(callback), schedulerSeq]() {
@@ -262,7 +330,6 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
     if (m_scheduler)
     {
         m_scheduler->stop();
-        m_oldScheduler = m_scheduler;
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "SchedulerSwitch: scheduler term switch "
                              << m_scheduler->getSchedulerTermId() << "->" << schedulerTermId;
     }
@@ -274,6 +341,11 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
 
 void SchedulerManager::switchTerm(int64_t schedulerSeq)
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     m_status.store(SWITCHING);
     m_schedulerTerm = SchedulerTerm(schedulerSeq);
     updateScheduler(m_schedulerTerm.getSchedulerTermID());
@@ -284,6 +356,11 @@ void SchedulerManager::switchTerm(int64_t schedulerSeq)
 
 void SchedulerManager::selfSwitchTerm()
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     if (m_status == SWITCHING)
     {
         // is self-switching, just return
@@ -305,6 +382,11 @@ void SchedulerManager::asyncSelfSwitchTerm()
 
 void SchedulerManager::onSwitchTermNotify()
 {
+    if (m_status == STOPPED)
+    {
+        return;
+    }
+
     m_factory->getLedger()->asyncGetBlockNumber(
         [this](Error::Ptr error, protocol::BlockNumber blockNumber) {
             if (error)

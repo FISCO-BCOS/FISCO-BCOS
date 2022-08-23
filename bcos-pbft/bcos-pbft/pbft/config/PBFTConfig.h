@@ -28,8 +28,8 @@
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
 
 namespace bcos
 {
@@ -54,7 +54,7 @@ public:
         m_frontService = _frontService;
         m_stateMachine = _stateMachine;
         m_storage = _storage;
-        m_timer = std::make_shared<PBFTTimer>(consensusTimeout());
+        m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
     }
 
     ~PBFTConfig() override {}

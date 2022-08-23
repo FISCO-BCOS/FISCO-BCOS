@@ -11,16 +11,16 @@ class NodeController:
     the max node controller
     """
 
-    def __init__(self, config, node_type):
+    def __init__(self, config, node_type, output_dir):
         self.config = config
         if node_type == "max":
             self.node_generator = MaxNodeConfigGenerator(
-                self.config, node_type)
+                self.config, node_type, output_dir)
         else:
-            self.node_generator = NodeConfigGenerator(self.config, node_type)
+            self.node_generator = NodeConfigGenerator(self.config, node_type, output_dir)
 
-    def generate_all_config(self):
-        return self.node_generator.generate_all_config(False)
+    def generate_all_config(self, is_build_opr = False):
+        return self.node_generator.generate_all_config(False, is_build_opr)
 
     def generate_all_executor_config(self):
         return self.node_generator.generate_all_executor_config()
@@ -56,7 +56,7 @@ class NodeController:
         return True
 
     def generate_and_deploy_group_services(self):
-        if self.generate_all_config() is False:
+        if self.generate_all_config(False) is False:
             return False
         if self.deploy_group_services() is False:
             return False
@@ -74,7 +74,7 @@ class NodeController:
         """
         generate expand config
         """
-        if self.node_generator.generate_all_config(True) is False:
+        if self.node_generator.generate_all_config(True, False) is False:
             return False
         return True
 

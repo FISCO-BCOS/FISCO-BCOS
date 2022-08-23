@@ -19,9 +19,9 @@
  */
 #pragma once
 #include "bcos-protocol/TransactionStatus.h"
-#include <bcos-framework/interfaces/protocol/BlockHeader.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/interfaces/protocol/TransactionSubmitResult.h>
+#include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/protocol/TransactionSubmitResult.h>
 
 namespace bcos
 {

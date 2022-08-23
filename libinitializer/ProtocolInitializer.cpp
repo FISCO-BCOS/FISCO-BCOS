@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
@@ -93,7 +94,8 @@ void ProtocolInitializer::createCryptoSuite()
 void ProtocolInitializer::createSMCryptoSuite()
 {
     auto hashImpl = std::make_shared<SM3>();
-    auto signatureImpl = std::make_shared<FastSM2Crypto>();
+    // auto signatureImpl = std::make_shared<FastSM2Crypto>(); //TODO: fix fastsm2
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto encryptImpl = std::make_shared<SM4Crypto>();
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }

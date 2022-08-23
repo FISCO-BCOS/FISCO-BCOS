@@ -1,7 +1,7 @@
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-storage/src/RocksDBStorage.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
+#include <bcos-storage/RocksDBStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
@@ -42,18 +42,16 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
-
-    // init a hashContext
-    void* init() override { return nullptr; }
-    // update the hashContext
-    void* update(void*, bytesConstRef) override { return nullptr; }
-    // final the hashContext
-    bcos::crypto::HashType final(void*) override { return bcos::crypto::HashType(); }
+    bcos::crypto::hasher::AnyHasher hasher() override
+    {
+        return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
+    }
 };
 struct TestRocksDBStorageFixture
 {
     TestRocksDBStorageFixture()
     {
+        boost::log::core::get()->set_logging_enabled(false);
         rocksdb::DB* db;
         rocksdb::Options options;
         // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
@@ -210,6 +208,7 @@ struct TestRocksDBStorageFixture
         {
             boost::filesystem::remove_all(path);
         }
+        boost::log::core::get()->set_logging_enabled(true);
     }
 
     std::string path = "./unittestdb";
@@ -224,42 +223,31 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
     prepareTestTableData();
 
-    tbb::concurrent_vector<std::function<void()>> checks;
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, 1050), [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i != range.end(); ++i)
-            {
-                std::string key = "key" + boost::lexical_cast<std::string>(i);
-                rocksDBStorage->asyncGetRow(
-                    testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
-                        BOOST_CHECK(!error);
-                        if (error)
-                        {
-                            std::cout << boost::diagnostic_information(*error);
-                        }
 
-                        checks.push_back([i, entry]() {
-                            if (i < 1000)
-                            {
-                                BOOST_CHECK_NE(entry.has_value(), false);
-                                auto data = entry->get();
-                                BOOST_CHECK_EQUAL(
-                                    data, "value_" + boost::lexical_cast<std::string>(i));
-                            }
-                            else
-                            {
-                                BOOST_CHECK_EQUAL(entry.has_value(), false);
-                            }
-                        });
-                    });
-            }
-        });
-
-    for (auto& it : checks)
+    // #pragma omp parallel for
+    for (size_t i = 0; i < 1050; ++i)
     {
-        it();
+        std::string key = "key" + boost::lexical_cast<std::string>(i);
+        rocksDBStorage->asyncGetRow(
+            testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
+                // #pragma omp critical
+                BOOST_REQUIRE(!error);
+                if (error)
+                {
+                    std::cout << boost::diagnostic_information(*error);
+                }
+                if (i < 1000)
+                {
+                    BOOST_CHECK_NE(entry.has_value(), false);
+                    auto data = entry->get();
+                    BOOST_CHECK_EQUAL(data, "value_" + boost::lexical_cast<std::string>(i));
+                }
+                else
+                {
+                    BOOST_CHECK_EQUAL(entry.has_value(), false);
+                }
+            });
     }
-
     cleanupTestTableData();
 }
 
@@ -592,6 +580,8 @@ BOOST_AUTO_TEST_CASE(rocksDBiter)
     {
         boost::filesystem::remove_all(testPath);
     }
+
+    delete db;
 }
 
 BOOST_AUTO_TEST_CASE(writeReadDelete_1Table)
@@ -698,7 +688,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         params.number = i;
         rocksDBStorage->asyncPrepare(
             params, *state, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
-        rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+        rocksDBStorage->asyncCommit(
+            params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

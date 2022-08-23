@@ -18,13 +18,13 @@
  * @author: yujiechen
  * @date 2021-05-26
  */
-#include "interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -352,7 +352,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     BOOST_CHECK(notifiedTxs->size() == sealedTxs->size());
 
     finish = false;
-    _txpool->asyncNotifyBlockResult(blockNumber, txsResult, [&](Error::Ptr _error) {
+    _faker->asyncNotifyBlockResult(blockNumber, txsResult, [&](Error::Ptr _error) {
         BOOST_CHECK(_error == nullptr);
         finish = true;
     });
@@ -542,7 +542,8 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         importedTxNum);
 
     // case10: malformed transaction
-    auto encodedData = tx->encode();
+    bcos::bytes encodedData;
+    tx->encode(encodedData);
     auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
     // fake invalid txData
     for (size_t i = 0; i < txData->size(); i++)

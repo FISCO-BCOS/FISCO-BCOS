@@ -21,7 +21,7 @@
 #pragma once
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/DataConvertUtility.h>
 namespace bcos
 {

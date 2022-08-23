@@ -19,8 +19,8 @@
  * @date 2021-05-08
  */
 #pragma once
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>

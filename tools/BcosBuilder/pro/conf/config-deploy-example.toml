@@ -9,14 +9,14 @@ chain_id="chain0"
 rpc_sm_ssl=false
 # the gateway-service enable sm-ssl or not, default disable sm-ssm
 gateway_sm_ssl=false
-# the existed rpc service ca path, will generate new ca if not configurated
+# the existed rpc service ca path, will generate new ca if not configured
 #rpc_ca_cert_path=""
-# the existed gateway service ca path, will generate new ca if not configurated
+# the existed gateway service ca path, will generate new ca if not configured
 #gateway_ca_cert_path="
 
 [[group]]
 group_id="group0"
-# the genesis configuration path of the group, will generate new genesis configuration if not configurated
+# the genesis configuration path of the group, will generate new genesis configuration if not configured
 # genesis_config_path = ""
 # VM type, now only support evm/wasm
 vm_type="evm"
@@ -37,7 +37,7 @@ consensus_type = "pbft"
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
 # the default is 3.0.0-rc4
-compatibility_version="3.0.0-rc4"
+compatibility_version="3.0.0"
 
 [[agency]]
 name = "agencyA"

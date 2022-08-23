@@ -22,7 +22,7 @@
 #include "FakeBlockHeader.h"
 #include "FakeReceipt.h"
 #include "FakeTransaction.h"
-#include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
+#include "bcos-framework/protocol/TransactionMetaData.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>

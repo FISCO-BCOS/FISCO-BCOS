@@ -24,11 +24,11 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "Common.h"
+// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
@@ -39,7 +39,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <unistd.h>
@@ -97,9 +97,7 @@ struct DagExecutorFixture
             64);
         createSysTable();
     }
-    ~DagExecutorFixture(){
-        boost::log::core::get()->set_logging_enabled(true);
-    }
+    ~DagExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }
 
     void createSysTable()
     {
@@ -247,7 +245,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     // Create contract transfer
     // --------------------------------
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->executeTransaction(std::move(params),
+    executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise.set_value(std::move(result));
@@ -257,7 +255,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     result->setSeq(1001);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-    executor->executeTransaction(std::move(result),
+    executor->dmcExecuteTransaction(std::move(result),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise2.set_value(std::move(result));
@@ -267,7 +265,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     result2->setSeq(1000);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
-    executor->executeTransaction(std::move(result2),
+    executor->dmcExecuteTransaction(std::move(result2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise3.set_value(std::move(result));
@@ -402,7 +400,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
                 params->setType(ExecutionMessage::MESSAGE);
 
                 std::promise<ExecutionMessage::UniquePtr> executePromise;
-                executor->executeTransaction(
+                executor->dmcExecuteTransaction(
                     std::move(params), [&executePromise](bcos::Error::UniquePtr&& error,
                                            ExecutionMessage::UniquePtr&& result) {
                         BOOST_CHECK(!error);
@@ -481,7 +479,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     // Create contract hello world
     // --------------------------------
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->executeTransaction(std::move(params),
+    executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise.set_value(std::move(result));
@@ -492,7 +490,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     result->setSeq(1001);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-    executor->executeTransaction(std::move(result),
+    executor->dmcExecuteTransaction(std::move(result),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise2.set_value(std::move(result));
@@ -502,7 +500,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     result2->setSeq(1000);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
-    executor->executeTransaction(std::move(result2),
+    executor->dmcExecuteTransaction(std::move(result2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise3.set_value(std::move(result));
@@ -625,7 +623,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             params->setType(ExecutionMessage::MESSAGE);
 
             std::promise<ExecutionMessage::UniquePtr> executePromise;
-            executor->executeTransaction(
+            executor->dmcExecuteTransaction(
                 std::move(params), [&executePromise](bcos::Error::UniquePtr&& error,
                                        ExecutionMessage::UniquePtr&& result) {
                     BOOST_CHECK(!error);
@@ -739,7 +737,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     // Create contract ParallelOk
     // --------------------------------
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->executeTransaction(std::move(params),
+    executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise.set_value(std::move(result));
@@ -769,7 +767,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
         params->setType(NativeExecutionMessage::MESSAGE);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params),
+        executor->dmcExecuteTransaction(std::move(params),
             [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
                 if (error)
                 {
@@ -857,7 +855,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
                 params->setType(NativeExecutionMessage::MESSAGE);
 
                 std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
-                executor->executeTransaction(
+                executor->dmcExecuteTransaction(
                     std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                            NativeExecutionMessage::UniquePtr&& result) {
                         if (error)
@@ -974,7 +972,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     // Create contract ParallelOk
     // --------------------------------
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->executeTransaction(std::move(params),
+    executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise.set_value(std::move(result));
@@ -1004,7 +1002,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
         params->setType(NativeExecutionMessage::MESSAGE);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params),
+        executor->dmcExecuteTransaction(std::move(params),
             [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
                 if (error)
                 {
@@ -1089,7 +1087,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
                 params->setType(NativeExecutionMessage::MESSAGE);
 
                 std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
-                executor->executeTransaction(
+                executor->dmcExecuteTransaction(
                     std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                            NativeExecutionMessage::UniquePtr&& result) {
                         if (error)

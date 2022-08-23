@@ -23,7 +23,7 @@
 
 #include "FakeGateway.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>

@@ -5,7 +5,6 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/gateway/ProGatewayNodeManager.h>
@@ -17,10 +16,16 @@
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
+#include <bcos-gateway/libratelimit/BWRateLimiter.h>
+#include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <openssl/asn1.h>
+#include <openssl/evp.h>
+#include <openssl/x509.h>
+#include <memory>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -76,7 +81,7 @@ void GatewayFactory::initCert2PubHexHandler()
             }
 
             ASN1_BIT_STRING* pubKey = X509_get0_pubkey_bitstr(x509Ptr.get());
-            if (pubKey == NULL)
+            if (!pubKey)
             {
                 errorMessage = "X509_get0_pubkey_bitstr error";
                 break;
@@ -122,8 +127,9 @@ void GatewayFactory::initSSLContextPubHexHandler()
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::CertConfig& _certConfig)
+    bool _server, const GatewayConfig::CertConfig& _certConfig)
 {
+    std::ignore = _server;
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
     /*
@@ -202,12 +208,32 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::SMCertConfig& _smCertConfig)
+    bool _server, const GatewayConfig::SMCertConfig& _smCertConfig)
 {
+    SSL_CTX* ctx = NULL;
+    if (_server)
+    {
+        const SSL_METHOD* meth = SSLv23_server_method();
+        ctx = SSL_CTX_new(meth);
+    }
+    else
+    {
+        const SSL_METHOD* meth = CNTLS_client_method();
+        ctx = SSL_CTX_new(meth);
+    }
+
     std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+        std::make_shared<boost::asio::ssl::context>(ctx);
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
+
+    /* Load the server certificate into the SSL_CTX structure */
+    if (SSL_CTX_use_certificate_file(
+            sslContext->native_handle(), _smCertConfig.nodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file error"));
+    }
 
     std::shared_ptr<bytes> keyContent;
     if (!_smCertConfig.nodeKey.empty())
@@ -229,8 +255,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
                     "buildSSLContext: unable read content of key: " + _smCertConfig.nodeKey));
         }
     }
+    // nodekey
     boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+
+    /* Check if the server certificate and private-key matches */
+    if (!SSL_CTX_check_private_key(sslContext->native_handle()))
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key error"));
+    }
 
     std::shared_ptr<bytes> enNodeKeyContent;
     if (!_smCertConfig.enNodeKey.empty())
@@ -253,21 +287,24 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
     }
 
-    SSL_CTX_use_enc_certificate_file(
-        sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM);
 
+    /* Load the server encrypt certificate into the SSL_CTX structure */
+    if (SSL_CTX_use_enc_certificate_file(
+            sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file error"));
+    }
     std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
 
     if (SSL_CTX_use_enc_PrivateKey(sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <=
         0)
     {
-        GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey_file error");
+        GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey error");
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment("GatewayFactory::buildSSLContext "
-                                                  "SSL_CTX_use_enc_PrivateKey_file error"));
+                                                  "SSL_CTX_use_enc_PrivateKey error"));
     }
-
-    sslContext->use_certificate_chain_file(_smCertConfig.nodeCert);
 
     auto caContent =
         readContentsToString(boost::filesystem::path(_smCertConfig.caCert));  // node.key content
@@ -312,6 +349,52 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
+std::shared_ptr<ratelimit::RateLimiterManager> GatewayFactory::buildRateLimitManager(
+    const GatewayConfig::RateLimitConfig& _rateLimitConfig)
+{
+    // rate limiter factory
+    auto rateLimiterFactory = std::make_shared<ratelimit::BWRateLimiterFactory>();
+    // rate limiter manager
+    auto rateLimiterManager = std::make_shared<ratelimit::RateLimiterManager>(_rateLimitConfig);
+
+    // total outgoing bandwidth Limit for p2p network
+    ratelimit::BWRateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
+    if (_rateLimitConfig.totalOutgoingBwLimit > 0)
+    {
+        totalOutgoingRateLimiter =
+            rateLimiterFactory->buildRateLimiter(_rateLimitConfig.totalOutgoingBwLimit);
+
+        rateLimiterManager->registerRateLimiter(
+            ratelimit::RateLimiterManager::TOTAL_OUTGOING_KEY, totalOutgoingRateLimiter);
+    }
+
+    // ip connection => rate limit
+    if (!_rateLimitConfig.ip2BwLimit.empty())
+    {
+        for (const auto& [ip, bandWidth] : _rateLimitConfig.ip2BwLimit)
+        {
+            auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
+            rateLimiterManager->registerConnRateLimiter(ip, rateLimiterInterface);
+        }
+    }
+
+    // group => rate limit
+    if (!_rateLimitConfig.group2BwLimit.empty())
+    {
+        for (const auto& [group, bandWidth] : _rateLimitConfig.group2BwLimit)
+        {
+            auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
+            rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
+        }
+    }
+
+    // modules without bandwidth limit
+    rateLimiterManager->setModulesWithNoBwLimit(_rateLimitConfig.modulesWithNoBwLimit);
+    rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
+
+    return rateLimiterManager;
+}
+
 /**
  * @brief: construct Gateway
  * @param _config: config parameter object
@@ -334,14 +417,19 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                       "GatewayFactory::init unable parse myself pub id"));
         }
 
-        std::shared_ptr<ba::ssl::context> sslContext =
-            (_config->smSSL() ? buildSSLContext(_config->smCertConfig()) :
-                                buildSSLContext(_config->certConfig()));
+        std::shared_ptr<ba::ssl::context> srvCtx =
+            (_config->smSSL() ? buildSSLContext(true, _config->smCertConfig()) :
+                                buildSSLContext(true, _config->certConfig()));
+
+        std::shared_ptr<ba::ssl::context> clientCtx =
+            (_config->smSSL() ? buildSSLContext(false, _config->smCertConfig()) :
+                                buildSSLContext(false, _config->certConfig()));
 
         // init ASIOInterface
         auto asioInterface = std::make_shared<ASIOInterface>();
         asioInterface->setIOServicePool(std::make_shared<IOServicePool>());
-        asioInterface->setSSLContext(sslContext);
+        asioInterface->setSrvContext(srvCtx);
+        asioInterface->setClientContext(clientCtx);
         asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
         // Message Factory
@@ -350,7 +438,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
         // KeyFactory
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-
         // init Host
         auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
 
@@ -370,6 +457,13 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
         service->setMessageFactory(messageFactory);
         service->setKeyFactory(keyFactory);
+
+        // init rate limit
+        const auto& rateLimitConfig = _config->rateLimitConfig();
+        auto rateLimiterManager = buildRateLimitManager(_config->rateLimitConfig());
+
+        auto rateStatistics = std::make_shared<ratelimit::BWRateStatistics>();
+        auto rateStatisticsWeakPtr = std::weak_ptr<ratelimit::BWRateStatistics>(rateStatistics);
 
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
@@ -396,8 +490,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(
-            m_chainID, service, gatewayNodeManager, amop, _gatewayServiceName);
+        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop,
+            rateLimiterManager, rateStatistics, _gatewayServiceName);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
@@ -417,6 +511,31 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     return;
                 }
                 nodeMgr->onRemoveNodeIDs(_unreachableNode);
+            });
+
+        auto gatewayWeakPtr = std::weak_ptr<Gateway>(gateway);
+
+        service->setBeforeMessageHandler([gatewayWeakPtr](SessionFace::Ptr _session,
+                                             Message::Ptr _msg, SessionCallbackFunc _callback) {
+            auto gateway = gatewayWeakPtr.lock();
+            if (!gateway)
+            {
+                return true;
+            }
+
+            // bandwidth limit check
+            return gateway->checkBWRateLimit(_session, _msg, _callback);
+        });
+
+        service->setOnMessageHandler(
+            [rateStatisticsWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
+                auto rateStatistics = rateStatisticsWeakPtr.lock();
+                if (rateStatistics)
+                {
+                    auto endPoint = _session->nodeIPEndpoint().address();
+                    auto msgLength = _message->length();
+                    rateStatistics->updateInComing(endPoint, msgLength);
+                }
             });
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");

@@ -22,10 +22,10 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "Common.h"
+// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -35,7 +35,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <tbb/task_group.h>
@@ -193,7 +193,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     nextPromise.get_future().get();
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->executeTransaction(std::move(params),
+    executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise.set_value(std::move(result));
@@ -286,7 +286,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     params2->setType(NativeExecutionMessage::MESSAGE);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise2;
-    executor->executeTransaction(std::move(params2),
+    executor->dmcExecuteTransaction(std::move(params2),
         [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise2.set_value(std::move(result));
@@ -318,7 +318,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     params3->setType(ExecutionMessage::MESSAGE);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
-    executor->executeTransaction(std::move(params3),
+    executor->dmcExecuteTransaction(std::move(params3),
         [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise3.set_value(std::move(result));
@@ -423,7 +423,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Create contract A
     // --------------------------------
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-    executor->executeTransaction(std::move(params),
+    executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise.set_value(std::move(result));
@@ -456,7 +456,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     params2->setType(NativeExecutionMessage::MESSAGE);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise2;
-    executor->executeTransaction(std::move(params2),
+    executor->dmcExecuteTransaction(std::move(params2),
         [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise2.set_value(std::move(result));
@@ -492,7 +492,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     result2->setTo(addressString2);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
-    executor->executeTransaction(std::move(result2),
+    executor->dmcExecuteTransaction(std::move(result2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise3.set_value(std::move(result));
@@ -518,7 +518,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // --------------------------------
     result3->setSeq(1001);
     std::promise<ExecutionMessage::UniquePtr> executePromise4;
-    executor->executeTransaction(std::move(result3),
+    executor->dmcExecuteTransaction(std::move(result3),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise4.set_value(std::move(result));
@@ -552,7 +552,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     result4->setKeyLocks({});
 
     std::promise<ExecutionMessage::UniquePtr> executePromise5;
-    executor->executeTransaction(std::move(result4),
+    executor->dmcExecuteTransaction(std::move(result4),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise5.set_value(std::move(result));
@@ -579,7 +579,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // --------------------------------
     result5->setSeq(1001);
     std::promise<ExecutionMessage::UniquePtr> executePromise6;
-    executor->executeTransaction(std::move(result5),
+    executor->dmcExecuteTransaction(std::move(result5),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             BOOST_CHECK(!error);
             executePromise6.set_value(std::move(result));
@@ -626,7 +626,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     callParam->setCreate(false);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResultPromise;
-    executor->call(std::move(callParam),
+    executor->dmcCall(std::move(callParam),
         [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
             BOOST_CHECK(!error);
             callResultPromise.set_value(std::move(response));
@@ -661,7 +661,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     callParam2->setCreate(false);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResult2Promise;
-    executor->call(std::move(callParam2),
+    executor->dmcCall(std::move(callParam2),
         [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
             BOOST_CHECK(!error);
             callResult2Promise.set_value(std::move(response));
@@ -802,7 +802,7 @@ BOOST_AUTO_TEST_CASE(performance)
         // Create contract ParallelOk
         // --------------------------------
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->executeTransaction(
+        executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -833,7 +833,7 @@ BOOST_AUTO_TEST_CASE(performance)
             params->setType(NativeExecutionMessage::MESSAGE);
 
             std::promise<ExecutionMessage::UniquePtr> executePromise2;
-            executor->executeTransaction(std::move(params),
+            executor->dmcExecuteTransaction(std::move(params),
                 [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
                     if (error)
                     {
@@ -877,7 +877,7 @@ BOOST_AUTO_TEST_CASE(performance)
         {
             std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
 
-            executor->executeTransaction(
+            executor->dmcExecuteTransaction(
                 std::move(it), [&outputPromise](bcos::Error::UniquePtr&& error,
                                    NativeExecutionMessage::UniquePtr&& result) {
                     if (error)
@@ -919,7 +919,7 @@ BOOST_AUTO_TEST_CASE(performance)
             params->setType(NativeExecutionMessage::MESSAGE);
 
             std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
-            executor->executeTransaction(
+            executor->dmcExecuteTransaction(
                 std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                        NativeExecutionMessage::UniquePtr&& result) {
                     if (error)
@@ -1016,7 +1016,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
     {
         // not support multi-thread executeTransaction
         boost::latch latch(1);
-        executor->executeTransaction(std::move(std::move(paramsList[i])),
+        executor->dmcExecuteTransaction(std::move(std::move(paramsList[i])),
             [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr result) {
                 responses[i] = std::make_tuple(std::move(error), std::move(result));
                 latch.count_down();
@@ -1128,7 +1128,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->executeTransaction(
+        executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -1309,7 +1309,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->executeTransaction(
+        executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);

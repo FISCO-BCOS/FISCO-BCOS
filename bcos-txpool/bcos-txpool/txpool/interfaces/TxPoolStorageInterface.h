@@ -19,9 +19,9 @@
  * @date 2021-05-07
  */
 #pragma once
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/interfaces/txpool/TxPoolTypeDef.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
 

@@ -4,7 +4,6 @@ set(MESSAGES_HDRS)
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-
 set(BCOS_PROTO_PATH ${CMAKE_CURRENT_BINARY_DIR}/proto)
 set(PROTO_GENERATE_DIR ${BCOS_PROTO_PATH})
 file(MAKE_DIRECTORY ${PROTO_GENERATE_DIR})
@@ -27,7 +26,8 @@ foreach(proto_file ${MESSAGES_PROTOS})
 endforeach()
 
 add_library(${PBPROTOCOL_TARGET} ${SRC_LIST} ${MESSAGES_SRCS} ${HEADERS})
-target_compile_options(${PBPROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+# target_compile_options(${PBPROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(Protobuf CONFIG REQUIRED)
+target_include_directories(${PBPROTOCOL_TARGET} PUBLIC ${CMAKE_BINARY_DIR}/bcos-protocol)
 target_link_libraries(${PBPROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} ${UTILITIES_TARGET} ${CODEC_TARGET} protobuf::libprotobuf)

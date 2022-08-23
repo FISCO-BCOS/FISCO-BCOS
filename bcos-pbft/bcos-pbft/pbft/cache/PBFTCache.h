@@ -76,8 +76,7 @@ public:
     // Note: only called when receive checkPoint-triggered-proposal response
     virtual void setPrecommitCache(PBFTMessageInterface::Ptr _precommit)
     {
-        PBFT_LOG(INFO) << LOG_DESC("setPrecommitCache")
-                       << printPBFTMsgInfo(_precommit);
+        PBFT_LOG(INFO) << LOG_DESC("setPrecommitCache") << printPBFTMsgInfo(_precommit);
         m_precommit = _precommit;
         m_precommitWithoutData = _precommit;
     }

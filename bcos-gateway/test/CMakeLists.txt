@@ -33,10 +33,8 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
 
-find_package(Boost CONFIG REQUIRED unit_test_framework)
-if (APPLE)
-# target_compile_options(${TEST_BINARY_NAME} PRIVATE -faligned-allocation)
-endif()
+find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework ${FRONT_TARGET})
-add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TARS_PROTOCOL_TARGET} ${FRONT_TARGET} bcos-crypto Boost::unit_test_framework)
+# add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bcos-gateway/test/unittests COMMAND ${TEST_BINARY_NAME})

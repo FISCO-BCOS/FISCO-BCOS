@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/storage/Table.h"
 #include "tbb/enumerable_thread_specific.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>

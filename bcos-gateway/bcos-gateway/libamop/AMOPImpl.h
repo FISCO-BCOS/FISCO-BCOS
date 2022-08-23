@@ -20,7 +20,7 @@
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/protocol/AMOPRequest.h>
+#include <bcos-framework/protocol/AMOPRequest.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libamop/TopicManager.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
@@ -65,7 +65,7 @@ public:
      * @param _data: message data
      * @return void
      */
-    virtual void asyncSendBroadbastMessageByTopic(
+    virtual void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
     virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,

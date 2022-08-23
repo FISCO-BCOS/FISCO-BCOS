@@ -28,13 +28,13 @@ cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 nodeid_list=""
 file_dir="./"
-nodes_json_file_name="nodes.json"
+p2p_connected_conf_name="nodes.json"
 command="deploy"
 ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc4"
+default_version="v3.0.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -44,7 +44,15 @@ auth_admin_account=
 binary_path=""
 mtail_binary_path=""
 wasm_mode="false"
+serial_mode="false"
+nodeids_dir=""
+# if the config.genesis path has been set, don't generate genesis file, use the config instead
+genesis_conf_path=""
+lightnode_exec=""
 download_timeout=240
+
+default_group="group0"
+default_chainid="chain0"
 
 LOG_WARN() {
     local content=${1}
@@ -70,7 +78,7 @@ dir_must_exists() {
 
 dir_must_not_exists() {
     if [  -d "$1" ]; then
-        LOG_FATAL "$1 DIR does not exist, please check!"
+        LOG_FATAL "$1 DIR already exist, please check!"
     fi
 }
 
@@ -151,7 +159,7 @@ x509_extensions	= usr_cert		# The extensions to add to the cert
 name_opt 	= ca_default		# Subject Name options
 cert_opt 	= ca_default		# Certificate field options
 
-default_days	= 365			# how long to certify for
+default_days	= 36500			# how long to certify for
 default_crl_days= 30			# how long before next CRL
 default_md	= default		# use public key default MD
 preserve	= no			# keep passed DN ordering
@@ -241,7 +249,7 @@ generate_cert_conf() {
 [ca]
 default_ca=default_ca
 [default_ca]
-default_days = 3650
+default_days = 36500
 default_md = sha256
 
 [req]
@@ -471,10 +479,13 @@ help() {
     cat <<EOF
 Usage:
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
-    -v <FISCO-BCOS binary version>      Default is the latest ${default_version}
+    -g <group id>                       [Optional] set the group id, default: group0
+    -I <chain id>                       [Optional] set the chain id, default: chain0
+    -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
-    -t <mtail exec>                     [Required] mtail binary exec
+    -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
+    -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
+    -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
     -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
@@ -484,7 +495,8 @@ Usage:
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
-    -k <key page size>                  [Optional] key page size, default is 0 means not use key page
+    -R <Serial_mode>                    [Optional] Whether to use serial execute,default is false
+    -k <key page size>                  [Optional] key page size, default is 10240
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
@@ -503,11 +515,15 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:v:i:M:k:wDshmAa:" option; do
+    while getopts "l:L:C:c:o:e:t:p:d:g:G:v:i:I:M:k:wDshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
             use_ip_param="true"
+            ;;
+        L)
+            lightnode_exec="$OPTARG"
+            file_must_exists "${lightnode_exec}"
             ;;
         o)
             output_dir="$OPTARG"
@@ -531,8 +547,20 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
+        g) default_group="${OPTARG}"
+            check_name "group" "${default_group}"
+            ;;
+        G) genesis_conf_path="${OPTARG}"
+            ;;
+        I) default_chainid="${OPTARG}"
+            check_name "chain" "${default_chainid}"
+            ;;
         m)
            monitor_mode="true"
+           ;;
+        n)
+           nodeids_dir="${OPTARG}"
+           dir_must_exists "${nodeids_dir}"
            ;;
         i)
            mtail_ip_param="${OPTARG}"
@@ -546,6 +574,7 @@ parse_params() {
         ;;
         A) auth_mode="true" ;;
         w) wasm_mode="true";;
+        R) serial_mode="true";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -559,6 +588,8 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
+    LOG_INFO "GroupID               : ${default_group}"
+    LOG_INFO "ChainID               : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
         LOG_INFO "${binary_name} path      : ${binary_path}"
     else
@@ -635,6 +666,76 @@ LOG_INFO() {
 
 EOF
     chmod +x ${filepath}
+}
+
+generate_lightnode_scripts() {
+    local output=${1}
+    local lightnode_binary_name=${2}
+
+    generate_script_template "$output/start.sh"      
+    generate_script_template "$output/stop.sh"
+    chmod u+x "${output}/stop.sh"
+
+    local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini -g config.genesis >>nohup.out 2>&1 &"
+    local stop_cmd="kill \${node_pid}"
+
+     cat <<EOF >> "${output}/start.sh"
+fisco_bcos=\${SHELL_FOLDER}/${lightnode_binary_name}
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+ulimit -n 1024
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+    exit 0
+else
+    ${start_cmd}
+    sleep 1.5
+fi
+try_times=4
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    node_pid=${ps_cmd}
+    if [[ ! -z \${node_pid} ]];then
+        echo -e "\033[32m \${node} start successfully pid=\${node_pid}\033[0m"
+        exit 0
+    fi
+    sleep 0.5
+    ((i=i+1))
+done
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
+${log_cmd}
+EOF
+    chmod u+x "${output}/start.sh"
+    generate_script_template "$output/stop.sh"
+    cat <<EOF >> "${output}/stop.sh"
+fisco_bcos=\${SHELL_FOLDER}/${lightnode_binary_name}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+try_times=10
+i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
+while [ \$i -lt \${try_times} ]
+do
+    sleep 1
+    node_pid=${ps_cmd}
+    if [ -z \${node_pid} ];then
+        echo -e "\033[32m stop \${node} success.\033[0m"
+        exit 0
+    fi
+    ((i=i+1))
+done
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
+exit 1
+EOF
+    chmod u+x "${output}/stop.sh"
 }
 
 generate_node_scripts() {
@@ -760,13 +861,13 @@ node = "${node}"
 
 #chain id
 hidden text chain
-chain = "chain0"
+chain = "${default_chainid}"
 
 
 
 #group id
 hidden text group
-group = "group0"
+group = "${default_group}"
 
 
 gauge p2p_session_actived by host , node
@@ -1028,25 +1129,35 @@ generate_chain_cert() {
 }
 generate_config_ini() {
     local output="${1}"
-    local p2p_listen_port="${2}"
-    local rpc_listen_port="${3}"
+    local p2p_listen_ip="${2}"
+    local p2p_listen_port="${3}"
+
+    local rpc_listen_ip="${4}"
+    local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
-    listen_ip=${listen_ip}
+    listen_ip=${p2p_listen_ip}
     listen_port=${p2p_listen_port}
     ; ssl or sm ssl
     sm_ssl=false
     nodes_path=${file_dir}
-    nodes_file=${nodes_json_file_name}
+    nodes_file=${p2p_connected_conf_name}
 
 [rpc]
-    listen_ip=${listen_ip}
+    listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -1072,9 +1183,9 @@ generate_common_ini() {
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_mode}
     ; the group id, should nerver be changed
-    group_id=group0
+    group_id=${default_group}
     ; the chain id, should nerver be changed
-    chain_id=chain0
+    chain_id=${default_chainid}
 
 [security]
     private_key_path=conf/node.pem
@@ -1110,33 +1221,71 @@ generate_common_ini() {
     enable=true
     log_path=./log
     ; info debug trace
-    level=DEBUG
+    level=info
     ; MB
     max_log_file_size=200
+
+[flow_control]
+    ; the module that does not limit bandwidth
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
+    ;
+    ; modules_without_bw_limit=raft,pbft
+
+    ; restrict the outgoing bandwidth of the node
+    ; both integer and decimal is support, unit: Mb
+    ;
+    ; total_outgoing_bw_limit=10
+
+    ; restrict the outgoing bandwidth of the the connection
+    ; both integer and decimal is support, unit: Mb
+    ;
+    ; conn_outgoing_bw_limit=2
+    ;
+    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
+    ;   ip_192.108.0.1=3
+    ;   ip_192.108.0.2=3
+    ;   ip_192.108.0.3=3
+    ;
+    ; default bandwidth limit for the group
+    ; group_outgoing_bw_limit=2
+    ;
+    ; specify group to limit bandwidth, group_groupName=n
+    ;   group_group0=2
+    ;   group_group1=2
+    ;   group_group2=2
 EOF
 }
 
 generate_sm_config_ini() {
     local output=${1}
-    local p2p_listen_port="${2}"
-    local rpc_listen_port="${3}"
+    local p2p_listen_ip="${2}"
+    local p2p_listen_port="${3}"
+    local rpc_listen_ip="${4}"
+    local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
-    listen_ip=${listen_ip}
+    listen_ip=${p2p_listen_ip}
     listen_port=${p2p_listen_port}
     ; ssl or sm ssl
     sm_ssl=true
     nodes_path=${file_dir}
-    nodes_file=${nodes_json_file_name}
+    nodes_file=${p2p_connected_conf_name}
 
 [rpc]
-    listen_ip=${listen_ip}
+    listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
     thread_count=16
     ; ssl or sm ssl
     sm_ssl=true
     ;ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -1155,23 +1304,30 @@ EOF
     generate_common_ini "${output}"
 }
 
-generate_nodes_json() {
-    local output=${1}
-    local p2p_host_list=""
+generate_p2p_connected_conf() {
+    local output="${1}"
     local ip_params="${2}"
-    local ip_array=(${ip_params//,/ })
-    local ip_length=${#ip_array[@]}
-    local i=0
-    for (( ; i < ip_length; i++)); do
-        local ip=${ip_array[i]}
-        local delim=""
-        if [[ $i == $((ip_length - 1)) ]]; then
-            delim=""
-        else
-            delim=","
-        fi
-        p2p_host_list="${p2p_host_list}\"${ip}\"${delim}"
-    done
+    local template="${3}"
+
+    local p2p_host_list=""
+    if [[ "${template}" == "true" ]]; then
+        p2p_host_list="${ip_params}"
+    else
+        local ip_array=(${ip_params//,/ })
+        local ip_length=${#ip_array[@]}
+    
+        local i=0
+        for (( ; i < ip_length; i++)); do
+            local ip=${ip_array[i]}
+            local delim=""
+            if [[ $i == $((ip_length - 1)) ]]; then
+                delim=""
+            else
+                delim=","
+            fi
+            p2p_host_list="${p2p_host_list}\"${ip}\"${delim}"
+        done
+    fi
 
     cat <<EOF >"${output}"
 {"nodes":[${p2p_host_list}]}
@@ -1181,17 +1337,18 @@ EOF
 generate_config() {
     local sm_mode="${1}"
     local node_config_path="${2}"
-    local node_json_config_path="${3}"
-    local connected_nodes="${4}"
-    local p2p_listen_port="${5}"
+    local p2p_listen_ip="${3}"
+    local p2p_listen_port="${4}"
+    local rpc_listen_ip="${5}"
     local rpc_listen_port="${6}"
+    local disable_ssl="${7}"
+
     check_auth_account
     if [ "${sm_mode}" == "false" ]; then
-        generate_config_ini "${node_config_path}" "${p2p_listen_port}" "${rpc_listen_port}"
+        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     else
-        generate_sm_config_ini "${node_config_path}" "${p2p_listen_port}" "${rpc_listen_port}"
+        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     fi
-    generate_nodes_json "${node_json_config_path}/${nodes_json_file_name}" "${connected_nodes}"
 }
 
 generate_secp256k1_node_account() {
@@ -1246,8 +1403,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.0.0-rc4
-    compatibility_version=3.0.0-rc4
+    ; the default is 3.0.0
+    compatibility_version=3.0.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
@@ -1256,6 +1413,7 @@ generate_genesis_config() {
     is_wasm=${wasm_mode}
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
+    is_serial_execute=${serial_mode}
 EOF
 }
 
@@ -1538,13 +1696,132 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             local p2p_port=$((p2p_listen_port + node_count))
             local rpc_port=$((rpc_listen_port + node_count))
-            generate_config "${sm_mode}" "${node_dir}/config.ini" "${node_dir}" "${connected_nodes}" "${p2p_port}" "${rpc_port}"
+            generate_config "${sm_mode}" "${node_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+            generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
             generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
             set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
             ((++count))
         done
     done
+
+    # Generate lightnode cert
+    if [ -e "${lightnode_exec}" ]; then
+        local lightnode_dir="${output_dir}/lightnode"
+        mkdir -p ${lightnode_dir}
+        generate_genesis_config "${lightnode_dir}/config.genesis" "${nodeid_list}"
+
+        generate_node_cert "${sm_mode}" "${ca_dir}" "${lightnode_dir}/conf"
+        generate_lightnode_scripts "${lightnode_dir}" "fisco-bcos-lightnode"
+        local lightnode_account_dir="${lightnode_dir}/conf"
+        generate_node_account "${sm_mode}" "${lightnode_account_dir}" ${count}
+
+        local node_count=$(get_value ${ip//./}_count)
+        local p2p_port=$((p2p_listen_port + node_count))
+        local rpc_port=$((rpc_listen_port + node_count))
+        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+        generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
+
+        cp "${lightnode_exec}" ${lightnode_dir}/
+    fi
+
     print_result
+}
+
+generate_template_package()
+{
+    local node_name="${1}"
+    local binary_path="${2}"
+    local genesis_conf_path="${3}"
+    local output_dir="${4}"
+
+    # do not support docker 
+    if [ -n "${docker_mode}" ];then
+        LOG_FATAL "Docker mode is not supported on building template install package"
+    fi
+
+    # do not support monitor 
+    if "${monitor_mode}" ;then
+        LOG_FATAL "Monitor mode is not support on building template install package"
+    fi
+
+    # check if node.nodid dir exist
+    file_must_exists "${genesis_conf_path}"
+    file_must_exists "${binary_path}"
+    # dir_must_not_exists "${output_dir}"
+
+    mkdir -p "${output_dir}"
+    dir_must_exists "${output_dir}"
+
+    # mkdir node dir
+    node_dir="${output_dir}/${node_name}"
+    mkdir -p "${node_dir}"
+    mkdir -p "${node_dir}/conf"
+
+    p2p_listen_ip="[#P2P_LISTEN_IP]"
+    rpc_listen_ip="[#RPC_LISTEN_IP]"
+
+    p2p_listen_port="[#P2P_LISTEN_PORT]"
+    rpc_listen_port="[#RPC_LISTEN_PORT]"
+
+    # copy binary file
+    cp "${binary_path}" "${node_dir}/../"
+    # copy config.genesis
+    cp "${genesis_conf_path}" "${node_dir}/"
+
+    # generate start_all.sh and stop_all.sh
+    generate_all_node_scripts "${node_dir}/../"
+
+    # generate node start.sh stop.sh
+    generate_node_scripts "${node_dir}"
+
+    local connected_nodes="[#P2P_CONNECTED_NODES]"
+    # generate config for node
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true"
+    generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
+
+    LOG_INFO "Building template intstall package"
+    # TODO: auth mode handle
+    LOG_INFO "Auth mode            : ${auth_mode}"
+    if ${auth_mode} ; then
+        LOG_INFO "Auth account     : ${auth_admin_account}"
+    fi
+    LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "All completed. Files in ${output_dir}"
+}
+
+generate_genesis_config_by_nodeids()
+{
+    local nodeid_dir="${1}"
+    local output_dir="${2}"
+
+    local nodeid_list=""
+    local node_index=0
+
+    local nodeid_file_list=$(ls "${nodeid_dir}" | tr "\n" " ")
+    local nodeid_file_array=(${nodeid_file_list})
+    # gen node.N=xxxx first
+    for nodeid_file in ${nodeid_file_array[@]}
+    do
+        if [[ ! -f "${nodeid_dir}/${nodeid_file}" ]]; then
+            LOG_WARN " x.nodeid file not exist, ${nodeid_dir}/${nodeid_file}"
+            continue
+        fi
+        local nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
+        nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1
+        "
+
+        ((node_index += 1))
+    done
+
+    if [[ -z "${nodeid_list}" ]]; then
+        LOG_FATAL "generate config.genesis failed, please check if the nodeids directory correct"
+    fi
+
+    if [ ! -d "${output_dir}" ]; then
+        mkdir -p "${output_dir}"
+    fi
+
+    generate_genesis_config "${output_dir}/config.genesis" "${nodeid_list}"
 }
 
 check_auth_account()
@@ -1582,6 +1859,25 @@ main() {
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
         expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
+    elif [[ "${command}" == "generate-template-package"  ]]; then
+        local node_name="node0"
+        if [[ -n "${genesis_conf_path}" ]]; then
+            dir_must_not_exists "${output_dir}"
+            # config.genesis is set
+            file_must_exists "${genesis_conf_path}"
+            generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}"
+        elif [[ -n "${nodeids_dir}" ]] && [[ -d "${nodeids_dir}" ]]; then
+            dir_must_not_exists "${output_dir}"
+            generate_genesis_config_by_nodeids "${nodeids_dir}" "${output_dir}/"
+            file_must_exists "${output_dir}/config.genesis"
+            generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}"
+        else
+            echo "bash build_chain.sh generate-template-package -h "
+            echo "  eg:"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis "
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
+        fi
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi

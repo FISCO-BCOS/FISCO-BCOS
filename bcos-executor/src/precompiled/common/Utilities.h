@@ -24,8 +24,8 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/storage/Table.h"
 #include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -36,7 +36,6 @@ namespace bcos
 {
 namespace precompiled
 {
-
 inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _codec)
 {
     if (result >= 0 && result < 128)
@@ -86,6 +85,8 @@ std::string checkCreateTableParam(const std::string_view& _tableName, std::strin
     const std::variant<std::string, std::vector<std::string>>& _valueField);
 
 uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
+// for ut
+void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);
 uint32_t getFuncSelectorByFunctionName(
     std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);

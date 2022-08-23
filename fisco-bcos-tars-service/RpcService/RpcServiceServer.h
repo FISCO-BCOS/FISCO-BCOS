@@ -1,5 +1,8 @@
 #pragma once
-#include "RpcService/RpcInitializer.h"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
+#include "RpcInitializer.h"
 #include <bcos-tars-protocol/tars/RpcService.h>
 namespace bcostars
 {

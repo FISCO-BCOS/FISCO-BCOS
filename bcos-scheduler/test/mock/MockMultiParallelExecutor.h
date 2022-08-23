@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MockExecutor.h"
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <tbb/task_group.h>
 
 namespace bcos::test
@@ -33,6 +33,11 @@ public:
         });
     }
 
+    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override
+    {}
+
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
@@ -43,7 +48,7 @@ public:
         });
     }
 
-    void call(bcos::protocol::ExecutionMessage::UniquePtr input,
+    void dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {}

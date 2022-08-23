@@ -19,8 +19,8 @@
  * @date 2021-06-08
  */
 #pragma once
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-utilities/ThreadPool.h>
 using namespace bcos;
 using namespace bcos::consensus;

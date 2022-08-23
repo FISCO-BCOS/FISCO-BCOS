@@ -23,7 +23,7 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
 #include <bcos-utilities/Common.h>
@@ -154,9 +154,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         break;
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Unsupported opcode EVM_DELEGATECALL or EVM_CALLCODE"));
-        break;
+        // TODO: implement this, don't forget the compatibility
+        evmc_result result;
+        result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
+        result.release = nullptr;  // no output to release
+        result.gas_left = 0;
+        return result;
     case EVMC_CREATE:
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
@@ -247,7 +250,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         return preResult;
     }
 
-    preResult.gas_left = _request->gas - callResults->gas;
+    preResult.gas_left = callResults->gas;
     if (preResult.gas_left < 0)
     {
         callResults->type = CallParameters::REVERT;
@@ -286,7 +289,7 @@ bool HostContext::setCode(bytes code)
 
 void HostContext::setCodeAndAbi(bytes code, string abi)
 {
-    EXECUTOR_LOG(DEBUG) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
+    EXECUTOR_LOG(TRACE) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
                         << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
     if (setCode(std::move(code)))
     {
@@ -504,5 +507,11 @@ std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
     (void)_assetName;
     return std::vector<uint64_t>();
 }
+
+bool HostContext::isWasm()
+{
+    return m_executive->isWasm();
+}
+
 }  // namespace executor
 }  // namespace bcos

@@ -21,12 +21,12 @@
 #pragma once
 #include "../../src/Common.h"
 #include "MockTransactionalStorage.h"
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-table/src/KeyPageStorage.h>
-#include "MockTransactionalStorage.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+
 
 using namespace bcos::protocol;
 

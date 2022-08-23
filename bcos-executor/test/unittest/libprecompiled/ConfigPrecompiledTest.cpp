@@ -77,7 +77,7 @@ public:
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->executeTransaction(
+        executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     };
     // simple set SYSTEM_KEY_TX_GAS_LIMIT
     {
-        simpleSetFunc(2, 100, ledger::SYSTEM_KEY_TX_GAS_LIMIT, std::string("1000000"));
+        simpleSetFunc(2, 100, std::string{ledger::SYSTEM_KEY_TX_GAS_LIMIT}, std::string("1000000"));
     }
 
     // simple get SYSTEM_KEY_TX_GAS_LIMIT
@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -318,12 +318,12 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
 
     // simple set SYSTEM_KEY_TX_COUNT_LIMIT
     {
-        simpleSetFunc(4, 102, ledger::SYSTEM_KEY_TX_COUNT_LIMIT, std::string("1000"));
+        simpleSetFunc(4, 102, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("1000"));
     }
 
     // set SYSTEM_KEY_TX_COUNT_LIMIT error
     {
-        simpleSetFunc(5, 103, ledger::SYSTEM_KEY_TX_COUNT_LIMIT, std::string("error"),
+        simpleSetFunc(5, 103, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("error"),
             bcos::protocol::TransactionStatus::PrecompiledError);
     }
     // set error key
@@ -354,7 +354,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -365,7 +365,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -419,7 +419,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));

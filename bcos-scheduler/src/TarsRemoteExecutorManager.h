@@ -20,12 +20,9 @@
  */
 #pragma once
 #include "bcos-scheduler/src/ExecutorManager.h"
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-utilities/Worker.h>
 #include <atomic>
-
-#define EXECUTOR_MANAGER_LOG(LEVEL) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
 
 
 namespace bcos::scheduler
@@ -77,12 +74,14 @@ public:
 
     bool checkAllExecutorSeq();
 
-private:
-    std::string buildEndPointUrl(std::string host, uint16_t port)
+    void stop() override
     {
-        auto endPointStr = m_executorServiceName + "@tcp -h " + host + " -p " +
-                           boost::lexical_cast<std::string>(port);
-        return endPointStr;
+        EXECUTOR_MANAGER_LOG(INFO) << "Try to stop TarsRemoteExecutorManager";
+        if (isWorking())
+        {
+            stopWorking();
+        }
+        ExecutorManager::stop();
     }
 
 private:

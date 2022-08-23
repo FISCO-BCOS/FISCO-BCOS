@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
+#include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-utilities/Common.h>
 #include <memory>
 #include <string>
@@ -15,9 +15,9 @@ struct CallParameters
     enum Type : int8_t
     {
         MESSAGE = 0,
-        KEY_LOCK,
-        FINISHED,
-        REVERT,
+        KEY_LOCK = 1,
+        FINISHED = 2,
+        REVERT = 3,
     };
 
     explicit CallParameters(Type _type) : type(_type) {}

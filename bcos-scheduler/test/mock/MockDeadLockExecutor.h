@@ -1,6 +1,6 @@
 #pragma once
 #include "MockExecutor.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
 
 namespace bcos::test
 {

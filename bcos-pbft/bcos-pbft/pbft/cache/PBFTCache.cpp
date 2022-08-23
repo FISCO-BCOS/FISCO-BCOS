@@ -29,7 +29,7 @@ PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
   : m_config(_config), m_index(_index)
 {
     // Timer is used to manage checkpoint timeout
-    m_timer = std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval());
+    m_timer = std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "pbftCacheTimer");
 }
 void PBFTCache::init()
 {
@@ -335,6 +335,7 @@ void PBFTCache::resetCache(ViewType _curView)
         m_config->notifyResetSealing(m_prePrepare->consensusProposal()->index());
         // reset the exceptioned txs to unsealed
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
+        m_prePrepare = nullptr;
     }
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);

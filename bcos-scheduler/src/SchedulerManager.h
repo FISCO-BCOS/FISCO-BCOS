@@ -100,10 +100,22 @@ public:
         INITIALING = 1,
         RUNNING = 2,
         SWITCHING = 3,
+        STOPPED = 4,
     };
 
     std::pair<bool, std::string> checkAndInit();
+    void stop() override
+    {
+        SCHEDULER_LOG(INFO) << "Try to stop SchedulerManager";
 
+        m_status.store(STOPPED);
+
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+        m_remoteExecutorManager->stop();
+    }
 
 private:
     void updateScheduler(int64_t schedulerTermId);
@@ -114,7 +126,6 @@ private:
 
 private:
     SchedulerImpl::Ptr m_scheduler;
-    SchedulerImpl::Ptr m_oldScheduler;  // TODO: no to use this
     SchedulerFactory::Ptr m_factory;
     SchedulerTerm m_schedulerTerm;
     TarsRemoteExecutorManager::Ptr m_remoteExecutorManager;

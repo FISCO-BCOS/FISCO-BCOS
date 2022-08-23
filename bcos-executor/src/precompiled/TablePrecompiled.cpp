@@ -21,7 +21,7 @@
 #include "TablePrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework/protocol/Exceptions.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -123,8 +123,8 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled")
-                               << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled")
+                              << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("TablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
@@ -160,13 +160,12 @@ void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyC
     auto& count = std::get<1>(limit);
     if (count > USER_TABLE_MAX_LIMIT_COUNT || offset > offset + count)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("build key condition limit overflow")
-                               << LOG_KV("offset", offset) << LOG_KV("count", count);
+        PRECOMPILED_LOG(INFO) << LOG_DESC("build key condition limit overflow")
+                              << LOG_KV("offset", offset) << LOG_KV("count", count);
         BOOST_THROW_EXCEPTION(PrecompiledError("Limit overflow."));
     }
     if (conditions.empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("Condition is empty");
         BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
     }
     for (const auto& condition : conditions)
@@ -205,7 +204,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("tableName", tableName);
 
     auto entry = _executive->storage().getRow(tableName, key);
@@ -222,7 +221,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(values.size());
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
 
     EntryTuple entryTuple = {key, std::move(values)};
@@ -249,12 +248,6 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limit));
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
-                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
-    }
-
     // merge keys from storage and eqKeys
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
@@ -265,7 +258,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
         EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
         entries.emplace_back(std::move(entryTuple));
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("entries.size", entries.size());
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(entries.size());
@@ -291,14 +284,8 @@ void TablePrecompiled::count(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), {});
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
-                               << LOG_DESC("keyCond trace ") << keyCondition->toString();
-    }
-
     auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("entries.size", tableKeyList.size());
     // update the memory gas and the computation gas
     gasPricer->appendOperation(InterfaceOpcode::Select);
@@ -318,9 +305,9 @@ void TablePrecompiled::insert(const std::string& tableName,
     auto& key = std::get<0>(insertEntry);
     auto& values = std::get<1>(insertEntry);
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
-                           << LOG_KV("tableName", tableName) << LOG_KV("key", key)
-                           << LOG_KV("valueSize", values.size());
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
+                          << LOG_KV("tableName", tableName) << LOG_KV("key", key)
+                          << LOG_KV("valueSize", values.size());
 
     TableInfoTuple tableInfo;
     // external call table manager desc
@@ -329,7 +316,7 @@ void TablePrecompiled::insert(const std::string& tableName,
 
     if (values.size() != columns.size())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
                                << LOG_DESC("Table insert entry fields number mismatch")
                                << LOG_KV("valueSize", values.size())
                                << LOG_KV("fieldSize", columns.size());
@@ -343,7 +330,7 @@ void TablePrecompiled::insert(const std::string& tableName,
 
     if (_executive->storage().getRow(tableName, key))
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
                                << LOG_DESC("key already exist in table, please use UPDATE method")
                                << LOG_KV("key", key);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_INSERT_KEY_EXIST)));
@@ -369,13 +356,13 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key, updateFields);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                           << LOG_KV("tableName", tableName) << LOG_KV("updateKey", key)
-                           << LOG_KV("updateFieldsSize", updateFields.size());
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                          << LOG_KV("tableName", tableName) << LOG_KV("updateKey", key)
+                          << LOG_KV("updateFieldsSize", updateFields.size());
     auto existEntry = _executive->storage().getRow(tableName, key);
     if (!existEntry)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                                << LOG_DESC("key not exist in table, please use INSERT method")
                                << LOG_KV("notExistKey", key);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
@@ -397,7 +384,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         auto const it = std::find(columns.begin(), columns.end(), field);
         if (field == keyField)
         {
-            PRECOMPILED_LOG(ERROR)
+            PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
             BOOST_THROW_EXCEPTION(
@@ -405,7 +392,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         }
         if (it == columns.end())
         {
-            PRECOMPILED_LOG(ERROR)
+            PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
             BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
@@ -432,12 +419,12 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, conditions, limitTuple, updateFields);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                           << LOG_KV("tableName", tableName)
-                           << LOG_KV("ConditionSize", conditions.size())
-                           << LOG_KV("limitOffset", std::get<0>(limitTuple))
-                           << LOG_KV("limitCount", std::get<1>(limitTuple))
-                           << LOG_KV("updateFieldsSize", updateFields.size());
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                          << LOG_KV("tableName", tableName)
+                          << LOG_KV("ConditionSize", conditions.size())
+                          << LOG_KV("limitOffset", std::get<0>(limitTuple))
+                          << LOG_KV("limitCount", std::get<1>(limitTuple))
+                          << LOG_KV("updateFieldsSize", updateFields.size());
     auto keyCondition = std::make_optional<storage::Condition>();
 
     // will throw exception when wrong condition cmp or limit count overflow
@@ -445,7 +432,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
 
     if (c_fileLogLevel >= LogLevel::TRACE)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                                << LOG_DESC("keyCond trace ") << keyCondition->toString();
     }
 
@@ -468,7 +455,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         auto const it = std::find(columns.begin(), columns.end(), field);
         if (field == keyField)
         {
-            PRECOMPILED_LOG(ERROR)
+            PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
             BOOST_THROW_EXCEPTION(
@@ -476,7 +463,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         }
         if (it == columns.end())
         {
-            PRECOMPILED_LOG(ERROR)
+            PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
             BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
@@ -485,20 +472,21 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         updateValue.emplace_back(std::move(p));
     }
 
-    for (auto& key : tableKeyList)
+    auto entries = _executive->storage().getRows(tableName, tableKeyList);
+    for (size_t i = 0; i < entries.size(); ++i)
     {
-        auto tableEntry = _executive->storage().getRow(tableName, key);
-        auto values = tableEntry->getObject<std::vector<std::string>>();
+        auto&& entry = entries[i];
+        auto values = entry->getObject<std::vector<std::string>>();
         for (auto& kv : updateValue)
         {
             values[kv.first] = kv.second;
         }
-        Entry updateEntry;
-        updateEntry.setObject(std::move(values));
-        _executive->storage().setRow(tableName, key, std::move(updateEntry));
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                               << LOG_KV("key", key);
+        entry->setObject(std::move(values));
+        _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
     }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                           << LOG_KV("selectKeySize", tableKeyList.size())
+                           << LOG_KV("affectedRows", entries.size());
     gasPricer->setMemUsed(tableKeyList.size() * columns.size());
     gasPricer->appendOperation(InterfaceOpcode::Update, tableKeyList.size());
     _callParameters->setExecResult(codec.encode((int32_t)tableKeyList.size()));
@@ -519,7 +507,7 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
     auto existEntry = _executive->storage().getRow(tableName, key);
     if (!existEntry)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                                << LOG_DESC("key not exist in table") << LOG_KV("notExistKey", key);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
         return;
@@ -542,11 +530,11 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, conditions, limitTuple);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
-                           << LOG_KV("tableName", tableName)
-                           << LOG_KV("ConditionSize", conditions.size())
-                           << LOG_KV("limitOffset", std::get<0>(limitTuple))
-                           << LOG_KV("limitCount", std::get<1>(limitTuple));
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
+                          << LOG_KV("tableName", tableName)
+                          << LOG_KV("ConditionSize", conditions.size())
+                          << LOG_KV("limitOffset", std::get<0>(limitTuple))
+                          << LOG_KV("limitCount", std::get<1>(limitTuple));
 
     auto keyCondition = std::make_optional<storage::Condition>();
 
@@ -555,7 +543,7 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
 
     if (c_fileLogLevel >= LogLevel::TRACE)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                                << LOG_DESC("keyCond trace ") << keyCondition->toString();
     }
 
@@ -566,9 +554,9 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
         Entry deletedEntry;
         deletedEntry.setStatus(Entry::DELETED);
         _executive->storage().setRow(tableName, tableKey, std::move(deletedEntry));
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
-                               << LOG_KV("removeKey", tableKey);
     }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
+                           << LOG_KV("affectedRows", tableKeyList.size());
     gasPricer->setMemUsed(tableKeyList.size());
     gasPricer->appendOperation(InterfaceOpcode::Remove, tableKeyList.size());
     _callParameters->setExecResult(codec.encode((int32_t)tableKeyList.size()));

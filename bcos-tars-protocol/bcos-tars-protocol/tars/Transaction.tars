@@ -1,0 +1,22 @@
+module bcostars {
+    struct TransactionData {
+        1 optional int version;
+        2 optional string chainID;
+        3 optional string groupID;
+        4 optional long blockLimit;
+        5 optional string nonce;
+        6 optional string to;
+        7 optional vector<byte> input;
+        8 optional string abi;
+    };
+
+    struct Transaction {
+        1 optional TransactionData data;
+        2 optional vector<byte> dataHash;
+        3 optional vector<byte> signature;
+        7 optional vector<byte> sender;
+        4 optional long importTime;
+        5 optional int attribute;
+        6 optional string source;
+    };
+};

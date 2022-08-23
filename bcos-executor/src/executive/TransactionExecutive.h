@@ -26,14 +26,13 @@
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/coroutine2/all.hpp>
 #include <boost/coroutine2/coroutine.hpp>
 #include <functional>
 #include <variant>
@@ -58,28 +57,6 @@ class TransactionExecutive : public std::enable_shared_from_this<TransactionExec
 {
 public:
     using Ptr = std::shared_ptr<TransactionExecutive>;
-
-    class ResumeHandler;
-
-    using CoroutineMessage = std::function<void(ResumeHandler resume)>;
-    using Coroutine = boost::coroutines2::coroutine<CoroutineMessage>;
-
-    class ResumeHandler
-    {
-    public:
-        ResumeHandler(TransactionExecutive& executive) : m_executive(executive) {}
-
-        void operator()()
-        {
-            COROUTINE_TRACE_LOG(TRACE, m_executive.contextID(), m_executive.seq())
-                << "Context switch to executive coroutine, from ResumeHandler";
-            (*m_executive.m_pullMessage)();
-        }
-
-    private:
-        TransactionExecutive& m_executive;
-    };
-
     TransactionExecutive(std::weak_ptr<BlockContext> blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
       : m_blockContext(std::move(blockContext)),
@@ -99,15 +76,10 @@ public:
 
     virtual ~TransactionExecutive() = default;
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input);  // start a new coroutine to
-                                                                       // execute
+    virtual CallParameters::UniquePtr start(CallParameters::UniquePtr input);
 
     // External call request
-    CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input);  // call by
-                                                                              // hostContext
-
-    // External request key locks, throw exception if dead lock detected
-    void externalAcquireKeyLocks(std::string acquireKeyLock);
+    virtual CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input);
 
     auto& storage()
     {
@@ -135,7 +107,7 @@ public:
 
     void setBuiltInPrecompiled(std::shared_ptr<const std::set<std::string>> _builtInPrecompiled)
     {
-        m_builtInPrecompiled = std::move(_builtInPrecompiled);
+        m_builtInPrecompiled = _builtInPrecompiled;
     }
 
     inline bool isBuiltInPrecompiled(const std::string& _a) const
@@ -171,29 +143,12 @@ public:
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
-    void setExchangeMessage(CallParameters::UniquePtr callParameters)
-    {
-        m_exchangeMessage = std::move(callParameters);
-    }
 
-    void appendResumeKeyLocks(std::vector<std::string> keyLocks)
-    {
-        std::copy(
-            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
-    }
-
-    CallParameters::UniquePtr resume()
-    {
-        EXECUTOR_LOG(TRACE) << "Context switch to executive coroutine, from resume";
-        (*m_pullMessage)();
-
-        return dispatcher();
-    }
     VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
 
-private:
-    CallParameters::UniquePtr dispatcher();
+    bool isWasm() { return m_blockContext.lock()->isWasm(); }
 
+protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
@@ -204,7 +159,6 @@ private:
         HostContext& hostContext, CallParameters::UniquePtr extraData = nullptr);
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
-    void spawnAndCall(std::function<void(ResumeHandler)> function);
 
     void revert();
 
@@ -273,11 +227,7 @@ private:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
 
     bcos::storage::Recoder::Ptr m_recoder;
-    std::unique_ptr<SyncStorageWrapper> m_storageWrapper;
-    CallParameters::UniquePtr m_exchangeMessage = nullptr;
-
-    std::optional<Coroutine::pull_type> m_pullMessage;
-    std::optional<Coroutine::push_type> m_pushMessage;
+    std::shared_ptr<StorageWrapper> m_storageWrapper;
 };
 
 }  // namespace executor

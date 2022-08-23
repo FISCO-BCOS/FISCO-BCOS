@@ -37,7 +37,7 @@ public:
     ~AirGroupManager() override {}
     virtual void init() { initNodeInfo(m_groupInfo->groupID(), "localNode", m_nodeService); }
 
-    NodeService::Ptr getNodeService(std::string const& _groupID, std::string const&) const override
+    NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view) const override
     {
         ReadGuard l(x_groupInfo);
         if (_groupID.size() > 0 && _groupID != m_groupInfo->groupID())
@@ -53,7 +53,7 @@ public:
         return std::set<std::string>{m_groupInfo->groupID()};
     }
 
-    bcos::group::GroupInfo::Ptr getGroupInfo(std::string const& _groupID) override
+    bcos::group::GroupInfo::Ptr getGroupInfo(std::string_view _groupID) override
     {
         ReadGuard l(x_groupInfo);
         if (m_groupInfo->groupID() == _groupID)
@@ -64,7 +64,7 @@ public:
     }
 
     bcos::group::ChainNodeInfo::Ptr getNodeInfo(
-        std::string const& _groupID, std::string const& _nodeName) override
+        std::string_view _groupID, std::string_view _nodeName) override
     {
         ReadGuard l(x_groupInfo);
         if (m_groupInfo->groupID() != _groupID)

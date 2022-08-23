@@ -20,7 +20,7 @@
  */
 
 #include "../common/FrontServiceBuilder.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>

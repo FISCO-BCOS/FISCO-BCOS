@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
+#include <bcos-utilities/Log.h>
 
 using namespace std;
 using namespace bcos;
@@ -267,8 +268,9 @@ namespace bcos
 {
 namespace precompiled
 {
-std::optional<storage::Table> Precompiled::createTable(storage::StateStorageInterface::Ptr _tableFactory,
-    const std::string& tableName, const std::string& valueField)
+std::optional<storage::Table> Precompiled::createTable(
+    storage::StateStorageInterface::Ptr _tableFactory, const std::string& tableName,
+    const std::string& valueField)
 {
     auto ret = _tableFactory->createTable(tableName, valueField);
     return ret ? _tableFactory->openTable(tableName) : nullopt;
@@ -283,7 +285,7 @@ h256 sha256(bytesConstRef _in) noexcept
 {
     h256 ret;
     CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.data(), h256::size};
+    COutputBuffer result{(char*)ret.data(), h256::SIZE};
     if (wedpr_sha256_hash(&in, &result) != 0)
     {  // TODO: add some log
         return ret;
@@ -295,7 +297,7 @@ h160 ripemd160(bytesConstRef _in)
 {
     h160 ret;
     CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.data(), h160::size};
+    COutputBuffer result{(char*)ret.data(), h160::SIZE};
     if (wedpr_ripemd160_hash(&in, &result) != 0)
     {  // TODO: add some log
         return ret;
@@ -449,29 +451,40 @@ const int RSV_LENGTH = 65;
 const int PUBLIC_KEY_LENGTH = 64;
 pair<bool, bytes> ecRecover(bytesConstRef _in)
 {  // _in is hash(32),v(32),r(32),s(32), return address
+    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: ") << _in.size();
     byte rawRSV[RSV_LENGTH];
     memcpy(rawRSV, _in.data() + 64, RSV_LENGTH - 1);
     rawRSV[RSV_LENGTH - 1] = (byte)((int)_in[63] - 27);
-    CInputBuffer msgHash{(const char*)_in.data(), crypto::HashType::size};
+    CInputBuffer msgHash{(const char*)_in.data(), crypto::HashType::SIZE};
     CInputBuffer rsv{(const char*)rawRSV, RSV_LENGTH};
 
-    pair<bool, bytes> ret{true, bytes(crypto::HashType::size, 0)};
+    pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
     bytes publicKeyBytes(64, 0);
     COutputBuffer publicKey{(char*)publicKeyBytes.data(), PUBLIC_KEY_LENGTH};
+
+    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")
+                    << LOG_KV("hash", *toHexString(msgHash.data, msgHash.data + msgHash.len))
+                    << LOG_KV("rsv", *toHexString(rsv.data, rsv.data + rsv.len))
+                    << LOG_KV("publicKey",
+                           *toHexString(publicKey.data, publicKey.data + publicKey.len));
     auto retCode = wedpr_secp256k1_recover_public_key(&msgHash, &rsv, &publicKey);
     if (retCode != 0)
     {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover publicKey failed");
         return {true, {}};
     }
+    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled")
+                    << LOG_DESC("wedpr_secp256k1_recover_public_key success");
     // keccak256 and set first 12 byte to zero
     CInputBuffer pubkeyBuffer{(const char*)publicKeyBytes.data(), PUBLIC_KEY_LENGTH};
-    COutputBuffer pubkeyHash{(char*)ret.second.data(), crypto::HashType::size};
+    COutputBuffer pubkeyHash{(char*)ret.second.data(), crypto::HashType::SIZE};
     retCode = wedpr_keccak256_hash(&pubkeyBuffer, &pubkeyHash);
     if (retCode != 0)
     {
         return {true, {}};
     }
     memset(ret.second.data(), 0, 12);
+    BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover success");
     return ret;
 }
 

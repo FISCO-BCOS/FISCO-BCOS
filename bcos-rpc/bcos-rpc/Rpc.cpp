@@ -21,9 +21,9 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/interfaces/Common.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-framework/interfaces/rpc/HandshakeRequest.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 
@@ -213,7 +213,7 @@ void Rpc::onRecvHandshakeRequest(
     }
     auto self = std::weak_ptr<Rpc>(shared_from_this());
 
-    // notify the handshakeResonse
+    // notify the handshakeResponse
     m_jsonRpcImpl->getGroupInfoList([_msg, _session, self](
                                         bcos::Error::Ptr _error, Json::Value& _groupListResponse) {
         if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)

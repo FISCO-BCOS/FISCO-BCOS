@@ -30,6 +30,14 @@ class ServiceInfo:
     single_node_obj_name_list = [
         "LedgerServiceObj", "SchedulerServiceObj", "TxPoolServiceObj", "PBFTServiceObj", "FrontServiceObj"]
 
+    rpc_name = "rpc"
+    gateway_name = "gateway"
+    ledger_name = "ledger"
+    front_name = "front"
+    executor_name = "executor"
+    scheduler_name = "scheduler"
+    txpool_name = "txpool"
+    
     max_node_service = "BcosMaxNodeService"
     max_node_service_obj = single_node_obj_name_list
     executor_service = "BcosExecutorService"
@@ -66,6 +74,16 @@ class ConfigInfo:
         pwd_path, tpl_monitor_path, "prometheus/prometheus.yml")
     executor_config_tpl_path = os.path.join(
         pwd_path, tpl_abs_path, "config.ini.executor")
+    tars_start_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "tars_start.sh")
+    tars_stop_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "tars_stop.sh")
+    tars_rpc_conf_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "tars_rpc.conf")
+    tars_gateway_conf_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "tars_gateway.conf")
+    tars_node_conf_tpl_path = os.path.join(
+        pwd_path, tpl_abs_path, "tars_node.conf")
 
 
 class CommandInfo:
@@ -81,7 +99,7 @@ class CommandInfo:
     network_add_vxlan = "add-vxlan"
     download_binary = "download_binary"
     download_type = ["cdn", "git"]
-    default_binary_version = "v3.0.0-rc4"
+    default_binary_version = "v3.0.0"
     command_list = [gen_config, upload, deploy,
                     upgrade, undeploy, expand, start, stop]
     service_command_list_str = ', '.join(command_list)
@@ -95,6 +113,12 @@ class CommandInfo:
     service_command_impl = {gen_config: "gen_service_config", upload: "upload_service", deploy: "deploy_service",
                             upgrade: "upgrade_service", undeploy: "delete_service", start: "start_service", stop: "stop_service", expand: "expand_service"}
 
+    build_command_type_list = ["rpc", "gateway", "node", "all"]
+    build_command_type_list_str = ', '.join(build_command_type_list)
+    build_package_parser_name = "build"
+    build_package = "build-package"
+    build_expand_package = "build-expand-package"
+    build_command_impl = {build_package: "build_install_package", build_expand_package: "build_expand_install_package"}
 
 def log_error(error_msg):
     logging.error("\033[31m%s \033[0m" % error_msg)
@@ -146,6 +170,9 @@ def mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+def removeDir(path):
+    if os.path.exists(path):
+        os.removedirs(path)
 
 def mkfiledir(filepath):
     parent_dir = os.path.abspath(os.path.join(filepath, ".."))
@@ -272,9 +299,13 @@ def print_split_info():
     log_info("=========================================================")
 
 
-def print_badage(badage):
-    log_info("----------- %s -----------" % badage)
+def print_badge(badge):
+    log_info("----------- %s -----------" % badge)
 
+def file_must_exist(file_path):
+    if not os.path.exists(file_path):
+        log_error("%s does not exist, please check" % file_path)
+        sys.exit(-1)
 
 def try_to_rename_tgz_package(root_path, tars_pkg_path, service_name, org_service_name):
     renamed_package_path = ""

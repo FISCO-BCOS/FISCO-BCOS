@@ -26,7 +26,7 @@
 #include "ExecutivePool.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
-#include <bcos-framework/interfaces/protocol/Block.h>
+#include <bcos-framework/protocol/Block.h>
 #include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
@@ -35,7 +35,6 @@
 //#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
-
 class DmcExecutor
 {
 public:

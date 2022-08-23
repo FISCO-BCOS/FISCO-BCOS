@@ -21,8 +21,8 @@
 #pragma once
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <set>
 namespace bcos
 {
@@ -54,7 +54,7 @@ private:
     void checkValueValid(std::string_view key, std::string_view value);
     std::map<std::string, std::function<int64_t(std::string)>> m_valueConverter;
     std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
-    const std::set<std::string> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+    const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
         bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
         bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION};
 };

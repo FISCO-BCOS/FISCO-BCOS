@@ -18,10 +18,11 @@
  * @date 2021-05-13
  */
 #pragma once
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/multigroup/ChainNodeInfo.h>
-#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include "bcos-tars-protocol/Common.h"
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/multigroup/ChainNodeInfo.h>
+#include <bcos-framework/protocol/ProtocolInfo.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tars-protocol/client/FrontServiceClient.h>
 namespace bcos
 {
@@ -47,10 +48,9 @@ public:
         {
             return false;
         }
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
-        m_frontServicePrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-        return (activeEndPoints.size() == 0);
+
+        return !bcostars::checkConnection(
+            "FrontService", "unreachable", m_frontServicePrx, nullptr, false);
     }
 
     std::string const& nodeID() const { return m_nodeID; }

@@ -4,39 +4,34 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment ver
 include(Version)
 project(bcos-storage VERSION ${VERSION})
 
-set(SRC_LIST src/Common.cpp)
-list(APPEND SRC_LIST src/RocksDBStorage.cpp)
-include(ProjectTiKVClient)
-list(APPEND SRC_LIST src/TiKVStorage.cpp)
+find_package(zstd REQUIRED)
+find_package(RocksDB REQUIRED)
 
-hunter_add_package(zstd)
-find_package(zstd CONFIG REQUIRED)
-hunter_add_package(rocksdb)
-find_package(RocksDB CONFIG REQUIRED)
+find_package(Boost REQUIRED serialization thread context filesystem)
 
-find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
+set(SRC_LIST bcos-storage/Common.cpp)
+list(APPEND SRC_LIST bcos-storage/RocksDBStorage.cpp)
 
-if(NOT (TARGET zstd::zstd))
-  # use zstd::libzstd_static instead zstd::zstd(depended by RocksDB)
-  get_target_property(zstd_INCLUDE_DIRS zstd::libzstd_static INTERFACE_INCLUDE_DIRECTORIES)
-  get_target_property(zstd_LIBRARIES zstd::libzstd_static LOCATION)
-  add_library(zstd::zstd UNKNOWN IMPORTED)
-  set_target_properties(zstd::zstd
-    PROPERTIES
-      IMPORTED_LOCATION ${zstd_LIBRARIES}
-      INTERFACE_INCLUDE_DIRECTORIES ${zstd_INCLUDE_DIRS})
+set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb)
+
+if(WITH_TIKV)
+  include(ProjectTiKVClient)
+  list(APPEND SRC_LIST bcos-storage/TiKVStorage.cpp)
+  list(APPEND LIB_LIST kv_client)
 endif()
 
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_link_libraries(${STORAGE_TARGET} PUBLIC ${TABLE_TARGET} Boost::serialization RocksDB::rocksdb kv_client)
+target_include_directories(${STORAGE_TARGET} PUBLIC .)
+target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
 
-if (TESTS)
-    enable_testing()
-    set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
-    add_subdirectory(test)
+if(TESTS)
+  enable_testing()
+  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+  add_subdirectory(test)
 endif()
 
 option(TOOLS "build tools" OFF)
+
 if(TOOLS)
-    add_subdirectory(tools)
+  add_subdirectory(tools)
 endif()

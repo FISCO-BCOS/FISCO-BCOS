@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "../framework/StateMachineInterface.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-utilities/ThreadPool.h>
 
 namespace bcos
@@ -40,11 +40,22 @@ public:
         m_schedulerWorker =
             std::make_shared<ThreadPool>("preExec", (std::thread::hardware_concurrency() * 2));
     }
-    ~StateMachine() override {}
+
+    ~StateMachine() override
+    {
+        if (m_worker)
+        {
+            m_worker->stop();
+        }
+        if (m_schedulerWorker)
+        {
+            m_schedulerWorker->stop();
+        }
+    }
 
     void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
-        std::function<void(bool)> _onExecuteFinished) override;
+        std::function<void(int64_t)> _onExecuteFinished) override;
 
     void asyncPreApply(
         ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) override;
@@ -52,7 +63,7 @@ public:
 private:
     void apply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
-        std::function<void(bool)> _onExecuteFinished);
+        std::function<void(int64_t)> _onExecuteFinished);
 
     void preApply(ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished);
 

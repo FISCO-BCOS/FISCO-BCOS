@@ -1,0 +1,108 @@
+{
+  "name": "fiscobcos",
+  "version-string": "3.0.0",
+  "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
+  "description": "FISCO BCOS",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    "boost-log",
+    "boost-beast",
+    "boost-uuid",
+    "boost-heap",
+    "boost-graph",
+    "boost-property-map",
+    "boost-chrono",
+    "boost-iostreams",
+    "boost-thread",
+    "boost-test",
+    "boost-multiprecision",
+    "boost-program-options",
+    "ms-gsl",
+    "tbb",
+    "zlib",
+    "grpc",
+    "poco",
+    "jsoncpp",
+    "protobuf",
+    "cryptopp",
+    {
+      "name": "tarscpp",
+      "version>=": "3.0.3-m"
+    },
+    {
+      "name": "openssl",
+      "version>=": "1.1.1-tassl"
+    },
+    {
+      "name": "boost-context",
+      "version>=": "1.79.0-m1"
+    },
+    "wedprcrypto",
+    "range-v3"
+  ],
+  "features": {
+    "fullnode": {
+      "description": "Full node dependencies",
+      "dependencies": [
+        "evmone",
+        "boost-coroutine2",
+        {
+          "name": "rocksdb",
+          "features": [
+            "zstd"
+          ]
+        },
+        "zstd"
+      ]
+    },
+    "lightnode": {
+      "description": "Light node dependencies",
+      "dependencies": [
+        "evmone",
+        {
+          "name": "rocksdb",
+          "features": [
+            "zstd"
+          ]
+        }
+      ]
+    },
+    "etcd": {
+      "description": "ETCD dependencies",
+      "dependencies": [
+        "etcd-cpp-apiv3"
+      ]
+    },
+    "tcmalloc": {
+      "description": "tcmalloc dependencies",
+      "dependencies": [
+        {
+          "name": "gperftools",
+          "features": [
+            "override"
+          ]
+        }
+      ]
+    },
+    "jemalloc": {
+      "description": "jemalloc dependencies",
+      "dependencies": [
+        "jemalloc"
+      ]
+    },
+    "mimalloc": {
+      "description": "mimalloc dependencies",
+      "dependencies": [
+        "mimalloc"
+      ]
+    }
+  },
+  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
+}

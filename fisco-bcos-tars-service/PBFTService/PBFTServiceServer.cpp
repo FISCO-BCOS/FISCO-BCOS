@@ -20,7 +20,7 @@
  */
 
 #include "PBFTServiceServer.h"
-#include "Common/TarsUtils.h"
+#include "../Common/TarsUtils.h"
 
 using namespace bcostars;
 using namespace bcos::consensus;
@@ -112,10 +112,10 @@ Error PBFTServiceServer::asyncSubmitProposal(bool _containSysTxs,
 {
     _current->setResponse(false);
     auto proposalHash = bcos::crypto::HashType();
-    if (_proposalHash.size() >= bcos::crypto::HashType::size)
+    if (_proposalHash.size() >= bcos::crypto::HashType::SIZE)
     {
         proposalHash = bcos::crypto::HashType(
-            (const bcos::byte*)_proposalHash.data(), bcos::crypto::HashType::size);
+            (const bcos::byte*)_proposalHash.data(), bcos::crypto::HashType::SIZE);
     }
     m_pbftInitializer->pbft()->asyncSubmitProposal(_containSysTxs,
         bcos::bytesConstRef((const bcos::byte*)_proposalData.data(), _proposalData.size()),

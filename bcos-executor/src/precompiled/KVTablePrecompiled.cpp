@@ -22,8 +22,8 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/protocol/Exceptions.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -85,8 +85,8 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTablePrecompiled")
-                               << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled")
+                              << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("KVTablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
@@ -103,7 +103,7 @@ void KVTablePrecompiled::get(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
                            << LOG_KV("get", key);
     auto table = _executive->storage().openTable(tableName);
 
@@ -128,8 +128,8 @@ void KVTablePrecompiled::set(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key, value);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
-                           << LOG_KV("key", key) << LOG_KV("value", value);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
+                          << LOG_KV("key", key) << LOG_KV("value", value);
 
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
 

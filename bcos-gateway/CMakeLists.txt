@@ -22,15 +22,16 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 include(Version)
 project(bcos-gateway VERSION ${VERSION})
 
-find_package(OpenSSL REQUIRED)
-find_package(tarscpp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(Boost REQUIRED COMPONENTS filesystem)
 
 file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
+find_package(tarscpp REQUIRED)
+
 add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_lib_static ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} OpenSSL::SSL OpenSSL::Crypto)
-target_compile_options(${GATEWAY_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static Boost::filesystem bcos-boostssl ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
+# target_compile_options(${GATEWAY_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 if (APPLE)
 # target_compile_options(${GATEWAY_TARGET} PRIVATE -faligned-allocation)

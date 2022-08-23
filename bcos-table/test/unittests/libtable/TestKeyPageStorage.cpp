@@ -18,7 +18,7 @@
  */
 
 #include "Hash.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
@@ -44,6 +44,10 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
+
+#if defined(__APPLE__)
+#undef __APPLE__
+#endif
 
 namespace std
 {
@@ -147,6 +151,9 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     auto hash = tableFactory->hash(hashImpl);
 
+#ifdef __APPLE__
+#undef __APPLE__
+#endif
     // delete not exist entry will cause hash mismatch
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -426,7 +433,50 @@ BOOST_AUTO_TEST_CASE(rollback2)
 
 BOOST_AUTO_TEST_CASE(rollback3)
 {
-    // Test rollback multi state storage
+    auto hash0 = tableFactory->hash(hashImpl);
+    // auto savePoint0 = tableFactory->savepoint();
+    auto savePoint0 = std::make_shared<Recoder>();
+    tableFactory->setRecoder(savePoint0);
+    BOOST_REQUIRE(hash0 == crypto::HashType(0));
+    auto ret = createDefaultTable();
+    BOOST_REQUIRE(ret);
+    auto table = tableFactory->openTable(testTableName);
+    auto entry = table->newEntry();
+    entry.set("value");
+    table->setRow("name", entry);
+    auto hash = tableFactory->hash(hashImpl);
+    // first rollback
+    tableFactory->rollback(*savePoint0);
+
+    savePoint0 = std::make_shared<Recoder>();
+    tableFactory->setRecoder(savePoint0);
+    ret = createDefaultTable();
+    BOOST_REQUIRE(ret);
+    table = tableFactory->openTable(testTableName);
+    entry = table->newEntry();
+    entry.set("value");
+    table->setRow("name", entry);
+    // second rollback
+    tableFactory->rollback(*savePoint0);
+
+    tableFactory->setReadOnly(true);
+    std::promise<Entry> getRow;
+    tableFactory->asyncGetRow(
+        testTableName, "", [&](Error::UniquePtr error, std::optional<Entry> e) {
+            BOOST_REQUIRE(!error);
+            getRow.set_value(e.value());
+        });
+    KeyPageStorage::TableMeta meta(getRow.get_future().get().get());
+    auto pageInfo = meta.getAllPageInfoNoLock();
+    BOOST_REQUIRE(pageInfo.empty());
+    tableFactory->setReadOnly(false);
+
+    ret = createDefaultTable();
+    BOOST_REQUIRE(ret);
+    table = tableFactory->openTable(testTableName);
+    entry = table->newEntry();
+    entry.set("value");
+    table->setRow("name", entry);
 }
 
 BOOST_AUTO_TEST_CASE(hash)
@@ -1305,7 +1355,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key =
@@ -1320,7 +1370,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             if (k % 5 < 4)
             {
@@ -1339,7 +1389,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1362,7 +1412,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 2200);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeRandom)
@@ -1373,7 +1423,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
-    auto entryCount = 1000;
+    auto entryCount = 100;
     auto tableCount = 100;
 
 #if defined(__APPLE__)
@@ -1484,8 +1534,8 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
         }
         return true;
     });
-    BOOST_TEST(totalCount == 4190);  // meta + 5page + s_table
-    BOOST_TEST(deleted == 3300);     // meta + 5page + s_table
+    BOOST_TEST(totalCount == 2200);  // meta + 5page + s_table
+    BOOST_TEST(deleted == 1900);     // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
@@ -1507,7 +1557,7 @@ BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key =
@@ -1525,7 +1575,7 @@ BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             if (k % 5 < 4)
             {
@@ -1547,7 +1597,7 @@ BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1592,7 +1642,7 @@ BOOST_AUTO_TEST_CASE(parallelMix)
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key =
@@ -1610,7 +1660,7 @@ BOOST_AUTO_TEST_CASE(parallelMix)
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             if (k % 5 == 4)
             {
@@ -1644,7 +1694,7 @@ BOOST_AUTO_TEST_CASE(parallelMix)
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1686,7 +1736,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key =
@@ -1701,7 +1751,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 1000; ++k)
+        for (int k = 0; k < 100; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1717,7 +1767,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
         ++totalCount;
         return true;
     });
-    BOOST_REQUIRE_EQUAL(totalCount, 4190);  // meta + 5page + s_table
+    BOOST_REQUIRE_EQUAL(totalCount, 2200);  // meta + 5page + s_table
 }
 
 BOOST_AUTO_TEST_CASE(pageSplitRandom)
@@ -1757,7 +1807,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
 
-        for (int k = 0; k < 5000; ++k)
+        for (int k = 0; k < 500; ++k)
         {
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
@@ -1847,14 +1897,13 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#if defined(__APPLE__)
 #pragma omp parallel for
-#endif
         for (int k = 0; k < 1000; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
             entry->setField(0, boost::lexical_cast<std::string>(k));
+#pragma omp critical
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -1864,22 +1913,25 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#if defined(__APPLE__)
 #pragma omp parallel for
-#endif
         for (int k = 0; k < 1000; ++k)
         {
             Condition c;
             c.limit(0, 200);
             auto keys = table->getPrimaryKeys(c);
+
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 200);
             c.limit(200, 300);
             keys = table->getPrimaryKeys(c);
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 300);
             c.limit(900, 200);
             keys = table->getPrimaryKeys(c);
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
             c.GE("900");
+#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
         }
     }
@@ -2471,6 +2523,90 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(insertAndDelete)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+    auto cacheSize = 256 * 1024 * 1024;
+    auto pageSize = 512;
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    stateStorage0->setMaxCapacity(cacheSize);
+    StateStorageInterface::Ptr prev0 = stateStorage0;
+
+    auto tableName = "table_0";
+    BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
+
+    size_t count = 10;
+    auto keyCount = 100;
+    auto index = 0;
+    srand(time(NULL));
+    for (size_t i = 0; i < count; ++i)
+    {
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto table0 = tableStorage0->openTable(tableName);
+        BOOST_REQUIRE(table0);
+
+        std::vector<int> keys(keyCount, 0);
+#if defined(__APPLE__)
+#pragma omp parallel for
+#endif
+        for (int k = 0; k < keyCount; ++k)
+        {
+            auto v = rand() + index + k;
+            keys[k] = v;
+            auto key = boost::lexical_cast<std::string>(v);
+            auto value =
+                boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
+            auto entry0 = std::make_optional(table0->newEntry());
+            entry0->setField(0, value);
+            BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+        }
+
+#if defined(__APPLE__)
+#pragma omp parallel for
+#endif
+        for (int k = 0; k < keyCount; ++k)
+        {
+            auto v = rand() + index + k;
+            auto key = boost::lexical_cast<std::string>(v);
+            auto entry0 = std::make_optional(table0->newDeletedEntry());
+            BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+        }
+        if (rand() % 2 == 0)
+        {
+            BCOS_LOG(DEBUG) << LOG_DESC("delete from head");
+            for (int k = 0; k < keyCount; ++k)
+            {
+                auto key = boost::lexical_cast<std::string>(keys[k]);
+                auto entry0 = std::make_optional(table0->newDeletedEntry());
+                BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+            }
+        }
+        else
+        {
+            BCOS_LOG(DEBUG) << LOG_DESC("delete from tail");
+            for (int k = keyCount - 1; k >= 0; --k)
+            {
+                auto key = boost::lexical_cast<std::string>(keys[k]);
+                auto entry0 = std::make_optional(table0->newDeletedEntry());
+                BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+            }
+        }
+        auto hash0 = tableStorage0->hash(hashImpl);
+        BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
+                        << LOG_KV("hash", hash0.hex());
+        BOOST_TEST(hash0.hex() != crypto::HashType(0).hex());
+        tableStorage0->setReadOnly(true);
+        stateStorage0->merge(true, *tableStorage0);
+        hash0 = stateStorage0->hash(hashImpl);
+        BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage0") << LOG_KV("i", i)
+                        << LOG_KV("hash", hash0.hex());
+        index += keyCount;
+    }
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

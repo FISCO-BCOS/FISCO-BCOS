@@ -19,7 +19,7 @@
  */
 #include "Sealer.h"
 #include "Common.h"
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 
 using namespace bcos;
 using namespace bcos::sealer;
@@ -122,6 +122,9 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     }
     if (_block->blockHeader()->number() <= m_sealingManager->currentNumber())
     {
+        SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has alreay been committed")
+                       << LOG_KV("proposalIndex", _block->blockHeader()->number())
+                       << LOG_KV("currentNumber", m_sealingManager->currentNumber());
         m_sealingManager->notifyResetProposal(_block);
         return;
     }

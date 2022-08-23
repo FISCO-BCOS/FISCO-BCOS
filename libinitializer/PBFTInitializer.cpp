@@ -19,16 +19,19 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
-#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
-#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
-#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-framework/election/FailOverTypeDef.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/storage/KVStorageHelper.h>
+
+#ifdef WITH_ETCD
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
+#endif
+
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
-#include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
@@ -114,6 +117,7 @@ std::string PBFTInitializer::generateIniConfig(bcos::tool::NodeConfig::Ptr _node
     iniConfig["smCryptoType"] = _nodeConfig->smCryptoType();
     iniConfig["isWasm"] = _nodeConfig->isWasm();
     iniConfig["isAuthCheck"] = _nodeConfig->isAuthCheck();
+    iniConfig["isSerialExecute"] = _nodeConfig->isSerialExecute();
     iniConfig["nodeName"] = _nodeConfig->nodeName();
     iniConfig["nodeID"] = m_protocolInitializer->keyPair()->publicKey()->hex();
     iniConfig["rpcServiceName"] = _nodeConfig->rpcServiceName();
@@ -175,9 +179,9 @@ void PBFTInitializer::start()
     if (!m_nodeConfig->enableFailOver())
     {
         m_blockSync->enableAsMaster(true);
-        // Note: since enableAsMaterNode will recover pbftState and execute the recovered proposal,
+        // Note: since enableAsMasterNode will recover pbftState and execute the recovered proposal,
         // should call this after every module and handlers has been inited completed
-        m_pbft->enableAsMaterNode(true);
+        m_pbft->enableAsMasterNode(true);
     }
     m_sealer->start();
     m_blockSync->start();
@@ -382,10 +386,9 @@ void PBFTInitializer::createPBFT()
     auto keyPair = m_protocolInitializer->keyPair();
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
     // create pbft
-    auto pbftFactory = std::make_shared<PBFTFactory>(m_nodeArchType,
-        m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
-        kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
-        m_protocolInitializer->txResultFactory());
+    auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
+        m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory());
 
     m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
@@ -493,20 +496,27 @@ void PBFTInitializer::onGroupInfoChanged()
 void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 {
     m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+
+#ifdef WITH_ETCD
     auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
+#endif
     // leader key: /${chainID}/consensus/${nodeID}
     std::string leaderKey =
         "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR + _nodeID->hex();
 
     std::string nodeConfig;
     m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
+
+#ifdef WITH_ETCD
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
         m_nodeConfig->leaseTTL());
+
+
     // register the handler
     m_leaderElection->registerOnCampaignHandler(
         [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
-            m_pbft->enableAsMaterNode(_success);
+            m_pbft->enableAsMasterNode(_success);
             m_blockSync->enableAsMaster(_success);
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
@@ -524,4 +534,5 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
         });
     INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
                           << LOG_KV("nodeConfig", nodeConfig);
+#endif
 }

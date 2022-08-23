@@ -21,7 +21,7 @@
 #include "PBBlock.h"
 #include "../Common.h"
 #include "PBTransactionMetaData.h"
-#include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-framework/protocol/Exceptions.h>
 #include <tbb/parallel_invoke.h>
 
 using namespace bcos;
@@ -189,7 +189,8 @@ void PBBlock::encodeTransactions() const
     tbb::parallel_for(tbb::blocked_range<int>(0, txsNum), [&](const tbb::blocked_range<int>& _r) {
         for (auto i = _r.begin(); i < _r.end(); i++)
         {
-            auto data = (*m_transactions)[i]->encode();
+            bcos::bytes data;
+            (*m_transactions)[i]->encode(data);
             m_pbRawBlock->set_transactions(i, data.data(), data.size());
         }
     });
@@ -225,7 +226,12 @@ void PBBlock::encodeReceipts() const
 
 void PBBlock::encodeTransactionsMetaData() const
 {
-    clearTransactionMetaDataCache();
+    auto allocatedMetaDataSize = m_pbRawBlock->transactionsmetadata_size();
+    for (int i = 0; i < allocatedMetaDataSize; i++)
+    {
+        m_pbRawBlock->mutable_transactionsmetadata()->UnsafeArenaReleaseLast();
+    }
+    m_pbRawBlock->clear_transactionsmetadata();
     for (auto txMetaData : *m_transactionMetaDataList)
     {
         auto txMetaDataImpl = std::dynamic_pointer_cast<PBTransactionMetaData>(txMetaData);

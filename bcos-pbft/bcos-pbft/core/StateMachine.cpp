@@ -28,7 +28,7 @@ using namespace bcos::crypto;
 
 void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _lastAppliedProposal,
     ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
-    std::function<void(bool)> _onExecuteFinished)
+    std::function<void(int64_t)> _onExecuteFinished)
 {
     // Note: async here to increase performance
     m_worker->enqueue(
@@ -49,7 +49,7 @@ void StateMachine::asyncPreApply(
 
 void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedProposal,
     ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
-    std::function<void(bool)> _onExecuteFinished)
+    std::function<void(int64_t)> _onExecuteFinished)
 {
     if (_proposal->index() <= _lastAppliedProposal->index())
     {
@@ -58,7 +58,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
                                << LOG_KV("lastAppliedProposal", _lastAppliedProposal->index());
         if (_onExecuteFinished)
         {
-            _onExecuteFinished(false);
+            _onExecuteFinished(-1);
         }
         return;
     }
@@ -69,7 +69,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
     {
         if (_onExecuteFinished)
         {
-            _onExecuteFinished(false);
+            _onExecuteFinished(-1);
         }
         return;
     }
@@ -107,7 +107,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
                                        << LOG_KV("number", blockHeader->number())
                                        << LOG_KV("errorCode", _error->errorCode())
                                        << LOG_KV("errorInfo", _error->errorMessage());
-                _onExecuteFinished(false);
+                _onExecuteFinished(_error->errorCode());
                 return;
             }
             auto execT = (double)(utcTime() - startT) / (double)(block->transactionsHashSize());
@@ -139,7 +139,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             _executedProposal->setExtraData(_proposal->data());
             // The _onExecuteFinished callback itself does the asynchronous logic, so there is no
             // need to use m_worker to re-synchronize it here.
-            _onExecuteFinished(true);
+            _onExecuteFinished(0);
         });
     return;
 }

@@ -14,6 +14,9 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>  // for Respon...
 #include <bcos-gateway/libnetwork/SocketFace.h>   // for Socket...
 #include <chrono>
+#include <cstddef>
+#include <fstream>
+#include <iterator>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -76,6 +79,14 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         }
         return;
     }
+
+    auto session = shared_from_this();
+    // checking before send the message
+    if (m_beforeMessageHandler && !m_beforeMessageHandler(session, message, callback))
+    {
+        return;
+    }
+
     if (callback)
     {
         auto handler = std::make_shared<ResponseCallback>();
@@ -109,10 +120,11 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         addSeqCallback(message->seq(), handler);
     }
     SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                       << LOG_KV("seq2Callback.size", m_seq2Callback->size())
                        << LOG_KV("endpoint", nodeIPEndpoint());
+
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
+
     send(p_buffer);
 }
 
@@ -372,8 +384,7 @@ void Session::drop(DisconnectReason _reason)
                 });
         }
         catch (...)
-        {
-        }
+        {}
     }
 }
 
@@ -573,7 +584,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     ResponseCallback::Ptr callbackPtr = getCallbackBySeq(seq);
     if (!callbackPtr)
         return;
-    server->threadPool()->enqueue([=]() {
+    server->threadPool()->enqueue([=, this]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
         callbackPtr->callback(e, Message::Ptr());
         removeSeqCallback(seq);

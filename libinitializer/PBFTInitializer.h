@@ -20,21 +20,21 @@
  */
 #pragma once
 #include "Common.h"
-#include "Common/TarsUtils.h"
-#include "bcos-framework/interfaces/rpc/RPCInterface.h"
+#include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/election/LeaderElectionInterface.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfo.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfoCodec.h>
-#include <bcos-framework/interfaces/protocol/MemberInterface.h>
-#include <bcos-framework/interfaces/sealer/SealerInterface.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/election/LeaderElectionInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/multigroup/GroupInfo.h>
+#include <bcos-framework/multigroup/GroupInfoCodec.h>
+#include <bcos-framework/protocol/MemberInterface.h>
+#include <bcos-framework/sealer/SealerInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 namespace bcos
 {

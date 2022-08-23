@@ -19,9 +19,9 @@
  * @date: 2021-03-16
  */
 #include "bcos-protocol/protobuf/PBTransaction.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/testutils/protocol/FakeTransaction.h"
-#include "interfaces/crypto/KeyPairInterface.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -87,7 +87,8 @@ void testBlock(CryptoSuite::Ptr cryptoSuite)
     auto sign = cryptoSuite->signatureImpl()->sign(*keyPair, tx.hash());
     tx.updateSignature(bcos::ref(*sign), keyPair->publicKey()->data());
 
-    auto buffer = tx.encode();
+    bcos::bytes buffer;
+    tx.encode(buffer);
 
     PBTransaction decodedTx(cryptoSuite, buffer, false);
 

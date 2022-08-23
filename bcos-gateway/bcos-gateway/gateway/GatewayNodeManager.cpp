@@ -19,8 +19,8 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/ServiceDesc.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
@@ -318,7 +318,7 @@ GroupNodeInfo::Ptr GatewayNodeManager::getGroupNodeInfoList(const std::string& _
     return groupNodeInfo;
 }
 
-std::map<std::string, std::set<std::string>> GatewayNodeManager::peersNodeIDList(
+std::map<std::string, std::set<std::string>, std::less<>> GatewayNodeManager::peersNodeIDList(
     std::string const& _p2pNodeID)
 {
     if (_p2pNodeID == m_p2pNodeID)

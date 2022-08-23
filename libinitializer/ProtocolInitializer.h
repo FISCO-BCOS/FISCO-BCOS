@@ -21,9 +21,9 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/interfaces/security/DataEncryptInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos

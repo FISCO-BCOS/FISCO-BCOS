@@ -8,6 +8,10 @@
 
 [service]
     ;rpc=chain0
+    
+    ; run without tars framework
+    ; without_tars_framework = true
+    ; tars_proxy_conf = conf/tars_proxy.ini
 
 [cert]
     ; directory the certificates located in
@@ -20,7 +24,7 @@
     node_cert=ssl.crt
 
 [chain]
-    ; use SM crypto or not, should nerver be changed
+    ; use SM crypto or not, should never be changed
     sm_crypto=false
     chain_id=chain0
 
@@ -41,6 +45,33 @@
     enable=true
     log_path=./log
     ; info debug trace
-    level=DEBUG
+    level=info
     ; MB
     max_log_file_size=200
+
+[flow_control]
+    ; the module that does not limit bandwidth
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
+
+    ; modules_without_bw_limit=raft,pbft,cons_txs_sync
+
+    ; restrict the outgoing bandwidth of the node
+    ; both integer and decimal is supported for the node, unit: Mb
+    ; total_outgoing_bw_limit=10
+
+    ; restrict the outgoing bandwidth of the the connection
+    ; both integer and decimal is supported for the connection, unit: Mb
+    ; conn_outgoing_bw_limit=2
+
+    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
+    ;   ip_192.108.0.1=3
+    ;   ip_192.108.0.2=3
+    ;   ip_192.108.0.3=3
+
+    ; default bandwidth limit for the group
+    ; group_outgoing_bw_limit=2
+
+    ; specify group to limit bandwidth, group_groupName=n
+    ;   group_group0=2
+    ;   group_group1=2
+    ;   group_group2=2

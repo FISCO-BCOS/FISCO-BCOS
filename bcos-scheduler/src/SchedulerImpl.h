@@ -1,19 +1,21 @@
 #pragma once
 
 #include "BlockExecutive.h"
+#include "BlockExecutiveFactory.h"
 #include "ExecutorManager.h"
-#include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <tbb/concurrent_hash_map.h>
 #include <future>
 #include <list>
+
 
 namespace bcos::scheduler
 {
@@ -28,16 +30,32 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
+      : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
+            txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
+            schedulerTermId)
+    {}
+
+
+    SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::storage::TransactionalStorageInterface::Ptr storage,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+        int64_t schedulerTermId)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_blockExecutiveFactory(
+            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
         m_blockFactory(std::move(blockFactory)),
         m_txPool(txPool),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
+        m_isSerialExecute(isSerialExecute),
         m_schedulerTermId(schedulerTermId)
     {
         start();
@@ -91,6 +109,8 @@ public:
 
     inline void fetchGasLimit(protocol::BlockNumber _number = -1)
     {
+        SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
+                            << LOG_KV("requestBlockNumber", _number);
         if (_number == -1)
         {
             std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
@@ -116,12 +136,13 @@ public:
         if (e)
         {
             SCHEDULER_LOG(WARNING)
-                << LOG_DESC("fetchGasLimit failed") << LOG_KV("code", e->errorCode())
-                << LOG_KV("message", e->errorMessage());
+                << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasLimit failed")
+                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
             BOOST_THROW_EXCEPTION(
                 BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
         }
 
+        // cast must be success
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 
@@ -138,13 +159,20 @@ public:
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
                              << "Start with termId: " << getSchedulerTermId();
     }
-    void stop()
+    void stop() override
     {
+        SCHEDULER_LOG(INFO) << "Try to stop SchedulerImpl";
         m_isRunning = false;
+        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         for (auto& blockExecutive : *m_blocks)
         {
             blockExecutive->stop();
         }
+    }
+
+    void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory)
+    {
+        m_blockExecutiveFactory = blockExecutiveFactory;
     }
 
     void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent)
@@ -159,6 +187,8 @@ public:
             f_onNeedSwitchEvent(m_schedulerTermId);
         }
     }
+
+    bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
 
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
@@ -182,6 +212,7 @@ private:
 
     // remove prepared all block <= oldBlockNumber
     void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
+    void removeAllPreparedBlock();
 
     bcos::protocol::BlockNumber getBlockNumberFromStorage();
 
@@ -207,12 +238,14 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
+    bcos::scheduler::BlockExecutiveFactory::Ptr m_blockExecutiveFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck = false;
     bool m_isWasm = false;
+    bool m_isSerialExecute = false;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,

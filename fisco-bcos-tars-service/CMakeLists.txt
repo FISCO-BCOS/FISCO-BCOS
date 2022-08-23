@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 macro(compile_service SERVICE_SOURCE_PATH BINARY_NAME)
@@ -32,8 +31,10 @@ compile_service("NodeService/pro" ${PRO_NODE_SERVICE_BINARY_NAME})
 set(MAX_NODE_SERVICE_BINARY_NAME BcosMaxNodeService)
 compile_service("NodeService/max" ${MAX_NODE_SERVICE_BINARY_NAME})
 
-# ExecutorService
-set(EXECUTOR_BINARY_NAME BcosExecutorService)
-compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
+if(WITH_TIKV)
+    # ExecutorService
+    set(EXECUTOR_BINARY_NAME BcosExecutorService)
+    compile_service("ExecutorService/main" ${EXECUTOR_BINARY_NAME})
+endif()
 
 add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})

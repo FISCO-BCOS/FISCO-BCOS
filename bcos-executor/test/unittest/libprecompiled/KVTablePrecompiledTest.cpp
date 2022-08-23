@@ -19,7 +19,7 @@
  */
 
 #include "precompiled/KVTablePrecompiled.h"
-#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
@@ -70,7 +70,7 @@ public:
 
         // call precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -93,7 +93,7 @@ public:
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
+        executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
@@ -103,7 +103,7 @@ public:
         result3->setSeq(1002);
         // external call bfs
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->executeTransaction(std::move(result3),
+        executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
@@ -114,7 +114,7 @@ public:
         result4->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->executeTransaction(std::move(result4),
+        executor->dmcExecuteTransaction(std::move(result4),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise5.set_value(std::move(result));
@@ -125,7 +125,7 @@ public:
         result5->setSeq(1000);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
-        executor->executeTransaction(std::move(result5),
+        executor->dmcExecuteTransaction(std::move(result5),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise6.set_value(std::move(result));
@@ -162,7 +162,7 @@ public:
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -197,7 +197,7 @@ public:
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -231,7 +231,7 @@ public:
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
