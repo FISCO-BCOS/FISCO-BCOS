@@ -36,22 +36,35 @@ private:
         bcos::concepts::serialize::encode(transaction, *transactionData);
 
         bool withReceipt = false;
-        std::promise<Error::Ptr> promise;
+        // must ensure the lifetime of promise
+        auto promise = std::make_shared<std::promise<Error::Ptr>>();
+        // Note: can't call get_future after called get()
+        auto future = promise->get_future();
         transactionPool().asyncSubmit(std::move(transactionData),
-            [&promise, &receipt, &withReceipt](Error::Ptr error,
+            [promise, &receipt, &withReceipt](Error::Ptr error,
                 bcos::protocol::TransactionSubmitResult::Ptr transactionSubmitResult) mutable {
-                if (transactionSubmitResult && transactionSubmitResult->transactionReceipt())
+                try
                 {
-                    auto receiptImpl =
-                        std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
-                            transactionSubmitResult->transactionReceipt());
-                    receipt =
-                        std::move(const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
-                    withReceipt = true;
+                    if (transactionSubmitResult && transactionSubmitResult->transactionReceipt())
+                    {
+                        auto receiptImpl =
+                            std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
+                                transactionSubmitResult->transactionReceipt());
+                        receipt = std::move(
+                            const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
+                        withReceipt = true;
+                    }
+                    // Note: promise set_value can't been called multiple times, otherwise will
+                    // throw future_error exception
+                    promise->set_value(std::move(error));
                 }
-                promise.set_value(std::move(error));
+                catch (std::future_error const& e)
+                {
+                    TRANSACTIONPOOL_LOG(INFO)
+                        << LOG_DESC("asyncSubmit: the callback has already been called for timeout")
+                        << LOG_KV("msg", boost::diagnostic_information(e));
+                }
             });
-        auto future = promise.get_future();
         if (future.wait_for(std::chrono::seconds(c_sumitTransactionTimeout)) ==
             std::future_status::timeout)
         {
