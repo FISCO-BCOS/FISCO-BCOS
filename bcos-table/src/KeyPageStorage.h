@@ -672,15 +672,14 @@ public:
             }
             else
             {
+                pageInfoChanged = true;
                 m_size += key.size();
                 if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_validCount;
-                    pageInfoChanged = true;
                 }
                 if (entries.empty() || key > entries.rbegin()->first)
                 {
-                    pageInfoChanged = true;
                     if (!entries.empty())
                     {  // means key > entries.rbegin()->first is true
                         m_invalidPageKeys.insert(entries.rbegin()->first);
