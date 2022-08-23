@@ -37,6 +37,8 @@ using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 
+constexpr int c_hexedPrivateKeySize = 64;
+
 struct ConfigResult
 {
     KeyPair keyPair;
@@ -112,9 +114,9 @@ ConfigResult initOriginConfig(const string& _dataPath)
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
 
     std::string keyHex(privateKeyData.get());
-    if (keyHex.size() != 64u)
+    for (size_t i = keyHex.size(); i < c_hexedPrivateKeySize; ++i)
     {
-        throw std::invalid_argument("Private Key file error! Missing bytes!");
+        keyHex = '0' + keyHex;
     }
 
     KeyPair keyPair = KeyPair(Secret(keyHex));
@@ -353,9 +355,9 @@ ConfigResult initNormalConfig(const boost::property_tree::ptree& pt)
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
 
     std::string keyHex(privateKeyData.get());
-    if (keyHex.size() != 64u)
+    for (size_t i = keyHex.size(); i < c_hexedPrivateKeySize; ++i)
     {
-        throw std::invalid_argument("Incompleted privateKey!");
+        keyHex = '0' + keyHex;
     }
     KeyPair keyPair = KeyPair(Secret(keyHex));
 
@@ -518,9 +520,9 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
 
     std::string keyHex(privateKeyData.get());
-    if (keyHex.size() != 64u)
+    for (size_t i = keyHex.size(); i < c_hexedPrivateKeySize; ++i)
     {
-        throw std::invalid_argument("Private Key file error! Missing bytes!");
+        keyHex = '0' + keyHex;
     }
 
     KeyPair keyPair = KeyPair(Secret(keyHex));
