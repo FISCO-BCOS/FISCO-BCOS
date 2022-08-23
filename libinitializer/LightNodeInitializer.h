@@ -95,8 +95,7 @@ public:
                 front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETTRANSACTIONS, nodeID,
                     bcos::ref(responseBuffer), [](Error::Ptr _error) {
                         if (_error)
-                        {
-                        }
+                        {}
                     });
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GETRECEIPTS,
@@ -131,8 +130,7 @@ public:
                 sharedFront->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETRECEIPTS, nodeID,
                     bcos::ref(responseBuffer), [](Error::Ptr _error) {
                         if (_error)
-                        {
-                        }
+                        {}
                     });
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GETSTATUS,
@@ -170,8 +168,7 @@ public:
                 sharedFront->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETSTATUS, nodeID,
                     bcos::ref(responseBuffer), [](Error::Ptr _error) {
                         if (_error)
-                        {
-                        }
+                        {}
                     });
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SENDTRANSACTION,
@@ -242,8 +239,7 @@ private:
         front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETBLOCK, nodeID,
             bcos::ref(responseBuffer), [](Error::Ptr _error) {
                 if (_error)
-                {
-                }
+                {}
             });
     }
 
@@ -256,6 +252,7 @@ private:
         try
         {
             bcos::concepts::serialize::decode(data, request);
+            return success;
         }
         catch (std::exception const& e)
         {
@@ -268,8 +265,7 @@ private:
         front->asyncSendResponse(
             id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
                 if (_error)
-                {
-                }
+                {}
             });
         return success;
     }
@@ -322,8 +318,7 @@ private:
                 front->asyncSendResponse(
                     id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
                         if (_error)
-                        {
-                        }
+                        {}
                     });
             });
     }
@@ -376,8 +371,7 @@ private:
                 front->asyncSendResponse(
                     id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
                         if (_error)
-                        {
-                        }
+                        {}
                     });
             });
     }
