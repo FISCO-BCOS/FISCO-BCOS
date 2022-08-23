@@ -14,7 +14,6 @@
 
 namespace bcos::transaction_pool
 {
-
 template <class TransactionPoolType>
 class TransactionPoolImpl : public bcos::concepts::transacton_pool::TransactionPoolBase<
                                 TransactionPoolImpl<TransactionPoolType>>
@@ -50,11 +49,18 @@ private:
                         std::move(const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
                     withReceipt = true;
                 }
-
                 promise.set_value(std::move(error));
             });
-
-        auto error = promise.get_future().get();
+        auto future = promise.get_future();
+        if (future.wait_for(std::chrono::seconds(c_sumitTransactionTimeout)) ==
+            std::future_status::timeout)
+        {
+            auto errorMsg = "submitTransaction timeout" + LOG_KV("hash", transaction.hash());
+            TRANSACTIONPOOL_LOG(ERROR) << errorMsg;
+            auto error = std::make_shared<Error>(-1, errorMsg);
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        auto error = future.get();
         if (error)
         {
             TRANSACTIONPOOL_LOG(ERROR)
@@ -67,5 +73,7 @@ private:
     auto& transactionPool() { return bcos::concepts::getRef(m_transactionPool); }
 
     TransactionPoolType m_transactionPool;
+
+    int c_sumitTransactionTimeout = 30;
 };
 }  // namespace bcos::transaction_pool

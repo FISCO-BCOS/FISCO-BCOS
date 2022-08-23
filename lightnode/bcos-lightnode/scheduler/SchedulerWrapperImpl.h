@@ -8,7 +8,6 @@
 
 namespace bcos::scheduler
 {
-
 template <class SchedulerType>
 class SchedulerWrapperImpl
   : public bcos::concepts::scheduler::SchedulerBase<SchedulerWrapperImpl<SchedulerType>>
@@ -43,13 +42,25 @@ private:
                 }
                 promise.set_value(std::move(error));
             });
-
-        auto error = promise.get_future().get();
-        if (error)
+        auto future = promise.get_future();
+        if (future.wait_for(std::chrono::seconds(c_callTimeout)) == std::future_status::timeout)
+        {
+            auto errorMsg = "call timeout" + LOG_KV("hash", transaction.hash());
+            BCOS_LOG(ERROR) << LOG_DESC("SchedulerWrapperImpl") << errorMsg;
+            auto error = std::make_shared<Error>(-1, errorMsg);
             BOOST_THROW_EXCEPTION(*error);
+        }
+
+        auto error = future.get();
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
     }
 
+
     SchedulerType m_scheduler;
+    int c_callTimeout = 10;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
 }  // namespace bcos::scheduler
