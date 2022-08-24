@@ -131,12 +131,10 @@ void ExecutiveStackFlow::runWaitingFlow(std::function<void(CallParameters::Uniqu
                         CallParameters::UniquePtr output) {
         if (output->type == CallParameters::MESSAGE || output->type == CallParameters::KEY_LOCK)
         {
-            lastKeyLocks = output->keyLocks;
+            std::copy(
+                output->keyLocks.begin(), output->keyLocks.end(), std::back_inserter(lastKeyLocks));
         }
-        else
-        {
-            lastKeyLocks = {};
-        }
+
 
         onTxReturn(std::move(output));
     };
@@ -150,7 +148,7 @@ void ExecutiveStackFlow::runWaitingFlow(std::function<void(CallParameters::Uniqu
         }
 
         auto executiveState = m_executives[contextIDAndSeq];
-        executiveState->appendKeyLocks(std::move(lastKeyLocks));
+        executiveState->appendKeyLocks(lastKeyLocks);
 
         runOne(executiveState, callback);
     }
