@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SOURCE=${SOURCE_BRANCH:-master}
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     curl git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-    libgmp-dev flex bison patch libzstd-dev unzip ninja-build pkg-config\
+    libgmp-dev flex bison patch libzstd-dev unzip ninja-build pkg-config curl zip tar \
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
@@ -21,12 +21,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Check cargo is visible
 RUN cargo --help
 
+ENV VCPKG_FORCE_SYSTEM_BINARIES=1
 
-
-RUN export VCPKG_FORCE_SYSTEM_BINARIES=1 \
-    && git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git --recursive --depth=1 -b ${SOURCE} \
+RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git --recursive --depth=1 -b ${SOURCE} \
     && mkdir -p FISCO-BCOS/build && cd FISCO-BCOS/build \
-    && cmake ..  && make -j2 && strip fisco-bcos-air/fisco-bcos
+    && cmake .. && make -j2 && strip fisco-bcos-air/fisco-bcos || cat /FISCO-BCOS/build/*.log
+
 
 FROM ubuntu:20.04
 LABEL maintainer service@fisco.com.cn
