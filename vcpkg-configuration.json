@@ -13,7 +13,6 @@
         "intx",
         "fiscobcos",
         "boost-context",
-        "etcd-cpp-apiv3",
         "wedprcrypto"
       ]
     }

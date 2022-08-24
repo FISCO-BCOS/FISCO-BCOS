@@ -335,7 +335,10 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
 
 crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const
 {
-    bcos::crypto::HashType totalHash(0);
+    bcos::crypto::HashType pagesHash(0);
+    bcos::crypto::HashType entriesHash(0);
+    int64_t pageCount = 0;
+    int64_t entrycount = 0;
     std::vector<const Data*> allData;
     for (size_t i = 0; i < m_buckets.size(); ++i)
     {
@@ -357,7 +360,8 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
                 auto page = &std::get<0>(data->data);
                 auto pageHash = page->hash(data->table, hashImpl);
 #pragma omp critical
-                totalHash ^= pageHash;
+                pagesHash ^= pageHash;
+                ++pageCount;
             }
             else
             {  // sys table
@@ -365,13 +369,21 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
                 hash ^= hashImpl->hash(data->key);
                 hash ^= entry.hash(data->table, data->key, hashImpl);
 #pragma omp critical
-                totalHash ^= hash;
+                entriesHash ^= hash;
+                ++entrycount;
             }
         }
     }
+    bcos::crypto::HashType totalHash(0);
+    totalHash ^= pagesHash;
+    totalHash ^= entriesHash;
     KeyPage_LOG(INFO) << LOG_DESC("hash") << LOG_KV("size", allData.size())
                       << LOG_KV("readLength", m_readLength) << LOG_KV("writeLength", m_writeLength)
-                      << LOG_KV("hash", totalHash.hex());
+                      << LOG_KV("pageCount", pageCount)
+                      << LOG_KV("entrycount", entrycount)
+                      << LOG_KV("entriesHash", entriesHash.hex())
+                      << LOG_KV("pagesHash", pagesHash.hex())
+                      << LOG_KV("totalHash", totalHash.hex());
     return totalHash;
 }
 

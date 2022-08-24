@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
 include(Version)
+
 project(bcos-storage VERSION ${VERSION})
 
 find_package(zstd REQUIRED)
@@ -21,7 +22,7 @@ if(WITH_TIKV)
 endif()
 
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_include_directories(${STORAGE_TARGET} PUBLIC .)
+target_include_directories(${STORAGE_TARGET} PUBLIC ${HUNTER_INSTALL_PREFIX}/include .)
 target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
 
 if(TESTS)

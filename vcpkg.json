@@ -27,8 +27,6 @@
     "ms-gsl",
     "tbb",
     "zlib",
-    "grpc",
-    "poco",
     "jsoncpp",
     "protobuf",
     "cryptopp",
@@ -77,7 +75,7 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "etcd-cpp-apiv3"
+        "cpprestsdk"
       ]
     },
     "tcmalloc": {

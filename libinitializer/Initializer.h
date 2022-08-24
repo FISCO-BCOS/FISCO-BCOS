@@ -88,9 +88,11 @@ private:
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
+#ifdef WITH_LIGHTNODE
     // Note: since LightNodeInitializer use weak_ptr of shared_from_this, this object must be exists
     // for the whole life time
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
+#endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     std::string const c_consensusStorageDBName = "consensus_log";
