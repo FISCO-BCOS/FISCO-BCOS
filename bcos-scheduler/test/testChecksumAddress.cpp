@@ -52,7 +52,7 @@ struct ChecksumFixture
     void check(const std::string& addr)
     {
         auto ret = addr;
-        toChecksumAddress(ret, hashImpl);
+        toCheckSumAddress(ret, hashImpl);
         BOOST_CHECK_EQUAL(addr, ret);
     }
 };
