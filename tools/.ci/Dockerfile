@@ -37,7 +37,7 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends libssl-dev 
     && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /FISCO-BCOS/fisco-bcos-air/fisco-bcos /usr/local/bin/
+COPY --from=builder /FISCO-BCOS/build/fisco-bcos-air/fisco-bcos /usr/local/bin/
 
 EXPOSE 30300 20200
 
