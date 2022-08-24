@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 as builder
+FROM ubuntu:22.04 as builder
 LABEL maintainer service@fisco.com.cn
 
 WORKDIR /
@@ -8,11 +8,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SOURCE=${SOURCE_BRANCH:-master}
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     curl git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-    libgmp-dev flex bison patch libzstd-dev\
+    libgmp-dev flex bison patch libzstd-dev unzip ninja-build pkg-config\
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 
@@ -21,8 +21,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Check cargo is visible
 RUN cargo --help
 
-RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS \
-    && git checkout ${SOURCE} && cmake . && make -j2 && strip fisco-bcos-air/fisco-bcos
+
+
+RUN export VCPKG_FORCE_SYSTEM_BINARIES=1 \
+    && git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git --recursive --depth=1 -b ${SOURCE} \
+    && mkdir -p FISCO-BCOS/build && cd FISCO-BCOS/build \
+    && cmake ..  && make -j2 && strip fisco-bcos-air/fisco-bcos
 
 FROM ubuntu:20.04
 LABEL maintainer service@fisco.com.cn
