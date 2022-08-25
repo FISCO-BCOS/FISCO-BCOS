@@ -50,6 +50,8 @@ void CampaignConfig::fetchLeaderInfoFromEtcd()
         auto response = m_etcdClient->get(m_leaderKey).get();
         if (!checkAndUpdateLeaderKey(response))
         {
+            ELECTION_LOG(INFO) << LOG_DESC("fetchLeaderInfoFromEtcd failed")
+                               << LOG_KV("key", m_leaderKey);
             return;
         }
         ELECTION_LOG(INFO) << LOG_DESC("fetchLeaderInfoFromEtcd success")

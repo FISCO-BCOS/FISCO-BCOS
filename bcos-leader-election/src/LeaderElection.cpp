@@ -157,6 +157,14 @@ bool LeaderElection::campaignLeader()
     {
         ELECTION_LOG(WARNING) << LOG_DESC("campaignLeader exception")
                               << LOG_KV("error", boost::diagnostic_information(e));
+        // release the leaderKey when exception
+        if (m_keepAlive)
+        {
+            ELECTION_LOG(INFO) << LOG_DESC("campaignLeader: cancel keepAlive thread for exception")
+                               << LOG_KV("lease", m_keepAlive->Lease())
+                               << LOG_KV("leaderKey", m_config->leaderKey());
+            m_keepAlive->Cancel();
+        }
     }
     return false;
 }
