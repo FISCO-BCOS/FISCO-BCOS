@@ -473,7 +473,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev));
+        auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
         // TODO: pass blockHash, version here
