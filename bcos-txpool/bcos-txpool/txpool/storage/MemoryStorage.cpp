@@ -350,14 +350,17 @@ Transaction::ConstPtr MemoryStorage::remove(HashType const& _txHash)
 }
 
 Transaction::ConstPtr MemoryStorage::removeSubmittedTxWithoutLock(
-    TransactionSubmitResult::Ptr _txSubmitResult)
+    TransactionSubmitResult::Ptr _txSubmitResult, bool _notify)
 {
     auto tx = removeWithoutLock(_txSubmitResult->txHash());
     if (!tx)
     {
         return nullptr;
     }
-    notifyTxResult(tx, _txSubmitResult);
+    if (_notify)
+    {
+        notifyTxResult(tx, _txSubmitResult);
+    }
     return tx;
 }
 
@@ -684,8 +687,9 @@ void MemoryStorage::removeInvalidTxs()
                             memoryStorage->m_config->txResultFactory()->createTxSubmitResult();
                         txResult->setTxHash(txHash);
                         txResult->setStatus((uint32_t)TransactionStatus::BlockLimitCheckFail);
-
-                        memoryStorage->removeSubmittedTxWithoutLock(txResult);
+                        // not notify receipt to the sdk when the txs has been removed by
+                        // removeInvalidTxs in the cases the txs-expired
+                        memoryStorage->removeSubmittedTxWithoutLock(txResult, false);
                     }
                     memoryStorage->notifyUnsealedTxsSize();
                 },

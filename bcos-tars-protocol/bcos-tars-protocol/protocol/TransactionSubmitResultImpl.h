@@ -38,6 +38,7 @@ namespace bcostars
 {
 namespace protocol
 {
+// Note: this will create a default transactionReceipt
 class TransactionSubmitResultImpl : public bcos::protocol::TransactionSubmitResult
 {
 public:

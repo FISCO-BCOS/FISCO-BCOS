@@ -109,7 +109,7 @@ protected:
     virtual bcos::protocol::Transaction::ConstPtr removeWithoutLock(
         bcos::crypto::HashType const& _txHash);
     virtual bcos::protocol::Transaction::ConstPtr removeSubmittedTxWithoutLock(
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult);
+        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult, bool _notify = true);
 
     virtual void notifyInvalidReceipt(bcos::crypto::HashType const& _txHash,
         bcos::protocol::TransactionStatus _status,
