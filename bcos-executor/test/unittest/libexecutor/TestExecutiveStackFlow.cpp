@@ -177,6 +177,55 @@ BOOST_AUTO_TEST_CASE(RunTest)
     // BOOST_CHECK(flag);
 }
 
+BOOST_AUTO_TEST_CASE(DagTest)
+{
+    std::shared_ptr<std::vector<CallParameters::UniquePtr>> DAGtxInputs =
+        make_shared<std::vector<CallParameters::UniquePtr>>();
+
+    for (size_t i = 0; i < 3; ++i)
+    {
+        auto input = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
+        input->contextID = i;
+        input->keyLocks = boost::lexical_cast<std::string>((i + 1) % 10);
+        input->seq = 1;
+        DAGtxInputs->push_back(std::move(input));
+    }
+
+    EXECUTOR_LOG(DEBUG) << "DagTest begin";
+    std::shared_ptr<std::vector<int64_t>> sequence = make_shared<std::vector<int64_t>>();
+    ExecutiveStackFlow::Ptr executiveStackFlow =
+        std::make_shared<ExecutiveStackFlow>(executiveFactory);
+    BOOST_CHECK(executiveStackFlow != nullptr);
+
+    executiveStackFlow->submit(DAGtxInputs);
+    EXECUTOR_LOG(DEBUG) << "submit 3 transaction success!";
+
+    executiveStackFlow->asyncRun(
+        // onTxReturn
+        [this, sequence](CallParameters::UniquePtr output) {
+            EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
+                                << ",the conntextID is:" << output->contextID
+                                << LOG_KV("keyLocks", keyLocks)
+                                << LOG_KV("acquireKeyLock", acquireKeyLock);
+            sequence->push_back(output->contextID);
+        },
+        // onFinished
+        [this, sequence](bcos::Error::UniquePtr error) {
+            if (error != nullptr)
+            {
+                EXECUTOR_LOG(ERROR)
+                    << "ExecutiveFlow asyncRun error: " << LOG_KV("errorCode", error->errorCode())
+                    << LOG_KV("errorMessage", error->errorMessage());
+                EXECUTOR_LOG(ERROR) << "all transaction perform error, sequence clear!";
+                sequence->clear();
+                // callback(std::move(error), std::vector<protocol::ExecutionMessage::UniquePtr>());
+            }
+            else
+            {
+                EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
+            }
+        });
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
