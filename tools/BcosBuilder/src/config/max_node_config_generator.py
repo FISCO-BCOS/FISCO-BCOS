@@ -26,7 +26,7 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
                 "generate genesis config for %s success" % group_config.group_id)
             utilities.print_badge(
                 "generate ini config for BcosMaxNodeService of group %s" % group_config.group_id)
-            if self.generate_all_ini_config(group_config, is_build_opr) is False:
+            if self.generate_max_node_ini_config(group_config) is False:
                 return False
             utilities.print_badge(
                 "generate ini config for BcosMaxNodeService of group %s success" % group_config.group_id)
@@ -37,6 +37,43 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
             utilities.print_badge(
                 "generate ini config for BcosExecutorService of group %s success" % group_config.group_id)
         return True
+
+    def generate_max_node_ini_config(self, group_config):
+        """
+        generate all ini config file
+        """
+        for node_config in group_config.node_list:
+            if self.__generate_and_store_max_node_ini_config(node_config, group_config) is False:
+                return False
+        return True
+
+    def __generate_and_store_max_node_ini_config(self, node_config, group_config,):
+        """
+        generate and store ini config for given node
+        """
+        for ip in node_config.node_service.deploy_ip_list:
+            utilities.print_badge("generate ini config for ip %s" % ip)
+            ini_config_content = self.generate_node_config(
+                group_config, node_config, node_config.node_service.service_name, self.node_type, False)
+            node_path = self.__get_and_generate_ini_config_base_path(node_config, ip)
+
+            if os.path.exists(node_path) is False:
+                utilities.mkdir(node_path)
+                
+            ini_config_path = os.path.join(node_path, self.ini_tmp_config_file)
+            ret = self.store_config(ini_config_content, "ini", ini_config_path, node_config.node_service.service_name, False)
+            if ret is False:
+                utilities.log_error("generate ini config for ip %s failed", ip)
+                return False
+            utilities.print_badge("generate ini config for ip %s success" % ip)
+        return True
+
+    def __get_and_generate_ini_config_base_path(self, node_config, deploy_ip):
+        path = os.path.join(self.root_dir, node_config.agency_config.chain_id,
+                            node_config.group_id, node_config.node_service.service_name, deploy_ip)
+        if os.path.exists(path) is False:
+            utilities.mkdir(path)
+        return path
 
     def generate_all_executor_config(self):
         """

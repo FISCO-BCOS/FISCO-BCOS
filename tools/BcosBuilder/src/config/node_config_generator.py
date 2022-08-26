@@ -98,7 +98,7 @@ class NodeConfigGenerator:
             executor_ini_config, node_config, self.node_type)
         return executor_ini_config
 
-    def __generate_node_config(self, group_config, node_config, node_name, node_type, is_build_opr):
+    def generate_node_config(self, group_config, node_config, node_name, node_type, is_build_opr):
         """
         generate node config: config.ini.tmp
         """
@@ -212,6 +212,13 @@ class NodeConfigGenerator:
         for config in node_service_config.config_file_list:
             config_file_path_list.append(os.path.join(path, config))
         return config_file_path_list
+
+    def get_ini_config_file_path(self, node_service_config, node_config, deploy_ip):
+        """
+        get config file path for given config files
+        """
+        return os.path.join(self.root_dir, node_config.agency_config.chain_id,
+                            node_config.group_id, node_service_config.service_name, deploy_ip, node_service_config.ini_config_file)
 
     def __get_and_generate_node_base_path(self, node_config, is_build_opr):
         if not is_build_opr:
@@ -356,7 +363,7 @@ class NodeConfigGenerator:
         """
         generate and store ini config for given node
         """
-        ini_config_content = self.__generate_node_config(
+        ini_config_content = self.generate_node_config(
             group_config, node_config, node_config.node_service.service_name, self.node_type, is_build_opr)
         node_path = self.__get_and_generate_node_base_path(node_config, is_build_opr)
 
