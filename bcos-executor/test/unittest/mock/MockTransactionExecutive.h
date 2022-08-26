@@ -65,7 +65,9 @@ public:
                     count++;
                 }
                 BOOST_CHECK_EQUAL(count, 2);
-                std::copy("key2", std::back_inserter(m_lastKeyLocks));
+                std::vector<std::string> appendLocks = {"key2"};
+                std::copy(
+                    appendLocks.begin(), appendLocks.end(), std::back_inserter(m_lastKeyLocks));
                 input->keyLocks = m_lastKeyLocks;
                 input->type = CallParameters::KEY_LOCK;
                 return input;

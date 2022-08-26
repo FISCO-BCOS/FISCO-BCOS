@@ -208,19 +208,19 @@ BOOST_AUTO_TEST_CASE(DagTest)
                 uint16_t count = 0;
                 for (size_t i = 0; i < output->keyLocks.size(); ++i)
                 {
-                    sudo value = keyLocks[i].compare("key" + std::to_string(i));
+                    auto value = keyLocks[i].compare("key" + std::to_string(i));
                     BOOST_CHECK_EQUAL(value, 0);
                     count++;
                 }
                 BOOST_CHECK_EQUAL(count, 1);
                 BOOST_CHECK(output->keyLocks);
             }
-            else if (contextID == 1)
+            else if (output->contextID == 1)
             {
                 uint16_t count = 0;
                 for (size_t i = 0; i < output->keyLocks.size(); ++i)
                 {
-                    sudo value = keyLocks[i].compare("key" + std::to_string(i));
+                    auto value = keyLocks[i].compare("key" + std::to_string(i));
                     BOOST_CHECK_EQUAL(value, 0);
                     count++;
                 }
@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(DagTest)
                 BOOST_CHECK(output->keyLocks);
                 BOOST_CHECK(output->type == CallParameters::KEY_LOCK);
             }
-            else if (contextID == 2)
+            else if (output->contextID == 2)
             {
                 uint16_t count = 0;
                 for (size_t i = 0; i < output->keyLocks.size(); ++i)
