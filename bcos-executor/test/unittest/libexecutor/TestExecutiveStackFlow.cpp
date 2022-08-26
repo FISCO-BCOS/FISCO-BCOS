@@ -186,7 +186,6 @@ BOOST_AUTO_TEST_CASE(DagTest)
     {
         auto input = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);
         input->contextID = i;
-        input->keyLocks = boost::lexical_cast<std::string>((i + 1) % 10);
         input->seq = 1;
         DAGtxInputs->push_back(std::move(input));
     }
@@ -199,14 +198,49 @@ BOOST_AUTO_TEST_CASE(DagTest)
 
     executiveStackFlow->submit(DAGtxInputs);
     EXECUTOR_LOG(DEBUG) << "submit 3 transaction success!";
-
     executiveStackFlow->asyncRun(
         // onTxReturn
         [this, sequence](CallParameters::UniquePtr output) {
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
-                                << ",the conntextID is:" << output->contextID
-                                << LOG_KV("keyLocks", keyLocks)
-                                << LOG_KV("acquireKeyLock", acquireKeyLock);
+                                << ",the conntextID is:" << output->contextID;
+            if (output->contextID == 0)
+            {
+                uint16_t count = 0;
+                for (size_t i = 0; i < output->keyLocks.size(); ++i)
+                {
+                    sudo value = keyLocks[i].compare("key" + std::to_string(i));
+                    BOOST_CHECK_EQUAL(value, 0);
+                    count++;
+                }
+                BOOST_CHECK_EQUAL(count, 1);
+                BOOST_CHECK(output->keyLocks);
+            }
+            else if (contextID == 1)
+            {
+                uint16_t count = 0;
+                for (size_t i = 0; i < output->keyLocks.size(); ++i)
+                {
+                    sudo value = keyLocks[i].compare("key" + std::to_string(i));
+                    BOOST_CHECK_EQUAL(value, 0);
+                    count++;
+                }
+                BOOST_CHECK_EQUAL(count, 2);
+                BOOST_CHECK(output->keyLocks);
+                BOOST_CHECK(output->type == CallParameters::KEY_LOCK);
+            }
+            else if (contextID == 2)
+            {
+                uint16_t count = 0;
+                for (size_t i = 0; i < output->keyLocks.size(); ++i)
+                {
+                    sudo value = keyLocks[i].compare("key" + std::to_string(i));
+                    BOOST_CHECK_EQUAL(value, 0);
+                    count++;
+                }
+                BOOST_CHECK_EQUAL(count, 3);
+                BOOST_CHECK(output->keyLocks);
+                BOOST_CHECK(output->type == CallParameters::KEY_LOCK);
+            }
             sequence->push_back(output->contextID);
         },
         // onFinished
@@ -223,6 +257,7 @@ BOOST_AUTO_TEST_CASE(DagTest)
             else
             {
                 EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
+                BOOST_CHECK_EQUAL(sequence->size(), 15);
             }
         });
 }
