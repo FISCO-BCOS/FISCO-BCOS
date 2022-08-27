@@ -66,6 +66,8 @@ public:
             EXECUTOR_LOG(INFO)
                 << LOG_DESC("nextBlockHeader: not refreshExecutor for invalid schedulerTermId")
                 << LOG_KV("termId", schedulerTermId) << LOG_KV("currentTermId", m_schedulerTermId);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::STOPPED, "old executor has been stopped"));
             return;
         }
 
