@@ -307,6 +307,12 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                         downloadQueue->fetchAndUpdatesLedgerConfig();
                         return;
                     }
+                    if (!config->masterNode())
+                    {
+                        BLKSYNC_LOG(INFO) << LOG_DESC(
+                            "applyBlock error: but do nothing for the node is not the master node");
+                        return;
+                    }
                     {
                         // re-push the block into blockQueue to retry later
                         if (_block->blockHeader()->number() > config->blockNumber())
