@@ -131,6 +131,8 @@ public:
         }
     }
 
+    bool masterNode() const { return m_masterNode; }
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
 
