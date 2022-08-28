@@ -38,7 +38,7 @@ jobs:
         id: deps_cache
         with:
           path: |
-            deps/src
+            deps/
             c:/vcpkg
             !c:/vcpkg/.git
             !c:/vcpkg/buildtrees
@@ -100,7 +100,7 @@ jobs:
           path: |
             /home/runner/.ccache
             /Users/runner/.ccache/
-            deps/src
+            deps/
           key: centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}

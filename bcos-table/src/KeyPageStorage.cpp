@@ -379,8 +379,7 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
     totalHash ^= entriesHash;
     KeyPage_LOG(INFO) << LOG_DESC("hash") << LOG_KV("size", allData.size())
                       << LOG_KV("readLength", m_readLength) << LOG_KV("writeLength", m_writeLength)
-                      << LOG_KV("pageCount", pageCount)
-                      << LOG_KV("entrycount", entrycount)
+                      << LOG_KV("pageCount", pageCount) << LOG_KV("entrycount", entrycount)
                       << LOG_KV("entriesHash", entriesHash.hex())
                       << LOG_KV("pagesHash", pagesHash.hex())
                       << LOG_KV("totalHash", totalHash.hex());
@@ -698,20 +697,24 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
             return std::make_pair(nullptr, std::nullopt);
         }
         auto page = &std::get<0>(pageData->data);
-        if (page->validCount() != pageInfoOp.value()->getCount() && !m_ignoreNotExist)
+        if (page->validCount() != pageInfoOp.value()->getCount())
         {
-            KeyPage_LOG(FATAL) << LOG_DESC("getEntryFromPage page valid count mismatch")
-                               << LOG_KV("key", toHex(key))
-                               << LOG_KV("count", pageInfoOp.value()->getCount())
-                               << LOG_KV("realCount", page->validCount());
+            if (m_ignoreNotExist)
+            {
+                KeyPage_LOG(INFO) << LOG_DESC("getEntryFromPage page count mismatch ignore")
+                                  << LOG_KV("key", toHex(key))
+                                  << LOG_KV("count", pageInfoOp.value()->getCount())
+                                  << LOG_KV("realCount", page->validCount());
+            }
+            else
+            {
+                KeyPage_LOG(FATAL)
+                    << LOG_DESC("getEntryFromPage page valid count mismatch")
+                    << LOG_KV("key", toHex(key)) << LOG_KV("count", pageInfoOp.value()->getCount())
+                    << LOG_KV("realCount", page->validCount());
+            }
         }
-        if (m_ignoreNotExist)
-        {
-            KeyPage_LOG(INFO) << LOG_DESC("getEntryFromPage page count mismatch ignore")
-                              << LOG_KV("key", toHex(key))
-                              << LOG_KV("count", pageInfoOp.value()->getCount())
-                              << LOG_KV("realCount", page->validCount());
-        }
+
         if (m_readOnly)
         {  // TODO: check condition, if key is pageKey, return page
             if (pageInfoOp.value()->getPageKey() != key)
