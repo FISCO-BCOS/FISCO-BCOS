@@ -1179,8 +1179,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
     bcos::protocol::TwoPCParams params;
     params.number = number();
     params.timestamp = 0;
-    m_scheduler->m_storage->asyncCommit(
-        params, [status, this](Error::Ptr&& error, uint64_t commitTS) {
+    m_scheduler->m_storage->asyncCommit(params,
+        [status, this, callback = std::move(callback)](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -1188,6 +1188,28 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 
                 ++status->failed;
                 status->checkAndCommit(*status);
+                return;
+
+                batchBlockRollback(status->startTS,
+                    [this, callback = std::move(callback)](Error::UniquePtr&& error) {
+                        if (error)
+                        {
+                            SCHEDULER_LOG(ERROR)
+                                << BLOCK_NUMBER(number())
+                                << "Rollback storage(for commit scheduler storage error) failed!"
+                                << LOG_KV("number", number()) << " " << error->errorMessage();
+                            // FATAL ERROR, NEED MANUAL FIX!
+
+                            callback(std::move(error));
+                            return;
+                        }
+                        else
+                        {
+                            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
+                                "Commit scheduler storage error, rollback"));
+                            return;
+                        }
+                    });
                 return;
             }
             else
