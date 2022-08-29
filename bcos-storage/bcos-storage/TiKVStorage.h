@@ -82,7 +82,7 @@ public:
         std::vector<std::string> values) noexcept override;
 
 private:
-    int32_t m_maxRetry = 20;
+    int32_t m_maxRetry = 2048;  // Notice: too small number may lead to asyncPrepare failed.
     size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
