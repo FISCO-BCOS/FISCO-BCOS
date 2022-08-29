@@ -1184,11 +1184,8 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Commit storage error!" << error->errorMessage();
-
-                ++status->failed;
-                status->checkAndCommit(*status);
-                return;
+                    << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
+                    << error->errorMessage();
 
                 batchBlockRollback(status->startTS,
                     [this, callback = std::move(callback)](Error::UniquePtr&& error) {
