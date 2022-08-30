@@ -363,6 +363,9 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                     std::string((char*)(_txToStore->at(i)->data()), _txToStore->at(i)->size());
             }
         });
+    // Note: transactions must be submitted serially, because transaction submissions are
+    // transactional, preventing write conflicts
+    RecursiveGuard l(m_mutex);
     auto error = m_storage->setRows(SYS_HASH_2_TX, std::move(keys), std::move(values));
     _onTxStored(error);
 }

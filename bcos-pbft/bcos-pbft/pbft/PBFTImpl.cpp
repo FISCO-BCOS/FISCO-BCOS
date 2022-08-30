@@ -130,7 +130,14 @@ void PBFTImpl::asyncGetConsensusStatus(
     consensusStatus["isConsensusNode"] = config->isConsensusNode();
     consensusStatus["blockNumber"] = (Json::UInt64)config->committedProposal()->index();
     consensusStatus["hash"] = *toHexString(config->committedProposal()->hash());
-    consensusStatus["timeout"] = config->timeout();
+    if (config->isConsensusNode())
+    {
+        consensusStatus["timeout"] = config->timeout();
+    }
+    else
+    {
+        consensusStatus["timeout"] = false;
+    }
     consensusStatus["changeCycle"] = (Json::UInt64)config->timer()->changeCycle();
     consensusStatus["view"] = (Json::UInt64)config->view();
     consensusStatus["connectedNodeList"] = (Json::UInt64)((config->connectedNodeList()).size());
