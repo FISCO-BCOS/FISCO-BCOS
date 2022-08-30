@@ -50,7 +50,7 @@ public:
     };
 
     Status getStatus() { return m_status; }
-    virtual CallParameters::UniquePtr go();
+    CallParameters::UniquePtr go();
     void setResumeParam(CallParameters::UniquePtr pullParam);
     int64_t getContextID() { return m_contextID; }
     int64_t getSeq() { return m_seq; }
