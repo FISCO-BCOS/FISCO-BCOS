@@ -30,46 +30,69 @@ public:
     {
         if (input->type == CallParameters::MESSAGE || input->type == CallParameters::KEY_LOCK)
         {
-            if (input->contextID == 0)
+            EXECUTOR_LOG(DEBUG) << LOG_KV("contextID", input->contextID)
+                                << LOG_KV("keylocks_size", input->keyLocks.size());
+            if (input->contextID == 2)
             {
                 input->keyLocks = {"key0"};
                 input->type = CallParameters::MESSAGE;
                 return input;
             }
-            else if (input->contextID == 1)
+            else if (input->contextID == 1 && input->keyLocks.size() != 0)
             {
                 m_lastKeyLocks = input->keyLocks;
-                uint16_t count = 0;
+                uint16_t count1 = 0;
                 for (size_t i = 0; i < m_lastKeyLocks.size(); ++i)
                 {
                     auto value = m_lastKeyLocks[i].compare("key" + std::to_string(i));
                     BOOST_CHECK_EQUAL(value, 0);
-                    count++;
+                    count1++;
                 }
-                BOOST_CHECK_EQUAL(count, 1);
+                BOOST_CHECK_EQUAL(count1, 1);
                 std::vector<std::string> appendLocks = {"key1"};
                 std::copy(
                     appendLocks.begin(), appendLocks.end(), std::back_inserter(m_lastKeyLocks));
                 input->keyLocks = m_lastKeyLocks;
                 input->type = CallParameters::KEY_LOCK;
+                EXECUTOR_LOG(DEBUG) << LOG_KV("contextID", input->contextID)
+                                    << LOG_KV("keylocks_size", input->keyLocks.size());
                 return input;
             }
-            else if (input->contextID == 2)
+            else if (input->contextID == 0 && input->keyLocks.size() != 0)
             {
+                EXECUTOR_LOG(DEBUG)
+                    << LOG_KV("contextID", input->contextID)
+                    << LOG_KV("keylocks_size", input->keyLocks.size()) << input->keyLocks[0]
+                    << input->keyLocks[1] << input->keyLocks[2];
                 m_lastKeyLocks = input->keyLocks;
                 uint16_t count = 0;
                 for (size_t i = 0; i < m_lastKeyLocks.size(); ++i)
                 {
-                    auto value = m_lastKeyLocks[i].compare("key" + std::to_string(i));
-                    BOOST_CHECK_EQUAL(value, 0);
-                    count++;
+                    if (i >= 1)
+                    {
+                        auto value = m_lastKeyLocks[i].compare("key" + std::to_string(i - 1));
+                        BOOST_CHECK_EQUAL(value, 0);
+                        count++;
+                    }
+                    else
+                    {
+                        auto value = m_lastKeyLocks[i].compare("key" + std::to_string(i));
+                        BOOST_CHECK_EQUAL(value, 0);
+                        count++;
+                    }
                 }
-                BOOST_CHECK_EQUAL(count, 2);
+                BOOST_CHECK_EQUAL(count, 3);
                 std::vector<std::string> appendLocks = {"key2"};
                 std::copy(
                     appendLocks.begin(), appendLocks.end(), std::back_inserter(m_lastKeyLocks));
                 input->keyLocks = m_lastKeyLocks;
                 input->type = CallParameters::KEY_LOCK;
+                EXECUTOR_LOG(DEBUG) << LOG_KV("contextID", input->contextID)
+                                    << LOG_KV("keylocks_size", input->keyLocks.size());
+                return input;
+            }
+            else
+            {
                 return input;
             }
         }

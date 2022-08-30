@@ -157,24 +157,13 @@ BOOST_AUTO_TEST_CASE(RunTest)
     bool flag = true;
     for (int i = 0u; i < sequence->size(); ++i)
     {
-        if (i <= 10)
+        if (sequence->at(i) != 20 - i)
         {
-            if (sequence->at(i) != 11 + i)
-            {
-                flag = false;
-                break;
-            }
-        }
-        else
-        {
-            if (sequence->at(i) != i - 9)
-            {
-                flag = false;
-                break;
-            }
+            flag = false;
+            break;
         }
     }
-    // BOOST_CHECK(flag);
+    BOOST_CHECK(flag);
 }
 
 BOOST_AUTO_TEST_CASE(DagTest)
@@ -203,10 +192,10 @@ BOOST_AUTO_TEST_CASE(DagTest)
         [this, sequence](CallParameters::UniquePtr output) {
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
                                 << ",the conntextID is:" << output->contextID;
-            if (output->contextID == 0)
+            if (output->contextID == 2)
             {
                 uint16_t count = 0;
-                std::vector<std::string> m_KeyLocks = out->keyLocks;
+                std::vector<std::string> m_KeyLocks = output->keyLocks;
                 for (size_t i = 0; i < m_KeyLocks.size(); ++i)
                 {
                     auto value = m_KeyLocks[i].compare("key" + std::to_string(i));
@@ -214,12 +203,11 @@ BOOST_AUTO_TEST_CASE(DagTest)
                     count++;
                 }
                 BOOST_CHECK_EQUAL(count, 1);
-                BOOST_CHECK(m_KeyLocks);
             }
             else if (output->contextID == 1)
             {
                 uint16_t count = 0;
-                std::vector<std::string> m_KeyLocks = out->keyLocks;
+                std::vector<std::string> m_KeyLocks = output->keyLocks;
                 for (size_t i = 0; i < m_KeyLocks.size(); ++i)
                 {
                     auto value = m_KeyLocks[i].compare("key" + std::to_string(i));
@@ -227,21 +215,28 @@ BOOST_AUTO_TEST_CASE(DagTest)
                     count++;
                 }
                 BOOST_CHECK_EQUAL(count, 2);
-                BOOST_CHECK(output->keyLocks);
                 BOOST_CHECK(output->type == CallParameters::KEY_LOCK);
             }
-            else if (output->contextID == 2)
+            else if (output->contextID == 0)
             {
                 uint16_t count = 0;
-                std::vector<std::string> m_KeyLocks = out->keyLocks;
+                std::vector<std::string> m_KeyLocks = output->keyLocks;
                 for (size_t i = 0; i < m_KeyLocks.size(); ++i)
                 {
-                    sudo value = m_KeyLocks[i].compare("key" + std::to_string(i));
-                    BOOST_CHECK_EQUAL(value, 0);
-                    count++;
+                    if (i >= 1)
+                    {
+                        auto value = m_KeyLocks[i].compare("key" + std::to_string(i - 1));
+                        BOOST_CHECK_EQUAL(value, 0);
+                        count++;
+                    }
+                    else
+                    {
+                        auto value = m_KeyLocks[i].compare("key" + std::to_string(i));
+                        BOOST_CHECK_EQUAL(value, 0);
+                        count++;
+                    }
                 }
-                BOOST_CHECK_EQUAL(count, 3);
-                BOOST_CHECK(output->keyLocks);
+                BOOST_CHECK_EQUAL(count, 4);
                 BOOST_CHECK(output->type == CallParameters::KEY_LOCK);
             }
             sequence->push_back(output->contextID);
@@ -260,7 +255,7 @@ BOOST_AUTO_TEST_CASE(DagTest)
             else
             {
                 EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
-                BOOST_CHECK_EQUAL(sequence->size(), 15);
+                BOOST_CHECK_EQUAL(sequence->size(), 3);
             }
         });
 }
