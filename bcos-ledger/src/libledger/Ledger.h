@@ -145,5 +145,7 @@ private:
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
+
+    mutable RecursiveMutex m_mutex;
 };
 }  // namespace bcos::ledger
