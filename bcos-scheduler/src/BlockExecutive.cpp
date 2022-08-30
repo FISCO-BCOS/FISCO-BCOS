@@ -491,7 +491,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 }
 
                 SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
-                batchBlockCommit([this, callback](Error::UniquePtr&& error) {
+                batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
                         SCHEDULER_LOG(ERROR)
@@ -1152,7 +1152,8 @@ void BlockExecutive::batchGetHashes(
         });
 }
 
-void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> callback)
+void BlockExecutive::batchBlockCommit(
+    uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
@@ -1179,15 +1180,16 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
     bcos::protocol::TwoPCParams params;
     params.number = number();
     params.timestamp = 0;
-    m_scheduler->m_storage->asyncCommit(params,
-        [status, this, callback = std::move(callback)](Error::Ptr&& error, uint64_t commitTS) {
+    m_scheduler->m_storage->asyncCommit(
+        params, [rollbackVersion, status, this, callback = std::move(callback)](
+                    Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
                     << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
                     << error->errorMessage();
 
-                batchBlockRollback(status->startTS,
+                batchBlockRollback(rollbackVersion,
                     [this, callback = std::move(callback)](Error::UniquePtr&& error) {
                         if (error)
                         {

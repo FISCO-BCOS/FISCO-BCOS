@@ -116,7 +116,7 @@ protected:
     };
     void batchNextBlock(std::function<void(Error::UniquePtr)> callback);
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
-    void batchBlockCommit(std::function<void(Error::UniquePtr)> callback);
+    void batchBlockCommit(uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback);
     void batchBlockRollback(uint64_t version, std::function<void(Error::UniquePtr)> callback);
 
     struct BatchStatus  // Batch state per batch
