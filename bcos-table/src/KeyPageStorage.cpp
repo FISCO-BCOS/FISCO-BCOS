@@ -703,6 +703,7 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
             {
                 KeyPage_LOG(INFO) << LOG_DESC("getEntryFromPage page count mismatch ignore")
                                   << LOG_KV("key", toHex(key))
+                                  << LOG_KV("pageKey", toHex(pageInfoOp.value()->getPageKey()))
                                   << LOG_KV("count", pageInfoOp.value()->getCount())
                                   << LOG_KV("realCount", page->validCount());
             }
@@ -710,6 +711,7 @@ std::pair<Error::UniquePtr, std::optional<Entry>> KeyPageStorage::getEntryFromPa
             {
                 KeyPage_LOG(FATAL)
                     << LOG_DESC("getEntryFromPage page valid count mismatch")
+                    << LOG_KV("pageKey", toHex(pageInfoOp.value()->getPageKey()))
                     << LOG_KV("key", toHex(key)) << LOG_KV("count", pageInfoOp.value()->getCount())
                     << LOG_KV("realCount", page->validCount());
             }
@@ -794,7 +796,7 @@ Error::UniquePtr KeyPageStorage::setEntryToPage(std::string table, std::string k
         auto page = &std::get<0>(pageData->data);
         if (shouldExist && page->validCount() != pageInfoOption.value()->getCount())
         {
-            KeyPage_LOG(FATAL) << LOG_DESC("page valid count mismatch")
+            KeyPage_LOG(FATAL) << LOG_DESC("page valid count mismatch") << LOG_KV("key", toHex(key))
                                << LOG_KV("count", pageInfoOption.value()->getCount())
                                << LOG_KV("realCount", page->validCount());
         }
