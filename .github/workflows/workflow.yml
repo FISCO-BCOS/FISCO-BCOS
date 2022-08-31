@@ -21,9 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-20.04 , centos7.6]
         tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
-    container: docker.io/centos:7
     steps:
       - uses: actions/checkout@v2
         with:
