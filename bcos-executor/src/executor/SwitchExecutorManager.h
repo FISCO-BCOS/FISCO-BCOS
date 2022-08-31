@@ -58,6 +58,19 @@ public:
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
+        if (schedulerTermId < m_schedulerTermId)
+        {
+            // Call from an outdated scheduler instance
+            // Just return without callback, because run callback may trigger a new switch, thus
+            // some message will be outdated and trigger switch again and again.
+            EXECUTOR_LOG(INFO)
+                << LOG_DESC("nextBlockHeader: not refreshExecutor for invalid schedulerTermId")
+                << LOG_KV("termId", schedulerTermId) << LOG_KV("currentTermId", m_schedulerTermId);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::STOPPED, "old executor has been stopped"));
+            return;
+        }
+
         refreshExecutor(schedulerTermId);
 
         m_pool.enqueue([executor = m_executor, schedulerTermId,
@@ -89,22 +102,22 @@ public:
             return;
         }
 
-        m_pool.enqueue([executor = m_executor, inputRaw = input.release(),
-                           callback = std::move(callback)] {
-            // create a holder
-            auto _holdExecutorCallback = [executorHolder = executor, callback =
-                                                                         std::move(callback)](
-                                             bcos::Error::UniquePtr error,
-                                             bcos::protocol::ExecutionMessage::UniquePtr output) {
-                EXECUTOR_LOG(TRACE)
-                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
-                callback(std::move(error), std::move(output));
-            };
+        m_pool.enqueue(
+            [executor = m_executor, inputRaw = input.release(), callback = std::move(callback)] {
+                // create a holder
+                auto _holdExecutorCallback =
+                    [executorHolder = executor, callback = std::move(callback)](
+                        bcos::Error::UniquePtr error,
+                        bcos::protocol::ExecutionMessage::UniquePtr output) {
+                        EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                            << LOG_KV("ptr count", executorHolder.use_count());
+                        callback(std::move(error), std::move(output));
+                    };
 
-            // execute the function
-            executor->executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr(inputRaw),
-                std::move(_holdExecutorCallback));
-        });
+                // execute the function
+                executor->executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr(inputRaw),
+                    std::move(_holdExecutorCallback));
+            });
     }
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,

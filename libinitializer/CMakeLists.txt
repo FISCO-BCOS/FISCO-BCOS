@@ -14,7 +14,10 @@ add_library(${FRONTSERVICE_INIT_LIB} FrontServiceInitializer.cpp)
 target_link_libraries(${FRONTSERVICE_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${FRONT_TARGET})
 
 add_library(${PBFT_INIT_LIB} PBFTInitializer.cpp ProPBFTInitializer.cpp)
-target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${LEDGER_TARGET} ${TOOL_TARGET} ${SEALER_TARGET} ${PBFT_TARGET} ${SYNC_TARGET} ${LEADER_ELECTION_TARGET})
+target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${LEDGER_TARGET} ${TOOL_TARGET} ${SEALER_TARGET} ${PBFT_TARGET} ${SYNC_TARGET})
+if(WITH_TIKV)
+    target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${LEADER_ELECTION_TARGET})
+endif()
 
 add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${TXPOOL_TARGET})

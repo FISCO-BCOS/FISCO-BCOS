@@ -40,11 +40,11 @@ jobs:
             centos-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
-          sudo yum -y update
-          sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static
-          sudo yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
-          sudo yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-          sudo yum install -y git
+          yum -y update
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
+          yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+          yum install -y git
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1

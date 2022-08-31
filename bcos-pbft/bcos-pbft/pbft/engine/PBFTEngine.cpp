@@ -168,6 +168,15 @@ void PBFTEngine::onLoadAndVerifyProposalFinish(
 
 void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal)
 {
+    if (!m_config->asMasterNode())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "onProposalApplyFailed: proposal execute failed, but do nothing "
+                                 "for the node-self is not "
+                                 "the master node")
+                          << printPBFTProposal(_proposal) << m_config->printCurrentState();
+        return;
+    }
     PBFT_LOG(WARNING) << LOG_DESC("proposal execute failed") << printPBFTProposal(_proposal)
                       << m_config->printCurrentState();
     // Note: must add lock here to ensure thread-safe
@@ -1474,6 +1483,15 @@ void PBFTEngine::onReceivePrecommitRequest(
 void PBFTEngine::onStableCheckPointCommitFailed(
     Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal)
 {
+    if (!m_config->asMasterNode())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "onStableCheckPointCommitFailed: but do nothing for the node-self "
+                                 "is not a master node")
+                          << printPBFTProposal(_stableProposal) << m_config->printCurrentState();
+        return;
+    }
+
     if (_stableProposal->index() <= m_config->committedProposal()->index())
     {
         PBFT_LOG(INFO) << LOG_DESC(

@@ -115,13 +115,18 @@ class ServiceInfoConfig:
 
 
 class NodeServiceConfig:
-    def __init__(self, app_name, base_service_name, service_name, service_obj_list, deploy_ip_list, config_file_list):
+    def __init__(self, app_name, base_service_name, service_name, service_obj_list, deploy_ip_list, config_file_list, need_add_ini_config):
         self.app_name = app_name
         self.service_name = service_name
         self.service_obj_list = service_obj_list
         self.deploy_ip_list = deploy_ip_list
         self.base_service_name = base_service_name
+        # Note: in max-node mode, only contains [config.genesis, node.pem]
+        #       in pro-node mode, contains [config.ini, config.genesis, node.pem]
         self.config_file_list = config_file_list
+        # Note: in max-node mode, the ini config files prefixed with deploy ip
+        self.ini_config_file = "config.ini"
+        self.need_add_ini_config = need_add_ini_config
 
 
 class NodeConfig:
@@ -173,15 +178,18 @@ class NodeConfig:
 
         node_deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True, self.desc)
-        self.node_config_file_list = [
-            "config.ini", "config.genesis", "node.pem"]
         deploy_ip_list = []
+        self.node_config_file_list = None
         if node_type != "max":
+            self.node_config_file_list = [
+                "config.ini", "config.genesis", "node.pem"]
             deploy_ip_list.append(node_deploy_ip)
         else:
+            self.node_config_file_list = ["config.genesis", "node.pem"]
             deploy_ip_list = node_deploy_ip
+
         self.node_service = NodeServiceConfig(self.agency_config.chain_id, self.node_service_base_name, self.node_service_name,
-                                              self.node_service_obj_list, deploy_ip_list, self.node_config_file_list)
+                                              self.node_service_obj_list, deploy_ip_list, self.node_config_file_list, True)
         self.service_list.append(self.node_service)
 
     def get_service_name(self, service_base_name):
@@ -225,7 +233,7 @@ class MaxNodeConfig(NodeConfig):
             self.config, "executor_deploy_ip", None, True, self.desc)
         self.executor_config_file_list = ["config.ini", "config.genesis"]
         self.executor_service = NodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service, executor_service_name,
-                                                  utilities.ServiceInfo.executor_service_obj, executor_service_deploy_ip, self.executor_config_file_list)
+                                                  utilities.ServiceInfo.executor_service_obj, executor_service_deploy_ip, self.executor_config_file_list, False)
         self.service_list.append(self.executor_service)
 
     def __load_service_name(self):

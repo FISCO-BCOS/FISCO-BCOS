@@ -491,7 +491,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 }
 
                 SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
-                batchBlockCommit([this, callback](Error::UniquePtr&& error) {
+                batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
                         SCHEDULER_LOG(ERROR)
@@ -1152,11 +1152,12 @@ void BlockExecutive::batchGetHashes(
         });
 }
 
-void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> callback)
+void BlockExecutive::batchBlockCommit(
+    uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
-    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+    status->checkAndCommit = [this, callback](const CommitStatus& status) {
         if (!m_isRunning)
         {
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"));
@@ -1180,14 +1181,32 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
     params.number = number();
     params.timestamp = 0;
     m_scheduler->m_storage->asyncCommit(
-        params, [status, this](Error::Ptr&& error, uint64_t commitTS) {
+        params, [rollbackVersion, status, this, callback](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Commit storage error!" << error->errorMessage();
+                    << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
+                    << error->errorMessage();
 
-                ++status->failed;
-                status->checkAndCommit(*status);
+                batchBlockRollback(rollbackVersion, [this, callback](Error::UniquePtr&& error) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR)
+                            << BLOCK_NUMBER(number())
+                            << "Rollback storage(for commit scheduler storage error) failed!"
+                            << LOG_KV("number", number()) << " " << error->errorMessage();
+                        // FATAL ERROR, NEED MANUAL FIX!
+
+                        callback(std::move(error));
+                        return;
+                    }
+                    else
+                    {
+                        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
+                            "Commit scheduler storage error, rollback"));
+                        return;
+                    }
+                });
                 return;
             }
             else

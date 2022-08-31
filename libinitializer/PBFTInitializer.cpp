@@ -361,12 +361,12 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
         _rpc->asyncNotifyGroupInfo(m_groupInfo, [_version](bcos::Error::Ptr&& _error) {
             if (!_error)
             {
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("versionInfoNotification success") << LOG_KV("version", _version);
+                INITIALIZER_LOG(WARNING) << LOG_DESC("Election versionInfoNotification success")
+                                         << LOG_KV("version", _version);
                 return;
             }
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("versionInfoNotification error") << LOG_KV("version", _version)
+                << LOG_DESC("Election versionInfoNotification error") << LOG_KV("version", _version)
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         });
         onGroupInfoChanged();
@@ -484,7 +484,7 @@ void PBFTInitializer::onGroupInfoChanged()
     }
     // failover enabled, should sync the latest information to the etcd if the node is
     // leader
-    INITIALIZER_LOG(INFO) << LOG_DESC("onGroupInfoChanged, update the memberConfig");
+    INITIALIZER_LOG(INFO) << LOG_DESC("Election onGroupInfoChanged, update the memberConfig");
     std::string modifiedConfig;
     m_groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
     auto memberInfo = m_memberFactory->createMember();

@@ -50,6 +50,7 @@ public:
     void registerOnCampaignHandler(
         std::function<void(bool, bcos::protocol::MemberInterface::Ptr)> _onCampaignHandler) override
     {
+        // Note: m_onCampaignHandler can't been executed in threadPool
         m_onCampaignHandler = _onCampaignHandler;
     }
 
