@@ -21,7 +21,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04 , centos7.6]
         tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
     steps:
       - uses: actions/checkout@v2
@@ -33,7 +32,7 @@ jobs:
           path: |
             /home/runner/.ccache
             /Users/runner/.ccache/
-            deps/src
+            deps/
           key: centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
@@ -41,10 +40,11 @@ jobs:
             centos-notest-${{ matrix.os }}-
       - name: Prepare centos tools
         run: |
-          yum install -y epel-release centos-release-scl flex bison patch gmp-static
-          yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
-          yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-          yum install -y git
+          sudo yum -y update
+          sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          sudo yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
+          sudo yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+          sudo yum install -y git
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
@@ -63,8 +63,8 @@ jobs:
           . /opt/rh/llvm-toolset-7/enable
           mkdir -p build
           cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
-          cmake3 --build . --parallel 3
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../ || cat *.log
+          cmake3 --build . --parallel 16
       - name: Test with tikv
         if: matrix.tikv == 'WITH_TIKV=ON'
         run: |
@@ -82,4 +82,4 @@ jobs:
         if: matrix.tikv == 'WITH_TIKV=OFF'
         run: |
           export OMP_NUM_THREADS=1
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test 
