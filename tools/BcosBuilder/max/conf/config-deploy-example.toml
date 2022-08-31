@@ -36,7 +36,7 @@ consensus_type = "pbft"
 # transaction gas limit
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
-# the default is 3.0.0-rc4
+# the default is 3.0.0
 compatibility_version="3.0.0"
 
 [[agency]]
