@@ -16,7 +16,7 @@ on:
 jobs:
   build_centos:
     name: build_centos
-    runs-on: self-hosted
+    runs-on: ci-centos7-docker0
     continue-on-error: true
     strategy:
       fail-fast: false
