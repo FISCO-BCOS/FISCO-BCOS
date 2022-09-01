@@ -79,7 +79,7 @@ jobs:
       fail-fast: false
       matrix:
         tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
-    steps
+    steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
