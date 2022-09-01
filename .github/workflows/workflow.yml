@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     name: build
-    runs-on: ci-ubuntu20-docker1
+    runs-on: ubuntu-docker
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -71,7 +71,7 @@ jobs:
           fail_ci_if_error: true
   build_centos:
     name: build_centos
-    runs-on: self-hosted
+    runs-on: centos-docker
     continue-on-error: true
     strategy:
       fail-fast: false
