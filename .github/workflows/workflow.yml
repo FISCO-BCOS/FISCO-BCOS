@@ -69,3 +69,73 @@ jobs:
           file: ./build/coverage.info
           name: FISCO BCOS 3.0.0 coverage
           fail_ci_if_error: true
+  jobs:
+  build_centos:
+    name: build_centos
+    runs-on: self-hosted
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        tikv: ['WITH_TIKV=ON', 'WITH_TIKV=OFF']
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - uses: actions/cache@v2
+        id: deps_cache
+        with:
+          path: |
+            /home/runner/.ccache
+            /Users/runner/.ccache/
+            deps/
+          key: centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            centos-notest-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            centos-notest-${{ matrix.os }}-${{ github.base_ref }}-
+            centos-notest-${{ matrix.os }}-
+      - name: Prepare centos tools
+        run: |
+          sudo yum -y update
+          sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          sudo yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
+          sudo yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+          sudo yum install -y git
+      - name: Prepare vcpkg
+        if: runner.os != 'Windows'
+        uses: friendlyanon/setup-vcpkg@v1
+        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-07-28
+          override: true
+      - name: Build
+        run: |
+          alias cmake='cmake3'
+          . /opt/rh/devtoolset-10/enable
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          . /opt/rh/llvm-toolset-7/enable
+          mkdir -p build
+          cd build
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../ || cat *.log
+          cmake3 --build . --parallel 16
+      - name: Test with tikv
+        if: matrix.tikv == 'WITH_TIKV=ON'
+        run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          mkdir -p /root/.tiup/bin/
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /github/home/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.4.2 --mode tikv-slim &
+          sleep 15
+          export OMP_NUM_THREADS=1
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: Test
+        if: matrix.tikv == 'WITH_TIKV=OFF'
+        run: |
+          export OMP_NUM_THREADS=1
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
