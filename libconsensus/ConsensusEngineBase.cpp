@@ -287,22 +287,16 @@ void ConsensusEngineBase::statGasUsed(dev::eth::Block const& _block)
     {
         return;
     }
-    auto blockGasUsed = (*_block.transactionReceipts())[txsNum - 1]->gasUsed();
-    STAT_LOG(INFO) << LOG_TYPE("BlockGasUsed") << LOG_KV("g", m_groupId) << LOG_KV("txNum", txsNum)
-                   << LOG_KV("gasUsed", blockGasUsed)
-                   << LOG_KV("blockNumber", _block.blockHeader().number())
-                   << LOG_KV("sealerIdx", _block.blockHeader().sealer())
-                   << LOG_KV("blockHash", toHex(_block.blockHeader().hash()))
-                   << LOG_KV("nodeID", toHex(m_keyPair.pub()));
     // print the gasUsed for each transaction
     u256 prevGasUsed = 0;
     uint64_t receiptIndex = 0;
     auto receipts = _block.transactionReceipts();
+    auto totalGas = 0;
     for (auto const& tx : *_block.transactions())
     {
         auto receipt = (*receipts)[receiptIndex];
         u256 gasUsed = receipt->gasUsed();
-        if (g_BCOSConfig.version() < V2_9_0)
+        if (g_BCOSConfig.version() < V2_9_0 && (receiptIndex > 0))
         {
             gasUsed = receipt->gasUsed() - prevGasUsed;
         }
@@ -310,7 +304,14 @@ void ConsensusEngineBase::statGasUsed(dev::eth::Block const& _block)
                        << LOG_KV("txHash", toHex(tx->hash())) << LOG_KV("gasUsed", gasUsed);
         prevGasUsed = receipt->gasUsed();
         receiptIndex++;
+        totalGas += gasUsed;
     }
+    STAT_LOG(INFO) << LOG_TYPE("BlockGasUsed") << LOG_KV("g", m_groupId) << LOG_KV("txNum", txsNum)
+                   << LOG_KV("gasUsed", totalGas)
+                   << LOG_KV("blockNumber", _block.blockHeader().number())
+                   << LOG_KV("sealerIdx", _block.blockHeader().sealer())
+                   << LOG_KV("blockHash", toHex(_block.blockHeader().hash()))
+                   << LOG_KV("nodeID", toHex(m_keyPair.pub()));
 }
 
 void ConsensusEngineBase::updateMaxBlockTransactions()
