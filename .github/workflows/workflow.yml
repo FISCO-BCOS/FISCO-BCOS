@@ -30,8 +30,6 @@ jobs:
         with:
           toolchain: nightly-2022-07-28
           override: true
-      - name: Delete vcpkg
-        run: rm -rf _work/FISCO-BCOS/FISCO-BCOS/vcpkg/*
       - name: Prepare vcpkg
         if: runner.os == 'Linux'
         uses: friendlyanon/setup-vcpkg@v1
@@ -101,8 +99,6 @@ jobs:
           yum install -y epel-release centos-release-scl flex bison patch gmp-static
           yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
           yum install -y git
-      - name: Delete vcpkg
-        run: rm -rf _work/FISCO-BCOS/FISCO-BCOS/vcpkg/*
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
