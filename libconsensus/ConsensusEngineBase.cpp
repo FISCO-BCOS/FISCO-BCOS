@@ -291,7 +291,7 @@ void ConsensusEngineBase::statGasUsed(dev::eth::Block const& _block)
     u256 prevGasUsed = 0;
     uint64_t receiptIndex = 0;
     auto receipts = _block.transactionReceipts();
-    auto totalGas = 0;
+    u256 totalGas = 0;
     for (auto const& tx : *_block.transactions())
     {
         auto receipt = (*receipts)[receiptIndex];
