@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     name: build
-    runs-on: ci-ubuntu20-docker
+    runs-on: ci-ubuntu20-docker1
     continue-on-error: true
     strategy:
       fail-fast: false
