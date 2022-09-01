@@ -69,7 +69,6 @@ jobs:
           file: ./build/coverage.info
           name: FISCO BCOS 3.0.0 coverage
           fail_ci_if_error: true
-  jobs:
   build_centos:
     name: build_centos
     runs-on: self-hosted
