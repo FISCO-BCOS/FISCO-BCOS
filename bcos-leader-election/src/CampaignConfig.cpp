@@ -124,3 +124,18 @@ void CampaignConfig::onLeaderKeyChanged(etcd::Response _response)
                        << LOG_KV("leaderKey", m_leaderKey);
     checkAndUpdateLeaderKey(_response);
 }
+
+
+void CampaignConfig::onElectionClusterRecover()
+{
+    ElectionConfig::onElectionClusterRecover();
+    // trigger camppagin
+    resetLeader(nullptr);
+    // calls m_triggerCampaign to elect new leader when election cluster recover
+    if (m_triggerCampaign)
+    {
+        ELECTION_LOG(INFO) << LOG_DESC("onElectionClusterRecover: trigger campaign")
+                           << LOG_KV("key", m_leaderKey);
+        m_triggerCampaign();
+    }
+}

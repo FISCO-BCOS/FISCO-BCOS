@@ -47,7 +47,8 @@ void WatcherConfig::fetchLeadersInfo()
     {
         updateLeaderInfo(value);
     }
-    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir);
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir)
+                       << LOG_KV("nodesSize", values.size());
 }
 
 void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)

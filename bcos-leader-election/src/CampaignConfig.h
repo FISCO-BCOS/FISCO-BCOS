@@ -88,6 +88,7 @@ protected:
     virtual void fetchLeaderInfoFromEtcd();
     virtual void onLeaderKeyChanged(etcd::Response _response);
     bool checkAndUpdateLeaderKey(etcd::Response _response);
+    void onElectionClusterRecover() override;
     void reCreateWatcher() override
     {
         m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_leaderKey,
