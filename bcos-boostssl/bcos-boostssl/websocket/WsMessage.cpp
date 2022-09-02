@@ -24,59 +24,85 @@
 
 using namespace bcos;
 using namespace bcos::boostssl;
-using namespace bcos::boostssl::utilities;
 using namespace bcos::boostssl::ws;
 
-// seq field length
-const size_t WsMessage::SEQ_LENGTH;
-/// type(2) + error(2) + seq(32) + data(N)
-const size_t WsMessage::MESSAGE_MIN_LENGTH;
+// version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
+constexpr size_t WsMessage::MESSAGE_MIN_LENGTH = 10;
 
 bool WsMessage::encode(bytes& _buffer)
 {
     _buffer.clear();
 
-    uint16_t type = boost::asio::detail::socket_ops::host_to_network_short(m_type);
-    uint16_t status = boost::asio::detail::socket_ops::host_to_network_short(m_status);
+    uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
+    uint16_t type = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
+    int16_t status = boost::asio::detail::socket_ops::host_to_network_short(m_status);
+    uint16_t seqLength = boost::asio::detail::socket_ops::host_to_network_short(m_seq.size());
+    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
 
-    // seq length should be SEQ_LENGTH(32) long
-    if (m_seq->size() != SEQ_LENGTH)
-    {
-        return false;
-    }
-
+    _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
     _buffer.insert(_buffer.end(), (byte*)&type, (byte*)&type + 2);
     _buffer.insert(_buffer.end(), (byte*)&status, (byte*)&status + 2);
-    _buffer.insert(_buffer.end(), m_seq->begin(), m_seq->end());
-    _buffer.insert(_buffer.end(), m_data->begin(), m_data->end());
+    _buffer.insert(_buffer.end(), (byte*)&seqLength, (byte*)&seqLength + 2);
+    _buffer.insert(_buffer.end(), m_seq.begin(), m_seq.end());
+    _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
+    _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
 
+    m_length = _buffer.size();
     return true;
 }
 
-int64_t WsMessage::decode(const byte* _buffer, std::size_t _size)
+int64_t WsMessage::decode(bytesConstRef _buffer)
 {
-    if (_size < MESSAGE_MIN_LENGTH)
+    auto length = _buffer.size();
+    if (length < MESSAGE_MIN_LENGTH)
     {
         return -1;
     }
 
-    m_seq->clear();
-    m_data->clear();
+    m_seq.clear();
+    m_payload->clear();
 
-    auto p = _buffer;
-    // type field
-    m_type = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    auto dataBuffer = _buffer.data();
+    auto p = _buffer.data();
+    size_t offset = 0;
+
+    // version field
+    m_version = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
+
+    // type field
+    m_packetType = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
+    offset += 2;
 
     // status field
     m_status = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
+    offset += 2;
 
+    // seqLength
+    uint16_t seqLength = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
+    offset += 2;
+
+    CHECK_OFFSET(offset + seqLength, length);
     // seq field
-    m_seq->insert(m_seq->begin(), p, p + SEQ_LENGTH);
-    p += SEQ_LENGTH;
-    // data field
-    m_data->insert(m_data->begin(), p, _buffer + _size);
+    m_seq.insert(m_seq.begin(), p, p + seqLength);
+    p += seqLength;
+    offset += seqLength;
 
-    return _size;
+    // ext field
+    CHECK_OFFSET(offset + 2, length);
+    m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
+    offset += 2;
+
+    // data field
+    if (p)
+    {
+        m_payload->insert(m_payload->begin(), p, dataBuffer + length);
+    }
+    m_length = length;
+    return length;
 }

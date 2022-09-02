@@ -1,4 +1,18 @@
-/**
+/*
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
  * @file reader.cpp
  * @author: xingqiangbai
  * @date 2020-06-29
@@ -7,12 +21,14 @@
  * @date 2021-11-05
  */
 
-#include "../bcos-storage/RocksDBStorage.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
-#include "interfaces/storage/StorageInterface.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-storage/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -42,7 +58,11 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         "path,p", po::value<string>()->default_value(""), "[RocksDB path]")("name,n",
         po::value<string>()->default_value(""), "[RocksDB name]")("table,t", po::value<string>(),
         "table name ")("key,k", po::value<string>()->default_value(""), "table key")(
-        "iterate,i", po::value<bool>()->default_value(false), "traverse table");
+        "iterate,i", po::value<bool>()->default_value(false), "traverse table")("config,c",
+        boost::program_options::value<std::string>()->default_value("./config.ini"),
+        "config file path, eg. config.ini")("genesis,g",
+        boost::program_options::value<std::string>()->default_value("./config.genesis"),
+        "genesis config file path, eg. genesis.ini");
     po::variables_map vm;
     try
     {
@@ -88,7 +108,44 @@ int main(int argc, const char* argv[])
     options.create_if_missing = false;
     rocksdb::Status s = rocksdb::DB::Open(options, storagePath, &db);
 
-    auto adapter = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+    std::string configPath("./config.ini");
+    if (params.count("config"))
+    {
+        configPath = params["config"].as<std::string>();
+    }
+    if (params.count("c"))
+    {
+        configPath = params["c"].as<std::string>();
+    }
+
+    std::string genesisFilePath("./config.genesis");
+    if (params.count("genesis"))
+    {
+        genesisFilePath = params["genesis"].as<std::string>();
+    }
+    if (params.count("g"))
+    {
+        genesisFilePath = params["g"].as<std::string>();
+    }
+
+    if (!boost::filesystem::exists(configPath))
+    {
+        std::cout << "config \'" << configPath << "\' not found!";
+        exit(0);
+    }
+
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
+    nodeConfig->loadConfig(configPath);
+    if (true == boost::filesystem::exists(genesisFilePath))
+        nodeConfig->loadGenesisConfig(genesisFilePath);
+
+    bcos::security::DataEncryption::Ptr dataEncryption =
+        std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+    dataEncryption->init();
+
+    auto adapter =
+        std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
 
     if (iterate)
     {

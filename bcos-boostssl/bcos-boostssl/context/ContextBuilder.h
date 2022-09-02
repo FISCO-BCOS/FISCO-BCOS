@@ -37,19 +37,27 @@ public:
 public:
     std::shared_ptr<std::string> readFileContent(boost::filesystem::path const& _file);
 
+    std::string moduleName() { return m_moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+
 public:
-    std::shared_ptr<boost::asio::ssl::context> buildSslContext(const std::string& _configPath);
-    std::shared_ptr<boost::asio::ssl::context> buildSslContext(const ContextConfig& _contextConfig);
+    std::shared_ptr<boost::asio::ssl::context> buildSslContext(
+        bool _server, const std::string& _configPath);
+    std::shared_ptr<boost::asio::ssl::context> buildSslContext(
+        bool _server, const ContextConfig& _contextConfig);
 
 private:
     std::shared_ptr<boost::asio::ssl::context> buildSslContext(
         const ContextConfig::CertConfig& _certConfig);
     std::shared_ptr<boost::asio::ssl::context> buildSslContext(
-        const ContextConfig::SMCertConfig& _smCertConfig);
+        bool _server, const ContextConfig::SMCertConfig& _smCertConfig);
     std::shared_ptr<boost::asio::ssl::context> buildSslContextByCertContent(
         const ContextConfig::CertConfig& _certConfig);
     std::shared_ptr<boost::asio::ssl::context> buildSslContextByCertContent(
-        const ContextConfig::SMCertConfig& _smCertConfig);
+        bool _server, const ContextConfig::SMCertConfig& _smCertConfig);
+
+private:
+    std::string m_moduleName = "DEFAULT";
 };
 
 }  // namespace context

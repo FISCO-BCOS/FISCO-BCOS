@@ -22,9 +22,9 @@
 
 #include "bcos-txpool/sync/TransactionSyncConfig.h"
 #include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
-#include <bcos-framework/interfaces/protocol/Protocol.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
-#include <bcos-framework/libutilities/Worker.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/Worker.h>
 
 namespace bcos
 {
@@ -38,10 +38,11 @@ public:
     using Ptr = std::shared_ptr<TransactionSync>;
     explicit TransactionSync(TransactionSyncConfig::Ptr _config)
       : TransactionSyncInterface(_config),
-        Worker("sync", 0),
+        Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
-        m_worker(std::make_shared<ThreadPool>("sync", 1)),
-        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 1)),
+        m_worker(
+            std::make_shared<ThreadPool>("txsSyncWorker", std::thread::hardware_concurrency())),
+        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
         m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
     {
         m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { this->noteNewTransactions(); });

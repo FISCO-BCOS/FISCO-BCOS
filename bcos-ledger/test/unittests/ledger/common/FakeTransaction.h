@@ -19,10 +19,12 @@
  */
 
 #pragma once
-#include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
-#include "bcos-framework/libutilities/Common.h"
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include "bcos-protocol/protobuf/PBTransactionFactory.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -40,7 +42,7 @@ inline PBTransaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
     auto pbTransaction = std::make_shared<PBTransaction>(
         _cryptoSuite, 1, _to, _input, _nonce, _blockLimit, _chainId, _groupId, utcTime());
     // set signature
-    auto signData = _cryptoSuite->signatureImpl()->sign(_keyPair, pbTransaction->hash(), true);
+    auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->updateSignature(bytesConstRef(signData->data(), signData->size()),
         _keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     return pbTransaction;
@@ -58,7 +60,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
 
 inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
 {
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = *toHexString(keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
@@ -70,10 +72,10 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
 }
 inline TransactionsPtr fakeTransactions(int _size)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = *toHexString(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
 
     TransactionsPtr txs = std::make_shared<Transactions>();

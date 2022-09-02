@@ -21,8 +21,7 @@
 #pragma once
 #include "engine/BlockValidator.h"
 #include "engine/PBFTEngine.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/libtool/LedgerConfigFetcher.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
 namespace bcos
 {
 namespace consensus
@@ -60,10 +59,10 @@ public:
 
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumber) override;
     void asyncNoteUnSealedTxsSize(
-        size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
+        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
     void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
     {
-        m_ledgerFetcher = _ledgerFetcher;
+        m_pbftEngine->setLedgerFetcher(_ledgerFetcher);
     }
     PBFTEngine::Ptr pbftEngine() { return m_pbftEngine; }
 
@@ -128,12 +127,31 @@ public:
             _onResponse(nullptr);
         }
     }
+    virtual void enableAsMasterNode(bool _isMasterNode);
+
+    virtual bool masterNode() const { return m_masterNode.load(); }
+
+    virtual void registerVersionInfoNotification(
+        std::function<void(uint32_t _version)> _versionNotification)
+    {
+        m_pbftEngine->pbftConfig()->registerVersionInfoNotification(_versionNotification);
+    }
+
+    uint32_t compatibilityVersion() const override
+    {
+        return m_pbftEngine->pbftConfig()->compatibilityVersion();
+    }
+
+    void clearExceptionProposalState(bcos::protocol::BlockNumber _number) override
+    {
+        m_pbftEngine->clearExceptionProposalState(_number);
+    }
 
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
-    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
     std::atomic_bool m_running = {false};
+    std::atomic_bool m_masterNode = {false};
 };
 }  // namespace consensus
 }  // namespace bcos

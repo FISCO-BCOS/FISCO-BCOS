@@ -15,18 +15,24 @@
  *
  * @brief perf for bcos-crypto
  * @file perf_demo.cpp
- * @date 2021.04.07
- * @author yujiechen
+ * @date 2022.06.04
+ * @author yujiechen ancelmo
  */
-#include "../encrypt/AESCrypto.h"
-#include "../encrypt/SM4Crypto.h"
-#include "../hash/Keccak256.h"
-#include "../hash/SM3.h"
-#include "../hash/Sha3.h"
-#include "../signature/ed25519/Ed25519Crypto.h"
-#include "../signature/secp256k1/Secp256k1Crypto.h"
-#include "../signature/sm2/SM2Crypto.h"
-#include <bcos-framework/libutilities/Common.h>
+
+#include <bcos-crypto/encrypt/AESCrypto.h>
+#include <bcos-crypto/encrypt/SM4Crypto.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/hash/Sha256.h>
+#include <bcos-crypto/hash/Sha3.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
+#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-utilities/Common.h>
+#include <boost/core/ignore_unused.hpp>
+#include <span>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -46,42 +52,120 @@ double getTPS(int64_t _endT, int64_t _startT, size_t _count)
     return (1000.0 * (double)_count) / (double)(_endT - _startT);
 }
 
-void hashPerf(
-    Hash::Ptr _hash, std::string const& _hashName, std::string const& _inputData, size_t _count)
+template <class Hash>
+std::vector<bcos::h256> hashPerf(
+    Hash& _hash, std::string_view _hashName, std::string_view _inputData, size_t _count)
 {
+    std::vector<bcos::h256> result(_count);
+
     std::cout << std::endl;
     std::cout << "----------- " << _hashName << " perf start -----------" << std::endl;
     auto startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        _hash->hash(bytesConstRef((byte const*)_inputData.c_str(), _inputData.size()));
+        result[i] = _hash->hash(bytesConstRef((byte const*)_inputData.data(), _inputData.size()));
     }
     std::cout << "input data size: " << (double)_inputData.size() / 1000.0
               << "KB, loops: " << _count << ", timeCost: " << utcTime() - startT << std::endl;
     std::cout << "TPS of " << _hashName << ": "
-              << getTPS(utcTime(), startT, _count) * (double)_inputData.size() / 1000.0 << " KB/s"
-              << std::endl;
+              << getTPS(utcTime(), startT, _count) * (double)_inputData.size() / (1024 * 1024)
+              << " MB/s" << std::endl;
     std::cout << "----------- " << _hashName << " perf end -----------" << std::endl;
     std::cout << std::endl;
+
+    return result;
 }
 
-void hashPerf(size_t _count)
+std::vector<bcos::h256> hashingPerf(
+    bcos::crypto::hasher::Hasher auto& hasher, std::string_view _inputData, size_t _count)
 {
-    std::string inputData = "abcdwer234q4@#2424wdf";
-    std::string deltaData = inputData;
-    for (int i = 0; i < 50; i++)
+    std::vector<bcos::h256> result(_count);
+
+    std::string hashName = std::string{"New Hashing Test: "} + typeid(hasher).name();
+    std::cout << std::endl;
+    std::cout << "----------- " << hashName << " perf start -----------" << std::endl;
+    auto startT = utcTime();
+
+    for (size_t i = 0; i < _count; i++)
     {
-        inputData += deltaData;
+        hasher.update(_inputData);
+        hasher.final(result[i]);
     }
-    // sha3 perf
-    Hash::Ptr hashImpl = std::make_shared<class Sha3>();
-    hashPerf(hashImpl, "SHA3", inputData, _count);
+
+    std::cout << "input data size: " << (double)_inputData.size() / 1000.0
+              << "KB, loops: " << _count << ", timeCost: " << utcTime() - startT << std::endl;
+    std::cout << "TPS of " << hashName << ": "
+              << getTPS(utcTime(), startT, _count) * (double)_inputData.size() / (1024 * 1024)
+              << " MB/s" << std::endl;
+    std::cout << "----------- " << hashName << " perf end -----------" << std::endl;
+    std::cout << std::endl;
+
+    return result;
+}
+
+void stTest(std::string_view inputData, size_t _count)
+{
     // keccak256 perf
-    hashImpl = std::make_shared<Keccak256>();
-    hashPerf(hashImpl, "Keccak256", inputData, _count);
+    // auto hashImpl = std::make_shared<Keccak256>();
+    // auto keccak256Old = hashPerf(hashImpl, "Keccak256", inputData, _count);
+
+    // openssl::OPENSSL_Keccak256_Hasher hasherKeccak256;
+    // auto keccak256New = hashingPerf(hasherKeccak256, inputData, _count);
+    // if (keccak256Old[0] != keccak256New[0])
+    // {
+    //     std::cout << "Wrong keccak256 hash result! old: " << keccak256Old[0]
+    //               << " new: " << keccak256New[0] << std::endl;
+    // }
+
+    // sha3 perf
+    auto hashImpl2 = std::make_shared<class Sha3>();
+    auto sha3Old = hashPerf(hashImpl2, "SHA3", inputData, _count);
+
+    hasher::openssl::OpenSSL_SHA3_256_Hasher hasherSHA3;
+    auto sha3New = hashingPerf(hasherSHA3, inputData, _count);
+
+    for (size_t i = 0; i < _count; ++i)
+    {
+        if (sha3Old[i] != sha3New[i])
+        {
+            std::cout << "Wrong sha3 hash result! old: " << sha3Old[i] << " new: " << sha3New[i]
+                      << std::endl;
+            break;
+        }
+    }
+
     // sm3 perf
-    hashImpl = std::make_shared<SM3>();
-    hashPerf(hashImpl, "SM3", inputData, _count);
+    auto hashImpl3 = std::make_shared<SM3>();
+    auto sm3Old = hashPerf(hashImpl3, "SM3", inputData, _count);
+
+    hasher::openssl::OpenSSL_SM3_Hasher hasherSM3;
+    auto sm3New = hashingPerf(hasherSM3, inputData, _count);
+
+    for (size_t i = 0; i < _count; ++i)
+    {
+        if (sm3Old[i] != sm3New[i])
+        {
+            std::cout << "Wrong sm3 hash result! old: " << sm3Old[i] << " new: " << sm3New[i]
+                      << std::endl;
+            break;
+        }
+    }
+
+    auto hashImpl4 = std::make_shared<Sha256>();
+    auto sha256Old = hashPerf(hashImpl4, "SHA256", inputData, _count);
+
+    hasher::openssl::OpenSSL_SHA2_256_Hasher hasherSHA2;
+    auto sha256New = hashingPerf(hasherSHA2, inputData, _count);
+
+    for (size_t i = 0; i < _count; ++i)
+    {
+        if (sha256Old[i] != sha256New[i])
+        {
+            std::cout << "Wrong sha256 hash result! old: " << sha256Old[i]
+                      << " new: " << sha256New[i] << std::endl;
+            break;
+        }
+    }
 }
 
 void signaturePerf(SignatureCrypto::Ptr _signatureImpl, HashType const& _msgHash,
@@ -96,7 +180,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, HashType const& _msgHash
     auto startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        signedData = _signatureImpl->sign(keyPair, _msgHash, false);
+        signedData = _signatureImpl->sign(*keyPair, _msgHash, false);
     }
     std::cout << "TPS of " << _signatureName << " sign:" << getTPS(utcTime(), startT, _count)
               << std::endl;
@@ -111,7 +195,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, HashType const& _msgHash
               << std::endl;
 
     // recover
-    signedData = _signatureImpl->sign(keyPair, _msgHash, true);
+    signedData = _signatureImpl->sign(*keyPair, _msgHash, true);
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
@@ -123,6 +207,47 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, HashType const& _msgHash
     std::cout << std::endl;
 }
 
+void derivePublicKeyPerf(SignatureCrypto::Ptr _signatureImpl, std::string const& _signatureName,
+    const KeyPairInterface& _keyPair, size_t _count)
+{
+    std::cout << std::endl;
+    std::cout << "----------- " << _signatureName << " derivePublicKeyPerf test start -----------"
+              << std::endl;
+    auto startT = utcTime();
+    KeyPairInterface::Ptr keyPair;
+    for (size_t i = 0; i < _count; i++)
+    {
+        keyPair = _signatureImpl->createKeyPair(_keyPair.secretKey());
+        assert(keyPair->secretKey()->data() == _keyPair.secretKey()->data());
+        assert(keyPair->publicKey()->data() == _keyPair.publicKey()->data());
+    }
+    std::cout << "TPS of " << _signatureName
+              << " derivePublicKeyPerf:" << getTPS(utcTime(), startT, _count) << std::endl;
+    std::cout << "----------- " << _signatureName << " derivePublicKeyPerf test end -----------"
+              << std::endl;
+}
+
+void derivePublicKeyPerf(size_t _count)
+{
+    SignatureCrypto::Ptr signatureImpl = nullptr;
+    signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto keyPair = signatureImpl->generateKeyPair();
+    derivePublicKeyPerf(signatureImpl, "secp256k1", *keyPair, _count);
+
+    signatureImpl = std::make_shared<SM2Crypto>();
+    keyPair = signatureImpl->generateKeyPair();
+    derivePublicKeyPerf(signatureImpl, "SM2", *keyPair, _count);
+
+#if SM2_OPTIMIZE
+    signatureImpl = std::make_shared<FastSM2Crypto>();
+    keyPair = signatureImpl->generateKeyPair();
+    derivePublicKeyPerf(signatureImpl, "FastSM2", *keyPair, _count);
+#endif
+
+    signatureImpl = std::make_shared<Ed25519Crypto>();
+    keyPair = signatureImpl->generateKeyPair();
+    derivePublicKeyPerf(signatureImpl, "Ed25519Crypto", *keyPair, _count);
+}
 void signaturePerf(size_t _count)
 {
     std::string inputData = "signature perf test";
@@ -134,6 +259,12 @@ void signaturePerf(size_t _count)
     // sm2 perf
     signatureImpl = std::make_shared<SM2Crypto>();
     signaturePerf(signatureImpl, msgHash, "SM2", _count);
+
+#if SM2_OPTIMIZE
+    // fastsm2 perf
+    signatureImpl = std::make_shared<FastSM2Crypto>();
+    signaturePerf(signatureImpl, msgHash, "FastSM2", _count);
+#endif
 
     // ed25519 perf
     signatureImpl = std::make_shared<Ed25519Crypto>();
@@ -206,13 +337,24 @@ int main(int argc, char* argv[])
     }
     auto cmd = argv[1];
     size_t count = atoi(argv[2]);
+
+    std::string data;
+    data.reserve(16 * 1024);
+    for (size_t i = 0; i < 16 * 1024; ++i)
+    {
+        char c = i;
+        data.push_back(c);
+    }
+
+
     if (HASH_CMD == cmd)
     {
-        hashPerf(count);
+        stTest(data, count);
     }
     else if (SIGN_CMD == cmd)
     {
         signaturePerf(count);
+        derivePublicKeyPerf(count);
     }
     else if (ENCRYPT_CMD == cmd)
     {

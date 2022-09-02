@@ -20,11 +20,11 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/storage/Common.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libtable/Table.h"
-#include "bcos-framework/libutilities/ThreadPool.h"
+#include "bcos-framework/storage/Common.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/storage/Table.h"
 #include "bcos-ledger/libledger/utilities/Common.h"
+#include <bcos-utilities/ThreadPool.h>
 #define SLEEP_MILLI_SECONDS 10
 
 using namespace bcos::storage;

@@ -20,14 +20,14 @@
  */
 
 #pragma once
-#include "../precompiled/PrecompiledCodec.h"
-#include "../precompiled/PrecompiledGas.h"
 #include "../executive/TransactionExecutive.h"
-#include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libutilities/Common.h"
-#include "bcos-framework/libutilities/Exceptions.h"
-#include "bcos-framework/libutilities/FixedBytes.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
+#include "bcos-framework/storage/Table.h"
+#include "bcos-table/src/StateStorage.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <functional>
 #include <unordered_map>
 
@@ -146,24 +146,21 @@ public:
         assert(m_precompiledGasFactory);
     }
     virtual ~Precompiled() = default;
-    virtual std::string toString() { return ""; }
     virtual std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender) = 0;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) = 0;
 
     virtual bool isParallelPrecompiled() { return false; }
-    virtual std::vector<std::string> getParallelTag(bytesConstRef,bool)
-    {
-        return {};
-    }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
     crypto::Hash::Ptr m_hashImpl;
 
 protected:
-    std::optional<bcos::storage::Table> createTable(storage::StateStorage::Ptr _tableFactory,
-        const std::string& _tableName, const std::string& _valueField);
+    std::optional<bcos::storage::Table> createTable(
+        storage::StateStorageInterface::Ptr _tableFactory, const std::string& _tableName,
+        const std::string& _valueField);
 
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;
 };

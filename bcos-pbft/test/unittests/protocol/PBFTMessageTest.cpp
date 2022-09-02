@@ -19,10 +19,12 @@
  * @date 2021-04-16
  */
 #include "FakePBFTMessage.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
@@ -33,8 +35,8 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(PBFTMessageTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testNormalPBFTMessage)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTMessage(PacketType::PrePreparePacket, cryptoSuite);
     testPBFTMessage(PacketType::PreparePacket, cryptoSuite);
@@ -45,8 +47,8 @@ BOOST_AUTO_TEST_CASE(testNormalPBFTMessage)
 
 BOOST_AUTO_TEST_CASE(testSMPBFTMessage)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTMessage(PacketType::PrePreparePacket, cryptoSuite);
     testPBFTMessage(PacketType::PreparePacket, cryptoSuite);
@@ -57,40 +59,40 @@ BOOST_AUTO_TEST_CASE(testSMPBFTMessage)
 
 BOOST_AUTO_TEST_CASE(testNormalViewChangeMessage)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTViewChangeMessage(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testSMViewChangeMessage)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTViewChangeMessage(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testNormalNewViewMessage)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTNewViewMessage(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testSMNewViewMessage)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTNewViewMessage(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testNormalPBFTRequest)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTRequest(cryptoSuite, PacketType::CommittedProposalRequest);
     testPBFTRequest(cryptoSuite, PacketType::PreparedProposalRequest);
@@ -98,8 +100,8 @@ BOOST_AUTO_TEST_CASE(testNormalPBFTRequest)
 
 BOOST_AUTO_TEST_CASE(testSMPBFTRequest)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testPBFTRequest(cryptoSuite, PacketType::CommittedProposalRequest);
     testPBFTRequest(cryptoSuite, PacketType::PreparedProposalRequest);

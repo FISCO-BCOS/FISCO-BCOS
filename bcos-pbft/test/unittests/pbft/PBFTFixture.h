@@ -19,23 +19,24 @@
  * @date 2021-05-28
  */
 #pragma once
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/storage/KVStorageHelper.h"
 #include "bcos-pbft/core/StateMachine.h"
 #include "bcos-pbft/pbft/PBFTFactory.h"
 #include "bcos-pbft/pbft/PBFTImpl.h"
 #include "bcos-pbft/pbft/storage/LedgerStorage.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h>
-#include <bcos-framework/libstorage/StateStorage.h>
-#include <bcos-framework/libutilities/KVStorageHelper.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/protobuf/PBBlockFactory.h>
+#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-table/src/StateStorage.h>
 #include <boost/bind/bind.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -131,9 +132,11 @@ public:
         m_cacheProcessor->registerProposalAppliedHandler(
             boost::bind(&FakePBFTEngine::onProposalApplied, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
-        m_cacheProcessor->registerOnLoadAndVerifyProposalSucc(boost::bind(
-            &FakePBFTEngine::onLoadAndVerifyProposalSucc, this, boost::placeholders::_1));
+        m_cacheProcessor->registerOnLoadAndVerifyProposalFinish(
+            boost::bind(&FakePBFTEngine::onLoadAndVerifyProposalFinish, this,
+                boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
         initSendResponseHandler();
+        _config->enableAsMasterNode(true);
     }
     ~FakePBFTEngine() override {}
 
@@ -175,7 +178,17 @@ public:
 class FakePBFTImpl : public PBFTImpl
 {
 public:
-    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine) { m_running = true; }
+    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine)
+    {
+        m_running = true;
+        m_masterNode.store(true);
+    }
+    void start() override { m_pbftEngine->recoverState(); }
+    void init() override
+    {
+        PBFTImpl::init();
+        start();
+    }
     ~FakePBFTImpl() {}
 };
 
@@ -262,6 +275,7 @@ public:
             m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory);
         m_pbft = pbftFactory->createPBFT();
         m_pbftEngine = std::dynamic_pointer_cast<FakePBFTEngine>(m_pbft->pbftEngine());
+        m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });
     }
 
     virtual ~PBFTFixture() {}
@@ -277,7 +291,8 @@ public:
         {
             connectedNodeList.insert(node->nodeID());
         }
-        pbftConfig()->setConnectedNodeList(std::move(connectedNodeList));
+        pbftConfig()->setConnectedNodeList(connectedNodeList);
+        m_frontService->setNodeIDList(connectedNodeList);
     }
 
     void appendConsensusNode(PublicPtr _nodeId)
@@ -328,7 +343,7 @@ using PBFTFixtureList = std::vector<PBFTFixture::Ptr>;
 inline PBFTFixture::Ptr createPBFTFixture(
     CryptoSuite::Ptr _cryptoSuite, FakeLedger::Ptr _ledger = nullptr, size_t _txCountLimit = 1000)
 {
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     return std::make_shared<PBFTFixture>(_cryptoSuite, keyPair, _ledger, _txCountLimit);
 }
 

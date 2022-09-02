@@ -1,47 +1,38 @@
 cmake_minimum_required(VERSION 3.14)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-storage VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
 
-option(USE_TiKV "build tikv storage or not" OFF)
+project(bcos-storage VERSION ${VERSION})
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+find_package(zstd REQUIRED)
+find_package(RocksDB REQUIRED)
 
-set(SRC_LIST src/Common.cpp)
-if(USE_TiKV)
-    list(APPEND SRC_LIST src/TiKVStorage.cpp)
-else()
-    list(APPEND SRC_LIST src/RocksDBStorage.cpp)
+find_package(Boost REQUIRED serialization thread context filesystem)
+
+set(SRC_LIST bcos-storage/Common.cpp)
+list(APPEND SRC_LIST bcos-storage/RocksDBStorage.cpp)
+
+set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb)
+
+if(WITH_TIKV)
+  include(ProjectTiKVClient)
+  list(APPEND SRC_LIST bcos-storage/TiKVStorage.cpp)
+  list(APPEND LIB_LIST kv_client)
 endif()
 
-hunter_add_package(zstd)
-find_package(zstd CONFIG REQUIRED)
-hunter_add_package(rocksdb)
-find_package(RocksDB CONFIG REQUIRED)
+add_library(${STORAGE_TARGET} ${SRC_LIST})
+target_include_directories(${STORAGE_TARGET} PUBLIC ${HUNTER_INSTALL_PREFIX}/include .)
+target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
 
-find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
-
-add_library(storage ${SRC_LIST})
-target_link_libraries(storage PUBLIC framework Boost::serialization zstd::libzstd_static)
-if(USE_TiKV)
-    target_link_libraries(storage PUBLIC kv_client)
-else()
-target_link_libraries(storage PUBLIC RocksDB::rocksdb)
-endif()
-
-if (TESTS)
-    enable_testing()
-    set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
-endif()
-
-if(USE_TiKV)
-    message(STATUS "USE_TiKV: ${USE_TiKV}")
-    include(ProjectTiKVClient)
+if(TESTS)
+  enable_testing()
+  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+  add_subdirectory(test)
 endif()
 
 option(TOOLS "build tools" OFF)
+
 if(TOOLS)
-    add_subdirectory(tools)
+  add_subdirectory(tools)
 endif()

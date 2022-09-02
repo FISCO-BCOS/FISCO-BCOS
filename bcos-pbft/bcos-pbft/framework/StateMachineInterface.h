@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "ProposalInterface.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 namespace bcos
 {
 namespace consensus
@@ -34,7 +34,11 @@ public:
 
     virtual void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
-        std::function<void(bool)> _onExecuteFinished) = 0;
+        std::function<void(int64_t)> _onExecuteFinished) = 0;
+
+    // (Not required): Just for performance, call this before "asyncApply" in the other thread.
+    virtual void asyncPreApply(
+        ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) = 0;
 };
 }  // namespace consensus
 }  // namespace bcos

@@ -10,15 +10,18 @@
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/libp2p/Service.h>
 
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
 
 P2PSession::P2PSession()
+  : m_p2pInfo(std::make_shared<P2PInfo>()),
+    m_protocolInfo(std::make_shared<bcos::protocol::ProtocolInfo>())
 {
-    m_p2pInfo = std::make_shared<P2PInfo>();
+    // init with the minVersion
+    m_protocolInfo->setVersion(m_protocolInfo->minVersion());
     P2PSESSION_LOG(INFO) << "[P2PSession::P2PSession] this=" << this;
 }
 
@@ -59,16 +62,10 @@ void P2PSession::heartBeat()
         {
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
-            message->setPacketType(MessageType::Heartbeat);
-            uint32_t statusSeq =
-                boost::asio::detail::socket_ops::host_to_network_long(service->statusSeq());
-            auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
-            message->setPayload(payload);
-
+            message->setPacketType(GatewayMessageType::Heartbeat);
             P2PSESSION_LOG(DEBUG) << LOG_DESC("P2PSession onHeartBeat")
                                   << LOG_KV("p2pid", m_p2pInfo->p2pID)
-                                  << LOG_KV("endpoint", m_session->nodeIPEndpoint())
-                                  << LOG_KV("statusSeq", service->statusSeq());
+                                  << LOG_KV("endpoint", m_session->nodeIPEndpoint());
 
             m_session->asyncSendMessage(message);
         }

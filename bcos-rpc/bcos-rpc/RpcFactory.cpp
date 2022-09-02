@@ -19,20 +19,25 @@
  * @date 2021-07-15
  */
 
-#include "interfaces/gateway/GatewayTypeDef.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-rpc/groupmgr/TarsGroupManager.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
+#include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/libprotocol/amop/AMOPRequest.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/FileUtility.h>
-#include <bcos-framework/libutilities/Log.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/AMOPRequest.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
+#include <bcos-rpc/jsonrpc/DupTestTxJsonRpcImpl_2_0.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
-#include <bcos-rpc/ws/ProtocolVersion.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -48,10 +53,14 @@ using namespace bcos::gateway;
 using namespace bcos::group;
 using namespace bcos::boostssl::ws;
 using namespace bcos::protocol;
+using namespace bcos::security;
 
 RpcFactory::RpcFactory(std::string const& _chainID, GatewayInterface::Ptr _gatewayInterface,
-    KeyFactory::Ptr _keyFactory)
-  : m_chainID(_chainID), m_gateway(_gatewayInterface), m_keyFactory(_keyFactory)
+    KeyFactory::Ptr _keyFactory, bcos::security::DataEncryptInterface::Ptr _dataEncrypt)
+  : m_chainID(_chainID),
+    m_gateway(_gatewayInterface),
+    m_keyFactory(_keyFactory),
+    m_dataEncrypt(_dataEncrypt)
 {}
 
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
@@ -66,12 +75,11 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     wsConfig->setDisableSsl(_nodeConfig->rpcDisableSsl());
     if (_nodeConfig->rpcDisableSsl())
     {
-        BCOS_LOG(INFO) << LOG_BADGE("[RPC][FACTORY][initConfig]")
-                       << LOG_DESC("rpc work in disable ssl model")
-                       << LOG_KV("listenIP", wsConfig->listenIP())
-                       << LOG_KV("listenPort", wsConfig->listenPort())
-                       << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                       << LOG_KV("asServer", wsConfig->asServer());
+        RPC_LOG(INFO) << LOG_BADGE("initConfig") << LOG_DESC("rpc work in disable ssl model")
+                      << LOG_KV("listenIP", wsConfig->listenIP())
+                      << LOG_KV("listenPort", wsConfig->listenPort())
+                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("asServer", wsConfig->asServer());
         return wsConfig;
     }
 
@@ -79,44 +87,220 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     if (!_nodeConfig->rpcSmSsl())
     {  //  ssl
         boostssl::context::ContextConfig::CertConfig certConfig;
-        certConfig.caCert = _nodeConfig->caCert();
-        certConfig.nodeCert = _nodeConfig->nodeCert();
-        certConfig.nodeKey = _nodeConfig->nodeKey();
+
+        std::shared_ptr<bytes> keyContent;
+
+        // caCert
+        if (false == _nodeConfig->caCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->caCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.caCert.resize(keyContent->size());
+                    memcpy(certConfig.caCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open caCert failed")
+                                << LOG_KV("file", _nodeConfig->caCert());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->caCert()));
+            }
+        }
+
+        // nodeCert
+        if (false == _nodeConfig->nodeCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.nodeCert.resize(keyContent->size());
+                    memcpy(certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeCert failed")
+                                << LOG_KV("file", _nodeConfig->nodeCert());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeCert()));
+            }
+        }
+
+        // nodeKey
+        if (false == _nodeConfig->nodeKey().empty())
+        {
+            try
+            {
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->nodeKey());
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeKey failed")
+                                << LOG_KV("file", _nodeConfig->nodeKey());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
+            }
+        }
+        certConfig.nodeKey.resize(keyContent->size());
+        memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
+
+        contextConfig->setIsCertPath(false);
+
         contextConfig->setCertConfig(certConfig);
         contextConfig->setSslType("ssl");
 
-        BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][initConfig]")
-                       << LOG_DESC("rpc work in ssl model")
-                       << LOG_KV("listenIP", wsConfig->listenIP())
-                       << LOG_KV("listenPort", wsConfig->listenPort())
-                       << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                       << LOG_KV("asServer", wsConfig->asServer())
-                       << LOG_KV("caCert", _nodeConfig->caCert())
-                       << LOG_KV("nodeCert", _nodeConfig->nodeCert())
-                       << LOG_KV("nodeKey", _nodeConfig->nodeKey());
+        RPC_LOG(INFO) << LOG_DESC("rpc work in ssl model")
+                      << LOG_KV("listenIP", wsConfig->listenIP())
+                      << LOG_KV("listenPort", wsConfig->listenPort())
+                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("asServer", wsConfig->asServer())
+                      << LOG_KV("caCert", _nodeConfig->caCert())
+                      << LOG_KV("nodeCert", _nodeConfig->nodeCert())
+                      << LOG_KV("nodeKey", _nodeConfig->nodeKey());
     }
     else
     {  // sm ssl
         boostssl::context::ContextConfig::SMCertConfig certConfig;
-        certConfig.caCert = _nodeConfig->smCaCert();
-        certConfig.nodeCert = _nodeConfig->smNodeCert();
-        certConfig.nodeKey = _nodeConfig->smNodeKey();
-        certConfig.enNodeCert = _nodeConfig->enSmNodeCert();
-        certConfig.enNodeKey = _nodeConfig->enSmNodeKey();
+
+        std::shared_ptr<bytes> keyContent;
+
+        // caCert
+        if (false == _nodeConfig->smCaCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->smCaCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.caCert.resize(keyContent->size());
+                    memcpy(certConfig.caCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smCaCert failed")
+                                << LOG_KV("file", _nodeConfig->caCert());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->caCert()));
+            }
+        }
+
+        // nodeCert
+        if (false == _nodeConfig->smNodeCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.nodeCert.resize(keyContent->size());
+                    memcpy(certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeCert failed")
+                                << LOG_KV("file", _nodeConfig->nodeCert());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeCert()));
+            }
+        }
+
+        // nodeKey
+        if (false == _nodeConfig->smNodeKey().empty())
+        {
+            try
+            {
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->smNodeKey());
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeKey failed")
+                                << LOG_KV("file", _nodeConfig->nodeKey());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
+            }
+        }
+        certConfig.nodeKey.resize(keyContent->size());
+        memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
+
+        // enNodeCert
+        if (false == _nodeConfig->enSmNodeCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.enNodeCert.resize(keyContent->size());
+                    memcpy(certConfig.enNodeCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeCert failed")
+                                << LOG_KV("file", _nodeConfig->nodeCert());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeCert()));
+            }
+        }
+
+        // enNodeKey
+        if (false == _nodeConfig->enSmNodeKey().empty())
+        {
+            try
+            {
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->enSmNodeKey());
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeKey failed")
+                                << LOG_KV("file", _nodeConfig->nodeKey());
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
+            }
+        }
+        certConfig.enNodeKey.resize(keyContent->size());
+        memcpy(certConfig.enNodeKey.data(), keyContent->data(), keyContent->size());
+
+        contextConfig->setIsCertPath(false);
+
         contextConfig->setSmCertConfig(certConfig);
         contextConfig->setSslType("sm_ssl");
 
-        BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][initConfig]")
-                       << LOG_DESC("rpc work in sm ssl model")
-                       << LOG_KV("listenIP", wsConfig->listenIP())
-                       << LOG_KV("listenPort", wsConfig->listenPort())
-                       << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                       << LOG_KV("asServer", wsConfig->asServer())
-                       << LOG_KV("caCert", _nodeConfig->smCaCert())
-                       << LOG_KV("nodeCert", _nodeConfig->smNodeCert())
-                       << LOG_KV("nodeKey", _nodeConfig->smNodeKey())
-                       << LOG_KV("enNodeCert", _nodeConfig->enSmNodeCert())
-                       << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
+        RPC_LOG(INFO) << LOG_DESC("rpc work in sm ssl model")
+                      << LOG_KV("listenIP", wsConfig->listenIP())
+                      << LOG_KV("listenPort", wsConfig->listenPort())
+                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("asServer", wsConfig->asServer())
+                      << LOG_KV("caCert", _nodeConfig->smCaCert())
+                      << LOG_KV("nodeCert", _nodeConfig->smNodeCert())
+                      << LOG_KV("nodeKey", _nodeConfig->smNodeKey())
+                      << LOG_KV("enNodeCert", _nodeConfig->enSmNodeCert())
+                      << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
     }
 
     wsConfig->setContextConfig(contextConfig);
@@ -136,88 +320,25 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     return wsService;
 }
 
-void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsService,
-    bcos::rpc::JsonRpcImpl_2_0::Ptr _jsonRpcInterface)
-{
-    _wsService->registerMsgHandler(bcos::rpc::MessageType::HANDESHAKE,
-        [_jsonRpcInterface](std::shared_ptr<boostssl::ws::WsMessage> _msg,
-            std::shared_ptr<boostssl::ws::WsSession> _session) {
-            auto seq = std::string(_msg->data()->begin(), _msg->data()->end());
-            auto version = ws::EnumPV::CurrentVersion;
-            _session->setVersion(version);
-
-            _jsonRpcInterface->getGroupInfoList(
-                [_msg, _session, version, seq](
-                    bcos::Error::Ptr _error, Json::Value& _jGroupInfoList) {
-                    if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
-                    {
-                        BCOS_LOG(ERROR)
-                            << LOG_BADGE("HANDSHAKE") << LOG_DESC("get group info list error")
-                            << LOG_KV("seq", seq)
-                            << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
-                        return;
-                    }
-
-                    auto pv = std::make_shared<ws::ProtocolVersion>();
-                    pv->setProtocolVersion(version);
-                    auto jResult = pv->toJson();
-                    jResult["groupInfoList"] = _jGroupInfoList;
-
-                    Json::FastWriter writer;
-                    std::string result = writer.write(jResult);
-
-                    _msg->setData(std::make_shared<bcos::bytes>(result.begin(), result.end()));
-                    _session->asyncSendMessage(_msg);
-
-                    BCOS_LOG(INFO)
-                        << LOG_BADGE("HANDSHAKE") << LOG_DESC("handshake response")
-                        << LOG_KV("version", version) << LOG_KV("seq", seq)
-                        << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                        << LOG_KV("result", result);
-                });
-        });
-
-    _wsService->registerMsgHandler(bcos::rpc::MessageType::RPC_REQUEST,
-        [_jsonRpcInterface](std::shared_ptr<boostssl::ws::WsMessage> _msg,
-            std::shared_ptr<boostssl::ws::WsSession> _session) {
-            if (!_jsonRpcInterface)
-            {
-                return;
-            }
-            std::string req = std::string(_msg->data()->begin(), _msg->data()->end());
-            _jsonRpcInterface->onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
-                if (_session && _session->isConnected())
-                {
-                    auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
-                    _msg->setData(buffer);
-                    _session->asyncSendMessage(_msg);
-                }
-                else
-                {
-                    auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
-                    BCOS_LOG(WARNING)
-                        << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                        << LOG_DESC("unable to send response for session has been inactive")
-                        << LOG_KV("req", req) << LOG_KV("resp", _resp) << LOG_KV("seq", seq)
-                        << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
-                }
-            });
-        });
-}
-bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
+bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
-    auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway);
+    //*
+    auto jsonRpcInterface =
+        std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
+    jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
+    /*/
+        auto jsonRpcInterface =
+            std::make_shared<bcos::rpc::DupTestTxJsonRpcImpl_2_0>(_groupManager, m_gateway,
+       _wsService);
+        //*/
     auto httpServer = _wsService->httpServer();
     if (httpServer)
     {
         httpServer->setHttpReqHandler(std::bind(&bcos::rpc::JsonRpcInterface::onRPCRequest,
             jsonRpcInterface, std::placeholders::_1, std::placeholders::_2));
     }
-    registerHandlers(_wsService, jsonRpcInterface);
     return jsonRpcInterface;
 }
 
@@ -225,53 +346,29 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     auto eventSubFactory = std::make_shared<event::EventSubFactory>();
-    auto eventSub = eventSubFactory->buildEventSub();
+    auto eventSub = eventSubFactory->buildEventSub(_wsService);
 
     auto matcher = std::make_shared<event::EventSubMatcher>();
-    eventSub->setIoc(_wsService->ioc());
     eventSub->setGroupManager(_groupManager);
     eventSub->setMessageFactory(_wsService->messageFactory());
     eventSub->setMatcher(matcher);
-
-    auto eventSubWeakPtr = std::weak_ptr<bcos::event::EventSub>(eventSub);
-
-    // register event subscribe message
-    _wsService->registerMsgHandler(bcos::event::MessageType::EVENT_SUBSCRIBE,
-        [eventSubWeakPtr](std::shared_ptr<WsMessage> _msg, std::shared_ptr<WsSession> _session) {
-            auto eventSub = eventSubWeakPtr.lock();
-            if (eventSub)
-            {
-                eventSub->onRecvSubscribeEvent(_msg, _session);
-            }
-        });
-
-    // register event subscribe message
-    _wsService->registerMsgHandler(bcos::event::MessageType::EVENT_UNSUBSCRIBE,
-        [eventSubWeakPtr](std::shared_ptr<WsMessage> _msg, std::shared_ptr<WsSession> _session) {
-            auto eventSub = eventSubWeakPtr.lock();
-            if (eventSub)
-            {
-                eventSub->onRecvUnsubscribeEvent(_msg, _session);
-            }
-        });
-
-    BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][buildEventSub]") << LOG_DESC("create event sub obj");
-
+    RPC_LOG(INFO) << LOG_DESC("create event sub obj");
     return eventSub;
 }
 
-Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName)
+Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
+    std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto config = initConfig(m_nodeConfig);
     auto wsService = buildWsService(config);
-    auto groupManager = buildGroupManager();
+    auto groupManager = buildGroupManager(_rpcServiceName, _entryPoint);
     auto amopClient = buildAMOPClient(wsService, _gatewayServiceName);
 
-    BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][buildRpc]") << LOG_KV("listenIP", config->listenIP())
-                   << LOG_KV("listenPort", config->listenPort())
-                   << LOG_KV("threadCount", config->threadPoolSize())
-                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
-    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    RPC_LOG(INFO) << LOG_KV("listenIP", config->listenIP())
+                  << LOG_KV("listenPort", config->listenPort())
+                  << LOG_KV("threadCount", config->threadPoolSize())
+                  << LOG_KV("gatewayServiceName", _gatewayServiceName);
+    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
     return rpc;
 }
 
@@ -280,37 +377,71 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
 {
     auto config = initConfig(m_nodeConfig);
     auto wsService = buildWsService(config);
-    auto groupManager = buildLocalGroupManager(_groupInfo, _nodeService);
-    auto amopClient = buildLocalAMOPClient(wsService);
-    return buildRpc(wsService, groupManager, amopClient);
+    auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
+    auto amopClient = buildAirAMOPClient(wsService);
+    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
+    // Note: init groupManager after create rpc and register the handlers
+    groupManager->init();
+    return rpc;
 }
 
-/**
- * @brief: Rpc
- * @param _config: WsConfig
- * @param _nodeInfo: node info
- * @return Rpc::Ptr:
- */
-Rpc::Ptr RpcFactory::buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
-    GroupManager::Ptr _groupManager, AMOPClient::Ptr _amopClient)
+Rpc::Ptr RpcFactory::buildRpc(int sendTxTimeout,
+    std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager,
+    AMOPClient::Ptr _amopClient)
 {
     // JsonRpc
-    auto jsonRpc = buildJsonRpc(_wsService, _groupManager);
+    auto jsonRpc = buildJsonRpc(sendTxTimeout, _wsService, _groupManager);
     // EventSub
     auto es = buildEventSub(_wsService, _groupManager);
     return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient);
 }
 
-GroupManager::Ptr RpcFactory::buildGroupManager()
+// Note: _rpcServiceName is used to check the validation of groupInfo when groupManager update
+// groupInfo
+GroupManager::Ptr RpcFactory::buildGroupManager(
+    std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto nodeServiceFactory = std::make_shared<NodeServiceFactory>();
-    return std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
+    if (!_entryPoint)
+    {
+        RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
+        return std::make_shared<TarsGroupManager>(
+            _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
+    }
+    RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
+    auto groupManager = std::make_shared<GroupManager>(
+        _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    _entryPoint->addMemberChangeNotificationHandler(
+        [groupManager, groupInfoCodec](
+            std::string const& _key, bcos::protocol::MemberInterface::Ptr _member) {
+            auto const& groupInfoStr = _member->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            groupManager->updateGroupInfo(groupInfo);
+            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _key)
+                          << LOG_KV("memberID", _member->memberID())
+                          << LOG_KV("modifyIndex", _member->seq())
+                          << LOG_KV("groupID", groupInfo->groupID());
+        });
+
+    _entryPoint->addMemberDeleteNotificationHandler(
+        [groupManager, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint has been deleted")
+                          << LOG_KV("key", _leaderKey) << LOG_KV("memberID", _leader->memberID())
+                          << LOG_KV("modifyIndex", _leader->seq())
+                          << LOG_KV("groupID", groupInfo->groupID());
+            groupManager->removeGroupNodeList(groupInfo);
+        });
+    return groupManager;
 }
 
-GroupManager::Ptr RpcFactory::buildLocalGroupManager(
+AirGroupManager::Ptr RpcFactory::buildAirGroupManager(
     GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService)
 {
-    return std::make_shared<LocalGroupManager>(m_chainID, _groupInfo, _nodeService);
+    return std::make_shared<AirGroupManager>(m_chainID, _groupInfo, _nodeService);
 }
 
 AMOPClient::Ptr RpcFactory::buildAMOPClient(
@@ -322,10 +453,9 @@ AMOPClient::Ptr RpcFactory::buildAMOPClient(
         _wsService, wsFactory, requestFactory, m_gateway, _gatewayServiceName);
 }
 
-AMOPClient::Ptr RpcFactory::buildLocalAMOPClient(
-    std::shared_ptr<boostssl::ws::WsService> _wsService)
+AMOPClient::Ptr RpcFactory::buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService)
 {
     auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
-    return std::make_shared<LocalAMOPClient>(_wsService, wsFactory, requestFactory, m_gateway);
+    return std::make_shared<AirAMOPClient>(_wsService, wsFactory, requestFactory, m_gateway);
 }

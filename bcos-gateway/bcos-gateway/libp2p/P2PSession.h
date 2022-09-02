@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
@@ -48,6 +49,18 @@ public:
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
 
+    virtual void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
+    {
+        WriteGuard l(x_protocolInfo);
+        *m_protocolInfo = *_protocolInfo;
+    }
+    // empty when negotiate failed or negotiate unfinished
+    virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
+    {
+        ReadGuard l(x_protocolInfo);
+        return m_protocolInfo;
+    }
+
 private:
     SessionFace::Ptr m_session;
     /// gateway p2p info
@@ -56,6 +69,9 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
     const static uint32_t HEARTBEAT_INTERVEL = 5000;
+
+    bcos::protocol::ProtocolInfo::Ptr m_protocolInfo = nullptr;
+    mutable bcos::SharedMutex x_protocolInfo;
 };
 
 }  // namespace gateway

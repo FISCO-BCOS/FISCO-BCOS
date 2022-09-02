@@ -20,9 +20,9 @@
  */
 #include "LedgerStorage.h"
 #include "../utilities/Common.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/storage/Table.h>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -319,63 +319,91 @@ void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stab
                    << LOG_KV("proofSize", signatureList->size())
                    << LOG_KV("blockProofSize", blockSignatureList.size());
     // Note: enqueue here to increase the performance since commitBlock is a sync implementation
-    m_commitBlockWorker->enqueue([this, blockHeader, _stableProposal]() {
+    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    m_commitBlockWorker->enqueue([self, blockHeader, _stableProposal]() {
+        auto storage = self.lock();
+        if (!storage)
+        {
+            return;
+        }
         // get the transactions list
-        auto txsInfo = m_blockFactory->createBlock(_stableProposal->extraData());
-        this->commitStableCheckPoint(blockHeader, txsInfo);
+        auto txsInfo = storage->m_blockFactory->createBlock(_stableProposal->extraData());
+        storage->commitStableCheckPoint(_stableProposal, blockHeader, txsInfo);
     });
 }
-
-void LedgerStorage::commitStableCheckPoint(BlockHeader::Ptr _blockHeader, Block::Ptr _blockInfo)
+void LedgerStorage::onStableCheckPointCommitted(
+    size_t _txsSize, BlockHeader::Ptr _blockHeader, LedgerConfig::Ptr _ledgerConfig)
+{
+    _ledgerConfig->setSealerId(_blockHeader->sealer());
+    _ledgerConfig->setTxsSize(_txsSize);
+    // reset the blockNumber
+    _ledgerConfig->setBlockNumber(_blockHeader->number());
+    _ledgerConfig->setHash(_blockHeader->hash());
+    // finalize consensus
+    if (m_finalizeHandler)
+    {
+        m_finalizeHandler(_ledgerConfig, false);
+    }
+    // remove the proposal committed into the ledger,
+    // don't remove the latest stabled checkpoint for checkpoint msg response consideration
+    if (_blockHeader->number() > c_reservedCheckPointSize)
+    {
+        asyncRemoveStabledCheckPoint(_blockHeader->number() - c_reservedCheckPointSize);
+    }
+}
+void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal,
+    BlockHeader::Ptr _blockHeader, Block::Ptr _blockInfo)
 {
     auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
     auto startT = utcTime();
-    m_scheduler->commitBlock(
-        _blockHeader, [_blockHeader, _blockInfo, startT, self](
-                          Error::Ptr&& _error, LedgerConfig::Ptr _ledgerConfig) {
-            try
+    m_scheduler->commitBlock(_blockHeader, [_stableProposal, _blockHeader, _blockInfo, startT,
+                                               self](Error::Ptr&& _error,
+                                               LedgerConfig::Ptr _ledgerConfig) {
+        try
+        {
+            auto ledgerStorage = self.lock();
+            if (!ledgerStorage)
             {
-                auto ledgerStorage = self.lock();
-                if (!ledgerStorage)
-                {
-                    return;
-                }
-                if (_error != nullptr)
-                {
-                    PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")
-                                            << LOG_KV("errorCode", _error->errorCode())
-                                            << LOG_KV("errorInfo", _error->errorMessage())
-                                            << LOG_KV("proposalIndex", _blockHeader->number())
-                                            << LOG_KV("timecost", utcTime() - startT);
-                    return;
-                }
-                PBFT_STORAGE_LOG(INFO) << LOG_DESC("commitStableCheckPoint success")
-                                       << LOG_KV("index", _blockHeader->number())
-                                       << LOG_KV("hash", _ledgerConfig->hash().abridged())
-                                       << LOG_KV("txs", _blockInfo->transactionsHashSize())
-                                       << LOG_KV("timeCost", utcTime() - startT);
-                _ledgerConfig->setSealerId(_blockHeader->sealer());
-                _ledgerConfig->setTxsSize(_blockInfo->transactionsHashSize());
-                // finalize consensus
-                if (ledgerStorage->m_finalizeHandler)
-                {
-                    ledgerStorage->m_finalizeHandler(_ledgerConfig, false);
-                }
-                // remove the proposal committed into the ledger
-                // don't remove the latest stabled checkpoint to response checkpoint msg to the
-                // requester
-                if (_blockHeader->number() > ledgerStorage->c_reservedCheckPointSize)
-                {
-                    ledgerStorage->asyncRemoveStabledCheckPoint(
-                        _blockHeader->number() - ledgerStorage->c_reservedCheckPointSize);
-                }
+                return;
             }
-            catch (std::exception const& e)
+            if (_error != nullptr)
             {
-                PBFT_STORAGE_LOG(WARNING) << LOG_DESC("commitStableCheckPoint exception")
-                                          << LOG_KV("error", boost::diagnostic_information(e));
+                PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")
+                                        << LOG_KV("errorCode", _error->errorCode())
+                                        << LOG_KV("errorInfo", _error->errorMessage())
+                                        << LOG_KV("proposalIndex", _blockHeader->number())
+                                        << LOG_KV("timecost", utcTime() - startT);
+                ledgerStorage->m_onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
+                return;
             }
-        });
+            auto commitPerTx =
+                (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
+            PBFT_STORAGE_LOG(INFO)
+                << METRIC << LOG_DESC("commitStableCheckPoint success")
+                << LOG_KV("index", _blockHeader->number())
+                << LOG_KV("hash", _ledgerConfig->hash().abridged())
+                << LOG_KV("txs", _blockInfo->transactionsHashSize())
+                << LOG_KV("timeCost", utcTime() - startT) << LOG_KV("commitPerTx", commitPerTx);
+            auto txsSize = _blockInfo->transactionsHashSize();
+            // Note:Here the thread pool is used to asynchronize the operation of PBFT finalize to
+            // prevent the commitBlock from calling the callback synchronously and affecting the
+            // performance.
+            ledgerStorage->m_commitBlockWorker->enqueue(
+                [self, txsSize, _blockHeader, _ledgerConfig]() {
+                    auto storage = self.lock();
+                    if (!storage)
+                    {
+                        return;
+                    }
+                    storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
+                });
+        }
+        catch (std::exception const& e)
+        {
+            PBFT_STORAGE_LOG(WARNING) << LOG_DESC("commitStableCheckPoint exception")
+                                      << LOG_KV("error", boost::diagnostic_information(e));
+        }
+    });
 }
 
 void LedgerStorage::asyncRemoveStabledCheckPoint(size_t _stabledCheckPointIndex)

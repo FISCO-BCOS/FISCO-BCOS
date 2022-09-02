@@ -18,11 +18,12 @@
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-crypto)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+
+find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+find_package(ZLIB REQUIRED)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
-find_package(Boost CONFIG REQUIRED unit_test_framework)
-target_link_libraries(${TEST_BINARY_NAME} crypto framework Boost::unit_test_framework)
+target_include_directories(${TEST_BINARY_NAME} PRIVATE ..)
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-utilities bcos-crypto ZLIB::ZLIB)
+add_test(NAME test-crypto WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -19,9 +19,9 @@
  * @date 2021-05-17
  */
 
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
@@ -37,7 +37,7 @@ BOOST_AUTO_TEST_CASE(test_certPubHexHandler)
     auto factory = std::make_shared<GatewayFactory>("", "");
     {
         // sm cert
-        std::string cert = "../test/unittests/data/sm_ca/sm_node.crt";
+        std::string cert = "../../../bcos-gateway/test/unittests/data/sm_ca/sm_node.crt";
         std::string pubHex;
         auto r = factory->certPubHexHandler()(cert, pubHex);
         BOOST_CHECK(r);
@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(test_certPubHexHandler)
 
     {
         // RSA cert
-        std::string cert("../test/unittests/data/ca/node.crt");
+        std::string cert("../../../bcos-gateway/test/unittests/data/ca/node.crt");
         std::string pubHex;
         auto r = factory->certPubHexHandler()(cert, pubHex);
         BOOST_CHECK(r);
@@ -60,20 +60,36 @@ BOOST_AUTO_TEST_CASE(test_buildSSLContext)
 
     {
         // SM SSLContext
-        std::string configIni("../test/unittests/data/config/config_ipv6.ini");
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
         auto config = std::make_shared<GatewayConfig>();
         config->initConfig(configIni);
-        auto context = factory->buildSSLContext(config->smCertConfig());
-        BOOST_CHECK(context);
+
+        {
+            auto context = factory->buildSSLContext(true, config->smCertConfig());
+            BOOST_CHECK(context);
+        }
+
+        {
+            auto context = factory->buildSSLContext(false, config->smCertConfig());
+            BOOST_CHECK(context);
+        }
     }
 
     {
         // SSLContext
-        std::string configIni("../test/unittests/data/config/config_ipv4.ini");
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
         auto config = std::make_shared<GatewayConfig>();
         config->initConfig(configIni);
-        auto context = factory->buildSSLContext(config->certConfig());
-        BOOST_CHECK(context);
+
+        {
+            auto context = factory->buildSSLContext(true, config->certConfig());
+            BOOST_CHECK(context);
+        }
+
+        {
+            auto context = factory->buildSSLContext(false, config->certConfig());
+            BOOST_CHECK(context);
+        }
     }
 }
 

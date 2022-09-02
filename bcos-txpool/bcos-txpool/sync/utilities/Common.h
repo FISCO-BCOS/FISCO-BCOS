@@ -19,7 +19,8 @@
  * @date 2021-05-11
  */
 #pragma once
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-framework/Common.h>
+#include <tbb/parallel_for.h>
 
 #define SYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SYNC")
 namespace bcos

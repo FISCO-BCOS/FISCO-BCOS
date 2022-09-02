@@ -19,7 +19,6 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "../../config/PBFTConfig.h"
 #include "../../interfaces/PBFTMessageInterface.h"
 #include "PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
@@ -79,7 +78,7 @@ public:
     virtual void decodeAndSetSignature(
         bcos::crypto::CryptoSuite::Ptr _pbftConfig, bytesConstRef _data);
 
-    bool operator==(PBFTMessage const& _pbftMessage);
+    bool operator==(PBFTMessage const& _pbftMessage) const;
 
     bytesConstRef signatureData() override
     {
@@ -97,6 +96,7 @@ public:
     PBFTMessageInterface::Ptr populateWithoutProposal() override
     {
         auto pbftMessage = std::make_shared<PBFTMessage>();
+        encodeHashFields();
         auto const& hashFieldData = m_pbftRawMessage->hashfieldsdata();
         pbftMessage->pbftRawMessage()->set_hashfieldsdata(
             hashFieldData.data(), hashFieldData.size());

@@ -3,14 +3,17 @@ set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
 listen_ip="0.0.0.0"
-port_start=(30300 20200)
+port_start=(30300 20200 3901)
 p2p_listen_port=port_start[0]
 rpc_listen_port=port_start[1]
+mtail_listen_port=3901
 use_ip_param=
+mtail_ip_param=""
 ip_array=
 output_dir="./nodes"
 binary_name="fisco-bcos"
-
+mtail_binary_name="mtail"
+key_page_size=10240
 # for cert generation
 ca_cert_dir="${dirpath}"
 sm_cert_conf='sm_cert.cnf'
@@ -25,18 +28,31 @@ cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 nodeid_list=""
 file_dir="./"
-nodes_json_file_name="nodes.json"
+p2p_connected_conf_name="nodes.json"
 command="deploy"
 ca_dir=""
+prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc1"
+default_version="v3.0.0"
 compatibility_version=${default_version}
+default_mtail_version="3.0.0-rc49"
+compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
+monitor_mode="false"
 auth_admin_account=
 binary_path=""
+mtail_binary_path=""
 wasm_mode="false"
+serial_mode="false"
+nodeids_dir=""
+# if the config.genesis path has been set, don't generate genesis file, use the config instead
+genesis_conf_path=""
+lightnode_exec=""
 download_timeout=240
+
+default_group="group0"
+default_chainid="chain0"
 
 LOG_WARN() {
     local content=${1}
@@ -50,7 +66,7 @@ LOG_INFO() {
 
 LOG_FATAL() {
     local content=${1}
-    echo -e "\033[31m[FALT] ${content}\033[0m"
+    echo -e "\033[31m[FATAL] ${content}\033[0m"
     exit 1
 }
 
@@ -62,7 +78,7 @@ dir_must_exists() {
 
 dir_must_not_exists() {
     if [  -d "$1" ]; then
-        LOG_FATAL "$1 DIR does not exist, please check!"
+        LOG_FATAL "$1 DIR already exist, please check!"
     fi
 }
 
@@ -108,8 +124,6 @@ EOF
 generate_sm_cert_conf() {
     local output=$1
     cat <<EOF >"${output}"
-HOME			= .
-RANDFILE		= $ENV::HOME/.rnd
 oid_section		= new_oids
 
 [ new_oids ]
@@ -145,7 +159,7 @@ x509_extensions	= usr_cert		# The extensions to add to the cert
 name_opt 	= ca_default		# Subject Name options
 cert_opt 	= ca_default		# Certificate field options
 
-default_days	= 365			# how long to certify for
+default_days	= 36500			# how long to certify for
 default_crl_days= 30			# how long before next CRL
 default_md	= default		# use public key default MD
 preserve	= no			# keep passed DN ordering
@@ -235,7 +249,7 @@ generate_cert_conf() {
 [ca]
 default_ca=default_ca
 [default_ca]
-default_days = 3650
+default_days = 36500
 default_md = sha256
 
 [req]
@@ -281,7 +295,9 @@ gen_chain_cert() {
 
     ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
     ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
-    mv "${cert_conf}" "${chaindir}"
+    if [ ! -f "${chaindir}/cert.cnf" ];then
+        mv "${cert_conf}" "${chaindir}"
+    fi
 
     LOG_INFO "Generate ca cert successfully!"
 }
@@ -348,6 +364,52 @@ download_bin()
     chmod a+x ${binary_path}
 }
 
+download_monitor_bin()
+{
+    if [ ! -z "${mtail_binary_path}" ];then
+        LOG_INFO "Use binary ${mtail_binary_path}"
+        return
+    fi
+    local platform="$(uname -m)"
+    local mtail_postfix=""
+    if [[ -n "${macOS}" ]];then
+        if [[ "${platform}" == "arm64" ]];then
+            mtail_postfix ="Darwin_arm64"
+        elif [[ "${platform}" == "x86_64" ]];then
+            mtail_postfix="Darwin_x86_64"
+        else
+            LOG_FATAL "Unsupported platform ${platform} for mtail"
+            exit 1
+        fi
+    else
+        if [[ "${platform}" == "aarch64" ]];then
+            mtail_postfix ="Linux_arm64"
+        elif [[ "${platform}" == "x86_64" ]];then
+            mtail_postfix="Linux_x86_64"
+        else
+            LOG_FATAL "Unsupported platform ${platform} for mtail"
+            exit 1
+        fi
+    fi
+    mtail_binary_path="bin/${mtail_binary_name}"
+    package_name="${mtail_binary_name}_${compatibility_mtail_version}_${mtail_postfix}.tar.gz"
+    
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/mtail/${package_name}"
+    local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
+    # the binary can obtained from the cos
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        LOG_INFO "Downloading monitor binary from ${Download_Link} ..."
+        curl -#LO "${Download_Link}"
+    else
+        LOG_INFO "Downloading monitor binary from ${github_link} ..."
+        curl -#LO "${github_link}"
+    fi
+    mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
+    chmod a+x ${mtail_binary_path}
+}
+
+
 gen_sm_chain_cert() {
     local chaindir="${1}"
     name=$(basename "$chaindir")
@@ -364,8 +426,12 @@ gen_sm_chain_cert() {
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key" 2>/dev/null
     "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
-    cp "${sm_cert_conf}" "${chaindir}"
-    cp "${sm2_params}" "${chaindir}"
+    if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
+        cp "${sm_cert_conf}" "${chaindir}"
+    fi
+    if [ ! -f "${chaindir}/${sm2_params}" ];then
+        cp "${sm2_params}" "${chaindir}"
+    fi
 }
 
 gen_sm_node_cert_with_ext() {
@@ -383,7 +449,6 @@ gen_sm_node_cert_with_ext() {
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key" 2> /dev/null
     "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
 
-    # echo "not use $(basename "$capath") to sign $(basename $certpath) ${type}" >>"${logfile}"
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions" 2> /dev/null
 
     rm -f "$certpath/sm_${type}.csr"
@@ -414,43 +479,62 @@ help() {
     cat <<EOF
 Usage:
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
-    -v <FISCO-BCOS binary version>      Default is the latest ${default_version}
+    -g <group id>                       [Optional] set the group id, default: group0
+    -I <chain id>                       [Optional] set the chain id, default: chain0
+    -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
+    -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
+    -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
+    -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
-    -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
-    -p <Start Port>                     Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
+    -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -d, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
-    -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
+    -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
+    -R <Serial_mode>                    [Optional] Whether to use serial execute,default is false
+    -k <key page size>                  [Optional] key page size, default is 10240
+    -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
+    -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
+    -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -h Help
 
 deploy nodes e.g
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos
+    bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -m
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -s
 expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:p:d:v:wDshAa:" option; do
+    while getopts "l:L:C:c:o:e:t:p:d:g:G:v:i:I:M:k:wDshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
             use_ip_param="true"
             ;;
+        L)
+            lightnode_exec="$OPTARG"
+            file_must_exists "${lightnode_exec}"
+            ;;
         o)
             output_dir="$OPTARG"
             ;;
-        e) 
-            binary_path="$OPTARG" 
+        e)
+            binary_path="$OPTARG"
             file_must_exists "${binary_path}"
+            ;;
+        t)
+            mtail_binary_path="$OPTARG"
+            file_must_exists "${mtail_binary_path}"
             ;;
         C) command="${OPTARG}"
             ;;
@@ -463,6 +547,26 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
+        g) default_group="${OPTARG}"
+            check_name "group" "${default_group}"
+            ;;
+        G) genesis_conf_path="${OPTARG}"
+            ;;
+        I) default_chainid="${OPTARG}"
+            check_name "chain" "${default_chainid}"
+            ;;
+        m)
+           monitor_mode="true"
+           ;;
+        n)
+           nodeids_dir="${OPTARG}"
+           dir_must_exists "${nodeids_dir}"
+           ;;
+        i)
+           mtail_ip_param="${OPTARG}"
+           ;;
+        k) key_page_size="${OPTARG}";;
+        M) prometheus_dir="${OPTARG}" ;;
         D) docker_mode="true"
            if [ -n "${macOS}" ];then
                 LOG_FATAL "Not support docker mode for macOS now"
@@ -470,6 +574,7 @@ parse_params() {
         ;;
         A) auth_mode="true" ;;
         w) wasm_mode="true";;
+        R) serial_mode="true";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -483,20 +588,22 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
+    LOG_INFO "GroupID               : ${default_group}"
+    LOG_INFO "ChainID               : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
-        LOG_INFO "${binary_name} Path     : ${binary_path}"
+        LOG_INFO "${binary_name} path      : ${binary_path}"
     else
-        LOG_INFO "docker mode     : ${docker_mode}"
-        LOG_INFO "docker tag      : ${compatibility_version}"
+        LOG_INFO "docker mode      : ${docker_mode}"
+        LOG_INFO "docker tag       : ${compatibility_version}"
     fi
-    LOG_INFO "Auth Mode           : ${auth_mode}"
+    LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
-        LOG_INFO "Auth init account   : ${auth_admin_account}"
+        LOG_INFO "Auth account     : ${auth_admin_account}"
     fi
-    LOG_INFO "Start Port          : ${port_start[*]}"
-    LOG_INFO "Server IP           : ${ip_array[*]}"
-    LOG_INFO "SM Model            : ${sm_mode}"
-    LOG_INFO "output dir          : ${output_dir}"
+    LOG_INFO "Start port           : ${port_start[*]}"
+    LOG_INFO "Server IP            : ${ip_array[*]}"
+    LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "Output dir           : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
 
@@ -514,7 +621,7 @@ for dir in \${dirs[*]}
 do
     if [[ -f "\${dirpath}/\${dir}/config.ini" && -f "\${dirpath}/\${dir}/start.sh" ]];then
         echo "try to start \${dir}"
-        bash \${dirpath}/\${dir}/start.sh
+        bash \${dirpath}/\${dir}/start.sh &
     fi
 done
 wait
@@ -561,6 +668,76 @@ EOF
     chmod +x ${filepath}
 }
 
+generate_lightnode_scripts() {
+    local output=${1}
+    local lightnode_binary_name=${2}
+
+    generate_script_template "$output/start.sh"      
+    generate_script_template "$output/stop.sh"
+    chmod u+x "${output}/stop.sh"
+
+    local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini -g config.genesis >>nohup.out 2>&1 &"
+    local stop_cmd="kill \${node_pid}"
+
+     cat <<EOF >> "${output}/start.sh"
+fisco_bcos=\${SHELL_FOLDER}/${lightnode_binary_name}
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+ulimit -n 1024
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+    exit 0
+else
+    ${start_cmd}
+    sleep 1.5
+fi
+try_times=4
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    node_pid=${ps_cmd}
+    if [[ ! -z \${node_pid} ]];then
+        echo -e "\033[32m \${node} start successfully pid=\${node_pid}\033[0m"
+        exit 0
+    fi
+    sleep 0.5
+    ((i=i+1))
+done
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
+${log_cmd}
+EOF
+    chmod u+x "${output}/start.sh"
+    generate_script_template "$output/stop.sh"
+    cat <<EOF >> "${output}/stop.sh"
+fisco_bcos=\${SHELL_FOLDER}/${lightnode_binary_name}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+try_times=10
+i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
+while [ \$i -lt \${try_times} ]
+do
+    sleep 1
+    node_pid=${ps_cmd}
+    if [ -z \${node_pid} ];then
+        echo -e "\033[32m stop \${node} success.\033[0m"
+        exit 0
+    fi
+    ((i=i+1))
+done
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
+exit 1
+EOF
+    chmod u+x "${output}/stop.sh"
+}
+
 generate_node_scripts() {
     local output=${1}
     local docker_mode="${2}"
@@ -582,9 +759,22 @@ generate_node_scripts() {
     generate_script_template "$output/start.sh"
     cat <<EOF >> "${output}/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${binary_name}
+export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
+ulimit -n 1024
+#start monitor
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for dir in \${dirs[*]}
+do
+    if [[ -f "\${SHELL_FOLDER}/\${dir}/node.mtail" && -f "\${SHELL_FOLDER}/\${dir}/start_mtail_monitor.sh" ]];then
+        echo "try to start \${dir}"
+        bash \${SHELL_FOLDER}/\${dir}/start_mtail_monitor.sh &
+    fi
+done
+
+
 if [ ! -z \${node_pid} ];then
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
@@ -599,7 +789,7 @@ do
     node_pid=${ps_cmd}
     success_flag=${check_success}
     if [[ ! -z \${node_pid} && ! -z "\${success_flag}" ]];then
-        echo -e "\033[32m \${node} start successfully\033[0m"
+        echo -e "\033[32m \${node} start successfully pid=\${node_pid}\033[0m"
         exit 0
     fi
     sleep 0.5
@@ -620,6 +810,17 @@ if [ -z \${node_pid} ];then
     echo " \${node} isn't running."
     exit 0
 fi
+
+#Stop monitor here
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for dir in \${dirs[*]}
+do
+    if [[ -f "\${SHELL_FOLDER}/\${dir}/node.mtail" && -f "\${SHELL_FOLDER}/\${dir}/stop_mtail_monitor.sh" ]];then
+        echo "try to start \${dir}"
+        bash \${SHELL_FOLDER}/\${dir}/stop_mtail_monitor.sh &
+    fi
+done
+
 [ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
 while [ \$i -lt \${try_times} ]
 do
@@ -636,6 +837,259 @@ exit 1
 EOF
     chmod u+x "${output}/stop.sh"
 }
+
+generate_mtail_scripts() {
+    local output=${1}
+    local ip="${2}"
+    local port="${3}"
+    local node="${4}"
+    local ps_cmd="\$(ps aux|grep \${mtail}|grep -v grep|awk '{print \$2}')"
+    local start_cmd="nohup \${mtail} -logtostderr -progs \${mtailScript} -logs '../log/*.log' -port ${port} >>nohup.out 2>&1 &"
+    local stop_cmd="kill \${node_pid}"
+    local pid="pid"
+    local log_cmd="tail -n20  nohup.out"
+    local check_success="\$(${log_cmd} | grep Listening)"
+
+    mkdir -p $(dirname $output/mtail/node.mtail)
+    cat <<EOF >> "${output}/mtail/node.mtail"
+hidden text host
+host = "${ip}"
+
+#node
+hidden text node
+node = "${node}"
+
+#chain id
+hidden text chain
+chain = "${default_chainid}"
+
+
+
+#group id
+hidden text group
+group = "${default_group}"
+
+
+gauge p2p_session_actived by host , node
+/\[P2PService\]\[Service\]\[METRIC\]heartBeat,connected count=(?P<count>\d+)/ {
+  p2p_session_actived[host][node] = \$count
+}
+
+gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
+}
+
+histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
+/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
+}
+
+gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
+}
+
+
+histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+   block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
+}
+
+gauge ledger_block_height by chain , group , host , node
+/\[LEDGER\]\[METRIC\]asyncPrewriteBlock,number=(?P<number>\d+)/ {
+  ledger_block_height[chain][group][host][node] = \$number
+}
+
+gauge txpool_pending_tx_size by chain , group , host , node
+/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+  txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
+}
+EOF
+
+    generate_script_template "$output/mtail/start_mtail_monitor.sh"
+    cat <<EOF >> "${output}/mtail/start_mtail_monitor.sh"
+mtail=\${SHELL_FOLDER}/../../mtail
+mtailScript=\${SHELL_FOLDER}/node.mtail
+export RUST_LOG=bcos_wasm=error
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is Listening, ${pid} is \$node_pid."
+    exit 0
+else
+    ${start_cmd}
+    sleep 1.5
+fi
+
+try_times=4
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    node_pid=${ps_cmd}
+    success_flag=${check_success}
+    if [[ ! -z \${node_pid} && ! -z "\${success_flag}" ]];then
+        echo -e "\033[32m \${node} start successfully\033[0m"
+        exit 0
+    fi
+    sleep 0.5
+    ((i=i+1))
+done
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
+${log_cmd}
+EOF
+    chmod u+x "${output}/mtail/start_mtail_monitor.sh"
+
+
+    generate_script_template "$output/mtail/stop_mtail_monitor.sh"
+    cat <<EOF >> "${output}/mtail/stop_mtail_monitor.sh"
+mtail=\${SHELL_FOLDER}/../../mtail
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+try_times=10
+i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
+
+while [ \$i -lt \${try_times} ]
+do
+    sleep 1
+    node_pid=${ps_cmd}
+    if [ -z \${node_pid} ];then
+        echo -e "\033[32m stop \${node} success.\033[0m"
+        exit 0
+    fi
+    ((i=i+1))
+done
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
+exit 1
+EOF
+    chmod u+x "${output}/mtail/stop_mtail_monitor.sh"
+}
+
+
+generate_monitor_scripts() {
+    local output=${1}
+    local mtail_host_list=""
+    local ip_params="${2}"
+    local monitor_ip="${3}"
+    local ip_array=(${ip_params//,/ })
+    local ip_length=${#ip_array[@]}
+    local i=0
+    for (( ; i < ip_length; i++)); do
+        local ip=${ip_array[i]}
+        local delim=""
+        if [[ $i == $((ip_length - 1)) ]]; then
+            delim=""
+        else
+            delim=","
+        fi
+        mtail_host_list="${mtail_host_list}'${ip}'${delim}"
+    done
+
+
+    mkdir -p $(dirname $output/compose.yaml)
+    cat <<EOF >> "${output}/compose.yaml"
+version: '2'
+
+services:
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /etc/localtime:/etc/localtime
+    network_mode: host
+   # ports:
+   #   - \${PROMETHEUS_PORT}:9090
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-oss:7.3.3
+    restart: unless-stopped
+    user: '0'
+    network_mode: host
+   # ports:
+   #   - \${GRAFANA_PORT}:3000
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/logs:/var/log/grafana
+      - /etc/localtime:/etc/localtime
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+EOF
+
+    mkdir -p $(dirname $output/prometheus/prometheus.yml)
+    cat <<EOF >> "${output}/prometheus/prometheus.yml"
+global:
+  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+
+  # Attach these labels to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager).
+  external_labels:
+    monitor: 'bcos'
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label job=<job_name> to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+
+    static_configs:
+      - targets: [${mtail_host_list}]
+EOF
+
+    mkdir -p $(dirname $output/grafana/grafana.ini)
+    cat <<EOF >> "${output}/grafana/grafana.ini"
+[server]
+# The http port  to use
+http_port = 3001
+
+[security]
+# disable creation of admin user on first start of grafana
+;disable_initial_admin_creation = false
+;
+;# default admin user, created on startup
+admin_user = admin
+;
+;# default admin password, can be changed before first start of grafana,  or in profile settings
+admin_password = admin
+
+EOF
+
+    generate_script_template "$output/start_monitor.sh"
+    cat <<EOF >> "${output}/start_monitor.sh"
+
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} up -d prometheus grafana 2>&1
+echo "graphna web address: http://${monitor_ip}:3001/"
+echo "prometheus web address: http://${monitor_ip}:9090/"
+EOF
+    chmod u+x "${output}/start_monitor.sh"
+
+
+    generate_script_template "$output/stop_monitor.sh"
+    cat <<EOF >> "${output}/stop_monitor.sh"
+
+DOCKER_FILE=\${SHELL_FOLDER}/compose.yaml
+docker-compose -f \${DOCKER_FILE} stop
+echo -e "\033[32m stop monitor successfully\033[0m"
+EOF
+    chmod u+x "${output}/stop_monitor.sh"
+}
+
 
 generate_sdk_cert() {
     local sm_mode="$1"
@@ -675,25 +1129,35 @@ generate_chain_cert() {
 }
 generate_config_ini() {
     local output="${1}"
-    local p2p_listen_port="${2}"
-    local rpc_listen_port="${3}"
+    local p2p_listen_ip="${2}"
+    local p2p_listen_port="${3}"
+
+    local rpc_listen_ip="${4}"
+    local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
-    listen_ip=${listen_ip}
+    listen_ip=${p2p_listen_ip}
     listen_port=${p2p_listen_port}
     ; ssl or sm ssl
     sm_ssl=false
     nodes_path=${file_dir}
-    nodes_file=${nodes_json_file_name}
+    nodes_file=${p2p_connected_conf_name}
 
 [rpc]
-    listen_ip=${listen_ip}
+    listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -710,69 +1174,118 @@ EOF
 
 generate_common_ini() {
     local output=${1}
-
+    # LOG_INFO "Begin generate uuid"
+    local uuid=$(uuidgen)
+    LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
 [chain]
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_mode}
     ; the group id, should nerver be changed
-    group_id=group
+    group_id=${default_group}
     ; the chain id, should nerver be changed
-    chain_id=chain
+    chain_id=${default_chainid}
 
 [security]
     private_key_path=conf/node.pem
+
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
 
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
 
-[executor]
-    ; use the wasm virtual machine or not
-    is_wasm=${wasm_mode}
-    is_auth_check=${auth_mode}
-    auth_admin_account=${auth_admin_account}
-
 [storage]
     data_path=data
     enable_cache=true
+    ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
+    key_page_size=${key_page_size}
 
 [txpool]
+    ; size of the txpool, default is 15000
     limit=15000
+    ; txs notification threads num, default is 2
     notify_worker_num=2
-    verify_worker_num=2
+    ; txs verification threads num, default is the number of CPU cores
+    ;verify_worker_num=2
+    ; txs expiration time, in seconds, default is 10 minutes
+    txs_expiration_time = 600
+
 [log]
     enable=true
     log_path=./log
     ; info debug trace
-    level=DEBUG
+    level=info
     ; MB
     max_log_file_size=200
+
+[flow_control]
+    ; the module that does not limit bandwidth
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
+    ;
+    ; modules_without_bw_limit=raft,pbft
+
+    ; restrict the outgoing bandwidth of the node
+    ; both integer and decimal is support, unit: Mb
+    ;
+    ; total_outgoing_bw_limit=10
+
+    ; restrict the outgoing bandwidth of the the connection
+    ; both integer and decimal is support, unit: Mb
+    ;
+    ; conn_outgoing_bw_limit=2
+    ;
+    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
+    ;   ip_192.108.0.1=3
+    ;   ip_192.108.0.2=3
+    ;   ip_192.108.0.3=3
+    ;
+    ; default bandwidth limit for the group
+    ; group_outgoing_bw_limit=2
+    ;
+    ; specify group to limit bandwidth, group_groupName=n
+    ;   group_group0=2
+    ;   group_group1=2
+    ;   group_group2=2
 EOF
 }
 
 generate_sm_config_ini() {
     local output=${1}
-    local p2p_listen_port="${2}"
-    local rpc_listen_port="${3}"
+    local p2p_listen_ip="${2}"
+    local p2p_listen_port="${3}"
+    local rpc_listen_ip="${4}"
+    local rpc_listen_port="${5}"
+    local disable_ssl="${6}"
+
+    local disable_ssl_content=";disable_ssl=true"
+    if [[ "${disable_ssl}" == "true" ]]; then 
+        disable_ssl_content="disable_ssl=true"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
-    listen_ip=${listen_ip}
+    listen_ip=${p2p_listen_ip}
     listen_port=${p2p_listen_port}
     ; ssl or sm ssl
     sm_ssl=true
     nodes_path=${file_dir}
-    nodes_file=${nodes_json_file_name}
+    nodes_file=${p2p_connected_conf_name}
 
 [rpc]
-    listen_ip=${listen_ip}
+    listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
     thread_count=16
     ; ssl or sm ssl
     sm_ssl=true
     ;ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    ${disable_ssl_content}
 
 [cert]
     ; directory the certificates located in
@@ -791,23 +1304,30 @@ EOF
     generate_common_ini "${output}"
 }
 
-generate_nodes_json() {
-    local output=${1}
-    local p2p_host_list=""
+generate_p2p_connected_conf() {
+    local output="${1}"
     local ip_params="${2}"
-    local ip_array=(${ip_params//,/ })
-    local ip_length=${#ip_array[@]}
-    local i=0
-    for (( ; i < ip_length; i++)); do
-        local ip=${ip_array[i]}
-        local delim=""
-        if [[ $i == $((ip_length - 1)) ]]; then
-            delim=""
-        else
-            delim=","
-        fi
-        p2p_host_list="${p2p_host_list}\"${ip}\"${delim}"
-    done
+    local template="${3}"
+
+    local p2p_host_list=""
+    if [[ "${template}" == "true" ]]; then
+        p2p_host_list="${ip_params}"
+    else
+        local ip_array=(${ip_params//,/ })
+        local ip_length=${#ip_array[@]}
+    
+        local i=0
+        for (( ; i < ip_length; i++)); do
+            local ip=${ip_array[i]}
+            local delim=""
+            if [[ $i == $((ip_length - 1)) ]]; then
+                delim=""
+            else
+                delim=","
+            fi
+            p2p_host_list="${p2p_host_list}\"${ip}\"${delim}"
+        done
+    fi
 
     cat <<EOF >"${output}"
 {"nodes":[${p2p_host_list}]}
@@ -817,17 +1337,18 @@ EOF
 generate_config() {
     local sm_mode="${1}"
     local node_config_path="${2}"
-    local node_json_config_path="${3}"
-    local connected_nodes="${4}"
-    local p2p_listen_port="${5}"
+    local p2p_listen_ip="${3}"
+    local p2p_listen_port="${4}"
+    local rpc_listen_ip="${5}"
     local rpc_listen_port="${6}"
+    local disable_ssl="${7}"
+
     check_auth_account
     if [ "${sm_mode}" == "false" ]; then
-        generate_config_ini "${node_config_path}" "${p2p_listen_port}" "${rpc_listen_port}"
+        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     else
-        generate_sm_config_ini "${node_config_path}" "${p2p_listen_port}" "${rpc_listen_port}"
+        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     fi
-    generate_nodes_json "${node_json_config_path}/${nodes_json_file_name}" "${connected_nodes}"
 }
 
 generate_secp256k1_node_account() {
@@ -880,9 +1401,19 @@ generate_genesis_config() {
     ; the node id of consensusers
     ${node_list}
 
+[version]
+    ; compatible version, can be dynamically upgraded through setSystemConfig
+    ; the default is 3.0.0
+    compatibility_version=3.0.0
 [tx]
     ; transaction gas limit
-    gas_limit=300000000
+    gas_limit=3000000000
+[executor]
+    ; use the wasm virtual machine or not
+    is_wasm=${wasm_mode}
+    is_auth_check=${auth_mode}
+    auth_admin_account=${auth_admin_account}
+    is_serial_execute=${serial_mode}
 EOF
 }
 
@@ -927,17 +1458,18 @@ check_and_install_tassl(){
     if [ -f "${OPENSSL_CMD}" ];then
         return
     fi
+    # https://en.wikipedia.org/wiki/Uname#Examples
     local x86_64_name="x86_64"
     local arm_name="aarch64"
     local tassl_mid_name="linux"
     if [[ -n "${macOS}" ]];then
-        x86_64_name="i386"
-        arm_name="arm"
+        x86_64_name="x86_64"
+        arm_name="arm64"
         tassl_mid_name="macOS"
     fi
-    
+
     local tassl_post_fix="x86_64"
-    local platform="$(uname -p)"
+    local platform="$(uname -m)"
     if [[ "${platform}" == "${arm_name}" ]];then
         tassl_post_fix="aarch64"
     elif [[ "${platform}" == "${x86_64_name}" ]];then
@@ -950,7 +1482,7 @@ check_and_install_tassl(){
     local tassl_tgz_name="${tassl_package_name}.tar.gz"
     local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
     LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
-    curl -#LO "${tassl_link_prefix}"
+    wget --no-check-certificate  "${tassl_link_prefix}"
     tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
     chmod u+x ${tassl_package_name}
     mkdir -p "${HOME}"/.fisco
@@ -975,9 +1507,28 @@ expand_node()
     local ca_dir="${2}"
     local node_dir="${3}"
     local config_path="${4}"
+    local mtail_ip_param="${5}"
+    local prometheus_dir="${6}"
     if [ -d "${node_dir}" ];then
         LOG_FATAL "expand node failed for ${node_dir} already exists!"
     fi
+
+    if "${monitor_mode}" ; then
+       LOG_INFO "start generate monitor scripts"
+       ip=`echo $mtail_ip_param | awk '{split($0,a,":");print a[1]}'`
+       if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
+            LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
+        fi
+       num=`echo $mtail_ip_param | awk '{split($0,a,":");print a[2]}'`
+       local port=$((mtail_listen_port + num))
+       connected_mtail_nodes="${ip}:${port}"
+       generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${num}"
+       if [ -n "${prometheus_dir}" ];then
+           sed -i  "s/]/,\'${connected_mtail_nodes}\']/g" ${prometheus_dir}
+       fi
+       LOG_INFO "generate monitor scripts success"
+    fi
+
     file_must_exists "${config_path}/config.ini"
     file_must_exists "${config_path}/config.genesis"
     file_must_exists "${config_path}/nodes.json"
@@ -1051,17 +1602,26 @@ deploy_nodes()
     else
         help
     fi
-    # check the binary
+    #check the binary
     if [ -z "${docker_mode}" ];then
         download_bin
         if [[ ! -f "$binary_path" ]]; then
             LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
+    if "${monitor_mode}" ;then
+        download_monitor_bin
+        if [[ ! -f "$mtail_binary_path" ]]; then
+            LOG_FATAL "mtail binary exec ${mtail_binary_path} not exist, Must copy binary file ${mtail_binary_name} to ${mtail_binary_path}"
+        fi
+    fi
+
     local i=0
     node_count=0
     local count=0
     connected_nodes=""
+    connected_mtail_nodes=""
+    local monitor_ip=""
     # Note: must generate the node account firstly
     ca_dir="${output_dir}"/ca
     generate_chain_cert "${sm_mode}" "${ca_dir}"
@@ -1072,6 +1632,7 @@ deploy_nodes()
         if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
             LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
         fi
+        # echo $num
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
         echo "Processing IP:${ip} Total:${num}"
         [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
@@ -1081,6 +1642,9 @@ deploy_nodes()
         generate_all_node_scripts "${nodes_dir}"
         if [ -z "${docker_mode}" ];then
             cp "${binary_path}" "${nodes_dir}"
+        fi
+        if "${monitor_mode}" ;then
+            cp $mtail_binary_path "${nodes_dir}"
         fi
         ca_cert_dir="${nodes_dir}"/ca
         mkdir -p ${ca_cert_dir}
@@ -1094,6 +1658,14 @@ deploy_nodes()
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
             generate_node_scripts "${node_dir}" "${docker_mode}"
+            if "${monitor_mode}" ;then
+                local port=$((mtail_listen_port + node_count))
+                connected_mtail_nodes=${connected_mtail_nodes}"${ip}:${port}, "
+                if [[ $count == 0 ]]; then
+                    monitor_ip="${ip}"
+                fi
+                generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
+            fi
             local port=$((p2p_listen_port + node_count))
             connected_nodes=${connected_nodes}"${ip}:${port}, "
             account_dir="${node_dir}/conf"
@@ -1103,6 +1675,11 @@ deploy_nodes()
             ((++node_count))
         done
     done
+
+    if "${monitor_mode}" ;then
+        monitor_dir="${output_dir}/monitor"
+        generate_monitor_scripts "${monitor_dir}" "${connected_mtail_nodes}" ${monitor_ip}
+    fi
 
     local i=0
     local count=0
@@ -1119,13 +1696,132 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             local p2p_port=$((p2p_listen_port + node_count))
             local rpc_port=$((rpc_listen_port + node_count))
-            generate_config "${sm_mode}" "${node_dir}/config.ini" "${node_dir}" "${connected_nodes}" "${p2p_port}" "${rpc_port}"
+            generate_config "${sm_mode}" "${node_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+            generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
             generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
             set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
             ((++count))
         done
     done
+
+    # Generate lightnode cert
+    if [ -e "${lightnode_exec}" ]; then
+        local lightnode_dir="${output_dir}/lightnode"
+        mkdir -p ${lightnode_dir}
+        generate_genesis_config "${lightnode_dir}/config.genesis" "${nodeid_list}"
+
+        generate_node_cert "${sm_mode}" "${ca_dir}" "${lightnode_dir}/conf"
+        generate_lightnode_scripts "${lightnode_dir}" "fisco-bcos-lightnode"
+        local lightnode_account_dir="${lightnode_dir}/conf"
+        generate_node_account "${sm_mode}" "${lightnode_account_dir}" ${count}
+
+        local node_count=$(get_value ${ip//./}_count)
+        local p2p_port=$((p2p_listen_port + node_count))
+        local rpc_port=$((rpc_listen_port + node_count))
+        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+        generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
+
+        cp "${lightnode_exec}" ${lightnode_dir}/
+    fi
+
     print_result
+}
+
+generate_template_package()
+{
+    local node_name="${1}"
+    local binary_path="${2}"
+    local genesis_conf_path="${3}"
+    local output_dir="${4}"
+
+    # do not support docker 
+    if [ -n "${docker_mode}" ];then
+        LOG_FATAL "Docker mode is not supported on building template install package"
+    fi
+
+    # do not support monitor 
+    if "${monitor_mode}" ;then
+        LOG_FATAL "Monitor mode is not support on building template install package"
+    fi
+
+    # check if node.nodid dir exist
+    file_must_exists "${genesis_conf_path}"
+    file_must_exists "${binary_path}"
+    # dir_must_not_exists "${output_dir}"
+
+    mkdir -p "${output_dir}"
+    dir_must_exists "${output_dir}"
+
+    # mkdir node dir
+    node_dir="${output_dir}/${node_name}"
+    mkdir -p "${node_dir}"
+    mkdir -p "${node_dir}/conf"
+
+    p2p_listen_ip="[#P2P_LISTEN_IP]"
+    rpc_listen_ip="[#RPC_LISTEN_IP]"
+
+    p2p_listen_port="[#P2P_LISTEN_PORT]"
+    rpc_listen_port="[#RPC_LISTEN_PORT]"
+
+    # copy binary file
+    cp "${binary_path}" "${node_dir}/../"
+    # copy config.genesis
+    cp "${genesis_conf_path}" "${node_dir}/"
+
+    # generate start_all.sh and stop_all.sh
+    generate_all_node_scripts "${node_dir}/../"
+
+    # generate node start.sh stop.sh
+    generate_node_scripts "${node_dir}"
+
+    local connected_nodes="[#P2P_CONNECTED_NODES]"
+    # generate config for node
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true"
+    generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
+
+    LOG_INFO "Building template intstall package"
+    # TODO: auth mode handle
+    LOG_INFO "Auth mode            : ${auth_mode}"
+    if ${auth_mode} ; then
+        LOG_INFO "Auth account     : ${auth_admin_account}"
+    fi
+    LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "All completed. Files in ${output_dir}"
+}
+
+generate_genesis_config_by_nodeids()
+{
+    local nodeid_dir="${1}"
+    local output_dir="${2}"
+
+    local nodeid_list=""
+    local node_index=0
+
+    local nodeid_file_list=$(ls "${nodeid_dir}" | tr "\n" " ")
+    local nodeid_file_array=(${nodeid_file_list})
+    # gen node.N=xxxx first
+    for nodeid_file in ${nodeid_file_array[@]}
+    do
+        if [[ ! -f "${nodeid_dir}/${nodeid_file}" ]]; then
+            LOG_WARN " x.nodeid file not exist, ${nodeid_dir}/${nodeid_file}"
+            continue
+        fi
+        local nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
+        nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1
+        "
+
+        ((node_index += 1))
+    done
+
+    if [[ -z "${nodeid_list}" ]]; then
+        LOG_FATAL "generate config.genesis failed, please check if the nodeids directory correct"
+    fi
+
+    if [ ! -d "${output_dir}" ]; then
+        mkdir -p "${output_dir}"
+    fi
+
+    generate_genesis_config "${output_dir}/config.genesis" "${nodeid_list}"
 }
 
 check_auth_account()
@@ -1162,7 +1858,26 @@ main() {
         deploy_nodes
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
-        expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}"
+        expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
+    elif [[ "${command}" == "generate-template-package"  ]]; then
+        local node_name="node0"
+        if [[ -n "${genesis_conf_path}" ]]; then
+            dir_must_not_exists "${output_dir}"
+            # config.genesis is set
+            file_must_exists "${genesis_conf_path}"
+            generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}"
+        elif [[ -n "${nodeids_dir}" ]] && [[ -d "${nodeids_dir}" ]]; then
+            dir_must_not_exists "${output_dir}"
+            generate_genesis_config_by_nodeids "${nodeids_dir}" "${output_dir}/"
+            file_must_exists "${output_dir}/config.genesis"
+            generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}"
+        else
+            echo "bash build_chain.sh generate-template-package -h "
+            echo "  eg:"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis "
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
+            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
+        fi
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi

@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <boost/asio.hpp>
 #include <boost/core/ignore_unused.hpp>
 
@@ -59,47 +59,52 @@ public:
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
-     * @param _getNodeIDsFunc: get nodeIDs callback
+     * @param _onGetGroupNodeInfo: get nodeIDs callback
      * @return void
      */
-    void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) override
+    void asyncGetGroupNodeInfo(
+        const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
     {
-        boost::ignore_unused(_groupID, _getNodeIDsFunc);
+        boost::ignore_unused(_groupID, _onGetGroupNodeInfo);
     }
 
     /**
      * @brief: send message to a single node
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeID(const std::string& _groupID,
+    void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
 
     /**
      * @brief: send message to multiple nodes
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _nodeIDs: the receiver nodeIDs
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeIDs(const std::string& _groupID,
+    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
         bytesConstRef _payload) override;
 
     /**
      * @brief: send message to all nodes
+     * @param _nodeType: nodeType
      * @param _groupID: groupID
+     * @param _moduleID: moduleID
      * @param _srcNodeID: the sender nodeID
      * @param _payload: message content
      * @return void
      */
-    void asyncSendBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bytesConstRef _payload) override;
+    void asyncSendBroadcastMessage(uint16_t _nodeType, const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override
@@ -108,7 +113,7 @@ public:
     void asyncSendMessageByTopic(const std::string&, bcos::bytesConstRef,
         std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)>) override
     {}
-    void asyncSendBroadbastMessageByTopic(const std::string&, bcos::bytesConstRef) override {}
+    void asyncSendBroadcastMessageByTopic(const std::string&, bcos::bytesConstRef) override {}
 
     void asyncSubscribeTopic(
         std::string const&, std::string const&, std::function<void(Error::Ptr&&)>) override

@@ -17,11 +17,9 @@
 # ------------------------------------------------------------------------------
 list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
 # cmake settings
+set(TEST_BINARY_NAME test-storage)
 
-# include(SearchTestCases)
-set(TEST_BINARY_NAME test-bcos-storage)
-
-if(USE_TiKV)
+if(WITH_TIKV)
     list(APPEND SOURCES "TestTiKVStorage.cpp")
 else()
     set(EXCLUDE_SUITES "TestTiKVStorage")
@@ -32,13 +30,13 @@ endif()
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 
-find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework log)
 
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework framework ${STORAGE_TARGET})
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SECURITY_TARGET} ${STORAGE_TARGET} Boost::unit_test_framework Boost::log Boost::context)
 add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("coverage" "'/usr*' 'boost/**'")
+    config_coverage("storage-coverage" "'/usr*' 'boost/**'")
 endif ()

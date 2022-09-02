@@ -19,9 +19,10 @@
  * @date 2021-06-08
  */
 #include "SyncFixture.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -60,16 +61,16 @@ void testSyncConfig(CryptoSuite::Ptr _cryptoSuite)
 
 BOOST_AUTO_TEST_CASE(testNonSMSyncConfig)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testSyncConfig(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testSMSyncConfig)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testSyncConfig(cryptoSuite);
 }

@@ -20,8 +20,8 @@
 
 #pragma once
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
-#include <bcos-framework/interfaces/storage/Table.h>
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include <bcos-framework/storage/Table.h>
 
 namespace bcos
 {
@@ -34,20 +34,29 @@ public:
     DagTransferPrecompiled(crypto::Hash::Ptr _hashImpl);
     virtual ~DagTransferPrecompiled(){};
 
-    std::string toString() override;
-
     std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender) override;
+        std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters) override;
 
 public:
     // is this precompiled need parallel processing, default false.
-    virtual bool isParallelPrecompiled() override { return true; }
-    virtual std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
+    bool isParallelPrecompiled() override { return true; }
+    std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
 
-protected:
-    std::optional<storage::Table> openTable(
-        std::shared_ptr<executor::TransactionExecutive> _executive);
+    static void createDagTable(std::shared_ptr<storage::StorageInterface> storageInterface)
+    {
+        std::string _tableName(ledger::DAG_TRANSFER);
+        // create table first
+        std::promise<Error::UniquePtr> createPromise;
+        storageInterface->asyncCreateTable(_tableName, SYS_VALUE_FIELDS,
+            [&createPromise](Error::UniquePtr _e, std::optional<storage::Table>) {
+                createPromise.set_value(std::move(_e));
+            });
+        Error::UniquePtr _e = createPromise.get_future().get();
+        BCOS_LOG(TRACE) << LOG_BADGE("DAG TRANSFER") << "create DAG Transfer table"
+                        << LOG_KV("table", _tableName)
+                        << (_e == nullptr ? "" : " withError: " + _e->errorMessage());
+    }
 
 public:
     void userAddCall(std::shared_ptr<executor::TransactionExecutive> _executive,

@@ -21,7 +21,8 @@
 #pragma once
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
-#include <bcos-framework/interfaces/protocol/Block.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <queue>
 namespace bcos
 {
@@ -48,7 +49,9 @@ public:
     using Ptr = std::shared_ptr<DownloadingQueue>;
     explicit DownloadingQueue(BlockSyncConfig::Ptr _config)
       : m_config(_config), m_blockBuffer(std::make_shared<BlocksMessageQueue>())
-    {}
+    {
+        m_ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_config->ledger());
+    }
     virtual ~DownloadingQueue() {}
 
     virtual void push(BlocksMsgInterface::Ptr _blocksData);
@@ -86,6 +89,8 @@ public:
         return m_commitQueue.size();
     }
 
+    virtual void onCommitFailed(bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _failedBlock);
+
 protected:
     // clear queue
     virtual void clearQueue();
@@ -107,6 +112,7 @@ protected:
 private:
     // Note: this function should not be called frequently
     std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr _header);
+    void fetchAndUpdatesLedgerConfig();
 
 private:
     BlockSyncConfig::Ptr m_config;
@@ -120,6 +126,8 @@ private:
     mutable SharedMutex x_commitQueue;
 
     std::function<void(bcos::ledger::LedgerConfig::Ptr)> m_newBlockHandler;
+
+    std::shared_ptr<bcos::tool::LedgerConfigFetcher> m_ledgerFetcher;
 };
 }  // namespace sync
 }  // namespace bcos

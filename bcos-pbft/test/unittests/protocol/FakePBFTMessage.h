@@ -210,7 +210,7 @@ inline PBFTProposalInterface::Ptr fakeSingleProposal(CryptoSuite::Ptr _cryptoSui
     std::vector<bytes> signatureList;
     for (auto const& _nodeKeypairInfo : _nodeKeyPairList)
     {
-        auto signatureData = _cryptoSuite->signatureImpl()->sign(_nodeKeypairInfo.second, _hash);
+        auto signatureData = _cryptoSuite->signatureImpl()->sign(*_nodeKeypairInfo.second, _hash);
         nodeList.push_back(_nodeKeypairInfo.first);
         signatureList.push_back(*signatureData);
     }
@@ -368,7 +368,7 @@ inline void testPBFTMessage(PacketType _packetType, CryptoSuite::Ptr _cryptoSuit
     IndexType generatedFrom = 10;
     auto proposalHash = _cryptoSuite->hashImpl()->hash("proposal");
     size_t proposalSize = 3;
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto faker = std::make_shared<PBFTMessageFixture>(_cryptoSuite, keyPair);
     // for the proposal
     BlockNumber index = 100;
@@ -391,6 +391,15 @@ inline void testPBFTMessage(PacketType _packetType, CryptoSuite::Ptr _cryptoSuit
     checkFakedBasePBFTMessage(decodedMsg, orgTimestamp, version, view, generatedFrom, proposalHash);
     // verify the signature
     BOOST_CHECK(decodedMsg->verifySignature(_cryptoSuite, keyPair->publicKey()) == true);
+    // case: another node fake the decodedMsg with error view
+    KeyPairInterface::Ptr keyPair2 = _cryptoSuite->signatureImpl()->generateKeyPair();
+    auto pbftCodec2 = std::make_shared<PBFTCodec>(keyPair2, _cryptoSuite, pbftMessageFactory);
+    decodedMsg->setView(view + 1);
+    encodedData = pbftCodec2->encode(decodedMsg, 1);
+    auto decodedMsg2 =
+        std::dynamic_pointer_cast<PBFTMessage>(pbftCodec2->decode(ref(*encodedData)));
+    BOOST_CHECK(decodedMsg2->verifySignature(_cryptoSuite, keyPair->publicKey()) == false);
+
     // the signatureHash has been updated
     auto fakedHash = _cryptoSuite->hashImpl()->hash("fakedHash");
     decodedMsg->setSignatureDataHash(fakedHash);
@@ -411,7 +420,7 @@ inline void testPBFTViewChangeMessage(CryptoSuite::Ptr _cryptoSuite)
 
     BlockNumber committedIndex = 10002;
     HashType committedHash = _cryptoSuite->hash("10002");
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto faker = std::make_shared<PBFTMessageFixture>(_cryptoSuite, keyPair);
 
     auto fakedViewChangeMsg = fakeViewChangeMessage(orgTimestamp, version, view, generatedFrom,
@@ -433,6 +442,15 @@ inline void testPBFTViewChangeMessage(CryptoSuite::Ptr _cryptoSuite)
         proposalHash, index, data, committedIndex, committedHash, proposalSize, _cryptoSuite);
     // verify the signature
     BOOST_CHECK(decodedMsg->verifySignature(_cryptoSuite, keyPair->publicKey()) == true);
+    // case: another node fake the decodedMsg with error view
+    KeyPairInterface::Ptr keyPair2 = _cryptoSuite->signatureImpl()->generateKeyPair();
+    auto pbftCodec2 = std::make_shared<PBFTCodec>(keyPair2, _cryptoSuite, pbftMessageFactory);
+    decodedMsg->setView(view - 100);
+    encodedData = pbftCodec2->encode(decodedMsg, 1);
+    auto decodedMsg2 =
+        std::dynamic_pointer_cast<PBFTViewChangeMsg>(pbftCodec2->decode(ref(*encodedData)));
+    BOOST_CHECK(decodedMsg2->verifySignature(_cryptoSuite, keyPair->publicKey()) == false);
+
     // the signatureHash has been updated
     auto fakedHash = _cryptoSuite->hashImpl()->hash("fakedHash");
     decodedMsg->setSignatureDataHash(fakedHash);
@@ -482,7 +500,7 @@ inline void testPBFTNewViewMessage(CryptoSuite::Ptr _cryptoSuite)
     BlockNumber committedIndex = 10002;
     auto orgCommittedIndex = committedIndex;
 
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto faker = std::make_shared<PBFTMessageFixture>(_cryptoSuite, keyPair);
 
     int64_t viewChangeSize = 4;
@@ -533,7 +551,7 @@ inline void testPBFTRequest(CryptoSuite::Ptr _cryptoSuite, PacketType _packetTyp
     IndexType generatedFrom = 200;
 
     auto proposalHash = _cryptoSuite->hashImpl()->hash("testPBFTRequest");
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto faker = std::make_shared<PBFTMessageFixture>(_cryptoSuite, keyPair);
     auto pbftMessageFactory = std::make_shared<PBFTMessageFactoryImpl>();
 

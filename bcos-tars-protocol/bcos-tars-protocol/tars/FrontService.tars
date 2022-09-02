@@ -1,0 +1,22 @@
+#include "CommonProtocol.tars"
+#include "GatewayInfo.tars"
+module bcostars {
+    interface FrontService {
+        Error asyncGetGroupNodeInfo(out GroupNodeInfo groupNodeInfo);
+
+        Error onReceiveGroupNodeInfo(string groupID, GroupNodeInfo groupNodeInfo);
+
+        Error onReceiveMessage(string groupID, vector<byte> nodeID, vector<byte> data);
+
+        Error onReceiveBroadcastMessage(string groupID, vector<byte> nodeID, vector<byte> data);
+
+        Error asyncSendMessageByNodeID(int moduleID, vector<byte> nodeID, vector<byte> data, unsigned int timeout, bool requireRespCallback, 
+            out vector<byte> responseNodeID, out vector<byte> responseData, out string seq);
+
+        Error asyncSendResponse(string id, int moduleID, vector<byte> nodeID, vector<byte> data);
+
+        void asyncSendMessageByNodeIDs(int moduleID, vector<vector<byte>> nodeIDs, vector<byte> data);
+
+        void asyncSendBroadcastMessage(int _nodeType, int moduleID, vector<byte> data);
+    };
+};

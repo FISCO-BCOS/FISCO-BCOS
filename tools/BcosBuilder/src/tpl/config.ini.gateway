@@ -1,0 +1,77 @@
+[p2p]
+    listen_ip=0.0.0.0
+    listen_port=30300
+    ; ssl or sm ssl
+    sm_ssl=false
+    nodes_path=./
+    nodes_file=nodes.json
+
+[service]
+    ;rpc=chain0
+    
+    ; run without tars framework
+    ; without_tars_framework = true
+    ; tars_proxy_conf = conf/tars_proxy.ini
+
+[cert]
+    ; directory the certificates located in
+    ca_path=./conf
+    ; the ca certificate file
+    ca_cert=ca.crt
+    ; the node private key file
+    node_key=ssl.key
+    ; the node certificate file
+    node_cert=ssl.crt
+
+[chain]
+    ; use SM crypto or not, should never be changed
+    sm_crypto=false
+    chain_id=chain0
+
+[storage_security]
+    ; enable data disk encryption or not, default is false
+    enable=false
+    ; url of the key center, in format of ip:port
+    ;key_center_url=
+    ;cipher_data_key=
+    
+[failover]
+    ; enable failover or not, default disable
+    enable = false
+    ; the address of etcd, can configure multiple comma-separated
+    cluster_url= "127.0.0.1:2379"
+
+[log]
+    enable=true
+    log_path=./log
+    ; info debug trace
+    level=info
+    ; MB
+    max_log_file_size=200
+
+[flow_control]
+    ; the module that does not limit bandwidth
+    ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
+
+    ; modules_without_bw_limit=raft,pbft,cons_txs_sync
+
+    ; restrict the outgoing bandwidth of the node
+    ; both integer and decimal is supported for the node, unit: Mb
+    ; total_outgoing_bw_limit=10
+
+    ; restrict the outgoing bandwidth of the the connection
+    ; both integer and decimal is supported for the connection, unit: Mb
+    ; conn_outgoing_bw_limit=2
+
+    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
+    ;   ip_192.108.0.1=3
+    ;   ip_192.108.0.2=3
+    ;   ip_192.108.0.3=3
+
+    ; default bandwidth limit for the group
+    ; group_outgoing_bw_limit=2
+
+    ; specify group to limit bandwidth, group_groupName=n
+    ;   group_group0=2
+    ;   group_group1=2
+    ;   group_group2=2

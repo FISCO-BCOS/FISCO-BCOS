@@ -22,7 +22,7 @@
 
 #pragma once
 #include "../Common.h"
-#include "bcos-framework/libutilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <tbb/concurrent_queue.h>
 #include <condition_variable>
 #include <cstdint>
@@ -82,7 +82,6 @@ private:
     mutable std::mutex x_topLevel;
     std::condition_variable cv_topLevel;
     std::atomic_bool m_stop = {false};
-
 };
 
 }  // namespace executor

@@ -19,21 +19,21 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "bcos-protocol/protobuf/PBTransactionMetaData.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "libprotocol/protobuf/PBTransactionMetaData.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/protobuf/PBBlockFactory.h>
+#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -85,20 +85,8 @@ class FakeMemoryStorage : public MemoryStorage
 public:
     FakeMemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2)
       : MemoryStorage(_config, _notifyWorkerNum)
-    {}
-
-    bool shouldNotifyTx(bcos::protocol::Transaction::ConstPtr _tx,
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override
     {
-        if (!_txSubmitResult)
-        {
-            return false;
-        }
-        if (!_tx->submitCallback())
-        {
-            return false;
-        }
-        return true;
+        m_preStoreTxs = true;
     }
 };
 
@@ -140,7 +128,18 @@ public:
         m_fakeGateWay->addTxPool(_nodeId, m_txpool);
         m_frontService->setGateWay(m_fakeGateWay);
     }
-    virtual ~TxPoolFixture() {}
+    virtual ~TxPoolFixture()
+    {
+        std::cout << "#### TxPoolFixture de-constructor" << std::endl;
+        if (m_txpool)
+        {
+            m_txpool->stop();
+        }
+        if (m_sync)
+        {
+            m_sync->stop();
+        }
+    }
 
     BlockFactory::Ptr blockFactory() { return m_blockFactory; }
     TxPool::Ptr txpool() { return m_txpool; }
@@ -171,6 +170,16 @@ public:
         m_txpool->setTransactionSync(m_sync);
     }
 
+    void asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr _txsResult,
+        std::function<void(Error::Ptr)> _onNotifyFinished)
+    {
+        m_txpool->txpoolStorage()->batchRemove(_blockNumber, *_txsResult);
+        if (_onNotifyFinished)
+        {
+            _onNotifyFinished(nullptr);
+        }
+    }
+
 private:
     void updateConnectedNodeList()
     {
@@ -181,6 +190,7 @@ private:
         }
         m_txpool->transactionSync()->config()->setConnectedNodeList(nodeIdSet);
         m_txpool->transactionSync()->config()->notifyConnectedNodes(nodeIdSet, nullptr);
+        m_frontService->setNodeIDList(nodeIdSet);
     }
 
 private:
@@ -205,7 +215,8 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     bool _maybeExpired = false)
 {
     std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    auto encodedData = _tx->encode();
+    bcos::bytes encodedData;
+    _tx->encode(encodedData);
     auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
     _txpool->asyncSubmit(txData, [verifyFinish, _expectedTxHash, _expectedStatus, _maybeExpired](
                                      Error::Ptr, TransactionSubmitResult::Ptr _result) {

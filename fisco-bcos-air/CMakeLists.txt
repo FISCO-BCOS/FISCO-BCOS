@@ -1,25 +1,6 @@
 aux_source_directory(. SRC_LIST)
 
-find_package(tarscpp CONFIG REQUIRED)
-
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-txpool)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-pbft)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-sync)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-gateway)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-executor)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-ledger)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-scheduler)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-storage)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-rpc)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
-include_directories(${CMAKE_SOURCE_DIR}/fisco-bcos-pro)
-include_directories(${CMAKE_BINARY_DIR})
-
 set(BINARY_NAME fisco-bcos)
 add_executable(${BINARY_NAME} ${SRC_LIST})
-target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(${BINARY_NAME} PUBLIC init
-front_init pbft_init txpool_init  protocol_init rpc gateway framework tarscpp::tarsservant tarscpp::tarsutil)
+# target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
+target_link_libraries(${BINARY_NAME} PUBLIC ${INIT_LIB} ${PBFT_INIT_LIB} ${TOOL_TARGET} ${COMMAND_HELPER_LIB} ${RPC_TARGET} ${GATEWAY_TARGET})

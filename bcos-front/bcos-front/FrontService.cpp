@@ -17,20 +17,17 @@
  * @author: octopus
  * @date 2021-04-19
  */
-
-#include <thread>
-
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
-#include <boost/asio.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
+#include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
-
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Exceptions.h>
+#include <random>
+#include <thread>
 
 using namespace bcos;
 using namespace front;
@@ -38,7 +35,10 @@ using namespace protocol;
 
 FrontService::FrontService()
 {
-    FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this);
+    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
+    FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
+                    << LOG_KV("minVersion", m_localProtocol->minVersion())
+                    << LOG_KV("maxVersion", m_localProtocol->maxVersion());
 }
 
 FrontService::~FrontService()
@@ -99,25 +99,27 @@ void FrontService::start()
 
     // try to getNodeIDs from gateway
     auto self = std::weak_ptr<FrontService>(shared_from_this());
-    m_gatewayInterface->asyncGetNodeIDs(
-        m_groupID, [self](Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
+    m_gatewayInterface->asyncGetGroupNodeInfo(
+        m_groupID, [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             if (_error)
             {
-                FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetNodeIDs error")
+                FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo error")
                                  << LOG_KV("errorCode", _error->errorCode())
                                  << LOG_KV("errorMessage", _error->errorMessage());
                 return;
             }
-            FRONT_LOG(INFO) << LOG_BADGE("start") << LOG_DESC("asyncGetNodeIDs callback")
-                            << LOG_KV("node size", _nodeIDs ? _nodeIDs->size() : -1);
+            FRONT_LOG(INFO) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo callback")
+                            << LOG_KV("node size",
+                                   _groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0);
             auto frontService = self.lock();
             if (frontService)
             {
-                frontService->onReceiveNodeIDs(frontService->groupID(), _nodeIDs, nullptr);
+                frontService->onReceiveGroupNodeInfo(
+                    frontService->groupID(), _groupNodeInfo, nullptr);
             }
         });
 
-    m_frontServiceThread = std::make_shared<std::thread>([=]() {
+    m_frontServiceThread = std::make_shared<std::thread>([=, this]() {
         while (m_run)
         {
             try
@@ -208,32 +210,34 @@ void FrontService::stop()
 
 /**
  * @brief: get nodeIDs from frontservice
- * @param _getNodeIDsFunc: response callback
+ * @param _onGetGroupNodeInfo: response callback
  * @return void
  */
-void FrontService::asyncGetNodeIDs(GetNodeIDsFunc _getNodeIDsFunc)
+void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfo)
 {
-    std::shared_ptr<const crypto::NodeIDs> nodeIDs;
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo;
     {
-        Guard l(x_nodeIDs);
-        nodeIDs = m_nodeIDs;
+        Guard l(x_groupNodeInfo);
+        groupNodeInfo = m_groupNodeInfo;
     }
 
-    if (_getNodeIDsFunc)
+    if (_onGetGroupNodeInfo)
     {
         if (m_threadPool)
         {
-            m_threadPool->enqueue(
-                [nodeIDs, _getNodeIDsFunc]() { _getNodeIDsFunc(nullptr, nodeIDs); });
+            m_threadPool->enqueue([_onGetGroupNodeInfo, groupNodeInfo]() {
+                _onGetGroupNodeInfo(nullptr, groupNodeInfo);
+            });
         }
         else
         {
-            _getNodeIDsFunc(nullptr, nodeIDs);
+            _onGetGroupNodeInfo(nullptr, groupNodeInfo);
         }
     }
 
-    FRONT_LOG(INFO) << LOG_DESC("asyncGetNodeIDs")
-                    << LOG_KV("nodeIDs.size()", (nodeIDs ? nodeIDs->size() : 0));
+    FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
+                    << LOG_KV("nodeIDs.size()",
+                           (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
 
     return;
 }
@@ -252,7 +256,9 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
 {
     try
     {
-        std::string uuid = boost::uuids::to_string(boost::uuids::random_generator()());
+        static thread_local auto uuid_gen =
+            boost::uuids::basic_random_generator<std::random_device>();
+        std::string uuid = boost::uuids::to_string(uuid_gen());
         if (_callbackFunc)
         {
             auto callback = std::make_shared<Callback>();
@@ -283,16 +289,17 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
                              << LOG_KV("moduleID", _moduleID) << LOG_KV("uuid", uuid)
                              << LOG_KV("nodeID", _nodeID->hex())
                              << LOG_KV("data.size()", _data.size()) << LOG_KV("timeout", _timeout);
-
         }  // if (_callback)
 
         sendMessage(_moduleID, _nodeID, uuid, _data, false,
             [this, _moduleID, _nodeID, uuid](Error::Ptr _error) {
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
+                    /*
                     FRONT_LOG(ERROR) << LOG_BADGE("sendMessage callback") << LOG_KV("uuid", uuid)
                                      << LOG_KV("errorCode", _error->errorCode())
                                      << LOG_KV("errorMessage", _error->errorMessage());
+                */
                     handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
                 }
             });
@@ -338,7 +345,7 @@ void FrontService::asyncSendMessageByNodeIDs(
  * @param _data: send message data
  * @return void
  */
-void FrontService::asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data)
+void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
 {
     auto message = messageFactory()->buildMessage();
     message->setModuleID(_moduleID);
@@ -348,49 +355,104 @@ void FrontService::asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data)
     message->encode(*buffer.get());
 
     m_gatewayInterface->asyncSendBroadcastMessage(
-        m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
 }
 
 /**
  * @brief: receive nodeIDs from gateway
  * @param _groupID: groupID
- * @param _nodeIDs: nodeIDs pushed by gateway
+ * @param _groupNodeInfo: nodeIDs pushed by gateway
  * @param _receiveMsgCallback: response callback
  * @return void
  */
-void FrontService::onReceiveNodeIDs(const std::string& _groupID,
-    std::shared_ptr<const crypto::NodeIDs> _nodeIDs, ReceiveMsgFunc _receiveMsgCallback)
+void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
+    bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)
 {
     {
-        Guard l(x_nodeIDs);
-        m_nodeIDs = _nodeIDs;
+        protocolNegotiate(_groupNodeInfo);
+        Guard l(x_groupNodeInfo);
+        m_groupNodeInfo = _groupNodeInfo;
     }
+    // To be considered: How to ensure orderly notifications in the pro/max mode
+    FRONT_LOG(INFO) << LOG_DESC("onReceiveGroupNodeInfo") << LOG_KV("groupID", _groupID)
+                    << LOG_KV("nodeIDs.size()",
+                           (_groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0));
 
-    FRONT_LOG(INFO) << LOG_DESC("onReceiveNodeIDs") << LOG_KV("groupID", _groupID)
-                    << LOG_KV("nodeIDs.size()", (_nodeIDs ? _nodeIDs->size() : 0));
-
-    for (const auto& entry : m_moduleID2NodeIDsDispatcher)
+    if (m_threadPool)
     {
-        auto moduleID = entry.first;
-        entry.second(_nodeIDs, [_groupID, moduleID](Error::Ptr _error) {
-            if (_error)
+        auto self = std::weak_ptr<FrontService>(shared_from_this());
+        m_threadPool->enqueue([self, _groupID, _groupNodeInfo]() {
+            auto front = self.lock();
+            if (!front)
             {
-                FRONT_LOG(ERROR) << LOG_DESC("onReceiveNodeIDs dispather failed")
-                                 << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", moduleID);
+                return;
             }
+            front->notifyGroupNodeInfo(_groupID, _groupNodeInfo);
         });
+    }
+    else
+    {
+        notifyGroupNodeInfo(_groupID, _groupNodeInfo);
     }
 
     if (_receiveMsgCallback)
     {
-        if (m_threadPool)
+        _receiveMsgCallback(nullptr);
+    }
+}
+
+void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo)
+{
+    auto const& protocolList = _groupNodeInfo->nodeProtocolList();
+    auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+    size_t i = 0;
+    for (auto const& protocol : protocolList)
+    {
+        auto mutableProtocol = std::const_pointer_cast<ProtocolInfo>(protocol);
+        // negotiate failed: can't happen unless the code has a bug
+        if (mutableProtocol->minVersion() > m_localProtocol->maxVersion() ||
+            mutableProtocol->maxVersion() < m_localProtocol->minVersion())
         {
-            m_threadPool->enqueue([_receiveMsgCallback]() { _receiveMsgCallback(nullptr); });
+            FRONT_LOG(ERROR) << LOG_DESC("protocolNegotiate failed")
+                             << LOG_KV("nodeID", nodeIDList.at(i))
+                             << LOG_KV("groupID", _groupNodeInfo->groupID())
+                             << LOG_KV("minVersion", mutableProtocol->minVersion())
+                             << LOG_KV("maxVersion", mutableProtocol->maxVersion())
+                             << LOG_KV("supportedMinVersion", m_localProtocol->minVersion())
+                             << LOG_KV("supportedMaxVersion", m_localProtocol->maxVersion());
+            mutableProtocol->setVersion(ProtocolVersion::V0);
+            i++;
+            continue;
         }
-        else
-        {
-            _receiveMsgCallback(nullptr);
-        }
+        // set the negotiated version
+        auto version = std::min(m_localProtocol->maxVersion(), mutableProtocol->maxVersion());
+        mutableProtocol->setVersion((ProtocolVersion)version);
+        FRONT_LOG(INFO) << LOG_DESC("protocolNegotiate success")
+                        << LOG_KV("nodeID", nodeIDList.at(i))
+                        << LOG_KV("groupID", _groupNodeInfo->groupID())
+                        << LOG_KV("minVersion", mutableProtocol->minVersion())
+                        << LOG_KV("maxVersion", mutableProtocol->maxVersion())
+                        << LOG_KV("supportedMinVersion", m_localProtocol->minVersion())
+                        << LOG_KV("supportedMaxVersion", m_localProtocol->maxVersion())
+                        << LOG_KV("version", version);
+        i++;
+    }
+}
+
+void FrontService::notifyGroupNodeInfo(
+    const std::string& _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo)
+{
+    Guard l(x_notifierLock);
+    for (const auto& entry : m_module2GroupNodeInfoNotifier)
+    {
+        auto moduleID = entry.first;
+        entry.second(_groupNodeInfo, [_groupID, moduleID](Error::Ptr _error) {
+            if (_error)
+            {
+                FRONT_LOG(ERROR) << LOG_DESC("onReceiveGroupNodeInfo dispather failed")
+                                 << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", moduleID);
+            }
+        });
     }
 }
 
@@ -563,7 +625,7 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     message->encode(*buffer.get());
 
     // call gateway interface to send the message
-    m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, m_nodeID, _nodeID,
+    m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, _nodeID,
         bytesConstRef(buffer->data(), buffer->size()), [_receiveMsgCallback](Error::Ptr _error) {
             if (_receiveMsgCallback)
             {
@@ -583,8 +645,6 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
 {
     if (_error)
     {
-        FRONT_LOG(TRACE) << LOG_DESC("onMessageTimeout") << LOG_KV("error", _error)
-                         << LOG_KV("uuid", _uuid);
         return;
     }
 

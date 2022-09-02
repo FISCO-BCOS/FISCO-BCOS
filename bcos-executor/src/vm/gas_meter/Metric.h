@@ -31,7 +31,7 @@ struct Instruction
     std::string Name;
     uint8_t Opcode;
     uint32_t Cost;
-    Instruction() = default;
+    // Instruction() = default;
 
     enum Enum : uint32_t
     {

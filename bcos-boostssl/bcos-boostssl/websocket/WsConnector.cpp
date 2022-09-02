@@ -18,309 +18,145 @@
  * @date 2021-08-23
  */
 
+#include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConnector.h>
+#include <bcos-boostssl/websocket/WsTools.h>
 #include <boost/asio/error.hpp>
+#include <boost/asio/strand.hpp>
+#include <boost/beast/websocket/stream_base.hpp>
 #include <boost/thread/thread.hpp>
+#include <cstddef>
 #include <memory>
 #include <utility>
 
 using namespace bcos;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
+using namespace bcos::boostssl::context;
 
-
-/**
- * @brief: connect to the server
- * @param _host: the remote server host, support ipv4, ipv6, domain name
- * @param _port: the remote server port
- * @param _useSsl: the remote server port
- * @param _callback:
- * @return void:
- */
-void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port,
-    std::function<void(boost::beast::error_code, std::shared_ptr<WsStream>)> _callback)
-{
-    auto cbWrapper = _callback;
-    if (!m_disableSsl)
-    {
-        connectToWsServer(_host, _port,
-            [cbWrapper](boost::beast::error_code _ec,
-                std::shared_ptr<boost::beast::websocket::stream<
-                    boost::beast::ssl_stream<boost::beast::tcp_stream>>>
-                    _stream) {
-                if (_ec)
-                {
-                    cbWrapper(_ec, nullptr);
-                    return;
-                }
-
-                std::shared_ptr<ws::WsStream> wsStream = std::make_shared<WsStreamSslImpl>(_stream);
-                cbWrapper(_ec, wsStream);
-            });
-    }
-    else
-    {
-        connectToWsServer(_host, _port,
-            [cbWrapper](boost::beast::error_code _ec,
-                std::shared_ptr<boost::beast::websocket::stream<boost::beast::tcp_stream>>
-                    _stream) {
-                if (_ec)
-                {
-                    cbWrapper(_ec, nullptr);
-                    return;
-                }
-
-                std::shared_ptr<ws::WsStream> wsStream = std::make_shared<WsStreamImpl>(_stream);
-                cbWrapper(_ec, wsStream);
-            });
-    }
-}
-
-/**
- * @brief:
- * @param _host: the remote server host, support ipv4, ipv6, domain name
- * @param _port: the remote server port
- * @param _callback:
- * @return void:
- */
-void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port,
-    std::function<void(boost::beast::error_code _ec,
-        std::shared_ptr<boost::beast::websocket::stream<boost::beast::tcp_stream>>)>
+// TODO: how to set timeout for connect to wsServer ???
+void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bool _disableSsl,
+    std::function<void(boost::beast::error_code, const std::string& _extErrorMsg,
+        std::shared_ptr<WsStreamDelegate>, std::shared_ptr<std::string>)>
         _callback)
 {
-    std::string endpoint = _host + ":" + std::to_string(_port);
-    if (!insertPendingConns(endpoint))
-    {
-        WEBSOCKET_CONNECTOR(WARNING)
-            << LOG_BADGE("connectToWsServer") << LOG_DESC("insertPendingConns")
-            << LOG_KV("endpoint", endpoint);
-        _callback(boost::beast::error_code(boost::asio::error::would_block), nullptr);
-        return;
-    }
-
-    auto connector = shared_from_this();
-    auto cbWrapper =
-        [endpoint, connector, _callback](boost::beast::error_code _ec,
-            std::shared_ptr<boost::beast::websocket::stream<boost::beast::tcp_stream>> _stream) {
-            connector->erasePendingConns(endpoint);
-            _callback(_ec, _stream);
-        };
-
-    auto ioc = m_ioc;
-    // resolve host
-    m_resolver->async_resolve(_host.c_str(), std::to_string(_port).c_str(),
-        [_host, _port, ioc, cbWrapper](
-            boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
-            if (_ec)
-            {
-                WEBSOCKET_CONNECTOR(WARNING)
-                    << LOG_BADGE("connectToWsServer") << LOG_DESC("async_resolve")
-                    << LOG_KV("error", _ec) << LOG_KV("errorMessage", _ec.message())
-                    << LOG_KV("host", _host);
-                cbWrapper(_ec, nullptr);
-                return;
-            }
-
-            WEBSOCKET_CONNECTOR(TRACE)
-                << LOG_BADGE("connectToWsServer") << LOG_DESC("async_resolve success")
-                << LOG_KV("host", _host) << LOG_KV("port", _port);
-
-            auto stream =
-                std::make_shared<boost::beast::websocket::stream<boost::beast::tcp_stream>>(*ioc);
-            boost::beast::get_lowest_layer(*stream).expires_after(std::chrono::seconds(30));
-
-            // async connect
-            boost::beast::get_lowest_layer(*stream).async_connect(_results,
-                [stream, _host, _port, cbWrapper](boost::beast::error_code _ec,
-                    boost::asio::ip::tcp::resolver::results_type::endpoint_type _ep) mutable {
-                    if (_ec)
-                    {
-                        WEBSOCKET_CONNECTOR(WARNING)
-                            << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect")
-                            << LOG_KV("error", _ec.message()) << LOG_KV("host", _host)
-                            << LOG_KV("port", _port);
-                        cbWrapper(_ec, nullptr);
-                        return;
-                    }
-
-                    WEBSOCKET_CONNECTOR(TRACE)
-                        << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect success")
-                        << LOG_KV("host", _host) << LOG_KV("port", _port);
-
-                    // turn off the timeout on the tcp_stream, because
-                    // the websocket stream has its own timeout system.
-                    boost::beast::get_lowest_layer(*stream).expires_never();
-
-                    // set suggested timeout settings for the websocket
-                    stream->set_option(boost::beast::websocket::stream_base::timeout::suggested(
-                        boost::beast::role_type::client));
-
-                    std::string tmpHost = _host + ':' + std::to_string(_ep.port());
-
-                    // websocket async handshake
-                    stream->async_handshake(tmpHost, "/",
-                        [_host, _port, stream, cbWrapper](boost::beast::error_code _ec) mutable {
-                            if (_ec)
-                            {
-                                WEBSOCKET_CONNECTOR(WARNING)
-                                    << LOG_BADGE("connectToWsServer") << LOG_DESC("async_handshake")
-                                    << LOG_KV("error", _ec.message()) << LOG_KV("host", _host)
-                                    << LOG_KV("port", _port);
-                                ws::WsTools::close(stream->next_layer().socket());
-                                cbWrapper(_ec, nullptr);
-                                return;
-                            }
-
-                            WEBSOCKET_CONNECTOR(INFO)
-                                << LOG_BADGE("connectToWsServer")
-                                << LOG_DESC("websocket handshake successfully")
-                                << LOG_KV("host", _host) << LOG_KV("port", _port);
-                            cbWrapper(_ec, stream);
-                        });
-                });
-        });
-}
-
-/**
- * @brief: connect to the server with ssl
- * @param _host: the remote server host, support ipv4, ipv6, domain name
- * @param _port: the remote server port
- * @param _callback:
- * @return void:
- */
-void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port,
-    std::function<void(boost::beast::error_code _ec,
-        std::shared_ptr<
-            boost::beast::websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>>>)>
-        _callback)
-{
-    std::string endpoint = _host + ":" + std::to_string(_port);
-    if (!insertPendingConns(endpoint))
-    {
-        WEBSOCKET_CONNECTOR(WARNING)
-            << LOG_BADGE("connectToWsServer") << LOG_DESC("insertPendingConns")
-            << LOG_KV("endpoint", endpoint);
-        _callback(boost::beast::error_code(boost::asio::error::would_block), nullptr);
-        return;
-    }
-
-    auto connector = shared_from_this();
-    auto cbWrapper =
-        [endpoint, connector, _callback](boost::beast::error_code _ec,
-            std::shared_ptr<
-                boost::beast::websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>>>
-                _stream) {
-            connector->erasePendingConns(endpoint);
-            _callback(_ec, _stream);
-        };
-
-    auto ioc = m_ioc;
+    auto ioc = m_ioservicePool->getIOService();
     auto ctx = m_ctx;
+
+    std::string endpoint = _host + ":" + std::to_string(_port);
+    // check if last connect opr done
+    if (!insertPendingConns(endpoint))
+    {
+        WEBSOCKET_CONNECTOR(WARNING)
+            << LOG_BADGE("connectToWsServer") << LOG_DESC("insertPendingConns")
+            << LOG_KV("endpoint", endpoint);
+        _callback(boost::beast::error_code(boost::asio::error::would_block), "", nullptr, nullptr);
+        return;
+    }
+
+    auto resolver = m_resolver;
+    auto builder = m_builder;
+    auto connector = shared_from_this();
+
     // resolve host
-    m_resolver->async_resolve(_host.c_str(), std::to_string(_port).c_str(),
-        [_host, _port, ioc, ctx, cbWrapper](
+    resolver->async_resolve(_host.c_str(), std::to_string(_port).c_str(),
+        [this, _host, _port, _disableSsl, endpoint, ioc, ctx, connector, builder, _callback](
             boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
             if (_ec)
             {
                 WEBSOCKET_CONNECTOR(WARNING)
                     << LOG_BADGE("connectToWsServer") << LOG_DESC("async_resolve failed")
                     << LOG_KV("error", _ec) << LOG_KV("errorMessage", _ec.message())
-                    << LOG_KV("host", _host);
-                cbWrapper(_ec, nullptr);
+                    << LOG_KV("endpoint", endpoint);
+                _callback(_ec, "", nullptr, nullptr);
+                connector->erasePendingConns(endpoint);
                 return;
             }
 
             WEBSOCKET_CONNECTOR(TRACE)
                 << LOG_BADGE("connectToWsServer") << LOG_DESC("async_resolve success")
-                << LOG_KV("host", _host) << LOG_KV("port", _port);
+                << LOG_KV("endPoint", endpoint);
 
-            auto stream = std::make_shared<boost::beast::websocket::stream<
-                boost::beast::ssl_stream<boost::beast::tcp_stream>>>(*ioc, *ctx);
-
-            boost::beast::get_lowest_layer(*stream).expires_after(std::chrono::seconds(30));
+            // create raw tcp stream
+            auto rawStream = std::make_shared<boost::beast::tcp_stream>(*ioc);
+            // rawStream->expires_after(std::chrono::seconds(30));
 
             // async connect
-            boost::beast::get_lowest_layer(*stream).async_connect(_results,
-                [stream, _host, _port, cbWrapper](boost::beast::error_code _ec,
+            rawStream->async_connect(_results,
+                [this, _host, _port, _disableSsl, endpoint, ctx, connector, builder, rawStream,
+                    _callback](boost::beast::error_code _ec,
                     boost::asio::ip::tcp::resolver::results_type::endpoint_type _ep) mutable {
                     if (_ec)
                     {
                         WEBSOCKET_CONNECTOR(WARNING)
                             << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect failed")
-                            << LOG_KV("error", _ec.message()) << LOG_KV("host", _host)
-                            << LOG_KV("port", _port);
-                        cbWrapper(_ec, nullptr);
+                            << LOG_KV("error", _ec.message()) << LOG_KV("endpoint", endpoint);
+                        _callback(_ec, "", nullptr, nullptr);
+                        connector->erasePendingConns(endpoint);
                         return;
                     }
 
-                    WEBSOCKET_CONNECTOR(TRACE)
+                    WEBSOCKET_CONNECTOR(INFO)
                         << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect success")
-                        << LOG_KV("host", _host) << LOG_KV("port", _port);
+                        << LOG_KV("endpoint", endpoint);
 
-                    // Set SNI Hostname (many hosts need this to handshake successfully)
-                    /*
-                    if (!SSL_set_tlsext_host_name(ws_.next_layer().native_handle(), host_.c_str()))
-                    {
-                        ec = beast::error_code(
-                            static_cast<int>(::ERR_get_error()), net::error::get_ssl_category());
-                        return fail(ec, "connect");
-                    }*/
+                    auto wsStreamDelegate =
+                        builder->build(_disableSsl, ctx, rawStream, m_moduleName);
+
+                    std::shared_ptr<std::string> nodeId = std::make_shared<std::string>();
+                    wsStreamDelegate->setVerifyCallback(
+                        _disableSsl, NodeInfoTools::newVerifyCallback(nodeId));
 
                     // start ssl handshake
-                    stream->next_layer().async_handshake(boost::asio::ssl::stream_base::client,
-                        [stream, _host, _port, _ep, cbWrapper](boost::beast::error_code _ec) {
-                            if (_ec)
-                            {
-                                WEBSOCKET_CONNECTOR(WARNING)
-                                    << LOG_BADGE("connectToWsServer")
-                                    << LOG_DESC("ssl async_handshake failed")
-                                    << LOG_KV("host", _host) << LOG_KV("port", _port)
-                                    << LOG_KV("error", _ec.message());
-                                cbWrapper(_ec, nullptr);
-                                return;
-                            }
-
-                            WEBSOCKET_CONNECTOR(TRACE)
+                    wsStreamDelegate->asyncHandshake([this, wsStreamDelegate, connector, _host,
+                                                         _port, endpoint, _ep, _callback,
+                                                         nodeId](boost::beast::error_code _ec) {
+                        if (_ec)
+                        {
+                            WEBSOCKET_CONNECTOR(WARNING)
                                 << LOG_BADGE("connectToWsServer")
-                                << LOG_DESC("ssl async_handshake success") << LOG_KV("host", _host)
-                                << LOG_KV("port", _port);
+                                << LOG_DESC("ssl async_handshake failed") << LOG_KV("host", _host)
+                                << LOG_KV("port", _port) << LOG_KV("error", _ec.message());
+                            _callback(_ec, " ssl handshake failed", nullptr, nullptr);
+                            connector->erasePendingConns(endpoint);
+                            return;
+                        }
 
-                            // turn off the timeout on the tcp_stream, because
-                            // the websocket stream has its own timeout system.
-                            boost::beast::get_lowest_layer(*stream).expires_never();
+                        WEBSOCKET_CONNECTOR(INFO) << LOG_BADGE("connectToWsServer")
+                                                  << LOG_DESC("ssl async_handshake success")
+                                                  << LOG_KV("host", _host) << LOG_KV("port", _port);
 
-                            // set suggested timeout settings for the websocket
-                            stream->set_option(
-                                boost::beast::websocket::stream_base::timeout::suggested(
-                                    boost::beast::role_type::client));
+                        // turn off the timeout on the tcp_stream, because
+                        // the websocket stream has its own timeout system.
+                        wsStreamDelegate->tcpStream().expires_never();
 
-                            std::string tmpHost = _host + ':' + std::to_string(_ep.port());
+                        std::string tmpHost = _host + ':' + std::to_string(_ep.port());
 
-                            // websocket  async handshake
-                            stream->async_handshake(tmpHost, "/",
-                                [_host, _port, stream, cbWrapper](
-                                    boost::beast::error_code _ec) mutable {
-                                    if (_ec)
-                                    {
-                                        WEBSOCKET_CONNECTOR(WARNING)
-                                            << LOG_BADGE("connectToWsServer")
-                                            << LOG_DESC("websocket async_handshake failed")
-                                            << LOG_KV("error", _ec.message())
-                                            << LOG_KV("host", _host) << LOG_KV("port", _port);
-                                        ws::WsTools::close(
-                                            stream->next_layer().next_layer().socket());
-                                        cbWrapper(_ec, nullptr);
-                                        return;
-                                    }
-
-                                    WEBSOCKET_CONNECTOR(INFO)
+                        // websocket async handshake
+                        wsStreamDelegate->asyncWsHandshake(tmpHost, "/",
+                            [this, connector, _host, _port, endpoint, _callback, wsStreamDelegate,
+                                nodeId](boost::beast::error_code _ec) mutable {
+                                if (_ec)
+                                {
+                                    WEBSOCKET_CONNECTOR(WARNING)
                                         << LOG_BADGE("connectToWsServer")
-                                        << LOG_DESC("websocket handshake successfully")
-                                        << LOG_KV("host", _host) << LOG_KV("port", _port);
-                                    cbWrapper(_ec, stream);
-                                });
-                        });
+                                        << LOG_DESC("websocket async_handshake failed")
+                                        << LOG_KV("error", _ec.message()) << LOG_KV("host", _host)
+                                        << LOG_KV("port", _port);
+                                    _callback(_ec, "", nullptr, nullptr);
+                                    connector->erasePendingConns(endpoint);
+                                    return;
+                                }
+
+                                WEBSOCKET_CONNECTOR(INFO)
+                                    << LOG_BADGE("connectToWsServer")
+                                    << LOG_DESC("websocket handshake successfully")
+                                    << LOG_KV("host", _host) << LOG_KV("port", _port);
+                                _callback(_ec, "", wsStreamDelegate, nodeId);
+                                connector->erasePendingConns(endpoint);
+                            });
+                    });
                 });
         });
 }

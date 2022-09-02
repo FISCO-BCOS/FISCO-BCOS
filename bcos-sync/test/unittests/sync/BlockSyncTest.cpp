@@ -19,9 +19,10 @@
  * @date 2021-06-08
  */
 #include "SyncFixture.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -122,7 +123,6 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
         nodeList.push_back(faker->nodeID());
         syncPeerList.push_back(faker);
     }
-
     for (size_t i = 0; i < medianBlockNumberPeerSize; i++)
     {
         auto faker = std::make_shared<SyncFixture>(_cryptoSuite, gateWay, medianBlockNumber + 1);
@@ -157,7 +157,8 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
 
     size_t peerSize = maxBlockNumberPeerSize + medianBlockNumberPeerSize + minBlockNumberPeerSize;
     // check peers
-    while (!checkPeer(syncPeerList, peerSize))
+    auto startT = utcTime();
+    while (!checkPeer(syncPeerList, peerSize) && (utcTime() - startT <= 60 * 1000))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
@@ -184,7 +185,8 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
     BOOST_CHECK(invalidFaker->syncConfig()->knownHighestNumber() == 0);
 
     // wait the nodes to sync blocks
-    while (!downloadFinish(syncPeerList, maxBlockNumber))
+    startT = utcTime();
+    while (!downloadFinish(syncPeerList, maxBlockNumber) && (utcTime() - startT <= 60 * 1000))
     {
         for (auto faker : syncPeerList)
         {
@@ -197,8 +199,8 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
 
 BOOST_AUTO_TEST_CASE(testNonSMRequestAndDownloadBlock)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     testRequestAndDownloadBlock(cryptoSuite);
     testComplicatedCase(cryptoSuite);

@@ -20,10 +20,11 @@
  */
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -50,13 +51,14 @@ inline bool shouldExit(std::map<IndexType, PBFTFixture::Ptr>& _consensusNodes,
 
 void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     BlockNumber currentBlockNumber = 19;
+    std::cout << "### createFakers: " << currentBlockNumber << std::endl;
     auto fakerMap = createFakers(cryptoSuite, _consensusNodes, currentBlockNumber, _connectedNodes);
-
+    std::cout << "### createFakers: " << currentBlockNumber << " success" << std::endl;
     // check the leader notify the sealer to seal proposals
     IndexType leaderIndex = 0;
     auto leaderFaker = fakerMap[leaderIndex];
@@ -130,19 +132,24 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     }
 }
 
+// TODO: Remove this test due to memory access violation
 BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
 {
     size_t consensusNodeSize = 10;
     // case1: all non-faulty
+    std::cout << "testPBFTEngineWithFaulty with 10 non-faulty" << std::endl;
     testPBFTEngineWithFaulty(consensusNodeSize, consensusNodeSize);
+    std::cout << "testPBFTEngineWithFaulty with 10 non-faulty success" << std::endl;
     // case2: with f=3 faulty
+    std::cout << "testPBFTEngineWithFaulty with 7 non-faulty" << std::endl;
     testPBFTEngineWithFaulty(consensusNodeSize, 7);
+    std::cout << "testPBFTEngineWithFaulty with 7 non-faulty success" << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     size_t consensusNodeSize = 2;

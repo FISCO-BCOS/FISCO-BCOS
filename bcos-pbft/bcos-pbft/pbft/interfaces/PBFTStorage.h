@@ -21,10 +21,10 @@
 #pragma once
 #include "PBFTMessageInterface.h"
 #include "PBFTProposalInterface.h"
-#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/interfaces/protocol/BlockHeader.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace consensus
@@ -47,6 +47,9 @@ public:
         std::function<void(PBFTProposalListPtr)> _onSuccess) = 0;
     virtual void registerFinalizeHandler(
         std::function<void(bcos::ledger::LedgerConfig::Ptr, bool)> _finalizeHandler) = 0;
+    virtual void registerOnStableCheckPointCommitFailed(
+        std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
+            _onStableCheckPointCommitFailed) = 0;
 };
 }  // namespace consensus
 }  // namespace bcos

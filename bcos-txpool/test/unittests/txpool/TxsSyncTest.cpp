@@ -19,15 +19,18 @@
  * @date 2021-05-26
  */
 #include "test/unittests/txpool/TxPoolFixture.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
-#include <bcos-framework/testutils/protocol/FakeTransaction.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos::txpool;
 using namespace bcos::sync;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -45,7 +48,8 @@ void importTransactions(size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, TxPoolFix
         auto tx = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i, ledger->blockNumber() + 1,
             _faker->chainId(), _faker->groupId());
         transactions.push_back(tx);
-        auto encodedData = tx->encode();
+        bcos::bytes encodedData;
+        tx->encode(encodedData);
         auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
         txpool->asyncSubmit(txData, [&](Error::Ptr, TransactionSubmitResult::Ptr) {});
     }
@@ -58,8 +62,8 @@ void importTransactions(size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, TxPoolFix
 
 void testTransactionSync(bool _onlyTxsStatus = false)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     std::string groupId = "test-group";
@@ -112,6 +116,8 @@ void testTransactionSync(bool _onlyTxsStatus = false)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
+            std::cout << "### txpoolSize: " << txpoolPeer->txpool()->txpoolStorage()->size()
+                      << ", txsNum:" << txsNum << std::endl;
             BOOST_CHECK(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
         }
         // maintain transactions again

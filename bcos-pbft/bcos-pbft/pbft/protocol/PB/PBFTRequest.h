@@ -22,7 +22,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTRequestInterface.h"
 #include "PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
-#include <bcos-framework/libprotocol/Common.h>
+#include <bcos-protocol/Common.h>
 
 namespace bcos
 {
@@ -60,7 +60,7 @@ public:
         PBFTBaseMessage::deserializeToObject();
     }
 
-    bool operator==(PBFTRequest const& _pbftRequest)
+    bool operator==(PBFTRequest const& _pbftRequest) const
     {
         if (!PBFTBaseMessage::operator==(_pbftRequest))
         {

@@ -19,14 +19,18 @@
  */
 #pragma once
 
-#include <bcos-boostssl/utilities/BoostLog.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Common.h>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
+#include <boost/beast/http/vector_body.hpp>
 
-#define HTTP_LISTEN(LEVEL) BCOS_LOG(LEVEL) << "[HTTP][LISTEN]"
-#define HTTP_SESSION(LEVEL) BCOS_LOG(LEVEL) << "[HTTP][SESSION]"
-#define HTTP_SERVER(LEVEL) BCOS_LOG(LEVEL) << "[HTTP][SERVER]"
-#define HTTP_STREAM(LEVEL) BCOS_LOG(LEVEL) << "[HTTP][STREAM]"
+
+#define HTTP_LISTEN(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[HTTP][LISTEN]"
+#define HTTP_SESSION(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[HTTP][SESSION]"
+#define HTTP_SERVER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[HTTP][SERVER]"
+#define HTTP_STREAM(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[HTTP][STREAM]"
+
 
 namespace bcos
 {
@@ -36,12 +40,15 @@ namespace http
 {
 class HttpStream;
 using HttpRequest = boost::beast::http::request<boost::beast::http::string_body>;
-using HttpResponse = boost::beast::http::response<boost::beast::http::string_body>;
+using HttpResponse = boost::beast::http::response<boost::beast::http::vector_body<bcos::byte>>;
 using HttpRequestPtr = std::shared_ptr<HttpRequest>;
 using HttpResponsePtr = std::shared_ptr<HttpResponse>;
 using HttpReqHandler =
-    std::function<void(const std::string& req, std::function<void(const std::string& resp)>)>;
-using WsUpgradeHandler = std::function<void(std::shared_ptr<HttpStream>, HttpRequest&&)>;
+    std::function<void(const std::string_view req, std::function<void(bcos::bytes)>)>;
+using WsUpgradeHandler =
+    std::function<void(std::shared_ptr<HttpStream>, HttpRequest&&, std::shared_ptr<std::string>)>;
+
+static const int PARSER_BODY_LIMITATION = 100 * 1024 * 1024;
 }  // namespace http
 }  // namespace boostssl
 }  // namespace bcos

@@ -20,15 +20,16 @@
  */
 #pragma once
 #include "bcos-sync/interfaces/BlockSyncMsgFactory.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-framework/libsync/SyncConfig.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/sync/SyncConfig.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/CallbackCollectionHandler.h>
 namespace bcos
 {
 namespace sync
@@ -112,8 +113,33 @@ public:
         return m_committedProposalNumber;
     }
 
+    bcos::protocol::NodeType nodeType() const { return m_nodeType; }
+
+    void registerOnNodeTypeChanged(std::function<void(bcos::protocol::NodeType)> _onNodeTypeChanged)
+    {
+        m_nodeTypeChanged = _onNodeTypeChanged;
+    }
+
+    void setMasterNode(bool _masterNode)
+    {
+        Guard l(m_mutex);
+        m_masterNode = _masterNode;
+        // notify nodeType to the gateway
+        if (m_nodeTypeChanged)
+        {
+            m_nodeTypeChanged(nodeType());
+        }
+    }
+
+    bool masterNode() const { return m_masterNode; }
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
+
+    // Note: this only be called after block on-chain successfully
+    virtual bcos::protocol::NodeType determineNodeType();
+    bool existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList, SharedMutex& _lock,
+        bcos::crypto::NodeIDPtr _nodeID);
 
 private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -146,6 +172,14 @@ private:
     std::atomic<size_t> m_maxShardPerPeer = {2};
 
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
+
+    // TODO: ensure thread-safe
+    bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
+    bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::None;
+
+    std::function<void(bcos::protocol::NodeType)> m_nodeTypeChanged;
+
+    std::atomic_bool m_masterNode = {false};
 };
 }  // namespace sync
 }  // namespace bcos

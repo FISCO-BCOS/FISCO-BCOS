@@ -20,15 +20,16 @@
  */
 
 #include "BlockContext.h"
-#include "../precompiled/Common.h"
-#include "../precompiled/Utilities.h"
 #include "../vm/Precompiled.h"
+#include "ExecutiveStackFlow.h"
 #include "TransactionExecutive.h"
-#include "bcos-framework/interfaces/protocol/Exceptions.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libcodec/abi/ContractABICodec.h"
-#include "bcos-framework/libutilities/Error.h"
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/protocol/Exceptions.h"
+#include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/storage/Table.h"
+#include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -39,9 +40,9 @@ using namespace bcos::protocol;
 using namespace bcos::precompiled;
 using namespace std;
 
-BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
+BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
-    uint64_t timestamp, int32_t blockVersion, const EVMSchedule& _schedule, bool _isWasm,
+    uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
@@ -54,37 +55,34 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     m_hashImpl(_hashImpl)
 {}
 
-BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
-    storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
-    protocol::BlockHeader::ConstPtr _current, const EVMSchedule& _schedule, bool _isWasm,
-    bool _isAuthCheck)
+BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
+    crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
+    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
   : BlockContext(storage, _hashImpl, _current->number(), _current->hash(), _current->timestamp(),
         _current->version(), _schedule, _isWasm, _isAuthCheck)
-{
-    m_lastStorage = std::move(_lastStorage);
-}
+{}
 
-void BlockContext::insertExecutive(int64_t contextID, int64_t seq, ExecutiveState state)
+
+ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)
 {
-    auto it = m_executives.find(std::tuple{contextID, seq});
-    if (it != m_executives.end())
+    bcos::ReadGuard l(x_executiveFlows);
+    auto it = m_executiveFlows.find(codeAddress);
+    if (it == m_executiveFlows.end())
     {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Executive exists: " + boost::lexical_cast<std::string>(contextID)));
-    }
+        /*
+        bool success;
+        std::tie(it, success) =
+            m_executiveFlows.emplace(codeAddress, std::make_shared<ExecutiveStackFlow>());
 
-    bool success;
-    std::tie(it, success) = m_executives.emplace(std::tuple{contextID, seq}, std::move(state));
-}
-
-bcos::executor::BlockContext::ExecutiveState* BlockContext::getExecutive(
-    int64_t contextID, int64_t seq)
-{
-    auto it = m_executives.find({contextID, seq});
-    if (it == m_executives.end())
-    {
+            */
         return nullptr;
     }
+    return it->second;
+}
 
-    return &it->second;
+void BlockContext::setExecutiveFlow(
+    std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow)
+{
+    bcos::ReadGuard l(x_executiveFlows);
+    m_executiveFlows.emplace(codeAddress, executiveFlow);
 }

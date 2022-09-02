@@ -1,0 +1,23 @@
+module bcostars {
+    struct LogEntry {
+        1 optional string address;
+        2 optional vector<vector<byte>> topic;
+        3 optional vector<byte> data;
+    };
+
+    struct TransactionReceiptData {
+        1 require int version;
+        2 optional string gasUsed;
+        3 optional string contractAddress;
+        4 optional int status;
+        5 optional vector<byte> output;
+        6 optional vector<LogEntry> logEntries;
+        7 optional long blockNumber;
+    };
+
+    struct TransactionReceipt {
+        1 optional TransactionReceiptData data;
+        2 optional vector<byte> dataHash;
+        3 optional string message;
+    };
+};

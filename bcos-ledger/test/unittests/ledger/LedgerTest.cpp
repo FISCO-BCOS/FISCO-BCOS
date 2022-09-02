@@ -22,21 +22,24 @@
  */
 
 #include "bcos-ledger/src/libledger/Ledger.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
-#include "common/FakeBlock.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/ledger/LedgerTypeDef.h"
-#include "libtool/ConsensusNode.h"
 #include "../../mock/MockKeyFactor.h"
-#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libcodec/scale/Scale.h>
-#include <bcos-framework/libstorage/StateStorage.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-tool/ConsensusNode.h"
+#include "common/FakeBlock.h"
+#include <bcos-codec/scale/Scale.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/consensus/ConsensusNode.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-framework/storage/Table.h>
+#include <bcos-table/src/StateStorage.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -70,6 +73,24 @@ inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
 
 namespace bcos::test
 {
+class MockStorage : public virtual StateStorage
+{
+public:
+    MockStorage(std::shared_ptr<StorageInterface> prev)
+      : storage::StateStorageInterface(prev), StateStorage(prev)
+    {}
+    bcos::Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
+        std::vector<std::string> values) override
+    {
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            Entry e;
+            e.set(values[i]);
+            asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
+        }
+        return nullptr;
+    }
+};
 class LedgerFixture : public TestPromptFixture
 {
 public:
@@ -88,10 +109,10 @@ public:
 
     inline void initStorage()
     {
-        auto hashImpl = std::make_shared<Keccak256Hash>();
+        auto hashImpl = std::make_shared<Keccak256>();
         auto memoryStorage = std::make_shared<StateStorage>(nullptr);
         memoryStorage->setEnableTraverse(true);
-        auto storage = std::make_shared<StateStorage>(memoryStorage);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
         storage->setEnableTraverse(true);
         m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
@@ -118,7 +139,7 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(1000);
 
-        auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+        auto signImpl = std::make_shared<Secp256k1Crypto>();
         consensus::ConsensusNodeList consensusNodeList;
         consensus::ConsensusNodeList observerNodeList;
         for (int i = 0; i < 4; ++i)
@@ -135,10 +156,12 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
-        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result =
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result2 =
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result2);
     }
 
@@ -149,11 +172,14 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(0);
 
-        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result1 =
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result1);
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "");
+        auto result2 =
+            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(!result2);
-        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result3 =
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
         BOOST_CHECK(result3);
     }
 
@@ -161,11 +187,12 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
-            m_fakeBlocks = fakeBlocks(
-                m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
-            fakeBlockPromise.set_value(true);
-        });
+        m_ledger->asyncGetBlockHashByNumber(
+            0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
+                m_fakeBlocks = fakeBlocks(
+                    m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
+                fakeBlockPromise.set_value(true);
+            });
         future.get();
     }
 
@@ -173,11 +200,12 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
-            m_fakeBlocks = fakeEmptyBlocks(
-                m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
-            fakeBlockPromise.set_value(true);
-        });
+        m_ledger->asyncGetBlockHashByNumber(
+            0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
+                m_fakeBlocks = fakeEmptyBlocks(
+                    m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
+                fakeBlockPromise.set_value(true);
+            });
         future.get();
     }
 
@@ -186,22 +214,32 @@ public:
         initBlocks(_number);
         for (int i = 0; i < _number; ++i)
         {
+            auto txSize = m_fakeBlocks->at(i)->transactionsSize();
             auto txDataList = std::make_shared<std::vector<bytesConstPtr>>();
             auto txHashList = std::make_shared<protocol::HashList>();
-            for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
+            auto txList = std::make_shared<std::vector<Transaction::Ptr>>();
+            for (size_t j = 0; j < txSize; ++j)
             {
-                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+                bcos::bytes txData;
+                m_fakeBlocks->at(i)->transaction(j)->encode(txData);
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
-                txDataList->emplace_back(txPointer);
-                txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+                txDataList->push_back(txPointer);
+                txHashList->push_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+                txList->push_back(m_blockFactory->transactionFactory()->createTransaction(txData));
             }
 
             std::promise<bool> p1;
             auto f1 = p1.get_future();
-            m_ledger->asyncStoreTransactions(txDataList, txHashList, [=, &p1](Error::Ptr _error) {
-                BOOST_CHECK_EQUAL(_error, nullptr);
-                p1.set_value(true);
-            });
+            m_ledger->asyncPreStoreBlockTxs(
+                txList, m_fakeBlocks->at(i), [=, &p1](Error::Ptr _error) {
+                    BOOST_CHECK_EQUAL(_error, nullptr);
+                    p1.set_value(true);
+                });
+            //            m_ledger->asyncStoreTransactions(txDataList, txHashList, [=,
+            //            &p1](Error::Ptr _error) {
+            //                BOOST_CHECK_EQUAL(_error, nullptr);
+            //                p1.set_value(true);
+            //            });
             BOOST_CHECK_EQUAL(f1.get(), true);
 
             auto& block = m_fakeBlocks->at(i);
@@ -217,7 +255,7 @@ public:
             // write other meta data
             std::promise<bool> prewritePromise;
             m_ledger->asyncPrewriteBlock(
-                m_storage, block, [&](Error::Ptr&&) { prewritePromise.set_value(true); });
+                m_storage, nullptr, block, [&](Error::Ptr&&) { prewritePromise.set_value(true); });
 
             prewritePromise.get_future().get();
         }
@@ -251,10 +289,11 @@ public:
             // BOOST_CHECK_EQUAL(f3.get(), true);
 
             std::promise<bool> p3;
-            m_ledger->asyncPrewriteBlock(m_storage, m_fakeBlocks->at(i), [&](Error::Ptr&& error) {
-                BOOST_CHECK(!error);
-                p3.set_value(true);
-            });
+            m_ledger->asyncPrewriteBlock(
+                m_storage, nullptr, m_fakeBlocks->at(i), [&](Error::Ptr&& error) {
+                    BOOST_CHECK(!error);
+                    p3.set_value(true);
+                });
             BOOST_CHECK_EQUAL(p3.get_future().get(), true);
         }
     }
@@ -451,16 +490,18 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
+
     m_storage->asyncGetRow(
         SYS_NUMBER_2_HASH, "0", [&](auto&& error, std::optional<Entry>&& hashEntry) {
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromHex);
+                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromBinary);
 
             Entry numberEntry;
-            m_storage->asyncSetRow(
-                SYS_HASH_2_NUMBER, hash.hex(), std::move(numberEntry), [&](auto&& error) {
+            m_storage->asyncSetRow(SYS_HASH_2_NUMBER,
+                std::string_view((const char*)hash.data(), hash.size()), std::move(numberEntry),
+                [&](auto&& error) {
                     BOOST_CHECK(!error);
 
                     m_ledger->asyncGetBlockNumberByHash(
@@ -566,7 +607,8 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
             BOOST_CHECK(entry);
 
             auto list = decodeConsensusList(entry->getField(0));
-            list.emplace_back(bcos::crypto::HashType("56789").hex(), 100, CONSENSUS_SEALER, "5");
+            list.emplace_back(
+                bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5");
 
             entry->setField(0, encodeConsensusList(list));
             m_storage->asyncSetRow(
@@ -715,7 +757,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBatchTxsByHashList(hashList, true,
-        [=, &p1](Error::Ptr _error, protocol::TransactionsPtr _txList,
+        [=, &p1, this](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
@@ -728,7 +770,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBatchTxsByHashList(fullHashList, true,
-        [=, &p2](Error::Ptr _error, protocol::TransactionsPtr _txList,
+        [=, &p2, this](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
@@ -744,12 +786,10 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(errorHashList, true,
         [=, &p3](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_txList != nullptr);
-            BOOST_CHECK(_txList->empty());
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_txList == nullptr);
 
-            BOOST_CHECK(_proof != nullptr);
-            BOOST_CHECK(_proof->empty());
+            BOOST_CHECK(_proof == nullptr);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
@@ -887,8 +927,9 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
     auto hashList = std::make_shared<crypto::HashList>();
     for (size_t i = 0; i < m_fakeBlocks->at(3)->transactionsSize(); ++i)
     {
-        auto txData = m_fakeBlocks->at(3)->transaction(i)->encode();
-        auto txPointer = std::make_shared<bytes>(txData.toBytes());
+        bcos::bytes txData;
+        m_fakeBlocks->at(3)->transaction(i)->encode(txData);
+        auto txPointer = std::make_shared<bytes>(txData);
         auto hash = m_fakeBlocks->at(3)->transaction(i)->hash();
         txBytesList->emplace_back(txPointer);
         hashList->emplace_back(hash);
@@ -1020,7 +1061,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     std::string inputStr = "hello world!";
     bytes input(inputStr.begin(), inputStr.end());
 
-    auto keyPair = m_blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair =
+        m_blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     auto tx = m_blockFactory->transactionFactory()->createTransaction(
         0, "to", input, 200, 300, "chainid", "groupid", 800, keyPair);
 
@@ -1028,14 +1070,16 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
 
     auto txs = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
-    auto encoded = tx->encode();
+    bcos::bytes encoded;
+    tx->encode(encoded);
     txs->emplace_back(std::make_shared<bytes>(encoded.begin(), encoded.end()));
     hashList->emplace_back(tx->hash());
 
     initFixture();
 
     m_ledger->asyncStoreTransactions(txs, hashList, [](Error::Ptr error) { BOOST_CHECK(!error); });
-    m_ledger->asyncPrewriteBlock(m_storage, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {

@@ -19,8 +19,8 @@
  * @date 2021-04-26
  */
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
-#include <bcos-framework/libutilities/Timer.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -105,28 +105,6 @@ BOOST_AUTO_TEST_CASE(testTimer)
     BOOST_CHECK(timer->triggerTimeout() == true);
     timer->stop();
 }
-
-BOOST_AUTO_TEST_CASE(testTimerWithoutWait)
-{
-    uint64_t timeoutInterval = 200;
-    auto timer = std::make_shared<FakeTimer>(timeoutInterval);
-    timer->start();
-    BOOST_CHECK(timer->triggerTimeout() == false);
-    // sleep 80ms
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-
-    // test restart
-    timer->restart();
-    // sleep 20ms
-    auto startT = utcTime();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    if (utcTime() - startT < timeoutInterval)
-    {
-        BOOST_CHECK(timer->triggerTimeout() == false);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(testPBFTTimer)
 {
     uint64_t timeoutInterval = 100;

@@ -21,10 +21,10 @@
 #pragma once
 #include "PBFTImpl.h"
 #include "config/PBFTConfig.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/libtool/LedgerConfigFetcher.h>
-#include <bcos-framework/libutilities/KVStorageHelper.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/storage/KVStorageHelper.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 
 namespace bcos
 {

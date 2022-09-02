@@ -20,9 +20,9 @@
  */
 
 #include "../common/FrontServiceBuilder.h"
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Gateway.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -68,16 +68,19 @@ std::vector<bcos::front::FrontService::Ptr> buildFrontServiceVector()
 BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
 {
     auto frontServiceVector = buildFrontServiceVector();
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // echo test
     for (const auto& frontService : frontServiceVector)
     {
-        frontService->asyncGetNodeIDs([frontService](Error::Ptr _error,
-                                          std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
+        frontService->asyncGetGroupNodeInfo([frontService](Error::Ptr _error,
+                                                bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeIDs->size(), nodeCount);
+            auto const& nodeIDs = _groupNodeInfo->nodeIDList();
+            BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
 
-            for (const auto& nodeID : *_nodeIDs)
+            for (const auto& nodeIDStr : nodeIDs)
             {
+                auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
                 std::string sendStr = boost::uuids::to_string(boost::uuids::random_generator()());
 
                 auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());
@@ -108,16 +111,19 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
 BOOST_AUTO_TEST_CASE(test_FrontServiceTimeout)
 {
     auto frontServiceVector = buildFrontServiceVector();
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // echo test
     for (const auto& frontService : frontServiceVector)
     {
-        frontService->asyncGetNodeIDs([frontService](Error::Ptr _error,
-                                          std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
+        frontService->asyncGetGroupNodeInfo([frontService](Error::Ptr _error,
+                                                bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeIDs->size(), nodeCount);
+            auto const& nodeIDs = _groupNodeInfo->nodeIDList();
+            BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
 
-            for (const auto& nodeID : *_nodeIDs)
+            for (const auto& nodeIDStr : nodeIDs)
             {
+                auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
                 std::string sendStr = boost::uuids::to_string(boost::uuids::random_generator()());
 
                 auto payload = bcos::bytesConstRef((bcos::byte*)sendStr.data(), sendStr.size());

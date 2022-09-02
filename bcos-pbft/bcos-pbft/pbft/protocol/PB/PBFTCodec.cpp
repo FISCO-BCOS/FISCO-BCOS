@@ -20,7 +20,7 @@
  */
 #include "PBFTCodec.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
-#include <bcos-framework/libprotocol/Common.h>
+#include <bcos-protocol/Common.h>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -39,12 +39,12 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
     pbMessage->set_payload(payLoad->data(), payLoad->size());
 
     // set signature
-    if (shouldHandleSignature(packetType) && _pbftMessage->signatureData().size() == 0)
+    if (shouldHandleSignature(packetType))
     {
         // get hash of the payLoad
         auto hash = m_cryptoSuite->hashImpl()->hash(*payLoad);
         // sign for the payload
-        auto signatureData = m_cryptoSuite->signatureImpl()->sign(m_keyPair, hash, false);
+        auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
         pbMessage->set_signaturedata(signatureData->data(), signatureData->size());
         _pbftMessage->setSignatureDataHash(hash);
         _pbftMessage->setSignatureData(*signatureData);
@@ -91,7 +91,7 @@ PBFTBaseMessageInterface::Ptr PBFTCodec::decode(bytesConstRef _data) const
         BOOST_THROW_EXCEPTION(UnknownPBFTMsgType() << errinfo_comment(
                                   "unknow pbft packetType: " + std::to_string(packetType)));
     }
-    if (shouldHandleSignature(packetType) && decodedMsg->signatureData().size() == 0)
+    if (shouldHandleSignature(packetType))
     {
         // set signature data for the message
         auto hash = m_cryptoSuite->hashImpl()->hash(payLoadRefData);

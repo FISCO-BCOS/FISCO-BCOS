@@ -19,18 +19,15 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/libtool/Exceptions.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/FileUtility.h>
-#include <bcos-framework/libutilities/Log.h>
-#include <include/BuildInfo.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-tool/Exceptions.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
-#include <boost/property_tree/ini_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
 #include <memory>
 
 #define INITIALIZER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[INITIALIZER]"
@@ -38,16 +35,15 @@ namespace bcos
 {
 namespace initializer
 {
-enum NodeArchitectureType
+inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
+    unsigned _hexedPrivateKeySize, bcos::security::DataEncryptInterface::Ptr _certEncryptionHandler)
 {
-    AIR = 0,
-    PRO = 1,
-    MAX = 2,
-};
-inline std::shared_ptr<bytes> loadPrivateKey(
-    std::string const& _keyPath, unsigned _hexedPrivateKeySize)
-{
-    auto keyContent = readContents(boost::filesystem::path(_keyPath));
+    auto content = readContents(boost::filesystem::path(_keyPath));
+    auto keyContent = content;
+    if (_certEncryptionHandler)
+    {
+        keyContent = _certEncryptionHandler->decryptContents(content);
+    }
     if (keyContent->empty())
     {
         return nullptr;
@@ -90,45 +86,6 @@ inline std::shared_ptr<bytes> loadPrivateKey(
         keyHex = '0' + keyHex;
     }
     return fromHexString(keyHex);
-}
-
-inline void printVersion()
-{
-    std::cout << "FISCO BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << std::endl;
-    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
-    std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
-              << FISCO_BCOS_BUILD_TYPE << std::endl;
-    std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
-    std::cout << "Git Commit         : " << FISCO_BCOS_COMMIT_HASH << std::endl;
-}
-
-inline void initCommandLine(int argc, char* argv[])
-{
-    boost::program_options::options_description main_options("Usage of FISCO BCOS");
-    main_options.add_options()("help,h", "print help information")(
-        "version,v", "version of FISCO BCOS");
-    boost::program_options::variables_map vm;
-    try
-    {
-        boost::program_options::store(
-            boost::program_options::parse_command_line(argc, argv, main_options), vm);
-    }
-    catch (...)
-    {
-        printVersion();
-    }
-    /// help information
-    if (vm.count("help") || vm.count("h"))
-    {
-        std::cout << main_options << std::endl;
-        exit(0);
-    }
-    /// version information
-    if (vm.count("version") || vm.count("v"))
-    {
-        printVersion();
-        exit(0);
-    }
 }
 }  // namespace initializer
 }  // namespace bcos

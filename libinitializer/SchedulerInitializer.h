@@ -19,16 +19,17 @@
  * @date 2021-06-21
  */
 #pragma once
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "ProtocolInitializer.h"
-#include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
-#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/interfaces/executor/ExecutionMessage.h>
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/libtool/NodeConfig.h>
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/executor/ExecutionMessage.h>
+#include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-scheduler/src/SchedulerFactory.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
 {
@@ -40,14 +41,32 @@ public:
         bcos::ledger::LedgerInterface::Ptr _ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+        int64_t schedulerSeq)
     {
-        return std::make_shared<scheduler::SchedulerImpl>(std::move(executorManager),
+        bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
+            std::move(storage), executionMessageFactory, std::move(blockFactory), std::move(txPool),
+            std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm,
+            isSerialExecute);
+
+        return factory.build(schedulerSeq);
+    }
+
+    static bcos::scheduler::SchedulerFactory::Ptr buildFactory(
+        bcos::scheduler::ExecutorManager::Ptr executorManager,
+        bcos::ledger::LedgerInterface::Ptr _ledger,
+        bcos::storage::TransactionalStorageInterface::Ptr storage,
+        bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute)
+    {
+        return std::make_shared<bcos::scheduler::SchedulerFactory>(std::move(executorManager),
             std::move(_ledger), std::move(storage), executionMessageFactory,
-            std::move(blockFactory), std::move(transactionSubmitResultFactory), std::move(hashImpl),
-            isAuthCheck);
+            std::move(blockFactory), txPool, std::move(transactionSubmitResultFactory),
+            std::move(hashImpl), isAuthCheck, isWasm, isSerialExecute);
     }
 };
 }  // namespace bcos::initializer

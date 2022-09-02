@@ -18,9 +18,9 @@
  * @date 2021-04-12
  */
 #pragma once
-#include <bcos-framework/interfaces/consensus/ConsensusTypeDef.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/consensus/ConsensusTypeDef.h>
+#include <bcos-utilities/Exceptions.h>
 
 #define CONSENSUS_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("Core")
 namespace bcos

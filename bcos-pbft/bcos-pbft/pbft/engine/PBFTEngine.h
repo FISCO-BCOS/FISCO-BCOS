@@ -21,8 +21,9 @@
 #pragma once
 #include "PBFTLogSync.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
-#include <bcos-framework/libutilities/ConcurrentQueue.h>
-#include <bcos-framework/libutilities/Error.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
+#include <bcos-utilities/ConcurrentQueue.h>
+#include <bcos-utilities/Error.h>
 
 namespace bcos
 {
@@ -87,6 +88,19 @@ public:
         m_cacheProcessor->registerCommittedProposalNotifier(_committedProposalNotifier);
     }
 
+    virtual void restart();
+
+    virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
+
+    void clearAllCache();
+    void recoverState();
+
+    void fetchAndUpdatesLedgerConfig();
+    void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
+    {
+        m_ledgerFetcher = _ledgerFetcher;
+    }
+
 protected:
     virtual void initSendResponseHandler();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -144,12 +158,13 @@ protected:
         std::shared_ptr<bcos::ledger::LedgerConfig> _ledgerConfig, bool _syncedBlock = false);
 
 
-    virtual void onProposalApplied(bool _execSuccess, PBFTProposalInterface::Ptr _proposal,
+    virtual void onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
         PBFTProposalInterface::Ptr _executedProposal);
     virtual void onProposalApplySuccess(
         PBFTProposalInterface::Ptr _proposal, PBFTProposalInterface::Ptr _executedProposal);
-    virtual void onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal);
-    virtual void onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposal);
+    virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal);
+    virtual void onLoadAndVerifyProposalFinish(
+        bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal);
     virtual void triggerTimeout(bool _incTimeout = true);
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
@@ -176,6 +191,9 @@ protected:
         std::shared_ptr<PBFTBaseMessageInterface> _pbftMessage, SendResponseCallback _sendResponse);
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
+
+    virtual void onStableCheckPointCommitFailed(
+        Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
 
 private:
     // utility functions
@@ -216,6 +234,7 @@ protected:
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
     std::atomic_bool m_stopped = {false};
+    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
 };
 }  // namespace consensus
 }  // namespace bcos

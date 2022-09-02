@@ -17,11 +17,12 @@
  * @file HashTest.h
  * @date 2021.03.04
  */
-#include "../../hash/Keccak256.h"
-#include "../../hash/SM3.h"
-#include "../../hash/Sha3.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/hash/Sha3.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
@@ -36,11 +37,31 @@ BOOST_AUTO_TEST_CASE(testKeccak256)
 {
     auto keccak256 = std::make_shared<Keccak256>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(keccak256, nullptr, nullptr);
+    // test multiple-thread
+    auto worker = std::make_shared<ThreadPool>("testHash", 8);
+    std::atomic<int64_t> totolCount = 1000;
+    worker->enqueue([&]() {
+        if (totolCount <= 0)
+        {
+            return;
+        }
+        while (totolCount > 0)
+        {
+            totolCount -= 1;
+            auto data = "abcde" + std::to_string(totolCount.load());
+            keccak256->hash(data);
+        }
+    });
+    while (totolCount > 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     std::string ts = keccak256->emptyHash().hex();
     BOOST_CHECK_EQUAL(
         ts, std::string("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
 
     std::string hashData = "abcde";
+
     ts = keccak256->hash(hashData).hex();
     BOOST_CHECK_EQUAL(
         ts, std::string("6377c7e66081cb65e473c1b95db5195a27d04a7108b468890224bedbe1a8a6eb"));

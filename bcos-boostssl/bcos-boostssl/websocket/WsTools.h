@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "bcos-boostssl/websocket/WsConfig.h"
-#include <bcos-boostssl/utilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -34,6 +34,7 @@ namespace boostssl
 {
 namespace ws
 {
+static std::string m_moduleName = "DEFAULT";
 class WsTools
 {
 public:
@@ -50,9 +51,12 @@ public:
 
     static bool validPort(uint16_t _port) { return _port > 1024; }
 
-    static bool stringToEndPoint(const std::string& peer, EndPoint& _endpoint);
+    static bool stringToEndPoint(const std::string& peer, NodeIPEndpoint& _endpoint);
 
     static void close(boost::asio::ip::tcp::socket& skt);
+
+    static std::string moduleName() { return m_moduleName; }
+    static void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
 };
 }  // namespace ws
 }  // namespace boostssl

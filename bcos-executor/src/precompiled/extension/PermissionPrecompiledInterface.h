@@ -20,7 +20,7 @@
 
 #pragma once
 #include "../../vm/Precompiled.h"
-#include "../Common.h"
+#include "bcos-executor/src/precompiled/common/Common.h"
 
 namespace bcos::precompiled
 {
@@ -47,8 +47,8 @@ public:
     PermissionPrecompiledInterface(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl){};
     virtual ~PermissionPrecompiledInterface(){};
 
-    std::shared_ptr<PrecompiledExecResult> call(std::shared_ptr<executor::TransactionExecutive>,
-        bytesConstRef, const std::string&, const std::string&) override
+    std::shared_ptr<PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive>, PrecompiledExecResult::Ptr) override
     {
         return nullptr;
     }

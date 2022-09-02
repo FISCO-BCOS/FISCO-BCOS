@@ -18,9 +18,10 @@
  * @date 2021-09-07
  */
 
-#include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/CommonError.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/event/EventSubRequest.h>
@@ -33,6 +34,17 @@
 
 using namespace bcos;
 using namespace bcos::event;
+
+EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
+  : bcos::Worker("t_event_sub"), m_wsService(_wsService)
+{
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_SUBSCRIBE,
+        boost::bind(&EventSub::onRecvSubscribeEvent, this, boost::placeholders::_1,
+            boost::placeholders::_2));
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_UNSUBSCRIBE,
+        boost::bind(&EventSub::onRecvUnsubscribeEvent, this, boost::placeholders::_1,
+            boost::placeholders::_2));
+}
 
 void EventSub::start()
 {
@@ -64,11 +76,11 @@ void EventSub::stop()
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
 }
 
-void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
+void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
-    std::string seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
-    std::string request = std::string(_msg->data()->begin(), _msg->data()->end());
+    std::string seq = _msg->seq();
+    std::string request = std::string(_msg->payload()->begin(), _msg->payload()->end());
 
     EVENT_SUB(INFO) << LOG_BADGE("onRecvSubscribeEvent") << LOG_KV("endpoint", _session->endPoint())
                     << LOG_KV("seq", seq) << LOG_KV("request", request);
@@ -114,11 +126,11 @@ void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessag
     return;
 }
 
-void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
+void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
-    std::string seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
-    std::string request = std::string(_msg->data()->begin(), _msg->data()->end());
+    std::string seq = _msg->seq();
+    std::string request = std::string(_msg->payload()->begin(), _msg->payload()->end());
 
     EVENT_SUB(INFO) << LOG_BADGE("onRecvUnsubscribeEvent") << LOG_KV("seq", seq)
                     << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("request", request);
@@ -144,7 +156,7 @@ void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMess
  * @return bool: if _session is inactive, false will be return
  */
 bool EventSub::sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _session,
-    std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& _id, int32_t _status)
+    std::shared_ptr<bcos::boostssl::MessageFace> _msg, const std::string& _id, int32_t _status)
 {
     if (!_session->isConnected())
     {
@@ -160,7 +172,7 @@ bool EventSub::sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _sess
     auto result = esResp->generateJson();
 
     auto data = std::make_shared<bcos::bytes>(result.begin(), result.end());
-    _msg->setData(data);
+    _msg->setPayload(data);
 
     _session->asyncSendMessage(_msg);
     return true;
@@ -189,7 +201,7 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     if (_complete)
     {
         auto msg = m_messageFactory->buildMessage();
-        msg->setType(bcos::event::MessageType::EVENT_LOG_PUSH);
+        msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
         sendResponse(_session, msg, _id, EP_STATUS_CODE::PUSH_COMPLETED);
         return true;
     }
@@ -213,8 +225,8 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     auto data = std::make_shared<bcos::bytes>(strEventInfo.begin(), strEventInfo.end());
 
     auto msg = m_messageFactory->buildMessage();
-    msg->setType(bcos::event::MessageType::EVENT_LOG_PUSH);
-    msg->setData(data);
+    msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
+    msg->setPayload(data);
     _session->asyncSendMessage(msg);
 
     EVENT_SUB(TRACE) << LOG_BADGE("sendEvents") << LOG_DESC("send events to client")
@@ -257,9 +269,14 @@ void EventSub::reportEventSubTasks()
     //
     if (elapsedMs > 10 * 1000)
     {
-        EVENT_SUB(INFO) << LOG_BADGE("eventSubTasks")
-                        << LOG_DESC("all event sub tasks subscribed by client")
-                        << LOG_KV("count", m_tasks.size());
+        auto taskSize = m_tasks.size();
+        if (taskSize > 0)
+        {
+            EVENT_SUB(INFO) << LOG_BADGE("eventSubTasks")
+                            << LOG_DESC("all event sub tasks subscribed by client")
+                            << LOG_KV("count", m_tasks.size());
+        }
+
         start = std::chrono::high_resolution_clock::now();
     }
 }
@@ -454,40 +471,18 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task)
     }
 
     std::string group = _task->group();
-    auto nodeService = m_groupManager->getNodeService(group, "");
-    if (!nodeService)
-    {
-        // group not exist???
-        EVENT_SUB(ERROR) << LOG_BADGE("executeEventSubTask")
-                         << LOG_DESC("cannot get node service maybe the group has been removed")
-                         << LOG_KV("id", _task->id()) << LOG_KV("group", _task->group());
+    auto blockNumber = m_groupManager->getBlockNumberByGroup(group);
+    if (blockNumber < 0)
+    {  // group not exist ???
+        EVENT_SUB(ERROR)
+            << LOG_BADGE("executeEventSubTask")
+            << LOG_DESC("Cannot getBlockNumber from groupManager, maybe the group has been removed")
+            << LOG_KV("group", group);
         unsubscribeEventSub(_task->id());
         return -1;
     }
 
-    // TODO: optimize getBlockNumberByGroup instead of asyncGetBlockNumber
-    auto self = std::weak_ptr<EventSub>(shared_from_this());
-    auto ledger = nodeService->ledger();
-    ledger->asyncGetBlockNumber(
-        [group, self, _task](Error::Ptr _error, protocol::BlockNumber _blockNumber) {
-            if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
-            {
-                EVENT_SUB(ERROR) << LOG_BADGE("executeEventSubTask")
-                                 << LOG_DESC("asyncGetBlockNumber error") << LOG_KV("group", group)
-                                 << LOG_KV("errorCode", _error->errorCode())
-                                 << LOG_KV("errorMessage", _error->errorMessage());
-
-                // error occur, wait for the next loop ???
-                _task->freeWork();
-                return;
-            }
-
-            auto eventSub = self.lock();
-            if (eventSub)
-            {
-                eventSub->executeEventSubTask(_task, _blockNumber);
-            }
-        });
+    executeEventSubTask(_task, blockNumber);
 
     return 0;
 }

@@ -19,9 +19,9 @@
  * @date 2021-05-08
  */
 #pragma once
-#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/libprotocol/TransactionStatus.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-protocol/TransactionStatus.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
 
@@ -45,9 +45,9 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr _nonceList) = 0;
     virtual void batchRemove(bcos::protocol::NonceList const& _nonceList) = 0;
     virtual void batchRemove(tbb::concurrent_set<bcos::protocol::NonceType> const& _nonceList) = 0;
+    virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
 
 protected:
-    virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
     virtual void remove(bcos::protocol::NonceType const& _nonce) = 0;
 };
 }  // namespace txpool

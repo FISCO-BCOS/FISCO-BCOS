@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test
@@ -11,7 +11,7 @@ public:
     void start() override {}
     void stop() override {}
     void asyncSubmit(bytesPointer, bcos::protocol::TxSubmitCallback) override {}
-    void asyncSealTxs(size_t, bcos::txpool::TxsHashSetPtr,
+    void asyncSealTxs(uint64_t, bcos::txpool::TxsHashSetPtr,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
         override
     {}
@@ -33,7 +33,7 @@ public:
     void notifyObserverNodeList(
         bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
-    void asyncGetPendingTransactionSize(std::function<void(Error::Ptr, size_t)>) override {}
+    void asyncGetPendingTransactionSize(std::function<void(Error::Ptr, uint64_t)>) override {}
     void asyncResetTxPool(std::function<void(Error::Ptr)>) override {}
 
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,

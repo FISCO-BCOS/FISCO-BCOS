@@ -19,12 +19,12 @@
  */
 
 #pragma once
-
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
-#include <bcos-front/FrontMessage.h>
+#include "FrontMessage.h"
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <boost/asio.hpp>
 
 namespace bcos
@@ -55,10 +55,10 @@ public:
 public:
     /**
      * @brief: get nodeIDs from frontservice
-     * @param _getNodeIDsFunc: response callback
+     * @param _onGetGroupNodeInfoFunc: response callback
      * @return void
      */
-    void asyncGetNodeIDs(GetNodeIDsFunc _getNodeIDsFunc) override;
+    void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfoFunc) override;
     /**
      * @brief: send message
      * @param _moduleID: moduleID
@@ -98,7 +98,7 @@ public:
      * @param _data: send message data
      * @return void
      */
-    void asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data) override;
+    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) override;
 
     /**
      * @brief: receive nodeIDs from gateway
@@ -107,8 +107,8 @@ public:
      * @param _receiveMsgCallback: response callback
      * @return void
      */
-    void onReceiveNodeIDs(const std::string& _groupID,
-        std::shared_ptr<const crypto::NodeIDs> _nodeIDs,
+    void onReceiveGroupNodeInfo(const std::string& _groupID,
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
         ReceiveMsgFunc _receiveMsgCallback) override;
 
     /**
@@ -193,13 +193,27 @@ public:
         m_moduleID2MessageDispatcher[_moduleID] = _dispatcher;
     }
 
+    // only for ut
+    std::unordered_map<int,
+        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
+    moduleID2MessageDispatcher() const
+    {
+        return m_moduleID2MessageDispatcher;
+    }
+
+    // only for ut
+    std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
+    module2GroupNodeInfoNotifier() const
+    {
+        return m_module2GroupNodeInfoNotifier;
+    }
     // register nodeIDs _dispatcher for module
-    void registerModuleNodeIDsDispatcher(int _moduleID,
+    void registerGroupNodeInfoNotification(int _moduleID,
         std::function<void(
-            std::shared_ptr<const crypto::NodeIDs> _nodeIDs, ReceiveMsgFunc _receiveMsgCallback)>
+            bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)>
             _dispatcher)
     {
-        m_moduleID2NodeIDsDispatcher[_moduleID] = _dispatcher;
+        m_module2GroupNodeInfoNotifier[_moduleID] = _dispatcher;
     }
 
 public:
@@ -215,21 +229,8 @@ public:
     // uuid to callback
     std::unordered_map<std::string, Callback::Ptr> m_callback;
 
-    const std::unordered_map<std::string, Callback::Ptr>& callback() const { return m_callback; }
-
-    const std::unordered_map<int, std::function<void(bcos::crypto::NodeIDPtr _nodeID,
-                                      const std::string& _id, bytesConstRef _data)>>
-    moduleID2MessageDispatcher() const
-    {
-        return m_moduleID2MessageDispatcher;
-    }
-
-    std::unordered_map<int, std::function<void(std::shared_ptr<const crypto::NodeIDs> _nodeIDs,
-                                ReceiveMsgFunc _receiveMsgCallback)>>
-    moduleID2NodeIDsDispatcher() const
-    {
-        return m_moduleID2NodeIDsDispatcher;
-    }
+    // only for ut
+    std::unordered_map<std::string, Callback::Ptr> callback() const { return m_callback; }
 
     Callback::Ptr getAndRemoveCallback(const std::string& _uuid)
     {
@@ -257,6 +258,10 @@ public:
 protected:
     virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
         std::string const& _uuid, int _moduleID, bcos::crypto::NodeIDPtr _nodeID);
+    void notifyGroupNodeInfo(
+        const std::string& _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
+
+    virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
     // thread pool
@@ -272,9 +277,9 @@ private:
                                 const std::string& _id, bytesConstRef _data)>>
         m_moduleID2MessageDispatcher;
 
-    std::unordered_map<int, std::function<void(std::shared_ptr<const crypto::NodeIDs> _nodeIDs,
+    std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
                                 ReceiveMsgFunc _receiveMsgCallback)>>
-        m_moduleID2NodeIDsDispatcher;
+        m_module2GroupNodeInfoNotifier;
 
     // service is running or not
     bool m_run = false;
@@ -284,10 +289,17 @@ private:
     bcos::crypto::NodeIDPtr m_nodeID;
     // GroupID
     std::string m_groupID;
-    // lock m_callback
-    mutable bcos::Mutex x_nodeIDs;
-    // nodeIDs pushed by the gateway
-    std::shared_ptr<const bcos::crypto::NodeIDs> m_nodeIDs;
+    // lock notifyNodeIDs
+    mutable bcos::Mutex x_notifierLock;
+
+    // groupNodeInfo pushed by the gateway
+    bcos::gateway::GroupNodeInfo::Ptr m_groupNodeInfo = nullptr;
+    // lock m_nodeID
+    mutable bcos::Mutex x_groupNodeInfo;
+
+    // the local protocolInfo
+    // Note: frontService is responsible for version negotiation of blockchain nodes
+    bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
 };
 }  // namespace front
 }  // namespace bcos

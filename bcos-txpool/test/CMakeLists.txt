@@ -15,18 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
+file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
+file(GLOB_RECURSE DEMO_SOURCES "demo/*.cpp" "demo/*.h" "demo/*.sol")
 
 # cmake settings
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-txpool)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+set(DEMO_BINARY_NAME bcos-txpool-demo)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+add_executable(${DEMO_BINARY_NAME} ${DEMO_SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-find_package(wedpr-crypto CONFIG QUIET REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} txpool wedpr-crypto::crypto Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${TXPOOL_TARGET} bcos-crypto ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
+target_link_libraries(${DEMO_BINARY_NAME} ${TXPOOL_TARGET} bcos-crypto ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
 add_test(NAME test-txpool WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

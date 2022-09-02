@@ -19,26 +19,22 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-gateway VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-gateway VERSION ${VERSION})
 
-find_package(OpenSSL REQUIRED)
-find_package(tarscpp CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
-
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-gateway)
-include_directories(${CMAKE_BINARY_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+find_package(Boost REQUIRED COMPONENTS filesystem)
 
 file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
-add_library(gateway ${SRCS})
-target_link_libraries(gateway PUBLIC framework jsoncpp_lib_static OpenSSL::SSL OpenSSL::Crypto protocol-tars tarscpp::tarsservant)
-target_compile_options(gateway PRIVATE -Wno-error -Wno-unused-variable)
+find_package(tarscpp REQUIRED)
+
+add_library(${GATEWAY_TARGET} ${SRCS})
+target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static Boost::filesystem bcos-boostssl ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
+# target_compile_options(${GATEWAY_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 if (APPLE)
-# target_compile_options(gateway PRIVATE -faligned-allocation)
+# target_compile_options(${GATEWAY_TARGET} PRIVATE -faligned-allocation)
 endif()
 
 # ut

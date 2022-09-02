@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
 
 namespace bcos
 {

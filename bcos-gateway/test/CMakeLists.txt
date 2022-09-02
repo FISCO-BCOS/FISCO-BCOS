@@ -22,25 +22,19 @@ else()
 endif()
 
 # cmake settings
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-gateway)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
-if (BUILD_TEST_EXEC)
+if (TOOLS)
     add_subdirectory(main)
 endif()
-
-include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
 
-find_package(Boost CONFIG REQUIRED unit_test_framework)
-if (APPLE)
-# target_compile_options(${TEST_BINARY_NAME} PRIVATE -faligned-allocation)
-endif()
+find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} gateway Boost::unit_test_framework front tarscpp::tarsservant)
+target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TARS_PROTOCOL_TARGET} ${FRONT_TARGET} bcos-crypto Boost::unit_test_framework)
 # add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bcos-gateway/test/unittests COMMAND ${TEST_BINARY_NAME})

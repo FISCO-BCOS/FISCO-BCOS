@@ -21,8 +21,8 @@
 #pragma once
 #include "../../interfaces/PBFTCodecInterface.h"
 #include "../../interfaces/PBFTMessageFactory.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/crypto/KeyPairInterface.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 namespace bcos
 {
 namespace consensus

@@ -26,7 +26,7 @@ FISCO BCOS 3.0全新升级，新增多个核心特性，主要如下：
 
 ## 技术文档
 
-- **[FISCO BCOS 3.x技术文档（rc1）](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
+- **[FISCO BCOS 3.x技术文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
 
 - **[FISCO BCOS 2.x 技术文档（stable）](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)**
 
@@ -50,7 +50,13 @@ FISCO BCOS已落地应用达数百个，场景覆盖政务、金融、公益、�
 
 ## 加入我们的社区
 
-**FISCO BCOS开源社区**是国内活跃的开源社区，社区长期为机构和个人开发者提供各类支持与帮助。已有来自各行业的数千名技术爱好者在研究和使用FISCO BCOS。如您对FISCO BCOS开源技术及应用感兴趣，欢迎加入社区获得更多支持与帮助。
+**FISCO BCOS开源社区**是国内庞大且活跃的开源社区，开源以来，围绕FISCO BCOS所构建的开源社区已汇集超3000家企业及机构、7万余名个人成员共建共治共享，成功支持政务、金融、农业、公益、文娱、供应链、物联网等重点应用领域的数百个区块链应用场景落地，收集到的标杆应用超过200个，构建出庞大且活跃的开源联盟链生态圈。
+
+如您对FISCO BCOS开源技术及应用感兴趣，欢迎加入社区获得更多支持与帮助。
+- [MVP](https://www.fisco.com.cn/news_6/494.html)
+- [贡献者](https://www.fisco.com.cn/news_6/510.html)
+- [合作伙伴](https://www.fisco.com.cn/news_6/492.html)
+
 
 ![](https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/QR_image.png)
 

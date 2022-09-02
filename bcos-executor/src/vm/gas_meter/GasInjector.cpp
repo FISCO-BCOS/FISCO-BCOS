@@ -19,13 +19,13 @@
  */
 
 #include "GasInjector.h"
-#include "bcos-framework/libutilities/Log.h"
 #include "src/binary-reader-ir.h"
 #include "src/binary-reader.h"
 #include "src/binary-writer.h"
 #include "src/cast.h"
 #include "src/ir.h"
 #include "src/stream.h"
+#include <bcos-framework/Common.h>
 #include <iostream>
 
 using namespace std;

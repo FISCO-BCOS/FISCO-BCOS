@@ -20,9 +20,7 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -31,6 +29,7 @@ namespace bcos
 {
 namespace test
 {
+DERIVE_BCOS_EXCEPTION(InvalidKey);
 class MockKey : public bcos::crypto::KeyInterface
 {
 public:

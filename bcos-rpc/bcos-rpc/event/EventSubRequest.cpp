@@ -18,7 +18,7 @@
  * @date 2021-09-03
  */
 
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-framework/Common.h>
 #include <bcos-rpc/event/Common.h>
 #include <bcos-rpc/event/EventSubRequest.h>
 #include <bcos-rpc/event/EventSubTask.h>
@@ -89,7 +89,6 @@ bool EventSubUnsubRequest::fromJson(const std::string& _request)
                                 << LOG_KV("group", m_group) << LOG_KV("id", m_id);
 
             return true;
-
         } while (0);
 
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub request")
@@ -232,7 +231,7 @@ bool EventSubRequest::fromJson(const std::string& _request)
                     {
                         address = address.substr(2);
                     }
-                    std::transform(address.begin(), address.end(), address.begin(), ::tolower);
+                    // std::transform(address.begin(), address.end(), address.begin(), ::tolower);
                     params->addAddress(address);
                 }
             }
@@ -280,7 +279,6 @@ bool EventSubRequest::fromJson(const std::string& _request)
                                 << LOG_KV("group", group) << LOG_KV("id", id);
 
             return true;
-
         } while (0);
 
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub request")

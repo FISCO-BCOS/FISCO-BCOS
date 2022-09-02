@@ -21,8 +21,8 @@
 
 #include "../src/dag/Abi.h"
 #include "../src/dag/ScaleUtils.h"
-#include "libutilities/Common.h"
-#include "libutilities/DataConvertUtility.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <utility>
 #include <vector>
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(CalculateEncodingLength)
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 11);
 
-    // Encoding of static arrary of string ["Alice", "Bob"]
+    // Encoding of static array of string ["Alice", "Bob"]
     encodedBytes = fromHexString("14416c6963650c426f62");
     paramAbi.type = "string[2]";
     result = scaleEncodingLength(paramAbi, *encodedBytes, 0);

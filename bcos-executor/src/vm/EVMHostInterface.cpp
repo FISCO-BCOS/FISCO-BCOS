@@ -26,10 +26,10 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
-#include "libutilities/Common.h"
-#include <boost/core/ignore_unused.hpp>
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <exception>
 #include <optional>
 
@@ -58,7 +58,7 @@ evmc_bytes32 getStorage(
 {
     boost::ignore_unused(_addr);
     auto& hostContext = static_cast<HostContext&>(*_context);
-    
+
     // programming assert for debug
     assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
@@ -75,18 +75,12 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
 
     u256 index = fromEvmC(*_key);
     u256 value = fromEvmC(*_value);
-    u256 oldValue = hostContext.store(index);
-
-    if (value == oldValue)
-        return EVMC_STORAGE_UNCHANGED;
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (oldValue == 0)
-        status = EVMC_STORAGE_ADDED;
-    else if (value == 0)
+    if (value == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
     hostContext.setStore(index, value);  // Interface uses native endianness
     return status;
@@ -176,11 +170,36 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
 
+evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
+{
+    std::ignore = _context;
+    std::ignore = _addr;
+    return EVMC_ACCESS_COLD;
+}
+
+
+evmc_access_status access_storage(
+    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+{
+    std::ignore = _context;
+    std::ignore = _addr;
+    std::ignore = _key;
+    return EVMC_ACCESS_COLD;
+}
+
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
     evmc_tx_context result;
-    result.tx_origin = toEvmC(hostContext.origin());
+    if (hostContext.isWasm())
+    {
+        result.tx_origin = toEvmC(hostContext.origin());
+    }
+    else
+    {
+        auto origin = fromHex(hostContext.origin());
+        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
+    }
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
@@ -224,7 +243,7 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     // * origin code: assert(_msg->gas >= 0)
     if (_msg->gas < 0)
     {
-        EXECUTIVE_LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
         BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 
@@ -248,6 +267,8 @@ evmc_host_interface const fnTable = {
     getTxContext,
     getBlockHash,
     log,
+    access_account,
+    access_storage,
 };
 // clang-format on
 
@@ -290,18 +311,12 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
     string key((char*)_key, _keyLength);
     string value((char*)_value, _valueLength);
-    auto oldValue = hostContext.get(string((char*)_key, _keyLength));
-
-    if (value == oldValue)
-        return EVMC_STORAGE_UNCHANGED;
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (oldValue.size() == 0)
-        status = EVMC_STORAGE_ADDED;
-    else if (value.size() == 0)
+    if (value.size() == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
     hostContext.set(key, value);  // Interface uses native endianness
     return status;
@@ -347,7 +362,7 @@ void wasmLog(evmc_host_context* _context, const uint8_t* _addr, int32_t _address
     size_t _numTopics) noexcept
 {
     boost::ignore_unused(_addr, _addressLength);
-    
+
     auto& hostContext = static_cast<HostContext&>(*_context);
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);

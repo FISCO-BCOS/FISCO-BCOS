@@ -19,12 +19,12 @@
  */
 
 #include <bcos-boostssl/context/ContextConfig.h>
-#include <bcos-boostssl/utilities/BoostLog.h>
-#include <bcos-boostssl/utilities/Common.h>
-#include <bcos-boostssl/utilities/ThreadPool.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <memory>
 
 using namespace bcos;
@@ -37,10 +37,10 @@ using namespace bcos::boostssl::context;
 
 void usage()
 {
-    std::cerr << "Usage: http-server <host> <port> <ssl>\n"
+    std::cerr << "Usage: http-server-sample <host> <port> <ssl>\n"
               << "Example:\n"
-              << "    ./http-server 127.0.0.1 20200 true\n"
-              << "    ./http-server 127.0.0.1 20200 false\n";
+              << "    ./http-server-sample 127.0.0.1 20200 true\n"
+              << "    ./http-server-sample 127.0.0.1 20200 false\n";
     std::exit(0);
 }
 
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
         disableSsl = argv[3];
     }
 
-    BCOS_LOG(INFO) << LOG_DESC("http-server") << LOG_KV("ip", host) << LOG_KV("port", port)
+    BCOS_LOG(INFO) << LOG_DESC("http-server-sample") << LOG_KV("ip", host) << LOG_KV("port", port)
                    << LOG_KV("disableSsl", disableSsl);
 
 
@@ -73,14 +73,14 @@ int main(int argc, char** argv)
     config->setListenPort(port);
     config->setThreadPoolSize(4);
     config->setDisableSsl(0 == disableSsl.compare("true"));
-    if (config->disableSsl())
+    if (!config->disableSsl())
     {
         auto contextConfig = std::make_shared<ContextConfig>();
         contextConfig->initConfig("./boostssl.ini");
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>();
+    auto wsService = std::make_shared<ws::WsService>("TEST");
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);

@@ -1,11 +1,13 @@
 #pragma once
 
 #include "../../src/Common.h"
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/libstorage/StateStorage.h>
+#include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+
+using namespace bcos::protocol;
 
 namespace bcos::test
 {
@@ -84,11 +86,11 @@ public:
         callback(nullptr, 0);
     }
 
-    void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override
+    void asyncCommit(const TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
-        callback(nullptr);
+        callback(nullptr, 0);
     }
 
     void asyncRollback(

@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include <mutex>
 #include <string>
 
@@ -32,7 +32,6 @@ namespace storage
 {
 class MemoryStorage : public StorageInterface
 {
-
 public:
     typedef std::shared_ptr<MemoryStorage> Ptr;
     MemoryStorage() { data[storage::SYS_TABLE] = std::map<std::string, Entry::Ptr>(); }

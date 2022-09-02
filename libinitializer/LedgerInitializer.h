@@ -19,11 +19,11 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/interfaces/ledger/LedgerInterface.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/libtool/NodeConfig.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
 {
@@ -36,8 +36,8 @@ public:
     {
         auto ledger = std::make_shared<bcos::ledger::Ledger>(_blockFactory, _storage);
         // build genesis block
-        ledger->buildGenesisBlock(
-            _nodeConfig->ledgerConfig(), _nodeConfig->txGasLimit(), _nodeConfig->genesisData());
+        ledger->buildGenesisBlock(_nodeConfig->ledgerConfig(), _nodeConfig->txGasLimit(),
+            _nodeConfig->genesisData(), _nodeConfig->compatibilityVersionStr());
         return ledger;
     }
 };

@@ -23,10 +23,10 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-framework/storage/Table.h"
+#include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
-#include "libutilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>
@@ -76,7 +76,6 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 }
 }  // namespace
 
-EVMSchedule HostContext::m_evmSchedule = FiscoBcosScheduleV3;
 // crypto::Hash::Ptr g_hashImpl = nullptr;
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
@@ -97,25 +96,30 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
         isSMCrypto = true;
     }
     metrics = &ethMetrics;
+    m_startTime = utcTimeUs();
 }
 
-std::string_view HostContext::get(const std::string_view& _key)
+std::string HostContext::get(const std::string_view& _key)
 {
+    auto start = utcTimeUs();
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        return entry->getField(0);
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
+        return std::string(entry->getField(0));
     }
-
-    return std::string_view();
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
+    return std::string();
 }
 
 void HostContext::set(const std::string_view& _key, std::string _value)
 {
+    auto start = utcTimeUs();
     Entry entry;
     entry.importFields({std::move(_value)});
 
     m_executive->storage().setRow(m_tableName, _key, std::move(entry));
+    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
@@ -150,9 +154,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         break;
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Unsupported opcode EVM_DELEGATECALL or EVM_CALLCODE"));
-        break;
+        // TODO: implement this, don't forget the compatibility
+        evmc_result result;
+        result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
+        result.release = nullptr;  // no output to release
+        result.gas_left = 0;
+        return result;
     case EVMC_CREATE:
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
@@ -216,11 +223,12 @@ evmc_result HostContext::callBuiltInPrecompiled(
     {
         try
         {
-            auto precompiledResponse = m_executive->execPrecompiled(_request->receiveAddress,
-                ref(_request->data), _request->origin, _request->senderAddress);
-            callResults->gas = precompiledResponse->m_gas;
+            auto precompiledCallParams =
+                std::make_shared<precompiled::PrecompiledExecResult>(_request);
+            precompiledCallParams = m_executive->execPrecompiled(precompiledCallParams);
+            callResults->gas = precompiledCallParams->m_gas;
             resultCode = (int32_t)TransactionStatus::None;
-            resultData.swap(precompiledResponse->m_execResult);
+            resultData = std::move(precompiledCallParams->m_execResult);
         }
         catch (protocol::PrecompiledError& e)
         {
@@ -242,7 +250,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         return preResult;
     }
 
-    preResult.gas_left = _request->gas - callResults->gas;
+    preResult.gas_left = callResults->gas;
     if (preResult.gas_left < 0)
     {
         callResults->type = CallParameters::REVERT;
@@ -281,6 +289,8 @@ bool HostContext::setCode(bytes code)
 
 void HostContext::setCodeAndAbi(bytes code, string abi)
 {
+    EXECUTOR_LOG(TRACE) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
+                        << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
     if (setCode(std::move(code)))
     {
         Entry abiEntry;
@@ -301,32 +311,56 @@ h256 HostContext::codeHashAt(const std::string_view& _a)
     return h256();  // TODO: ok?
 }
 
+VMSchedule const& HostContext::vmSchedule() const
+{
+    return m_executive->vmSchedule();
+}
+
 u256 HostContext::store(const u256& _n)
 {
+    auto start = utcTimeUs();
+
     auto key = toEvmC(_n);
     auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
 
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
     {
+        // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+        // {  // FIXME: this log is only for debug, comment it when release
+        //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
+        //                         << LOG_KV("value", toHex(entry->get()));
+        // }
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
         return fromBigEndian<u256>(entry->getField(0));
     }
-
+    // else
+    // {// FIXME: this log is only for debug, comment it when release
+    //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
+    //                         << LOG_KV("value", "not found");
+    // }
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return u256();
 }
 
 void HostContext::setStore(u256 const& _n, u256 const& _v)
 {
+    auto start = utcTimeUs();
     auto key = toEvmC(_n);
     auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
 
     auto value = toEvmC(_v);
     bytes valueBytes(value.bytes, value.bytes + sizeof(value.bytes));
 
+    // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+    // {  // FIXME: this log is only for debug, comment it when release
+    //     EXECUTOR_LOG(TRACE) << LOG_DESC("setStore") << LOG_KV("key", toHex(keyView))
+    //                         << LOG_KV("value", toHex(valueBytes));
+    // }
     Entry entry;
     entry.importFields({std::move(valueBytes)});
-
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
+    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)
@@ -370,17 +404,12 @@ std::string_view HostContext::myAddress() const
     return m_executive->contractAddress();
 }
 
-bytesConstRef HostContext::code()
+std::optional<storage::Entry> HostContext::code()
 {
+    auto start = utcTimeUs();
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-    if (entry)
-    {
-        auto code = entry->getField(0);
-
-        return bytesConstRef((bcos::byte*)code.data(), code.size());
-    }
-
-    return bytesConstRef();
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
+    return entry;
 }
 
 h256 HostContext::codeHash()
@@ -406,19 +435,6 @@ bool HostContext::registerAsset(const std::string& _assetName, const std::string
     (void)_description;
 
     return true;
-    // auto table = m_tableFactory->openTable(SYS_ASSET_INFO);
-    // if (table->getRow(_assetName)) {
-    //   return false;
-    // }
-    // auto entry = table->newEntry();
-    // entry.setField(SYS_ASSET_NAME, _assetName);
-    // entry.setField(SYS_ASSET_ISSUER, string(_addr));
-    // entry.setField(SYS_ASSET_FUNGIBLE, to_string(_fungible));
-    // entry.setField(SYS_ASSET_TOTAL, to_string(_total));
-    // entry.setField(SYS_ASSET_SUPPLIED, "0");
-    // entry.setField(SYS_ASSET_DESCRIPTION, _description);
-    // auto count = table->setRow(_assetName, entry);
-    // return count == 1;
 }
 
 bool HostContext::issueFungibleAsset(
@@ -429,41 +445,6 @@ bool HostContext::issueFungibleAsset(
     (void)_amount;
 
     return true;
-    // auto table = m_tableFactory->openTable(SYS_ASSET_INFO);
-    // auto entry = table->getRow(_assetName);
-    // if (!entry) {
-    //   EXECUTIVE_LOG(WARNING) << "issueFungibleAsset " << _assetName
-    //                          << "is not exist";
-    //   return false;
-    // }
-
-    // auto issuer = std::string(entry->getField(SYS_ASSET_ISSUER));
-    // if (caller() != issuer) {
-    //   EXECUTIVE_LOG(WARNING) << "issueFungibleAsset not issuer of " <<
-    //   _assetName
-    //                          << LOG_KV("issuer", issuer)
-    //                          << LOG_KV("caller", caller());
-    //   return false;
-    // }
-    // // TODO: check supplied is less than total_supply
-    // auto total =
-    // boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_TOTAL)); auto
-    // supplied =
-    //     boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_SUPPLIED));
-    // if (total - supplied < _amount) {
-    //   EXECUTIVE_LOG(WARNING) << "issueFungibleAsset overflow total supply"
-    //                          << LOG_KV("amount", _amount)
-    //                          << LOG_KV("supplied", supplied)
-    //                          << LOG_KV("total", total);
-    //   return false;
-    // }
-    // // TODO: update supplied
-    // auto updateEntry = table->newEntry();
-    // updateEntry.setField(SYS_ASSET_SUPPLIED, to_string(supplied + _amount));
-    // table->setRow(_assetName, updateEntry);
-    // // TODO: create new tokens
-    // depositFungibleAsset(_to, _assetName, _amount);
-    // return true;
 }
 
 uint64_t HostContext::issueNotFungibleAsset(
@@ -473,41 +454,6 @@ uint64_t HostContext::issueNotFungibleAsset(
     (void)_assetName;
     (void)_uri;
     return 0;
-    // // check issuer
-    // auto table = m_tableFactory->openTable(SYS_ASSET_INFO);
-    // auto entry = table->getRow(_assetName);
-    // if (!entry) {
-    //   EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset " << _assetName
-    //                          << "is not exist";
-    //   return false;
-    // }
-
-    // auto issuer = std::string(entry->getField(SYS_ASSET_ISSUER));
-    // if (caller() != issuer) {
-    //   EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset not issuer of "
-    //                          << _assetName;
-    //   return false;
-    // }
-    // // check supplied
-    // auto total =
-    // boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_TOTAL)); auto
-    // supplied =
-    //     boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_SUPPLIED));
-    // if (total - supplied == 0) {
-    //   EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset overflow total supply"
-    //                          << LOG_KV("supplied", supplied)
-    //                          << LOG_KV("total", total);
-    //   return false;
-    // }
-    // // get asset id and update supplied
-    // auto assetID = supplied + 1;
-    // auto updateEntry = table->newEntry();
-    // updateEntry.setField(SYS_ASSET_SUPPLIED, to_string(assetID));
-    // table->setRow(_assetName, updateEntry);
-
-    // // create new tokens
-    // depositNotFungibleAsset(_to, _assetName, assetID, _uri);
-    // return assetID;
 }
 
 void HostContext::depositFungibleAsset(
@@ -516,29 +462,6 @@ void HostContext::depositFungibleAsset(
     (void)_to;
     (void)_assetName;
     (void)_amount;
-    // auto tableName =
-    //     getContractTableName(_to, true, m_blockContext->hashHandler());
-    // auto table = m_tableFactory->openTable(tableName);
-    // if (!table) {
-    //   EXECUTIVE_LOG(DEBUG) << LOG_DESC("depositFungibleAsset createAccount")
-    //                        << LOG_KV("account", _to);
-    //   m_s->setNonce(_to, u256(0));
-    //   table = m_tableFactory->openTable(tableName);
-    // }
-    // auto entry = table->getRow(_assetName);
-    // if (!entry) {
-    //   auto entry = table->newEntry();
-    //   entry.setField("key", _assetName);
-    //   entry.setField("value", to_string(_amount));
-    //   table->setRow(_assetName, entry);
-    //   return;
-    // }
-
-    // auto value = boost::lexical_cast<uint64_t>(entry->getField("value"));
-    // value += _amount;
-    // auto updateEntry = table->newEntry();
-    // updateEntry.setField("value", to_string(value));
-    // table->setRow(_assetName, updateEntry);
 }
 
 void HostContext::depositNotFungibleAsset(const std::string_view& _to,
@@ -548,39 +471,6 @@ void HostContext::depositNotFungibleAsset(const std::string_view& _to,
     (void)_assetName;
     (void)_assetID;
     (void)_uri;
-
-    // auto tableName =
-    //     getContractTableName(_to, true, m_blockContext->hashHandler());
-    // auto table = m_tableFactory->openTable(tableName);
-    // if (!table) {
-    //   EXECUTIVE_LOG(DEBUG) << LOG_DESC("depositNotFungibleAsset createAccount")
-    //                        << LOG_KV("account", _to);
-    //   m_s->setNonce(_to, u256(0));
-    //   table = m_tableFactory->openTable(tableName);
-    // }
-    // auto entry = table->getRow(_assetName);
-    // if (!entry) {
-    //   auto entry = table->newEntry();
-    //   entry.setField("value", to_string(_assetID));
-    //   entry.setField("key", _assetName);
-    //   table->setRow(_assetName, entry);
-    // } else {
-    //   auto assetIDs = string(entry->getField("value"));
-    //   if (assetIDs.empty()) {
-    //     assetIDs = to_string(_assetID);
-    //   } else {
-    //     assetIDs = assetIDs + "," + to_string(_assetID);
-    //   }
-    //   auto updateEntry = table->newEntry();
-    //   updateEntry.setField("key", _assetName);
-    //   updateEntry.setField("value", assetIDs);
-    //   table->setRow(_assetName, updateEntry);
-    // }
-    // auto newEntry = table->newEntry();
-    // auto key = _assetName + "-" + to_string(_assetID);
-    // newEntry.setField("key", key);
-    // newEntry.setField("value", _uri);
-    // table->setRow(key, newEntry);
 }
 
 bool HostContext::transferAsset(const std::string_view& _to, const std::string& _assetName,
@@ -591,74 +481,6 @@ bool HostContext::transferAsset(const std::string_view& _to, const std::string& 
     (void)_amountOrID;
     (void)_fromSelf;
     return true;
-    // // get asset info
-    // auto table = m_tableFactory->openTable(SYS_ASSET_INFO);
-    // auto assetEntry = table->getRow(_assetName);
-    // if (!assetEntry) {
-    //   EXECUTIVE_LOG(WARNING) << "transferAsset " << _assetName << " is not
-    //   exist"; return false;
-    // }
-    // auto fungible =
-    //     boost::lexical_cast<bool>(assetEntry->getField(SYS_ASSET_FUNGIBLE));
-    // auto from = caller();
-    // if (_fromSelf) {
-    //   from = myAddress();
-    // }
-    // auto tableName =
-    //     getContractTableName(from, true, m_blockContext->hashHandler());
-    // table = m_tableFactory->openTable(tableName);
-    // auto entry = table->getRow(_assetName);
-    // if (!entry) {
-    //   EXECUTIVE_LOG(WARNING) << LOG_DESC("transferAsset account does not have")
-    //                          << LOG_KV("asset", _assetName)
-    //                          << LOG_KV("account", from);
-    //   return false;
-    // }
-    // EXECUTIVE_LOG(DEBUG) << LOG_DESC("transferAsset")
-    //                      << LOG_KV("asset", _assetName)
-    //                      << LOG_KV("fungible", fungible)
-    //                      << LOG_KV("account", from);
-    // try {
-    //   if (fungible) {
-    //     auto value = boost::lexical_cast<uint64_t>(entry->getField("value"));
-    //     value -= _amountOrID;
-    //     auto updateEntry = table->newEntry();
-    //     updateEntry.setField("key", _assetName);
-    //     updateEntry.setField("value", to_string(value));
-    //     table->setRow(_assetName, updateEntry);
-    //     depositFungibleAsset(_to, _assetName, _amountOrID);
-    //   } else {
-    //     // TODO: check if from has asset
-    //     auto tokenIDs = entry->getField("value");
-    //     // find id in tokenIDs
-    //     auto tokenID = to_string(_amountOrID);
-    //     vector<string> tokenIDList;
-    //     boost::split(tokenIDList, tokenIDs, boost::is_any_of(","));
-    //     auto it = find(tokenIDList.begin(), tokenIDList.end(), tokenID);
-    //     if (it != tokenIDList.end()) {
-    //       tokenIDList.erase(it);
-    //       auto updateEntry = table->newEntry();
-    //       updateEntry.setField("value", boost::algorithm::join(tokenIDList,
-    //       ",")); table->setRow(_assetName, updateEntry); auto tokenKey =
-    //       _assetName + "-" + tokenID; auto entry = table->getRow(tokenKey);
-    //       auto tokenURI = string(entry->getField("value"));
-    //       // FIXME: how to use remove
-    //       // table->remove(tokenKey);
-    //       depositNotFungibleAsset(_to, _assetName, _amountOrID, tokenURI);
-    //     } else {
-    //       EXECUTIVE_LOG(WARNING)
-    //           << LOG_DESC("transferAsset account does not have")
-    //           << LOG_KV("asset", _assetName) << LOG_KV("account", from);
-    //       return false;
-    //     }
-    //   }
-    // } catch (std::exception &e) {
-    //   EXECUTIVE_LOG(ERROR) << "transferAsset exception"
-    //                        << LOG_KV("what", e.what());
-    //   return false;
-    // }
-
-    // return true;
 }
 
 uint64_t HostContext::getAssetBanlance(
@@ -667,33 +489,6 @@ uint64_t HostContext::getAssetBanlance(
     (void)_account;
     (void)_assetName;
     return 0;
-    // auto table = m_tableFactory->openTable(SYS_ASSET_INFO);
-    // auto assetEntry = table->getRow(_assetName);
-    // if (!assetEntry) {
-    //   EXECUTIVE_LOG(WARNING) << "getAssetBanlance " << _assetName
-    //                          << " is not exist";
-    //   return false;
-    // }
-    // auto fungible =
-    //     boost::lexical_cast<bool>(assetEntry->getField(SYS_ASSET_FUNGIBLE));
-    // auto tableName =
-    //     getContractTableName(_account, true, m_blockContext->hashHandler());
-    // table = m_tableFactory->openTable(tableName);
-    // if (!table) {
-    //   return 0;
-    // }
-    // auto entry = table->getRow(_assetName);
-    // if (!entry) {
-    //   return 0;
-    // }
-
-    // if (fungible) {
-    //   return boost::lexical_cast<uint64_t>(entry->getField("value"));
-    // }
-    // // not fungible
-    // auto tokenIDS = entry->getField("value");
-    // uint64_t counts = std::count(tokenIDS.begin(), tokenIDS.end(), ',') + 1;
-    // return counts;
 }
 
 std::string HostContext::getNotFungibleAssetInfo(
@@ -703,29 +498,6 @@ std::string HostContext::getNotFungibleAssetInfo(
     (void)_assetName;
     (void)_assetID;
     return {};
-    //   auto tableName =
-    //       getContractTableName(_owner, true, m_blockContext->hashHandler());
-    //   auto table = m_tableFactory->openTable(tableName);
-    //   if (!table) {
-    //     EXECUTIVE_LOG(WARNING)
-    //         << "getNotFungibleAssetInfo failed, account not exist"
-    //         << LOG_KV("account", _owner);
-    //     return "";
-    //   }
-    //   auto assetKey = _assetName + "-" + to_string(_assetID);
-    //   auto entry = table->getRow(assetKey);
-    //   if (!entry) {
-    //     EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetInfo failed"
-    //                            << LOG_KV("account", _owner)
-    //                            << LOG_KV("asset", assetKey);
-    //     return "";
-    //   }
-
-    //   EXECUTIVE_LOG(DEBUG) << "getNotFungibleAssetInfo" << LOG_KV("account",
-    //   _owner)
-    //                        << LOG_KV("asset", _assetName)
-    //                        << LOG_KV("uri", entry->getField("value"));
-    //   return string(entry->getField("value"));
 }
 
 std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
@@ -734,41 +506,12 @@ std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
     (void)_account;
     (void)_assetName;
     return std::vector<uint64_t>();
-    //   auto tableName =
-    //       getContractTableName(_account, true, m_blockContext->hashHandler());
-    //   auto table = m_tableFactory->openTable(tableName);
-    //   if (!table) {
-    //     EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetIDs account not exist"
-    //                            << LOG_KV("account", _account);
-    //     return vector<uint64_t>();
-    //   }
-    //   auto entry = table->getRow(_assetName);
-    //   if (!entry) {
-    //     EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetIDs account has none
-    //     asset"
-    //                            << LOG_KV("account", _account)
-    //                            << LOG_KV("asset", _assetName);
-    //     return vector<uint64_t>();
-    //   }
-
-    //   auto tokenIDs = entry->getField("value");
-    //   if (tokenIDs.empty()) {
-    //     EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetIDs account has none
-    //     asset"
-    //                            << LOG_KV("account", _account)
-    //                            << LOG_KV("asset", _assetName);
-    //     return vector<uint64_t>();
-    //   }
-    //   vector<string> tokenIDList;
-    //   boost::split(tokenIDList, tokenIDs, boost::is_any_of(","));
-    //   vector<uint64_t> ret(tokenIDList.size(), 0);
-    //   EXECUTIVE_LOG(DEBUG) << "getNotFungibleAssetIDs"
-    //                        << LOG_KV("account", _account)
-    //                        << LOG_KV("asset", _assetName)
-    //                        << LOG_KV("tokenIDs", tokenIDs);
-    //   for (size_t i = 0; i < tokenIDList.size(); ++i) {
-    //     ret[i] = boost::lexical_cast<uint64_t>(tokenIDList[i]);
-    // return ret;
 }
+
+bool HostContext::isWasm()
+{
+    return m_executive->isWasm();
+}
+
 }  // namespace executor
 }  // namespace bcos

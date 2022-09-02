@@ -36,7 +36,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     {
         return;
     }
-    PBFT_LOG(INFO) << LOG_DESC("resetConfig")
+    PBFT_LOG(INFO) << METRIC << LOG_DESC("resetConfig")
                    << LOG_KV("committedIndex", _ledgerConfig->blockNumber())
                    << LOG_KV("propHash", _ledgerConfig->hash().abridged())
                    << LOG_KV("blockCountLimit", _ledgerConfig->blockTxCountLimit())
@@ -53,22 +53,45 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // set ConsensusNodeList
     auto& consensusList = _ledgerConfig->mutableConsensusNodeList();
     setConsensusNodeList(consensusList);
+    auto observerList = _ledgerConfig->mutableObserverList();
+    setObserverNodeList(*observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
     // reset the timer
-    resetTimer();
+    freshTimer();
 
     if (_ledgerConfig->sealerId() == -1)
     {
-        PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << printCurrentState();
+        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report") << printCurrentState();
     }
     else
     {
-        PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("sealer", _ledgerConfig->sealerId())
+        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report")
+                       << LOG_KV("sealer", _ledgerConfig->sealerId())
                        << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState();
     }
-    // notify the txpool validator to update the consensusNodeList.
-    m_validator->updateValidatorConfig(consensusList, _ledgerConfig->observerNodeList());
+    if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
+    {
+        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
+                       << LOG_KV("version", (bcos::protocol::Version)m_compatibilityVersion)
+                       << LOG_KV("updatedVersion",
+                              (bcos::protocol::Version)(_ledgerConfig->compatibilityVersion()));
+        m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
+        if (m_versionNotification && m_asMasterNode)
+        {
+            m_versionNotification(m_compatibilityVersion);
+        }
+    }
+    // notify the txpool validator to update the consensusNodeList and the observerNodeList
+    if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
+    {
+        m_validator->updateValidatorConfig(consensusList, *observerList);
+        PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
+                       << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
+                       << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
+                       << LOG_KV("consensusNodeSize", consensusList.size())
+                       << LOG_KV("observerNodeSize", observerList->size());
+    }
 
     // notify the latest block number to the sealer
     if (m_stateNotifier)
@@ -93,7 +116,6 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // the node is syncing, reset the timeout state to false for view recovery
     if (m_syncingHighestNumber > _ledgerConfig->blockNumber())
     {
-        m_timeoutState = true;
         m_syncingState = true;
         // notify resetSealing(the syncing node should not seal block)
         notifyResetSealing();
@@ -166,6 +188,7 @@ void PBFTConfig::reNotifySealer(bcos::protocol::BlockNumber _index)
 
 bool PBFTConfig::canHandleNewProposal()
 {
+    ReadGuard l(x_committedProposal);
     bcos::protocol::BlockNumber committedIndex = 0;
     if (m_committedProposal)
     {
@@ -188,6 +211,7 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     {
         return true;
     }
+    ReadGuard l(x_committedProposal);
     auto committedIndex = m_committedProposal->index();
     if (_msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
         _msg->index() <= m_waitResealUntil)
@@ -241,6 +265,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
+    RecursiveGuard l(m_mutex);
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -284,6 +309,11 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
     }
+    // already notified
+    if (m_sealEndIndex >= endProposalIndex && m_sealStartIndex <= startSealIndex)
+    {
+        return;
+    }
     auto committedIndex = m_committedProposal->index();
     if (m_validator->resettingProposalSize() > 0 && (startSealIndex > (committedIndex + 1)))
     {
@@ -292,6 +322,16 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                               "been resetted success")
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
+        // notify the leader to seal when all txs of all proposals have been resetted
+        auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+        m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
+            auto config = self.lock();
+            if (!config)
+            {
+                return;
+            }
+            config->notifySealer(_progressedIndex, _enforce);
+        });
         return;
     }
     asyncNotifySealProposal(startSealIndex, endProposalIndex, blockTxCountLimit());

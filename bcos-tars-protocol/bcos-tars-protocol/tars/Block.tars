@@ -1,0 +1,50 @@
+#include "Transaction.tars"
+#include "TransactionReceipt.tars"
+#include "TransactionMetaData.tars"
+
+module bcostars {
+    struct ParentInfo {
+        1 optional long blockNumber;
+        2 optional vector<byte> blockHash;
+    };
+
+    struct Signature {
+        1 optional long sealerIndex;
+        2 optional vector<byte> signature;
+    };
+
+    struct BlockHeaderData {
+        2 optional int version;
+        3 optional vector<ParentInfo> parentInfo;
+        4 optional vector<byte> txsRoot;
+        5 optional vector<byte> receiptRoot;
+        6 optional vector<byte> stateRoot;
+        7 optional long blockNumber;
+        8 optional string gasUsed;
+        9 optional long timestamp;
+        10 optional long sealer;
+        11 optional vector<vector<byte>> sealerList;
+        12 optional vector<byte> extraData; 
+        13 optional vector<long> consensusWeights;
+    };
+
+    struct BlockHeader {
+        1 optional BlockHeaderData data;
+        2 optional vector<byte> dataHash;
+        3 optional vector<Signature> signatureList;
+    };
+
+    struct Block {
+        1 optional int version;
+        2 optional int type;
+        3 optional BlockHeader blockHeader;
+        4 optional vector<Transaction> transactions;
+        5 optional vector<TransactionReceipt> receipts;
+        6 optional vector<TransactionMetaData> transactionsMetaData;
+        7 optional vector<vector<byte>> receiptsHash;
+        8 optional vector<string> nonceList;
+        
+        9 optional vector<vector<byte>> transactionsMerkle;
+        10 optional vector<vector<byte>> receiptsMerkle;
+    };
+};

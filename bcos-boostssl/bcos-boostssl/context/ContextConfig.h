@@ -70,6 +70,10 @@ public:
     const SMCertConfig& smCertConfig() const { return m_smCertConfig; }
     void setSmCertConfig(const SMCertConfig& _smCertConfig) { m_smCertConfig = _smCertConfig; }
 
+    std::string moduleName() { return m_moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+
+
 private:
     // is the cert path or cert file content
     bool m_isCertPath = true;
@@ -78,6 +82,7 @@ private:
     // cert config for ssl
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
+    std::string m_moduleName = "DEFAULT";
 };
 
 }  // namespace context

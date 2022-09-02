@@ -21,8 +21,9 @@
 #pragma once
 #include "../framework/ConsensusConfigInterface.h"
 #include "Common.h"
-#include <bcos-framework/interfaces/crypto/KeyPairInterface.h>
-#include <bcos-framework/libutilities/Common.h>
+#include "bcos-framework/protocol/Protocol.h"
+#include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
+#include <bcos-utilities/Common.h>
 
 namespace bcos
 {
@@ -33,7 +34,9 @@ class ConsensusConfig : public ConsensusConfigInterface
 public:
     using Ptr = std::shared_ptr<ConsensusConfig>;
     explicit ConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _keyPair)
-      : m_keyPair(_keyPair), m_consensusNodeList(std::make_shared<ConsensusNodeList>())
+      : m_keyPair(_keyPair),
+        m_consensusNodeList(std::make_shared<ConsensusNodeList>()),
+        m_observerNodeList(std::make_shared<ConsensusNodeList>())
     {}
     virtual ~ConsensusConfig() {}
 
@@ -43,7 +46,10 @@ public:
     // the nodeIndex of this node
     IndexType nodeIndex() const override { return m_nodeIndex; }
 
-    bool isConsensusNode() const override { return (m_nodeIndex != NON_CONSENSUS_NODE); }
+    bool isConsensusNode() const override
+    {
+        return (m_nodeIndex != NON_CONSENSUS_NODE) && m_asMasterNode.load();
+    }
     // the consensus node list
     ConsensusNodeList consensusNodeList() const override;
     bcos::crypto::NodeIDs consensusNodeIDList(bool _excludeSelf = true) const override;
@@ -106,6 +112,25 @@ public:
 
     IndexType consensusNodesNum() const { return m_consensusNodeNum.load(); }
 
+    void setObserverNodeList(ConsensusNodeList& _observerNodeList);
+
+    bool asMasterNode() const { return m_asMasterNode.load(); }
+    virtual void enableAsMasterNode(bool _isMasterNode)
+    {
+        m_asMasterNode.store(_isMasterNode);
+        if (m_versionNotification)
+        {
+            m_versionNotification(m_compatibilityVersion);
+        }
+    }
+
+    virtual void registerVersionInfoNotification(
+        std::function<void(uint32_t _version)> _versionNotification)
+    {
+        m_versionNotification = _versionNotification;
+    }
+
+    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
 private:
     bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
@@ -117,6 +142,11 @@ protected:
 
     ConsensusNodeListPtr m_consensusNodeList;
     mutable bcos::SharedMutex x_consensusNodeList;
+    std::atomic_bool m_consensusNodeListUpdated = {false};
+
+    ConsensusNodeListPtr m_observerNodeList;
+    mutable bcos::SharedMutex x_observerNodeList;
+    std::atomic_bool m_observerNodeListUpdated = {false};
 
     // default timeout is 3000ms
     std::atomic<uint64_t> m_consensusTimeout = {3000};
@@ -130,7 +160,10 @@ protected:
     std::atomic_bool m_syncingState = {false};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
 
-    std::atomic_bool m_nodeUpdated = {false};
+    std::atomic_bool m_asMasterNode = {false};
+
+    std::function<void(uint32_t _version)> m_versionNotification;
+    uint32_t m_compatibilityVersion = (uint32_t)(bcos::protocol::DEFAULT_VERSION);
 };
 }  // namespace consensus
 }  // namespace bcos

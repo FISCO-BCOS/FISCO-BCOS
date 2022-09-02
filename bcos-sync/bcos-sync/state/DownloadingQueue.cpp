@@ -20,6 +20,7 @@
  */
 #include "DownloadingQueue.h"
 #include "bcos-sync/utilities/Common.h"
+#include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <future>
 
 using namespace std;
@@ -210,26 +211,34 @@ bool DownloadingQueue::verifyExecutedBlock(
 std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 {
     std::stringstream oss;
-    auto sealerList = _header->sealerList();
     std::stringstream sealerListStr;
-    for (auto const& sealer : sealerList)
-    {
-        sealerListStr << *toHexString(sealer) << ", ";
-    }
-    auto signatureList = _header->signatureList();
     std::stringstream signatureListStr;
-    for (auto const& signatureData : signatureList)
-    {
-        signatureListStr << (*toHexString(signatureData.signature)) << ":" << signatureData.index
-                         << ", ";
-    }
-
     std::stringstream weightsStr;
+
+    sealerListStr << "size: " << _header->sealerList().size();
+    signatureListStr << "size: " << _header->signatureList().size();
+    if (c_fileLogLevel >= TRACE)
+    {
+        auto sealerList = _header->sealerList();
+        sealerListStr << ", sealer list: ";
+        for (auto const& sealer : sealerList)
+        {
+            sealerListStr << *toHexString(sealer) << ", ";
+        }
+        auto signatureList = _header->signatureList();
+        signatureListStr << ", sign list: ";
+        for (auto const& signatureData : signatureList)
+        {
+            signatureListStr << (*toHexString(signatureData.signature)) << ":"
+                             << signatureData.index << ", ";
+        }
+    }
     auto weightList = _header->consensusWeights();
     for (auto const& weight : weightList)
     {
         weightsStr << weight << ", ";
     }
+
     auto parentInfo = _header->parentInfo();
     std::stringstream parentInfoStr;
     for (auto const& parent : parentInfo)
@@ -263,10 +272,15 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
         m_config->setExecutedBlock(m_config->blockNumber());
         return;
     }
+    if (blockHeader->number() <= m_config->executedBlock())
+    {
+        return;
+    }
     auto startT = utcTime();
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
     m_config->scheduler()->executeBlock(_block, true,
-        [self, startT, _block](Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader) {
+        [self, startT, _block](
+            Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader, bool _sysBlock) {
             auto orgBlockHeader = _block->blockHeader();
             try
             {
@@ -281,11 +295,38 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 {
                     // reset the executed number
                     BLKSYNC_LOG(WARNING)
-                        << LOG_DESC("applyBlock: executing the downloaded block failed and retry")
+                        << LOG_DESC("applyBlock: executing the downloaded block failed")
                         << LOG_KV("number", orgBlockHeader->number())
                         << LOG_KV("hash", orgBlockHeader->hash().abridged())
                         << LOG_KV("errorCode", _error->errorCode())
                         << LOG_KV("errorMessage", _error->errorMessage());
+                    if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
+                    {
+                        BLKSYNC_LOG(INFO)
+                            << LOG_DESC("fetchAndUpdatesLedgerConfig for InvalidBlocks");
+                        downloadQueue->fetchAndUpdatesLedgerConfig();
+                        return;
+                    }
+                    if (!config->masterNode())
+                    {
+                        BLKSYNC_LOG(INFO) << LOG_DESC(
+                            "applyBlock error: but do nothing for the node is not the master node");
+                        return;
+                    }
+                    {
+                        // re-push the block into blockQueue to retry later
+                        if (_block->blockHeader()->number() > config->blockNumber())
+                        {
+                            BLKSYNC_LOG(INFO)
+                                << LOG_DESC(
+                                       "applyBlock: executing the downloaded block failed, re-push "
+                                       "the block into executing queue")
+                                << LOG_KV("number", orgBlockHeader->number())
+                                << LOG_KV("hash", orgBlockHeader->hash().abridged());
+                            WriteGuard l(downloadQueue->x_blocks);
+                            downloadQueue->m_blocks.push(_block);
+                        }
+                    }
                     config->setExecutedBlock(config->blockNumber());
                     return;
                 }
@@ -294,17 +335,40 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     config->setExecutedBlock(config->blockNumber());
                     return;
                 }
-                config->setExecutedBlock(orgBlockHeader->number());
+                auto executedBlock = config->executedBlock();
+                if (orgBlockHeader->number() > executedBlock + 1)
+                {
+                    {
+                        WriteGuard lock(downloadQueue->x_blocks);
+                        downloadQueue->m_blocks.push(_block);
+                    }
+                    BLKSYNC_LOG(WARNING)
+                        << LOG_BADGE("Download")
+                        << LOG_DESC("BlockSync: re-push the appliedBlock for discontinuous")
+                        << LOG_KV("executedBlock", executedBlock)
+                        << LOG_KV("nextBlock", downloadQueue->m_config->nextBlock())
+                        << LOG_KV("number", orgBlockHeader->number())
+                        << LOG_KV("hash", orgBlockHeader->hash().abridged());
+                    return;
+                }
+                // Note: continue to execute the next block only after sysBlock is submitted
+                if (!_sysBlock)
+                {
+                    config->setExecutedBlock(orgBlockHeader->number());
+                }
                 auto signature = orgBlockHeader->signatureList();
-                BLKSYNC_LOG(INFO) << LOG_BADGE("Download")
+                BLKSYNC_LOG(INFO) << METRIC << LOG_BADGE("Download")
                                   << LOG_DESC("BlockSync: applyBlock success")
                                   << LOG_KV("number", orgBlockHeader->number())
                                   << LOG_KV("hash", orgBlockHeader->hash().abridged())
                                   << LOG_KV("signatureSize", signature.size())
                                   << LOG_KV("txsSize", _block->transactionsSize())
                                   << LOG_KV("nextBlock", downloadQueue->m_config->nextBlock())
+                                  << LOG_KV(
+                                         "executedBlock", downloadQueue->m_config->executedBlock())
                                   << LOG_KV("timeCost", (utcTime() - startT))
-                                  << LOG_KV("node", downloadQueue->m_config->nodeID()->shortHex());
+                                  << LOG_KV("node", downloadQueue->m_config->nodeID()->shortHex())
+                                  << LOG_KV("sysBlock", _sysBlock);
                 // verify and commit the block
                 downloadQueue->updateCommitQueue(_block);
             }
@@ -332,44 +396,54 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
         m_config->setExecutedBlock(m_config->blockNumber());
         return false;
     }
+    auto signature = blockHeader->signatureList();
+    BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("checkAndCommitBlock")
+                      << LOG_KV("number", blockHeader->number())
+                      << LOG_KV("signatureSize", signature.size())
+                      << LOG_KV("currentNumber", m_config->blockNumber())
+                      << LOG_KV("hash", blockHeader->hash().abridged());
+
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
-    m_config->consensus()->asyncCheckBlock(
-        _block, [self, _block, blockHeader](Error::Ptr _error, bool _ret) {
-            try
+    m_config->consensus()->asyncCheckBlock(_block, [self, _block, blockHeader](
+                                                       Error::Ptr _error, bool _ret) {
+        try
+        {
+            auto downloadQueue = self.lock();
+            if (!downloadQueue)
             {
-                auto downloadQueue = self.lock();
-                if (!downloadQueue)
-                {
-                    return;
-                }
-                if (_error)
-                {
-                    BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock error")
-                                         << LOG_KV("blockNumber", blockHeader->number())
-                                         << LOG_KV("hash", blockHeader->hash().abridged())
-                                         << LOG_KV("code", _error->errorCode())
-                                         << LOG_KV("msg", _error->errorMessage());
-                    downloadQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                    return;
-                }
-                if (_ret)
-                {
-                    downloadQueue->commitBlock(_block);
-                    return;
-                }
+                return;
+            }
+            if (_error)
+            {
+                BLKSYNC_LOG(WARNING)
+                    << LOG_DESC("asyncCheckBlock error")
+                    << LOG_KV("blockNumber", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
                 downloadQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock failed")
-                                     << LOG_KV("blockNumber", blockHeader->number())
-                                     << LOG_KV("hash", blockHeader->hash().abridged());
+                return;
             }
-            catch (std::exception const& e)
+            if (_ret)
             {
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
-                                     << LOG_KV("blockNumber", blockHeader->number())
-                                     << LOG_KV("hash", blockHeader->hash().abridged())
-                                     << LOG_KV("error", boost::diagnostic_information(e));
+                BLKSYNC_LOG(INFO) << LOG_DESC("asyncCheckBlock success, try to commit the block")
+                                  << LOG_KV("blockNumber", blockHeader->number())
+                                  << LOG_KV("hash", blockHeader->hash().abridged());
+                downloadQueue->commitBlock(_block);
+                return;
             }
-        });
+            downloadQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
+            BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock failed")
+                                 << LOG_KV("blockNumber", blockHeader->number())
+                                 << LOG_KV("hash", blockHeader->hash().abridged());
+        }
+        catch (std::exception const& e)
+        {
+            BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
+                                 << LOG_KV("blockNumber", blockHeader->number())
+                                 << LOG_KV("hash", blockHeader->hash().abridged())
+                                 << LOG_KV("error", boost::diagnostic_information(e));
+        }
+    });
     return true;
 }
 
@@ -415,7 +489,11 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
     // empty block
     if (_block->transactionsSize() == 0)
     {
+        BLKSYNC_LOG(INFO) << LOG_DESC("commitBlock: receive empty block, commitBlockState directly")
+                          << LOG_KV("number", blockHeader->number())
+                          << LOG_KV("hash", blockHeader->hash().abridged());
         commitBlockState(_block);
+        return;
     }
     // commit transaction firstly
     auto txsData = std::make_shared<std::vector<bytesConstPtr>>();
@@ -430,8 +508,9 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
             {
                 // maintain lifetime for tx
                 auto tx = _block->transaction(i);
-                auto encodedData = tx->encode(false);
-                (*txsData)[i] = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
+                bcos::bytes encodeData;
+                tx->encode(encodeData);
+                (*txsData)[i] = std::make_shared<bytes>(std::move(encodeData));
                 (*txsHashList)[i] = tx->hash();
             }
         });
@@ -449,14 +528,14 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
                 // store transaction failed
                 if (_error)
                 {
-                    downloadingQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
+                    downloadingQueue->onCommitFailed(_error, _block);
                     BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock: store transactions failed")
                                          << LOG_KV("number", blockHeader->number())
                                          << LOG_KV("hash", blockHeader->hash().abridged())
                                          << LOG_KV("txsSize", _block->transactionsSize());
                     return;
                 }
-                BLKSYNC_LOG(INFO) << LOG_DESC("commitBlock: store transactions success")
+                BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlock: store transactions success")
                                   << LOG_KV("number", blockHeader->number())
                                   << LOG_KV("hash", blockHeader->hash().abridged())
                                   << LOG_KV("txsSize", _block->transactionsSize())
@@ -490,26 +569,40 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             }
             if (_error != nullptr)
             {
-                downloadingQueue->m_config->setExecutedBlock(blockHeader->number() - 1);
-                BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlockState failed")
-                                     << LOG_KV("number", blockHeader->number())
-                                     << LOG_KV("hash", blockHeader->hash().abridged())
-                                     << LOG_KV("code", _error->errorCode())
-                                     << LOG_KV("message", _error->errorMessage());
+                BLKSYNC_LOG(WARNING)
+                    << LOG_DESC("commitBlockState failed")
+                    << LOG_KV("executedBlock", downloadingQueue->m_config->executedBlock())
+                    << LOG_KV("number", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
+                downloadingQueue->onCommitFailed(_error, _block);
                 return;
             }
             _ledgerConfig->setTxsSize(_block->transactionsSize());
             _ledgerConfig->setSealerId(blockHeader->sealer());
+            // reset the blockNumber
+            _ledgerConfig->setBlockNumber(blockHeader->number());
+            _ledgerConfig->setHash(blockHeader->hash());
             // notify the txpool the transaction result
             // reset the config for the consensus and the blockSync module
             // broadcast the status to all the peers
             // clear the expired cache
             downloadingQueue->finalizeBlock(_block, _ledgerConfig);
-            BLKSYNC_LOG(INFO) << LOG_DESC("commitBlockState success")
+            auto executedBlock = downloadingQueue->m_config->executedBlock();
+            if (executedBlock < blockHeader->number())
+            {
+                downloadingQueue->m_config->setExecutedBlock(blockHeader->number());
+            }
+            BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlockState success")
                               << LOG_KV("number", blockHeader->number())
                               << LOG_KV("hash", blockHeader->hash().abridged())
+                              << LOG_KV(
+                                     "executedBlock", downloadingQueue->m_config->executedBlock())
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
-                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex());
+                              << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex())
+                              << LOG_KV("txsSize", _block->transactionsSize())
+                              << LOG_KV("sealer", blockHeader->sealer());
         }
         catch (std::exception const& e)
         {
@@ -544,5 +637,124 @@ void DownloadingQueue::clearExpiredCache(BlockQueue& _queue, SharedMutex& _lock)
     while (!_queue.empty() && _queue.top()->blockHeader()->number() <= m_config->blockNumber())
     {
         _queue.pop();
+    }
+}
+
+void DownloadingQueue::onCommitFailed(
+    bcos::Error::Ptr _error, bcos::protocol::Block::Ptr _failedBlock)
+{
+    auto blockHeader = _failedBlock->blockHeader();
+    // case invalidBlocks
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC(
+                                    "onCommitFailed: the block has already been committed, return "
+                                    "directly")
+                             << LOG_KV("executedBlock", m_config->executedBlock())
+                             << LOG_KV("number", blockHeader->number())
+                             << LOG_KV("hash", blockHeader->hash().abridged())
+                             << LOG_KV("code", _error->errorCode())
+                             << LOG_KV("message", _error->errorMessage());
+        fetchAndUpdatesLedgerConfig();
+        return;
+    }
+    if (blockHeader->number() <= m_config->blockNumber())
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: drop the expired block")
+                          << LOG_KV("number", blockHeader->number())
+                          << LOG_KV("hash", blockHeader->hash().abridged())
+                          << LOG_KV("executedBlock", m_config->executedBlock());
+        return;
+    }
+    BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed") << LOG_KV("number", blockHeader->number())
+                      << LOG_KV("hash", blockHeader->hash().abridged())
+                      << LOG_KV("executedBlock", m_config->executedBlock());
+
+    // re-push failedBlock to commitQueue
+    {
+        WriteGuard l(x_commitQueue);
+        m_commitQueue.push(_failedBlock);
+    }
+    if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC(
+                                 "onCommitFailed for BlockIsCommitting: re-push failed "
+                                 "block to commitQueue")
+                          << LOG_KV("hash", blockHeader->hash().abridged())
+                          << LOG_KV("executedBlock", m_config->executedBlock());
+        // retry after 20ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        tryToCommitBlockToLedger();
+        return;
+    }
+    // fetchAndUpdatesLedgerConfig in case of the blocks commit success while get-system-config
+    // failed
+    fetchAndUpdatesLedgerConfig();
+    m_config->setExecutedBlock(blockHeader->number() - 1);
+    auto topBlock = top();
+    bcos::protocol::BlockNumber topNumber = std::numeric_limits<bcos::protocol::BlockNumber>::max();
+    if (topBlock)
+    {
+        topNumber = topBlock->blockHeader()->number();
+    }
+    size_t rePushedBlockCount = 0;
+    {
+        // re-push un-committed block into m_blocks
+        // Note: this operation is low performance and low frequency
+        WriteGuard l(x_commitQueue);
+        WriteGuard lock(x_blocks);
+        if (m_commitQueue.empty())
+        {
+            return;
+        }
+        // Note: since the applied block will be re-pushed into m_commitQueue again, no-need to
+        // write-back the poped block into commitQueue here
+        while (!m_commitQueue.empty())
+        {
+            auto topBlock = m_commitQueue.top();
+            if (topBlock->blockHeader()->number() >= topNumber)
+            {
+                break;
+            }
+            rePushedBlockCount++;
+            m_blocks.push(topBlock);
+            m_commitQueue.pop();
+        }
+    }
+    auto blocksTop = m_blocks.top();
+    BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: update commitQueue and executingQueue")
+                      << LOG_KV("commitQueueSize", m_commitQueue.size())
+                      << LOG_KV("blocksQueueSize", m_blocks.size())
+                      << LOG_KV("topNumber", topNumber)
+                      << LOG_KV("topBlock", blocksTop ? (blocksTop->blockHeader()->number()) : -1)
+                      << LOG_KV("rePushedBlockCount", rePushedBlockCount)
+                      << LOG_KV("executedBlock", m_config->executedBlock());
+}
+
+void DownloadingQueue::fetchAndUpdatesLedgerConfig()
+{
+    try
+    {
+        BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig");
+        m_ledgerFetcher->fetchBlockNumberAndHash();
+        m_ledgerFetcher->fetchConsensusNodeList();
+        // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
+        // txpool
+        m_ledgerFetcher->fetchObserverNodeList();
+        m_ledgerFetcher->fetchBlockTxCountLimit();
+        m_ledgerFetcher->fetchConsensusLeaderPeriod();
+        m_ledgerFetcher->fetchCompatibilityVersion();
+        auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+        BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig success")
+                          << LOG_KV("blockNumber", ledgerConfig->blockNumber())
+                          << LOG_KV("hash", ledgerConfig->hash().abridged())
+                          << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
+                          << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
+        m_config->resetConfig(ledgerConfig);
+    }
+    catch (std::exception const& e)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC("fetchAndUpdatesLedgerConfig exception")
+                             << LOG_KV("msg", boost::diagnostic_information(e));
     }
 }

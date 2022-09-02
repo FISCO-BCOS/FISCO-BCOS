@@ -6,7 +6,10 @@
 
 #pragma once
 
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libnetwork/SessionFace.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Timer.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -14,9 +17,6 @@
 #include <mutex>
 #include <set>
 #include <utility>
-
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>
 
 namespace bcos
 {
@@ -44,7 +44,7 @@ public:
     bool actived() const override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host);
+    virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
@@ -66,6 +66,17 @@ public:
         m_messageHandler = messageHandler;
     }
 
+    // handle before sending message, if the check fails, meaning false is returned, the message is
+    // not sent, and the SessionCallbackFunc will be performed
+    void setBeforeMessageHandler(
+        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> handler) override
+    {
+        m_beforeMessageHandler = handler;
+    }
+
+    void setHostNodeID(std::string const& _hostNodeID) { m_hostNodeID = _hostNodeID; }
+
+protected:
     virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback)
     {
         RecursiveGuard l(x_seq2Callback);
@@ -96,6 +107,8 @@ public:
         }
     }
 
+    virtual void checkNetworkStatus();
+
 private:
     void send(std::shared_ptr<bytes> _msg);
 
@@ -111,15 +124,13 @@ private:
     bool checkRead(boost::system::error_code _ec);
 
     void onTimeout(const boost::system::error_code& error, uint32_t seq);
-    void updateIdleTimer(std::shared_ptr<boost::asio::deadline_timer> _idleTimer);
-    void onIdle(const boost::system::error_code& error);
 
     /// Perform a single round of the write operation. This could end up calling
     /// itself asynchronously.
     void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer);
     void write();
 
-    /// call by doRead() to deal with mesage
+    /// call by doRead() to deal with message
     void onMessage(NetworkException const& e, Message::Ptr message);
 
     std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
@@ -152,29 +163,40 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+
+    std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> m_beforeMessageHandler;
+
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
-    uint64_t m_idleTimeInterval = 60;
+    uint64_t m_idleTimeInterval = 60 * 1000;
 
     // timer to check the connection
-    std::shared_ptr<boost::asio::deadline_timer> m_readIdleTimer;
-    std::shared_ptr<boost::asio::deadline_timer> m_writeIdleTimer;
+    std::atomic<uint64_t> m_lastReadTime;
+    std::atomic<uint64_t> m_lastWriteTime;
+    std::shared_ptr<bcos::Timer> m_idleCheckTimer;
+
+    std::string m_hostNodeID;
 };
 
 class SessionFactory
 {
 public:
+    SessionFactory(std::string const& _hostNodeID) : m_hostNodeID(_hostNodeID) {}
     virtual ~SessionFactory(){};
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
+        session->setHostNodeID(m_hostNodeID);
         session->setHost(_server);
         session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         return session;
     }
+
+private:
+    std::string m_hostNodeID;
 };
 
 }  // namespace gateway

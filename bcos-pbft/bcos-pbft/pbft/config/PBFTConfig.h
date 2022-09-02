@@ -27,9 +27,9 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
 
 namespace bcos
 {
@@ -54,7 +54,7 @@ public:
         m_frontService = _frontService;
         m_stateMachine = _stateMachine;
         m_storage = _storage;
-        m_timer = std::make_shared<PBFTTimer>(consensusTimeout());
+        m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
     }
 
     ~PBFTConfig() override {}
@@ -99,7 +99,8 @@ public:
         m_leaderSwitchPeriod.store(_leaderSwitchPeriod);
         // notify the sealer module to reset sealing
         notifyResetSealing(sealStartIndex());
-        PBFT_LOG(INFO) << LOG_DESC(
+        PBFT_LOG(INFO) << METRIC
+                       << LOG_DESC(
                               "updateLeaderSwitchPeriod and re-notify the sealer to seal block")
                        << LOG_KV("leader_period", m_leaderSwitchPeriod)
                        << LOG_KV("committedIndex", committedProposal()->index());
@@ -117,7 +118,7 @@ public:
     PBFTStorage::Ptr storage() { return m_storage; }
 
     std::string printCurrentState();
-    int64_t highWaterMark() { return m_progressedIndex + m_warterMarkLimit; }
+    int64_t highWaterMark() { return m_progressedIndex + m_waterMarkLimit; }
     int64_t lowWaterMark() { return m_lowWaterMark; }
     void setLowWaterMark(bcos::protocol::BlockNumber _index) { m_lowWaterMark = _index; }
 
@@ -155,8 +156,8 @@ public:
 
     StateMachineInterface::Ptr stateMachine() { return m_stateMachine; }
 
-    int64_t warterMarkLimit() const { return m_warterMarkLimit; }
-    void setWarterMarkLimit(int64_t _warterMarkLimit) { m_warterMarkLimit = _warterMarkLimit; }
+    int64_t waterMarkLimit() const { return m_waterMarkLimit; }
+    void setWaterMarkLimit(int64_t _waterMarkLimit) { m_waterMarkLimit = _waterMarkLimit; }
 
     int64_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
     void setCheckPointTimeoutInterval(int64_t _timeoutInterval)
@@ -168,6 +169,7 @@ public:
     {
         m_toView.store(m_view);
         m_timer->resetChangeCycle();
+        m_timeoutState.store(false);
     }
 
     uint64_t maxFaultyQuorum() const { return m_maxFaultyQuorum; }
@@ -212,7 +214,8 @@ public:
             m_startRecovered.store(true);
         }
         // reset the timer when reach a new-view
-        resetTimer();
+        m_timeoutState.store(false);
+        freshTimer();
         // update the changeCycle
         timer()->resetChangeCycle();
         setView(_view);
@@ -226,13 +229,6 @@ public:
         {
             m_timer->start();
         }
-    }
-
-    virtual void resetTimer()
-    {
-        // reset the timeout state to false
-        m_timeoutState.store(false);
-        freshTimer();
     }
 
     virtual void freshTimer()
@@ -301,7 +297,7 @@ public:
     void setConsensusNodeList(ConsensusNodeList& _consensusNodeList) override
     {
         ConsensusConfig::setConsensusNodeList(_consensusNodeList);
-        if (!m_nodeUpdated)
+        if (!m_consensusNodeListUpdated)
         {
             return;
         }
@@ -352,6 +348,8 @@ public:
 
     virtual bool startRecovered() const { return m_startRecovered; }
 
+    bcos::protocol::BlockNumber waitSealUntil() { return m_waitSealUntil; }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
@@ -395,7 +393,7 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_sealStartIndex = {0};
     std::atomic<bcos::protocol::BlockNumber> m_sealEndIndex = {0};
 
-    int64_t m_warterMarkLimit = 10;
+    int64_t m_waterMarkLimit = 50;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
@@ -418,6 +416,8 @@ protected:
     std::atomic_bool m_startRecovered = {false};
 
     std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
+
+    mutable RecursiveMutex m_mutex;
 };
 }  // namespace consensus
 }  // namespace bcos

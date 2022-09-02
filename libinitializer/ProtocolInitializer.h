@@ -19,12 +19,12 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "libinitializer/Common.h"
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/libtool/NodeConfig.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-tool/NodeConfig.h>
 
 namespace bcos
 {
@@ -34,7 +34,7 @@ class ProtocolInitializer
 {
 public:
     using Ptr = std::shared_ptr<ProtocolInitializer>;
-    ProtocolInitializer() : m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>()) {}
+    ProtocolInitializer();
     virtual ~ProtocolInitializer() {}
 
     virtual void init(bcos::tool::NodeConfig::Ptr _nodeConfig);
@@ -48,8 +48,8 @@ public:
     }
 
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
-
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
+    bcos::security::DataEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
 
 private:
     void createCryptoSuite();
@@ -62,6 +62,7 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
+    bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
 };
 }  // namespace initializer
 }  // namespace bcos

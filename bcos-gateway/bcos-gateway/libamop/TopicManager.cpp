@@ -18,10 +18,15 @@
  * @date 2021-06-18
  */
 
+#include "bcos-tars-protocol/Common.h"
+#include "bcos-utilities/BoostLog.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-gateway/libamop/TopicManager.h>
 #include <json/json.h>
+#include <servant/Application.h>
 #include <algorithm>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::amop;
@@ -139,6 +144,10 @@ bool TopicManager::queryTopicItemsByClient(const std::string& _client, TopicItem
 void TopicManager::removeTopics(
     const std::string& _client, std::vector<std::string> const& _topicList)
 {
+    if (_topicList.size() == 0)
+    {
+        return;
+    }
     {
         std::unique_lock lock(x_clientTopics);
         if (!m_client2TopicItems.count(_client))
@@ -151,25 +160,26 @@ void TopicManager::removeTopics(
             {
                 m_client2TopicItems[_client].erase(topic);
             }
+            TOPIC_LOG(INFO) << LOG_BADGE("removeTopics") << LOG_KV("client", _client)
+                            << LOG_KV("topicSeq", topicSeq()) << LOG_KV("topic", topic);
         }
         incTopicSeq();
     }
-    TOPIC_LOG(INFO) << LOG_BADGE("removeTopics") << LOG_KV("client", _client)
-                    << LOG_KV("topicSeq", topicSeq());
 }
 
-void TopicManager::removeTopicsByClients(const std::vector<std::string>& _clients)
+void TopicManager::removeTopicsByClient(const std::string& _client)
 {
-    std::unique_lock lock(x_clientTopics);
-    for (auto const& client : _clients)
+    std::size_t result = 0;
     {
-        if (m_client2TopicItems.count(client))
-        {
-            m_client2TopicItems.erase(client);
-        }
-        TOPIC_LOG(INFO) << LOG_BADGE("removeTopicsByClients") << LOG_KV("client", client);
+        std::unique_lock lock(x_clientTopics);
+
+        result = m_client2TopicItems.erase(_client);
     }
+
     incTopicSeq();
+
+    TOPIC_LOG(INFO) << LOG_BADGE("removeTopicsByClient") << LOG_KV("client", _client)
+                    << LOG_KV("success", result);
 }
 
 /**
@@ -349,7 +359,7 @@ void TopicManager::queryNodeIDsByTopic(
         auto findIt = std::find_if(it->second.begin(), it->second.end(),
             [_topic](const TopicItem& _topicItem) { return _topic == _topicItem.topicName(); });
         // only return the connected nodes
-        if (findIt != it->second.end() && m_network->connected(it->first))
+        if (findIt != it->second.end() && m_network->isReachable(it->first))
         {
             _nodeIDs.push_back(it->first);
         }
@@ -383,69 +393,96 @@ void TopicManager::queryClientsByTopic(
                     << LOG_KV("clients size", _clients.size());
 }
 
+//
+bcos::rpc::RPCInterface::Ptr TopicManager::createAndGetServiceByClient(std::string const& _clientID)
+{
+    try
+    {
+        UpgradableGuard l(x_clientInfo);
+        if (m_clientInfo.count(_clientID))
+        {
+            return m_clientInfo[_clientID];
+        }
+
+        auto serviceName = m_rpcServiceName;
+
+        auto topicManagerWeakPtr = std::weak_ptr<TopicManager>(shared_from_this());
+        auto servicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
+            tars::Application::getCommunicator().get(), _clientID,
+            bcostars::TarsServantProxyOnConnectHandler(),
+            [serviceName, topicManagerWeakPtr](const tars::TC_Endpoint& ep) {
+                auto topicManager = topicManagerWeakPtr.lock();
+                if (!topicManager)
+                {
+                    return;
+                }
+
+                auto endPointUrl = bcostars::endPointToString(serviceName, ep);
+                topicManager->removeTopicsByClient(endPointUrl);
+            });
+
+        auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
+
+        {
+            UpgradeGuard ul(l);
+            m_clientInfo[_clientID] = rpcClient;
+        }
+
+        TOPIC_LOG(INFO) << LOG_DESC("createAndGetServiceByClient") << LOG_KV("clientID", _clientID);
+        return rpcClient;
+    }
+    catch (std::exception const& e)
+    {
+        TOPIC_LOG(WARNING) << LOG_DESC("createAndGetServiceByClient exception")
+                           << LOG_KV("error", boost::diagnostic_information(e));
+    }
+    return nullptr;
+}
+
 void TopicManager::notifyRpcToSubscribeTopics()
 {
     try
     {
-        auto servicePrx = Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(
-            m_rpcServiceName);
-        auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
+        auto servicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(m_rpcServiceName);
+
+        auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
+
+        auto activeEndPoints = bcostars::tarsProxyAvailableEndPoints(rpcClient->prx());
+
         TOPIC_LOG(INFO) << LOG_DESC("notifyRpcToSubscribeTopics")
                         << LOG_KV("rpcServiceName", m_rpcServiceName)
-                        << LOG_KV("activeEndPoints", activeEndPoints.size());
-        rpcClient->prx()->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+                        << LOG_KV("activeEndPoints size", activeEndPoints.size());
+
         for (auto const& endPoint : activeEndPoints)
         {
-            auto endPointStr = m_rpcServiceName + "@tcp -h " + endPoint.getEndpoint().getHost() +
-                               " -p " +
-                               boost::lexical_cast<std::string>(endPoint.getEndpoint().getPort());
+            auto endPointStr = bcostars::endPointToString(m_rpcServiceName, endPoint);
+
             auto servicePrx =
-                Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
-            auto serviceClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
-            serviceClient->asyncNotifySubscribeTopic([endPointStr](Error::Ptr _error) {
-                TOPIC_LOG(INFO) << LOG_DESC("asyncNotifySubscribeTopic")
-                                << LOG_KV("endPoint", endPointStr)
-                                << LOG_KV("code", _error ? _error->errorCode() : 0)
-                                << LOG_KV("msg", _error ? _error->errorMessage() : "success");
-            });
+                bcostars::createServantProxy<bcostars::RpcServicePrx>(m_rpcServiceName, endPoint);
+
+            auto serviceClient =
+                std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
+            serviceClient->asyncNotifySubscribeTopic(
+                [this, endPointStr](Error::Ptr _error, std::string _topicInfo) {
+                    if (_error)
+                    {
+                        TOPIC_LOG(INFO) << LOG_DESC("asyncNotifySubscribeTopic error")
+                                        << LOG_KV("endPoint", endPointStr)
+                                        << LOG_KV("code", _error->errorCode())
+                                        << LOG_KV("msg", _error->errorMessage());
+                        return;
+                    }
+                    TOPIC_LOG(INFO)
+                        << LOG_DESC("asyncNotifySubscribeTopic success")
+                        << LOG_KV("endPoint", endPointStr) << LOG_KV("topicInfo", _topicInfo);
+
+                    subTopic(endPointStr, _topicInfo);
+                });
         }
     }
     catch (std::exception const& e)
     {
         TOPIC_LOG(WARNING) << LOG_DESC("notifyRpcToSubscribeTopics exception")
                            << LOG_KV("error", boost::diagnostic_information(e));
-    }
-}
-
-void TopicManager::checkClientConnection()
-{
-    m_timer->restart();
-    std::vector<std::string> clientsToRemove;
-    {
-        std::unique_lock lock(x_clientInfo);
-        for (auto it = m_clientInfo.begin(); it != m_clientInfo.end();)
-        {
-            try
-            {
-                auto rpcClient = std::dynamic_pointer_cast<bcostars::RpcServiceClient>(it->second);
-                rpcClient->prx()->tars_ping();
-                it++;
-                continue;
-            }
-            catch (std::exception const& e)
-            {
-                TOPIC_LOG(INFO) << LOG_DESC("checkClientConnection exception")
-                                << LOG_KV("error", boost::diagnostic_information(e));
-            }
-            {
-                TOPIC_LOG(INFO) << LOG_DESC("checkClientConnection: remove disconnected client")
-                                << LOG_KV("client", it->first);
-                clientsToRemove.emplace_back(it->first);
-                it = m_clientInfo.erase(it);
-            }
-        }
-        removeTopicsByClients(clientsToRemove);
     }
 }

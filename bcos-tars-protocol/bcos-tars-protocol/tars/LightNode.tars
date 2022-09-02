@@ -1,0 +1,68 @@
+#include "Block.tars"
+#include "Transaction.tars"
+#include "TransactionReceipt.tars"
+#include "CommonProtocol.tars"
+
+module bcostars {
+
+struct RequestBlock
+{
+    1 optional unsigned int blockNumber;
+    2 optional bool onlyHeader;
+};
+
+struct ResponseBlock
+{
+    1 optional Error error;
+    2 optional Block block;
+};
+
+struct RequestTransactions
+{
+    1 optional vector<vector<byte>> hashes;
+    2 optional bool withProof;
+};
+
+struct ResponseTransactions
+{
+    1 optional Error error;
+    2 optional vector<Transaction> transactions;
+};
+
+struct RequestReceipts
+{
+    1 optional vector<vector<byte>> hashes;
+    2 optional bool withProof;
+};
+
+struct ResponseReceipts
+{
+    1 optional Error error;
+    2 optional vector<TransactionReceipt> receipts;
+};
+
+struct RequestGetStatus
+{
+    0 optional int nothing;
+};
+
+struct ResponseGetStatus
+{
+    1 optional Error error;
+    2 optional unsigned int total;
+    3 optional unsigned int failed;
+    4 optional unsigned int blockNumber; 
+};
+
+struct RequestSendTransaction
+{
+    1 optional Transaction transaction;
+};
+
+struct ResponseSendTransaction
+{
+    1 optional Error error;
+    2 optional TransactionReceipt receipt;
+};
+
+};

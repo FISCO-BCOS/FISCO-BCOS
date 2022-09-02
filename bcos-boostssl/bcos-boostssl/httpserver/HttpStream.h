@@ -19,9 +19,9 @@
  */
 #pragma once
 #include <bcos-boostssl/httpserver/Common.h>
-#include <bcos-boostssl/utilities/Common.h>
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-boostssl/websocket/WsTools.h>
+#include <bcos-utilities/Common.h>
 #include <boost/beast/ssl/ssl_stream.hpp>
 #include <memory>
 #include <stdexcept>
@@ -46,7 +46,7 @@ public:
 public:
     virtual boost::beast::tcp_stream& stream() = 0;
 
-    virtual ws::WsStream::Ptr wsStream() = 0;
+    virtual ws::WsStreamDelegate::Ptr wsStream() = 0;
 
     virtual bool open() = 0;
     virtual void close() = 0;
@@ -92,8 +92,13 @@ public:
         return std::string("");
     }
 
+    virtual std::string moduleName() { return m_moduleName; }
+    virtual void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+
+
 protected:
     std::atomic<bool> m_closed{false};
+    std::string m_moduleName = "DEFAULT";
 };
 
 // The http stream
@@ -103,8 +108,10 @@ public:
     using Ptr = std::shared_ptr<HttpStreamImpl>;
 
 public:
-    HttpStreamImpl(std::shared_ptr<boost::beast::tcp_stream> _stream) : m_stream(_stream)
+    HttpStreamImpl(std::shared_ptr<boost::beast::tcp_stream> _stream, std::string _moduleName)
+      : m_stream(_stream)
     {
+        setModuleName(_moduleName);
         HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStreamImpl]", this);
     }
     virtual ~HttpStreamImpl()
@@ -116,13 +123,11 @@ public:
 public:
     virtual boost::beast::tcp_stream& stream() override { return *m_stream; }
 
-    virtual ws::WsStream::Ptr wsStream() override
+    virtual ws::WsStreamDelegate::Ptr wsStream() override
     {
-        auto wsStream = std::make_shared<ws::WsStreamImpl>(
-            std::make_shared<boost::beast::websocket::stream<boost::beast::tcp_stream>>(
-                std::move(*m_stream)));
         m_closed.store(true);
-        return wsStream;
+        auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
+        return builder->build(m_stream, m_moduleName);
     }
 
     virtual bool open() override
@@ -162,10 +167,10 @@ public:
         boost::beast::http::async_write(*m_stream, _httpResp, _handler);
     }
 
+
 private:
     std::shared_ptr<boost::beast::tcp_stream> m_stream;
 };
-
 
 // The http stream
 class HttpStreamSslImpl : public HttpStream, public std::enable_shared_from_this<HttpStreamSslImpl>
@@ -174,9 +179,11 @@ public:
     using Ptr = std::shared_ptr<HttpStreamSslImpl>;
 
 public:
-    HttpStreamSslImpl(std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
+    HttpStreamSslImpl(std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream,
+        std::string _moduleName)
       : m_stream(_stream)
     {
+        setModuleName(_moduleName);
         HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStreamSslImpl]", this);
     }
 
@@ -189,14 +196,11 @@ public:
 public:
     virtual boost::beast::tcp_stream& stream() override { return m_stream->next_layer(); }
 
-    virtual ws::WsStream::Ptr wsStream() override
+    virtual ws::WsStreamDelegate::Ptr wsStream() override
     {
-        auto stream = std::make_shared<
-            boost::beast::websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>>>(
-            std::move(*m_stream));
         m_closed.store(true);
-        auto wsStream = std::make_shared<ws::WsStreamSslImpl>(stream);
-        return wsStream;
+        auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
+        return builder->build(m_stream, m_moduleName);
     }
 
     virtual bool open() override
@@ -248,15 +252,17 @@ public:
     using Ptr = std::shared_ptr<HttpStreamFactory>;
 
 public:
-    HttpStream::Ptr buildHttpStream(std::shared_ptr<boost::beast::tcp_stream> _stream)
+    HttpStream::Ptr buildHttpStream(
+        std::shared_ptr<boost::beast::tcp_stream> _stream, std::string _moduleName)
     {
-        return std::make_shared<HttpStreamImpl>(_stream);
+        return std::make_shared<HttpStreamImpl>(_stream, _moduleName);
     }
 
     HttpStream::Ptr buildHttpStream(
-        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
+        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream,
+        std::string _moduleName)
     {
-        return std::make_shared<HttpStreamSslImpl>(_stream);
+        return std::make_shared<HttpStreamSslImpl>(_stream, _moduleName);
     }
 };
 }  // namespace http

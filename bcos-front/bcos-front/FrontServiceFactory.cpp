@@ -18,10 +18,10 @@
  * @date 2021-05-20
  */
 
-#include <bcos-framework/libutilities/Exceptions.h>
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
+#include <bcos-utilities/Exceptions.h>
 
 using namespace bcos;
 using namespace front;

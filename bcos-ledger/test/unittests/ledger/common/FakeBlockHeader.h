@@ -19,11 +19,12 @@
  */
 
 #pragma once
-#include "libprotocol/Common.h"
-#include "libprotocol/protobuf/PBBlockHeaderFactory.h"
-#include "libutilities/Common.h"
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include "bcos-protocol/Common.h"
+#include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -78,7 +79,7 @@ inline std::vector<bytes> fakeSealerList(
     std::vector<bytes> sealerList;
     for (size_t i = 0; i < size; i++)
     {
-        auto keyPair = _signImpl->generateKeyPair();
+        bcos::crypto::KeyPairInterface::Ptr keyPair = _signImpl->generateKeyPair();
         _keyPairVec.emplace_back(keyPair);
         sealerList.emplace_back(*(keyPair->publicKey()->encode()));
     }
@@ -92,7 +93,7 @@ inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
     SignatureList signatureList;
     for (auto keyPair : _keyPairVec)
     {
-        auto signature = _signImpl->sign(keyPair, _hash);
+        auto signature = _signImpl->sign(*keyPair, _hash);
         Signature sig;
         sig.index = sealerIndex++;
         sig.signature = *signature;

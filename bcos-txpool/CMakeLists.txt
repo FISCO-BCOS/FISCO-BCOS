@@ -19,19 +19,14 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-txpool VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-txpool VERSION ${VERSION})
 
-file(GLOB_RECURSE SRCS bcos-txpool/*.cpp)
+set(PROTO_PATH ${PROJECT_SOURCE_DIR})
+set(SYNC_PROTO_GENERATE_BASE_DIR ${CMAKE_CURRENT_BINARY_DIR})
+set(SYNC_PROTO_SUB_DIR "bcos-txpool/sync/protocol/proto")
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-txpool)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_BINARY_DIR}/bcos-framework)
-
-add_library(txpool ${SRCS})
-target_compile_options(txpool PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(txpool PUBLIC framework)
+add_subdirectory(bcos-txpool)
 
 if (TESTS)
     enable_testing()

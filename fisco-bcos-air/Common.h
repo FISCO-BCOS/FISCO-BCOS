@@ -19,9 +19,7 @@
  */
 
 #pragma once
-#include "libinitializer/Common.h"
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
+#include "bcos-utilities/Common.h"
 #include <atomic>
 #include <chrono>
 #include <ctime>
@@ -36,7 +34,12 @@ class ExitHandler
 {
 public:
     void exit() { exitHandler(0); }
-    static void exitHandler(int) { ExitHandler::c_shouldExit.store(true); }
+    static void exitHandler(int signal)
+    {
+        std::cout << "[" << bcos::getCurrentDateTime() << "] "
+                  << "exit because receive signal " << signal << std::endl;
+        ExitHandler::c_shouldExit.store(true);
+    }
     bool shouldExit() const { return ExitHandler::c_shouldExit.load(); }
 
     static std::atomic_bool c_shouldExit;
@@ -51,91 +54,6 @@ void setDefaultOrCLocale()
         setenv("LC_ALL", "C", 1);
     }
 #endif
-}
-
-struct Params
-{
-    std::string configFilePath;
-    std::string genesisFilePath;
-    float txSpeed;
-};
-
-Params initLocalNodeCommandLine(int argc, const char* argv[], bool _autoSendTx)
-{
-    boost::program_options::options_description main_options("Usage of FISCO-BCOS");
-    main_options.add_options()("help,h", "print help information")(
-        "version,v", "version of FISCO-BCOS")("config,c",
-        boost::program_options::value<std::string>()->default_value("./config.ini"),
-        "config file path, eg. config.ini")("genesis,g",
-        boost::program_options::value<std::string>()->default_value("./config.genesis"),
-        "genesis config file path, eg. genesis.ini");
-
-    if (_autoSendTx)
-    {
-        main_options.add_options()(
-            "txSpeed,t", boost::program_options::value<float>(), "transaction generate speed");
-    }
-    boost::program_options::variables_map vm;
-    try
-    {
-        boost::program_options::store(
-            boost::program_options::parse_command_line(argc, argv, main_options), vm);
-    }
-    catch (...)
-    {
-        std::cout << "invalid parameters" << std::endl;
-        std::cout << main_options << std::endl;
-        exit(0);
-    }
-    /// help information
-    if (vm.count("help") || vm.count("h"))
-    {
-        std::cout << main_options << std::endl;
-        exit(0);
-    }
-    /// version information
-    if (vm.count("version") || vm.count("v"))
-    {
-        bcos::initializer::printVersion();
-        exit(0);
-    }
-    std::string configPath("./config.ini");
-    if (vm.count("config"))
-    {
-        configPath = vm["config"].as<std::string>();
-    }
-    if (vm.count("c"))
-    {
-        configPath = vm["c"].as<std::string>();
-    }
-    std::string genesisFilePath("./config.genesis");
-    if (vm.count("genesis"))
-    {
-        genesisFilePath = vm["genesis"].as<std::string>();
-    }
-    if (vm.count("g"))
-    {
-        genesisFilePath = vm["g"].as<std::string>();
-    }
-    if (!boost::filesystem::exists(configPath))
-    {
-        std::cout << "config \'" << configPath << "\' not found!";
-        exit(0);
-    }
-    if (!boost::filesystem::exists(genesisFilePath))
-    {
-        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
-        exit(0);
-    }
-    float txSpeed = 10;
-    if (_autoSendTx)
-    {
-        if (vm.count("txSpeed") || vm.count("t"))
-        {
-            txSpeed = vm["txSpeed"].as<float>();
-        }
-    }
-    return Params{configPath, genesisFilePath, txSpeed};
 }
 }  // namespace node
 }  // namespace bcos

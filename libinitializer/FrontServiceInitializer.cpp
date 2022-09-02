@@ -19,6 +19,16 @@
  * @date 2021-06-10
  */
 #include "FrontServiceInitializer.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "libinitializer/ProtocolInitializer.h"
+#include <bcos-framework/consensus/ConsensusInterface.h>
+#include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/gateway/GroupNodeInfo.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-tars-protocol/tars/LightNode.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 using namespace bcos;
 using namespace bcos::initializer;
@@ -32,7 +42,9 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
-    auto threadPool = std::make_shared<ThreadPool>("frontService", 1);
+    // make the threadpool configurable
+    auto threadPool =
+        std::make_shared<ThreadPool>("frontService", std::thread::hardware_concurrency());
     frontServiceFactory->setThreadPool(threadPool);
     m_front = frontServiceFactory->buildFrontService(
         m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
@@ -104,6 +116,21 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                     }
                 });
         });
+
+    // register the message dispatcher for the consensus txs sync module
+    m_front->registerModuleMessageDispatcher(bcos::protocol::ModuleID::ConsTxsSync,
+        [_txpool](
+            bcos::crypto::NodeIDPtr _nodeID, std::string const& _id, bcos::bytesConstRef _data) {
+            _txpool->asyncNotifyTxsSyncMessage(
+                nullptr, _id, _nodeID, _data, [_id](bcos::Error::Ptr _error) {
+                    if (_error)
+                    {
+                        FRONTSERVICE_LOG(WARNING) << LOG_DESC("asyncNotifyTxsSyncMessage failed")
+                                                  << LOG_KV("code", _error->errorCode())
+                                                  << LOG_KV("msg", _error->errorMessage());
+                    }
+                });
+        });
     FRONTSERVICE_LOG(INFO) << LOG_DESC(
         "registerModuleMessageDispatcher for the txsSync module success");
 
@@ -126,36 +153,38 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
     FRONTSERVICE_LOG(INFO) << LOG_DESC(
         "registerModuleMessageDispatcher for the BlockSync module success");
 
-    // register the GetNodeIDsDispatcher to the frontService
-    m_front->registerModuleNodeIDsDispatcher(bcos::protocol::ModuleID::TxsSync,
-        [_txpool](std::shared_ptr<const bcos::crypto::NodeIDs> _nodeIDs,
+    // register the groupNodeInfo notification to the frontService
+    // Note: since txpool/blocksync/pbft are in the same module, they can share the same
+    // GroupNodeInfoNotification
+    m_front->registerGroupNodeInfoNotification(bcos::protocol::ModuleID::TxsSync,
+        [this, _txpool, _blockSync, _pbft](bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
             bcos::front::ReceiveMsgFunc _receiveMsgCallback) {
-            auto nodeIdSet = bcos::crypto::NodeIDSet(_nodeIDs->begin(), _nodeIDs->end());
+            auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+            bcos::crypto::NodeIDSet nodeIdSet;
+            for (auto const& nodeID : nodeIDList)
+            {
+                auto nodeIDPtr = keyFactory()->createKey(fromHex(nodeID));
+                if (!nodeIDPtr)
+                {
+                    continue;
+                }
+                nodeIdSet.insert(nodeIDPtr);
+            }
             _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
-            FRONTSERVICE_LOG(DEBUG) << LOG_DESC("TxPool: notifyConnectedNodes")
-                                    << LOG_KV("connectedNodeSize", nodeIdSet.size());
-        });
-
-    FRONTSERVICE_LOG(INFO) << LOG_DESC(
-        "registerModuleNodeIDsDispatcher for the TxsSync module success");
-
-    m_front->registerModuleNodeIDsDispatcher(bcos::protocol::ModuleID::BlockSync,
-        [_blockSync](std::shared_ptr<const bcos::crypto::NodeIDs> _nodeIDs,
-            bcos::front::ReceiveMsgFunc _receiveMsgCallback) {
-            auto nodeIdSet = bcos::crypto::NodeIDSet(_nodeIDs->begin(), _nodeIDs->end());
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
-            FRONTSERVICE_LOG(DEBUG) << LOG_DESC("BlockSync: notifyConnectedNodes")
-                                    << LOG_KV("connectedNodeSize", nodeIdSet.size());
-        });
-
-    FRONTSERVICE_LOG(INFO) << LOG_DESC(
-        "registerModuleNodeIDsDispatcher for the BlockSync module success");
-    m_front->registerModuleNodeIDsDispatcher(bcos::protocol::ModuleID::PBFT,
-        [_pbft](std::shared_ptr<const bcos::crypto::NodeIDs> _nodeIDs,
-            bcos::front::ReceiveMsgFunc _receiveMsgCallback) {
-            auto nodeIdSet = bcos::crypto::NodeIDSet(_nodeIDs->begin(), _nodeIDs->end());
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
-            FRONTSERVICE_LOG(DEBUG) << LOG_DESC("PBFT: notifyConnectedNodes")
-                                    << LOG_KV("connectedNodeSize", nodeIdSet.size());
+            FRONTSERVICE_LOG(DEBUG)
+                << LOG_DESC("notifyGroupNodeInfo") << LOG_KV("connectedNodeSize", nodeIdSet.size());
         });
+    FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
+}
+
+
+bcos::crypto::KeyFactory::Ptr FrontServiceInitializer::keyFactory()
+{
+    return m_protocolInitializer->keyFactory();
+}
+bcos::front::FrontServiceInterface::Ptr FrontServiceInitializer::front()
+{
+    return m_front;
 }

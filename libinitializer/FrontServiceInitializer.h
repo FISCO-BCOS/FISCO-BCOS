@@ -19,46 +19,66 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "Common/TarsUtils.h"
-#include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-front/FrontServiceFactory.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
+#include <bcos-tool/NodeConfig.h>
+#include <memory>
 
 namespace bcos
 {
+namespace consensus
+{
+class ConsensusInterface;
+}
+namespace sync
+{
+class BlockSyncInterface;
+}
+namespace txpool
+{
+class TxPoolInterface;
+}
+namespace gateway
+{
+class GatewayInterface;
+}
+namespace front
+{
+class FrontService;
+}
+
 namespace initializer
 {
+class ProtocolInitializer;
+
 class FrontServiceInitializer
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceInitializer>;
     FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
-        bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer,
-        bcos::gateway::GatewayInterface::Ptr _gateWay);
+        std::shared_ptr<bcos::initializer::ProtocolInitializer> _protocolInitializer,
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateWay);
     virtual ~FrontServiceInitializer() { stop(); }
 
-    virtual void init(bcos::consensus::ConsensusInterface::Ptr _pbft,
-        bcos::sync::BlockSyncInterface::Ptr _blockSync, bcos::txpool::TxPoolInterface::Ptr _txpool);
+    virtual void init(std::shared_ptr<bcos::consensus::ConsensusInterface> _pbft,
+        std::shared_ptr<bcos::sync::BlockSyncInterface> _blockSync,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txpool);
     virtual void start();
     virtual void stop();
 
-    bcos::front::FrontService::Ptr front() { return m_front; }
-    bcos::crypto::KeyFactory::Ptr keyFactory() { return m_protocolInitializer->keyFactory(); }
+    bcos::front::FrontServiceInterface::Ptr front();
+    bcos::crypto::KeyFactory::Ptr keyFactory();
 
 protected:
-    virtual void initMsgHandlers(bcos::consensus::ConsensusInterface::Ptr _pbft,
-        bcos::sync::BlockSyncInterface::Ptr _blockSync, bcos::txpool::TxPoolInterface::Ptr _txpool);
+    virtual void initMsgHandlers(std::shared_ptr<bcos::consensus::ConsensusInterface> _pbft,
+        std::shared_ptr<bcos::sync::BlockSyncInterface> _blockSync,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txpool);
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
-    bcos::initializer::ProtocolInitializer::Ptr m_protocolInitializer;
-    bcos::gateway::GatewayInterface::Ptr m_gateWay;
+    std::shared_ptr<bcos::initializer::ProtocolInitializer> m_protocolInitializer;
+    std::shared_ptr<bcos::gateway::GatewayInterface> m_gateWay;
 
-    bcos::front::FrontService::Ptr m_front;
+    std::shared_ptr<bcos::front::FrontService> m_front;
     std::atomic_bool m_running = {false};
 };
 }  // namespace initializer

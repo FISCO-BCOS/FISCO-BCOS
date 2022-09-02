@@ -1,7 +1,7 @@
 #pragma once
 
-#include "bcos-framework/libprotocol/LogEntry.h"
-#include "bcos-framework/libutilities/Common.h"
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-utilities/Common.h>
 #include <memory>
 #include <string>
 
@@ -15,9 +15,9 @@ struct CallParameters
     enum Type : int8_t
     {
         MESSAGE = 0,
-        KEY_LOCK,
-        FINISHED,
-        REVERT,
+        KEY_LOCK = 1,
+        FINISHED = 2,
+        REVERT = 3,
     };
 
     explicit CallParameters(Type _type) : type(_type) {}
@@ -38,6 +38,7 @@ struct CallParameters
 
     int64_t gas = 0;   // common field
     bcos::bytes data;  // common field, transaction data, binary format
+    std::string abi;   // common field, contract abi, json format
 
     std::vector<std::string> keyLocks;  // common field
     std::string acquireKeyLock;         // by response
@@ -49,7 +50,59 @@ struct CallParameters
 
     int32_t status = 0;  // by response
     Type type;
-    bool staticCall = false;  // common field
-    bool create = false;      // by request, is create
+    bool staticCall = false;      // common field
+    bool create = false;          // by request, is creation
+    bool internalCreate = false;  // by internal precompiled request, is creation
+    /**
+     * Internal precompiled contract request, this option is used to
+     * modify contract table, which address scheduled by 'to', by a
+     * certain precompiled contract
+     */
+    bool internalCall = false;
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "[" << contextID << "|" << seq << "|";
+        switch (type)
+        {
+        case MESSAGE:
+            ss << "MESSAGE";
+            break;
+        case KEY_LOCK:
+            ss << "KEY_LOCK";
+            break;
+        case FINISHED:
+            ss << "FINISHED";
+            break;
+        case REVERT:
+            ss << "REVERT";
+            break;
+        };
+        ss << "]";
+        return ss.str();
+    }
+
+    // this method only for trace log
+    std::string toFullString()
+    {
+        std::stringstream ss;
+        // clang-format off
+        ss << toString()
+           << "senderAddress:" << senderAddress << "|"
+           << "codeAddress:" << codeAddress << "|"
+           << "receiveAddress:" << receiveAddress << "|"
+           << "origin:" << origin << "|"
+           << "gas:" << gas << "|"
+           << "dataSize:" << data.size() << "|"
+           << "abiSize:" << abi.size() << "|"
+           << "acquireKeyLock:" << acquireKeyLock << "|"
+           << "message:" << message << "|"
+           << "newEVMContractAddress:" << newEVMContractAddress << "|"
+           << "staticCall:" << staticCall << "|"
+           << "create :" << create << "|";
+        // clang-format on
+        return ss.str();
+    }
 };
 }  // namespace bcos::executor

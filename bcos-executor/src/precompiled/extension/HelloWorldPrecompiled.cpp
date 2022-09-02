@@ -20,8 +20,8 @@
 
 #include "HelloWorldPrecompiled.h"
 #include "../../executive/BlockContext.h"
-#include "../PrecompiledResult.h"
-#include "../Utilities.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -54,27 +54,20 @@ HelloWorldPrecompiled::HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl) : Prec
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET, _hashImpl);
 }
 
-std::string HelloWorldPrecompiled::toString()
-{
-    return "HelloWorld";
-}
-
 std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHexString(_param));
+                           << LOG_KV("param", toHexString(_callParameters->input()));
 
     // parse function name
-    uint32_t func = getParamFunc(_param);
-    bytesConstRef data = getParamData(_param);
+    uint32_t func = getParamFunc(_callParameters->input());
+    bytesConstRef data = _callParameters->params();
     auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
-    auto callResult = std::make_shared<PrecompiledExecResult>();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
-    gasPricer->setMemUsed(_param.size());
+    gasPricer->setMemUsed(_callParameters->input().size());
 
     auto table = _executive->storage().openTable(precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
@@ -86,10 +79,10 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         gasPricer->appendOperation(InterfaceOpcode::CreateTable);
         if (!table)
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
-            return callResult;
+            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+            return _callParameters;
         }
     }
     if (func == name2Selector[HELLO_WORLD_METHOD_GET])
@@ -104,16 +97,15 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
             gasPricer->appendOperation(InterfaceOpcode::Select, 1);
 
             retValue = entry->getField(0);
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
-        callResult->setExecResult(codec->encode(retValue));
+        _callParameters->setExecResult(codec.encode(retValue));
     }
     else if (func == name2Selector[HELLO_WORLD_METHOD_SET])
     {  // set(string) function call
-
         std::string strValue;
-        codec->decode(data, strValue);
+        codec.decode(data, strValue);
         auto entry = table->getRow(HELLO_WORLD_KEY_FIELD_NAME);
         gasPricer->updateMemUsed(entry->size());
         gasPricer->appendOperation(InterfaceOpcode::Select, 1);
@@ -122,15 +114,15 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         table->setRow(HELLO_WORLD_KEY_FIELD_NAME, *entry);
         gasPricer->appendOperation(InterfaceOpcode::Update, 1);
         gasPricer->updateMemUsed(entry->size());
-        getErrorCodeOut(callResult->mutableExecResult(), 1, *codec);
+        getErrorCodeOut(_callParameters->mutableExecResult(), 1, codec);
     }
     else
     {  // unknown function call
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled")
                                << LOG_DESC(" unknown function ") << LOG_KV("func", func);
-        callResult->setExecResult(codec->encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
+        _callParameters->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
     }
-    gasPricer->updateMemUsed(callResult->m_execResult.size());
-    callResult->setGas(gasPricer->calTotalGas());
-    return callResult;
+    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
+    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    return _callParameters;
 }

@@ -5,7 +5,7 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextConfig.h>
-#include <bcos-boostssl/utilities/BoostLog.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/throw_exception.hpp>
@@ -41,8 +41,8 @@ void ContextConfig::initConfig(std::string const& _configPath)
         boost::filesystem::path currentPath(boost::filesystem::current_path());
 
         CONTEXT_LOG(WARNING) << LOG_DESC("initConfig failed") << LOG_KV("configPath", _configPath)
-                           << LOG_KV("currentPath", currentPath.string())
-                           << LOG_KV("error", boost::diagnostic_information(e));
+                             << LOG_KV("currentPath", currentPath.string())
+                             << LOG_KV("error", boost::diagnostic_information(e));
 
 
         BOOST_THROW_EXCEPTION(std::runtime_error("initConfig: currentPath:" + currentPath.string() +

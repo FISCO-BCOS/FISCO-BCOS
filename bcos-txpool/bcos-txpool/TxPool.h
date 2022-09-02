@@ -19,11 +19,12 @@
  * @date 2021-05-10
  */
 #pragma once
-#include "bcos-txpool/TxPoolConfig.h"
-#include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
-#include "bcos-txpool/txpool/interfaces/TxPoolStorageInterface.h"
-#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include "TxPoolConfig.h"
+#include "sync/interfaces/TransactionSyncInterface.h"
+#include "txpool/interfaces/TxPoolStorageInterface.h"
+#include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/ThreadPool.h>
+#include <thread>
 namespace bcos
 {
 namespace txpool
@@ -40,6 +41,9 @@ public:
         m_worker = std::make_shared<ThreadPool>("submitter", _verifierWorkerNum);
         // threadpool for verify block
         m_verifier = std::make_shared<ThreadPool>("verifier", 4);
+        m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
+        m_txsResultNotifier = std::make_shared<ThreadPool>("txsResultNotify", 1);
+        m_filler = std::make_shared<ThreadPool>("txsFiller", std::thread::hardware_concurrency());
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
                          << LOG_KV("submitterWorkerNum", _verifierWorkerNum);
     }
@@ -52,7 +56,7 @@ public:
     void asyncSubmit(
         bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback) override;
 
-    void asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
+    void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) override;
 
@@ -99,7 +103,7 @@ public:
     }
 
     void asyncGetPendingTransactionSize(
-        std::function<void(Error::Ptr, size_t)> _onGetTxsSize) override
+        std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override
     {
         if (!_onGetTxsSize)
         {
@@ -129,6 +133,13 @@ public:
         m_transactionSync->config()->setTxPoolStorage(_txpoolStorage);
     }
 
+    void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch) override
+    {
+        m_txpoolStorage->registerTxsCleanUpSwitch(_txsCleanUpSwitch);
+    }
+
+    void clearAllTxs() override { m_txpoolStorage->clear(); }
+
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
@@ -141,33 +152,7 @@ protected:
 
     void initSendResponseHandler();
 
-    template <typename T>
-    void asyncSubmitTransaction(T _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback)
-    {
-        // verify and try to submit the valid transaction
-        auto self = std::weak_ptr<TxPool>(shared_from_this());
-        m_worker->enqueue([self, _txData, _txSubmitCallback]() {
-            try
-            {
-                auto txpool = self.lock();
-                if (!txpool)
-                {
-                    return;
-                }
-                if (!txpool->checkExistsInGroup(_txSubmitCallback))
-                {
-                    return;
-                }
-                auto txpoolStorage = txpool->m_txpoolStorage;
-                txpoolStorage->submitTransaction(_txData, _txSubmitCallback);
-            }
-            catch (std::exception const& e)
-            {
-                TXPOOL_LOG(WARNING) << LOG_DESC("asyncSubmit exception")
-                                    << LOG_KV("errorInfo", boost::diagnostic_information(e));
-            }
-        });
-    }
+    virtual void storeVerifiedBlock(bcos::protocol::Block::Ptr _block);
 
 private:
     TxPoolConfig::Ptr m_config;
@@ -180,6 +165,9 @@ private:
 
     ThreadPool::Ptr m_worker;
     ThreadPool::Ptr m_verifier;
+    ThreadPool::Ptr m_sealer;
+    ThreadPool::Ptr m_filler;
+    ThreadPool::Ptr m_txsResultNotifier;
     std::atomic_bool m_running = {false};
 };
 }  // namespace txpool

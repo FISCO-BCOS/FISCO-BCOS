@@ -20,14 +20,16 @@
  */
 
 #include "../src/dag/Abi.h"
-#include "bcos-framework/libutilities/DataConvertUtility.h"
-#include "bcos-framework/testutils/crypto/HashImpl.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
 using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -35,7 +37,7 @@ namespace test
 {
 struct AbiReaderFixture
 {
-    AbiReaderFixture() { hashImpl = std::make_shared<Keccak256Hash>(); }
+    AbiReaderFixture() { hashImpl = std::make_shared<Keccak256>(); }
 
     Hash::Ptr hashImpl;
 };
@@ -77,7 +79,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
             "conflictFields":[
                 {
                     "kind":0,
-                    "path":[
+                    "value":[
 
                     ],
                     "read_only":true,
@@ -85,7 +87,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                 },
                 {
                     "kind":4,
-                    "path":[
+                    "value":[
                         0, 1, 2
                     ],
                     "read_only":false,
@@ -117,6 +119,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"tuple[]"
                 }
             ],
+            "selector": [352741043,0],
             "name":"add_prod_batch",
             "outputs":[
 
@@ -135,12 +138,13 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"string"
                 }
             ],
+            "selector": [352741043,0],
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK_EQUAL(result->inputs.size(), 1);
 
@@ -156,23 +160,19 @@ BOOST_AUTO_TEST_CASE(NormalCase)
     BOOST_CHECK_EQUAL(conflictFields[0].kind, 0);
 
     auto accessPath = vector<uint8_t>{};
-    BOOST_CHECK(
-        std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].accessPath.begin()));
-    BOOST_CHECK_EQUAL(conflictFields[0].readOnly, true);
-    BOOST_CHECK_EQUAL(conflictFields[0].slot, 0);
+    BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].value.begin()));
+    BOOST_CHECK_EQUAL(conflictFields[0].slot.value(), 0);
 
     accessPath = vector<uint8_t>{0, 1, 2};
-    cout << conflictFields[1].accessPath.size() << endl;
-    BOOST_CHECK(
-        std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].accessPath.begin()));
-    BOOST_CHECK_EQUAL(conflictFields[1].readOnly, false);
-    BOOST_CHECK_EQUAL(conflictFields[1].slot, 1);
+    cout << conflictFields[1].value.size() << endl;
+    BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
+    BOOST_CHECK_EQUAL(conflictFields[1].slot.value(), 1);
 }
 
 BOOST_AUTO_TEST_CASE(InvalidAbi)
 {
     auto abiStr = "vita"sv;
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(!result);
 }
 
@@ -184,7 +184,7 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "conflictFields":[
                 {
                     "kind":0,
-                    "path":[
+                    "value":[
 
                     ],
                     "read_only":false,
@@ -203,12 +203,13 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "outputs":[
 
             ],
+            "selector": [1322485854,0],
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(!result);
 }
 
@@ -229,12 +230,13 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
             "outputs":[
 
             ],
+            "selector": [1322485854,0],
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK(result->conflictFields.empty());
 }

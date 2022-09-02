@@ -19,14 +19,15 @@
  */
 #pragma once
 
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Timer.h>
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
-#include <tarscpp/servant/Application.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Timer.h>
+#include <servant/Application.h>
 #include <algorithm>
 #include <shared_mutex>
 
@@ -40,19 +41,13 @@ public:
     using Ptr = std::shared_ptr<TopicManager>;
     TopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network)
     {
-        m_timer = std::make_shared<Timer>(CONNECTION_CHECK_PERIOD, "topicChecker");
-        m_timer->registerTimeoutHandler(boost::bind(&TopicManager::checkClientConnection, this));
         m_rpcServiceName = _rpcServiceName;
         m_network = _network;
     }
     virtual ~TopicManager() {}
 
-    virtual void start()
-    {
-        m_timer->start();
-        notifyRpcToSubscribeTopics();
-    }
-    virtual void stop() { m_timer->stop(); }
+    virtual void start() { notifyRpcToSubscribeTopics(); }
+    virtual void stop() {}
 
     uint32_t topicSeq() const { return m_topicSeq; }
     uint32_t incTopicSeq()
@@ -95,7 +90,8 @@ public:
      * @return void
      */
     void removeTopics(const std::string& _client, std::vector<std::string> const& _topicList);
-    void removeTopicsByClients(const std::vector<std::string>& _clients);
+
+    void removeTopicsByClient(const std::string& _client);
     /**
      * @brief: query topics subscribed by all connected clients
      * @return json string result, include topicSeq and topicItems fields
@@ -147,35 +143,10 @@ public:
      */
     void queryClientsByTopic(const std::string& _topic, std::vector<std::string>& _clients);
 
-    virtual bcos::rpc::RPCInterface::Ptr createAndGetServiceByClient(std::string const& _clientID)
-    {
-        try
-        {
-            UpgradableGuard l(x_clientInfo);
-            if (m_clientInfo.count(_clientID))
-            {
-                return m_clientInfo[_clientID];
-            }
-            auto servicePrx =
-                Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(_clientID);
-            auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
-            UpgradeGuard ul(l);
-            m_clientInfo[_clientID] = rpcClient;
-            TOPIC_LOG(INFO) << LOG_DESC("createAndGetServiceByClient")
-                            << LOG_KV("clientID", _clientID);
-            return rpcClient;
-        }
-        catch (std::exception const& e)
-        {
-            TOPIC_LOG(WARNING) << LOG_DESC("createAndGetServiceByClient exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
-        }
-        return nullptr;
-    }
+    virtual bcos::rpc::RPCInterface::Ptr createAndGetServiceByClient(std::string const& _clientID);
 
 protected:
     virtual void notifyRpcToSubscribeTopics();
-    virtual void checkClientConnection();
 
     // m_client2TopicItems lock
     mutable std::shared_mutex x_clientTopics;
@@ -197,8 +168,6 @@ protected:
     std::map<std::string, bcos::rpc::RPCInterface::Ptr> m_clientInfo;
     mutable SharedMutex x_clientInfo;
 
-    std::shared_ptr<Timer> m_timer;
-    unsigned const int CONNECTION_CHECK_PERIOD = 2000;
     std::string m_rpcServiceName;
     bcos::gateway::P2PInterface::Ptr m_network;
 };

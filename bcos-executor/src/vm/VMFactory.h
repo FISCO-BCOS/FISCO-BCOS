@@ -20,8 +20,8 @@
  */
 
 #pragma once
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace bcos
@@ -32,7 +32,7 @@ class VMInstance;
 enum class VMKind
 {
     evmone,
-    Hera,
+    BcosWasm,
     DLL
 };
 

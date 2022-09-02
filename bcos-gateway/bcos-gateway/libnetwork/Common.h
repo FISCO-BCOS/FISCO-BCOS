@@ -15,11 +15,11 @@
 
 #include <boost/asio/ip/tcp.hpp>
 
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Error.h>
-#include <bcos-framework/libutilities/Exceptions.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/gateway/GatewayTypeDef.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
+#include <bcos-utilities/Exceptions.h>
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 #define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"
@@ -56,6 +56,7 @@ enum DisconnectReason
     PingTimeout,
     UserReason = 0x10,
     IdleWaitTimeout = 0x11,
+    NegotiateFailed = 0x12,
     NoDisconnect = 0xffff
 };
 
@@ -70,6 +71,7 @@ enum P2PExceptionType
     ConnectError,
     DuplicateSession,
     NotInWhitelist,
+    BandwidthOverFlow,
     ALL,
 };
 

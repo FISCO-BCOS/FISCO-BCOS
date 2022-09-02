@@ -19,7 +19,10 @@
  * @date 2021-06-10
  */
 #include "TxPoolInitializer.h"
+#include "Common.h"
 #include <bcos-txpool/TxPoolFactory.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
+
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::initializer;
@@ -27,7 +30,7 @@ using namespace bcos::initializer;
 TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     ProtocolInitializer::Ptr _protocolInitializer,
     bcos::front::FrontServiceInterface::Ptr _frontService,
-    bcos::ledger::LedgerInterface::Ptr _ledger)
+    bcos::ledger::LedgerInterface::Ptr _ledger, bool _preStoreTxs)
   : m_nodeConfig(_nodeConfig),
     m_protocolInitializer(_protocolInitializer),
     m_frontService(_frontService),
@@ -40,8 +43,8 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
         m_nodeConfig->blockLimit());
     // init the txpool
-    m_txpool = txpoolFactory->createTxPool(
-        m_nodeConfig->notifyWorkerNum(), m_nodeConfig->verifierWorkerNum());
+    m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
+        m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime(), _preStoreTxs);
     auto txpoolConfig = m_txpool->txpoolConfig();
     txpoolConfig->setPoolLimit(m_nodeConfig->txpoolLimit());
 }
@@ -86,4 +89,9 @@ void TxPoolInitializer::stop()
     INITIALIZER_LOG(INFO) << LOG_DESC("Stop the txpool");
     m_running = false;
     m_txpool->stop();
+}
+
+bcos::txpool::TxPoolInterface::Ptr TxPoolInitializer::txpool()
+{
+    return m_txpool;
 }

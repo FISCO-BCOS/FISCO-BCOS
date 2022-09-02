@@ -9,7 +9,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <memory>
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 
 namespace bcos
 {
@@ -53,7 +53,7 @@ public:
     virtual P2PInfo localP2pInfo() = 0;
 
     virtual bool isConnected(P2pID const& _nodeID) const = 0;
-
+    virtual bool isReachable(P2pID const& _nodeID) const = 0;
     virtual std::shared_ptr<Host> host() = 0;
 
     virtual std::shared_ptr<MessageFactory> messageFactory() = 0;
@@ -71,7 +71,8 @@ public:
      * @param _callback called when receive response
      */
     virtual void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID,
-        bytesConstRef _payload, Options options, P2PResponseCallback _callback) = 0;
+        bytesConstRef _payload, Options options = Options(),
+        P2PResponseCallback _callback = nullptr) = 0;
 
     /**
      * @brief broadcast message to all p2p nodes
@@ -80,7 +81,7 @@ public:
      * @param _payload the payload
      */
     virtual void asyncBroadcastMessageToP2PNodes(
-        int16_t _type, bytesConstRef _payload, Options _options) = 0;
+        int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) = 0;
 
     /**
      * @brief send message to the given nodeIDs
@@ -90,9 +91,13 @@ public:
 
     using MessageHandler =
         std::function<void(NetworkException, std::shared_ptr<P2PSession>, P2PMessage::Ptr)>;
+
     virtual void registerHandlerByMsgType(int16_t _type, MessageHandler const& _msgHandler) = 0;
 
-    virtual bool connected(std::string const& _nodeID) = 0;
+    virtual void eraseHandlerByMsgType(int16_t _type) = 0;
+
+    virtual void sendRespMessageBySession(bytesConstRef _payload, P2PMessage::Ptr _p2pMessage,
+        std::shared_ptr<P2PSession> _p2pSession) = 0;
 };
 
 }  // namespace gateway

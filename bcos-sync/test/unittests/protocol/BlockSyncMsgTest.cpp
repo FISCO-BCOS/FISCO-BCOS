@@ -19,8 +19,9 @@
  * @date 2021-06-08
  */
 #include "bcos-sync/protocol/PB/BlockSyncMsgFactoryImpl.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -134,7 +135,7 @@ BOOST_AUTO_TEST_CASE(testBlockSyncMsg)
 {
     BlockNumber blockNumber = 123214;
     int32_t version = 10;
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     HashType hash = hashImpl->hash(std::string("hash"));
     HashType genesisHash = hashImpl->hash(std::string("genesisHash"));
     size_t requestedSize = 1203;

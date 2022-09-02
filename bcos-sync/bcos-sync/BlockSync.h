@@ -22,10 +22,10 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/state/DownloadingQueue.h"
 #include "bcos-sync/state/SyncPeerStatus.h"
-#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
-#include <bcos-framework/libutilities/Timer.h>
-#include <bcos-framework/libutilities/Worker.h>
+#include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/Worker.h>
 namespace bcos
 {
 namespace sync
@@ -73,6 +73,8 @@ public:
     // determine the specified node is faulty or not
     // used to optimize consensus
     bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) override;
+
+    void enableAsMaster(bool _masterNode);
 
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -132,7 +134,9 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
-    bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 5;
+    bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
+
+    std::atomic_bool m_masterNode = {false};
 };
 }  // namespace sync
 }  // namespace bcos

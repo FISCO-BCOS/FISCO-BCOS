@@ -21,8 +21,8 @@
 #pragma once
 #include "bcos-pbft/core/proto/Consensus.pb.h"
 #include "bcos-pbft/framework/ProposalInterface.h"
-#include <bcos-framework/interfaces/protocol/BlockHeader.h>
-#include <bcos-framework/libprotocol/Common.h>
+#include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-protocol/Common.h>
 
 namespace bcos
 {
@@ -50,7 +50,7 @@ public:
     void setHash(bcos::crypto::HashType const& _hash) override
     {
         m_hash = _hash;
-        m_rawProposal->set_hash(_hash.data(), bcos::crypto::HashType::size);
+        m_rawProposal->set_hash(_hash.data(), bcos::crypto::HashType::SIZE);
     }
     // the payload of the proposal
     bcos::bytesConstRef data() const override
@@ -105,12 +105,12 @@ public:
         m_rawProposal->set_signature(_data.data(), _data.size());
     }
 
-    bool operator==(Proposal const _proposal)
+    bool operator==(Proposal const _proposal) const
     {
         return _proposal.index() == index() && _proposal.hash() == hash() &&
                _proposal.data().toBytes() == data().toBytes();
     }
-    bool operator!=(Proposal const _proposal) { return !(operator==(_proposal)); }
+    bool operator!=(Proposal const _proposal) const { return !(operator==(_proposal)); }
 
     std::shared_ptr<RawProposal> rawProposal() { return m_rawProposal; }
 
@@ -140,12 +140,12 @@ protected:
     virtual void deserializeObject()
     {
         auto const& hashData = m_rawProposal->hash();
-        if (hashData.size() < bcos::crypto::HashType::size)
+        if (hashData.size() < bcos::crypto::HashType::SIZE)
         {
             return;
         }
         m_hash =
-            bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::size);
+            bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE);
     }
 
 protected:

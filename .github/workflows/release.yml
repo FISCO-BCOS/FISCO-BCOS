@@ -6,12 +6,12 @@ on:
     branches-ignore:
       - "**"
   release:
-    types: [published, created, edited]
+    types: [published, created]
 
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: macos-latest
+    runs-on: macos-12
     # if: startsWith(github.ref,'v2')
     steps:
       - uses: actions/checkout@v2
@@ -22,29 +22,16 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - uses: actions/cache@v2
-        id: cache
-        with:
-          path: |
-            /home/runner/.hunter
-            /Users/runner/.hunter/
-            deps/src
-            ccache
-          key: hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-clang-v1-notest-${{ runner.temp }}-
       - name: install macOS dependencies
-        run: brew install ccache
+        run: brew install ccache libomp gmp
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
       - name: compile
         run: make -j2 && make tar
-      - name: tar BcosProBuilder
-        run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
+      - name: tar BcosBuilder
+        run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
-        run: mv fisco-bcos/ bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
+        run:  mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
@@ -57,7 +44,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosNodeService.tgz
+          file: fisco-bcos-tars-service/BcosNodeService.tgz
           asset_name: BcosNodeService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -65,7 +52,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosRpcService.tgz
+          file: fisco-bcos-tars-service/BcosRpcService.tgz
           asset_name: BcosRpcService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -73,8 +60,24 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosGatewayService.tgz
+          file: fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh
@@ -85,12 +88,12 @@ jobs:
           asset_name: build_chain.sh
           tag: ${{ github.ref }}
           overwrite: true
-      - name: Upload BcosProBuilder
+      - name: Upload BcosBuilder
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosProBuilder.tgz
-          asset_name: BcosProBuilder.tgz
+          file: BcosBuilder.tgz
+          asset_name: BcosBuilder.tgz
           tag: ${{ github.ref }}
           overwrite: true
       
@@ -106,10 +109,11 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel && source /opt/rh/devtoolset-7/enable
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 patch ccache llvm-toolset-7 devtoolset-11 libzstd-devel zlib-devel flex bison python-devel python3-devel wget devtoolset-11 rh-perl530-perl
+          source /opt/rh/devtoolset-11/enable
           alias cmake='cmake3'
-          yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum swap -y git git224-core
+          yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
+          yum install -y git
           git --version
       - uses: actions/checkout@v2
         with:
@@ -119,29 +123,17 @@ jobs:
         with:
           toolchain: nightly-2021-06-17
           override: true
-      - uses: actions/cache@v2
-        id: cache
-        with:
-          path: |
-            /home/runner/.hunter
-            /github/home/.hunter
-            deps/src
-            ccache
-          key: hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-centos-v1-notest-${{ runner.temp }}-
       - name: configure and compile
         run: |
-          source /opt/rh/devtoolset-7/enable
-          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF -DHUNTER_CONFIGURATION_TYPES=Release
+          source /opt/rh/devtoolset-11/enable
+          source /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
+          source /opt/rh/llvm-toolset-7/enable
+          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF
           make -j4
           make tar
-      - name: tar BcosProBuilder
-        run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for CentOS
-        run: mv fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
+        run:  mkdir bin && mv fisco-bcos-air/fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
@@ -154,7 +146,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosNodeService.tgz
+          file: fisco-bcos-tars-service/BcosNodeService.tgz
           asset_name: BcosNodeService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -162,7 +154,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosRpcService.tgz
+          file: fisco-bcos-tars-service/BcosRpcService.tgz
           asset_name: BcosRpcService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -170,8 +162,24 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-pro/BcosGatewayService.tgz
+          file: fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh
@@ -180,13 +188,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: tools/BcosAirBuilder/build_chain.sh
           asset_name: build_chain.sh
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosProBuilder
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosProBuilder.tgz
-          asset_name: BcosProBuilder.tgz
           tag: ${{ github.ref }}
           overwrite: true

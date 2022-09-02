@@ -18,18 +18,17 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
-#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
-#include "bcos-framework/interfaces/storage/Common.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libutilities/Common.h"
-#include "bcos-framework/libutilities/Exceptions.h"
-#include "bcos-framework/libutilities/ThreadPool.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
-#include "utilities/Common.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-framework/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Common.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "utilities/MerkleProofUtility.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <utility>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
@@ -49,8 +48,12 @@ public:
 
     virtual ~Ledger() = default;
 
+    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+        bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override;
+        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) override;
 
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override;
@@ -81,7 +84,7 @@ public:
         std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
         override;
 
-    void asyncGetSystemConfigByKey(const std::string& _key,
+    void asyncGetSystemConfigByKey(const std::string_view& _key,
         std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
         override;
 
@@ -90,12 +93,12 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override;
 
-    void asyncGetNodeListByType(const std::string& _type,
+    void asyncGetNodeListByType(const std::string_view& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
 
     /****** init ledger ******/
-    bool buildGenesisBlock(
-        LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string& _genesisData);
+    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+        const std::string_view& _genesisData, std::string const& _compatibilityVersion);
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
@@ -131,9 +134,14 @@ private:
     void buildDir(const std::string& _absoluteDir);
 
     // only for /sys/
-    inline std::string getSysBaseName(const std::string& _s) {
+    inline std::string getSysBaseName(const std::string& _s)
+    {
         return _s.substr(_s.find_last_of('/') + 1);
     }
+
+    std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
+    needStoreUnsavedTxs(
+        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
