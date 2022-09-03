@@ -26,7 +26,8 @@ jobs:
 
       - name: apt install
         run: |
-          sudo apt install -y lcov ccache wget libgmp-dev python3-dev git curl zip unzip tar
+          sudo apt update
+          sudo apt install -y lcov ccache wget libgmp-dev python3-dev git curl zip unzip tar cmake
 
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -41,23 +42,28 @@ jobs:
           restore-keys: |
             build-ubuntu22.04-${{ hashFiles('.github/workflows/workflow.yml') }}
             build-ubuntu22.04-
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
           override: true
+
       - name: Prepare vcpkg
         uses: lukka/run-vcpkg@v10
         with: { vcpkgGitCommitId: 7e3dcf74e37034eea358934a90a11d618520e139 }
+
       - name: Build for linux
         run: |
           export GCC='gcc-10'
           export CXX='g++-10'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON && make -j16|| cat *.log
+
       - name: Test
         run: |
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
           make cov
+
       - name: Generate covreage report
         uses: codecov/codecov-action@v3
         with:
