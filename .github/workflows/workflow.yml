@@ -53,6 +53,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt install -y lcov cmake vim ccache wget libgmp-dev python3-dev
+          export X_VCPKG_ASSET_SOURCES=x-azurl,http://106.15.181.5/
           export GCC='gcc-10'
           export CXX='g++-10'
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../  || cat *.log
@@ -96,12 +97,12 @@ jobs:
       - name: Prepare centos tools
         run: |
           yum -y update
+          export X_VCPKG_ASSET_SOURCES=x-azurl,http://106.15.181.5/
           yum install -y epel-release centos-release-scl flex bison patch gmp-static
           yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
       - name: Prepare vcpkg
-        if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
         with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - uses: actions-rs/toolchain@v1
