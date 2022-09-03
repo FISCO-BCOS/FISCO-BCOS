@@ -30,8 +30,8 @@ jobs:
           override: true
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
-        uses: friendlyanon/setup-vcpkg@v1
-        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
+        uses: lukka/run-vcpkg@v10
+        with: { vcpkgGitCommitId: 7e3dcf74e37034eea358934a90a11d618520e139 }
       - uses: actions/cache@v2
         id: deps_cache
         with:
