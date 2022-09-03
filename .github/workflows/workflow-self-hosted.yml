@@ -11,7 +11,7 @@ on:
       - "Changelog.md"
       - "README.md"
   release:
-    types: [published, created, edited]
+    types: [pushed]
 
 jobs:
   build:
@@ -56,7 +56,7 @@ jobs:
       - name: Build for linux
         if: runner.os == 'Linux'
         run: |
-          sudo apt install -y lcov ccache wget libgmp-dev python3-dev
+          sudo apt install -y lcov ccache wget libgmp-dev python3-dev git curl zip unzip tar
           export GCC='gcc-10'
           export CXX='g++-10'
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
