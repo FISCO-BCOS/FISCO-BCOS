@@ -27,7 +27,7 @@ jobs:
       - name: apt install
         run: |
           sudo apt update
-          sudo apt install -y lcov ccache wget libgmp-dev python3-dev git curl zip unzip tar cmake
+          sudo apt install -y lcov ccache wget libgmp-dev python3-dev git curl zip unzip tar cmake gcc-10 g++-10
 
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
