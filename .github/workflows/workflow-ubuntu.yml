@@ -48,16 +48,19 @@ jobs:
           toolchain: nightly-2022-07-28
           override: true
 
-      #- name: Prepare vcpkg
+      - name: Prepare vcpkg
+        env:
+          VCPKG_ROOT: ~/cache/vcpkg
       #  uses: lukka/run-vcpkg@v10
       #  with: { vcpkgGitCommitId: 7e3dcf74e37034eea358934a90a11d618520e139 }
+
 
       - name: Build for linux
         run: |
           export GCC='gcc-10'
           export CXX='g++-10'
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=~/cache/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. && make -j16|| cat *.log
+          mkdir -p build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. && make -j16|| cat *.log
 
       - name: Test
         run: |
