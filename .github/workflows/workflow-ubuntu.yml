@@ -19,6 +19,8 @@ jobs:
     runs-on: self-hosted
     strategy:
       fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
     steps:
       - uses: actions/checkout@v2
         with:
@@ -48,9 +50,7 @@ jobs:
           toolchain: nightly-2022-07-28
           override: true
 
-      - name: Prepare vcpkg
-        env:
-          VCPKG_ROOT: ~/cache/vcpkg
+      # - name: Prepare vcpkg
       #  uses: lukka/run-vcpkg@v10
       #  with: { vcpkgGitCommitId: 7e3dcf74e37034eea358934a90a11d618520e139 }
 
