@@ -12,8 +12,8 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
-
-  build_centos:
+jods:
+  build:
     name: build_centos
     runs-on: centos-docker
     continue-on-error: true
@@ -48,7 +48,7 @@ on:
           path: |
             deps/
           key: build-centos7-${{ hashFiles('.github/workflows/workflow.yml') }}
-          
+
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
           max-size: 25G
