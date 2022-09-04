@@ -30,9 +30,9 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y  lcov ccache wget python3-dev git curl zip unzip tar
-          sudo apt install -q update && apt-get install -qy --no-install-recommends \
+          sudo apt install -y --no-install-recommends \
               clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-              libgmp-dev flex bison patch libzstd-dev  ninja-build pkg-config
+              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config
 
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
