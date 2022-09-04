@@ -12,7 +12,8 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
-jods:
+
+jobs:
   build:
     name: build_centos
     runs-on: centos-docker
