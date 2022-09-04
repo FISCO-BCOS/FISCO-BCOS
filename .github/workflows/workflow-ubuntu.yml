@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     name: ubuntu ci check
-    runs-on: self-hosted
+    runs-on: self-hosted-ubuntu
     strategy:
       fail-fast: false
     env:
@@ -67,7 +67,7 @@ jobs:
 
       - name: Test
         run: |
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make cov
 
       - name: Generate covreage report
