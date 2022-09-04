@@ -15,12 +15,13 @@ on:
 
 jobs:
   build:
-    name: build
+    name: ubuntu ci check
     runs-on: self-hosted
     strategy:
       fail-fast: false
     env:
       VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
     steps:
       - uses: actions/checkout@v2
         with:
@@ -59,6 +60,7 @@ jobs:
 
       - name: Build for linux
         run: |
+          ln -s ${{ env.DEPS_ROOT }} deps
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j16
