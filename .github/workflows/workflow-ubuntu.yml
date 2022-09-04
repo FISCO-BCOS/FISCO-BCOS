@@ -29,7 +29,10 @@ jobs:
       - name: apt install
         run: |
           sudo apt update
-          sudo apt install -y lcov ccache wget libgmp-dev python3-dev git curl zip unzip tar cmake gcc-10 g++-10
+          sudo apt install -y  lcov ccache wget python3-dev git curl zip unzip tar
+          sudo apt install -q update && apt-get install -qy --no-install-recommends \
+              clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
+              libgmp-dev flex bison patch libzstd-dev  ninja-build pkg-config
 
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -59,8 +62,9 @@ jobs:
         run: |
           export GCC='gcc-10'
           export CXX='g++-10'
-          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          mkdir -p build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. && make -j16|| cat *.log
+          mkdir -p build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. || cat *.log
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH" # must after cmake
+          make -j16
 
       - name: Test
         run: |
