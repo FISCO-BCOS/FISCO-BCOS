@@ -128,14 +128,13 @@ void CampaignConfig::onLeaderKeyChanged(etcd::Response _response)
 
 void CampaignConfig::onElectionClusterRecover()
 {
-    ElectionConfig::onElectionClusterRecover();
-    // trigger camppagin
-    resetLeader(nullptr);
-    // calls m_triggerCampaign to elect new leader when election cluster recover
-    if (m_triggerCampaign)
+    if (m_electionClusterOk.load())
     {
-        ELECTION_LOG(INFO) << LOG_DESC("onElectionClusterRecover: trigger campaign")
-                           << LOG_KV("key", m_leaderKey);
-        m_triggerCampaign();
+        return;
     }
+    resetLeader(nullptr);
+    // fetch leader and trigger campaign again(Note: checkAndUpdateLeaderKey of fetchLeader will
+    // trigger leader campaign)
+    fetchLeader();
+    ElectionConfig::onElectionClusterRecover();
 }
