@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     name: ubuntu ci check
-    runs-on: self-hosted-ubuntu
+    runs-on: self-hosted
     strategy:
       fail-fast: false
     env:
@@ -39,16 +39,6 @@ jobs:
       #  with:
       #    max-size: 25G
 
-      - uses: actions/cache@v2
-        id: deps_cache
-        with:
-          path: |
-            deps/
-          key: build-ubuntu22.04-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            build-ubuntu22.04-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-ubuntu22.04-
-
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
@@ -67,7 +57,7 @@ jobs:
 
       - name: Test
         run: |
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
           make cov
 
       - name: Generate covreage report
