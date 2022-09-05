@@ -1,4 +1,4 @@
-name: FISCO-BCOS GitHub Actions
+name: FISCO-BCOS GitHub Actions self hosted ubuntu
 on:
   push:
     paths-ignore:
