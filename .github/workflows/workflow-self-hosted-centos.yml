@@ -55,4 +55,4 @@ jobs:
           make -j8
       - name: Test
         run: 
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE test
