@@ -76,10 +76,10 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
             LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: store uncommitted txs")
                              << LOG_KV("blockNumber", blockNumber)
                              << LOG_KV("blockTxsSize", blockTxsSize)
-                             << LOG_KV("unstoredTxs", unstoredTxsHash->size())
+                             << LOG_KV("unStoredTxs", unstoredTxsHash->size())
                              << LOG_KV("msg", _error ? _error->errorMessage() : "success")
                              << LOG_KV("code", _error ? _error->errorCode() : 0)
-                             << LOG_KV("timecost", (utcTime() - startT));
+                             << LOG_KV("timeCost", (utcTime() - startT));
 
             if (_error)
             {

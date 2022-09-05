@@ -487,7 +487,14 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         }
     }
     WriteOptions options;
-    m_db->Write(options, &writeBatch);
+    auto status = m_db->Write(options, &writeBatch);
+    auto err = checkStatus(status);
+    if (err)
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows failed") << LOG_KV("message", err->errorMessage());
+        return err;
+    }
     return nullptr;
 }
 
