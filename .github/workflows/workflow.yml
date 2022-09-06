@@ -15,7 +15,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-  
+
 jobs:
   build:
     name: build
@@ -78,8 +78,9 @@ jobs:
           make cov
       - name: Generate covreage report
         if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v2
         with:
+          version: "v0.1.15"
           file: ./build/coverage.info
           name: FISCO BCOS 3.0.0 coverage
           fail_ci_if_error: true
