@@ -73,6 +73,7 @@ public:
             std::make_shared<dev::ThreadPool>("reqWait-" + std::to_string(m_groupId), 1);
     }
 
+    ~RotatingPBFTEngine() override {}
     // create TreeTopology to forward prepare message
     void createTreeTopology(unsigned const& _treeWidth)
     {

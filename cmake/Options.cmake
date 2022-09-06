@@ -61,12 +61,13 @@ macro(configure_project)
 
     #ARCH TYPE
     eth_default_option(ARCH_NATIVE OFF)
-
+    set(USE_LD_GOLD ON)
     if(ARCH_NATIVE)
         if(APPLE) 
             set(MARCH_TYPE "-mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
         else()
             set(MARCH_TYPE "-march=native -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")    
+            set(USE_LD_GOLD OFF)
         endif()
     endif()
 
