@@ -454,13 +454,14 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
-                    "Prewrite block error: " + error->errorMessage(), *error));
 
                 if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                 {
                     triggerSwitch();
                 }
+
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
+                    "Prewrite block error: " + error->errorMessage(), *error));
 
                 return;
             }
@@ -511,15 +512,14 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
                             << error->errorMessage();
 
-                        // FATAL ERROR, NEED MANUAL FIX!
-
-                        callback(std::move(error));
-
                         if (error->errorCode() ==
                             bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                         {
                             triggerSwitch();
                         }
+
+                        // FATAL ERROR, NEED MANUAL FIX!
+                        callback(std::move(error));
 
                         return;
                     }
