@@ -1578,10 +1578,11 @@ void TransactionExecutor::prepare(
         auto errorMessage =
             "Prepare error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
-            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
+            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number) +
+            " trigger switch";
 
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-        callback(BCOS_ERROR_PTR(ExecuteError::PREPARE_ERROR, errorMessage));
+        callback(BCOS_ERROR_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, errorMessage));
 
         return;
     }
@@ -1709,10 +1710,11 @@ void TransactionExecutor::rollback(
         auto errorMessage =
             "Rollback error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
-            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
+            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number) +
+            " trigger switch";
 
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-        callback(BCOS_ERROR_PTR(ExecuteError::ROLLBACK_ERROR, errorMessage));
+        callback(BCOS_ERROR_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, errorMessage));
 
         return;
     }

@@ -33,6 +33,14 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     //  beforeBack() -> whenQueueBack()
 
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+
+    // refresh block cache
+    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
+    while (!m_blocks->empty() && currentNumber > m_blocks->front()->number())
+    {
+        m_blocks->pop_front();
+    }
+
     try
     {
         if (m_blocks->empty())
