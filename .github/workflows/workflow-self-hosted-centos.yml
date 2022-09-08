@@ -45,6 +45,7 @@ jobs:
 
       - name: Build for linux
         run: |
+          mkdir -p build
           ln -s ${{ env.DEPS_ROOT }} deps
           ln -s ${{ env.BUILD_ROOT}} build
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
@@ -53,7 +54,7 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           . /opt/rh/llvm-toolset-7/enable
           alias cmake='cmake3'
-          current_dir=$(pwd) && mkdir -p build && cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON current_dir || cat *.log
+          current_dir=$(pwd) && cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON current_dir || cat *.log
           make -j8
       - name: Test
         run: 
