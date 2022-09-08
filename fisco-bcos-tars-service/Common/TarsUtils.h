@@ -19,7 +19,6 @@
 
 namespace bcostars
 {
-
 inline tars::TC_Endpoint string2TarsEndPoint(const std::string& _strEndPoint)
 {
     std::vector<std::string> temp;
@@ -108,6 +107,7 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
     TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler())
 {
     auto prx = communicator->stringToProxy<S>(_serviceName);
+    BCOS_LOG(INFO) << LOG_DESC("createServantProxy ") << _serviceName;
     if (!prx->tars_get_push_callback())
     {
         auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);

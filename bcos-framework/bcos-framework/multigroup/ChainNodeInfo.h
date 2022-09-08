@@ -148,7 +148,12 @@ inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
     oss << LOG_KV("name", _nodeInfo->nodeName())
         << LOG_KV("cryptoType", std::to_string((int32_t)_nodeInfo->nodeCryptoType()))
         << LOG_KV("nodeType", _nodeInfo->nodeType());
-
+    auto const& serviceInfos = _nodeInfo->serviceInfo();
+    oss << ", serviceInfos: ";
+    for (auto const& info : serviceInfos)
+    {
+        oss << info.second << ",";
+    }
     return oss.str();
 }
 }  // namespace group
