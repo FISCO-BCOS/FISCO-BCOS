@@ -25,7 +25,6 @@ jobs:
     env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
-      BUILD_ROOT: ~/cache/build
     steps:
       - uses: actions/checkout@v2
         with:
@@ -43,15 +42,21 @@ jobs:
         with:
           toolchain: nightly-2022-07-28
           override: true
-          
+      
+      - name: reuse build cache
+        run: cp -r ~/cache/build ./
+
       - name: Build for linux
         run: |
-          mkdir -p build
           ln -s ${{ env.DEPS_ROOT }} deps
-          ln -s ${{ env.BUILD_ROOT}} build
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          current_dir=$(cd 'dirname $0'; pwd) && cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON current_dir || cat *.log
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
       - name: Test
         run: 
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+      
+      - name: Save build cache
+        run: |
+           rm -rf ~/cache/build
+           mv build/ ~/cache/build
