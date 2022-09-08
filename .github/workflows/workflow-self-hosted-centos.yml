@@ -43,7 +43,7 @@ jobs:
           override: true
       
       - name: reuse build cache
-        run: cp -r ~/cache/build ./
+        run: mv ~/cache/build ./
 
       - name: Build for linux
         run: |
@@ -62,5 +62,4 @@ jobs:
 
       - name: Save build cache
         run: |
-           rm -rf ~/cache/build
            mv build/ ~/cache/
