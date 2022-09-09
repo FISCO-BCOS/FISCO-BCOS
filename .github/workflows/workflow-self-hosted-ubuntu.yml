@@ -44,7 +44,7 @@ jobs:
           override: true
       
       - name: reuse build cache
-        run: cp ~/cache/build ./
+        run: cp -r ~/cache/build ./
 
       - name: Build for linux
         run: |
