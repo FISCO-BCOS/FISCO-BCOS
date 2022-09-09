@@ -1,4 +1,4 @@
-name: FISCO-BCOS release Actions
+name: Build and Publish Binary
 on:
   push:
     tags-ignore:
