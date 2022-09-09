@@ -165,7 +165,7 @@ gen_agency_cert() {
     # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config $chain/cert.cnf -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days ${days} -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
 
@@ -374,7 +374,7 @@ gen_rsa_chain_cert() {
     dir_must_exists "$chaindir"
 
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -config ${ca_path}/cert.cnf -out "${chaindir}"/ca.crt  2>/dev/null
 
     LOG_INFO "Generate rsa ca cert successfully!"
 }
@@ -395,7 +395,7 @@ gen_rsa_node_cert() {
     dir_must_exists "${ndpath}"
 
     openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -out "$ndpath"/"${type}".csr
+    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config ${ca_path}/cert.cnf -out "$ndpath"/"${type}".csr
     openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req 2>/dev/null
 
