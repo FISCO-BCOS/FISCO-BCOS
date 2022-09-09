@@ -1,0 +1,36 @@
+name: Check Commit
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: check commit
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+
+      - name: Check
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install clang-format
+          bash tools/.ci/check-commit.sh
