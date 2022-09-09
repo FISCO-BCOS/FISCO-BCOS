@@ -1,4 +1,4 @@
-name: Check Commit
+name: Commit Check
 on:
   push:
     paths-ignore:

@@ -58,12 +58,12 @@ function check_codeFormat() {
 
 function check_PR_limit() {
     if [ "${PR_TITLE}" != "" ]; then
-        local skip=$(cat ${PR_TITLE} | grep "title\"" | grep "${skip_check_words}")
+        local skip=$(echo ${PR_TITLE} | grep "${skip_check_words}")
         if [ ! -z "${skip}" ]; then
             LOG_INFO "sync code PR, skip PR limit check!"
             exit 0
         else
-            LOG_INFO "PR-${PR_TITLE}, checking PR limit..."
+            LOG_INFO "PR: \"${PR_TITLE}\", checking limit..."
         fi
     else
         LOG_INFO "Could not get PR title"
@@ -105,6 +105,7 @@ function check_PR_limit() {
         exit 1
     fi
     LOG_INFO "modify ${files} files, insert ${insertions} lines, valid insertion ${valid_insertions}, delete ${deletions} lines. Total ${commits} commits."
+    LOG_INFO "Ok!"
 }
 
 check_codeFormat
