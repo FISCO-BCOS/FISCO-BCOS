@@ -127,10 +127,13 @@ private:
 
     std::string_view toView(const Json::Value& value)
     {
-        const char* begin;
-        const char* end;
-        value.getString(&begin, &end);
-
+        const char* begin = nullptr;
+        const char* end = nullptr;
+        bool result = value.getString(&begin, &end);
+        if (!result)
+        {
+            return std::string_view();
+        }
         std::string_view view(begin, end - begin);
         return view;
     }

@@ -454,14 +454,28 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
+
+                if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                {
+                    triggerSwitch();
+                }
+
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
                     "Prewrite block error: " + error->errorMessage(), *error));
+
                 return;
             }
 
             auto status = std::make_shared<CommitStatus>();
             status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
             status->checkAndCommit = [this, callback](const CommitStatus& status) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                        SchedulerError::Stopped, "BlockExecutive is stopped"));
+                    return;
+                }
+
                 if (status.failed > 0)
                 {
                     std::string errorMessage = "Prepare with errors, begin rollback, status: " +
@@ -498,9 +512,15 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
                             << error->errorMessage();
 
-                        // FATAL ERROR, NEED MANUAL FIX!
+                        if (error->errorCode() ==
+                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                        {
+                            triggerSwitch();
+                        }
 
+                        // FATAL ERROR, NEED MANUAL FIX!
                         callback(std::move(error));
+
                         return;
                     }
 
