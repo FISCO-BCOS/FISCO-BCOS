@@ -89,7 +89,7 @@ void RouterTable::updateDistanceForAllRouterEntries(
         if (entry->nextHop() == _nextHop)
         {
             auto oldDistance = entry->distance();
-            entry->setDistance(_newDistance + 1);
+            entry->setDistance(_newDistance + (oldDistance - 1));
             if (entry->distance() >= m_unreachableDistance)
             {
                 entry->clearNextHop();
@@ -201,6 +201,10 @@ bool RouterTable::updateDstNodeEntry(
             return false;
         }
         currentEntry->setDistance(distance);
+        if (currentEntry->distance() >= m_unreachableDistance)
+        {
+            currentEntry->clearNextHop();
+        }
         SERVICE_ROUTER_LOG(INFO) << LOG_DESC(
                                         "updateDstNodeEntry: distance of the nextHop Entry "
                                         "updated, update the current entry")
