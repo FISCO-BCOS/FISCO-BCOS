@@ -329,6 +329,14 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
 {
     if (m_scheduler)
     {
+        if (m_scheduler->getSchedulerTermId() == schedulerTermId)
+        {
+            SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
+                                 << "SchedulerSwitch: scheduler has just switched, ignore trigger."
+                                 << m_scheduler->getSchedulerTermId() << " == " << schedulerTermId;
+            return;
+        }
+
         m_scheduler->stop();
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "SchedulerSwitch: scheduler term switch "
                              << m_scheduler->getSchedulerTermId() << "->" << schedulerTermId;
