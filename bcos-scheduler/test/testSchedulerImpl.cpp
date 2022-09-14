@@ -503,13 +503,15 @@ BOOST_AUTO_TEST_CASE(call)
 
         scheduler->call(tx,
             [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
+                auto blockNumber = receiptResponse->blockNumber();
+                std::cout << "blockNumber" << blockNumber << std::endl;
                 BOOST_CHECK(!error);
                 BOOST_CHECK(receiptResponse);
 
                 receipt = std::move(receiptResponse);
             });
 
-        BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+        BOOST_CHECK_NE(receipt->blockNumber(), 0);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_GT(receipt->gasUsed(), 0);
         auto output = receipt->output();
@@ -595,7 +597,7 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
 
             receipt = std::move(receiptResponse);
         });
-    BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+    BOOST_CHECK_NE(receipt->blockNumber(), 0);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
     BOOST_CHECK_GT(receipt->gasUsed(), 0);
 }
