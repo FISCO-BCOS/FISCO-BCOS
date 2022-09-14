@@ -80,7 +80,7 @@ public:
         const std::vector<std::string>& _pdAddrs, const std::string& _logPath)
     {
         boost::filesystem::create_directories(_logPath);
-        auto cluster = storage::newTiKVCluster(_pdAddrs, _logPath);
+        auto cluster = storage::newTiKVClient(_pdAddrs, _logPath);
 
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
     }

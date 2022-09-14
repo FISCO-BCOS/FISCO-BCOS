@@ -24,28 +24,26 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-utilities/Common.h>
 
-namespace pingcap
+namespace tikv_client
 {
-namespace kv
-{
-struct Cluster;
-struct BCOSTwoPhaseCommitter;
-struct Snapshot;
-}  // namespace kv
-}  // namespace pingcap
+struct TransactionClient;
+struct Transaction;
+}  // namespace tikv_client
 
 namespace bcos
 {
 namespace storage
 {
-std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
+constexpr int scan_batch_size = 64;
+
+std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
     const std::vector<std::string>& pdAddrs, const std::string& logPath);
 
 class TiKVStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
-    explicit TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster)
+    explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster)
       : m_cluster(_cluster)
     {}
 
@@ -82,10 +80,8 @@ public:
         std::vector<std::string> values) noexcept override;
 
 private:
-    int32_t m_maxRetry = 256;  // Notice: too small number may lead to asyncPrepare failed.
-    size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
-    std::shared_ptr<pingcap::kv::Cluster> m_cluster;
-    std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
+    std::shared_ptr<tikv_client::TransactionClient> m_cluster;
+    std::shared_ptr<tikv_client::Transaction> m_committer;
     uint64_t m_currentStartTS = 0;
     mutable RecursiveMutex x_committer;
 };
