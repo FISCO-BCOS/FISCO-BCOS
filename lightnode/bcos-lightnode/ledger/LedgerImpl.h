@@ -4,6 +4,7 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Receipt.h>
 #include <bcos-concepts/Transaction.h>
@@ -25,6 +26,14 @@
 
 namespace bcos::ledger
 {
+
+// clang-format off
+struct NotFoundTransaction : public bcos::exception::Exception {};
+struct UnexpectedRowIndex : public bcos::exception::Exception {};
+struct MismatchTransactionCount : public bcos::exception::Exception {};
+struct MismatchParentHash: public bcos::exception::Exception {};
+struct NotFoundBlockHeader: public bcos::exception::Exception {};
+// clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
 class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>
@@ -115,7 +124,9 @@ private:
                 for (auto index = range.begin(); index != range.end(); ++index)
                 {
                     if (!entries[index]) [[unlikely]]
-                        BOOST_THROW_EXCEPTION(std::runtime_error{"Get transaction not found"});
+                        BOOST_THROW_EXCEPTION(
+                            NotFoundTransaction{}
+                            << bcos::exception::ErrorMessage{"Get transaction not found"});
 
                     auto field = entries[index]->getField(0);
                     bcos::concepts::serialize::decode(field, out[index]);
@@ -151,7 +162,9 @@ private:
                 status.blockNumber = value;
                 break;
             default:
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpected getRows index"});
+                BOOST_THROW_EXCEPTION(
+                    UnexpectedRowIndex{} << bcos::exception::ErrorMessage{
+                        "Unexpected getRows index: " + boost::lexical_cast<std::string>(i)});
                 break;
             }
         }
@@ -168,7 +181,8 @@ private:
         auto count = RANGES::size(buffers);
         if (count != RANGES::size(hashes))
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"No match count"});
+            BOOST_THROW_EXCEPTION(
+                MismatchTransactionCount{} << bcos::exception::ErrorMessage{"No match count"});
         }
         constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
 
@@ -223,8 +237,9 @@ private:
                     !bcos::concepts::bytebuffer::equalTo(
                         block.blockHeader.data.parentInfo[0].blockHash, parentHash))
                 {
-                    LEDGER_LOG(ERROR) << "No match parentHash!";
-                    BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                    LEDGER_LOG(ERROR) << "ParentHash mismatch!";
+                    BOOST_THROW_EXCEPTION(MismatchParentHash{}
+                                          << bcos::exception::ErrorMessage{"No match parentHash!"});
                 }
             }
 
@@ -247,7 +262,8 @@ private:
             auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
             if (!entry) [[unlikely]]
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"GetBlock not found header!"});
+                BOOST_THROW_EXCEPTION(NotFoundBlockHeader{}
+                                      << bcos::exception::ErrorMessage{"Not found block header!"});
             }
 
             auto field = entry->getField(0);

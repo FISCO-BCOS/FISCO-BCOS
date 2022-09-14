@@ -29,7 +29,7 @@ void impl_decode(bcos::concepts::bytebuffer::ByteBuffer auto const& in,
     bcostars::protocol::impl::TarsStruct auto& out)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)std::data(in), RANGES::size(in));
+    input.setBuffer((const char*)RANGES::data(in), RANGES::size(in));
 
     out.readFrom(input);
 }
