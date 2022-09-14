@@ -303,8 +303,8 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
                     {
                         BLKSYNC_LOG(INFO)
-                            << LOG_DESC("fetchAndUpdatesLedgerConfig for InvalidBlocks");
-                        downloadQueue->fetchAndUpdatesLedgerConfig();
+                            << LOG_DESC("fetchAndUpdateLedgerConfig for InvalidBlocks");
+                        downloadQueue->fetchAndUpdateLedgerConfig();
                         return;
                     }
                     if (!config->masterNode())
@@ -655,7 +655,7 @@ void DownloadingQueue::onCommitFailed(
                              << LOG_KV("hash", blockHeader->hash().abridged())
                              << LOG_KV("code", _error->errorCode())
                              << LOG_KV("message", _error->errorMessage());
-        fetchAndUpdatesLedgerConfig();
+        fetchAndUpdateLedgerConfig();
         return;
     }
     if (blockHeader->number() <= m_config->blockNumber())
@@ -687,9 +687,9 @@ void DownloadingQueue::onCommitFailed(
         tryToCommitBlockToLedger();
         return;
     }
-    // fetchAndUpdatesLedgerConfig in case of the blocks commit success while get-system-config
+    // fetchAndUpdateLedgerConfig in case of the blocks commit success while get-system-config
     // failed
-    fetchAndUpdatesLedgerConfig();
+    fetchAndUpdateLedgerConfig();
     m_config->setExecutedBlock(blockHeader->number() - 1);
     auto topBlock = top();
     bcos::protocol::BlockNumber topNumber = std::numeric_limits<bcos::protocol::BlockNumber>::max();
@@ -731,11 +731,11 @@ void DownloadingQueue::onCommitFailed(
                       << LOG_KV("executedBlock", m_config->executedBlock());
 }
 
-void DownloadingQueue::fetchAndUpdatesLedgerConfig()
+void DownloadingQueue::fetchAndUpdateLedgerConfig()
 {
     try
     {
-        BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig");
+        BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
         m_ledgerFetcher->fetchBlockNumberAndHash();
         m_ledgerFetcher->fetchConsensusNodeList();
         // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
@@ -745,7 +745,7 @@ void DownloadingQueue::fetchAndUpdatesLedgerConfig()
         m_ledgerFetcher->fetchConsensusLeaderPeriod();
         m_ledgerFetcher->fetchCompatibilityVersion();
         auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
-        BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig success")
+        BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                           << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                           << LOG_KV("hash", ledgerConfig->hash().abridged())
                           << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
@@ -754,7 +754,7 @@ void DownloadingQueue::fetchAndUpdatesLedgerConfig()
     }
     catch (std::exception const& e)
     {
-        BLKSYNC_LOG(WARNING) << LOG_DESC("fetchAndUpdatesLedgerConfig exception")
+        BLKSYNC_LOG(WARNING) << LOG_DESC("fetchAndUpdateLedgerConfig exception")
                              << LOG_KV("msg", boost::diagnostic_information(e));
     }
 }
