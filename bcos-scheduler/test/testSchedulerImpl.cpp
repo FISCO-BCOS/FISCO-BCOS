@@ -6,8 +6,6 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-scheduler/src/BlockExecutive.h"
-#include "bcos-scheduler/src/SchedulerImpl.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
@@ -24,6 +22,8 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-scheduler/src/BlockExecutive.h>
+#include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
