@@ -602,5 +602,50 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
     BOOST_CHECK_GT(receipt->gasUsed(), 0);
 }
 
+BOOST_AUTO_TEST_CASE(executeBlockTimeoutTest)
+{
+    auto scheduler = std::make_shared<bcos::scheduler::SchedulerImpl>(executorManager, ledger,
+        storage, executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
+        hashImpl, false, false, false, 0);
+    auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
+    scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
+    bool executeBlockError = false;
+
+    auto block = blockFactory->createBlock();
+    block->blockHeader()->setNumber(6);
+    for (size_t j = 0; j < 10; ++j)
+    {
+        auto metaTx =
+            std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract1");
+        block->appendTransactionMetaData(std::move(metaTx));
+    }
+    // executeBlock
+    SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHash", block)
+                         << LOG_KV("BlockHeaderNumber", block->blockHeader()->number());
+
+    scheduler->executeBlock(
+        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+            BOOST_CHECK(!error);
+        });
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    auto blockExecutive = scheduler->getExecutedBlock(block->blockHeaderConst()->number());
+
+    BOOST_CHECK(!blockExecutive->hasTimeout());
+
+    BOOST_CHECK(blockExecutive);
+    blockExecutive->setCreationTime(0);
+
+    BOOST_CHECK(blockExecutive->hasTimeout());
+
+    scheduler->executeBlock(
+        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
+            BOOST_CHECK(error);
+            BOOST_CHECK_EQUAL(error->errorCode(), SchedulerError::BlockCacheTimeout);
+        });
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

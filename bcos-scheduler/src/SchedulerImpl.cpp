@@ -33,7 +33,6 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     //  beforeBack() -> whenQueueBack()
 
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-
     // refresh block cache
     bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
     while (!m_blocks->empty() && currentNumber > m_blocks->front()->number())
@@ -194,8 +193,18 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
     auto whenInQueue = [this, callback, block, requestBlockNumber, &signature, verify](
                            BlockExecutive::Ptr blockExecutive) {
-        auto blockHeader = blockExecutive->result();
+        if (blockExecutive->hasTimeout())
+        {
+            auto message = "hit block cache, but executive is timeout! Trigger switch";
+            SCHEDULER_LOG(WARNING)
+                << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock error, " << message;
+            triggerSwitch();
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::BlockCacheTimeout, message), nullptr, false);
+            return;
+        }
 
+        auto blockHeader = blockExecutive->result();
         if (blockHeader == nullptr)
         {
             auto message = "hit block cache, but block is executing!";
@@ -1004,4 +1013,21 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
         std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         return m_blocks->front()->number() - 1;
     }
+}
+
+BlockExecutive::Ptr SchedulerImpl::getExecutedBlock(bcos::protocol::BlockNumber number)
+{
+    if (m_blocks->empty())
+    {
+        return nullptr;
+    }
+
+    for (auto block : *m_blocks)
+    {
+        if (block->number() == number)
+        {
+            return block;
+        }
+    }
+    return nullptr;
 }

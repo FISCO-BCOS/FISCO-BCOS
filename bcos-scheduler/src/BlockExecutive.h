@@ -104,6 +104,14 @@ public:
 
     bool isSysBlock() { return m_isSysBlock; }
 
+    bool hasTimeout()
+    {
+        // timeout is 1 min since creation
+        return (1 * 60 * 1000 + m_creationTime) < utcTime();
+    }
+
+    void setCreationTime(uint64_t timestamp) { m_creationTime = timestamp; }
+
 protected:
     struct CommitStatus
     {
@@ -194,6 +202,8 @@ protected:
     bool m_isRunning = false;
 
     std::function<void()> f_onNeedSwitchEvent;
+
+    uint64_t m_creationTime = utcTime();
 };
 
 }  // namespace bcos::scheduler

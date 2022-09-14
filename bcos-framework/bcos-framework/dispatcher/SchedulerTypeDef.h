@@ -45,6 +45,7 @@ enum SchedulerError
     Stopped,
     InvalidBlockVersion,
     BlockIsCommitting,
+    BlockCacheTimeout,
 };
 }  // namespace scheduler
 }  // namespace bcos
