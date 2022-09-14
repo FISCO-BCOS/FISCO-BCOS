@@ -219,10 +219,10 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block3;
-    BOOST_CHECK_THROW(
-        ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3), std::runtime_error);
-    BOOST_CHECK_THROW(
-        ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3), std::runtime_error);
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3),
+        bcos::ledger::NotFoundBlockHeader);
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3),
+        bcos::ledger::NotFoundBlockHeader);
 }
 
 BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
