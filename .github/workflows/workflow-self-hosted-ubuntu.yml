@@ -43,8 +43,10 @@ jobs:
           toolchain: nightly-2022-07-28
           override: true
       
-      - name: reuse build cache
-        run: cp -r ~/cache/build ./
+      - name: Reuse build cache
+        run: |
+          cp -r ~/cache/build ./
+          rm -rf build/generated
 
       - name: Build for linux
         run: |
