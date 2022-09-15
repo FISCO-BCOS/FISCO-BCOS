@@ -143,7 +143,6 @@ BOOST_AUTO_TEST_CASE(NormalCase)
         }
     ]
     )"sv;
-#ifndef __aarch64__
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK_EQUAL(result->inputs.size(), 1);
@@ -167,16 +166,14 @@ BOOST_AUTO_TEST_CASE(NormalCase)
     cout << conflictFields[1].value.size() << endl;
     BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
     BOOST_CHECK_EQUAL(conflictFields[1].slot.value(), 1);
-#endif
 }
 
 BOOST_AUTO_TEST_CASE(InvalidAbi)
 {
     auto abiStr = "vita"sv;
-#ifndef __aarch64__
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(!result);
-#endif
+
 }
 
 BOOST_AUTO_TEST_CASE(InvalidSelector)
@@ -211,10 +208,8 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
         }
     ]
     )"sv;
-#ifndef __aarch64__
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(!result);
-#endif
 }
 
 BOOST_AUTO_TEST_CASE(EmptyConflictFields)
@@ -239,11 +234,9 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
         }
     ]
     )"sv;
-#ifndef __aarch64__
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK(result->conflictFields.empty());
-#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

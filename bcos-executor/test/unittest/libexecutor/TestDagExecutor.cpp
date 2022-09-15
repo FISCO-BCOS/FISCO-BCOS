@@ -18,7 +18,7 @@
  * @author: catli
  * @date: 2021-10-27
  */
-
+#ifndef __aarch64__
 #include "../liquid/hello_world.h"
 #include "../liquid/transfer.h"
 #include "../mock/MockLedger.h"
@@ -1117,3 +1117,4 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
+#endif

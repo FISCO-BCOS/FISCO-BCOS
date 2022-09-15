@@ -18,14 +18,13 @@
  * @author: catli
  * @date: 2021-10-19
  */
-
+#ifndef __aarch64__
 #include "../liquid/hello_world.h"
 #include "../liquid/hello_world_caller.h"
 #include "../liquid/transfer.h"
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -1247,3 +1246,4 @@ BOOST_AUTO_TEST_CASE(performance)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
+#endif
