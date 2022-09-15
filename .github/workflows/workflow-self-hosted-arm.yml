@@ -1,0 +1,59 @@
+name: Arm CI Check
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_arm:
+    name: arm ci check
+    runs-on: self-hosted-arm
+    strategy:
+      fail-fast: false
+    env: 
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+    
+      - name: Prepare centos tools
+        run: |
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-07-28
+          override: true
+
+      - name: Build for linux
+        run: |
+          ln -s  ${{ env.DEPS_ROOT }} deps
+          export X_VCPKG_ASSET_SOURCES=x-azurl,http://106.15.181.5/
+          source /opt/rh/devtoolset-10/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          source /opt/rh/llvm-toolset-7.0/enable
+          source /opt/rh/rh-perl530/enable
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          alias cmake='cmake3'
+          mkdir -p build && cd build
+          cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j3
+
+      - name: Test
+        run: 
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
