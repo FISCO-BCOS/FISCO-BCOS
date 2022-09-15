@@ -61,17 +61,15 @@ jobs:
 
       - name: Build for linux
         run: |
-          export X_VCPKG_ASSET_SOURCES=x-azurl,http://106.15.181.5/
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           source /opt/rh/devtoolset-10/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           source /opt/rh/llvm-toolset-7.0/enable
           source /opt/rh/rh-perl530/enable
-          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           alias cmake='cmake3'
           mkdir -p build && cd build
           cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j3
-
       - name: Test
         run: 
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
