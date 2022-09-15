@@ -33,6 +33,14 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     //  beforeBack() -> whenQueueBack()
 
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+
+    // refresh block cache
+    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
+    while (!m_blocks->empty() && currentNumber > m_blocks->front()->number())
+    {
+        m_blocks->pop_front();
+    }
+
     try
     {
         if (m_blocks->empty())
@@ -593,11 +601,17 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
         callback(BCOS_ERROR_PTR(SchedulerError::UnknownError, "Call address is empty"), nullptr);
         return;
     }
+
+    auto blockNumber = getCurrentBlockNumber();
+    SCHEDULER_LOG(DEBUG) << "Call request: " << LOG_KV("blockNumber", blockNumber)
+                         << LOG_KV("address", tx->to());
+
     // set attribute before call
     tx->setAttribute(m_isWasm ? bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC :
                                 bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC);
     // Create temp block
     auto block = m_blockFactory->createBlock();
+    block->blockHeader()->setNumber(blockNumber);
     block->appendTransaction(std::move(tx));
 
     // Create temp executive
@@ -619,7 +633,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
             callback(BCOS_ERROR_WITH_PREV_PTR(error->errorCode(), errorMessage, *error), nullptr);
             return;
         }
-        SCHEDULER_LOG(INFO) << "Call success";
+        SCHEDULER_LOG(DEBUG) << "Call success";
         callback(nullptr, std::move(receipt));
     });
 }
@@ -987,6 +1001,7 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
     }
     else
     {
+        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         return m_blocks->front()->number() - 1;
     }
 }

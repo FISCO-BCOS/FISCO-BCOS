@@ -1,4 +1,4 @@
-name: FISCO-BCOS GitHub Actions
+name: Others CI check
 on:
   push:
     paths-ignore:
@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2019, macos-12]
+        os: [windows-2019, macos-12]
     steps:
       - uses: actions/checkout@v2
         with:

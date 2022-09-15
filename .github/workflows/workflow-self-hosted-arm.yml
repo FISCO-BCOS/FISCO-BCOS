@@ -1,4 +1,4 @@
-name: FISCO-BCOS GitHub Actions self hosted arm
+name: Arm CI Check
 on:
   push:
     paths-ignore:
@@ -40,9 +40,6 @@ jobs:
           toolchain: nightly-2022-07-28
           override: true
 
-      - name: reuse build cache
-        run: cp -r ~/cache/build ./
-
       - name: Build for linux
         run: |
           ln -s  ${{ env.DEPS_ROOT }} deps
@@ -53,12 +50,8 @@ jobs:
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           . /opt/rh/llvm-toolset-7.0/enable
           mkdir -p build && cd build
-          cmake3  cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j3
-      - name: Save build cache
-        run: |
-          rm -rf ~/cache/build
-          cp -r build/ ~/cache/
       
       - name: Test
         run: 
