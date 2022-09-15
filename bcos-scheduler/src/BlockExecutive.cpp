@@ -186,7 +186,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             std::string to = {message->to().data(), message->to().size()};
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
-            m_hasDAG = enableDAG;
+            m_hasDAG = m_hasDAG || enableDAG;
             saveMessage(to, std::move(message), enableDAG);
         }
     }
