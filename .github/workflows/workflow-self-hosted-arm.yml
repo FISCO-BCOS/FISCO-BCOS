@@ -61,7 +61,6 @@ jobs:
 
       - name: Build for linux
         run: |
-          ln -s  ${{ env.DEPS_ROOT }} deps
           export X_VCPKG_ASSET_SOURCES=x-azurl,http://106.15.181.5/
           source /opt/rh/devtoolset-10/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
