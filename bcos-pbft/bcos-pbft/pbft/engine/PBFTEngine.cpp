@@ -183,8 +183,8 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
     RecursiveGuard l(m_mutex);
     if (_errorCode == bcos::scheduler::SchedulerError::InvalidBlocks)
     {
-        PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig for InvalidBlocks");
-        fetchAndUpdatesLedgerConfig();
+        PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig for InvalidBlocks");
+        fetchAndUpdateLedgerConfig();
     }
     // re-push the proposal into the queue
     if (_proposal->index() >= m_config->committedProposal()->index() ||
@@ -1515,9 +1515,9 @@ void PBFTEngine::onStableCheckPointCommitFailed(
     {
         PBFT_LOG(WARNING) << LOG_DESC(
                                  "onStableCheckPointCommitFailed for InvalidBlocks: "
-                                 "fetchAndUpdatesLedgerConfig")
+                                 "fetchAndUpdateLedgerConfig")
                           << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
-        fetchAndUpdatesLedgerConfig();
+        fetchAndUpdateLedgerConfig();
         return;
     }
     clearExceptionProposalState(_stableProposal->index());
@@ -1546,6 +1546,12 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
 {
     try
     {
+        if (!m_config->asMasterNode())
+        {
+            PBFT_LOG(INFO) << LOG_DESC(
+                "clearExceptionProposalState return directly for the node is the backup node");
+            return;
+        }
         RecursiveGuard l(m_mutex);
         if (!m_config->committedProposal())
         {
@@ -1555,7 +1561,7 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
             return;
         }
         // update the ledgerConfig when switch
-        fetchAndUpdatesLedgerConfig();
+        fetchAndUpdateLedgerConfig();
         m_config->timer()->restart();
         m_cacheProcessor->resetUnCommittedCacheState(_number);
         m_config->setExpectedCheckPoint(_number);
@@ -1572,9 +1578,9 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
     }
 }
 
-void PBFTEngine::fetchAndUpdatesLedgerConfig()
+void PBFTEngine::fetchAndUpdateLedgerConfig()
 {
-    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig");
+    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
     m_ledgerFetcher->fetchBlockNumberAndHash();
     m_ledgerFetcher->fetchConsensusNodeList();
     // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
@@ -1583,7 +1589,7 @@ void PBFTEngine::fetchAndUpdatesLedgerConfig()
     m_ledgerFetcher->fetchConsensusLeaderPeriod();
     m_ledgerFetcher->fetchCompatibilityVersion();
     auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
-    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdatesLedgerConfig success")
+    PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                    << LOG_KV("hash", ledgerConfig->hash().abridged())
                    << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())

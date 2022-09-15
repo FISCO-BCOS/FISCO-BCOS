@@ -115,14 +115,18 @@ bool GroupManager::shouldRebuildNodeService(
     auto const& serviceInfo = _nodeInfo->serviceInfo();
     if (originServiceInfo.size() != serviceInfo.size())
     {
-        GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed");
+        GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed")
+                        << LOG_KV("originServiceInfo", originServiceInfo.size())
+                        << LOG_KV("serviceInfo", serviceInfo.size());
         return true;
     }
     for (auto const& it : serviceInfo)
     {
         if (!originServiceInfo.count(it.first) || originServiceInfo.at(it.first) != it.second)
         {
-            GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed");
+            GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed")
+                            << LOG_KV("orgService", originServiceInfo.at(it.first))
+                            << LOG_KV("updatedService", it.second);
             return true;
         }
     }
@@ -153,8 +157,8 @@ bool GroupManager::updateNodeService(
     // will cover the old NodeInfo
     groupInfo->appendNodeInfo(_nodeInfo);
     m_groupInfoNotifier(groupInfo);
-    GROUP_LOG(INFO) << LOG_DESC("buildNodeService for the started new node")
-                    << printNodeInfo(_nodeInfo) << printGroupInfo(groupInfo);
+    GROUP_LOG(INFO) << LOG_DESC("buildNodeService for the master node") << printNodeInfo(_nodeInfo)
+                    << printGroupInfo(groupInfo);
     return true;
 }
 

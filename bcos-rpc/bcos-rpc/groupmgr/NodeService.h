@@ -105,17 +105,6 @@ public:
                 return std::make_pair(nullptr, nullptr);
             }
         }
-
-        std::vector<tars::TC_Endpoint> endPoints;
-        try
-        {
-            _nodeConfig->getTarsClientProxyEndpoints(getServiceNameByType(_type), endPoints);
-        }
-        catch (const std::exception&)
-        {
-            return std::make_pair(nullptr, nullptr);
-        }
-
         auto prx = bcostars::createServantProxy<S>(serviceName);
         auto client = std::make_shared<T>(prx, _args...);
 

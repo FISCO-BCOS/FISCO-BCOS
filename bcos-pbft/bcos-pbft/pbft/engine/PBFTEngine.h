@@ -95,7 +95,7 @@ public:
     void clearAllCache();
     void recoverState();
 
-    void fetchAndUpdatesLedgerConfig();
+    void fetchAndUpdateLedgerConfig();
     void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
     {
         m_ledgerFetcher = _ledgerFetcher;

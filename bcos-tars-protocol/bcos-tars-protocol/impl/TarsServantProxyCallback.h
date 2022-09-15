@@ -88,6 +88,9 @@ public:
         try
         {
             auto p = addInactiveEndpoint(ep);
+            BCOS_LOG(INFO) << LOG_DESC("onClose:") << m_serviceName
+                           << LOG_KV("endpoint", ep.toString())
+                           << LOG_KV("inActiveEndPointSize", p.second);
             if (p.first && m_onCloseHandler)
             {
                 m_onCloseHandler(ep);
@@ -104,8 +107,8 @@ public:
     {
         auto p = addActiveEndpoint(ep);
         BCOS_LOG(INFO) << LOG_BADGE("ServantProxyCallback::onConnect") << LOG_KV("this", this)
-                       << LOG_KV("endpoint", ep.toString()) << LOG_KV("result", p.first)
-                       << LOG_KV("activeEndpoints size", p.second);
+                       << LOG_KV("serviceName", m_serviceName) << LOG_KV("endpoint", ep.toString())
+                       << LOG_KV("result", p.first) << LOG_KV("activeEndpoints size", p.second);
 
         if (p.first && m_onConnectHandler)
         {
