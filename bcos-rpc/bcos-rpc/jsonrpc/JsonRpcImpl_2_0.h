@@ -136,7 +136,8 @@ protected:
     static void toJsonResp(
         Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
     static void toJsonResp(Json::Value& jResp, std::string_view _txHash,
-        bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr);
+        bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr, bool _isWasm,
+        crypto::Hash::Ptr _hashImpl);
     static void addProofToResponse(
         Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
 
@@ -153,7 +154,7 @@ protected:
         if (!_service)
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::ServiceNotInitCompleted,
-                "The service " + _serviceName + " has not been inited completed yet!"));
+                "The service " + _serviceName + " has not been initted completed yet!"));
         }
     }
 

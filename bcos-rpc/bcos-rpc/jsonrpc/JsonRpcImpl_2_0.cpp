@@ -18,7 +18,9 @@
  * @author: octopus
  * @date: 2021-07-09
  */
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -217,10 +219,25 @@ void JsonRpcImpl_2_0::toJsonResp(
 }
 
 void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
-    bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr)
+    bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr, bool _isWasm,
+    crypto::Hash::Ptr _hashImpl)
 {
     jResp["version"] = _transactionReceiptPtr->version();
-    jResp["contractAddress"] = string(_transactionReceiptPtr->contractAddress());
+
+    std::string contractAddress = string(_transactionReceiptPtr->contractAddress());
+    jResp["contractAddress"] = contractAddress;
+
+    if (!contractAddress.empty() && !_isWasm)
+    {
+        std::string checksumContractAddr = contractAddress;
+        toChecksumAddress(checksumContractAddr, _hashImpl->hash(contractAddress).hex());
+        jResp["checksumContractAddress"] = checksumContractAddr;
+
+        // RPC_IMPL_LOG(INFO) << LOG_DESC("TransactionReceipt toJsonResp") <<
+        // LOG_KV("contractAddress", contractAddress) << LOG_KV("checksumContractAddr",
+        // checksumContractAddr);
+    }
+
     jResp["gasUsed"] = _transactionReceiptPtr->gasUsed().str(16);
     jResp["status"] = _transactionReceiptPtr->status();
     jResp["blockNumber"] = _transactionReceiptPtr->blockNumber();
@@ -338,7 +355,6 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
     auto transaction =
         transactionFactory->createTransaction(0, _to, decodeData(_data), u256(0), 0, "", "", 0);
-
     nodeService->scheduler()->call(std::move(transaction),
         [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
             Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
@@ -370,6 +386,17 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_vie
     auto txpool = nodeService->txpool();
     checkService(txpool, "txpool");
 
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    bool isWasm = groupInfo->wasm();
+
+    auto hashImpl = nodeService->blockFactory()->cryptoSuite()->hashImpl();
+
     // Note: avoid call tx->sender() or tx->verify() here in case of verify the same transaction
     // more than once
     auto tx = nodeService->blockFactory()->transactionFactory()->createTransaction(
@@ -377,16 +404,16 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_vie
     Json::Value jResp;
     jResp["input"] = toHexStringWithPrefix(tx->input());
     RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", _groupID)
-                        << LOG_KV("node", _nodeName);
+                        << LOG_KV("node", _nodeName) << LOG_KV("isWasm", isWasm);
 
     auto start = utcTime();
     auto sendTxTimeout = m_sendTxTimeout;
 
     // Note: In order to avoid taking up too much memory at runtime, it is not recommended to pass
-    // tx to lamba expressions for the tx will only be released when submitCallback is called
+    // tx to lambda expressions for the tx will only be released when submitCallback is called
     auto submitCallback =
         [m_jResp = std::move(jResp), _requireProof, respFunc = std::move(_respFunc), start,
-            sendTxTimeout, self](Error::Ptr _error,
+            sendTxTimeout, self, hashImpl, isWasm](Error::Ptr _error,
             bcos::protocol::TransactionSubmitResult::Ptr _transactionSubmitResult) mutable {
             auto rpc = self.lock();
             if (!rpc)
@@ -417,7 +444,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_vie
 
                 auto end = utcTime();
                 auto totalTime = end - start;  // ms
-                if (sendTxTimeout > 0 && totalTime > sendTxTimeout)
+                if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
                 {
                     RPC_IMPL_LOG(WARNING)
                         << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
@@ -440,7 +467,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_vie
                         _transactionSubmitResult->status());
                     m_jResp["errorMessage"] = errorMsg.str();
                 }
-                toJsonResp(m_jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());
+                toJsonResp(m_jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt(),
+                    isWasm, hashImpl);
                 m_jResp["to"] = string(_transactionSubmitResult->to());
                 m_jResp["from"] = toHexStringWithPrefix(_transactionSubmitResult->sender());
                 // TODO: notify transactionProof
@@ -549,12 +577,25 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getTransactionReceipt");
     auto ledger = nodeService->ledger();
+
     checkService(ledger, "ledger");
+    auto hashImpl = nodeService->blockFactory()->cryptoSuite()->hashImpl();
+
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    bool isWasm = groupInfo->wasm();
+
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     ledger->asyncGetTransactionReceiptByHash(hash, _requireProof,
         [m_group = std::string(_groupID), m_nodeName = std::string(_nodeName),
             m_txHash = std::string(_txHash), hash, _requireProof, m_respFunc = std::move(_respFunc),
-            self](Error::Ptr _error, protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
+            self, hashImpl, isWasm](Error::Ptr _error,
+            protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
             ledger::MerkleProofPtr _merkleProofPtr) {
             auto rpc = self.lock();
             if (!rpc)
@@ -574,7 +615,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                 return;
             }
 
-            toJsonResp(jResp, hash.hexPrefixed(), _transactionReceiptPtr);
+            toJsonResp(jResp, hash.hexPrefixed(), _transactionReceiptPtr, isWasm, hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)
