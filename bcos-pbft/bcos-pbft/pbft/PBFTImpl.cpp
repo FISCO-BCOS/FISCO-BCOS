@@ -32,7 +32,6 @@ void PBFTImpl::start()
     }
     m_running = true;
     m_pbftEngine->start();
-    m_pbftEngine->recoverState();
     PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
 }
 
@@ -112,7 +111,7 @@ void PBFTImpl::init()
 {
     auto config = m_pbftEngine->pbftConfig();
     config->validator()->init();
-    m_pbftEngine->fetchAndUpdatesLedgerConfig();
+    m_pbftEngine->fetchAndUpdateLedgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 
