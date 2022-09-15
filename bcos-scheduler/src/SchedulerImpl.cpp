@@ -995,13 +995,14 @@ bcos::protocol::BlockNumber SchedulerImpl::getBlockNumberFromStorage()
 
 bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
 {
+    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
     if (m_blocks->empty())
     {
+        blocksLock.unlock();
         return getBlockNumberFromStorage();
     }
     else
     {
-        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
         return m_blocks->front()->number() - 1;
     }
 }
