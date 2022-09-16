@@ -14,6 +14,7 @@ class SwitchExecutorManager : public executor::ParallelTransactionExecutorInterf
 {
 public:
     const int64_t INIT_SCHEDULER_TERM_ID = 0;
+    const int64_t STOPPED_TERM_ID = -1;
 
     SwitchExecutorManager(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
@@ -48,6 +49,12 @@ public:
         }
     }
 
+    bool hasStopped()
+    {
+        ReadGuard l(m_mutex);
+        return m_schedulerTermId == STOPPED_TERM_ID;
+    }
+
     bool hasNextBlockHeaderDone()
     {
         ReadGuard l(m_mutex);
@@ -58,6 +65,14 @@ public:
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "nextBlockHeader: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (schedulerTermId < m_schedulerTermId)
         {
             // Call from an outdated scheduler instance
@@ -94,6 +109,15 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "executeTransaction: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), nullptr);
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -124,6 +148,15 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "call: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), nullptr);
+            return;
+        }
+
         if (!m_executor)
         {
             m_executor = m_factory->build();
@@ -150,6 +183,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "executeTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         // Note: copy the inputs here in case of inputs has been released
         if (!hasNextBlockHeaderDone())
         {
@@ -165,7 +206,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
+        m_pool.enqueue([executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
@@ -189,6 +230,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "dmcExecuteTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -204,7 +253,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
+        m_pool.enqueue([executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
@@ -227,6 +276,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "dagExecuteTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -241,7 +298,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, executor = m_executor, inputsVec, callback = std::move(callback)] {
+        m_pool.enqueue([executor = m_executor, inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -261,6 +318,15 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "dmcCall: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), nullptr);
+            return;
+        }
+
         if (!m_executor)
         {
             m_executor = m_factory->build();
@@ -284,6 +350,14 @@ public:
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "getHash: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!m_executor)
         {
             m_executor = m_factory->build();
@@ -310,6 +384,14 @@ public:
     void prepare(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "prepare: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -317,7 +399,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+        m_pool.enqueue([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -337,6 +419,14 @@ public:
     void commit(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "commit: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -344,7 +434,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+        m_pool.enqueue([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -364,6 +454,14 @@ public:
     void rollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "rollback: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -392,6 +490,14 @@ public:
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "reset: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!m_executor)
         {
             m_executor = m_factory->build();
@@ -414,6 +520,14 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "getCode: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!m_executor)
         {
             m_executor = m_factory->build();
@@ -438,6 +552,14 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "getABI: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!m_executor)
         {
             m_executor = m_factory->build();
@@ -470,13 +592,13 @@ public:
 
         m_executor = nullptr;
 
-        m_schedulerTermId = -1;
+        m_schedulerTermId = STOPPED_TERM_ID;
     }
 
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
-    int64_t m_schedulerTermId = -1;
+    int64_t m_schedulerTermId = STOPPED_TERM_ID;
 
     mutable bcos::SharedMutex m_mutex;
 

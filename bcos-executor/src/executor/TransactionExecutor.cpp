@@ -1906,14 +1906,6 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                             ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                    {});
-                return;
-            }
-
             auto message = toExecutionResult(std::move(output));
             allOutputs->add(std::move(message));
         },

@@ -38,17 +38,25 @@ void ExecutiveSerialFlow::submit(std::shared_ptr<std::vector<CallParameters::Uni
 void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
-    asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
-        try
-        {
-            run(onTxReturn, onFinished);
-        }
-        catch (std::exception& e)
-        {
-            onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
-                "ExecutiveSerialFlow asyncRun exception:" + std::string(e.what())));
-        }
-    });
+    try
+    {
+        asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+            try
+            {
+                run(onTxReturn, onFinished);
+            }
+            catch (std::exception& e)
+            {
+                onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                    "ExecutiveSerialFlow asyncRun exception:" + std::string(e.what())));
+            }
+        });
+    }
+    catch (std::exception const& e)
+    {
+        onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+            "ExecutiveSerialFlow asyncTo exception:" + std::string(e.what())));
+    }
 }
 
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
@@ -68,6 +76,8 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             if (!m_isRunning)
             {
                 EXECUTOR_LOG(DEBUG) << "ExecutiveSerialFlow has stopped during running";
+                onFinished(BCOS_ERROR_UNIQUE_PTR(
+                    ExecuteError::STOPPED, "ExecutiveSerialFlow has stopped during running"));
                 return;
             }
 
