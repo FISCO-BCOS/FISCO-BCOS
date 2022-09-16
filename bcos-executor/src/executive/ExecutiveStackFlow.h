@@ -65,6 +65,7 @@ public:
 
     void stop() override
     {
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveStackFlow";
         m_isRunning = false;
         ExecutiveFlowInterface::stop();
     };

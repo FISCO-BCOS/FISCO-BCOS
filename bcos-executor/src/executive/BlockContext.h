@@ -89,6 +89,7 @@ public:
         bcos::ReadGuard l(x_executiveFlows);
         for (auto it : m_executiveFlows)
         {
+            EXECUTOR_LOG(INFO) << "Try to stop flow: " << it.first;
             it.second->stop();
         }
     }

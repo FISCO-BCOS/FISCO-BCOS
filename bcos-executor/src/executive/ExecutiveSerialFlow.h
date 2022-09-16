@@ -54,6 +54,7 @@ public:
 
     void stop() override
     {
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveSerialFlow";
         m_isRunning = false;
         ExecutiveFlowInterface::stop();
     };

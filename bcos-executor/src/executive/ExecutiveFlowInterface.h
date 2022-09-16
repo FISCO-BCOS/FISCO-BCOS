@@ -78,6 +78,12 @@ private:
                     "ExecutiveFlow", std::thread::hardware_concurrency());
             }
         }
+
+        if (m_pool->hasStopped())
+        {
+            throw std::runtime_error("Executive flow has stopped");
+        }
+
         return m_pool;
     }
 
