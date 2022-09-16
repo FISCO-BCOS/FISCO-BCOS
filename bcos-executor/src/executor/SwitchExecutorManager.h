@@ -157,23 +157,19 @@ public:
             return;
         }
 
-        if (!m_executor)
-        {
-            m_executor = m_factory->build();
-        }
+        auto currentExecutor = getAndNewExecutorIfNotExists();
 
         // create a holder
-        auto executor = m_executor;
-        auto _holdExecutorCallback = [executorHolder = executor, callback = std::move(callback)](
-                                         bcos::Error::UniquePtr error,
-                                         bcos::protocol::ExecutionMessage::UniquePtr output) {
-            EXECUTOR_LOG(TRACE) << "Release executor holder"
-                                << LOG_KV("ptr count", executorHolder.use_count());
-            callback(std::move(error), std::move(output));
-        };
+        auto _holdExecutorCallback =
+            [executorHolder = currentExecutor, callback = std::move(callback)](
+                bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(output));
+            };
 
         // execute the function
-        executor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+        currentExecutor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
             std::move(_holdExecutorCallback));
     }
 
@@ -327,23 +323,19 @@ public:
             return;
         }
 
-        if (!m_executor)
-        {
-            m_executor = m_factory->build();
-        }
+        auto currentExecutor = getAndNewExecutorIfNotExists();
 
         // create a holder
-        auto executor = m_executor;
-        auto _holdExecutorCallback = [executorHolder = executor, callback = std::move(callback)](
-                                         bcos::Error::UniquePtr error,
-                                         bcos::protocol::ExecutionMessage::UniquePtr output) {
-            EXECUTOR_LOG(TRACE) << "Release executor holder"
-                                << LOG_KV("ptr count", executorHolder.use_count());
-            callback(std::move(error), std::move(output));
-        };
+        auto _holdExecutorCallback =
+            [executorHolder = currentExecutor, callback = std::move(callback)](
+                bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(output));
+            };
 
         // execute the function
-        executor->dmcCall(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+        currentExecutor->dmcCall(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
             std::move(_holdExecutorCallback));
     }
 
@@ -358,12 +350,9 @@ public:
             return;
         }
 
-        if (!m_executor)
-        {
-            m_executor = m_factory->build();
-        }
+        auto currentExecutor = getAndNewExecutorIfNotExists();
 
-        m_pool.enqueue([executor = m_executor, number, callback = std::move(callback)] {
+        m_pool.enqueue([executor = currentExecutor, number, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -498,12 +487,9 @@ public:
             return;
         }
 
-        if (!m_executor)
-        {
-            m_executor = m_factory->build();
-        }
+        auto currentExecutor = getAndNewExecutorIfNotExists();
 
-        m_pool.enqueue([executor = m_executor, callback = std::move(callback)] {
+        m_pool.enqueue([executor = currentExecutor, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -528,12 +514,9 @@ public:
             return;
         }
 
-        if (!m_executor)
-        {
-            m_executor = m_factory->build();
-        }
+        auto currentExecutor = getAndNewExecutorIfNotExists();
 
-        m_pool.enqueue([executor = m_executor, contract = std::string(contract),
+        m_pool.enqueue([executor = currentExecutor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -560,12 +543,9 @@ public:
             return;
         }
 
-        if (!m_executor)
-        {
-            m_executor = m_factory->build();
-        }
+        auto currentExecutor = getAndNewExecutorIfNotExists();
 
-        m_pool.enqueue([executor = m_executor, contract = std::string(contract),
+        m_pool.enqueue([executor = currentExecutor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -584,17 +564,26 @@ public:
     void stop() override
     {
         EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
-        WriteGuard l(m_mutex);
-        if (m_executor)
+        auto executorUseCount = 0;
         {
-            m_executor->stop();
+            WriteGuard l(m_mutex);
+            if (m_executor)
+            {
+                m_executor->stop();
+            }
+            executorUseCount = m_executor.use_count();
         }
 
         // waiting for stopped
-        while (m_executor.use_count() > 1)
+        while (executorUseCount > 1)
         {
+            auto executor = getCurrentExecutor();
+            if (executor != nullptr)
+            {
+                executorUseCount = executor.use_count();
+            }
             EXECUTOR_LOG(DEBUG) << "Executor is stopping.. "
-                                << LOG_KV("unfinishedTaskNum", m_executor.use_count() - 1);
+                                << LOG_KV("unfinishedTaskNum", executorUseCount - 1);
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         EXECUTOR_LOG(INFO) << "Executor has stopped.";
@@ -602,6 +591,24 @@ public:
         m_executor = nullptr;
 
         m_schedulerTermId = STOPPED_TERM_ID;
+    }
+
+    bcos::executor::TransactionExecutor::Ptr getCurrentExecutor()
+    {
+        ReadGuard l(m_mutex);
+        auto executor = m_executor;
+        return executor;
+    }
+
+    bcos::executor::TransactionExecutor::Ptr getAndNewExecutorIfNotExists()
+    {
+        WriteGuard l(m_mutex);
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
+        auto executor = m_executor;
+        return executor;
     }
 
 private:
