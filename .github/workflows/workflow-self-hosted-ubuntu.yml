@@ -50,16 +50,7 @@ jobs:
           ln -s ${{ env.DEPS_ROOT }} deps
 
       - name: Remove cache if correspond dir change
-        id: changed-files-specific
-        uses: tj-actions/changed-files@v29.0.7
-        with:
-          files: |
-            bcos-tars-protocol/**
-      - name: Remove changed file build cache
-        if: steps.changed-files-specific.outputs.any_changed == 'true'
-        run: |
-          echo "bcos-tars-protocol change remove build/generated"
-          rm -rf build/generated
+        run: ./tools/.ci/clear_build_cache.sh
 
       - name: Build for linux
         run: |
