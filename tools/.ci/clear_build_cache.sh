@@ -18,7 +18,7 @@ function has_dir_change() {
     origin_checksum=$(cat ${checksum_file})
 
     if [ "${origin_checksum}" == "${checksum}" ]; then
-        echo "Verify ok!"
+        echo "Verify ok! No need to clear cache for ${dir}"
         return 0
     else
         echo "Verify failed for checksum not the same. origin checksum:${origin_checksum}"
