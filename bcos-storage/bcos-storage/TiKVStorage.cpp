@@ -45,8 +45,7 @@ std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
     const std::vector<std::string>& pdAddrs, const std::string& logPath)
 {
     // TODO: config log and ssl
-    std::ignore = logPath;
-    return std::make_shared<tikv_client::TransactionClient>(pdAddrs);
+    return std::make_shared<tikv_client::TransactionClient>(pdAddrs, logPath);
 }
 }  // namespace bcos::storage
 
@@ -54,43 +53,60 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
     const std::optional<Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
 {
-    auto start = utcTime();
-    std::vector<std::string> result;
-
-    std::string keyPrefix;
-    keyPrefix = string(_table) + TABLE_KEY_SPLIT;
-    auto snap = m_cluster->snapshot();
-
-    // TODO: check performance and add limit of primary keys
-    bool finished = false;
-    while (!finished)
+    try
     {
-        auto keys =
-            snap.scan_keys(keyPrefix, Bound::Included, string(), Bound::Unbounded, scan_batch_size);
-        for (auto& key : keys)
+        auto start = utcTime();
+        std::vector<std::string> result;
+
+        std::string keyPrefix;
+        keyPrefix = string(_table) + TABLE_KEY_SPLIT;
+        auto snap = m_cluster->snapshot();
+
+        // TODO: check performance and add limit of primary keys
+        bool finished = false;
+        auto lastKey = keyPrefix;
+        int i = 0;
+        while (!finished)
         {
-            if (key.rfind(keyPrefix, 0) == 0)
-            {
-                size_t start = keyPrefix.size();
-                auto realKey = key.substr(start);
-                if (!_condition || _condition->isValid(realKey))
-                {  // filter by condition, remove keyPrefix
-                    result.push_back(std::move(realKey));
-                }
-            }
-            else
+            auto keys = snap.scan_keys(
+                lastKey, Bound::Excluded, string(), Bound::Unbounded, scan_batch_size);
+            if (keys.empty())
             {
                 finished = true;
                 break;
             }
+            lastKey = keys.back();
+            for (auto& key : keys)
+            {
+                if (key.rfind(keyPrefix, 0) == 0)
+                {
+                    size_t start = keyPrefix.size();
+                    auto realKey = key.substr(start);
+                    if (!_condition || _condition->isValid(realKey))
+                    {  // filter by condition, remove keyPrefix
+                        result.push_back(std::move(realKey));
+                    }
+                }
+                else
+                {
+                    finished = true;
+                    break;
+                }
+            }
         }
+        auto end = utcTime();
+        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
+                                << LOG_KV("count", result.size())
+                                << LOG_KV("read time(ms)", end - start)
+                                << LOG_KV("callback time(ms)", utcTime() - end);
+        _callback(nullptr, std::move(result));
     }
-    auto end = utcTime();
-    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
-                            << LOG_KV("count", result.size())
-                            << LOG_KV("read time(ms)", end - start)
-                            << LOG_KV("callback time(ms)", utcTime() - end);
-    _callback(nullptr, std::move(result));
+    catch (const std::exception& e)
+    {
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetPrimaryKeys failed")
+                                  << LOG_KV("table", _table) << LOG_KV("message", e.what());
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetPrimaryKeys failed!", e), {});
+    }
 }
 
 void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
@@ -259,11 +275,17 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
                 << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
             auto start = utcTime();
-            std::unordered_map<std::string, std::string> mutations;
             tbb::spin_mutex writeMutex;
             atomic_bool isTableValid = true;
             std::atomic_uint64_t putCount{0};
             std::atomic_uint64_t deleteCount{0};
+            if (m_committer)
+            {
+                STORAGE_TIKV_LOG(DEBUG)
+                    << "asyncPrepare clean old committer" << LOG_KV("blockNumber", params.number);
+                m_committer->rollback();
+                m_committer = nullptr;
+            }
             m_committer = m_cluster->new_optimistic_transaction();
             storage.parallelTraverse(true, [&](const std::string_view& table,
                                                const std::string_view& key, Entry const& entry) {
@@ -296,21 +318,35 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 return;
             }
             auto encode = utcTime();
-            if (mutations.empty() && params.timestamp == 0)
+            auto size = putCount + deleteCount;
+            if (size == 0)
             {
                 STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare empty storage")
                                         << LOG_KV("blockNumber", params.number);
-                callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
+                m_committer->rollback();
+                m_committer = nullptr;
+                if (params.timestamp == 0)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
+                }
+                else
+                {
+                    callback(nullptr, 0);
+                }
                 return;
             }
-            auto size = mutations.size();
             auto primaryLock = toDBKey(params.primaryTableName, params.primaryTableKey);
+            if (primaryLock == TABLE_KEY_SPLIT)
+            {
+                primaryLock.clear();
+            }
+
             if (params.timestamp == 0)
             {
                 STORAGE_TIKV_LOG(INFO)
                     << LOG_DESC("asyncPrepare primary") << LOG_KV("blockNumber", params.number);
                 auto result = m_committer->prewrite_primary(primaryLock);
-                m_committer->prewrite_secondary(result.first, result.second);
+                // m_committer->prewrite_secondary(result.first, result.second);
                 auto write = utcTime();
                 m_currentStartTS = result.second;
                 lock.unlock();
@@ -383,7 +419,7 @@ void TiKVStorage::asyncCommit(
                     ts = m_committer->commit_primary();
                     m_committer->commit_secondary(ts);
                 }
-                // m_committer = nullptr;
+                m_committer = nullptr;
             }
             auto end = utcTime();
             STORAGE_TIKV_LOG(INFO)
