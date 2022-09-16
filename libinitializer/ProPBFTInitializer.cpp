@@ -53,14 +53,14 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     // init rpc client
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
-    // TODO: tars
+
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
-    // TODO: tars
+
     auto gatewayServicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
         withoutTarsFramework, gatewayServiceName, endPoints);
     m_gateway =
