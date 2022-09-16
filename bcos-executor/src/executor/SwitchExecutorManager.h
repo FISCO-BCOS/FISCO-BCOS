@@ -590,6 +590,15 @@ public:
             m_executor->stop();
         }
 
+        // waiting for stopped
+        while (m_executor.use_count() > 1)
+        {
+            EXECUTOR_LOG(DEBUG) << "Executor is stopping.. "
+                                << LOG_KV("unfinishedTaskNum", m_executor.use_count() - 1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        EXECUTOR_LOG(INFO) << "Executor has stopped.";
+
         m_executor = nullptr;
 
         m_schedulerTermId = STOPPED_TERM_ID;
