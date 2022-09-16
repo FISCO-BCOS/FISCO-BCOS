@@ -47,6 +47,8 @@ public:
       : m_cacheFactory(_cacheFactory), m_config(_config)
     {}
 
+    virtual void tryToResendCheckPoint();
+
     virtual ~PBFTCacheProcessor() {}
     virtual void initState(
         PBFTProposalList const& _committedProposals, bcos::crypto::NodeIDPtr _fromNode);
