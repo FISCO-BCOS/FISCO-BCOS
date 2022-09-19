@@ -68,20 +68,32 @@ jobs:
         run: make -j2
       - name: prepare artifact
         run: |
-          cd build/bin
+          cd bin
           tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
           strip fisco-bcos
           tar -zcf fisco-bcos.tar.gz fisco-bcos
           strip fisco-sync
           tar -zcf fisco-sync.tar.gz fisco-sync
-      - name: Upload binaries to release
+      - name: Upload fisco-bcos-withSymbols to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos-withSymbols.tar.gz
           asset_name: fisco-bcos-withSymbols.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload fisco-bcos to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos.tar.gz
           asset_name: fisco-bcos.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload fisco-sync to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-sync.tar.gz
           asset_name: fisco-sync.tar.gz
           tag: ${{ github.ref }}
