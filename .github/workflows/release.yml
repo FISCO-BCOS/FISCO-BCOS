@@ -34,3 +34,55 @@ jobs:
           asset_name: fisco-bcos-macOS.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
+  compile_ubuntu_release:
+    name: upload standard binary of ubuntu
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: deps/src
+          key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v4-notest-${{ runner.temp }}-
+            deps-v4-${{ runner.temp }}-
+      - uses: actions/cache@v2
+        id: ccache
+        with:
+          path: ccache
+          key: ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v3-notest-${{ runner.temp }}-
+      - name: install ubuntu dependencies
+        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
+      - name: configure
+        run: /usr/bin/cmake . -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release
+      - name: compile
+        run: make -j2
+      - name: prepare artifact
+        run: |
+          cd build/bin
+          tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
+          strip fisco-bcos
+          tar -zcf fisco-bcos.tar.gz fisco-bcos
+          strip fisco-sync
+          tar -zcf fisco-sync.tar.gz fisco-sync
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/fisco-bcos-withSymbols.tar.gz
+          asset_name: fisco-bcos-withSymbols.tar.gz
+          file: bin/fisco-bcos.tar.gz
+          asset_name: fisco-bcos.tar.gz
+          file: bin/fisco-sync.tar.gz
+          asset_name: fisco-sync.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
