@@ -24,6 +24,8 @@ concept PointerLike = requires(Pointer p)
 {
     *p;
     p.operator->();
+    ++p;
+    --p;
 };
 
 template <class Input>
