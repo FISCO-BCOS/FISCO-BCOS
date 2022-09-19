@@ -64,6 +64,10 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     // set timeout to be true to in case of notify-seal before the PBFTEngine
     // started
     m_config->setTimeoutState(true);
+
+    // Timer is used to manage checkpoint timeout
+    m_timer =
+        std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
 }
 
 void PBFTEngine::initSendResponseHandler()
@@ -106,11 +110,39 @@ void PBFTEngine::start()
     ConsensusEngine::start();
     // when the node setup, start the timer for view recovery
     m_config->timer()->start();
+    // register timeout handler
+    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    m_timer->registerTimeoutHandler([self]() {
+        try
+        {
+            auto engine = self.lock();
+            if (!engine)
+            {
+                return;
+            }
+            engine->tryToResendCheckPoint();
+        }
+        catch (std::exception const& e)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("tryToResendCheckPoint error")
+                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
+    });
+    m_timer->start();
     // trigger fast viewchange to reachNewView
     if (!m_config->startRecovered())
     {
         triggerTimeout(false);
     }
+}
+
+void PBFTEngine::tryToResendCheckPoint()
+{
+    {
+        RecursiveGuard l(m_mutex);
+        m_cacheProcessor->tryToResendCheckPoint();
+    }
+    m_timer->restart();
 }
 
 void PBFTEngine::restart()
@@ -140,6 +172,10 @@ void PBFTEngine::stop()
     if (m_config)
     {
         m_config->stop();
+    }
+    if (m_timer)
+    {
+        m_timer->stop();
     }
     PBFT_LOG(INFO) << LOG_DESC("stop the PBFTEngine");
 }

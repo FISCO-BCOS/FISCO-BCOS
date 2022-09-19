@@ -45,10 +45,17 @@ public:
 
     virtual void stop()
     {
-        auto pool = getPoolInstance();
-        if (pool)
+        try
         {
-            pool->stop();
+            auto pool = getPoolInstance();
+            if (pool)
+            {
+                pool->stop();
+            }
+        }
+        catch (std::exception const& e)
+        {
+            EXECUTOR_LOG(DEBUG) << "ExecutiveFlowInterface stop: " << e.what();
         }
     }
 
@@ -78,6 +85,12 @@ private:
                     "ExecutiveFlow", std::thread::hardware_concurrency());
             }
         }
+
+        if (m_pool->hasStopped())
+        {
+            throw std::runtime_error("Executive flow has stopped");
+        }
+
         return m_pool;
     }
 

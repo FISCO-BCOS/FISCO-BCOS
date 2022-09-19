@@ -93,7 +93,6 @@ void NodeServiceApp::initNodeService()
     m_nodeInitializer->nodeConfig()->getTarsClientProxyEndpoints(
         bcos::protocol::RPC_NAME, endPoints);
 
-    // TODO: tars
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
 

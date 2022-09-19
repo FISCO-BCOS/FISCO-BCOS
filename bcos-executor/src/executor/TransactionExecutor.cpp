@@ -1906,14 +1906,6 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                             ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                    {});
-                return;
-            }
-
             auto message = toExecutionResult(std::move(output));
             allOutputs->add(std::move(message));
         },
@@ -2404,6 +2396,11 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 void TransactionExecutor::stop()
 {
     EXECUTOR_NAME_LOG(INFO) << "Try to stop executor";
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Executor has just tried to stop";
+        return;
+    }
     m_isRunning = false;
     if (m_blockContext)
     {

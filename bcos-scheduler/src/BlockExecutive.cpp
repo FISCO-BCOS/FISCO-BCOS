@@ -186,7 +186,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             std::string to = {message->to().data(), message->to().size()};
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
-            m_hasDAG = enableDAG;
+            m_hasDAG = m_hasDAG || enableDAG;
             saveMessage(to, std::move(message), enableDAG);
         }
     }
@@ -1309,12 +1309,12 @@ void BlockExecutive::batchBlockRollback(
     params.number = number();
     params.timestamp = version;
     m_scheduler->m_storage->asyncRollback(
-        params, [number = params.number, status](Error::Ptr&& error) {
+        params, [this, version, number = params.number, status](Error::Ptr&& error) {
             {
                 WriteGuard lock(status->x_lock);
                 if (error)
                 {
-                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback storage error!"
+                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback node storage error!"
                                          << error->errorMessage();
 
                     ++status->failed;
@@ -1323,56 +1323,59 @@ void BlockExecutive::batchBlockRollback(
                 {
                     ++status->success;
                 }
-
-                if (status->success + status->failed < status->total)
-                {
-                    return;
-                }
             }
-            status->checkAndCommit(*status);
-        });
 
-    // for (auto& it : *(m_scheduler->m_executorManager))
-    m_scheduler->m_executorManager->forEachExecutor(
-        [this, version, status](
-            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-            bcos::protocol::TwoPCParams executorParams;
-            executorParams.number = number();
-            executorParams.timestamp = version;
-            executor->rollback(executorParams, [this, status](bcos::Error::Ptr&& error) {
-                {
-                    WriteGuard lock(status->x_lock);
-                    if (error)
-                    {
-                        if (error->errorCode() ==
-                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                        {
-                            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
+            if (status->failed > 0)
+            {
+                status->checkAndCommit(*status);
+            }
+            else
+            {
+                // for (auto& it : *(m_scheduler->m_executorManager))
+                m_scheduler->m_executorManager->forEachExecutor(
+                    [this, version, number, status](std::string,
+                        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+                        bcos::protocol::TwoPCParams executorParams;
+                        executorParams.number = number;
+                        executorParams.timestamp = version;
+                        executor->rollback(
+                            executorParams, [this, number, status](bcos::Error::Ptr&& error) {
+                                {
+                                    WriteGuard lock(status->x_lock);
+                                    if (error)
+                                    {
+                                        if (error->errorCode() ==
+                                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                                        {
+                                            SCHEDULER_LOG(INFO)
+                                                << BLOCK_NUMBER(number)
                                                 << "Rollback a restarted executor. Ignore."
                                                 << error->errorMessage();
-                            ++status->success;
-                            triggerSwitch();
-                        }
-                        else
-                        {
-                            SCHEDULER_LOG(ERROR)
-                                << BLOCK_NUMBER(number()) << "Rollback executor error!"
-                                << error->errorMessage();
-                            ++status->failed;
-                        }
-                    }
-                    else
-                    {
-                        ++status->success;
-                    }
+                                            ++status->success;
+                                            triggerSwitch();
+                                        }
+                                        else
+                                        {
+                                            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number)
+                                                                 << "Rollback executor error!"
+                                                                 << error->errorMessage();
+                                            ++status->failed;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ++status->success;
+                                    }
 
-                    if (status->success + status->failed < status->total)
-                    {
-                        return;
-                    }
-                }
-                status->checkAndCommit(*status);
-            });
+                                    if (status->success + status->failed < status->total)
+                                    {
+                                        return;
+                                    }
+                                }
+                                status->checkAndCommit(*status);
+                            });
+                    });
+            }
         });
 }
 

@@ -28,6 +28,14 @@ using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
+void PBFTCacheProcessor::tryToResendCheckPoint()
+{
+    for (auto const& it : m_caches)
+    {
+        it.second->onCheckPointTimeout();
+    }
+}
+
 void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr _fromNode)
 {
     for (auto proposal : _proposals)

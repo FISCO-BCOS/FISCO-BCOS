@@ -80,7 +80,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
 
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
-    // TODO: tars
+
     auto gatewayPrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
         withoutTarsFramework, gatewayServiceName, endPoints);
 

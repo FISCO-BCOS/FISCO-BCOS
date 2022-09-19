@@ -95,7 +95,7 @@ struct schedulerImplFixture
     };
 
     ~schedulerImplFixture() {}
-    bcos::ledger::LedgerInterface::Ptr ledger;
+    bcos::test::MockLedger3::Ptr ledger;
     bcos::scheduler::ExecutorManager::Ptr executorManager;
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
     bcos::protocol::TransactionReceiptFactory::Ptr transactionReceiptFactory;
@@ -311,7 +311,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     bool commitBlockError = false;
     size_t errorNumber = 0;
     size_t queueFrontNumber = 0;
-    for (size_t i = 5; i < 11; ++i)
+    ledger->commitSuccess(true);
+    for (size_t i = 7; i < 11; ++i)
     {
         auto blockHeader = blockHeaderFactory->createBlockHeader();
         blockHeader->setNumber(i);
@@ -333,7 +334,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
                     BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
                     BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
                     BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
-                    BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
+                    BOOST_CHECK_EQUAL(config->hash().hex(), h256(6).hex());
                     committedPromise.set_value(true);
                 }
             });
@@ -342,8 +343,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             commitBlockError = false;
         }
     }
-    BOOST_CHECK_EQUAL(errorNumber, 2);
-    BOOST_CHECK_EQUAL(queueFrontNumber, 4);
+    BOOST_CHECK_EQUAL(errorNumber, 1);
+    BOOST_CHECK_EQUAL(queueFrontNumber, 3);
     BOOST_CHECK(!commitBlockError);
     SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
                          << LOG_KV("queueFrontNumber", queueFrontNumber);
@@ -601,6 +602,7 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
     BOOST_CHECK_EQUAL(receipt->status(), 0);
     BOOST_CHECK_GT(receipt->gasUsed(), 0);
 }
+
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
