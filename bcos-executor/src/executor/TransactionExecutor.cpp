@@ -2396,6 +2396,11 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 void TransactionExecutor::stop()
 {
     EXECUTOR_NAME_LOG(INFO) << "Try to stop executor";
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Executor has just tried to stop";
+        return;
+    }
     m_isRunning = false;
     if (m_blockContext)
     {

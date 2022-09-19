@@ -29,22 +29,25 @@ public:
         // refresh when receive larger schedulerTermId
         if (schedulerTermId > m_schedulerTermId)
         {
-            WriteGuard l(m_mutex);
-            if (m_schedulerTermId != schedulerTermId)
+            bcos::executor::TransactionExecutor::Ptr oldExecutor;
             {
-                // remove old executor and build new
-                if (m_executor)
+                WriteGuard l(m_mutex);
+                if (m_schedulerTermId != schedulerTermId)
                 {
-                    m_executor->stop();
+                    oldExecutor = m_executor;
+
+                    // TODO: check cycle reference in executor to avoid memory leak
+                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("Switch")
+                                        << "ExecutorSwitch: Build new executor instance with "
+                                        << LOG_KV("schedulerTermId", schedulerTermId);
+                    m_executor = m_factory->build();
+
+                    m_schedulerTermId = schedulerTermId;
                 }
-
-                // TODO: check cycle reference in executor to avoid memory leak
-                EXECUTOR_LOG(DEBUG)
-                    << LOG_BADGE("Switch") << "ExecutorSwitch: Build new executor instance with "
-                    << LOG_KV("schedulerTermId", schedulerTermId);
-                m_executor = m_factory->build();
-
-                m_schedulerTermId = schedulerTermId;
+            }
+            if (oldExecutor)
+            {
+                oldExecutor->stop();
             }
         }
     }
