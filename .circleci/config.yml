@@ -209,7 +209,7 @@ jobs:
       - run:
           name: Upload to GitHub Release
           command: |
-            go get github.com/tcnksm/ghr
+            go install github.com/tcnksm/ghr
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-sync.tar.gz
