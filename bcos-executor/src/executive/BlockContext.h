@@ -86,11 +86,24 @@ public:
 
     void stop()
     {
-        bcos::ReadGuard l(x_executiveFlows);
-        for (auto it : m_executiveFlows)
+        std::vector<ExecutiveFlowInterface::Ptr> executiveFlow2Stop;
         {
-            EXECUTOR_LOG(INFO) << "Try to stop flow: " << it.first;
-            it.second->stop();
+            bcos::ReadGuard l(x_executiveFlows);
+            for (auto it : m_executiveFlows)
+            {
+                EXECUTOR_LOG(INFO) << "Try to stop flow: " << it.first;
+                executiveFlow2Stop.push_back(it.second);
+            }
+        }
+
+        if (executiveFlow2Stop.empty())
+        {
+            return;
+        }
+
+        for (auto executiveFlow : executiveFlow2Stop)
+        {
+            executiveFlow->stop();
         }
     }
     void clear()
