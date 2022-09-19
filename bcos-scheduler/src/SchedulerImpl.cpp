@@ -36,7 +36,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 
     // refresh block cache
     bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
-    while (!m_blocks->empty() && currentNumber > m_blocks->front()->number())
+    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number())
     {
         m_blocks->pop_front();
     }

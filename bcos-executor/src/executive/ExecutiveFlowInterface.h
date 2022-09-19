@@ -45,10 +45,17 @@ public:
 
     virtual void stop()
     {
-        auto pool = getPoolInstance();
-        if (pool)
+        try
         {
-            pool->stop();
+            auto pool = getPoolInstance();
+            if (pool)
+            {
+                pool->stop();
+            }
+        }
+        catch (std::exception const& e)
+        {
+            EXECUTOR_LOG(DEBUG) << "ExecutiveFlowInterface stop: " << e.what();
         }
     }
 

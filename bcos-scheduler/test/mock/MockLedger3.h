@@ -52,14 +52,14 @@ public:
     void asyncGetBlockNumber(
         std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
     {
-        _onGetBlock(nullptr, 5);
+        _onGetBlock(nullptr, commitBlockNumber);
     }
 
     void asyncGetBlockHashByNumber(protocol::BlockNumber _blockNumber,
         std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override
     {
-        BOOST_CHECK_EQUAL(_blockNumber, 5);
-        _onGetBlock(nullptr, h256(5));
+        BOOST_CHECK_EQUAL(_blockNumber, commitBlockNumber);
+        _onGetBlock(nullptr, h256(commitBlockNumber));
     }
 
     void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
@@ -87,19 +87,19 @@ public:
     {
         if (_key == ledger::SYSTEM_KEY_TX_COUNT_LIMIT)
         {
-            _onGetConfig(nullptr, "100", 5);
+            _onGetConfig(nullptr, "100", commitBlockNumber);
         }
         else if (_key == ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
         {
-            _onGetConfig(nullptr, "300", 5);
+            _onGetConfig(nullptr, "300", commitBlockNumber);
         }
         else if (_key == ledger::SYSTEM_KEY_TX_GAS_LIMIT)
         {
-            _onGetConfig(nullptr, "300000000", 5);
+            _onGetConfig(nullptr, "300000000", commitBlockNumber);
         }
         else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
-            _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, 5);
+            _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, commitBlockNumber);
         }
         else
         {
