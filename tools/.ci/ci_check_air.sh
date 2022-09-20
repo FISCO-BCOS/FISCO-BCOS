@@ -1,5 +1,5 @@
 #!/bin/bash
-console_branch="release-3.0.0"
+console_branch="3.0.0"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
@@ -73,10 +73,11 @@ download_console()
 {
     cd ${current_path}
     LOG_INFO "Download console ..."
-    git clone https://github.com/FISCO-BCOS/console && cd console && git checkout ${console_branch} 
+    curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
     LOG_INFO "Download console success, branch: ${console_branch}"
     LOG_INFO "Build and Config console ..."
-    bash gradlew build -x test && cd dist
+    tar -zxvf console.tar.gz
+    cd console
 }
 
 config_console()
