@@ -1,5 +1,5 @@
 #!/bin/bash
-console_branch="release-3.0.0"
+console_branch="3.0.0"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
@@ -43,6 +43,7 @@ init()
     cd ${current_path}
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
+    rm -rf nodes
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
     cd nodes/127.0.0.1 && bash start_all.sh
 }
@@ -73,15 +74,16 @@ download_console()
 {
     cd ${current_path}
     LOG_INFO "Download console ..."
-    git clone https://github.com/FISCO-BCOS/console && cd console && git checkout ${console_branch} 
+    curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
     LOG_INFO "Download console success, branch: ${console_branch}"
     LOG_INFO "Build and Config console ..."
-    bash gradlew build -x test && cd dist
+    tar -zxvf console.tar.gz
+    cd console
 }
 
 config_console()
 {
-    cd ${current_path}/console/dist
+    cd ${current_path}/console/
     use_sm="${1}"
     cp -r ${current_path}/nodes/127.0.0.1/sdk/* conf/
     cp conf/config-example.toml conf/config.toml
@@ -97,7 +99,7 @@ config_console()
 send_transactions()
 {
     txs_num="${1}"
-    cd ${current_path}/console/dist
+    cd ${current_path}/console/
     LOG_INFO "Deploy HelloWorld..."
     for((i=1;i<=${txs_num};i++));
     do

@@ -966,9 +966,13 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << LOG_BADGE("BlockTrace") << "DMCExecute.6:"
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
                       << "\t " << LOG_BADGE("DMCRecorder")
                       << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
+                      << LOG_KV("checksum", dmcChecksum);
+
+        DMC_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                      << LOG_BADGE("DMCRecorder") << " DMCExecute for transaction finished "
                       << LOG_KV("checksum", dmcChecksum);
     }
 
@@ -1052,9 +1056,11 @@ void BlockExecutive::onExecuteFinish(
 
 void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callback)
 {
+    auto startTime = utcTime();
     auto status = std::make_shared<CommitStatus>();
     status->total = m_scheduler->m_executorManager->size();
-    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+    status->checkAndCommit = [this, startTime, callback = std::move(callback)](
+                                 const CommitStatus& status) {
         if (!m_isRunning)
         {
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"));
@@ -1072,11 +1078,12 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
         }
 
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
-                            << "NextBlock success."
-                            << LOG_KV("executorNum", m_scheduler->m_executorManager->size());
+                            << "NextBlock success"
+                            << LOG_KV("executorNum", m_scheduler->m_executorManager->size())
+                            << LOG_KV("timeCost", utcTime() - startTime);
         callback(nullptr);
     };
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace") << "NextBlock request."
+    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace") << "NextBlock request"
                         << LOG_KV("executorNum", m_scheduler->m_executorManager->size());
 
     // for (auto& it : *(m_scheduler->m_executorManager))
