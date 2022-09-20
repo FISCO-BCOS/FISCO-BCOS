@@ -1,4 +1,4 @@
-name: Ubuntu CI Check
+name: Arm CI Check
 on:
   push:
     paths-ignore:
@@ -11,18 +11,19 @@ on:
       - "Changelog.md"
       - "README.md"
   release:
-    types: [push]
+    types: [published, created, edited]
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build_ubuntu:
-    name: ubuntu ci check
-    runs-on: self-hosted-ubuntu
+  build_arm:
+    name: arm ci check
+    runs-on: self-hosted-arm
     strategy:
       fail-fast: false
-    env:
+    env: 
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
@@ -30,14 +31,10 @@ jobs:
         with:
           clean: false
 
-      - name: apt install
+      - name: Prepare centos tools
         run: |
-          sudo apt update
-          sudo apt install -y  lcov ccache wget python3-dev git curl zip unzip tar
-          sudo apt install -y --no-install-recommends \
-              clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache
-
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
@@ -55,9 +52,14 @@ jobs:
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
-          make -j8
-
+          . /opt/rh/devtoolset-10/enable
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          . /opt/rh/llvm-toolset-7.0/enable
+          alias cmake='cmake3'
+          mkdir -p build && cd build
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j3
       - name: Test
-        run:
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+        run: 
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test

@@ -64,6 +64,8 @@ public:
         _ioService.post(f);
     }
 
+    bool hasStopped() { return _ioService.stopped(); }
+
 private:
     std::string _threadName;
     boost::thread_group _workers;

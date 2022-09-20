@@ -54,7 +54,6 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
 
     auto blockFactory = createBlockFactory(cryptoSuite);
 
-    // TODO: tars
     auto ledgerClient = createServicePrx<bcostars::LedgerServiceClient, bcostars::LedgerServicePrx>(
         LEDGER, _nodeInfo, _nodeConfig, blockFactory);
     if (!ledgerClient.first)
@@ -62,7 +61,6 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
         return nullptr;
     }
 
-    // TODO: tars
     auto schedulerClient =
         createServicePrx<bcostars::SchedulerServiceClient, bcostars::SchedulerServicePrx>(
             SCHEDULER, _nodeInfo, _nodeConfig, cryptoSuite);
@@ -71,7 +69,6 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
         return nullptr;
     }
 
-    // TODO: tars
     // create txpool client
     auto txpoolClient = createServicePrx<bcostars::TxPoolServiceClient, bcostars::TxPoolServicePrx>(
         TXPOOL, _nodeInfo, _nodeConfig, cryptoSuite, blockFactory);
@@ -80,7 +77,6 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
         return nullptr;
     }
 
-    // TODO: tars
     // create consensus client
     auto consensusClient = createServicePrx<bcostars::PBFTServiceClient, bcostars::PBFTServicePrx>(
         CONSENSUS, _nodeInfo, _nodeConfig);
@@ -89,7 +85,6 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
         return nullptr;
     }
 
-    // TODO: tars
     // create sync client
     auto syncClient = createServicePrx<bcostars::BlockSyncServiceClient, bcostars::PBFTServicePrx>(
         CONSENSUS, _nodeInfo, _nodeConfig);
