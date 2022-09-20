@@ -107,10 +107,10 @@ send_transactions()
         sleep 1
     done  
     blockNumber=`bash console.sh getBlockNumber`
-    if [ "${blockNumber}" -ne "${txs_num}" ]; then
-        exit_node "send transaction failed, current blockNumber: ${blockNumber}"
-    else
+    if [ "${blockNumber}" == "${txs_num}" ]; then
         LOG_INFO "send transaction success, current blockNumber: ${blockNumber}"
+    else
+        exit_node "send transaction failed, current blockNumber: ${blockNumber}"
     fi
 }
 
@@ -124,10 +124,10 @@ check_sync()
     # wait for sync
     sleep 10
     block_number=$(cat node0/log/* |grep Report | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
-    if [ "${block_number}" -ne "${expected_block_number}" ]; then
-        exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
-    else
+    if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
+    else
+        exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
     fi
     LOG_INFO "check sync success..."
 }
