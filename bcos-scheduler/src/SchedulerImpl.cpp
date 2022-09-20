@@ -499,8 +499,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
             {
                 std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                bcos::protocol::BlockNumber number = m_blocks->front()->number();
-                if (number == block->blockHeaderConst()->number())
+                auto number = block->blockHeaderConst()->number();
+                if (m_blocks && m_blocks->front()->number() == number)
                 {
                     m_blocks->pop_front();
                     SCHEDULER_LOG(DEBUG)
