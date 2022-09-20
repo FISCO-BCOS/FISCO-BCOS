@@ -73,11 +73,19 @@ check_consensus()
 download_console()
 {
     cd ${current_path}
+
     LOG_INFO "Download console ..."
-    curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
-    LOG_INFO "Download console success, branch: ${console_branch}"
+    tar_file=console-${console_branch}.tar.gz
+    if [ -f "${tar_file}" ]; then
+        LOG_INFO "Use download cache"
+    else
+        curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
+        LOG_INFO "Download console success, branch: ${console_branch}"
+        mv console.tar.gz ${tar_file}
+    fi
     LOG_INFO "Build and Config console ..."
-    tar -zxvf console.tar.gz
+    rm -rf console
+    tar -zxvf ${tar_file}
     cd console
 }
 
