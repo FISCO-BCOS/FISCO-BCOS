@@ -30,7 +30,9 @@ function write_checksum_file() {
     dir=${1}
     checksum=${2}
     checksum_file=${BUILD_DIR}/${dir}.checksum
-
+    checksum_file_dir=${checksum_file%/*}
+    echo "Checksum file dir is" ${checksum_file_dir}
+    mkdir -p ${checksum_file_dir}
     echo -n ${checksum} > ${checksum_file}
 }
 
@@ -50,4 +52,5 @@ function check_and_clear_cache() {
     fi
 }
 
+check_and_clear_cache .github/workflows ${BUILD_DIR}
 check_and_clear_cache bcos-tars-protocol/bcos-tars-protocol ${BUILD_DIR}/generated
