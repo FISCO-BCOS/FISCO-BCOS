@@ -101,7 +101,6 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
 
-    // TODO: tars
     // get the gateway client
     auto gatewayPrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
         withoutTarsFramework, gatewayServiceName, endPoints);
