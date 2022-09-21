@@ -150,24 +150,17 @@ void ProPBFTInitializer::init()
     // Note: m_leaderElection is created after PBFTInitializer::init
     if (m_leaderElection)
     {
-        // should report the latest nodeInfo actively to rpc/gateway when the electionCluster is
-        // down
         m_leaderElection->registerOnElectionClusterException([this]() {
-            if (m_pbft->masterNode())
-            {
-                INITIALIZER_LOG(INFO)
-                    << LOG_DESC("OnElectionClusterException: reportNodeInfo to rpc/gateway")
-                    << LOG_KV("nodeName", m_nodeConfig->nodeName());
-                reportNodeInfo();
-                m_timer->start();
-            }
+            INITIALIZER_LOG(INFO) << LOG_DESC("OnElectionClusterException")
+                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
         });
-        // stop reportNodeInfo to rpc/gateway
         m_leaderElection->registerOnElectionClusterRecover([this]() {
             INITIALIZER_LOG(INFO) << LOG_DESC(
                 "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
-            m_timer->stop();
         });
     }
-    reportNodeInfo();
+    else
+    {
+        reportNodeInfo();
+    }
 }

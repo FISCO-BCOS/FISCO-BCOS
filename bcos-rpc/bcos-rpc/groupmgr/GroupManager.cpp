@@ -155,7 +155,7 @@ bool GroupManager::updateNodeService(
     m_nodeServiceList[_groupID][nodeAppName] = nodeService;
     auto groupInfo = m_groupInfos[_groupID];
     // will cover the old NodeInfo
-    groupInfo->appendNodeInfo(_nodeInfo);
+    groupInfo->updateNodeInfo(_nodeInfo);
     m_groupInfoNotifier(groupInfo);
     GROUP_LOG(INFO) << LOG_DESC("buildNodeService for the master node") << printNodeInfo(_nodeInfo)
                     << printGroupInfo(groupInfo)
