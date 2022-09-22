@@ -175,14 +175,16 @@ void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
         m_pbftEngine->clearAllCache();
     }
     PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: ") << _isMasterNode;
-    m_masterNode.store(_isMasterNode);
     m_pbftEngine->pbftConfig()->enableAsMasterNode(_isMasterNode);
     if (!_isMasterNode)
     {
+        m_masterNode.store(_isMasterNode);
         return;
     }
     PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: init and start the consensus module");
     init();
     m_pbftEngine->recoverState();
     m_pbftEngine->restart();
+    // only reset m_masterNode to true when init success
+    m_masterNode.store(_isMasterNode);
 }
