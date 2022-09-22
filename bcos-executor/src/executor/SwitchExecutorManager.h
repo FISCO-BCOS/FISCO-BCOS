@@ -14,6 +14,7 @@ class SwitchExecutorManager : public executor::ParallelTransactionExecutorInterf
 {
 public:
     const int64_t INIT_SCHEDULER_TERM_ID = 0;
+    const int64_t STOPPED_TERM_ID = -1;
 
     SwitchExecutorManager(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
@@ -28,24 +29,33 @@ public:
         // refresh when receive larger schedulerTermId
         if (schedulerTermId > m_schedulerTermId)
         {
-            WriteGuard l(m_mutex);
-            if (m_schedulerTermId != schedulerTermId)
+            bcos::executor::TransactionExecutor::Ptr oldExecutor;
             {
-                // remove old executor and build new
-                if (m_executor)
+                WriteGuard l(m_mutex);
+                if (m_schedulerTermId != schedulerTermId)
                 {
-                    m_executor->stop();
+                    oldExecutor = m_executor;
+
+                    // TODO: check cycle reference in executor to avoid memory leak
+                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("Switch")
+                                        << "ExecutorSwitch: Build new executor instance with "
+                                        << LOG_KV("schedulerTermId", schedulerTermId);
+                    m_executor = m_factory->build();
+
+                    m_schedulerTermId = schedulerTermId;
                 }
-
-                // TODO: check cycle reference in executor to avoid memory leak
-                EXECUTOR_LOG(DEBUG)
-                    << LOG_BADGE("Switch") << "ExecutorSwitch: Build new executor instance with "
-                    << LOG_KV("schedulerTermId", schedulerTermId);
-                m_executor = m_factory->build();
-
-                m_schedulerTermId = schedulerTermId;
+            }
+            if (oldExecutor)
+            {
+                oldExecutor->stop();
             }
         }
+    }
+
+    bool hasStopped()
+    {
+        ReadGuard l(m_mutex);
+        return m_schedulerTermId == STOPPED_TERM_ID;
     }
 
     bool hasNextBlockHeaderDone()
@@ -58,6 +68,14 @@ public:
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "nextBlockHeader: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (schedulerTermId < m_schedulerTermId)
         {
             // Call from an outdated scheduler instance
@@ -94,6 +112,15 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "executeTransaction: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), nullptr);
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -124,23 +151,28 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        if (!m_executor)
+        if (hasStopped())
         {
-            m_executor = m_factory->build();
+            std::string message = "call: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), nullptr);
+            return;
         }
 
+        auto currentExecutor = getAndNewExecutorIfNotExists();
+
         // create a holder
-        auto executor = m_executor;
-        auto _holdExecutorCallback = [executorHolder = executor, callback = std::move(callback)](
-                                         bcos::Error::UniquePtr error,
-                                         bcos::protocol::ExecutionMessage::UniquePtr output) {
-            EXECUTOR_LOG(TRACE) << "Release executor holder"
-                                << LOG_KV("ptr count", executorHolder.use_count());
-            callback(std::move(error), std::move(output));
-        };
+        auto _holdExecutorCallback =
+            [executorHolder = currentExecutor, callback = std::move(callback)](
+                bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(output));
+            };
 
         // execute the function
-        executor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+        currentExecutor->call(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
             std::move(_holdExecutorCallback));
     }
 
@@ -150,6 +182,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "executeTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         // Note: copy the inputs here in case of inputs has been released
         if (!hasNextBlockHeaderDone())
         {
@@ -165,7 +205,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
+        m_pool.enqueue([executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
@@ -189,6 +229,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "dmcExecuteTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -204,7 +252,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, executor = m_executor, contractAddress = std::move(contractAddress),
+        m_pool.enqueue([executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
@@ -227,6 +275,14 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "dagExecuteTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -241,7 +297,7 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([this, executor = m_executor, inputsVec, callback = std::move(callback)] {
+        m_pool.enqueue([executor = m_executor, inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -261,35 +317,45 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        if (!m_executor)
+        if (hasStopped())
         {
-            m_executor = m_factory->build();
+            std::string message = "dmcCall: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), nullptr);
+            return;
         }
 
+        auto currentExecutor = getAndNewExecutorIfNotExists();
+
         // create a holder
-        auto executor = m_executor;
-        auto _holdExecutorCallback = [executorHolder = executor, callback = std::move(callback)](
-                                         bcos::Error::UniquePtr error,
-                                         bcos::protocol::ExecutionMessage::UniquePtr output) {
-            EXECUTOR_LOG(TRACE) << "Release executor holder"
-                                << LOG_KV("ptr count", executorHolder.use_count());
-            callback(std::move(error), std::move(output));
-        };
+        auto _holdExecutorCallback =
+            [executorHolder = currentExecutor, callback = std::move(callback)](
+                bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
+                EXECUTOR_LOG(TRACE)
+                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
+                callback(std::move(error), std::move(output));
+            };
 
         // execute the function
-        executor->dmcCall(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
+        currentExecutor->dmcCall(bcos::protocol::ExecutionMessage::UniquePtr(input.release()),
             std::move(_holdExecutorCallback));
     }
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override
     {
-        if (!m_executor)
+        if (hasStopped())
         {
-            m_executor = m_factory->build();
+            std::string message = "getHash: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
         }
 
-        m_pool.enqueue([executor = m_executor, number, callback = std::move(callback)] {
+        auto currentExecutor = getAndNewExecutorIfNotExists();
+
+        m_pool.enqueue([executor = currentExecutor, number, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -310,6 +376,14 @@ public:
     void prepare(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "prepare: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -317,7 +391,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+        m_pool.enqueue([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -337,6 +411,14 @@ public:
     void commit(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "commit: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -344,7 +426,7 @@ public:
             return;
         }
 
-        m_pool.enqueue([this, executor = m_executor, params = bcos::protocol::TwoPCParams(params),
+        m_pool.enqueue([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -364,6 +446,14 @@ public:
     void rollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(bcos::Error::Ptr)> callback) override
     {
+        if (hasStopped())
+        {
+            std::string message = "rollback: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
         if (!hasNextBlockHeaderDone())
         {
             callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
@@ -392,12 +482,17 @@ public:
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override
     {
-        if (!m_executor)
+        if (hasStopped())
         {
-            m_executor = m_factory->build();
+            std::string message = "reset: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
         }
 
-        m_pool.enqueue([executor = m_executor, callback = std::move(callback)] {
+        auto currentExecutor = getAndNewExecutorIfNotExists();
+
+        m_pool.enqueue([executor = currentExecutor, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -414,12 +509,17 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
-        if (!m_executor)
+        if (hasStopped())
         {
-            m_executor = m_factory->build();
+            std::string message = "getCode: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
         }
 
-        m_pool.enqueue([executor = m_executor, contract = std::string(contract),
+        auto currentExecutor = getAndNewExecutorIfNotExists();
+
+        m_pool.enqueue([executor = currentExecutor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -438,12 +538,17 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override
     {
-        if (!m_executor)
+        if (hasStopped())
         {
-            m_executor = m_factory->build();
+            std::string message = "getABI: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message), {});
+            return;
         }
 
-        m_pool.enqueue([executor = m_executor, contract = std::string(contract),
+        auto currentExecutor = getAndNewExecutorIfNotExists();
+
+        m_pool.enqueue([executor = currentExecutor, contract = std::string(contract),
                            callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
@@ -462,21 +567,57 @@ public:
     void stop() override
     {
         EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
-        WriteGuard l(m_mutex);
-        if (m_executor)
+        auto executorUseCount = 0;
         {
-            m_executor->stop();
+            WriteGuard l(m_mutex);
+            if (m_executor)
+            {
+                m_executor->stop();
+            }
+            executorUseCount = m_executor.use_count();
         }
+
+        // waiting for stopped
+        while (executorUseCount > 1)
+        {
+            auto executor = getCurrentExecutor();
+            if (executor != nullptr)
+            {
+                executorUseCount = executor.use_count();
+            }
+            EXECUTOR_LOG(DEBUG) << "Executor is stopping.. "
+                                << LOG_KV("unfinishedTaskNum", executorUseCount - 1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        EXECUTOR_LOG(INFO) << "Executor has stopped.";
 
         m_executor = nullptr;
 
-        m_schedulerTermId = -1;
+        m_schedulerTermId = STOPPED_TERM_ID;
+    }
+
+    bcos::executor::TransactionExecutor::Ptr getCurrentExecutor()
+    {
+        ReadGuard l(m_mutex);
+        auto executor = m_executor;
+        return executor;
+    }
+
+    bcos::executor::TransactionExecutor::Ptr getAndNewExecutorIfNotExists()
+    {
+        WriteGuard l(m_mutex);
+        if (!m_executor)
+        {
+            m_executor = m_factory->build();
+        }
+        auto executor = m_executor;
+        return executor;
     }
 
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
-    int64_t m_schedulerTermId = -1;
+    int64_t m_schedulerTermId = STOPPED_TERM_ID;
 
     mutable bcos::SharedMutex m_mutex;
 

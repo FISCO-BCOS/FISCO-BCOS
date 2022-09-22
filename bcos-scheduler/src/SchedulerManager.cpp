@@ -200,6 +200,11 @@ void SchedulerManager::preExecuteBlock(
 
 std::pair<bool, std::string> SchedulerManager::checkAndInit()
 {
+    if (m_status == STOPPED)
+    {
+        return {false, "Scheduler has stopped"};
+    }
+
     initSchedulerIfNotExist();
 
     if (m_remoteExecutorManager->empty())
