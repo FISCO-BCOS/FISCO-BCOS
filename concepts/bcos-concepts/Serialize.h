@@ -6,6 +6,7 @@
 namespace bcos::concepts::serialize
 {
 
+// ADL-based customization points
 template <class ObjectType>
 concept Serializable = requires(
     ObjectType object, std::vector<std::byte> out, std::vector<std::byte> in)

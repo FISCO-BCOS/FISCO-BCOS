@@ -10,10 +10,10 @@ template <class Impl>
 class TransactionPoolBase
 {
 public:
-    void submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
+    auto submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        impl().impl_submitTransaction(std::move(transaction), receipt);
+        return impl().impl_submitTransaction(std::move(transaction), receipt);
     }
 
 private:
