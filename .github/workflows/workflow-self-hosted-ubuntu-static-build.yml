@@ -1,8 +1,14 @@
 name: Ubuntu Static Build
 on:
-  push:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
   schedule: 
-    - cron: '20 19 * * *'
+    - cron: '50 19 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
