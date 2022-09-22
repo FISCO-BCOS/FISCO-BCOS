@@ -1,13 +1,8 @@
 name: Arm Static Buld
 on:
   push:
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  release:
-    types: [published]
+  schedule:
+    - cron: '20 19 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -56,9 +51,6 @@ jobs:
           mkdir -p build && cd build
           cmake3 -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug  -DWITH_LIGHTNODE=ON  -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j3
-      - name: Test
-        run: 
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh

@@ -1,12 +1,9 @@
 name: Ubuntu Static Build
 on:
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  release:
-    types: [push]
+  push:
+  schedule: 
+    - cron: '20 19 * * *'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -58,10 +55,6 @@ jobs:
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=On -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
-
-      - name: Test
-        run:
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh
