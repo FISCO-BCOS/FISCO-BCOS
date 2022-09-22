@@ -17,8 +17,18 @@ public:
             std::cout << "start resume at " << std::this_thread::get_id() << std::endl;
             if constexpr (withError)
             {
-                auto error = std::make_shared<bcos::Error>(-1, "mock error!");
-                m_callback(std::move(error), nullptr);
+                try
+                {
+                    auto error = std::make_shared<bcos::Error>(-1, "mock error!");
+                    m_callback(std::move(error), nullptr);
+                }
+                catch (bcos::Error& error)
+                {
+                    std::cout << "Exception successed throwd!" << std::endl;
+                    return;
+                }
+
+                BOOST_FAIL("No exception throw!");
             }
             else
             {
@@ -50,7 +60,7 @@ BOOST_AUTO_TEST_CASE(testTransactionPool)
 
     MockTransactionPool<true> mock2;
     bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
-    BOOST_CHECK_THROW(transactionPool2.submitTransaction(transaction, receipt), bcos::Error);
+    transactionPool2.submitTransaction(transaction, receipt);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

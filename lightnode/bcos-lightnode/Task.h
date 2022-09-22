@@ -1,5 +1,6 @@
 #pragma once
 #include <coroutine>
+#include <exception>
 
 namespace bcos::task
 {
@@ -11,7 +12,7 @@ struct Task
         constexpr std::suspend_never final_suspend() const noexcept { return {}; }
         Task get_return_object() { return {std::coroutine_handle<Promise>::from_promise(*this)}; }
         void return_void() {}
-        void unhandled_exception() {}
+        void unhandled_exception() { std::rethrow_exception(std::current_exception()); }
     };
 
     using promise_type = Promise;
