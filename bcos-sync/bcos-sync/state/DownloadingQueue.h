@@ -112,7 +112,7 @@ protected:
 private:
     // Note: this function should not be called frequently
     std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr _header);
-    void fetchAndUpdatesLedgerConfig();
+    void fetchAndUpdateLedgerConfig();
 
 private:
     BlockSyncConfig::Ptr m_config;

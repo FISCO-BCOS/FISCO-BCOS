@@ -106,6 +106,12 @@ public:
     std::pair<bool, std::string> checkAndInit();
     void stop() override
     {
+        if (m_status == STOPPED)
+        {
+            std::cout << "scheduler has just stopped." << std::endl;
+            return;
+        }
+
         SCHEDULER_LOG(INFO) << "Try to stop SchedulerManager";
 
         m_status.store(STOPPED);
@@ -115,6 +121,16 @@ public:
             m_scheduler->stop();
         }
         m_remoteExecutorManager->stop();
+
+        // waiting for stopped
+        while (m_scheduler.use_count() > 1)
+        {
+            SCHEDULER_LOG(DEBUG) << "Scheduler is stopping.. "
+                                 << LOG_KV("unfinishedTaskNum", m_scheduler.use_count() - 1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        SCHEDULER_LOG(INFO) << "scheduler has stopped.";
+        m_scheduler = nullptr;
     }
 
 private:

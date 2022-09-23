@@ -1578,10 +1578,11 @@ void TransactionExecutor::prepare(
         auto errorMessage =
             "Prepare error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
-            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
+            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number) +
+            " trigger switch";
 
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-        callback(BCOS_ERROR_PTR(ExecuteError::PREPARE_ERROR, errorMessage));
+        callback(BCOS_ERROR_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, errorMessage));
 
         return;
     }
@@ -1709,10 +1710,11 @@ void TransactionExecutor::rollback(
         auto errorMessage =
             "Rollback error: Request blockNumber: " +
             boost::lexical_cast<std::string>(params.number) +
-            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number);
+            " not equal to last blockNumber: " + boost::lexical_cast<std::string>(first->number) +
+            " trigger switch";
 
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
-        callback(BCOS_ERROR_PTR(ExecuteError::ROLLBACK_ERROR, errorMessage));
+        callback(BCOS_ERROR_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, errorMessage));
 
         return;
     }
@@ -1904,14 +1906,6 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                             ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                    {});
-                return;
-            }
-
             auto message = toExecutionResult(std::move(output));
             allOutputs->add(std::move(message));
         },
@@ -2402,6 +2396,11 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 void TransactionExecutor::stop()
 {
     EXECUTOR_NAME_LOG(INFO) << "Try to stop executor";
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(INFO) << "Executor has just tried to stop";
+        return;
+    }
     m_isRunning = false;
     if (m_blockContext)
     {

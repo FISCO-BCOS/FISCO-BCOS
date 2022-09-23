@@ -186,7 +186,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
             std::string to = {message->to().data(), message->to().size()};
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 #pragma omp critical
-            m_hasDAG = enableDAG;
+            m_hasDAG = m_hasDAG || enableDAG;
             saveMessage(to, std::move(message), enableDAG);
         }
     }
@@ -454,14 +454,28 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
+
+                if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                {
+                    triggerSwitch();
+                }
+
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
                     "Prewrite block error: " + error->errorMessage(), *error));
+
                 return;
             }
 
             auto status = std::make_shared<CommitStatus>();
             status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
             status->checkAndCommit = [this, callback](const CommitStatus& status) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                        SchedulerError::Stopped, "BlockExecutive is stopped"));
+                    return;
+                }
+
                 if (status.failed > 0)
                 {
                     std::string errorMessage = "Prepare with errors, begin rollback, status: " +
@@ -498,9 +512,15 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
                             << error->errorMessage();
 
-                        // FATAL ERROR, NEED MANUAL FIX!
+                        if (error->errorCode() ==
+                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                        {
+                            triggerSwitch();
+                        }
 
+                        // FATAL ERROR, NEED MANUAL FIX!
                         callback(std::move(error));
+
                         return;
                     }
 
@@ -683,7 +703,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
     auto failed = std::make_shared<std::atomic_size_t>(0);
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     SCHEDULER_LOG(INFO) << LOG_BADGE("DAG") << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                        << "DAGExecute.0:\t>>> Start send to executor";
+                        << LOG_BADGE("BlockTrace") << "DAGExecute.0:\t>>> Start send to executor";
 
     // string => <tuple<std::string, ContextID> => ExecutiveState::Ptr>::it
     for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
@@ -772,8 +792,9 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                     }
 
                     SCHEDULER_LOG(INFO)
-                        << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute finish")
-                        << LOG_KV("prepareT", prepareT) << LOG_KV("execT", (utcTime() - startT));
+                        << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                        << LOG_DESC("DAGExecute finish") << LOG_KV("prepareT", prepareT)
+                        << LOG_KV("execT", (utcTime() - startT));
                     (*callbackPtr)(nullptr);
                 }
             });
@@ -949,6 +970,10 @@ void BlockExecutive::onDmcExecuteFinish(
                       << "\t " << LOG_BADGE("DMCRecorder")
                       << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
                       << LOG_KV("checksum", dmcChecksum);
+
+        DMC_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                      << LOG_BADGE("DMCRecorder") << " DMCExecute for transaction finished "
+                      << LOG_KV("checksum", dmcChecksum);
     }
 
     onExecuteFinish(std::move(callback));
@@ -1031,9 +1056,11 @@ void BlockExecutive::onExecuteFinish(
 
 void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callback)
 {
+    auto startTime = utcTime();
     auto status = std::make_shared<CommitStatus>();
     status->total = m_scheduler->m_executorManager->size();
-    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+    status->checkAndCommit = [this, startTime, callback = std::move(callback)](
+                                 const CommitStatus& status) {
         if (!m_isRunning)
         {
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"));
@@ -1050,8 +1077,14 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
             return;
         }
 
+        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                            << "NextBlock success"
+                            << LOG_KV("executorNum", m_scheduler->m_executorManager->size())
+                            << LOG_KV("timeCost", utcTime() - startTime);
         callback(nullptr);
     };
+    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace") << "NextBlock request"
+                        << LOG_KV("executorNum", m_scheduler->m_executorManager->size());
 
     // for (auto& it : *(m_scheduler->m_executorManager))
     m_scheduler->m_executorManager->forEachExecutor(
@@ -1289,12 +1322,12 @@ void BlockExecutive::batchBlockRollback(
     params.number = number();
     params.timestamp = version;
     m_scheduler->m_storage->asyncRollback(
-        params, [number = params.number, status](Error::Ptr&& error) {
+        params, [this, version, number = params.number, status](Error::Ptr&& error) {
             {
                 WriteGuard lock(status->x_lock);
                 if (error)
                 {
-                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback storage error!"
+                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback node storage error!"
                                          << error->errorMessage();
 
                     ++status->failed;
@@ -1303,56 +1336,59 @@ void BlockExecutive::batchBlockRollback(
                 {
                     ++status->success;
                 }
-
-                if (status->success + status->failed < status->total)
-                {
-                    return;
-                }
             }
-            status->checkAndCommit(*status);
-        });
 
-    // for (auto& it : *(m_scheduler->m_executorManager))
-    m_scheduler->m_executorManager->forEachExecutor(
-        [this, version, status](
-            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-            bcos::protocol::TwoPCParams executorParams;
-            executorParams.number = number();
-            executorParams.timestamp = version;
-            executor->rollback(executorParams, [this, status](bcos::Error::Ptr&& error) {
-                {
-                    WriteGuard lock(status->x_lock);
-                    if (error)
-                    {
-                        if (error->errorCode() ==
-                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                        {
-                            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
+            if (status->failed > 0)
+            {
+                status->checkAndCommit(*status);
+            }
+            else
+            {
+                // for (auto& it : *(m_scheduler->m_executorManager))
+                m_scheduler->m_executorManager->forEachExecutor(
+                    [this, version, number, status](std::string,
+                        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+                        bcos::protocol::TwoPCParams executorParams;
+                        executorParams.number = number;
+                        executorParams.timestamp = version;
+                        executor->rollback(
+                            executorParams, [this, number, status](bcos::Error::Ptr&& error) {
+                                {
+                                    WriteGuard lock(status->x_lock);
+                                    if (error)
+                                    {
+                                        if (error->errorCode() ==
+                                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                                        {
+                                            SCHEDULER_LOG(INFO)
+                                                << BLOCK_NUMBER(number)
                                                 << "Rollback a restarted executor. Ignore."
                                                 << error->errorMessage();
-                            ++status->success;
-                            triggerSwitch();
-                        }
-                        else
-                        {
-                            SCHEDULER_LOG(ERROR)
-                                << BLOCK_NUMBER(number()) << "Rollback executor error!"
-                                << error->errorMessage();
-                            ++status->failed;
-                        }
-                    }
-                    else
-                    {
-                        ++status->success;
-                    }
+                                            ++status->success;
+                                            triggerSwitch();
+                                        }
+                                        else
+                                        {
+                                            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number)
+                                                                 << "Rollback executor error!"
+                                                                 << error->errorMessage();
+                                            ++status->failed;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ++status->success;
+                                    }
 
-                    if (status->success + status->failed < status->total)
-                    {
-                        return;
-                    }
-                }
-                status->checkAndCommit(*status);
-            });
+                                    if (status->success + status->failed < status->total)
+                                    {
+                                        return;
+                                    }
+                                }
+                                status->checkAndCommit(*status);
+                            });
+                    });
+            }
         });
 }
 

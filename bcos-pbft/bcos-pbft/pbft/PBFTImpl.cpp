@@ -32,7 +32,6 @@ void PBFTImpl::start()
     }
     m_running = true;
     m_pbftEngine->start();
-    m_pbftEngine->recoverState();
     PBFT_LOG(INFO) << LOG_DESC("Start the PBFT module.");
 }
 
@@ -112,7 +111,7 @@ void PBFTImpl::init()
 {
     auto config = m_pbftEngine->pbftConfig();
     config->validator()->init();
-    m_pbftEngine->fetchAndUpdatesLedgerConfig();
+    m_pbftEngine->fetchAndUpdateLedgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("init PBFT success");
 }
 
@@ -130,7 +129,14 @@ void PBFTImpl::asyncGetConsensusStatus(
     consensusStatus["isConsensusNode"] = config->isConsensusNode();
     consensusStatus["blockNumber"] = (Json::UInt64)config->committedProposal()->index();
     consensusStatus["hash"] = *toHexString(config->committedProposal()->hash());
-    consensusStatus["timeout"] = config->timeout();
+    if (config->isConsensusNode())
+    {
+        consensusStatus["timeout"] = config->timeout();
+    }
+    else
+    {
+        consensusStatus["timeout"] = false;
+    }
     consensusStatus["changeCycle"] = (Json::UInt64)config->timer()->changeCycle();
     consensusStatus["view"] = (Json::UInt64)config->view();
     consensusStatus["connectedNodeList"] = (Json::UInt64)((config->connectedNodeList()).size());
@@ -169,14 +175,16 @@ void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
         m_pbftEngine->clearAllCache();
     }
     PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: ") << _isMasterNode;
-    m_masterNode.store(_isMasterNode);
     m_pbftEngine->pbftConfig()->enableAsMasterNode(_isMasterNode);
     if (!_isMasterNode)
     {
+        m_masterNode.store(_isMasterNode);
         return;
     }
     PBFT_LOG(INFO) << LOG_DESC("enableAsMasterNode: init and start the consensus module");
     init();
     m_pbftEngine->recoverState();
     m_pbftEngine->restart();
+    // only reset m_masterNode to true when init success
+    m_masterNode.store(_isMasterNode);
 }

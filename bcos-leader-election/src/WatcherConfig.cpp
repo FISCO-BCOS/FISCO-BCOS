@@ -30,6 +30,8 @@ void WatcherConfig::reCreateWatcher()
     // Note: set recursive to watch subdirectory change
     m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_watchDir,
         boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1), true);
+    // fetchLeadersInfo when reCreateWatcher
+    fetchLeadersInfo();
 }
 
 void WatcherConfig::fetchLeadersInfo()
@@ -47,7 +49,8 @@ void WatcherConfig::fetchLeadersInfo()
     {
         updateLeaderInfo(value);
     }
-    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir);
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir)
+                       << LOG_KV("nodesSize", values.size());
 }
 
 void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)

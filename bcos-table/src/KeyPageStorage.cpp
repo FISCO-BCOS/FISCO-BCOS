@@ -252,19 +252,22 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     Entry entry;
                     entry.setObject(*meta);
                     readLock.unlock();
-                    if (meta->size() < 5)
-                    {  // FIXME: this log is only for debug, comment it when release
+                    if (!m_readOnly)
+                    {
+                        if (meta->size() <= 10)
+                        {  // FIXME: this log is only for debug, comment it when release
+                            KeyPage_LOG(DEBUG)
+                                << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
+                                << LOG_KV("key", toHex(it.first.second)) << LOG_KV("meta", *meta);
+                        }
                         KeyPage_LOG(DEBUG)
-                            << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
-                            << LOG_KV("key", toHex(it.first.second)) << LOG_KV("meta", *meta);
+                            << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
+                            << LOG_KV("pageCount", meta->size())
+                            << LOG_KV("rowCount", meta->rowCount()) << LOG_KV("size", entry.size())
+                            << LOG_KV("payloadRate",
+                                   sizeof(PageInfo) * meta->size() / (double)entry.size())
+                            << LOG_KV("predictHit", meta->hitRate());
                     }
-
-                    KeyPage_LOG(DEBUG)
-                        << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
-                        << LOG_KV("count", meta->size()) << LOG_KV("size", entry.size())
-                        << LOG_KV("payloadRate",
-                               sizeof(PageInfo) * meta->size() / (double)entry.size())
-                        << LOG_KV("predictHit", meta->hitRate());
                     callback(it.first.first, it.first.second, std::move(entry));
                 }
             }
@@ -276,10 +279,13 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     Entry entry;
                     if (page->validCount() == 0)
                     {
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("Traverse deleted Page") << LOG_KV("table", it.first.first)
-                            << LOG_KV("key", toHex(it.first.second))
-                            << LOG_KV("validCount", page->validCount());
+                        if (!m_readOnly)
+                        {
+                            KeyPage_LOG(DEBUG) << LOG_DESC("Traverse deleted Page")
+                                               << LOG_KV("table", it.first.first)
+                                               << LOG_KV("key", toHex(it.first.second))
+                                               << LOG_KV("validCount", page->validCount());
+                        }
                         entry.setStatus(Entry::Status::DELETED);
                         callback(it.first.first, it.first.second, std::move(entry));
                     }
@@ -287,12 +293,12 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     {
                         entry.setObject(*page);
                         entry.setStatus(it.second->entry.status());
-                        if (c_fileLogLevel >= TRACE)
+                        if (!m_readOnly)
                         {
-                            KeyPage_LOG(TRACE)
+                            KeyPage_LOG(DEBUG)
                                 << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
                                 << LOG_KV("pageKey", toHex(it.first.second))
-                                << LOG_KV("validCount", page->validCount())
+                                << LOG_KV("valid", page->validCount())
                                 << LOG_KV("count", page->count())
                                 << LOG_KV("status", (int)it.second->entry.status())
                                 << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
@@ -310,10 +316,13 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                     auto invalidKeys = page->invalidKeySet();
                     for (auto& k : invalidKeys)
                     {
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("Traverse Page delete invalid key")
-                            << LOG_KV("currentKey", toHex(page->endKey()))
-                            << LOG_KV("table", it.first.first) << LOG_KV("key", toHex(k));
+                        if (!m_readOnly)
+                        {
+                            KeyPage_LOG(DEBUG)
+                                << LOG_DESC("Traverse Page delete invalid key")
+                                << LOG_KV("currentKey", toHex(page->endKey()))
+                                << LOG_KV("table", it.first.first) << LOG_KV("key", toHex(k));
+                        }
                         Entry e;
                         e.setStatus(Entry::Status::DELETED);
                         callback(it.first.first, k, std::move(e));

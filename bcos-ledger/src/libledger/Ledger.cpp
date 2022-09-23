@@ -76,10 +76,10 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
             LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: store uncommitted txs")
                              << LOG_KV("blockNumber", blockNumber)
                              << LOG_KV("blockTxsSize", blockTxsSize)
-                             << LOG_KV("unstoredTxs", unstoredTxsHash->size())
+                             << LOG_KV("unStoredTxs", unstoredTxsHash->size())
                              << LOG_KV("msg", _error ? _error->errorMessage() : "success")
                              << LOG_KV("code", _error ? _error->errorCode() : 0)
-                             << LOG_KV("timecost", (utcTime() - startT));
+                             << LOG_KV("timeCost", (utcTime() - startT));
 
             if (_error)
             {
@@ -363,6 +363,9 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                     std::string((char*)(_txToStore->at(i)->data()), _txToStore->at(i)->size());
             }
         });
+    // Note: transactions must be submitted serially, because transaction submissions are
+    // transactional, preventing write conflicts
+    RecursiveGuard l(m_mutex);
     auto error = m_storage->setRows(SYS_HASH_2_TX, std::move(keys), std::move(values));
     _onTxStored(error);
 }

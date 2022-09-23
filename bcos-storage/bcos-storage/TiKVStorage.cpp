@@ -346,6 +346,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 auto result = m_committer->prewriteKeys();
                 auto write = utcTime();
                 m_currentStartTS = result.start_ts;
+                lock.unlock();
                 callback(nullptr, result.start_ts);
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare primary finished" << LOG_KV("blockNumber", params.number)
@@ -428,6 +429,7 @@ void TiKVStorage::asyncCommit(
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncCommit finished") << LOG_KV("blockNumber", params.number)
                 << LOG_KV("startTS", params.timestamp) << LOG_KV("time(ms)", end - start);
+            lock.unlock();
             callback(nullptr, ts);
         }
         else
@@ -484,6 +486,7 @@ void TiKVStorage::asyncRollback(
                 m_committer = nullptr;
             }
             auto end = utcTime();
+            lock.unlock();
             callback(nullptr);
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncRollback finished") << LOG_KV("blockNumber", params.number)

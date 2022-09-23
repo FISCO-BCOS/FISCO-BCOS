@@ -95,6 +95,11 @@ void TransactionSync::onRecvSyncMessage(
                               << LOG_KV("errorMsg", _error->errorMessage());
             return;
         }
+        // reject the message from the outside-group
+        if (!m_config->existsInGroup(_nodeID))
+        {
+            return;
+        }
         auto txsSyncMsg = m_config->msgFactory()->createTxsSyncMsg(_data);
         // receive transactions
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsPacket)
@@ -726,7 +731,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
     {
         return;
     }
-    requestMissedTxs(_fromNode, requestTxs, nullptr, nullptr);
+    requestMissedTxsFromPeer(_fromNode, requestTxs, nullptr, nullptr);
     SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus") << LOG_KV("reqSize", requestTxs->size())
                     << LOG_KV("peerTxsSize", _txsStatus->txsHash().size())
                     << LOG_KV("peer", _fromNode->shortHex());

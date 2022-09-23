@@ -361,8 +361,8 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
         _rpc->asyncNotifyGroupInfo(m_groupInfo, [_version](bcos::Error::Ptr&& _error) {
             if (!_error)
             {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("Election versionInfoNotification success")
-                                         << LOG_KV("version", _version);
+                INITIALIZER_LOG(INFO) << LOG_DESC("Election versionInfoNotification success")
+                                      << LOG_KV("version", _version);
                 return;
             }
             INITIALIZER_LOG(WARNING)

@@ -18,7 +18,7 @@
  * @author: catli
  * @date: 2021-10-19
  */
-
+#ifndef __aarch64__
 #include "../liquid/hello_world.h"
 #include "../liquid/hello_world_caller.h"
 #include "../liquid/transfer.h"
@@ -1247,3 +1247,4 @@ BOOST_AUTO_TEST_CASE(performance)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
+#endif

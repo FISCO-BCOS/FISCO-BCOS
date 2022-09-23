@@ -75,7 +75,7 @@ public:
 protected:
     virtual void refreshWatcher();
     virtual void reCreateWatcher() = 0;
-    void onElectionClusterRecover();
+    virtual void onElectionClusterRecover();
     void onElectionClusterDown();
 
 protected:
