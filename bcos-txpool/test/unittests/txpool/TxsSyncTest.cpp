@@ -84,6 +84,8 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     // append sessions
     size_t sessionSize = 8;
     std::vector<TxPoolFixture::Ptr> txpoolPeerList;
+    std::vector<NodeIDPtr> sessionNodeIDs;
+    sessionNodeIDs.emplace_back(keyPair->publicKey());
     for (size_t i = 0; i < sessionSize; i++)
     {
         auto nodeId = signatureImpl->generateKeyPair()->publicKey();
@@ -94,10 +96,17 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         {
             sessionFaker->resetToFakeTransactionSync();
         }
+        sessionNodeIDs.emplace_back(nodeId);
         faker->appendSealer(nodeId);
-        // make sure the session in the group
-        sessionFaker->appendSealer(nodeId);
         txpoolPeerList.push_back(sessionFaker);
+    }
+    for (auto& sessionFaker : txpoolPeerList)
+    {
+        for (auto const& nodeID : sessionNodeIDs)
+        {
+            // make sure the session in the group
+            sessionFaker->appendSealer(nodeID);
+        }
     }
     size_t txsNum = 10;
     importTransactions(txsNum, cryptoSuite, faker);

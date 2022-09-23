@@ -33,7 +33,7 @@ jobs:
 
       - name: Prepare centos tools
         run: |
-          yum install -y epel-release centos-release-scl flex bison patch gmp-static
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static java
           yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel
       - uses: actions-rs/toolchain@v1
         with:
@@ -58,8 +58,11 @@ jobs:
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
           mkdir -p build && cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j3
       - name: Test
         run: 
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+
+      - name: Integration test - Air
+        run: cd tools && bash .ci/ci_check_air.sh

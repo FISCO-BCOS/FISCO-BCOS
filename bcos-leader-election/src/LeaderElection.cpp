@@ -85,6 +85,8 @@ bool LeaderElection::campaignLeader()
         // already has leader
         if (m_config->getLeader())
         {
+            // tryToSwitchToBackup in case of the leader is not the node-self
+            tryToSwitchToBackup();
             return false;
         }
         auto ret = grantLease();

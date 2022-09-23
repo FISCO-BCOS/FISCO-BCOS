@@ -462,10 +462,12 @@ public:
             return os;
         }
         double hitRate() { return hit / (double)getPageInfoCount; }
+        uint64_t rowCount() { return m_rows; }
 
     private:
         uint32_t getPageInfoCount = 0;
         uint32_t hit = 0;
+        mutable uint64_t m_rows = 0;
         mutable std::shared_mutex mutex;
         std::unique_ptr<std::vector<PageInfo>> pages = nullptr;
         friend class boost::serialization::access;
@@ -485,6 +487,7 @@ public:
             //     ar & pages->at(i);
             // }
             int invalid = 0;
+            m_rows = 0;
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())
@@ -498,6 +501,7 @@ public:
                 }
                 else
                 {
+                    m_rows += it->getCount();
                     ++it;
                 }
             }
