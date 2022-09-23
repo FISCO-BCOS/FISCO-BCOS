@@ -18,7 +18,6 @@
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
-#include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
