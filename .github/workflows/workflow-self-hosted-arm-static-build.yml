@@ -1,6 +1,8 @@
 name: Arm Static Buld
 on:
   pull_request:
+    branches:
+      - feature-3.1.0
     types: [closed] 
 
 concurrency:
@@ -48,7 +50,7 @@ jobs:
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
           mkdir -p build && cd build
-          cmake3 -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug  -DWITH_LIGHTNODE=ON  -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake3 -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug  -DWITH_LIGHTNODE=ON  -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j3
 
       - name: Integration test - Air

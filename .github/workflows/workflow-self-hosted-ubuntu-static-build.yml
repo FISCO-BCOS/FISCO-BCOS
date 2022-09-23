@@ -1,7 +1,9 @@
 name: Ubuntu Static Build
 on:
   pull_request:
-    types: [published, created, edited]
+    branches:
+      - feature-3.1.0
+    types: [closed] 
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
