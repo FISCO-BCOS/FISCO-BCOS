@@ -36,7 +36,7 @@ private:
         auto transactionData = std::make_shared<bcos::bytes>();
         bcos::concepts::serialize::encode(transaction, *transactionData);
 
-        struct Awaiter : public std::suspend_always
+        struct Awaiter : public CO_STD::suspend_always
         {
             Awaiter(decltype(transactionData)& transactionData,
                 TransactionPoolType& transactionPool,
@@ -46,7 +46,7 @@ private:
                 m_receipt(receipt)
             {}
 
-            constexpr void await_suspend(std::coroutine_handle<task::Task::Promise> handle)
+            constexpr void await_suspend(CO_STD::coroutine_handle<task::Task::Promise> handle)
             {
                 bcos::concepts::getRef(m_transactionPool)
                     .asyncSubmit(std::move(m_transactionData),
