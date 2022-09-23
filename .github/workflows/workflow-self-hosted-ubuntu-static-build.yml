@@ -1,14 +1,7 @@
 name: Ubuntu Static Build
 on:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  release:
     types: [published, created, edited]
-  schedule: 
-    - cron: '50 19 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -17,6 +10,7 @@ concurrency:
 jobs:
   build_ubuntu:
     name: ubuntu static build 
+    if:  github.event.pull_request.merged == true
     runs-on: self-hosted-static-ubuntu
     strategy:
       fail-fast: false

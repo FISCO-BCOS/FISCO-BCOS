@@ -1,22 +1,15 @@
 name: Arm Static Buld
 on:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  release:
-    types: [published, created, edited]
-  schedule:
-    - cron: '50 19 * * *'
+    types: [closed] 
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  build_arm:
+  if_merged:
     name: arm static build
+    if: github.event.pull_request.merged == true
     runs-on: self-hosted-static-arm
     strategy:
       fail-fast: false
