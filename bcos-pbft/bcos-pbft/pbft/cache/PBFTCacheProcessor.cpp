@@ -995,9 +995,13 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
 bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _checkPointMsg)
 {
     auto checkPointIndex = _checkPointMsg->index();
+    auto committedIndex = m_config->committedProposal()->index();
     // expired checkpoint
-    if (checkPointIndex <= m_config->committedProposal()->index() ||
-        checkPointIndex <= m_config->syncingHighestNumber())
+    if (checkPointIndex <= committedIndex || checkPointIndex <= m_config->syncingHighestNumber())
+    {
+        return false;
+    }
+    if (checkPointIndex > (committedIndex + m_config->waterMarkLimit()))
     {
         return false;
     }
