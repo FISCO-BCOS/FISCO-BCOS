@@ -32,15 +32,9 @@ template <class Object>
 concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> &&
     !std::is_pointer_v<std::remove_cvref_t<Object>>;
 
-#if (defined __clang__) && (__clang_major__ < 15)
-template <class Object>
-concept Range = RANGES::range<std::remove_cvref_t<Object>> &&
-    std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
-#else
 template <class Object>
 concept Range = RANGES::contiguous_range<std::remove_cvref_t<Object>> &&
     std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
-#endif
 
 template <class Input>
 concept Object = Value<Input> || Range<Input>;
