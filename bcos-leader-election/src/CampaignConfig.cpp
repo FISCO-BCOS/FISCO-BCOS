@@ -110,6 +110,11 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
     leader->setSeq(seq);
     leader->setLeaseID(_response.value().lease());
     resetLeader(leader);
+    // calls campaignLeader try to tryToSwitchToBackup if the leader is not the node-self
+    if (m_triggerCampaign)
+    {
+        m_triggerCampaign();
+    }
     ELECTION_LOG(INFO) << LOG_DESC("checkAndUpdateLeaderKey success")
                        << LOG_KV("leaderKey", m_leaderKey) << LOG_KV("leader", m_leader->memberID())
                        << LOG_KV("version", valueVersion) << LOG_KV("modifiedIndex", seq)

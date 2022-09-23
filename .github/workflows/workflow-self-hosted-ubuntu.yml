@@ -29,6 +29,12 @@ jobs:
       - uses: actions/checkout@v2
         with:
           clean: false
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 8
+          java-package: jdk
 
       - name: apt install
         run: |
@@ -36,7 +42,7 @@ jobs:
           sudo apt install -y  lcov ccache wget python3-dev git curl zip unzip tar
           sudo apt install -y --no-install-recommends \
               clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache
+              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime
 
       - uses: actions-rs/toolchain@v1
         with:
@@ -61,3 +67,7 @@ jobs:
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+
+      - name: Integration test - Air
+        run: cd tools && bash .ci/ci_check_air.sh
+
