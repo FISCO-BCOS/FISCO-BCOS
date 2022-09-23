@@ -119,6 +119,9 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 
             std::string errorMessage =
                 "RocksDB get failed!, " + boost::lexical_cast<std::string>(status.ToString());
+            STORAGE_ROCKSDB_LOG(WARNING)
+                << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table) << LOG_KV("key", _key)
+                << LOG_KV("error", errorMessage);
             if (status.getState())
             {
                 errorMessage.append(" ").append(status.getState());
