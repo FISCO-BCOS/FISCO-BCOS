@@ -28,7 +28,8 @@ public:
     {}
 
 private:
-    task::Task impl_submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
+    task::Task<void> impl_submitTransaction(
+        bcos::concepts::transaction::Transaction auto transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction request";
@@ -36,9 +37,9 @@ private:
         auto transactionData = std::make_shared<bcos::bytes>();
         bcos::concepts::serialize::encode(transaction, *transactionData);
 
-        struct Awaiter : public CO_STD::suspend_always
+        struct Awaitable : public CO_STD::suspend_always
         {
-            Awaiter(decltype(transactionData)& transactionData,
+            Awaitable(decltype(transactionData)& transactionData,
                 TransactionPoolType& transactionPool,
                 std::remove_cvref_t<decltype(receipt)>& receipt)
               : m_transactionData(transactionData),
@@ -46,7 +47,8 @@ private:
                 m_receipt(receipt)
             {}
 
-            constexpr void await_suspend(CO_STD::coroutine_handle<task::Task::Promise> handle)
+            constexpr void await_suspend(
+                CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 bcos::concepts::getRef(m_transactionPool)
                     .asyncSubmit(std::move(m_transactionData),
@@ -62,7 +64,7 @@ private:
                                     transactionSubmitResult->transactionReceipt());
                                 m_receipt = std::move(const_cast<bcostars::TransactionReceipt&>(
                                     receiptImpl->inner()));
-                                withReceipt = true;
+                                m_withReceipt = true;
                             }
 
                             handle.resume();
@@ -74,13 +76,13 @@ private:
             TransactionPoolType& m_transactionPool;
             std::remove_cvref_t<decltype(receipt)>& m_receipt;
             Error::Ptr m_error;
-            bool withReceipt{};
+            bool m_withReceipt{};
         };
 
-        Awaiter awaiter(transactionData, m_transactionPool, receipt);
-        co_await awaiter;
+        Awaitable awaitable(transactionData, m_transactionPool, receipt);
+        co_await awaitable;
 
-        auto& error = awaiter.m_error;
+        auto& error = awaitable.m_error;
         if (error)
         {
             TRANSACTIONPOOL_LOG(ERROR)
@@ -89,7 +91,7 @@ private:
             BOOST_THROW_EXCEPTION(*error);
         }
 
-        TRANSACTIONPOOL_LOG(INFO) << "Submit transaction successed";
+        TRANSACTIONPOOL_LOG(DEBUG) << "Submit transaction successed";
     }
 
     TransactionPoolType m_transactionPool;

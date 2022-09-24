@@ -1,28 +1,83 @@
 #pragma once
 #include <bcos-concepts/Coroutine.h>
+#include <bcos-concepts/Exception.h>
+#include <boost/throw_exception.hpp>
+#include <coroutine>
 #include <exception>
+#include <type_traits>
+#include <variant>
+
+#include <iostream>
 
 namespace bcos::task
 {
-struct Task
+
+struct NoReturnValue : public bcos::exception::Exception
 {
-    struct Promise
+};
+
+
+template <class Value>
+struct Task : public std::suspend_never
+{
+    struct PromiseVoid;
+    struct PromiseValue;
+    using promise_type = std::conditional_t<std::is_same_v<Value, void>, PromiseVoid, PromiseValue>;
+
+    template <class Impl>
+    struct PromiseBase
     {
         constexpr CO_STD::suspend_never initial_suspend() const noexcept { return {}; }
         constexpr CO_STD::suspend_never final_suspend() const noexcept { return {}; }
-        Task get_return_object()
+        constexpr Task get_return_object()
         {
-            return {CO_STD::coroutine_handle<Promise>::from_promise(*this)};
+            Task task(
+                CO_STD::coroutine_handle<promise_type>::from_promise(*static_cast<Impl*>(this)));
+            m_task = &task;  // Task lifetime is longer than promise
+            return task;
         }
+        constexpr void unhandled_exception()
+        {
+            m_task->m_value.template emplace<std::exception_ptr>(std::current_exception());
+        }
+
+        Task* m_task;
+    };
+    struct PromiseVoid : public PromiseBase<PromiseVoid>
+    {
         void return_void() {}
-        void unhandled_exception() { std::rethrow_exception(std::current_exception()); }
+    };
+    struct PromiseValue : public PromiseBase<PromiseValue>
+    {
+        void return_value(Value&& value)
+        {
+            PromiseBase<PromiseValue>::m_task->m_value.template emplace<Value>(
+                std::forward<Value>(value));
+        }
     };
 
-    using promise_type = Promise;
+    Task(CO_STD::coroutine_handle<promise_type> handle) : m_handle(std::move(handle)) {}
 
-    constexpr CO_STD::suspend_never await_transform() const noexcept { return {}; }
+    constexpr Value await_resume()
+    {
+        // Note: promise is dead already
+        if (std::holds_alternative<std::exception_ptr>(m_value))
+            std::rethrow_exception(std::get<std::exception_ptr>(m_value));
 
-    CO_STD::coroutine_handle<Promise> m_handle;
+        if constexpr (!std::is_same_v<Value, void>)
+        {
+            if (!std::holds_alternative<Value>(m_value))
+                BOOST_THROW_EXCEPTION(NoReturnValue{});
+
+            return std::move(std::get<Value>(m_value));
+        }
+    }
+
+    CO_STD::coroutine_handle<promise_type> m_handle;
+    std::conditional_t<std::is_same_v<Value, void>,
+        std::variant<std::monostate, std::exception_ptr>,
+        std::variant<std::monostate, Value, std::exception_ptr>>
+        m_value;
 };
 
 
