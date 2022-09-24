@@ -12,10 +12,9 @@
 namespace bcos::task
 {
 
-struct NoReturnValue : public bcos::exception::Exception
-{
-};
-
+// clang-format off
+struct NoReturnValue : public bcos::exception::Exception {};
+// clang-format on
 
 template <class Value>
 struct Task : public std::suspend_never
@@ -60,7 +59,7 @@ struct Task : public std::suspend_never
 
     constexpr Value await_resume()
     {
-        // Note: promise is dead already
+        // Do not use m_handle, it's dead already
         if (std::holds_alternative<std::exception_ptr>(m_value))
             std::rethrow_exception(std::get<std::exception_ptr>(m_value));
 
@@ -74,8 +73,7 @@ struct Task : public std::suspend_never
     }
 
     CO_STD::coroutine_handle<promise_type> m_handle;
-    std::conditional_t<std::is_same_v<Value, void>,
-        std::variant<std::monostate, std::exception_ptr>,
+    std::conditional_t<std::is_same_v<Value, void>, std::variant<std::exception_ptr>,
         std::variant<std::monostate, Value, std::exception_ptr>>
         m_value;
 };

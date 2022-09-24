@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../Log.h"
-#include "../Task.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include <bcos-concepts/Task.h>
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-utilities/FixedBytes.h>

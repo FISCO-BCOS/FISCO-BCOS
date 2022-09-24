@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Task.h"
+#include <bcos-concepts/Task.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
@@ -23,7 +23,7 @@ public:
 private:
     auto& scheduler() { return bcos::concepts::getRef(m_scheduler); }
 
-    task::Task<> impl_call(bcos::concepts::transaction::Transaction auto const& transaction,
+    task::Task<void> impl_call(bcos::concepts::transaction::Transaction auto const& transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
         auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
@@ -36,7 +36,8 @@ private:
               : m_transactionImpl(transactionImpl), m_scheduler(scheduler), m_receipt(receipt)
             {}
 
-            constexpr void await_suspend(CO_STD::coroutine_handle<task::Task<>::Promise> handle)
+            constexpr void await_suspend(
+                CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 bcos::concepts::getRef(m_scheduler)
                     .call(std::move(m_transactionImpl),
