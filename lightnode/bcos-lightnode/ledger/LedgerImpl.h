@@ -45,7 +45,7 @@ public:
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
-    void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+    auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(INFO) << "getBlock: " << blockNumber;
@@ -55,7 +55,7 @@ private:
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    void impl_setBlock(bcos::concepts::block::Block auto block)
+    auto impl_setBlock(bcos::concepts::block::Block auto block)
     {
         LEDGER_LOG(INFO) << "setBlock: " << block.blockHeader.data.blockNumber;
 
