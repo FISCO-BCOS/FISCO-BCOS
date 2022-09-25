@@ -219,9 +219,9 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block3;
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).getResult(),
         bcos::ledger::NotFoundBlockHeader);
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).getResult(),
         bcos::ledger::NotFoundBlockHeader);
 }
 
@@ -250,8 +250,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         block.transactions.emplace_back(std::move(transaction));
         block.receipts.emplace_back(std::move(receipt));
     }
-    ledger.setTransactions<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
-        block.transactions);
+    ledger.setTransactions<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(block.transactions);
 
     bcos::concepts::hash::calculate<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         block, block.blockHeader.dataHash);

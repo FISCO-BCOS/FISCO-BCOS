@@ -75,7 +75,8 @@ struct Task : public std::suspend_never
     }
 
     CO_STD::coroutine_handle<promise_type> m_handle;
-    std::conditional_t<std::is_same_v<Value, void>, std::variant<std::exception_ptr>,
+    std::conditional_t<std::is_same_v<Value, void>,
+        std::variant<std::monostate, std::exception_ptr>,
         std::variant<std::monostate, Value, std::exception_ptr>>
         m_value;
 };
