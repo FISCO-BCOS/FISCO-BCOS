@@ -47,13 +47,13 @@ public:
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
-    auto impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+    task::Task<void> impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(INFO) << "getBlock: " << blockNumber;
 
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
-        (getBlockData<Flags>(blockNumberStr, block), ...);
+        (co_await getBlockData<Flags>(blockNumberStr, block), ...);
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -255,7 +255,8 @@ private:
     }
 
     template <bcos::concepts::ledger::DataFlag Flag>
-    void getBlockData(std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(DEBUG) << "getBlockData: " << blockNumberKey << " " << typeid(Flag).name();
 
@@ -277,7 +278,7 @@ private:
             if (!entry) [[unlikely]]
             {
                 LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
-                return;
+                co_return;
             }
 
             auto field = entry->getField(0);
@@ -293,7 +294,7 @@ private:
             if (RANGES::empty(block.transactionsMetaData))
             {
                 LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
-                return;
+                co_return;
             }
 
             auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
@@ -320,7 +321,7 @@ private:
             if (!entry)
             {
                 LEDGER_LOG(INFO) << "GetBlock not found nonce data!";
-                return;
+                co_return;
             }
 
             std::remove_reference_t<decltype(block)> nonceBlock;

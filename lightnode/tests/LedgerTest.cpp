@@ -250,7 +250,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         block.transactions.emplace_back(std::move(transaction));
         block.receipts.emplace_back(std::move(receipt));
     }
-    ledger.setTransactionsOrReceipts<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
+    ledger.setTransactions<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         block.transactions);
 
     bcos::concepts::hash::calculate<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
@@ -351,8 +351,8 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
 
             bcos::crypto::merkle::Merkle<Hasher> merkler;
         }
-        fromLedger.setTransactionsOrReceipts<Hasher>(block.transactions);
-        toLedger.setTransactionsOrReceipts<Hasher>(block.transactions);
+        fromLedger.setTransactions<Hasher>(block.transactions);
+        toLedger.setTransactions<Hasher>(block.transactions);
 
         BOOST_CHECK_NO_THROW(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block));
         bcos::concepts::hash::calculate<Hasher>(block, lastBlockHash);

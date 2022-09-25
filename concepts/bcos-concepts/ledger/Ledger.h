@@ -37,10 +37,10 @@ class LedgerBase
 {
 public:
     template <DataFlag... Flags>
-    void getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
-        bcos::concepts::block::Block auto& block)
+    auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block) -> bcos::coroutine::Awaitable auto
     {
-        impl().template impl_getBlock<Flags...>(blockNumber, block);
+        return impl().template impl_getBlock<Flags...>(blockNumber, block);
     }
 
     template <DataFlag... Flags>
@@ -70,8 +70,8 @@ public:
     auto getStatus() -> bcos::coroutine::Awaitable auto { return impl().impl_getStatus(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
-    void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires bcos::concepts::
-        ledger::TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
+    void setTransactions(RANGES::range auto const& inputs) requires bcos::concepts::ledger::
+        TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
     {
         auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
             decltype(input.dataHash) hash(Hasher::HASH_SIZE);
