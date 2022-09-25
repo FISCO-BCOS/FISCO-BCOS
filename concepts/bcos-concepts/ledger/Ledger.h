@@ -1,6 +1,7 @@
 #pragma once
 #include "../Block.h"
 #include "../storage/Storage.h"
+#include <bcos-concepts/Coroutine.h>
 #include <bcos-utilities/Ranges.h>
 #include <concepts>
 
@@ -43,9 +44,9 @@ public:
     }
 
     template <DataFlag... Flags>
-    void setBlock(bcos::concepts::block::Block auto block)
+    auto setBlock(bcos::concepts::block::Block auto block) -> bcos::coroutine::Awaitable auto
     {
-        impl().template impl_setBlock<Flags...>(std::move(block));
+        return impl().template impl_setBlock<Flags...>(std::move(block));
     }
 
     void getBlockNumberByHash(
@@ -66,7 +67,7 @@ public:
         impl().impl_getTransactions(hashes, out);
     }
 
-    Status getStatus() { return impl().impl_getStatus(); }
+    auto getStatus() -> bcos::coroutine::Awaitable auto { return impl().impl_getStatus(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
     void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires bcos::concepts::

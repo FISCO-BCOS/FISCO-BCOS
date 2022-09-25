@@ -57,7 +57,9 @@ struct Task : public std::suspend_never
 
     Task(CO_STD::coroutine_handle<promise_type> handle) : m_handle(std::move(handle)) {}
 
-    constexpr Value await_resume()
+    constexpr Value await_resume() { return getResult(); }
+
+    constexpr Value getResult()
     {
         // Do not use m_handle, it's dead already
         if (std::holds_alternative<std::exception_ptr>(m_value))

@@ -1,9 +1,11 @@
 #pragma once
 
 #include "../Log.h"
+#include "bcos-concepts/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-concepts/Coroutine.h>
 #include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Receipt.h>
@@ -55,12 +57,12 @@ private:
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    auto impl_setBlock(bcos::concepts::block::Block auto block)
+    task::Task<void> impl_setBlock(bcos::concepts::block::Block auto block)
     {
         LEDGER_LOG(INFO) << "setBlock: " << block.blockHeader.data.blockNumber;
 
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader.data.blockNumber);
-        (setBlockData<Flags>(blockNumberStr, block), ...);
+        (co_await setBlockData<Flags>(blockNumberStr, block), ...);
     }
 
     void impl_getBlockNumberByHash(
@@ -134,7 +136,7 @@ private:
             });
     }
 
-    auto impl_getStatus()
+    task::Task<bcos::concepts::ledger::Status> impl_getStatus()
     {
         LEDGER_LOG(TRACE) << "getStatus";
         constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
@@ -171,7 +173,7 @@ private:
         LEDGER_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed << " | "
                           << status.blockNumber;
 
-        return status;
+        co_return status;
     }
 
     template <bool isTransaction>
@@ -201,12 +203,12 @@ private:
     }
 
     template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::block::Block BlockType>
-    void impl_sync(LedgerType& source, bool onlyHeader)
+    task::Task<void> impl_sync(LedgerType& source, bool onlyHeader)
     {
         auto& sourceLedger = bcos::concepts::getRef(source);
 
-        auto status = impl_getStatus();
-        auto sourceStatus = sourceLedger.getStatus();
+        auto status = co_await impl_getStatus();
+        auto sourceStatus = co_await sourceLedger.getStatus();
 
         std::optional<BlockType> parentBlock;
         for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
@@ -341,7 +343,8 @@ private:
     }
 
     template <bcos::concepts::ledger::DataFlag Flag>
-    void setBlockData(std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    task::Task<void> setBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(DEBUG) << "setBlockData: " << blockNumberKey << " " << typeid(Flag).name();
 
@@ -402,7 +405,7 @@ private:
             if (std::empty(block.transactionsMetaData))
             {
                 LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
-                return;
+                co_return;
             }
 
             std::remove_cvref_t<decltype(block)> transactionsBlock;
@@ -421,7 +424,7 @@ private:
             if (std::empty(block.transactionsMetaData))
             {
                 LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
-                return;
+                co_return;
             }
 
             std::vector<std::vector<bcos::byte>> transactionBuffers(block.transactions.size());
@@ -443,7 +446,7 @@ private:
             if (std::empty(block.transactionsMetaData))
             {
                 LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
-                return;
+                co_return;
             }
 
             std::atomic_size_t totalTransactionCount = 0;
@@ -474,7 +477,7 @@ private:
                               << LOG_KV("totalCount", totalTransactionCount)
                               << LOG_KV("failedCount", failedTransactionCount);
 
-            auto transactionCount = impl_getStatus();
+            auto transactionCount = co_await impl_getStatus();
             transactionCount.total += totalTransactionCount;
             transactionCount.failed += failedTransactionCount;
 

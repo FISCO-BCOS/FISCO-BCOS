@@ -237,7 +237,8 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block number request";
 
-        auto count = localLedger().getStatus();
+        auto task = localLedger().getStatus();
+        auto count = task.getResult();
 
         Json::Value resp = count.blockNumber;
 
@@ -352,7 +353,8 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get group block number request";
 
-        auto count = localLedger().getStatus();
+        auto task = localLedger().getStatus();
+        auto count = task.getResult();
 
         Json::Value resp(Json::objectValue);
         resp[m_groupID] = count.blockNumber;

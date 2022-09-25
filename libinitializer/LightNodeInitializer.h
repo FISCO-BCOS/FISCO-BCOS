@@ -145,8 +145,8 @@ public:
                     bcos::concepts::serialize::decode(data, request);
 
                     std::visit(
-                        [&response](auto& ledger) {
-                            auto status = ledger.getStatus();
+                        [&response](auto& ledger) -> task::Task<void> {
+                            auto status = co_await ledger.getStatus();
                             response.total = status.total;
                             response.failed = status.failed;
                             response.blockNumber = status.blockNumber;
