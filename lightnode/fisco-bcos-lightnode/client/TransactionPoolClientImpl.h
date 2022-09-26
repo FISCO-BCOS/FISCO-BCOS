@@ -24,20 +24,18 @@ public:
 private:
     auto& p2p() { return bcos::concepts::getRef(m_p2p); }
 
-    void impl_submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
+    task::Task<void> impl_submitTransaction(
+        bcos::concepts::transaction::Transaction auto transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
         bcostars::RequestSendTransaction request;
         request.transaction = std::move(transaction);
-        bcos::bytes requestBuffer;
-        bcos::concepts::serialize::encode(request, requestBuffer);
-
-        auto nodeID = p2p().randomSelectNode();
-        auto responseBuffer = p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_SENDTRANSACTION, nodeID, bcos::ref(requestBuffer));
 
         bcostars::ResponseSendTransaction response;
-        bcos::concepts::serialize::decode(responseBuffer, response);
+        auto nodeID = co_await p2p().randomSelectNode();
+        co_await p2p().sendMessageByNodeID(
+            bcos::protocol::LIGHTNODE_SENDTRANSACTION, nodeID, request, response);
+
         if (response.error.errorCode)
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
 
