@@ -408,6 +408,7 @@ void RocksDBStorage::asyncCommit(
                     << LOG_DESC("asyncCommit failed") << LOG_KV("number", params.number)
                     << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("time(ms)", utcTime() - start);
+                lock.release();
                 callback(err, 0);
                 return;
             }
