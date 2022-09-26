@@ -189,7 +189,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
     BOOST_CHECK_EQUAL(block.transactions.size(), count);
     BOOST_CHECK_EQUAL(block.receipts.size(), count);
 
-    for (auto i = 0u; i < count; ++i)
+    for (auto i = 0U; i < count; ++i)
     {
         BOOST_CHECK_EQUAL(block.transactions[i].data.chainID, "chain");
         BOOST_CHECK_EQUAL(block.transactions[i].data.groupID, "group");
@@ -219,9 +219,9 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block3;
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).getResult(),
         bcos::ledger::NotFoundBlockHeader);
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).getResult(),
         bcos::ledger::NotFoundBlockHeader);
 }
 
@@ -250,8 +250,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         block.transactions.emplace_back(std::move(transaction));
         block.receipts.emplace_back(std::move(receipt));
     }
-    ledger.setTransactionsOrReceipts<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
-        block.transactions);
+    ledger.setTransactions<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(block.transactions);
 
     bcos::concepts::hash::calculate<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         block, block.blockHeader.dataHash);
@@ -351,8 +350,8 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
 
             bcos::crypto::merkle::Merkle<Hasher> merkler;
         }
-        fromLedger.setTransactionsOrReceipts<Hasher>(block.transactions);
-        toLedger.setTransactionsOrReceipts<Hasher>(block.transactions);
+        fromLedger.setTransactions<Hasher>(block.transactions);
+        toLedger.setTransactions<Hasher>(block.transactions);
 
         BOOST_CHECK_NO_THROW(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block));
         bcos::concepts::hash::calculate<Hasher>(block, lastBlockHash);

@@ -52,7 +52,7 @@ private:
             {
                 bcos::concepts::getRef(m_transactionPool)
                     .asyncSubmit(std::move(m_transactionData),
-                        [this, handle = std::move(handle)](Error::Ptr error,
+                        [this, m_handle = std::move(handle)](Error::Ptr error,
                             bcos::protocol::TransactionSubmitResult::Ptr
                                 transactionSubmitResult) mutable {
                             m_error = std::move(error);
@@ -67,7 +67,7 @@ private:
                                 m_withReceipt = true;
                             }
 
-                            handle.resume();
+                            m_handle.resume();
                         });
             }
 

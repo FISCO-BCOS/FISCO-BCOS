@@ -39,7 +39,7 @@ private:
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    void impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+    task::Task<void> impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
     {
         bcostars::RequestBlock request;
@@ -48,15 +48,10 @@ private:
 
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
 
-        bcos::bytes requestBuffer;
-        bcos::concepts::serialize::encode(request, requestBuffer);
-
-        auto nodeID = p2p().randomSelectNode();
-        auto responseBuffer = p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_GETBLOCK, nodeID, bcos::ref(requestBuffer));
-
         bcostars::ResponseBlock response;
-        bcos::concepts::serialize::decode(responseBuffer, response);
+        auto nodeID = co_await p2p().randomSelectNode();
+        co_await p2p().sendMessageByNodeID(
+            bcos::protocol::LIGHTNODE_GETBLOCK, nodeID, request, response);
 
         if (response.error.errorCode)
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
@@ -64,7 +59,7 @@ private:
         std::swap(response.block, block);
     }
 
-    void impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
+    task::Task<void> impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
         using RequestType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
@@ -83,15 +78,10 @@ private:
         }
         request.withProof = true;
 
-        bcos::bytes requestBuffer;
-        bcos::concepts::serialize::encode(request, requestBuffer);
-
-        auto nodeID = p2p().randomSelectNode();
-        auto responseBuffer =
-            p2p().sendMessageByNodeID(moduleID, std::move(nodeID), bcos::ref(requestBuffer));
-
         ResponseType response;
-        bcos::concepts::serialize::decode(responseBuffer, response);
+        auto nodeID = co_await p2p().randomSelectNode();
+        co_await p2p().sendMessageByNodeID(moduleID, std::move(nodeID), request, response);
+
         if (response.error.errorCode)
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
 
@@ -109,18 +99,15 @@ private:
         }
     }
 
-    bcos::concepts::ledger::Status impl_getStatus()
+    task::Task<bcos::concepts::ledger::Status> impl_getStatus()
     {
         bcostars::RequestGetStatus request;
-        bcos::bytes requestBuffer;
-        bcos::concepts::serialize::encode(request, requestBuffer);
-
-        auto nodeID = p2p().randomSelectNode();
-        auto responseBuffer = p2p().sendMessageByNodeID(
-            protocol::LIGHTNODE_GETSTATUS, std::move(nodeID), bcos::ref(requestBuffer));
 
         bcostars::ResponseGetStatus response;
-        bcos::concepts::serialize::decode(responseBuffer, response);
+        auto nodeID = co_await p2p().randomSelectNode();
+        co_await p2p().sendMessageByNodeID(
+            protocol::LIGHTNODE_GETSTATUS, std::move(nodeID), request, response);
+
         if (response.error.errorCode)
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
 
@@ -129,7 +116,7 @@ private:
         status.failed = response.failed;
         status.blockNumber = response.blockNumber;
 
-        return status;
+        co_return status;
     }
 
     std::shared_ptr<p2p::P2PClientImpl> m_p2p;
