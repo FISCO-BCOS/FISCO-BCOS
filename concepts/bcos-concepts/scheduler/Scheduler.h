@@ -10,10 +10,10 @@ template <class Impl>
 class SchedulerBase
 {
 public:
-    void call(bcos::concepts::transaction::Transaction auto const& transaction,
+    auto call(bcos::concepts::transaction::Transaction auto const& transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        impl().impl_call(transaction, receipt);
+        return impl().impl_call(transaction, receipt);
     }
 
 private:

@@ -38,10 +38,6 @@ using AnyLedger = std::variant<Keccak256Ledger, SM3Ledger, SHA3Ledger, SHA2Ledge
 class LightNodeInitializer : public std::enable_shared_from_this<LightNodeInitializer>
 {
 public:
-    LightNodeInitializer()
-    {
-        m_lightNodePool = std::make_shared<bcos::ThreadPool>("lightNodePool", 4);
-    }
     // Note: FrontService is owned by Initializier for the entire lifetime
     void initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
         std::shared_ptr<AnyLedger> anyLedger,
@@ -288,38 +284,31 @@ private:
         {
             return;
         }
-        m_lightNodePool->enqueue(
-            [response = std::move(sendTxsResponse), request = std::move(sendTxsRequest), nodeID, id,
-                transactionPool, weakFront, moduleID]() mutable {
-                auto front = weakFront.lock();
-                if (!front)
-                {
-                    return;
-                }
-                try
-                {
-                    std::string transactionHash;
-                    transactionHash.reserve(request.transaction.dataHash.size() * 2);
-                    boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
-                        request.transaction.dataHash.end(), std::back_inserter(transactionHash));
-                    LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
+        auto& response = sendTxsResponse;
+        auto& request = sendTxsRequest;
 
-                    transactionPool->submitTransaction(
-                        std::move(request.transaction), response.receipt);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
+        try
+        {
+            std::string transactionHash;
+            transactionHash.reserve(request.transaction.dataHash.size() * 2);
+            boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
+                request.transaction.dataHash.end(), std::back_inserter(transactionHash));
+            LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
 
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                front->asyncSendResponse(
-                    id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
+            transactionPool->submitTransaction(std::move(request.transaction), response.receipt);
+        }
+        catch (std::exception& e)
+        {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+        }
+
+        bcos::bytes responseBuffer;
+        bcos::concepts::serialize::encode(response, responseBuffer);
+        front->asyncSendResponse(
+            id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
+                if (_error)
+                {}
             });
     }
 
@@ -341,42 +330,33 @@ private:
         {
             return;
         }
-        m_lightNodePool->enqueue(
-            [request = std::move(sendTxsRequest), response = std::move(sendTxResponse), weakFront,
-                scheduler, nodeID, id, moduleID]() mutable {
-                auto front = weakFront.lock();
-                if (!front)
-                {
-                    return;
-                }
-                try
-                {
-                    std::string to;
-                    to.reserve(request.transaction.data.to.size() * 2);
-                    boost::algorithm::hex_lower(request.transaction.data.to.begin(),
-                        request.transaction.data.to.end(), std::back_inserter(to));
+        auto& request = sendTxsRequest;
+        auto& response = sendTxResponse;
 
-                    LIGHTNODE_LOG(INFO) << "Call to: " << to;
+        try
+        {
+            std::string to;
+            to.reserve(request.transaction.data.to.size() * 2);
+            boost::algorithm::hex_lower(request.transaction.data.to.begin(),
+                request.transaction.data.to.end(), std::back_inserter(to));
 
-                    scheduler->call(request.transaction, response.receipt);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
+            LIGHTNODE_LOG(INFO) << "Call to: " << to;
 
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                front->asyncSendResponse(
-                    id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
+            scheduler->call(request.transaction, response.receipt);
+        }
+        catch (std::exception& e)
+        {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+        }
+
+        bcos::bytes responseBuffer;
+        bcos::concepts::serialize::encode(response, responseBuffer);
+        front->asyncSendResponse(
+            id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
+                if (_error)
+                {}
             });
     }
-
-private:
-    std::shared_ptr<bcos::ThreadPool> m_lightNodePool;
 };
 }  // namespace bcos::initializer

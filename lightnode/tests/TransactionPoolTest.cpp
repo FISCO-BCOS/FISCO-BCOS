@@ -4,9 +4,11 @@
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
-#include <boost/test/tools/old/interface.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <exception>
 #include <thread>
+#include <variant>
 
 template <bool withError>
 class MockTransactionPoolMT
@@ -19,18 +21,8 @@ public:
             std::cout << "start resume at " << std::this_thread::get_id() << std::endl;
             if constexpr (withError)
             {
-                try
-                {
-                    auto error = std::make_shared<bcos::Error>(-1, "mock error!");
-                    m_callback(std::move(error), nullptr);
-                }
-                catch (bcos::Error& error)
-                {
-                    std::cout << "Exception successed throwd!" << std::endl;
-                    return;
-                }
-
-                BOOST_FAIL("No exception throw!");
+                auto error = std::make_shared<bcos::Error>(-1, "mock error!");
+                m_callback(std::move(error), nullptr);
             }
             else
             {
@@ -90,7 +82,7 @@ BOOST_AUTO_TEST_CASE(mtTxPool)
 
     MockTransactionPoolMT<true> mock2;
     bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
-    transactionPool2.submitTransaction(transaction, receipt);
+    auto task = transactionPool2.submitTransaction(transaction, receipt);
 }
 
 BOOST_AUTO_TEST_CASE(stTxPool)
@@ -103,6 +95,22 @@ BOOST_AUTO_TEST_CASE(stTxPool)
     transactionPool3.submitTransaction(transaction, receipt);
 
     BOOST_CHECK_EQUAL(receipt.data.status, 79);
+}
+
+bcos::task::Task<void> mainTask()
+{
+    bcostars::Transaction transaction;
+    bcostars::TransactionReceipt receipt;
+
+    MockTransactionPoolMT<true> mock2;
+    bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
+    BOOST_CHECK_THROW(co_await transactionPool2.submitTransaction(transaction, receipt),
+        boost::wrapexcept<bcos::Error>);
+}
+
+BOOST_AUTO_TEST_CASE(multiCoro)
+{
+    mainTask();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
