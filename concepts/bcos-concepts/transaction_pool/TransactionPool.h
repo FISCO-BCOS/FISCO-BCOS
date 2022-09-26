@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Basic.h"
+#include "../Coroutine.h"
 #include "../Receipt.h"
 #include "../Transaction.h"
 
@@ -11,7 +12,8 @@ class TransactionPoolBase
 {
 public:
     auto submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
-        bcos::concepts::receipt::TransactionReceipt auto& receipt)
+        bcos::concepts::receipt::TransactionReceipt auto& receipt) -> bcos::coroutine::Awaitable
+        auto
     {
         return impl().impl_submitTransaction(std::move(transaction), receipt);
     }

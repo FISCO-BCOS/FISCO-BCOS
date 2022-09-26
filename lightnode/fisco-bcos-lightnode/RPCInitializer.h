@@ -131,7 +131,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     wsService->registerMsgHandler(bcos::rpc::AMOPClientMessageType::AMOP_SUBTOPIC,
         [](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
-            RPC_LOG(INFO) << "LightNode amop topic request";
+            RPC_LOG(TRACE) << "LightNode amop topic request";
         });
     wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
         [jsonrpc = std::move(jsonrpc)](std::shared_ptr<bcos::boostssl::MessageFace> msg,

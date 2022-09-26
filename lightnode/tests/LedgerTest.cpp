@@ -219,9 +219,9 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block3;
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).getResult(),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).get(),
         bcos::ledger::NotFoundBlockHeader);
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).getResult(),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).get(),
         bcos::ledger::NotFoundBlockHeader);
 }
 
@@ -357,15 +357,15 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
         bcos::concepts::hash::calculate<Hasher>(block, lastBlockHash);
     }
 
-    toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false);
+    toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false).get();
 
     // get all block
     std::vector<bcostars::Block> fromBlocks(blockCount);
     std::vector<bcostars::Block> toBlocks(blockCount);
-    for (auto i = 1u; i < blockCount; ++i)
+    for (auto i = 1U; i < blockCount; ++i)
     {
-        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]);
-        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]);
+        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]).get();
+        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]).get();
     }
 
     BOOST_CHECK_EQUAL_COLLECTIONS(

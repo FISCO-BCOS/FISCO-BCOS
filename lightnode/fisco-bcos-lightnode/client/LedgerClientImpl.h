@@ -8,6 +8,7 @@
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Gateway.h>
+#include <bcos-lightnode/Log.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
@@ -115,6 +116,9 @@ private:
         status.total = response.total;
         status.failed = response.failed;
         status.blockNumber = response.blockNumber;
+
+        LIGHTNODE_LOG(DEBUG) << "Got status from remote: " << status.blockNumber << " "
+                             << response.blockNumber;
 
         co_return status;
     }

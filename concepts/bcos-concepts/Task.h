@@ -6,8 +6,6 @@
 #include <type_traits>
 #include <variant>
 
-#include <iostream>
-
 namespace bcos::task
 {
 
@@ -16,7 +14,7 @@ struct NoReturnValue : public bcos::exception::Exception {};
 // clang-format on
 
 template <class Value>
-struct Task : public std::suspend_never
+struct Task : public CO_STD::suspend_never
 {
     struct PromiseVoid;
     struct PromiseValue;
@@ -56,9 +54,9 @@ struct Task : public std::suspend_never
 
     Task(CO_STD::coroutine_handle<promise_type> handle) : m_handle(std::move(handle)) {}
 
-    constexpr Value await_resume() { return getResult(); }
+    constexpr Value await_resume() { return static_cast<Task&&>(*this).get(); }
 
-    constexpr Value getResult()
+    constexpr Value get() &&
     {
         // Do not use m_handle, it's dead already
         if (std::holds_alternative<std::exception_ptr>(m_value))

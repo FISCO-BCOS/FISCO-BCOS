@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bcos-concepts/Exception.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Serialize.h>
@@ -12,6 +13,11 @@
 
 namespace bcos::p2p
 {
+
+// clang-format off
+struct NoNodeAvailable: public bcos::exception::Exception {};
+// clang-format on
+
 class P2PClientImpl
 {
 public:
@@ -34,11 +40,11 @@ public:
         struct Awaitable : public CO_STD::suspend_always
         {
             Awaitable(bcos::front::FrontServiceInterface::Ptr& front, int moduleID,
-                crypto::NodeIDPtr nodeID, bcos::bytes const& buffer, ResponseType& response)
+                crypto::NodeIDPtr nodeID, bcos::bytes buffer, ResponseType& response)
               : m_front(front),
                 m_moduleID(moduleID),
-                m_nodeID(nodeID),
-                m_requestBuffer(buffer),
+                m_nodeID(std::move(nodeID)),
+                m_requestBuffer(std::move(buffer)),
                 m_response(response)
             {}
 
@@ -65,20 +71,20 @@ public:
             bcos::front::FrontServiceInterface::Ptr& m_front;
             int m_moduleID;
             crypto::NodeIDPtr m_nodeID;
-            bcos::bytes const& m_requestBuffer;
+            bcos::bytes m_requestBuffer;
 
             // Response params
             Error::Ptr m_error;
             ResponseType& m_response;
         };
 
-        Awaitable awaitable(m_front, moduleID, nodeID, requestBuffer, response);
+        Awaitable awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
         co_await awaitable;
 
         if (awaitable.m_error)
-        {
             BOOST_THROW_EXCEPTION(*awaitable.m_error);
-        }
+
+        co_return;
     }
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()
@@ -95,7 +101,7 @@ public:
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
                     [this, m_handle = std::move(handle)](Error::Ptr error,
                         gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr peerGatewayInfos) {
-                        if (!error)
+                        if (error)
                         {
                             m_error = std::move(error);
                         }
@@ -136,10 +142,10 @@ public:
         co_await awaitable;
 
         if (awaitable.m_error)
-            BOOST_THROW_EXCEPTION(*awaitable.m_error);
+            BOOST_THROW_EXCEPTION(*(awaitable.m_error));
 
         if (awaitable.m_nodeID.empty())
-            BOOST_THROW_EXCEPTION(std::runtime_error{"No node available"});
+            BOOST_THROW_EXCEPTION(NoNodeAvailable{});
 
         bcos::bytes nodeIDBin;
         boost::algorithm::unhex(

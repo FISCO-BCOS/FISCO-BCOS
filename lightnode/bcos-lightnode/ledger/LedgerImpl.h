@@ -63,9 +63,10 @@ private:
 
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader.data.blockNumber);
         (co_await setBlockData<Flags>(blockNumberStr, block), ...);
+        co_return;
     }
 
-    void impl_getBlockNumberByHash(
+    task::Task<void> impl_getBlockNumberByHash(
         bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
     {
         LEDGER_LOG(INFO) << "getBlockNumberByHash request";
@@ -75,7 +76,7 @@ private:
         if (!entry)
         {
             number = -1;
-            return;
+            co_return;
         }
 
         try
@@ -91,7 +92,7 @@ private:
         }
     }
 
-    void impl_getBlockHashByNumber(
+    task::Task<void> impl_getBlockHashByNumber(
         std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
     {
         LEDGER_LOG(INFO) << "getBlockHashByNumber request" << LOG_KV("blockNumber", number);
@@ -101,14 +102,14 @@ private:
         if (!entry)
         {
             LEDGER_LOG(WARNING) << "Not found block number: " << number;
-            return;
+            co_return;
         }
 
         auto hashStr = entry->getField(0);
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
     }
 
-    void impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
+    task::Task<void> impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
     {
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
         using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
@@ -134,6 +135,8 @@ private:
                     bcos::concepts::serialize::decode(field, out[index]);
                 }
             });
+
+        co_return;
     }
 
     task::Task<bcos::concepts::ledger::Status> impl_getStatus()
@@ -177,7 +180,7 @@ private:
     }
 
     template <bool isTransaction>
-    void impl_setTransactionOrReceiptBuffers(
+    task::Task<void> impl_setTransactions(
         RANGES::range auto const& hashes, RANGES::range auto buffers)
     {
         auto count = RANGES::size(buffers);
@@ -200,6 +203,8 @@ private:
             storage().setRow(
                 tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
         }
+
+        co_return;
     }
 
     template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::block::Block BlockType>
@@ -218,16 +223,23 @@ private:
                              << sourceStatus.blockNumber << " | " << onlyHeader;
             BlockType block;
             if (onlyHeader)
-                sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(blockNumber, block);
+            {
+                co_await sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(
+                    blockNumber, block);
+            }
             else
-                sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
+            {
+                co_await sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(
+                    blockNumber, block);
+            }
 
             if (blockNumber > 0)  // Ignore verify genesis block
             {
                 if (!parentBlock)
                 {
                     parentBlock = BlockType();
-                    impl_getBlock<bcos::concepts::ledger::HEADER>(blockNumber - 1, *parentBlock);
+                    co_await impl_getBlock<bcos::concepts::ledger::HEADER>(
+                        blockNumber - 1, *parentBlock);
                 }
 
                 std::array<std::byte, Hasher::HASH_SIZE> parentHash;
@@ -246,9 +258,13 @@ private:
             }
 
             if (onlyHeader)
-                impl_setBlock<bcos::concepts::ledger::HEADER>(block);
+            {
+                co_await impl_setBlock<bcos::concepts::ledger::HEADER>(block);
+            }
             else
-                impl_setBlock<bcos::concepts::ledger::ALL>(block);
+            {
+                co_await impl_setBlock<bcos::concepts::ledger::ALL>(block);
+            }
 
             parentBlock = std::move(block);
         }
@@ -306,12 +322,12 @@ private:
             if constexpr (std::is_same_v<Flag, concepts::ledger::TRANSACTIONS>)
             {
                 bcos::concepts::resizeTo(block.transactions, outputSize);
-                impl_getTransactions(std::move(hashesRange), block.transactions);
+                co_await impl_getTransactions(std::move(hashesRange), block.transactions);
             }
             else
             {
                 bcos::concepts::resizeTo(block.receipts, outputSize);
-                impl_getTransactions(std::move(hashesRange), block.receipts);
+                co_await impl_getTransactions(std::move(hashesRange), block.receipts);
             }
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
@@ -440,7 +456,7 @@ private:
 
             auto hashView = block.transactionsMetaData |
                             RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-            impl_setTransactionOrReceiptBuffers<false>(hashView, std::move(transactionBuffers));
+            impl_setTransactions<false>(hashView, std::move(transactionBuffers));
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::RECEIPTS>)
         {
@@ -471,7 +487,7 @@ private:
 
             auto hashView = block.transactionsMetaData |
                             RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-            impl_setTransactionOrReceiptBuffers<false>(hashView, std::move(receiptBuffers));
+            impl_setTransactions<false>(hashView, std::move(receiptBuffers));
 
             LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                               << LOG_KV("number", blockNumberKey)
@@ -517,21 +533,21 @@ private:
         }
     }
 
-    void impl_setupGenesisBlock(bcos::concepts::block::Block auto block)
+    task::Task<void> impl_setupGenesisBlock(bcos::concepts::block::Block auto block)
     {
         try
         {
             decltype(block) currentBlock;
 
-            impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
-            return;
+            co_await impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
+            co_return;
         }
-        catch (...)
+        catch (NotFoundBlockHeader& e)
         {
             LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
         }
 
-        impl_setBlock<concepts::ledger::HEADER>(std::move(block));
+        co_await impl_setBlock<concepts::ledger::HEADER>(std::move(block));
     }
 
     auto& storage() { return bcos::concepts::getRef(m_storage); }
