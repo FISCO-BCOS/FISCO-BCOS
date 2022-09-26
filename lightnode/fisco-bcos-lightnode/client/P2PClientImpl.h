@@ -47,7 +47,7 @@ public:
                 bcos::concepts::getRef(m_front).asyncSendMessageByNodeID(m_moduleID, m_nodeID,
                     bcos::ref(m_requestBuffer), 0,
                     [m_handle = std::move(handle), this](Error::Ptr error, bcos::crypto::NodeIDPtr,
-                        bytesConstRef data, const std::string&, front::ResponseFunc) {
+                        bytesConstRef data, const std::string&, front::ResponseFunc) mutable {
                         if (!error)
                         {
                             bcos::concepts::serialize::decode(data, m_response);
@@ -94,7 +94,8 @@ public:
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
                     [this, m_handle = std::move(handle)](Error::Ptr error,
-                        gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr peerGatewayInfos) {
+                        gateway::GatewayInfo::Ptr,
+                        gateway::GatewayInfosPtr peerGatewayInfos) mutable {
                         if (!error)
                         {
                             m_error = std::move(error);

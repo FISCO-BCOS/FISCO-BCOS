@@ -16,7 +16,7 @@ struct NoReturnValue : public bcos::exception::Exception {};
 // clang-format on
 
 template <class Value>
-struct Task : public std::suspend_never
+struct Task : public CO_STD::suspend_never
 {
     struct PromiseVoid;
     struct PromiseValue;
