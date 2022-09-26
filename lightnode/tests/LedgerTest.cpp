@@ -189,7 +189,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
     BOOST_CHECK_EQUAL(block.transactions.size(), count);
     BOOST_CHECK_EQUAL(block.receipts.size(), count);
 
-    for (auto i = 0u; i < count; ++i)
+    for (auto i = 0U; i < count; ++i)
     {
         BOOST_CHECK_EQUAL(block.transactions[i].data.chainID, "chain");
         BOOST_CHECK_EQUAL(block.transactions[i].data.groupID, "group");

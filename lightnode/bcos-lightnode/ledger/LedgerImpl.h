@@ -505,11 +505,11 @@ private:
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::ALL>)
         {
-            setBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
-            setBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
-            setBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
-            setBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
-            setBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+            co_await setBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            co_await setBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
+            co_await setBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
+            co_await setBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
+            co_await setBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
         }
         else
         {
