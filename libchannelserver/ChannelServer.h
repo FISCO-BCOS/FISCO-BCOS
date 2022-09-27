@@ -46,6 +46,8 @@ namespace channel
 class ChannelServer : public std::enable_shared_from_this<ChannelServer>
 {
 public:
+    ChannelServer(int _threadPoolSize) : m_threadPoolSize(_threadPoolSize) {}
+
     typedef std::shared_ptr<ChannelServer> Ptr;
     virtual ~ChannelServer() = default;
     virtual void run();
@@ -83,6 +85,8 @@ public:
         m_messageFactory = messageFactory;
     }
 
+    int threadPoolSize() { return m_threadPoolSize; }
+
     virtual void stop();
 
     void setCheckCertIssuer(bool checkCertIssuer) { m_checkCertIssuer = checkCertIssuer; }
@@ -102,6 +106,8 @@ private:
     std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
+
+    int m_threadPoolSize;
 
     std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> m_connectionHandler;
     MessageFactory::Ptr m_messageFactory;

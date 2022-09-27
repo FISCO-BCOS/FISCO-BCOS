@@ -49,7 +49,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.9.0"
+default_version="2.9.1"
 rsa_key_length=2048
 macOS=""
 x86_64_arch="false"
@@ -1322,8 +1322,8 @@ while getopts "v:V:f" option;do
     esac
 done
 
-default_version=2.9.0
-download_version=${default_version}
+default_version=2.9.1
+download_version=\${default_version}
 sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}
 cos_download_link=${cdn_link_header}/console/releases/v\${download_version}/\${package_name}
@@ -1662,12 +1662,6 @@ check_bin()
         exit_with_clean "${bin_version} is less than ${compatibility_version}. Please correct it and try again."
     fi
     echo "Binary check passed."
-    
-    if version_gt "2.9.0" "${compatibility_version}";then
-        echo " ${compatibility_version} less than 2.9.0, does not use rsa ssl"
-        rsa_crypto_channel="false"
-        LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel" 
-    fi
 }
 
 prepare_ca(){
@@ -1765,6 +1759,13 @@ fi
 # use default version as compatibility_version
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${default_version}"
+fi
+
+# check if rsa crypto
+if version_gt "2.9.0" "${compatibility_version}";then
+    echo " ${compatibility_version} less than 2.9.0, does not use rsa ssl"
+    rsa_crypto_channel="false"
+    LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel" 
 fi
 
 # download fisco-bcos and check it
