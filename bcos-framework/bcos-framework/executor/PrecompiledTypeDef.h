@@ -45,6 +45,7 @@ constexpr const char* const BFS_NAME = "/sys/bfs";
 constexpr const char* const GROUP_SIG_NAME = "/sys/group_sig";
 constexpr const char* const RING_SIG_NAME = "/sys/ring_sig";
 constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
+constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account";
 
 /// precompiled contract for solidity
 constexpr const char* const SYS_CONFIG_ADDRESS = "0000000000000000000000000000000000001000";
@@ -70,6 +71,8 @@ constexpr const char* const DISCRETE_ZKP_ADDRESS = "0000000000000000000000000000
 constexpr const char* const AUTH_INTERCEPT_ADDRESS = "0000000000000000000000000000000000010000";
 constexpr const char* const AUTH_COMMITTEE_ADDRESS = "0000000000000000000000000000000000010001";
 constexpr const char* const AUTH_CONTRACT_MGR_ADDRESS = "0000000000000000000000000000000000010002";
+constexpr const char* const ACCOUNT_MGR_ADDRESS = "0000000000000000000000000000000000010003";
+constexpr const char* const ACCOUNT_ADDRESS = "0000000000000000000000000000000000010004";
 
 const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
     bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
