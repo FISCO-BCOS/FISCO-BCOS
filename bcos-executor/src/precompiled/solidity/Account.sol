@@ -8,12 +8,12 @@ abstract contract AccountManager {
     // 设置账户状态，只有治理委员可以调用，0 - normal, others - abnormal
     function setAccountStatus(string memory addr, uint16 status) public virtual returns (int32);
     // 任何用户都可以调用
-    function getAccountStatus(string memory addr) public view virtual returns (uint16);
+    function getAccountStatus(string memory addr) public view virtual returns (uint16,uint256);
 }
 
 abstract contract Account {
     // 设置账户状态，只有AccountManager可以调用， 0 - normal, others - abnormal
     function setAccountStatus(uint16 status) public view virtual returns (int32);
     // 任何用户都可以调用
-    function getAccountStatus() public view virtual returns (uint16);
+    function getAccountStatus() public view virtual returns (uint16,uint256);
 }

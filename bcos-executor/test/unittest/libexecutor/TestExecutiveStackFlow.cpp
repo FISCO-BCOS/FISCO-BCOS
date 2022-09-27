@@ -106,13 +106,13 @@ BOOST_AUTO_TEST_CASE(RunTest)
 
     executiveStackFlow->asyncRun(
         // onTxReturn
-        [this, sequence](CallParameters::UniquePtr output) {
+        [sequence](CallParameters::UniquePtr output) {
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
                                 << ",the conntextID is:" << output->contextID;
             sequence->push_back(output->contextID);
         },
         // onFinished
-        [this, sequence](bcos::Error::UniquePtr error) {
+        [sequence](bcos::Error::UniquePtr error) {
             if (error != nullptr)
             {
                 EXECUTOR_LOG(ERROR)
@@ -131,13 +131,13 @@ BOOST_AUTO_TEST_CASE(RunTest)
 
     executiveStackFlow->asyncRun(
         // onTxReturn
-        [this, sequence](CallParameters::UniquePtr output) {
+        [sequence](CallParameters::UniquePtr output) {
             EXECUTOR_LOG(DEBUG) << "one transaction perform success! the seq is :" << output->seq
                                 << ",the conntextID is:" << output->contextID;
             sequence->push_back(output->contextID);
         },
         // onFinished
-        [this, sequence](bcos::Error::UniquePtr error) {
+        [sequence](bcos::Error::UniquePtr error) {
             if (error != nullptr)
             {
                 EXECUTOR_LOG(ERROR)
@@ -154,8 +154,8 @@ BOOST_AUTO_TEST_CASE(RunTest)
         });
 
     EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size());
-    bool flag = true;
-    for (int i = 0u; i < sequence->size(); ++i)
+    [[maybe_unused]] bool flag = true;
+    for (int64_t i = 0u; i < (int64_t)sequence->size(); ++i)
     {
         if (i <= 10)
         {

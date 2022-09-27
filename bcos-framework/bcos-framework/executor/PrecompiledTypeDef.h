@@ -48,6 +48,7 @@ constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
 constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account";
 
 /// precompiled contract for solidity
+/// precompiled address should range in [0x1000, 0x20000)
 constexpr const char* const SYS_CONFIG_ADDRESS = "0000000000000000000000000000000000001000";
 constexpr const char* const TABLE_ADDRESS = "0000000000000000000000000000000000001001";
 constexpr const char* const TABLE_MANAGER_ADDRESS = "0000000000000000000000000000000000001002";

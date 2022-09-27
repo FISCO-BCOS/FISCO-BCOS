@@ -23,6 +23,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -97,8 +98,7 @@ int BFSPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     boost::trim(_contractName);
     boost::trim(_contractVersion);
     // check the status of the contract(only print the error message to the log)
-    std::string tableName =
-        getContractTableName(_contractAddress, _executive->blockContext().lock()->isWasm());
+    std::string tableName = getContractTableName(_contractAddress);
     ContractStatus contractStatus = getContractStatus(_executive, tableName);
 
     if (contractStatus != ContractStatus::Available)
@@ -397,14 +397,23 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
         return;
     }
-    if (absolutePath.find(USER_APPS_PREFIX) != 0 && absolutePath.find(USER_TABLE_PREFIX) != 0)
+    if (!absolutePath.starts_with(USER_APPS_PREFIX) && !absolutePath.starts_with(USER_TABLE_PREFIX))
     {
-        PRECOMPILED_LOG(DEBUG)
-            << LOG_BADGE("BFSPrecompiled")
-            << LOG_DESC("only support touch file under the system dir /apps/, /tables/")
-            << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
-        return;
+        if (blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION) &&
+            absolutePath.starts_with(USER_USR_PREFIX))
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("touch /usr/ file")
+                                   << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
+        }
+        else
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("BFSPrecompiled")
+                << LOG_DESC("only support touch file under the system dir /apps/, /tables/")
+                << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+            return;
+        }
     }
 
     std::string parentDir, baseName;

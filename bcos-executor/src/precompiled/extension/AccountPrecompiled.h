@@ -38,10 +38,12 @@ public:
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
-    void setAccountStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    void setAccountStatus(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         PrecompiledExecResult::Ptr const& _callParameters);
 
-    void getAccountStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    void getAccountStatus(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 };
 }  // namespace bcos::precompiled

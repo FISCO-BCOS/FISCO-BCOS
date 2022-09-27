@@ -84,7 +84,7 @@ concept DynamicRange = requires(Range range, size_t newSize)
 
 void resizeTo(RANGES::range auto& out, size_t size)
 {
-    if (RANGES::size(out) < size)
+    if ((size_t)RANGES::size(out) < size)
     {
         if constexpr (DynamicRange<std::remove_cvref_t<decltype(out)>>)
         {
