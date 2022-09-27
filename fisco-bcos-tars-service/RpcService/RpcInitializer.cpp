@@ -142,7 +142,7 @@ void RpcInitializer::stop()
 {
     if (!m_running)
     {
-        RPCSERVICE_LOG(WARNING) << LOG_DESC("The RpcService has already stopped!");
+        RPCSERVICE_LOG(INFO) << LOG_DESC("The RpcService has already stopped!");
         return;
     }
     m_running = false;
