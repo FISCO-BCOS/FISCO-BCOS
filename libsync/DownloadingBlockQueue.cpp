@@ -161,7 +161,7 @@ void DownloadingBlockQueue::clearQueue()
     swap(m_blocks, emptyQueue);  // Does memory leak here ?
     // give back the memory to os
 #ifndef FISCO_DEBUG
-    SYNC_LOG(INFO) << LOG_DESC("DownloadingBlockQueue: clearQueue and ReleaseFreeMemory");
+    SYNC_LOG(TRACE) << LOG_DESC("DownloadingBlockQueue: clearQueue and ReleaseFreeMemory");
     MallocExtension::instance()->ReleaseFreeMemory();
 #endif
 }

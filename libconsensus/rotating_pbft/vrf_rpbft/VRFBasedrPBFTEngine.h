@@ -47,6 +47,7 @@ public:
         m_nodeID2Index(std::make_shared<std::map<dev::h512, IDXTYPE>>())
     {}
 
+    ~VRFBasedrPBFTEngine() override {}
     bool shouldRotateSealers() { return m_shouldRotateSealers.load(); }
     void setShouldRotateSealers(bool _shouldRotateSealers);
 

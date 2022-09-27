@@ -187,34 +187,6 @@ jobs:
           path: /FISCO-BCOS/build/bin/fisco-bcos-mini.tar.gz
           destination: fisco-bcos-mini.tar.gz
 
-  deploy_static:
-    working_directory: /FISCO-BCOS
-    executor: ubuntu-build-env
-    steps:
-      - install_depencies:
-          packages: "ca-certificates golang-go libgmp-dev flex bison patch"
-      - checkout
-      - compile:
-          options: "-DTOOL=ON -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
-          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
-      - run:
-          name: Strip
-          command: |
-            cd build/bin
-            tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
-            strip fisco-bcos
-            tar -zcf fisco-bcos.tar.gz fisco-bcos
-            strip fisco-sync
-            tar -zcf fisco-sync.tar.gz fisco-sync
-      - run:
-          name: Upload to GitHub Release
-          command: |
-            go get github.com/tcnksm/ghr
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-sync.tar.gz
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
-
 workflows:
   version: 2
   build_and_test:
@@ -257,13 +229,4 @@ workflows:
             branches:
               ignore: /^pull.*/
             tags:
-              ignore: /.*/
-  deploy:
-    jobs:
-      - deploy_static:
-          filters:
-            tags:
-              only:
-                - /v2.*/
-            branches:
               ignore: /.*/

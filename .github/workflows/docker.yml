@@ -2,6 +2,8 @@ name: Build and Publish Docker Image
 
 on:
   push:
+    branches-ignore:
+      - '*'
     tags:
       - 'v2.*.*'
   release:
@@ -56,8 +58,8 @@ jobs:
         with:
           context: .
           push: true
-          file: ./tools/.ci/Dockerfile
-          platforms: linux/amd64
+          file: tools/ci/Dockerfile
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.set_docker_tag.outputs.docker_tag }}
 
       - name: Image digest

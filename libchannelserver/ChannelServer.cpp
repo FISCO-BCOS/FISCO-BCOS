@@ -43,8 +43,10 @@ void dev::channel::ChannelServer::run()
     OPENSSL_free((void*)issuer);
 
     // ChannelReq process more request, should be larger
-    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 16);
-    m_responseThreadPool = std::make_shared<ThreadPool>("ChannelResp", 8);
+    m_requestThreadPool =
+        std::make_shared<ThreadPool>("ChannelReq", m_threadPoolSize > 0 ? m_threadPoolSize : 16);
+    m_responseThreadPool =
+        std::make_shared<ThreadPool>("ChannelResp", m_threadPoolSize > 0 ? m_threadPoolSize : 8);
     if (!m_listenHost.empty() && m_listenPort > 0)
     {
         m_acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
@@ -54,6 +56,9 @@ void dev::channel::ChannelServer::run()
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
         m_acceptor->set_option(optionReuseAddress);
     }
+
+    CHANNEL_LOG(INFO) << LOG_BADGE("ChannelServer::run")
+                      << LOG_KV("threadPoolSize", m_threadPoolSize);
 
     m_serverThread = std::make_shared<std::thread>([=]() {
         pthread_setThreadName("ChannelServer");
