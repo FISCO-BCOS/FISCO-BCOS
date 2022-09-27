@@ -106,7 +106,7 @@ void GatewayInitializer::stop()
 {
     if (!m_running)
     {
-        GATEWAYSERVICE_LOG(WARNING) << LOG_DESC("The GatewayService has already been stopped");
+        GATEWAYSERVICE_LOG(INFO) << LOG_DESC("The GatewayService has already been stopped");
         return;
     }
     m_running = false;

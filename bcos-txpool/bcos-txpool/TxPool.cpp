@@ -35,7 +35,7 @@ void TxPool::start()
 {
     if (m_running)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("The txpool has already been started!");
+        TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been started!");
         return;
     }
     m_transactionSync->start();
@@ -48,7 +48,7 @@ void TxPool::stop()
 {
     if (!m_running)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("The txpool has already been stopped!");
+        TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been stopped!");
         return;
     }
     if (m_worker)
@@ -446,11 +446,12 @@ void TxPool::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        TXPOOL_LOG(WARNING) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                            << LOG_KV("module", std::to_string(_moduleID))
-                                            << LOG_KV("dst", _dstNode->shortHex())
-                                            << LOG_KV("code", _error->errorCode())
-                                            << LOG_KV("msg", _error->errorMessage());
+                        TXPOOL_LOG(WARNING)
+                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                            << LOG_KV("module", std::to_string(_moduleID))
+                            << LOG_KV("dst", _dstNode->shortHex())
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }
