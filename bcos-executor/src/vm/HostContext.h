@@ -88,8 +88,8 @@ public:
 
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
-    evmc_result toEVMStatus(
-        int32_t _status, int32_t _evmStatus, std::shared_ptr<BlockContext> _blockContext);
+    evmc_status_code toEVMStatus(std::unique_ptr<CallParameters> const& _response,
+        std::shared_ptr<BlockContext> _blockContext);
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
 
