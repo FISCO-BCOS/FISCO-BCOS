@@ -52,6 +52,7 @@
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 #include <util/tc_clientsocket.h>
 #include <vector>
 
@@ -244,12 +245,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         executorManager->addExecutor(executorName, parallelExecutor);
     }
 
+    // build node time synchronization tool
+    auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
+
     // build and init the pbft related modules
     if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front());
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance);
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();
@@ -275,7 +279,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front());
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance);
     }
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {

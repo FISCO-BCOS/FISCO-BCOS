@@ -40,13 +40,15 @@ public:
         BlockSyncMsgInterface::Ptr _msg) = 0;
     virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(
         bcos::protocol::BlockNumber _number, bcos::crypto::HashType const& _hash,
-        bcos::crypto::HashType const& _gensisHash, int32_t _version = 0)
+        bcos::crypto::HashType const& _gensisHash, int64_t const time = utcTime(),
+        int32_t _version = 0)
     {
         auto statusMsg = createBlockSyncStatusMsg();
         statusMsg->setVersion(_version);
         statusMsg->setNumber(_number);
         statusMsg->setHash(_hash);
         statusMsg->setGenesisHash(_gensisHash);
+        statusMsg->setTime(time);
         return statusMsg;
     }
 
