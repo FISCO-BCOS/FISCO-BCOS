@@ -67,6 +67,7 @@ jobs:
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+          make cov
       
       - name: Generate covreage report
         if: runner.os == 'Linux'
