@@ -185,7 +185,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     // Convert CallParameters to evmc_result
     evmc_result result;
-    result.status_code = toEVMStatus(response, blockContext);
+    result.status_code = toEVMStatus(response, result, blockContext);
 
     result.create_address =
         toEvmC(boost::algorithm::unhex(response->newEVMContractAddress));  // TODO: check if ok
@@ -202,18 +202,18 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     return result;
 }
 
-evmc_status_code HostContext::toEVMStatus(std::unique_ptr<CallParameters> const& _response,
+evmc_status_code HostContext::toEVMStatus(std::unique_ptr<CallParameters> const& _response, evmc_result _result,
     std::shared_ptr<bcos::executor::BlockContext> _blockContext)
 {
     if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION))
     {
-        result.status_code = evmc_status_code(_response->evmStatus);
-        return result.status_code;
+        _result.status_code = evmc_status_code(_response->evmStatus);
+        return _result.status_code;
     }
     else
     {
-        result.status_code = evmc_status_code(_response->status);
-        return result.status_code;
+        _result.status_code = evmc_status_code(_response->status);
+        return _result.status_code;
     }
 }
 
