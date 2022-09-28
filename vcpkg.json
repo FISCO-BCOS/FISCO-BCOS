@@ -27,6 +27,7 @@
     "ms-gsl",
     "tbb",
     "zlib",
+    "redis-plus-plus",
     "jsoncpp",
     "protobuf",
     "cryptopp",
