@@ -61,6 +61,16 @@ inline std::string getActualTableName(const std::string& _tableName)
     return "u_" + _tableName;
 }
 
+inline std::string getAccountTableName(std::string_view _account)
+{
+    if (_account.substr(0, strlen(executor::USER_USR_PREFIX)) == executor::USER_USR_PREFIX)
+    {
+        return std::string(_account);
+    }
+    auto tableName = (_account[0] == '/') ? _account.substr(1) : _account;
+    return executor::USER_USR_PREFIX + std::string(tableName);
+}
+
 inline std::string getDynamicPrecompiledCodeString(
     const std::string& _address, const std::string& _params)
 {

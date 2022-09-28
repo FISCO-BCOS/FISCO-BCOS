@@ -46,8 +46,5 @@ private:
 
     void getAccountStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
-
-    uint16_t getAccountStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& _address);
 };
 }  // namespace bcos::precompiled

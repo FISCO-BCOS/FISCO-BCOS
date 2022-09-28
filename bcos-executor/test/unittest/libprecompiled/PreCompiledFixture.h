@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "executive/BlockContext.h"
@@ -235,10 +236,11 @@ public:
         }
     }
 
-    void nextBlock(int64_t blockNumber)
+    void nextBlock(int64_t blockNumber, protocol::Version version = protocol::Version::V3_0_VERSION)
     {
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(blockNumber);
+        blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
         std::promise<void> nextPromise;
         executor->nextBlockHeader(

@@ -33,7 +33,6 @@ namespace bcos
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
-#define PRECOMPILED_BLK_LOG(LEVEL, BLK_NUMBER) PRECOMPILED_LOG(LEVEL) << BLOCK_NUMBER(BLK_NUMBER)
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
@@ -87,7 +86,7 @@ enum PrecompiledErrorCode : int
     CODE_FILE_ALREADY_EXIST = -53002,
     CODE_FILE_NOT_EXIST = -53001,
 
-    // ContractLifeCyclePrecompiled -51999 ~ -51900
+    // AccountManagerPrecompiled -51999 ~ -51900
     CODE_INVALID_REVOKE_LAST_AUTHORIZATION = -51907,
     CODE_INVALID_NON_EXIST_AUTHORIZATION = -51906,
     CODE_INVALID_NO_AUTHORIZED = -51905,
@@ -95,7 +94,7 @@ enum PrecompiledErrorCode : int
     CODE_INVALID_CONTRACT_ADDRESS = -51903,
     CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51902,
     CODE_INVALID_CONTRACT_AVAILABLE = -51901,
-    CODE_INVALID_CONTRACT_FROZEN = -51900,
+    CODE_ACCOUNT_ALREADY_EXIST = -51900,
 
     // RingSigPrecompiled -51899 ~ -51800
     VERIFY_RING_SIG_FAILED = -51800,

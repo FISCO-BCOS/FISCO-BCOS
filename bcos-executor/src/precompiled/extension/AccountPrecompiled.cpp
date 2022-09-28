@@ -25,14 +25,13 @@ using namespace bcos;
 using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::storage;
+using namespace bcos::protocol;
 
-const char* const AM_METHOD_CREATE_ACCOUNT = "createAccount(address)";
-const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(address,uint16)";
-const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus(address)";
+const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint16)";
+const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
 
 AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    name2Selector[AM_METHOD_CREATE_ACCOUNT] = getFuncSelector(AM_METHOD_CREATE_ACCOUNT, _hashImpl);
     name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
         getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, _hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
@@ -43,16 +42,31 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    // parse function name
-    uint32_t func = getParamFunc(_callParameters->input());
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    // [tableName][actualParams]
+    std::vector<std::string> dynamicParams;
+    bytes param;
+    codec.decode(_callParameters->input(), dynamicParams, param);
+    auto accountTableName = dynamicParams.at(0);
+
+    // get user call actual params
+    auto originParam = ref(param);
+    uint32_t func = getParamFunc(originParam);
+    bytesConstRef data = getParamData(originParam);
+    auto table = _executive->storage().openTable(accountTableName);
+    if (!table.has_value())
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
+    }
 
     if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
     {
-        setAccountStatus(_executive, _callParameters);
+        setAccountStatus(accountTableName, _executive, data, _callParameters);
     }
     else if (func == name2Selector[AM_METHOD_GET_ACCOUNT_STATUS])
     {
-        getAccountStatus(_executive, _callParameters);
+        getAccountStatus(accountTableName, _executive, _callParameters);
     }
     else
     {
@@ -65,12 +79,33 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
 }
 
 
-void AccountPrecompiled::setAccountStatus(
+void AccountPrecompiled::setAccountStatus([[maybe_unused]] const std::string& tableName,
     [[maybe_unused]] const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[maybe_unused]] bytesConstRef& data,
     [[maybe_unused]] const PrecompiledExecResult::Ptr& _callParameters)
 {}
 
-void AccountPrecompiled::getAccountStatus(
-    [[maybe_unused]] const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    [[maybe_unused]] const PrecompiledExecResult::Ptr& _callParameters)
-{}
+void AccountPrecompiled::getAccountStatus(const std::string& tableName,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    auto entry = _executive->storage().getRow(tableName, ACCOUNT_STATUS);
+    if (!entry.has_value())
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
+                               << LOG_DESC("Status row not exist, return 0 by default");
+        _callParameters->setExecResult(codec.encode(uint16_t(0)));
+        return;
+    }
+    auto statusStr = entry->get();
+    auto lastUpdateEntry = _executive->storage().getRow(tableName, ACCOUNT_LAST_UPDATE);
+    auto lastUpdateStr = lastUpdateEntry->get();
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
+                           << LOG_KV("status", statusStr)
+                           << LOG_KV("lastUpdateNumber", lastUpdateStr);
+    uint16_t status = boost::lexical_cast<uint16_t>(statusStr);
+    u256 blockNumber = boost::lexical_cast<u256>(lastUpdateStr);
+    _callParameters->setExecResult(codec.encode(status, blockNumber));
+}
