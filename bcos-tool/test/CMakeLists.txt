@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for bcos-leader-election
+# Top-level CMake file for ut of bcos-tool
 # ------------------------------------------------------------------------------
-# Copyright (C) 2022 bcos-leader-election
+# Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+file(GLOB_RECURSE SOURCES "*.cpp")
 
-cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
+# cmake settings
+set(TEST_BINARY_NAME test-bcos-tool)
+find_package(Boost REQUIRED unit_test_framework)
 
-if(WITH_TIKV)
-    include(Version)
-    project(bcos-leader-election VERSION ${VERSION})
+add_executable(${TEST_BINARY_NAME} ${SOURCES})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-    file(GLOB_RECURSE SRCS src/*.cpp)
-    find_package(etcd-cpp-api CONFIG REQUIRED)
-    find_package(gRPC REQUIRED)
-    add_library(${LEADER_ELECTION_TARGET} ${SRCS})
-    target_link_libraries(${LEADER_ELECTION_TARGET} PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
-endif()
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${TOOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)
+add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

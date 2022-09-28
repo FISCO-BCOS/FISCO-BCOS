@@ -46,9 +46,9 @@ struct TestTiKVStorageFixture
 {
     TestTiKVStorageFixture()
     {
-        boost::log::core::get()->set_logging_enabled(false);
+        // boost::log::core::get()->set_logging_enabled(false);
         std::vector<std::string> pd_addrs{"127.0.0.1:2379"};
-        m_cluster = newTiKVCluster(pd_addrs, "./");
+        m_cluster = newTiKVClient(pd_addrs, "./");
 
         storage = std::make_shared<TiKVStorage>(m_cluster);
         storage->asyncOpenTable(testTableName, [&](auto error, auto table) {
@@ -191,7 +191,7 @@ struct TestTiKVStorageFixture
     TransactionalStorageInterface::Ptr storage;
     std::string testTableName = "TestTable";
     TableInfo::ConstPtr testTableInfo = nullptr;
-    std::shared_ptr<pingcap::kv::Cluster> m_cluster;
+    std::shared_ptr<tikv_client::TransactionClient> m_cluster;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestTiKVStorage, TestTiKVStorageFixture)
@@ -483,6 +483,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
 BOOST_AUTO_TEST_CASE(multiStorageCommit)
 {
+    // FIXME: this test case will crash, because tikv-rust client only resolve timeout lock
     size_t tableEntries = 101;
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
@@ -540,6 +541,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
         BOOST_CHECK_EQUAL(ts, 0);
     });
     // prewrite
+    BOOST_CHECK_EQUAL(params1.timestamp, 0);
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
@@ -557,10 +559,11 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
     // check commit success
+    this_thread::sleep_for(chrono::seconds(3));
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
-            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_REQUIRE_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), tableEntries);
 
             std::sort(table1Keys.begin(), table1Keys.end());
@@ -756,8 +759,6 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     storage2->asyncRollback(
         params1, [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
 
-    // std::this_thread::sleep_for(chrono::seconds(20));
-
     // check commit failed
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
@@ -849,6 +850,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
 
 BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 {
+    // FIXME: this test case will crash
     size_t tableEntries = 101;
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
@@ -921,6 +923,8 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     storage2->asyncRollback(
         params1, [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
 
+    // FIXME: this sleep_for is to wait lock timeout
+    this_thread::sleep_for(chrono::seconds(3));
     // check commit failed
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
@@ -956,6 +960,10 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     // only storage call asyncCommit
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
+
+    // FIXME: this sleep_for is to wait lock timeout
+    this_thread::sleep_for(chrono::seconds(3));
+
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
@@ -1062,6 +1070,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
 BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 {
+    // FIXME: this test case will crash
     size_t tableEntries = 101;
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
@@ -1128,6 +1137,10 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
             BOOST_CHECK_EQUAL(ts, 0);
         });
     });
+
+    // FIXME: this sleep_for is to wait lock timeout
+    this_thread::sleep_for(chrono::seconds(3));
+
     // just recommit prewrite
     storage = std::make_shared<TiKVStorage>(m_cluster);
     auto storage4 = std::make_shared<TiKVStorage>(m_cluster);
@@ -1154,6 +1167,10 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     // only storage call asyncCommit
     storage->asyncCommit(bcos::protocol::TwoPCParams(),
         [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
+
+    // FIXME: this sleep_for is to wait lock timeout
+    this_thread::sleep_for(chrono::seconds(3));
+
     // check commit success
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),

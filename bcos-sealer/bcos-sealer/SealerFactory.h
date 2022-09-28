@@ -29,7 +29,8 @@ class SealerFactory
 public:
     using Ptr = std::shared_ptr<SealerFactory>;
     SealerFactory(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime);
+        bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime,
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
 
     virtual ~SealerFactory() {}
     Sealer::Ptr createSealer();
@@ -38,6 +39,7 @@ protected:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     unsigned m_minSealTime;
+    bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };
 }  // namespace sealer
 }  // namespace bcos

@@ -75,7 +75,8 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "cpprestsdk"
+        "etcd-cpp-apiv3",
+        "grpc"
       ]
     },
     "tcmalloc": {

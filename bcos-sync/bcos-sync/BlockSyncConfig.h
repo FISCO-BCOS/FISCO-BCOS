@@ -30,6 +30,8 @@
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
+
 namespace bcos
 {
 namespace sync
@@ -43,7 +45,8 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-        bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory)
+        bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory, 
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
       : SyncConfig(_nodeId),
         m_ledger(_ledger),
         m_txpool(_txpool),
@@ -52,7 +55,8 @@ public:
         m_frontService(_frontService),
         m_scheduler(_scheduler),
         m_consensus(_consensus),
-        m_msgFactory(_msgFactory)
+        m_msgFactory(_msgFactory),
+        m_nodeTimeMaintenance(_nodeTimeMaintenance)
     {}
     ~BlockSyncConfig() override {}
 
@@ -61,6 +65,7 @@ public:
     bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
     bcos::scheduler::SchedulerInterface::Ptr scheduler() { return m_scheduler; }
     bcos::consensus::ConsensusInterface::Ptr consensus() { return m_consensus; }
+    bcos::tool::NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
 
     BlockSyncMsgFactory::Ptr msgFactory() { return m_msgFactory; }
     virtual void resetConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
@@ -150,6 +155,7 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     BlockSyncMsgFactory::Ptr m_msgFactory;
+    bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
     bcos::crypto::HashType m_genesisHash;
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};

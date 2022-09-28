@@ -35,6 +35,7 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 
 namespace bcos
 {
@@ -62,7 +63,8 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
-        bcos::front::FrontServiceInterface::Ptr _frontService);
+        bcos::front::FrontServiceInterface::Ptr _frontService, 
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
 
     virtual ~PBFTInitializer() { stop(); }
 
@@ -122,6 +124,7 @@ protected:
     bcos::group::GroupInfoCodec::Ptr m_groupInfoCodec;
     bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
     bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
+    bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };
 }  // namespace initializer
 }  // namespace bcos
