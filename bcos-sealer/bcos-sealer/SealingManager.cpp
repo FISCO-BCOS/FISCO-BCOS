@@ -147,7 +147,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
-    blockHeader->setTimestamp(utcTime());
+    blockHeader->setTimestamp(m_config->nodeTimeMaintenance()->getAlignedTime());
     block->setBlockHeader(blockHeader);
     auto txsSize =
         std::min((size_t)m_maxTxsPerBlock, (m_pendingTxs->size() + m_pendingSysTxs->size()));
