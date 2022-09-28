@@ -884,6 +884,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     callResults->type = CallParameters::REVERT;
     // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm
     // need this
+    callResults->evmStatus = _result.status();
     auto outputRef = _result.output();
     switch (_result.status())
     {

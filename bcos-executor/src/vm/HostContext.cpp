@@ -26,6 +26,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -184,6 +185,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     // Convert CallParameters to evmc_result
     evmc_result result;
+    result = toEVMStatus(response->status, response->evmStatus, blockContext);
     result.status_code = evmc_status_code(response->status);
 
     result.create_address =
@@ -199,6 +201,21 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     m_responseStore.emplace_back(std::move(response));
 
     return result;
+}
+
+evmc_result HostContext::toEVMStatus(int32_t _status, int32_t _evmStatus,
+    std::shared_ptr<bcos::executor::BlockContext> _blockContext)
+{
+    evmc_result result;
+    if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION))
+    {
+        result.status_code = evmc_status_code(_evmStatus);
+    }
+    else
+    {
+        result.status_code = evmc_status_code(_status);
+        return result;
+    }
 }
 
 evmc_result HostContext::callBuiltInPrecompiled(

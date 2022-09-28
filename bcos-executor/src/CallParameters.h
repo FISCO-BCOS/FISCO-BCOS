@@ -49,6 +49,7 @@ struct CallParameters
     std::string newEVMContractAddress;                 // by response, readable format
 
     int32_t status = 0;  // by response
+    int32_t evmStatus = 0;
     Type type;
     bool staticCall = false;      // common field
     bool create = false;          // by request, is creation
