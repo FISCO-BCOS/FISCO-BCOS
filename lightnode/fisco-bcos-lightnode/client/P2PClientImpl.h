@@ -2,12 +2,13 @@
 
 #include "bcos-concepts/Exception.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
+#include "bcos-lightnode/Log.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Serialize.h>
-#include <bcos-concepts/Task.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-task/Task.h>
 #include <future>
 #include <random>
 
@@ -37,7 +38,7 @@ public:
         bcos::concepts::serialize::encode(request, requestBuffer);
 
         using ResponseType = std::remove_cvref_t<decltype(response)>;
-        struct Awaitable : public CO_STD::suspend_always
+        struct Awaitable
         {
             Awaitable(bcos::front::FrontServiceInterface::Ptr& front, int moduleID,
                 crypto::NodeIDPtr nodeID, bcos::bytes buffer, ResponseType& response)
@@ -47,13 +48,18 @@ public:
                 m_requestBuffer(std::move(buffer)),
                 m_response(response)
             {}
+            constexpr bool await_ready() const { return false; }
 
             void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
+                LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << m_moduleID << " | "
+                                     << m_nodeID << " | " << m_requestBuffer.size();
                 bcos::concepts::getRef(m_front).asyncSendMessageByNodeID(m_moduleID, m_nodeID,
                     bcos::ref(m_requestBuffer), 0,
                     [m_handle = std::move(handle), this](Error::Ptr error, bcos::crypto::NodeIDPtr,
                         bytesConstRef data, const std::string&, front::ResponseFunc) {
+                        LIGHTNODE_LOG(DEBUG) << "P2P client receive message: " << m_moduleID
+                                             << " | " << m_nodeID << " | " << data.size();
                         if (!error)
                         {
                             bcos::concepts::serialize::decode(data, m_response);
@@ -63,8 +69,19 @@ public:
                             m_error = std::move(error);
                         }
 
+                        LIGHTNODE_LOG(DEBUG) << "sendMessageByNodeID m_handle resume";
                         m_handle.resume();
                     });
+
+                LIGHTNODE_LOG(DEBUG) << "sendMessageByNodeID await_suspend ended";
+            }
+
+            constexpr void await_resume() const
+            {
+                if (m_error)
+                {
+                    BOOST_THROW_EXCEPTION(*m_error);
+                }
             }
 
             // Request params
@@ -78,25 +95,22 @@ public:
             ResponseType& m_response;
         };
 
-        Awaitable awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
-        co_await awaitable;
-
-        if (awaitable.m_error)
-            BOOST_THROW_EXCEPTION(*awaitable.m_error);
-
-        co_return;
+        LIGHTNODE_LOG(DEBUG) << "start co_await sendMessageByNodeID";
+        co_await Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
+        LIGHTNODE_LOG(DEBUG) << "finished co_await sendMessageByNodeID";
     }
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()
     {
-        struct Awaitable : public CO_STD::suspend_always
+        struct Awaitable
         {
             Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::mt19937& rng)
               : m_gateway(gateway), m_rng(rng)
             {}
 
-            void await_suspend(
-                CO_STD::coroutine_handle<task::Task<crypto::NodeIDPtr>::promise_type> handle)
+            constexpr bool await_ready() const noexcept { return false; }
+
+            void await_suspend(CO_STD::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
                     [this, m_handle = std::move(handle)](Error::Ptr error,
@@ -116,7 +130,7 @@ public:
                                 if (!nodeIDs.empty())
                                 {
                                     std::uniform_int_distribution<size_t> distribution{
-                                        0u, nodeIDs.size() - 1};
+                                        0U, nodeIDs.size() - 1};
                                     auto nodeIDIt = nodeIDs.begin();
                                     auto step = distribution(m_rng);
                                     for (size_t i = 0; i < step; ++i)
@@ -127,8 +141,20 @@ public:
                             }
                         }
 
+                        LIGHTNODE_LOG(DEBUG) << "randomSelectNode m_handle resume";
                         m_handle.resume();
                     });
+
+                LIGHTNODE_LOG(DEBUG) << "randomSelectNode await_suspend ended";
+            }
+
+            std::string await_resume()
+            {
+                if (m_error)
+                {
+                    BOOST_THROW_EXCEPTION(*(m_error));
+                }
+                return std::move(m_nodeID);
             }
 
             bcos::gateway::GatewayInterface::Ptr& m_gateway;
@@ -138,20 +164,17 @@ public:
             std::string m_nodeID;
         };
 
-        Awaitable awaitable(m_gateway, m_rng);
-        co_await awaitable;
+        LIGHTNODE_LOG(DEBUG) << "start co_await randomSelectNode";
+        auto nodeID = co_await Awaitable(m_gateway, m_rng);
+        LIGHTNODE_LOG(DEBUG) << "finish co_await randomSelectNode";
 
-        if (awaitable.m_error)
-            BOOST_THROW_EXCEPTION(*(awaitable.m_error));
-
-        if (awaitable.m_nodeID.empty())
+        if (nodeID.empty())
             BOOST_THROW_EXCEPTION(NoNodeAvailable{});
 
         bcos::bytes nodeIDBin;
-        boost::algorithm::unhex(
-            awaitable.m_nodeID.begin(), awaitable.m_nodeID.end(), std::back_inserter(nodeIDBin));
-        auto nodeID = m_keyFactory->createKey(nodeIDBin);
-        co_return nodeID;
+        boost::algorithm::unhex(nodeID.begin(), nodeID.end(), std::back_inserter(nodeIDBin));
+        auto nodeIDPtr = m_keyFactory->createKey(nodeIDBin);
+        co_return nodeIDPtr;
     }
 
 private:

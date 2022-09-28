@@ -103,14 +103,21 @@ private:
     task::Task<bcos::concepts::ledger::Status> impl_getStatus()
     {
         bcostars::RequestGetStatus request;
-
         bcostars::ResponseGetStatus response;
+
         auto nodeID = co_await p2p().randomSelectNode();
+
+        LIGHTNODE_LOG(DEBUG) << "Start co_await getStatus";
         co_await p2p().sendMessageByNodeID(
             protocol::LIGHTNODE_GETSTATUS, std::move(nodeID), request, response);
+        LIGHTNODE_LOG(DEBUG) << "End co_await getStatus";
 
         if (response.error.errorCode)
+        {
+            LIGHTNODE_LOG(WARNING) << "Get status failed, errorCode: " << response.error.errorCode
+                                   << " " << response.error.errorMessage;
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        }
 
         bcos::concepts::ledger::Status status;
         status.total = response.total;

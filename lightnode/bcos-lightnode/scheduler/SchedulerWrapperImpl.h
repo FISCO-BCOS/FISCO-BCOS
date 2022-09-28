@@ -1,9 +1,9 @@
 #pragma once
 
-#include <bcos-concepts/Task.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
+#include <bcos-task/Task.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 
@@ -41,7 +41,7 @@ private:
             {
                 bcos::concepts::getRef(m_scheduler)
                     .call(std::move(m_transactionImpl),
-                        [this](Error::Ptr&& error,
+                        [this, m_handle = std::move(handle)](Error::Ptr&& error,
                             protocol::TransactionReceipt::Ptr&& transactionReceipt) {
                             if (!error)
                             {
@@ -55,9 +55,9 @@ private:
                             {
                                 m_error = std::move(error);
                             }
-                        });
 
-                handle.resume();
+                            m_handle.resume();
+                        });
             }
 
             decltype(transactionImpl)& m_transactionImpl;

@@ -1,11 +1,10 @@
 #pragma once
 
 #include "../Log.h"
-#include "bcos-concepts/Task.h"
+#include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Block.h>
 #include <bcos-concepts/ByteBuffer.h>
-#include <bcos-concepts/Coroutine.h>
 #include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Receipt.h>

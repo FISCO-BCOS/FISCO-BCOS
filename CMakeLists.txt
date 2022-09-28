@@ -57,6 +57,7 @@ if(FULLNODE)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
     add_subdirectory(concepts)
+    add_subdirectory(libtask)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)

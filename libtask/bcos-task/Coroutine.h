@@ -28,8 +28,11 @@ concept CanCoAwait = requires(Awaitable awaitable)
     awaitable.await_ready();
 };
 
+// template <class Object>
+// concept Awaitable = MemberCoAwait<Object> || NonMemberCoAwait<Object> || CanCoAwait<Object>;
+
 template <class Object>
-concept Awaitable = MemberCoAwait<Object> || NonMemberCoAwait<Object> || CanCoAwait<Object>;
+concept Awaitable = CO_STD::is_class_v<Object>;
 
 
 }  // namespace bcos::coroutine

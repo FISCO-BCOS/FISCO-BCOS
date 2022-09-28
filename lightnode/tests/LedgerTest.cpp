@@ -16,7 +16,6 @@
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
@@ -180,8 +179,10 @@ BOOST_AUTO_TEST_CASE(getBlock)
         ledger{storage};
 
     bcostars::Block block;
-    ledger.getBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::TRANSACTIONS_METADATA,
-        bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(10086, block);
+    ledger
+        .getBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::TRANSACTIONS_METADATA,
+            bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(10086, block)
+        .result();
     BOOST_CHECK_EQUAL(block.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block.blockHeader.data.timestamp, 5000);
@@ -219,9 +220,9 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block3;
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).get(),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).result(),
         bcos::ledger::NotFoundBlockHeader);
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).get(),
+    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).result(),
         bcos::ledger::NotFoundBlockHeader);
 }
 
@@ -357,15 +358,15 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
         bcos::concepts::hash::calculate<Hasher>(block, lastBlockHash);
     }
 
-    toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false).get();
+    toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false).result();
 
     // get all block
     std::vector<bcostars::Block> fromBlocks(blockCount);
     std::vector<bcostars::Block> toBlocks(blockCount);
     for (auto i = 1U; i < blockCount; ++i)
     {
-        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]).get();
-        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]).get();
+        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]).result();
+        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]).result();
     }
 
     BOOST_CHECK_EQUAL_COLLECTIONS(

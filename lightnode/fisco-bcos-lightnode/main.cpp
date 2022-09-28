@@ -25,8 +25,8 @@
 #include "RPCInitializer.h"
 #include "bcos-lightnode/ledger/LedgerImpl.h"
 #include "libinitializer/CommandHelper.h"
-#include <bcos-concepts/Task.h>
 #include <bcos-tars-protocol/tars/Block.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -71,8 +71,9 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                 auto ledger = bcos::concepts::getRef(toLedger);
 
                 auto beforeStatus = co_await ledger.getStatus();
-                ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                    fromLedger, true);
+                co_await ledger
+                    .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
+                        fromLedger, true);
                 auto afterStatus = co_await ledger.getStatus();
 
                 // Notify the client if block number changed

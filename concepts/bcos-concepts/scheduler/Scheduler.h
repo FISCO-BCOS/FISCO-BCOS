@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../Basic.h"
-#include "../Coroutine.h"
 #include "../Receipt.h"
 #include "../Transaction.h"
 
@@ -12,8 +11,7 @@ class SchedulerBase
 {
 public:
     auto call(bcos::concepts::transaction::Transaction auto const& transaction,
-        bcos::concepts::receipt::TransactionReceipt auto& receipt) -> bcos::coroutine::Awaitable
-        auto
+        bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
         return impl().impl_call(transaction, receipt);
     }

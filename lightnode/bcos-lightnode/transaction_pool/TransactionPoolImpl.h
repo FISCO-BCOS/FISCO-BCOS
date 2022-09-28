@@ -3,9 +3,9 @@
 #include "../Log.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-concepts/Task.h>
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -70,7 +70,6 @@ private:
                             m_handle.resume();
                         });
             }
-
 
             decltype(transactionData)& m_transactionData;
             TransactionPoolType& m_transactionPool;
