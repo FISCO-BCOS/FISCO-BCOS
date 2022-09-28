@@ -30,7 +30,7 @@ STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" RUSTC_VERSION ${RUSTC_VERSION_INFO
 
 # same as https://github.com/WeBankBlockchain/WeDPR-Lab-Crypto/blob/main/rust-toolchain
 if(NOT RUSTC_VERSION_REQUIRED)
-    set(RUSTC_VERSION_REQUIRED "nightly-2021-06-17")
+    set(RUSTC_VERSION_REQUIRED "nightly-2022-07-28")
 endif()
 message(STATUS "set rustc to ${RUSTC_VERSION_REQUIRED} of path ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/)
