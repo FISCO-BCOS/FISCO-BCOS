@@ -65,7 +65,7 @@ jobs:
           make -j8
 
       - name: Test
-        run:
+        run: |
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
           make cov
       
