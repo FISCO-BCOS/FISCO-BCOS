@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
 
     BOOST_CHECK_NO_THROW(bcos::task::syncWait(ledger.setBlock<bcos::concepts::ledger::ALL>(block)));
     bcostars::Block gotBlock;
-    bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock));
+    ~ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock);
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
     BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());

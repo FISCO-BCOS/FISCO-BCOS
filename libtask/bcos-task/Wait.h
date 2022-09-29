@@ -67,6 +67,12 @@ void wait(Task&& task, Callback callback)
 }
 
 template <class Task>
+void wait(Task&& task)
+{
+    std::move(task).run();
+}
+
+template <class Task>
 auto syncWait(Task&& task)
 {
     using TaskType = std::remove_cvref_t<Task>;
@@ -102,6 +108,12 @@ auto syncWait(Task&& task)
 
 
     return promise.get_future().get();
+}
+
+template <class Task>
+auto operator~(Task&& task)
+{
+    return syncWait(std::forward<Task>(task));
 }
 
 }  // namespace bcos::task
