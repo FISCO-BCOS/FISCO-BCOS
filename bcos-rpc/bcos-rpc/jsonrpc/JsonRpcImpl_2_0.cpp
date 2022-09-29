@@ -226,6 +226,7 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
 
     std::string contractAddress = string(_transactionReceiptPtr->contractAddress());
     jResp["contractAddress"] = contractAddress;
+    jResp["checksumContractAddress"] = contractAddress;
 
     if (!contractAddress.empty() && !_isWasm)
     {

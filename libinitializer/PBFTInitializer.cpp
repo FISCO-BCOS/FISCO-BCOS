@@ -134,6 +134,7 @@ void PBFTInitializer::initChainNodeInfo(
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
+    m_groupInfo->setWasm(_nodeConfig->isWasm());
     int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
     {
@@ -378,8 +379,8 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
 void PBFTInitializer::createSealer()
 {
     // create sealer
-    auto sealerFactory = std::make_shared<SealerFactory>(
-        m_protocolInitializer->blockFactory(), m_txpool, m_nodeConfig->minSealTime(), m_nodeTimeMaintenance);
+    auto sealerFactory = std::make_shared<SealerFactory>(m_protocolInitializer->blockFactory(),
+        m_txpool, m_nodeConfig->minSealTime(), m_nodeTimeMaintenance);
     m_sealer = sealerFactory->createSealer();
 }
 
