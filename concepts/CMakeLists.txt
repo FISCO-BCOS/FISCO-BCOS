@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 project(bcos-concepts VERSION ${VERSION})
 
-file(GLOB_RECURSE SOURCES "bcos-concepts/*.h")
-
-add_library(bcos-concepts INTERFACE ${SOURCES})
+add_library(bcos-concepts INTERFACE)
 target_include_directories(bcos-concepts INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-concepts>)
