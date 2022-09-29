@@ -439,6 +439,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         // Message Factory
         auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
+
+        // todo
+        messageFactory->setCompressType(_config->compressType());
+
         // Session Factory
         auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
         // KeyFactory

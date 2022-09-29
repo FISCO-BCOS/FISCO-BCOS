@@ -1149,6 +1149,7 @@ generate_config_ini() {
     sm_ssl=false
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    compress_type=snappy
 
 [rpc]
     listen_ip=${rpc_listen_ip}
@@ -1277,6 +1278,7 @@ generate_sm_config_ini() {
     sm_ssl=true
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    compress_type=snappy
 
 [rpc]
     listen_ip=${rpc_listen_ip}

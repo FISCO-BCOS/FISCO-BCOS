@@ -220,6 +220,9 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
 
+    // todo: for test compress performance, wait to be removed
+    m_compressType = _pt.get<std::string>("p2p.compress_type", "snappy");
+
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
