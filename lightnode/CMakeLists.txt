@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 project(lightnode VERSION ${VERSION})
 
-file(GLOB_RECURSE SOURCES "bcos-lightnode/*")
-
-add_library(bcos-lightnode INTERFACE ${SOURCES})
+add_library(bcos-lightnode INTERFACE)
 target_include_directories(bcos-lightnode INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-lightnode INTERFACE bcos-framework bcos-crypto bcos-task bcos-concepts)
 

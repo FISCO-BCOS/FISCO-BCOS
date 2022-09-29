@@ -151,7 +151,7 @@ public:
                     bcos::concepts::serialize::decode(data, request);
 
                     std::visit(
-                        [&response](auto& ledger) -> task::Task<void> {
+                        [&response](auto& ledger) {
                             auto status = ~ledger.getStatus();
                             response.total = status.total;
                             response.failed = status.failed;
