@@ -227,8 +227,8 @@ private:
 
             bcos::bytes responseBuffer;
             bcos::concepts::serialize::encode(response, responseBuffer);
-            front->asyncSendResponse(std::string(id), moduleID, nodeID, bcos::ref(responseBuffer),
-                [](Error::Ptr _error) {});
+            front->asyncSendResponse(
+                std::string(id), moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr) {});
         }
 
         return success;

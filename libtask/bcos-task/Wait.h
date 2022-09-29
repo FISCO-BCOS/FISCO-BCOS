@@ -8,39 +8,6 @@
 namespace bcos::task
 {
 
-// template <IsTask Task, class Callback>
-// class CallbackableTask
-// {
-// public:
-//     CallbackableTask(Task task, Callback callback)
-//       : m_task(std::move(task)), m_callback(std::move(callback))
-//     {}
-
-//     struct Promise
-//     {
-//         constexpr CO_STD::suspend_always initial_suspend() const noexcept { return {}; }
-//         constexpr CO_STD::suspend_never final_suspend() const noexcept { return {}; }
-//         constexpr CallbackableTask get_return_object()
-//         {
-//             auto task = Impl(CO_STD::coroutine_handle<Promise>::from_promise(*this));
-//             m_task = &task;
-//             return task;
-//         }
-
-//         CallbackableTask* m_task = nullptr;
-//     };
-
-//     using promise_type = Promise;
-
-//     void get() { m_task.start(); }
-
-//     void onFinalSuspend() { m_callback(Task::m_value); }
-
-// private:
-//     Task m_task;
-//     Callback m_callback;
-// };
-
 template <class Task, class Callback>
 void wait(Task&& task, Callback callback)
 {
