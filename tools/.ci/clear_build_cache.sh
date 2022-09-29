@@ -55,3 +55,9 @@ function check_and_clear_cache() {
 
 check_and_clear_cache .github/workflows ${BUILD_DIR}
 check_and_clear_cache bcos-tars-protocol/bcos-tars-protocol ${BUILD_DIR}/generated
+check_and_clear_cache bcos-sync/bcos-sync/protocol/proto ${BUILD_DIR}/bcos-sync
+check_and_clear_cache bcos-protocol/bcos-protocol ${BUILD_DIR}/bcos-protocol
+check_and_clear_cache bcos-pbft/bcos-pbft/core/proto ${BUILD_DIR}/bcos-pbft/bcos-pbft/core
+check_and_clear_cache bcos-pbft/bcos-pbft/pbft/protocol/proto ${BUILD_DIR}/bcos-pbft/bcos-pbft/pbft/protocol
+check_and_clear_cache bcos-txpool/bcos-txpool/sync/protocol/proto ${BUILD_DIR}/bcos-txpool
+

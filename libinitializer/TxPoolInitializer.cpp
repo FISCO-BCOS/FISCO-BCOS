@@ -71,7 +71,7 @@ void TxPoolInitializer::start()
 {
     if (m_running)
     {
-        INITIALIZER_LOG(WARNING) << LOG_DESC("The txpool has already been started");
+        INITIALIZER_LOG(INFO) << LOG_DESC("The txpool has already been started");
         return;
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("Start the txpool");
@@ -83,7 +83,7 @@ void TxPoolInitializer::stop()
 {
     if (!m_running)
     {
-        INITIALIZER_LOG(WARNING) << LOG_DESC("The txpool has already been stopped");
+        INITIALIZER_LOG(INFO) << LOG_DESC("The txpool has already been stopped");
         return;
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("Stop the txpool");

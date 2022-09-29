@@ -1,4 +1,4 @@
-# !/bin/bash
+#!/bin/bash
 # "Copyright [2018] <fisco-bcos>"
 # @ function: check code format of {.h, .hpp and .cpp} files
 # @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready

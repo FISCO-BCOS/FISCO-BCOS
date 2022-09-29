@@ -12,6 +12,7 @@
         "ethash",
         "intx",
         "fiscobcos",
+        "etcd-cpp-apiv3",
         "boost-context",
         "wedprcrypto"
       ]

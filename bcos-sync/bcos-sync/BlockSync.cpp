@@ -404,6 +404,8 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
     }
     auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(_syncMsg);
     m_syncStatus->updatePeerStatus(_nodeID, statusMsg);
+    
+    m_config->nodeTimeMaintenance()->tryToUpdatePeerTimeInfo(_nodeID, statusMsg->time());
 }
 
 void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)

@@ -28,12 +28,14 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 using namespace bcos::scheduler;
+using namespace bcos::tool;
 
 namespace bcos
 {
@@ -76,10 +78,12 @@ public:
     using Ptr = std::shared_ptr<FakeBlockSyncFactory>;
     FakeBlockSyncFactory(PublicPtr _nodeId, BlockFactory::Ptr _blockFactory,
         LedgerInterface::Ptr _ledger, FrontServiceInterface::Ptr _frontService,
-        SchedulerInterface::Ptr _dispatcher, ConsensusInterface::Ptr _consensus)
+        SchedulerInterface::Ptr _dispatcher, ConsensusInterface::Ptr _consensus,
+        NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
       : BlockSyncFactory(_nodeId, _blockFactory,
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), _ledger,
-            std::make_shared<FakeTxPoolForSync>(), _frontService, _dispatcher, _consensus)
+            std::make_shared<FakeTxPoolForSync>(), _frontService, _dispatcher, _consensus,
+            _nodeTimeMaintenance)
     {}
 
     BlockSync::Ptr createBlockSync() override
@@ -102,11 +106,12 @@ public:
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, _blockNumber, 10, 0, _sealerList);
         m_frontService = std::make_shared<FakeFrontService>(m_keyPair->publicKey());
         m_consensus = std::make_shared<FakeConsensus>();
+        m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
 
         // create FakeScheduler
         m_scheduler = std::make_shared<FakeScheduler>(m_ledger, m_blockFactory);
         auto blockSyncFactory = std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(),
-            m_blockFactory, m_ledger, m_frontService, m_scheduler, m_consensus);
+            m_blockFactory, m_ledger, m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
         m_sync = std::dynamic_pointer_cast<FakeBlockSync>(blockSyncFactory->createBlockSync());
         if (_fakeGateWay)
         {
@@ -165,6 +170,7 @@ private:
 
     FakeScheduler::Ptr m_scheduler;
     FakeBlockSync::Ptr m_sync;
+    NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };
 }  // namespace test
 }  // namespace bcos

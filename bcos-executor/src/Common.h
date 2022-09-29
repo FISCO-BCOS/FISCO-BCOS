@@ -57,6 +57,7 @@ namespace executor
 static const char* const USER_TABLE_PREFIX = "/tables/";
 static const char* const USER_APPS_PREFIX = "/apps/";
 static const char* const USER_SYS_PREFIX = "/sys/";
+static const char* const USER_USR_PREFIX = "/usr/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
@@ -74,6 +75,10 @@ static const char* const STATUS_FIELD = "status";
 static const char* const METHOD_AUTH_TYPE = "method_auth_type";
 static const char* const METHOD_AUTH_WHITE = "method_auth_white";
 static const char* const METHOD_AUTH_BLACK = "method_auth_black";
+
+/// account
+static constexpr const std::string_view ACCOUNT_STATUS = "status";
+static constexpr const std::string_view ACCOUNT_LAST_UPDATE = "last_update";
 
 /// contract status
 static const char* const CONTRACT_FROZEN = "frozen";
@@ -367,7 +372,7 @@ inline bytes toBytes(const std::string_view& _addr)
     return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
 }
 
-inline std::string getContractTableName(const std::string_view& _address, bool _isWasm)
+inline std::string getContractTableName(const std::string_view& _address)
 {
     std::string formatAddress(_address);
 

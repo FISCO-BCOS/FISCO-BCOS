@@ -38,6 +38,8 @@
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
 #include "../precompiled/TablePrecompiled.h"
+#include "../precompiled/extension/AccountManagerPrecompiled.h"
+#include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
@@ -211,6 +213,10 @@ void TransactionExecutor::initEvmEnvironment()
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({ACCOUNT_MGR_ADDRESS,
+            std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert(
+            {ACCOUNT_ADDRESS, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl)});
     }
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
@@ -267,6 +273,10 @@ void TransactionExecutor::initWasmEnvironment()
             {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({ACCOUNT_MANAGER_NAME,
+            std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert(
+            {ACCOUNT_ADDRESS, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl)});
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     storage::StorageInterface::Ptr storage = m_backendStorage;
@@ -1776,7 +1786,7 @@ void TransactionExecutor::getCode(
         stateStorage = createStateStorage(m_backendStorage);
     }
 
-    auto tableName = getContractTableName(contract, m_isWasm);
+    auto tableName = getContractTableName(contract);
     stateStorage->asyncGetRow(tableName, "code",
         [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (!m_isRunning)
@@ -1836,7 +1846,7 @@ void TransactionExecutor::getABI(
         stateStorage = createStateStorage(m_backendStorage);
     }
 
-    auto tableName = getContractTableName(contract, m_isWasm);
+    auto tableName = getContractTableName(contract);
     stateStorage->asyncGetRow(tableName, ACCOUNT_ABI,
         [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (!m_isRunning)

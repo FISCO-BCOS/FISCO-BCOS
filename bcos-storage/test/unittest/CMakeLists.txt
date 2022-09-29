@@ -33,7 +33,9 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 find_package(Boost REQUIRED unit_test_framework log)
 
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SECURITY_TARGET} ${STORAGE_TARGET} Boost::unit_test_framework Boost::log Boost::context)
-add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+include(SearchTestCases)
+config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
+# add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
 if (COVERAGE)

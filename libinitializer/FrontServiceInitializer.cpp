@@ -54,7 +54,7 @@ void FrontServiceInitializer::start()
 {
     if (m_running)
     {
-        FRONTSERVICE_LOG(WARNING) << LOG_DESC("The front service has already been started");
+        FRONTSERVICE_LOG(INFO) << LOG_DESC("The front service has already been started");
         return;
     }
     FRONTSERVICE_LOG(INFO) << LOG_DESC("Start the front service");
@@ -65,7 +65,7 @@ void FrontServiceInitializer::stop()
 {
     if (!m_running)
     {
-        FRONTSERVICE_LOG(WARNING) << LOG_DESC("The front service has already been stopped");
+        FRONTSERVICE_LOG(INFO) << LOG_DESC("The front service has already been stopped");
         return;
     }
     FRONTSERVICE_LOG(INFO) << LOG_DESC("Stop the front service");

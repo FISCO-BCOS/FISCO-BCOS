@@ -25,6 +25,7 @@
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-utilities/Timer.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 
 namespace bcos
 {
@@ -39,7 +40,8 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService);
+        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
 
     virtual ~ProPBFTInitializer() { stop(); }
 
