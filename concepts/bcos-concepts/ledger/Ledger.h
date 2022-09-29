@@ -85,12 +85,11 @@ public:
 
         constexpr auto isTransaction =
             bcos::concepts::transaction::Transaction<RANGES::range_value_t<decltype(inputs)>>;
-        return setTransactionOrReceiptBuffers<isTransaction>(hashesRange, std::move(buffersRange));
+        return setTransactionBuffers<isTransaction>(hashesRange, std::move(buffersRange));
     }
 
     template <bool isTransaction>
-    auto setTransactionOrReceiptBuffers(
-        RANGES::range auto const& hashes, RANGES::range auto buffers)
+    auto setTransactionBuffers(RANGES::range auto const& hashes, RANGES::range auto buffers)
     {
         return impl().template impl_setTransactions<isTransaction>(hashes, std::move(buffers));
     }

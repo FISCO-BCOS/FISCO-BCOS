@@ -14,6 +14,7 @@
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionMetaData.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -179,10 +180,11 @@ BOOST_AUTO_TEST_CASE(getBlock)
         ledger{storage};
 
     bcostars::Block block;
-    ledger
-        .getBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::TRANSACTIONS_METADATA,
-            bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(10086, block)
-        .result();
+    bcos::task::syncWait(
+        ledger
+            .getBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::TRANSACTIONS_METADATA,
+                bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(
+                10086, block));
     BOOST_CHECK_EQUAL(block.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block.blockHeader.data.timestamp, 5000);
@@ -201,7 +203,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block2;
-    ledger.getBlock<bcos::concepts::ledger::ALL>(10086, block2);
+    bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(10086, block2));
     BOOST_CHECK_EQUAL(block2.blockHeader.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(block2.blockHeader.data.gasUsed, "1000");
     BOOST_CHECK_EQUAL(block2.blockHeader.data.timestamp, 5000);
@@ -220,9 +222,11 @@ BOOST_AUTO_TEST_CASE(getBlock)
     }
 
     bcostars::Block block3;
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3).result(),
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::HEADER>(10087, block3)),
         bcos::ledger::NotFoundBlockHeader);
-    BOOST_CHECK_THROW(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3).result(),
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3)),
         bcos::ledger::NotFoundBlockHeader);
 }
 
@@ -251,14 +255,15 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         block.transactions.emplace_back(std::move(transaction));
         block.receipts.emplace_back(std::move(receipt));
     }
-    ledger.setTransactions<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(block.transactions);
+    bcos::task::syncWait(ledger.setTransactions<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
+        block.transactions));
 
     bcos::concepts::hash::calculate<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         block, block.blockHeader.dataHash);
 
-    BOOST_CHECK_NO_THROW(ledger.setBlock<bcos::concepts::ledger::ALL>(block));
+    BOOST_CHECK_NO_THROW(bcos::task::syncWait(ledger.setBlock<bcos::concepts::ledger::ALL>(block)));
     bcostars::Block gotBlock;
-    ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock);
+    bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock));
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
     BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());
@@ -269,14 +274,14 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         block.receipts.begin(), block.receipts.end());
 
     std::array<std::byte, 32> hash;
-    ledger.getBlockHashByNumber(100, hash);
+    bcos::task::syncWait(ledger.getBlockHashByNumber(100, hash));
 
     std::array<std::byte, 32> blockHash;
     bcos::concepts::hash::calculate<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>(
         gotBlock, blockHash);
 
     int64_t newNumber = 100;
-    ledger.getBlockNumberByHash(hash, newNumber);
+    bcos::task::syncWait(ledger.getBlockNumberByHash(hash, newNumber));
     BOOST_CHECK_EQUAL(newNumber, 100);
 
     BOOST_CHECK_EQUAL(hash, blockHash);
@@ -288,11 +293,11 @@ BOOST_AUTO_TEST_CASE(notExistsBlock)
         storage};
 
     std::vector<std::byte> hash;
-    ledger.getBlockHashByNumber(50, hash);
+    bcos::task::syncWait(ledger.getBlockHashByNumber(50, hash));
     BOOST_CHECK(RANGES::empty(hash));
 
     int64_t number = 0;
-    ledger.getBlockNumberByHash(hash, number);
+    bcos::task::syncWait(ledger.getBlockNumberByHash(hash, number));
     BOOST_CHECK_EQUAL(number, -1);
 }
 
@@ -310,8 +315,8 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
 
     bcostars::Block genesisBlock;
     genesisBlock.blockHeader.data.blockNumber = 0;
-    fromLedger.setupGenesisBlock(genesisBlock);
-    toLedger.setupGenesisBlock(genesisBlock);
+    bcos::task::syncWait(fromLedger.setupGenesisBlock(genesisBlock));
+    bcos::task::syncWait(toLedger.setupGenesisBlock(genesisBlock));
 
     std::array<std::byte, 32> lastBlockHash;
     bcos::concepts::hash::calculate<Hasher>(genesisBlock, lastBlockHash);
@@ -351,22 +356,23 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
 
             bcos::crypto::merkle::Merkle<Hasher> merkler;
         }
-        fromLedger.setTransactions<Hasher>(block.transactions);
-        toLedger.setTransactions<Hasher>(block.transactions);
+        bcos::task::syncWait(fromLedger.setTransactions<Hasher>(block.transactions));
+        bcos::task::syncWait(toLedger.setTransactions<Hasher>(block.transactions));
 
-        BOOST_CHECK_NO_THROW(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block));
+        BOOST_CHECK_NO_THROW(
+            bcos::task::syncWait(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block)));
         bcos::concepts::hash::calculate<Hasher>(block, lastBlockHash);
     }
 
-    toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false).result();
+    bcos::task::syncWait(toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false));
 
     // get all block
     std::vector<bcostars::Block> fromBlocks(blockCount);
     std::vector<bcostars::Block> toBlocks(blockCount);
     for (auto i = 1U; i < blockCount; ++i)
     {
-        fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]).result();
-        toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]).result();
+        bcos::task::syncWait(fromLedger.getBlock<bcos::concepts::ledger::ALL>(i, fromBlocks[i]));
+        bcos::task::syncWait(toLedger.getBlock<bcos::concepts::ledger::ALL>(i, toBlocks[i]));
     }
 
     BOOST_CHECK_EQUAL_COLLECTIONS(

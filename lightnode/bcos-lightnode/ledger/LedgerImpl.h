@@ -116,8 +116,7 @@ private:
         constexpr auto tableName =
             bcos::concepts::transaction::Transaction<DataType> ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
 
-        LEDGER_LOG(INFO) << "getTransactionOrReceipts: " << tableName << " "
-                         << RANGES::size(hashes);
+        LEDGER_LOG(INFO) << "getTransactions: " << tableName << " " << RANGES::size(hashes);
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
@@ -190,10 +189,9 @@ private:
         }
         constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
 
-        LEDGER_LOG(INFO) << "setTransactionOrReceiptBuffers: " << tableName << " "
-                         << RANGES::size(hashes);
+        LEDGER_LOG(INFO) << "setTransactionBuffers: " << tableName << " " << RANGES::size(hashes);
 
-        for (auto i = 0u; i < count; ++i)
+        for (auto i = 0U; i < count; ++i)
         {
             bcos::storage::Entry entry;
             entry.importFields({std::move(buffers[i])});
@@ -486,7 +484,7 @@ private:
 
             auto hashView = block.transactionsMetaData |
                             RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-            impl_setTransactions<false>(hashView, std::move(receiptBuffers));
+            co_await impl_setTransactions<false>(hashView, std::move(receiptBuffers));
 
             LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                               << LOG_KV("number", blockNumberKey)

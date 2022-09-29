@@ -6,6 +6,7 @@
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-task/Task.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>

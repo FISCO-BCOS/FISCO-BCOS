@@ -18,10 +18,12 @@
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
+#include <bcos-task/Wait.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <memory>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
@@ -52,25 +54,29 @@ public:
         [[maybe_unused]] std::string_view hexTransaction, RespFunc respFunc) override
     {
         // call data is json
-        bcostars::Transaction transaction;
-        decodeData(hexTransaction, transaction.data.input);
-        transaction.data.to = to;
-        transaction.data.nonce = "0";
-        transaction.data.blockLimit = 0;
-        transaction.data.chainID = "";
-        transaction.data.groupID = "";
-        transaction.importTime = 0;
+        auto transaction = std::make_unique<bcostars::Transaction>();
+        decodeData(hexTransaction, transaction->data.input);
+        transaction->data.to = to;
+        transaction->data.nonce = "0";
+        transaction->data.blockLimit = 0;
+        transaction->data.chainID = "";
+        transaction->data.groupID = "";
+        transaction->importTime = 0;
 
         LIGHTNODE_LOG(INFO) << "RPC call request, to: " << to;
 
-        bcostars::TransactionReceipt receipt;
-        scheduler().call(transaction, receipt);
+        auto callback = [m_transaction = std::move(transaction),
+                            m_receipt = std::make_unique<bcostars::TransactionReceipt>(),
+                            m_respFunc = std::move(respFunc)]() {
+            Json::Value resp;
+            toJsonResp<Hasher>(*m_receipt, {}, resp);
 
-        Json::Value resp;
-        toJsonResp<Hasher>(receipt, {}, resp);
+            LIGHTNODE_LOG(INFO) << "RPC call transaction finished";
+            m_respFunc(nullptr, resp);
+        };
 
-        LIGHTNODE_LOG(INFO) << "RPC call transaction finished";
-        respFunc(nullptr, resp);
+        bcos::task::wait(
+            scheduler().call(*callback.m_transaction, *callback.m_receipt), std::move(callback));
     }
 
     void sendTransaction([[maybe_unused]] std::string_view _groupID,
