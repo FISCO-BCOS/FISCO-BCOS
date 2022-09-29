@@ -3,6 +3,7 @@
  *  @date 2021-05-17
  */
 
+#include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -16,8 +17,8 @@
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
-#include <bcos-gateway/libratelimit/BWRateLimiter.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
+#include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
@@ -350,28 +351,28 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
 }
 
 std::shared_ptr<ratelimit::RateLimiterManager> GatewayFactory::buildRateLimitManager(
-    const GatewayConfig::RateLimitConfig& _rateLimitConfig)
+    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
 {
     // rate limiter factory
-    auto rateLimiterFactory = std::make_shared<ratelimit::BWRateLimiterFactory>();
+    auto rateLimiterFactory = std::make_shared<ratelimit::RateLimiterFactory>();
     // rate limiter manager
-    auto rateLimiterManager = std::make_shared<ratelimit::RateLimiterManager>(_rateLimitConfig);
+    auto rateLimiterManager = std::make_shared<ratelimit::RateLimiterManager>(_rateLimiterConfig);
 
     // total outgoing bandwidth Limit for p2p network
-    ratelimit::BWRateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
-    if (_rateLimitConfig.totalOutgoingBwLimit > 0)
+    ratelimit::RateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
+    if (_rateLimiterConfig.totalOutgoingBwLimit > 0)
     {
         totalOutgoingRateLimiter =
-            rateLimiterFactory->buildRateLimiter(_rateLimitConfig.totalOutgoingBwLimit);
+            rateLimiterFactory->buildRateLimiter(_rateLimiterConfig.totalOutgoingBwLimit);
 
         rateLimiterManager->registerRateLimiter(
             ratelimit::RateLimiterManager::TOTAL_OUTGOING_KEY, totalOutgoingRateLimiter);
     }
 
     // ip connection => rate limit
-    if (!_rateLimitConfig.ip2BwLimit.empty())
+    if (!_rateLimiterConfig.ip2BwLimit.empty())
     {
-        for (const auto& [ip, bandWidth] : _rateLimitConfig.ip2BwLimit)
+        for (const auto& [ip, bandWidth] : _rateLimiterConfig.ip2BwLimit)
         {
             auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
             rateLimiterManager->registerConnRateLimiter(ip, rateLimiterInterface);
@@ -379,9 +380,9 @@ std::shared_ptr<ratelimit::RateLimiterManager> GatewayFactory::buildRateLimitMan
     }
 
     // group => rate limit
-    if (!_rateLimitConfig.group2BwLimit.empty())
+    if (!_rateLimiterConfig.group2BwLimit.empty())
     {
-        for (const auto& [group, bandWidth] : _rateLimitConfig.group2BwLimit)
+        for (const auto& [group, bandWidth] : _rateLimiterConfig.group2BwLimit)
         {
             auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
             rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
@@ -389,8 +390,12 @@ std::shared_ptr<ratelimit::RateLimiterManager> GatewayFactory::buildRateLimitMan
     }
 
     // modules without bandwidth limit
-    rateLimiterManager->setModulesWithNoBwLimit(_rateLimitConfig.modulesWithNoBwLimit);
+    rateLimiterManager->setModulesWithNoBwLimit(_rateLimiterConfig.modulesWithNoBwLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
+
+
+    auto dsRateLimiter = std::make_shared<ratelimit::DistributedRateLimiter>(-1);
+    std::ignore = dsRateLimiter;
 
     return rateLimiterManager;
 }
@@ -459,11 +464,12 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->setKeyFactory(keyFactory);
 
         // init rate limit
-        const auto& rateLimitConfig = _config->rateLimitConfig();
-        auto rateLimiterManager = buildRateLimitManager(_config->rateLimitConfig());
+        const auto& rateLimiterConfig = _config->rateLimiterConfig();
+        auto rateLimiterManager = buildRateLimitManager(_config->rateLimiterConfig());
 
-        auto rateStatistics = std::make_shared<ratelimit::BWRateStatistics>();
-        auto rateStatisticsWeakPtr = std::weak_ptr<ratelimit::BWRateStatistics>(rateStatistics);
+        auto rateStatistics = std::make_shared<ratelimit::RateLimiterStatistics>();
+        auto rateStatisticsWeakPtr =
+            std::weak_ptr<ratelimit::RateLimiterStatistics>(rateStatistics);
 
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;

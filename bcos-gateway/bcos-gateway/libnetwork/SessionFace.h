@@ -14,7 +14,6 @@
 #pragma once
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
-#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 #include <boost/asio.hpp>
 
 namespace bcos

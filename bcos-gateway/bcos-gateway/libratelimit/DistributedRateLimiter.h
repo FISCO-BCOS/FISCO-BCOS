@@ -13,14 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file DistributedBWRateLimiter.h
+ * @file DistributedRateLimiter.h
  * @author: octopus
  * @date 2022-06-30
  */
 
 #pragma once
 
-#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
+#include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos
@@ -35,23 +35,23 @@ namespace ratelimit
  * Distributed limited bandwidth
  */
 
-class DistributedBWRateLimiter : public BWRateLimiterInterface
+class DistributedRateLimiter : public RateLimiterInterface
 {
 public:
-    using Ptr = std::shared_ptr<DistributedBWRateLimiter>;
-    using ConstPtr = std::shared_ptr<const DistributedBWRateLimiter>;
-    using UniquePtr = std::unique_ptr<const DistributedBWRateLimiter>;
+    using Ptr = std::shared_ptr<DistributedRateLimiter>;
+    using ConstPtr = std::shared_ptr<const DistributedRateLimiter>;
+    using UniquePtr = std::unique_ptr<const DistributedRateLimiter>;
 
 public:
-    DistributedBWRateLimiter(int64_t _maxQPS);
+    DistributedRateLimiter(int64_t _maxQPS);
 
-    DistributedBWRateLimiter(DistributedBWRateLimiter&&) = delete;
-    DistributedBWRateLimiter(const DistributedBWRateLimiter&) = delete;
-    DistributedBWRateLimiter& operator=(const DistributedBWRateLimiter&) = delete;
-    DistributedBWRateLimiter& operator=(DistributedBWRateLimiter&&) = delete;
+    DistributedRateLimiter(DistributedRateLimiter&&) = delete;
+    DistributedRateLimiter(const DistributedRateLimiter&) = delete;
+    DistributedRateLimiter& operator=(const DistributedRateLimiter&) = delete;
+    DistributedRateLimiter& operator=(DistributedRateLimiter&&) = delete;
 
 public:
-    ~DistributedBWRateLimiter() override {}
+    ~DistributedRateLimiter() override {}
 
 public:
     /**

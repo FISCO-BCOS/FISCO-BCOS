@@ -55,7 +55,7 @@ public:
         bool _server, const GatewayConfig::SMCertConfig& _smCertConfig);
     //
     std::shared_ptr<ratelimit::RateLimiterManager> buildRateLimitManager(
-        const GatewayConfig::RateLimitConfig& _rateLimitConfig);
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
     /**
      * @brief: construct Gateway
