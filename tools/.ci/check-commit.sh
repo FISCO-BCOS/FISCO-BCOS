@@ -75,7 +75,7 @@ function check_PR_limit() {
     #     exit 1
     # fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
-    local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
+    local test_insertions=$(git diff --numstat HEAD^ | grep -P "tests?/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local tool_insertions=$(git diff --numstat HEAD^ | grep "tools/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local demo_insertions=$(git diff --numstat HEAD^ | grep "fisco-bcos/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
