@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 #include <set>
 #include <string>
