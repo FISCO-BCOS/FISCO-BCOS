@@ -454,15 +454,15 @@ bool Gateway::checkBWRateLimit(ratelimit::RateLimiterManager::Ptr _rateLimiterMa
     do
     {
         // total outgoing bandwidth
-        ratelimit::BWRateLimiterInterface::Ptr totalOutGoingBWLimit =
+        ratelimit::RateLimiterInterface::Ptr totalOutGoingBWLimit =
             _rateLimiterManager->getRateLimiter(ratelimit::RateLimiterManager::TOTAL_OUTGOING_KEY);
 
         // connection outgoing bandwidth
-        ratelimit::BWRateLimiterInterface::Ptr connOutGoingBWLimit =
+        ratelimit::RateLimiterInterface::Ptr connOutGoingBWLimit =
             _rateLimiterManager->getConnRateLimiter(endPoint);
 
         // group outgoing bandwidth
-        ratelimit::BWRateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
+        ratelimit::RateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
         if (!groupID.empty())
         {
             groupOutGoingBWLimit = _rateLimiterManager->getGroupRateLimiter(groupID);
