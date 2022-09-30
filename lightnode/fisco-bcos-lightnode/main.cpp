@@ -63,18 +63,17 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
     std::thread worker([fromLedger = std::move(fromLedger), toLedger = std::move(toLedger),
                            wsService = std::move(wsService), groupID = std::move(groupID),
                            nodeName = std::move(nodeName),
-                           stopToken = std::move(stopToken)]() mutable -> bcos::task::Task<void> {
+                           stopToken = std::move(stopToken)]() mutable {
         while (!(*stopToken))
         {
             try
             {
                 auto ledger = bcos::concepts::getRef(toLedger);
 
-                auto beforeStatus = co_await ledger.getStatus();
-                co_await ledger
-                    .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                        fromLedger, true);
-                auto afterStatus = co_await ledger.getStatus();
+                auto beforeStatus = ~ledger.getStatus();
+                ~ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
+                    fromLedger, true);
+                auto afterStatus = ~ledger.getStatus();
 
                 // Notify the client if block number changed
                 if (afterStatus.blockNumber > beforeStatus.blockNumber)
@@ -130,7 +129,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     genesisBlock.blockHeader.data.blockNumber = 0;
     bcos::concepts::bytebuffer::assignTo(
         nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
-    ledger->setupGenesisBlock(std::move(genesisBlock));
+    ~ledger->setupGenesisBlock(std::move(genesisBlock));
 
     // rpc
     auto wsService = bcos::lightnode::initRPC(

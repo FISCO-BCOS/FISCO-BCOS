@@ -50,13 +50,13 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
 
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
         [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
-            std::shared_ptr<bcos::boostssl::ws::WsSession> session) -> task::Task<void> {
+            std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(INFO) << "LightNode handshake request";
 
             auto groupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
             bcos::cppsdk::service::HandshakeResponse handshakeResponse(std::move(groupInfoCodec));
 
-            auto status = co_await bcos::concepts::getRef(localLedger).getStatus();
+            auto status = ~bcos::concepts::getRef(localLedger).getStatus();
 
             handshakeResponse.mutableGroupBlockNumber().insert(
                 std::make_pair(nodeConfig->groupId(), status.blockNumber));

@@ -1,11 +1,15 @@
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
+#include <tbb/task_group.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <thread>
 
 using namespace bcos::task;
 
 struct TaskFixture
 {
+    tbb::task_group taskGroup;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TaskTest, TaskFixture)
@@ -61,6 +65,60 @@ BOOST_AUTO_TEST_CASE(normalTask)
     auto task3 = level2();
     auto num = bcos::task::syncWait(std::move(task3));
     BOOST_CHECK_EQUAL(num, 10000);
+}
+
+Task<int> asyncLevel2(tbb::task_group& taskGroup)
+{
+    struct Awaitable
+    {
+        constexpr bool await_ready() const { return false; }
+
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            std::cout << "Start run async thread" << std::endl;
+            taskGroup.run([this, m_handle = std::move(handle)]() {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                num = 100;
+
+                std::cout << "Call m_handle.resume()" << std::endl;
+                m_handle.resume();
+            });
+        }
+
+        int await_resume() const
+        {
+            std::cout << "Call await_resume()" << std::endl;
+            return num;
+        }
+
+        tbb::task_group& taskGroup;
+        int num = 0;
+    };
+
+    auto num = co_await Awaitable{taskGroup, 0};
+
+    std::cout << "asyncLevel2 co_return" << std::endl;
+    co_return num;
+}
+
+Task<int> asyncLevel1(tbb::task_group& taskGroup)
+{
+    std::cout << "co_await asyncLevel2 started" << std::endl;
+    auto num1 = co_await asyncLevel2(taskGroup);
+    std::cout << "co_await asyncLevel2 ended" << std::endl;
+
+    BOOST_CHECK_EQUAL(num1, 100);
+
+    std::cout << "AsyncLevel1 execute finished" << std::endl;
+    co_return num1 * 2;
+}
+
+BOOST_AUTO_TEST_CASE(asyncTask)
+{
+    auto num = ~asyncLevel1(taskGroup);
+
+    taskGroup.wait();
+    BOOST_CHECK_EQUAL(num, 200);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

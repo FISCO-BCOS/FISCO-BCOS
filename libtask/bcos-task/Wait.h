@@ -1,7 +1,9 @@
 #pragma once
 #include "Task.h"
+#include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 #include <new>
+#include <thread>
 #include <type_traits>
 #include <variant>
 
@@ -27,6 +29,14 @@ void wait(Task&& task, Callback callback)
         }
         catch (...)
         {
+            try
+            {
+                std::rethrow_exception(std::current_exception());
+            }
+            catch (std::exception& e)
+            {
+                std::cout << boost::diagnostic_information(e) << std::endl;
+            }
             callback(std::current_exception());
         }
     }()
@@ -44,6 +54,7 @@ auto syncWait(Task&& task)
 {
     using TaskType = std::remove_cvref_t<Task>;
     std::promise<typename Task::ReturnType> promise;
+    auto future = promise.get_future();
 
     if constexpr (std::is_void_v<typename Task::ReturnType>)
     {
@@ -64,17 +75,20 @@ auto syncWait(Task&& task)
             using ValueType = std::remove_cvref_t<decltype(value)>;
             if constexpr (std::is_same_v<ValueType, std::exception_ptr>)
             {
+                std::cout << std::this_thread::get_id() << "Set return exception" << std::endl;
                 promise.set_exception(value);
             }
             else
             {
+                std::cout << std::this_thread::get_id() << " Set return value: " << value
+                          << std::endl;
                 promise.set_value(std::forward<ValueType>(value));
             }
         });
     }
 
-
-    return promise.get_future().get();
+    std::cout << "Future get" << std::endl;
+    return future.get();
 }
 
 template <class Task>
