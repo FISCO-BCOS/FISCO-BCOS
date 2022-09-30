@@ -228,9 +228,10 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
-    auto tableName = std::string("/apps/") +
-                     std::string(result->newEVMContractAddress());  // TODO: ensure the contract
-                                                                    // address is hex
+    auto tableName =
+        std::string("/apps/") +
+        std::string(result->newEVMContractAddress());  // TODO: ensure the contract// address is hex
+    ledger->setBlockHeader(blockHeader);
 
     // test getCode()
     executor->getCode(address, [](Error::Ptr error, bcos::bytes code) {
@@ -298,6 +299,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_EQUAL(result2->message(), "");
     BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
+    ledger->setBlockHeader(blockHeader2);
 
     // read "fisco bcos"
     bytes queryBytes;
@@ -609,6 +611,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
     executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    ledger->setBlockHeader(blockHeader);
+
 
     // execute a call request
     auto callParam = std::make_unique<NativeExecutionMessage>();

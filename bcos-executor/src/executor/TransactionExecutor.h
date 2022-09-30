@@ -238,6 +238,7 @@ protected:
         bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
 
     protocol::BlockNumber getBlockNumberInStorage();
+    protocol::BlockHeader::Ptr getBlockHeaderInStorage(protocol::BlockNumber number);
 
     std::string m_name;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -263,7 +264,8 @@ protected:
         bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
-    bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
+    bcos::protocol::BlockNumber m_lastCommittedBlockNumber = getBlockNumberInStorage();
+    bcos::protocol::BlockHeader::Ptr m_lastCommittedBlockHeader = nullptr;
 
     struct HashCombine
     {
