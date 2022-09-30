@@ -42,16 +42,17 @@ using namespace std;
 namespace bcos::storage
 {
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
+    const std::vector<std::string>& pdAddrs, const std::string& logPath)
+{
+    return std::make_shared<tikv_client::TransactionClient>(pdAddrs, logPath);
+}
+
+std::shared_ptr<tikv_client::TransactionClient> newTiKVClientWithSSL(
     const std::vector<std::string>& pdAddrs, const std::string& logPath, const std::string& caPath,
     const std::string& certPath, const std::string& keyPath)
 {
-    // TODO: config ssl
-    if (!caPath.empty() && !certPath.empty() && !keyPath.empty())
-    {
-        return std::make_shared<tikv_client::TransactionClient>(
-            pdAddrs, logPath, caPath, certPath, keyPath);
-    }
-    return std::make_shared<tikv_client::TransactionClient>(pdAddrs, logPath);
+    return std::make_shared<tikv_client::TransactionClient>(
+        pdAddrs, logPath, caPath, certPath, keyPath);
 }
 }  // namespace bcos::storage
 

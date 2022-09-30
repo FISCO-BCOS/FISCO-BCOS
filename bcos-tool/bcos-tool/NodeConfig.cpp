@@ -556,6 +556,10 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
+    m_TiKVCaPath = _pt.get<std::string>("storage.tikv_ssl_ca_path", "");
+    m_TiKVCertPath = _pt.get<std::string>("storage.tikv_ssl_cert_path", "");
+    m_TiKVKeyPath = _pt.get<std::string>("storage.tikv_ssl_key_path", "");
+
     if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
     {
         BOOST_THROW_EXCEPTION(

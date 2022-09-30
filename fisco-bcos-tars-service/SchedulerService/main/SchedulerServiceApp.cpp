@@ -74,7 +74,7 @@ void SchedulerServiceApp::createAndInitSchedulerService()
 
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
-    
+
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
 
@@ -142,16 +142,18 @@ void SchedulerServiceApp::initConfig()
 void SchedulerServiceApp::createScheduler()
 {
     auto blockFactory = m_protocolInitializer->blockFactory();
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(
-        blockFactory, StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()));
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory,
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->tikvCaPath(),
+            m_nodeConfig->tikvCertPath(), m_nodeConfig->tikvKeyPath()));
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
     auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()), executionMessageFactory,
-        blockFactory, m_protocolInitializer->txResultFactory(),
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->tikvCaPath(),
+            m_nodeConfig->tikvCertPath(), m_nodeConfig->tikvKeyPath()),
+        executionMessageFactory, blockFactory, m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
         m_nodeConfig->isWasm());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);

@@ -155,9 +155,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->tikvCaPath(), m_nodeConfig->tikvCertPath(), m_nodeConfig->tikvKeyPath());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->tikvCaPath(), m_nodeConfig->tikvCertPath(), m_nodeConfig->tikvKeyPath());
+        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->tikvCaPath(), m_nodeConfig->tikvCertPath(), m_nodeConfig->tikvKeyPath());
 #endif
     }
     else

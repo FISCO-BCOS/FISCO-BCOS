@@ -113,6 +113,9 @@ public:
     std::string const& storageType() const { return m_storageType; }
     size_t keyPageSize() const { return m_keyPageSize; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
+    std::string const& tikvCaPath() const { return m_TiKVCaPath; }
+    std::string const& tikvCertPath() const { return m_TiKVCertPath; }
+    std::string const& tikvKeyPath() const { return m_TiKVKeyPath; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
 
@@ -288,6 +291,10 @@ private:
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 8192;
     std::vector<std::string> m_pd_addrs;
+    std::string m_TiKVCaPath = "";
+    std::string m_TiKVCertPath = "";
+    std::string m_TiKVKeyPath = "";
+
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
 
