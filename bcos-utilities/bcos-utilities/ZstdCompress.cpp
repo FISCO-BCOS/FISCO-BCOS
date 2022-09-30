@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief : complement compress and uncompress with snappy
+ * @brief : complement compress and uncompress with zstd
  *
  * @file ZstdCompress.cpp
  * @author: lucasli
@@ -40,7 +40,7 @@ size_t ZstdCompress::compress(bytesConstRef inputData, bytes& compressedData, in
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdCompress")
                         << LOG_DESC("compress failed, error code check failed")
                         << LOG_KV("code", code);
-        return 0;
+        return CompressError;
     }
     compressedData.resize(compressedSize);
 #if 0
@@ -63,7 +63,7 @@ size_t ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompresse
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdUncompress")
                         << LOG_DESC("compress failed, compressedData size error")
                         << LOG_KV("compressedData size", cBuffSize);
-        return 0;
+        return UnCompressError;
     }
 
     uncompressedData.resize(cBuffSize);
@@ -78,7 +78,7 @@ size_t ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompresse
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdUncompress")
                         << LOG_DESC("uncompress failed, error code check failed")
                         << LOG_KV("code", code);
-        return 0;
+        return UnCompressError;
     }
     uncompressedData.resize(uncompressSize);
 #if 0

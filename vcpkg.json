@@ -25,7 +25,6 @@
     "boost-multiprecision",
     "boost-program-options",
     "ms-gsl",
-    "snappy",
     "zstd",
     "tbb",
     "zlib",

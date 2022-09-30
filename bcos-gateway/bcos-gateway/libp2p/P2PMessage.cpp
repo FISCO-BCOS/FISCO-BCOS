@@ -21,7 +21,6 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-utilities/SnappyCompress.h>
 #include <bcos-utilities/ZstdCompress.h>
 #include <boost/asio/detail/socket_ops.hpp>
 
@@ -193,11 +192,8 @@ bool P2PMessage::encode(bytes& _buffer)
     // compress payload
     std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
     bool isCompressSuccess = false;
-    if (compress(compressData))
+    if (tryToCompressPayload(compressData))
     {
-        P2PMSG_LOG(TRACE) << LOG_DESC("P2PMessage encode")
-                          << LOG_KV("compressedData", (char*)compressData->data())
-                          << LOG_KV("ext", m_ext);
         isCompressSuccess = true;
     }
 
@@ -214,7 +210,7 @@ bool P2PMessage::encode(bytes& _buffer)
     // encode payload
     if (isCompressSuccess)
     {
-        P2PMSG_LOG(TRACE) << LOG_DESC("isCompressSuccess")
+        P2PMSG_LOG(TRACE) << LOG_DESC("compress payload success")
                           << LOG_KV("compressedData", (char*)compressData->data())
                           << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
                           << LOG_KV("seq", m_seq);
@@ -236,63 +232,21 @@ bool P2PMessage::encode(bytes& _buffer)
 }
 
 /// compress the payload data to be sended
-bool P2PMessage::compress(std::shared_ptr<bytes> compressData)
+bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
 {
     if (m_payload->size() <= bcos::gateway::c_compressThreshold)
     {
-        P2PMSG_LOG(TRACE) << LOG_DESC("P2PMessage compress data smaller than c_compressThreshold")
-                          << LOG_KV("packageType", m_packetType)
-                          << LOG_KV("payload size", m_payload->size());
-        return false;
-    }
-    // /// the packet has already been encoded
-    // if ((m_ext & bcos::protocol::MessageExtFieldFlag::Compress) ==
-    //     bcos::protocol::MessageExtFieldFlag::Compress)
-    // {
-    //     P2PMSG_LOG(INFO) << LOG_DESC("the packet has already been encoded")
-    //                      << LOG_KV("packageType", m_packetType);
-    //     return false;
-    // }
-
-    P2PMSG_LOG(TRACE) << LOG_DESC("P2PMessage compress") << LOG_KV("compressType", m_compressType);
-    size_t compressSize;
-    if (m_compressType == "snappy")
-    {
-        compressSize = SnappyCompress::compress(ref(*m_payload), *compressData);
-        // todo: remove
-        P2PMSG_LOG(TRACE) << LOG_DESC("snappy compress") << LOG_KV("compressSize", compressSize)
-                          << LOG_KV("compressData size", compressData->size())
-                          << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
-                          << LOG_KV("seq", m_seq);
-    }
-    else if (m_compressType == "zstd")
-    {
-        compressSize = ZstdCompress::compress(
-            ref(*m_payload), *compressData, bcos::gateway::c_zstdCompressLevel);
-        // todo: remove
-        P2PMSG_LOG(TRACE) << LOG_DESC("ZstdCompress compress")
-                          << LOG_KV("compressSize", compressSize)
-                          << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
-                          << LOG_KV("seq", m_seq);
-    }
-    else
-    {
-        P2PMSG_LOG(ERROR) << LOG_DESC("the compress type we don't support")
-                          << LOG_KV("compress type", m_compressType)
-                          << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
-                          << LOG_KV("seq", m_seq);
         return false;
     }
 
-    if (compressSize < 1)
+    size_t compressSize =
+        ZstdCompress::compress(ref(*m_payload), *compressData, bcos::gateway::c_zstdCompressLevel);
+    if (compressSize == CompressError)
     {
         return false;
     }
+    // update compress flag
     m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
-    // todo: remove
-    P2PMSG_LOG(TRACE) << LOG_DESC("P2PMessage compress success!")
-                      << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
-                      << LOG_KV("seq", m_seq);
     return true;
 }
 
@@ -363,72 +317,32 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
     auto rawData = std::make_shared<bytes>(data.begin(), data.end());
-    // P2PMSG_LOG(INFO) << LOG_DESC("p2pmessage info") << LOG_KV("rawData",
-    // (char*)(rawData->data()))
-    //                  << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext);
 
     // uncompress payload
     // payload has been compressed
     if ((m_ext & bcos::protocol::MessageExtFieldFlag::Compress) ==
         bcos::protocol::MessageExtFieldFlag::Compress)
     {
-        if (m_compressType == "snappy")
+        size_t uncompressSize = ZstdCompress::uncompress(ref(*rawData), *m_payload);
+        if (uncompressSize == UnCompressError)
         {
-            size_t uncompressSize = SnappyCompress::uncompress(ref(*rawData), *m_payload);
-            if (uncompressSize < 1)
-            {
-                P2PMSG_LOG(ERROR) << LOG_DESC(
-                                         "SnappyCompress decode message error, uncompress failed")
-                                  << LOG_KV("uncompressSize", uncompressSize)
-                                  << LOG_KV("rawData", (char*)(rawData->data()))
-                                  << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
-                                  << LOG_KV("seq", m_seq);
-                // invalid packet?
-                return MessageDecodeStatus::MESSAGE_ERROR;
-            }
-            P2PMSG_LOG(TRACE) << LOG_DESC("snappy uncompress success")
-                              << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
-                              << LOG_KV("rawData", (char*)(rawData->data()))
-                              << LOG_KV("seq", m_seq);
-            // reset ext
-            m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
-        }
-        else if (m_compressType == "zstd")
-        {
-            size_t uncompressSize = ZstdCompress::uncompress(ref(*rawData), *m_payload);
-            if (uncompressSize < 1)
-            {
-                P2PMSG_LOG(ERROR) << LOG_DESC(
-                                         "ZstdCompress decode message error, uncompress failed")
-                                  << LOG_KV("uncompressSize", uncompressSize)
-                                  << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
-                                  << LOG_KV("seq", m_seq);
-                // invalid packet?
-                return MessageDecodeStatus::MESSAGE_ERROR;
-            }
-            P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
-                              << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
-                              << LOG_KV("rawData", (char*)(rawData->data()))
-                              << LOG_KV("seq", m_seq);
-            // reset ext
-            m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
-        }
-        else
-        {
-            P2PMSG_LOG(ERROR) << LOG_DESC("the compress type we don't support")
-                              << LOG_KV("compress type", m_compressType)
+            P2PMSG_LOG(ERROR) << LOG_DESC("ZstdCompress decode message error, uncompress failed")
+                              << LOG_KV("uncompressSize", uncompressSize)
                               << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
                               << LOG_KV("seq", m_seq);
-            return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+            // invalid packet?
+            return MessageDecodeStatus::MESSAGE_ERROR;
         }
+        P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
+                          << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
+                          << LOG_KV("rawData", (char*)(rawData->data())) << LOG_KV("seq", m_seq);
+        // reset ext
+        m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
     }
     else
     {
         m_payload = std::move(rawData);
     }
-    // todo
-    P2PMSG_LOG(TRACE) << LOG_DESC("P2PMessage decode success") << LOG_KV("packetType", m_packetType)
-                      << LOG_KV("ext", m_ext) << LOG_KV("seq", m_seq);
 
     return m_length;
 }

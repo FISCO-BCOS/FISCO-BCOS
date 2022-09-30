@@ -177,7 +177,7 @@ public:
     }
 
     // compress payload if payload need to be compressed
-    bool compress(std::shared_ptr<bytes> compressData);
+    bool tryToCompressPayload(std::shared_ptr<bytes> compressData);
 
     bool hasOptions() const
     {
@@ -200,10 +200,6 @@ public:
     virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr) { m_extAttr = _extAttr; }
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
-    // todo: remove
-    std::string compressType() { return m_compressType; }
-    virtual void setCompressType(std::string _compressType) { m_compressType = _compressType; }
-
 protected:
     virtual ssize_t decodeHeader(bytesConstRef _buffer);
     virtual bool encodeHeader(bytes& _buffer);
@@ -225,10 +221,6 @@ protected:
     std::shared_ptr<bytes> m_payload;  ///< payload data
 
     MessageExtAttributes::Ptr m_extAttr = nullptr;  ///< message additional attributes
-
-private:
-    // todo: for test compress performance, need to be removed
-    std::string m_compressType;
 };
 
 class P2PMessageFactory : public MessageFactory

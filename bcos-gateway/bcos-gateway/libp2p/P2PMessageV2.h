@@ -52,17 +52,8 @@ public:
     Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessageV2>();
-        message->setCompressType(m_compressType);
         return message;
     }
-
-    // todo: for test compress performance, wait to be removed
-    std::string const& compressType() const { return m_compressType; }
-    void setCompressType(std::string _compressType) { m_compressType = _compressType; }
-
-private:
-    // todo: for test compress performance, wait to be removed
-    std::string m_compressType;
 };
 }  // namespace gateway
 }  // namespace bcos

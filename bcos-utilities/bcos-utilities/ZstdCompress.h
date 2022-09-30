@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief : complement compress and uncompress with snappy
+ * @brief : complement compress and uncompress with zstd
  *
  * @file ZstdCompress.h
  * @author: lucasli
@@ -23,6 +23,9 @@
 #pragma once
 #include "Common.h"
 #include "zstd.h"
+
+#define CompressError -1
+#define UnCompressError -1
 
 namespace bcos
 {
