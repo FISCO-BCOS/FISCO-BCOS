@@ -3,9 +3,8 @@ include(GNUInstallDirs)
 
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
-  # GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-c.git
-  GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/tikv-client-cpp.git
-  GIT_TAG        055fcb537518b40823ba9f15fb0c81a73b10161e
+  GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
+  GIT_TAG        e5f93a0d640023a2f207acacf593ab83f3e586e8
   BUILD_IN_SOURCE true
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   CONFIGURE_COMMAND cargo install cxxbridge-cmd@1.0.75
