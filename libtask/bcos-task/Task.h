@@ -115,6 +115,14 @@ public:
     struct Awaitable
     {
         Awaitable(Task const& task) : m_handle(task.m_handle){};
+        ~Awaitable()
+        {
+            if (m_handle)
+            {
+                m_handle.destroy();
+                m_handle = {};
+            }
+        }
 
         constexpr bool await_ready() const noexcept { return type == Type::EAGER; }
 
