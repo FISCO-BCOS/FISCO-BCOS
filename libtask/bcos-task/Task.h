@@ -11,8 +11,6 @@
 #include <type_traits>
 #include <variant>
 
-#include <iostream>
-
 namespace bcos::task
 {
 
@@ -43,8 +41,6 @@ public:
                 constexpr bool await_ready() const noexcept { return !m_continuationHandle; }
                 auto await_suspend([[maybe_unused]] CO_STD::coroutine_handle<> handle) noexcept
                 {
-                    std::cout << "Calling finalAwaitable await_suspend: "
-                              << m_continuationHandle.address() << std::endl;
                     return m_continuationHandle;
                 }
                 constexpr void await_resume() noexcept {}
@@ -52,7 +48,6 @@ public:
                 std::coroutine_handle<> m_continuationHandle;
             };
 
-            std::cout << "Resume to: " << m_continuationHandle.address() << std::endl;
             return FinalAwaitable{m_continuationHandle};
         }
         constexpr TaskImpl get_return_object()
@@ -95,9 +90,6 @@ private:
     CO_STD::coroutine_handle<promise_type> m_handle;
 };
 
-template <class Task>
-concept IsTask = std::derived_from<Task, TaskBase<typename Task::ReturnType, Task>>;
-
 enum class Type
 {
     LAZY,
@@ -115,21 +107,17 @@ public:
     struct Awaitable
     {
         Awaitable(Task const& task) : m_handle(task.m_handle){};
-        ~Awaitable()
-        {
-            if (m_handle)
-            {
-                m_handle.destroy();
-                m_handle = {};
-            }
-        }
+        Awaitable(const Awaitable&) = delete;
+        Awaitable(Awaitable&&) = default;
+        Awaitable& operator=(const Awaitable&) = delete;
+        Awaitable& operator=(Awaitable&&) = default;
+        ~Awaitable() {}
 
         constexpr bool await_ready() const noexcept { return type == Type::EAGER; }
 
         template <class Promise>
         auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
-            std::cout << "Await suspend: " << handle.address() << std::endl;
             m_handle.promise().m_continuationHandle = std::move(handle);
             return m_handle;
         }
@@ -148,7 +136,12 @@ public:
                     BOOST_THROW_EXCEPTION(NoReturnValue{});
                 }
 
-                return std::move(std::get<Value>(value));
+                auto result = std::move(std::get<Value>(value));
+                if (m_handle.promise().m_continuationHandle)
+                {
+                    m_handle.destroy();
+                }
+                return result;
             }
         }
 

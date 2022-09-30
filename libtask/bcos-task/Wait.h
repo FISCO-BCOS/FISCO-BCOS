@@ -38,7 +38,7 @@ void wait(Task&& task, Callback&& callback)
 template <class Task>
 void wait(Task&& task)
 {
-    std::move(task).run();
+    std::forward<Task>(task).run();
 }
 
 template <class Task>
