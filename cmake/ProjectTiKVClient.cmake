@@ -1,10 +1,11 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+# FIXME: when release 3.1.0 modify tikv-client log level to info
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
-  GIT_TAG        e5f93a0d640023a2f207acacf593ab83f3e586e8
+  GIT_TAG        8573ea4813283bd03c212d2dcea128cf47aaf9a3
   BUILD_IN_SOURCE true
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   CONFIGURE_COMMAND cargo install cxxbridge-cmd@1.0.75
