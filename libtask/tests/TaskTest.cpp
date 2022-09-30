@@ -75,12 +75,12 @@ Task<int> asyncLevel2(tbb::task_group& taskGroup)
 
         void await_suspend(CO_STD::coroutine_handle<> handle)
         {
-            std::cout << "Start run async thread" << std::endl;
+            std::cout << "Start run async thread: " << handle.address() << std::endl;
             taskGroup.run([this, m_handle = std::move(handle)]() {
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 num = 100;
 
-                std::cout << "Call m_handle.resume()" << std::endl;
+                std::cout << "Call m_handle.resume(): " << m_handle.address() << std::endl;
                 m_handle.resume();
             });
         }
@@ -95,7 +95,11 @@ Task<int> asyncLevel2(tbb::task_group& taskGroup)
         int num = 0;
     };
 
+    std::cout << "co_await Awaitable started" << std::endl;
     auto num = co_await Awaitable{taskGroup, 0};
+    std::cout << "co_await Awaitable ended" << std::endl;
+
+    BOOST_CHECK_EQUAL(num, 100);
 
     std::cout << "asyncLevel2 co_return" << std::endl;
     co_return num;
@@ -115,10 +119,11 @@ Task<int> asyncLevel1(tbb::task_group& taskGroup)
 
 BOOST_AUTO_TEST_CASE(asyncTask)
 {
-    auto num = ~asyncLevel1(taskGroup);
+    auto num = bcos::task::syncWait(asyncLevel1(taskGroup));
 
     taskGroup.wait();
     BOOST_CHECK_EQUAL(num, 200);
+    std::cout << "asyncTask test over" << std::endl;
 }
 
 BOOST_AUTO_TEST_SUITE_END()
