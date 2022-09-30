@@ -222,6 +222,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     });
     preparePromise.get_future().get();
 
+    ledger->setBlockHeader(blockHeader);
     std::promise<void> commitPromise;
     executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -231,7 +232,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     auto tableName =
         std::string("/apps/") +
         std::string(result->newEVMContractAddress());  // TODO: ensure the contract// address is hex
-    ledger->setBlockHeader(blockHeader);
+
 
     // test getCode()
     executor->getCode(address, [](Error::Ptr error, bcos::bytes code) {
@@ -610,8 +611,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
     commitParams.number = 1;
 
     executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
-    executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
     ledger->setBlockHeader(blockHeader);
+    executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
 
 
     // execute a call request

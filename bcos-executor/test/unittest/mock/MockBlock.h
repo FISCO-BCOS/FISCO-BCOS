@@ -1,3 +1,5 @@
+#pragma once
+#include "MockBlockHeader.h"
 #include <bcos-framework/protocol/Block.h>
 
 namespace bcos::test
@@ -51,6 +53,6 @@ public:
 
 
 private:
-    protocol::BlockHeader::Ptr m_blockHeader;
+    protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);
 };
 }  // namespace bcos::test

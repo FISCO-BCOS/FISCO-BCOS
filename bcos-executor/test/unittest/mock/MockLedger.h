@@ -32,12 +32,23 @@ public:
     };
 
     protocol::BlockHeader::Ptr m_blockHeader;
-    void setBlockHeader(protocol::BlockHeader::Ptr blockHeader) { m_blockHeader = blockHeader; }
+    void setBlockHeader(protocol::BlockHeader::Ptr blockHeader)
+    {
+        if (blockHeader)
+        {
+            m_blockHeader = blockHeader;
+            m_blockNumber = blockHeader->number();
+        }
+    }
     void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock) override
     {
         auto block = std::make_shared<MockBlock>();
-        block->setBlockHeader(m_blockHeader);
+        if (m_blockHeader)
+        {
+            block->setBlockHeader(m_blockHeader);
+        }
+        block->blockHeader()->setNumber(m_blockNumber);
         _onGetBlock(nullptr, block);
     };
 
