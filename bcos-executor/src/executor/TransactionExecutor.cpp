@@ -470,9 +470,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
-        auto blockHeader = m_lastCommittedBlockHeader ? m_lastCommittedBlockHeader :
-                                                        getBlockHeaderInStorage(number);
+        auto blockHeader = m_lastCommittedBlockHeader;
 
         if (!blockHeader)
         {
@@ -499,8 +497,9 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext = createBlockContext(number, blockHeader->hash(), blockHeader->timestamp(),
-            blockHeader->version(), std::move(storage));  // TODO: complete the block info
+        blockContext =
+            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
+                blockHeader->version(), std::move(storage));  // TODO: complete the block info
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -651,10 +650,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
-        auto blockHeader = m_lastCommittedBlockHeader ? m_lastCommittedBlockHeader :
-                                                        getBlockHeaderInStorage(number);
-
+        auto blockHeader = m_lastCommittedBlockHeader;
         if (!blockHeader)
         {
             auto message = "dmcCall could not get current block header, contextID: " +
@@ -680,8 +676,9 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext = createBlockContext(number, blockHeader->hash(), blockHeader->timestamp(),
-            blockHeader->version(), std::move(storage));  // TODO: complete the block info
+        blockContext =
+            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
+                blockHeader->version(), std::move(storage));  // TODO: complete the block info
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1708,7 +1705,6 @@ void TransactionExecutor::commit(
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
-        m_lastCommittedBlockNumber = blockNumber;
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
 
         removeCommittedState();
