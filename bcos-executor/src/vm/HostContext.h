@@ -95,6 +95,10 @@ public:
 
     void setCodeAndAbi(bytes code, std::string abi);
 
+    bool setCodeNewVersion(bytes code);
+
+    void setCodeAndAbi(bytes code, std::string abi, uint32_t blockVersion);
+
     size_t codeSizeAt(const std::string_view& _a);
 
     h256 codeHashAt(const std::string_view& _a);
@@ -108,6 +112,7 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash() const;
     int64_t blockNumber() const;
+    uint32_t blockVersion() const;
     int64_t timestamp() const;
     int64_t blockGasLimit() const
     {
@@ -126,6 +131,7 @@ public:
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
     std::optional<storage::Entry> code();
+    std::optional<storage::Entry> code(uint32_t blockVersion);
     bool isCodeHasPrefix(std::string_view _prefix) const;
     h256 codeHash();
     u256 salt() const { return m_salt; }
@@ -152,7 +158,6 @@ private:
     CallParameters::UniquePtr m_callParameters;
     std::shared_ptr<TransactionExecutive> m_executive;
     std::string m_tableName;
-
     u256 m_salt;     ///< Values used in new address construction by CREATE2
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 

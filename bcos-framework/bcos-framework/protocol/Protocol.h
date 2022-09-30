@@ -95,6 +95,7 @@ enum ProtocolVersion : uint32_t
 enum class Version : uint32_t
 {
     V3_0_VERSION = 0x03000000,
+    V3_1_VERSION = 0x03000001,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
     MAX_VERSION = V3_0_VERSION,

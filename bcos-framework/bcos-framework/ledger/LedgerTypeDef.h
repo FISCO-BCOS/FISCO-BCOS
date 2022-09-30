@@ -68,4 +68,5 @@ constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
+constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
 }  // namespace bcos::ledger
