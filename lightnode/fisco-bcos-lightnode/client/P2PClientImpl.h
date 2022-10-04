@@ -69,11 +69,8 @@ public:
                             m_error = std::move(error);
                         }
 
-                        LIGHTNODE_LOG(DEBUG) << "sendMessageByNodeID m_handle resume";
                         m_handle.resume();
                     });
-
-                LIGHTNODE_LOG(DEBUG) << "sendMessageByNodeID await_suspend ended";
             }
 
             constexpr void await_resume() const
@@ -95,9 +92,7 @@ public:
             ResponseType& m_response;
         };
 
-        LIGHTNODE_LOG(DEBUG) << "start co_await sendMessageByNodeID";
         co_await Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
-        LIGHTNODE_LOG(DEBUG) << "finished co_await sendMessageByNodeID";
     }
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()
@@ -109,7 +104,6 @@ public:
             {}
 
             constexpr bool await_ready() const noexcept { return false; }
-
             void await_suspend(CO_STD::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
@@ -121,33 +115,32 @@ public:
                         }
                         else
                         {
-                            auto groups = peerGatewayInfos->at(0);
-                            auto nodeIDInfo = groups->nodeIDInfo();
-                            auto it = nodeIDInfo.find("group0");
-                            if (it != nodeIDInfo.end())
+                            if (!peerGatewayInfos->empty())
                             {
-                                auto& nodeIDs = it->second;
-                                if (!nodeIDs.empty())
+                                auto groups = peerGatewayInfos->at(0);
+                                auto nodeIDInfo = groups->nodeIDInfo();
+                                auto it = nodeIDInfo.find("group0");
+                                if (it != nodeIDInfo.end())
                                 {
-                                    std::uniform_int_distribution<size_t> distribution{
-                                        0U, nodeIDs.size() - 1};
-                                    auto nodeIDIt = nodeIDs.begin();
-                                    auto step = distribution(m_rng);
-                                    for (size_t i = 0; i < step; ++i)
-                                        ++nodeIDIt;
+                                    auto& nodeIDs = it->second;
+                                    if (!nodeIDs.empty())
+                                    {
+                                        std::uniform_int_distribution<size_t> distribution{
+                                            0U, nodeIDs.size() - 1};
+                                        auto nodeIDIt = nodeIDs.begin();
+                                        auto step = distribution(m_rng);
+                                        for (size_t i = 0; i < step; ++i)
+                                            ++nodeIDIt;
 
-                                    m_nodeID = *nodeIDIt;
+                                        m_nodeID = *nodeIDIt;
+                                    }
                                 }
                             }
                         }
 
-                        LIGHTNODE_LOG(DEBUG) << "randomSelectNode m_handle resume";
                         m_handle.resume();
                     });
-
-                LIGHTNODE_LOG(DEBUG) << "randomSelectNode await_suspend ended";
             }
-
             std::string await_resume()
             {
                 if (m_error)
@@ -164,12 +157,11 @@ public:
             std::string m_nodeID;
         };
 
-        LIGHTNODE_LOG(DEBUG) << "start co_await randomSelectNode";
         auto nodeID = co_await Awaitable(m_gateway, m_rng);
-        LIGHTNODE_LOG(DEBUG) << "finish co_await randomSelectNode";
-
         if (nodeID.empty())
+        {
             BOOST_THROW_EXCEPTION(NoNodeAvailable{});
+        }
 
         bcos::bytes nodeIDBin;
         boost::algorithm::unhex(nodeID.begin(), nodeID.end(), std::back_inserter(nodeIDBin));

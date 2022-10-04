@@ -11,6 +11,8 @@
 #include <type_traits>
 #include <variant>
 
+#include <iostream>
+
 namespace bcos::task
 {
 
@@ -38,22 +40,24 @@ public:
         {
             struct FinalAwaitable
             {
-                constexpr bool await_ready() const noexcept { return !m_continuationHandle; }
-                auto await_suspend([[maybe_unused]] CO_STD::coroutine_handle<> handle) noexcept
+                constexpr bool await_ready() const noexcept { return false; }
+                auto await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) noexcept
                 {
-                    return m_continuationHandle;
+                    std::cout << "Final suspend: " << handle.address() << " | "
+                              << handle.promise().m_continuationHandle.address() << std::endl;
+                    return handle.promise().m_continuationHandle;
                 }
                 constexpr void await_resume() noexcept {}
-
-                std::coroutine_handle<> m_continuationHandle;
             };
 
-            return FinalAwaitable{m_continuationHandle};
+            return FinalAwaitable{};
         }
         constexpr TaskImpl get_return_object()
         {
-            return TaskImpl(CO_STD::coroutine_handle<promise_type>::from_promise(
-                *static_cast<PromiseImpl*>(this)));
+            auto handle = CO_STD::coroutine_handle<promise_type>::from_promise(
+                *static_cast<PromiseImpl*>(this));
+            std::cout << "Creating: " << handle.address() << std::endl;
+            return TaskImpl(handle);
         }
         void unhandled_exception()
         {
@@ -77,14 +81,25 @@ public:
         }
     };
 
-    TaskBase(CO_STD::coroutine_handle<promise_type>&& handle) : m_handle(std::move(handle)) {}
+    explicit TaskBase(CO_STD::coroutine_handle<promise_type> handle) : m_handle(handle) {}
     TaskBase(const TaskBase&) = delete;
-    TaskBase(TaskBase&&) = default;
+    TaskBase(TaskBase&& task) noexcept : m_handle(task.m_handle) { task.m_handle = {}; }
     TaskBase& operator=(const TaskBase&) = delete;
-    TaskBase& operator=(TaskBase&&) = default;
-    ~TaskBase() {}
+    TaskBase& operator=(TaskBase&& task) noexcept
+    {
+        m_handle = task.m_handle;
+        task.m_handle = {};
+    }
+    ~TaskBase()
+    {
+        // if (m_handle && m_handle.done())
+        // {
+        // std::cout << "Destroy: " << m_handle.address() << " | " << m_handle.done() << std::endl;
+        // m_handle.destroy();
+        // }
+    }
 
-    constexpr void run() && { m_handle.resume(); }
+    constexpr void run() { m_handle.resume(); }
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;
@@ -100,7 +115,7 @@ template <class Value, Type type = Type::LAZY>
 class Task : public TaskBase<Task<Value, type>, Value>
 {
 public:
-    using TaskBase<Task<Value>, Value>::TaskBase;
+    using TaskBase<Task<Value, type>, Value>::TaskBase;
     using typename TaskBase<Task<Value, type>, Value>::ReturnType;
     using typename TaskBase<Task<Value, type>, Value>::promise_type;
 
@@ -113,12 +128,15 @@ public:
         Awaitable& operator=(Awaitable&&) = default;
         ~Awaitable() {}
 
-        constexpr bool await_ready() const noexcept { return type == Type::EAGER; }
+        constexpr bool await_ready() const noexcept
+        {
+            return type == Type::EAGER || !m_handle || m_handle.done();
+        }
 
         template <class Promise>
         auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
-            m_handle.promise().m_continuationHandle = std::move(handle);
+            m_handle.promise().m_continuationHandle = handle;
             return m_handle;
         }
         constexpr Value await_resume()
@@ -137,17 +155,14 @@ public:
                 }
 
                 auto result = std::move(std::get<Value>(value));
-                if (m_handle.promise().m_continuationHandle)
-                {
-                    m_handle.destroy();
-                }
                 return result;
             }
         }
 
         CO_STD::coroutine_handle<promise_type> m_handle;
     };
-    Awaitable operator co_await() && { return Awaitable(*static_cast<Task*>(this)); }
+    Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
+
     friend Awaitable;
 };
 

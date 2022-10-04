@@ -53,17 +53,16 @@ BOOST_AUTO_TEST_CASE(normalTask)
     auto task = nothingTask();
 
     bool finished = false;
-    auto task2 = level1();
+    // auto task2 = level1();
 
     bcos::task::wait(
-        std::move(task2), [&finished]([[maybe_unused]] std::exception_ptr exception = nullptr) {
+        level1(), [&finished]([[maybe_unused]] std::exception_ptr exception = nullptr) {
             std::cout << "Callback called!" << std::endl;
             finished = true;
         });
     BOOST_CHECK_EQUAL(finished, true);
 
-    auto task3 = level2();
-    auto num = bcos::task::syncWait(std::move(task3));
+    auto num = bcos::task::syncWait(level2());
     BOOST_CHECK_EQUAL(num, 10000);
 }
 
@@ -77,7 +76,7 @@ Task<int> asyncLevel2(tbb::task_group& taskGroup)
         {
             std::cout << "Start run async thread: " << handle.address() << std::endl;
             taskGroup.run([this, m_handle = std::move(handle)]() {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::this_thread::sleep_for(std::chrono::seconds(2));
                 num = 100;
 
                 std::cout << "Call m_handle.resume(): " << m_handle.address() << std::endl;
@@ -120,9 +119,23 @@ Task<int> asyncLevel1(tbb::task_group& taskGroup)
 BOOST_AUTO_TEST_CASE(asyncTask)
 {
     auto num = bcos::task::syncWait(asyncLevel1(taskGroup));
+    BOOST_CHECK_EQUAL(num, 200);
+
+    bcos::task::wait(asyncLevel1(taskGroup), [](auto&& result) {
+        using ResultType = std::remove_cvref_t<decltype(result)>;
+        if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+        {
+            // nothing to do
+        }
+        else
+        {
+            BOOST_CHECK_EQUAL(result, 200);
+            std::cout << "Got async result" << std::endl;
+        }
+    });
+    std::cout << "Top task destroyed" << std::endl;
 
     taskGroup.wait();
-    BOOST_CHECK_EQUAL(num, 200);
     std::cout << "asyncTask test over" << std::endl;
 }
 

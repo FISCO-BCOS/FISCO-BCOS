@@ -47,10 +47,10 @@ void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(
     }
     updateTimeInfo();
 
-    TIMESYNC_LOG(INFO) << LOG_DESC("updateTimeInfo: update median time offset")
-                       << LOG_KV("updatedMedianTimeOffset", m_medianTimeOffset)
-                       << LOG_KV("peer", nodeID->shortHex()) << LOG_KV("peerTime", time)
-                       << LOG_KV("peerOffset", peerTimeOffset) << LOG_KV("utcTime", utcTime());
+    TIMESYNC_LOG(TRACE) << LOG_DESC("updateTimeInfo: update median time offset")
+                        << LOG_KV("updatedMedianTimeOffset", m_medianTimeOffset)
+                        << LOG_KV("peer", nodeID->shortHex()) << LOG_KV("peerTime", time)
+                        << LOG_KV("peerOffset", peerTimeOffset) << LOG_KV("utcTime", utcTime());
 }
 
 void NodeTimeMaintenance::updateTimeInfo()

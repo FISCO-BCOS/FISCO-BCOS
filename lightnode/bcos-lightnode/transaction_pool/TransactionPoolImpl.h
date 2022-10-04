@@ -38,24 +38,26 @@ private:
         auto transactionData = std::make_shared<bcos::bytes>();
         bcos::concepts::serialize::encode(transaction, *transactionData);
 
-        struct Awaitable : public CO_STD::suspend_always
+        struct Awaitable
         {
-            Awaitable(decltype(transactionData)& transactionData,
+            Awaitable(std::shared_ptr<bcos::bytes> transactionData,
                 TransactionPoolType& transactionPool,
                 std::remove_cvref_t<decltype(receipt)>& receipt)
-              : m_transactionData(transactionData),
+              : m_transactionData(std::move(transactionData)),
                 m_transactionPool(transactionPool),
                 m_receipt(receipt)
             {}
 
-            constexpr void await_suspend(
-                CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
+            constexpr bool await_ready() const { return false; }
+            constexpr void await_suspend(CO_STD::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_transactionPool)
                     .asyncSubmit(std::move(m_transactionData),
                         [this, m_handle = std::move(handle)](Error::Ptr error,
                             bcos::protocol::TransactionSubmitResult::Ptr
                                 transactionSubmitResult) mutable {
+                            TRANSACTIONPOOL_LOG(INFO) << "Submit transaction callback";
+
                             m_error = std::move(error);
                             if (transactionSubmitResult &&
                                 transactionSubmitResult->transactionReceipt())
@@ -71,27 +73,23 @@ private:
                             m_handle.resume();
                         });
             }
+            constexpr void await_resume() const
+            {
+                if (m_error)
+                {
+                    BOOST_THROW_EXCEPTION(*m_error);
+                }
+            }
 
-            decltype(transactionData)& m_transactionData;
+            std::shared_ptr<bcos::bytes> m_transactionData;
             TransactionPoolType& m_transactionPool;
             std::remove_cvref_t<decltype(receipt)>& m_receipt;
             Error::Ptr m_error;
             bool m_withReceipt{};
         };
 
-        Awaitable awaitable(transactionData, m_transactionPool, receipt);
-        co_await awaitable;
-
-        auto& error = awaitable.m_error;
-        if (error)
-        {
-            TRANSACTIONPOOL_LOG(ERROR)
-                << "submitTransaction error! " << boost::diagnostic_information(*error);
-
-            BOOST_THROW_EXCEPTION(*error);
-        }
-
-        TRANSACTIONPOOL_LOG(DEBUG) << "Submit transaction successed";
+        co_await Awaitable(std::move(transactionData), m_transactionPool, receipt);
+        TRANSACTIONPOOL_LOG(INFO) << "Submit transaction successed";
     }
 
     TransactionPoolType m_transactionPool;

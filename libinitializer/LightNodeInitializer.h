@@ -284,6 +284,7 @@ private:
         bcostars::ResponseSendTransaction response;
         try
         {
+            LIGHTNODE_LOG(INFO) << "Request submit transaction: " << id;
             co_await transactionPool->submitTransaction(
                 std::move(request.transaction), response.receipt);
         }
@@ -295,6 +296,9 @@ private:
 
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
+        LIGHTNODE_LOG(INFO) << "Response submit transaction: " << id << " | "
+                            << responseBuffer.size();
+
         front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_SENDTRANSACTION, nodeID,
             bcos::ref(responseBuffer), [](Error::Ptr) {});
     }

@@ -232,26 +232,25 @@ public:
         ;
     }
 
-    void getBlockByNumber([[maybe_unused]] std::string_view _groupID,
-        [[maybe_unused]] std::string_view _nodeName, int64_t _blockNumber, bool _onlyHeader,
-        bool _onlyTxHash, RespFunc _respFunc) override
+    void getBlockByNumber([[maybe_unused]] std::string_view groupID,
+        [[maybe_unused]] std::string_view nodeName, int64_t blockNumber, bool onlyHeader,
+        bool onlyTxHash, RespFunc respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber << " "
-                            << _onlyHeader;
+        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << blockNumber << " "
+                            << onlyHeader;
 
-        auto getBlockCoroutine = [this, m_onlyHeader = _onlyHeader,
-                                     m_blockNumber =
-                                         _blockNumber]() -> task::Task<bcostars::Block> {
+        auto getBlockCoroutine = [this](bool onlyHeader,
+                                     int64_t blockNumber) -> task::Task<bcostars::Block> {
             bcostars::Block block;
-            if (m_onlyHeader)
+            if (onlyHeader)
             {
                 co_await localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                    m_blockNumber, block);
+                    blockNumber, block);
             }
             else
             {
                 co_await remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
-                    m_blockNumber, block);
+                    blockNumber, block);
 
                 if (!RANGES::empty(block.transactionsMetaData))
                 {
@@ -265,20 +264,24 @@ public:
                     merkle.generateMerkle(hashesRange, merkles);
 
                     if (RANGES::empty(merkles))
+                    {
                         BOOST_THROW_EXCEPTION(
                             std::runtime_error{"Unable to generate transaction merkle root!"});
+                    }
 
                     if (!bcos::concepts::bytebuffer::equalTo(
                             block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
+                    {
                         BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
+                    }
                 }
 
                 // Check parentBlock
-                if (m_blockNumber > 0)
+                if (blockNumber > 0)
                 {
                     decltype(block) parentBlock;
                     co_await localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                        m_blockNumber - 1, parentBlock);
+                        blockNumber - 1, parentBlock);
 
                     std::array<std::byte, Hasher::HASH_SIZE> parentHash;
                     bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
@@ -296,24 +299,25 @@ public:
             }
 
             co_return block;
-        }();
+        };
 
-        bcos::task::wait(getBlockCoroutine, [this, m_respFunc = std::move(_respFunc),
-                                                m_onlyHeader = _onlyHeader](auto&& result) mutable {
-            using ResultType = std::remove_cvref_t<decltype(result)>;
-            if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-            {
-                toErrorResp(result, m_respFunc);
-                return;
-            }
-            else
-            {
-                Json::Value resp;
-                toJsonResp<Hasher>(result, resp, m_onlyHeader);
+        bcos::task::wait(getBlockCoroutine(onlyHeader, blockNumber),
+            [this, m_respFunc = std::move(respFunc), m_onlyHeader = onlyHeader](
+                auto&& result) mutable {
+                using ResultType = std::remove_cvref_t<decltype(result)>;
+                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+                {
+                    toErrorResp(result, m_respFunc);
+                    return;
+                }
+                else
+                {
+                    Json::Value resp;
+                    toJsonResp<Hasher>(result, resp, m_onlyHeader);
 
-                m_respFunc(nullptr, resp);
-            }
-        });
+                    m_respFunc(nullptr, resp);
+                }
+            });
     }
 
     void getBlockHashByNumber([[maybe_unused]] std::string_view _groupID,

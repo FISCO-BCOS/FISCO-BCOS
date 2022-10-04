@@ -107,10 +107,8 @@ private:
 
         auto nodeID = co_await p2p().randomSelectNode();
 
-        LIGHTNODE_LOG(DEBUG) << "Start co_await getStatus";
         co_await p2p().sendMessageByNodeID(
             protocol::LIGHTNODE_GETSTATUS, std::move(nodeID), request, response);
-        LIGHTNODE_LOG(DEBUG) << "End co_await getStatus";
 
         if (response.error.errorCode)
         {
