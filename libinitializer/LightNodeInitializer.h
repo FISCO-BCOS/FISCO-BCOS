@@ -185,8 +185,11 @@ public:
                 bcostars::RequestSendTransaction request;
                 init->decodeRequest<bcostars::ResponseSendTransaction>(
                     request, front, protocol::LIGHTNODE_SENDTRANSACTION, nodeID, id, data);
-                bcos::task::wait(init->submitTransaction(
-                    front, transactionPool, nodeID, id, std::move(request)));
+                bcos::task::wait(
+                    init->submitTransaction(front, transactionPool, nodeID, id, std::move(request)),
+                    []([[maybe_unused]] std::exception_ptr error = nullptr) {
+                        LIGHTNODE_LOG(INFO) << "Reach output point!";
+                    });
             });
 
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_CALL,
@@ -278,8 +281,7 @@ private:
         std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
             std::shared_ptr<bcos::txpool::TxPoolInterface>>>
             transactionPool,
-        bcos::crypto::NodeIDPtr nodeID, const std::string& id,
-        bcostars::RequestSendTransaction request)
+        bcos::crypto::NodeIDPtr nodeID, std::string id, bcostars::RequestSendTransaction request)
     {
         bcostars::ResponseSendTransaction response;
         try
