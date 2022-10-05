@@ -50,10 +50,9 @@ Task<void> level1()
 
 BOOST_AUTO_TEST_CASE(normalTask)
 {
-    auto task = nothingTask();
+    // auto task = nothingTask();
 
     bool finished = false;
-    // auto task2 = level1();
 
     bcos::task::wait(
         level1(), [&finished]([[maybe_unused]] std::exception_ptr exception = nullptr) {

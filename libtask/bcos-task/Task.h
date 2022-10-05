@@ -41,15 +41,18 @@ public:
             struct FinalAwaitable
             {
                 constexpr bool await_ready() const noexcept { return false; }
-                auto await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) noexcept
+                void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) noexcept
                 {
                     std::cout << "Final suspend: " << handle.address() << " | "
                               << handle.promise().m_continuationHandle.address() << std::endl;
-                    return handle.promise().m_continuationHandle;
+                    if (handle.promise().m_continuationHandle)
+                    {
+                        handle.promise().m_continuationHandle.resume();
+                    }
+                    handle.destroy();
                 }
                 constexpr void await_resume() noexcept {}
             };
-
             return FinalAwaitable{};
         }
         constexpr TaskImpl get_return_object()
@@ -83,21 +86,14 @@ public:
 
     explicit TaskBase(CO_STD::coroutine_handle<promise_type> handle) : m_handle(handle) {}
     TaskBase(const TaskBase&) = delete;
-    TaskBase(TaskBase&& task) noexcept : m_handle(task.m_handle) { task.m_handle = {}; }
+    TaskBase(TaskBase&& task) noexcept : m_handle(task.m_handle) { task.m_handle = nullptr; }
     TaskBase& operator=(const TaskBase&) = delete;
     TaskBase& operator=(TaskBase&& task) noexcept
     {
         m_handle = task.m_handle;
-        task.m_handle = {};
+        task.m_handle = nullptr;
     }
-    ~TaskBase()
-    {
-        // if (m_handle && m_handle.done())
-        // {
-        // std::cout << "Destroy: " << m_handle.address() << " | " << m_handle.done() << std::endl;
-        // m_handle.destroy();
-        // }
-    }
+    ~TaskBase() = default;
 
     constexpr void run() { m_handle.resume(); }
 

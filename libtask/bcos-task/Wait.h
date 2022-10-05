@@ -13,13 +13,6 @@ namespace bcos::task
 template <class Task, class Callback>
 void wait(Task task, Callback callback)
 {
-    struct FinalAwaitable
-    {
-        constexpr bool await_ready() const noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle) noexcept { handle.destroy(); }
-        constexpr void await_resume() noexcept {}
-    };
-
     auto waitTask = [](Task task, Callback callback) -> task::Task<void> {
         using TaskType = std::remove_cvref_t<Task>;
         try
@@ -39,7 +32,7 @@ void wait(Task task, Callback callback)
             callback(std::current_exception());
         }
 
-        co_await FinalAwaitable();
+        co_return;
     };
     waitTask(std::move(task), std::move(callback)).run();
 }
