@@ -900,7 +900,7 @@ void BlockExecutive::DMCExecute(
 
             // handle batch result(only one thread can get in here)
             DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                          << "DMCExecute.5:\t <<< Joint all executor result\t"
+                          << "DMCExecute.5:\t <<< Join all executor result\t"
                           << LOG_KV("round", m_dmcRecorder->getRound())
                           << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                           << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
@@ -1223,6 +1223,8 @@ void BlockExecutive::batchBlockCommit(
         params, [rollbackVersion, status, this, callback](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
+//#define COMMIT_FAILED_NEED_ROLLBACK
+#ifdef COMMIT_FAILED_NEED_ROLLBACK
                 SCHEDULER_LOG(ERROR)
                     << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
                     << error->errorMessage();
@@ -1246,6 +1248,14 @@ void BlockExecutive::batchBlockCommit(
                         return;
                     }
                 });
+#else
+                SCHEDULER_LOG(WARNING)
+                        << BLOCK_NUMBER(number())
+                        << "Commit scheduler storage error, just return with no rollback" << error->errorMessage()
+                        << LOG_KV("rollbackVersion", rollbackVersion);
+                callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
+                            "Commit scheduler storage error, just return with no rollback"));
+#endif
                 return;
             }
             else
