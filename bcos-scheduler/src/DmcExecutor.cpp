@@ -343,6 +343,21 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         executiveState->callStack.push(newSeq);
         executiveState->message->setSeq(newSeq);
 
+        if (executiveState->message->delegateCall())
+        {
+            bytes code = f_onGetCodeEvent(message->delegateCallAddress());
+            if (code.empty())
+            {
+                DMC_LOG(ERROR)
+                    << "Could not getCode() from correspond executor during delegateCall: "
+                    << message->toString();
+                BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::ExecutorNotEstablishedError,
+                    "Could not getCode from correspond executor"));
+            }
+
+            executiveState->message->setDelegateCallCode(code);
+        }
+
         return MessageHint::NEED_SEND;
     }
         // Return type, pop stack

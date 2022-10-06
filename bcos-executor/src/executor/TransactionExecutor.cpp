@@ -2191,6 +2191,11 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setLogEntries(std::move(params->logEntries));
     message->setNewEVMContractAddress(std::move(params->newEVMContractAddress));
 
+    message->setDelegateCall(params->delegateCall);
+    message->setDelegateCallAddress(std::move(params->codeAddress));
+    message->setDelegateCallCode(std::move(params->delegateCallCode));
+    message->setDelegateCallSender(std::move(params->delegateCallSender));
+
     return message;
 }
 
@@ -2324,6 +2329,13 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         callParameters->abi = input.abi();
     }
+    callParameters->delegateCall = input.delegateCall();
+    callParameters->delegateCallCode = input.takeDelegateCallCode();
+    callParameters->delegateCallSender = input.delegateCallSender();
+    if (input.delegateCall())
+    {
+        callParameters->codeAddress = input.delegateCallAddress();
+    }
 
     return callParameters;
 }
@@ -2348,6 +2360,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
+
+    // no delegateCall happens here
+    callParameters->delegateCall = false;
+    callParameters->delegateCallCode = bytes();
+    callParameters->delegateCallSender = "";
+
     return callParameters;
 }
 

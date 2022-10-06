@@ -171,7 +171,7 @@ void ExecutivePool::forEach(MessageHint type, ExecutiveStateHandler handler, boo
         {
             if (!handler(contextID, executiveState))
             {
-                // break if no need to contiue
+                // break if no need to continue
                 break;
             }
         }

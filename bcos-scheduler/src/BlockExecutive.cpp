@@ -952,6 +952,12 @@ void BlockExecutive::DMCExecute(
         callback(
             std::make_unique<bcos::Error>(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
     }
+    catch (...)
+    {
+        DMC_LOG(WARNING) << "DMCExecute exception. ";
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, "DMCExecute exception"),
+            nullptr, m_isSysBlock);
+    }
 }
 
 void BlockExecutive::onDmcExecuteFinish(
@@ -1437,6 +1443,42 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
                 onTxFinish(std::move(output));
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
+
+        dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
+            auto executor = m_scheduler->executorManager()->dispatchCorrespondExecutor(address);
+            if (!executor)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Could not dispatch correspond executor during getCode(). Trigger switch."
+                    << LOG_KV("address", address);
+                triggerSwitch();
+                return bcos::bytes();
+            }
+            else
+            {
+                // getCode from executor
+                std::promise<bcos::bytes> codeFuture;
+                executor->getCode(
+                    address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
+                        if (error)
+                        {
+                            SCHEDULER_LOG(ERROR)
+                                << "Could not getCode from correspond executor. Trigger switch."
+                                << LOG_KV("code", error->errorCode())
+                                << LOG_KV("message", error->errorMessage());
+                            triggerSwitch();
+                            codeFuture.set_value(bcos::bytes());
+                        }
+                        else
+                        {
+                            codeFuture.set_value(std::move(codes));
+                        }
+                    });
+                bcos::bytes codes = std::move(codeFuture.get_future().get());
+
+                return codes;
+            }
+        });
 
         return dmcExecutor;
     }
