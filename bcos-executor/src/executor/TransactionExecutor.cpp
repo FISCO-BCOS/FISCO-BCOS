@@ -470,7 +470,18 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
+        auto blockHeader = m_lastCommittedBlockHeader;
+
+        if (!blockHeader)
+        {
+            auto message = "dmcCall could not get current block header, contextID: " +
+                           boost::lexical_cast<std::string>(input->contextID()) +
+                           " seq: " + boost::lexical_cast<std::string>(input->seq());
+            EXECUTOR_NAME_LOG(ERROR) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
+            return;
+        }
+
         storage::StorageInterface::Ptr prev;
 
         if (m_cachedStorage)
@@ -486,9 +497,9 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        // TODO: pass blockHash, version here
-        blockContext = createBlockContext(
-            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
+        blockContext =
+            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
+                blockHeader->version(), std::move(storage));  // TODO: complete the block info
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -639,7 +650,17 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
+        auto blockHeader = m_lastCommittedBlockHeader;
+        if (!blockHeader)
+        {
+            auto message = "dmcCall could not get current block header, contextID: " +
+                           boost::lexical_cast<std::string>(input->contextID()) +
+                           " seq: " + boost::lexical_cast<std::string>(input->seq());
+            EXECUTOR_NAME_LOG(ERROR) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
+            return;
+        }
+
         storage::StorageInterface::Ptr prev;
 
         if (m_cachedStorage)
@@ -655,9 +676,9 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        // TODO: pass blockHash, version here
-        blockContext = createBlockContext(
-            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
+        blockContext =
+            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
+                blockHeader->version(), std::move(storage));  // TODO: complete the block info
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1684,7 +1705,7 @@ void TransactionExecutor::commit(
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
-        m_lastCommittedBlockNumber = blockNumber;
+        m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
 
         removeCommittedState();
 
@@ -2402,6 +2423,29 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 
     return blockNumberFuture.get_future().get();
 }
+
+protocol::BlockHeader::Ptr TransactionExecutor::getBlockHeaderInStorage(
+    protocol::BlockNumber number)
+{
+    std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+
+    m_ledger->asyncGetBlockDataByNumber(number, bcos::ledger::HEADER,
+        [this, &blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+            if (error)
+            {
+                EXECUTOR_NAME_LOG(INFO) << "Get getBlockHeader from storage failed";
+                blockHeaderFuture.set_value(nullptr);
+            }
+            else
+            {
+                blockHeaderFuture.set_value(block->blockHeader());
+            }
+        });
+
+
+    return blockHeaderFuture.get_future().get();
+}
+
 
 void TransactionExecutor::stop()
 {

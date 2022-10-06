@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MockBlock.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <boost/test/unit_test.hpp>
 
@@ -30,10 +31,25 @@ public:
         BOOST_CHECK(false);  // Need implementations
     };
 
+    protocol::BlockHeader::Ptr m_blockHeader;
+    void setBlockHeader(protocol::BlockHeader::Ptr blockHeader)
+    {
+        if (blockHeader)
+        {
+            m_blockHeader = blockHeader;
+            m_blockNumber = blockHeader->number();
+        }
+    }
     void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        auto block = std::make_shared<MockBlock>();
+        if (m_blockHeader)
+        {
+            block->setBlockHeader(m_blockHeader);
+        }
+        block->blockHeader()->setNumber(m_blockNumber);
+        _onGetBlock(nullptr, block);
     };
 
     protocol::BlockNumber m_blockNumber = 0;
