@@ -2029,7 +2029,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 auto callParameters = createCallParameters(*input, *tx);
 
                 ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
+                    getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -2067,7 +2067,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
         ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
+            getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr&& error,

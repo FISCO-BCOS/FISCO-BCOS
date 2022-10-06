@@ -26,6 +26,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -122,6 +123,18 @@ void HostContext::set(const std::string_view& _key, std::string _value)
     m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
+std::string evmAddress2String(const evmc_address& address)
+{
+    std::string strAddress;
+    auto receiveAddressBytes = fromEvmC(address);
+    strAddress.reserve(receiveAddressBytes.size() * 2);
+    boost::algorithm::hex_lower(
+        receiveAddressBytes.begin(), receiveAddressBytes.end(), std::back_inserter(strAddress));
+
+    return std::move(strAddress);
+}
+
+
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
 {
     // Convert evmc_message to CallParameters
@@ -130,6 +143,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->senderAddress = myAddress();
     request->origin = origin();
     request->status = 0;
+
+    auto blockContext = m_executive->blockContext().lock();
 
     switch (_msg->kind)
     {
@@ -143,16 +158,35 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         }
         else
         {
-            auto receiveAddressBytes = fromEvmC(_msg->destination);
-            request->receiveAddress.reserve(receiveAddressBytes.size() * 2);
-            boost::algorithm::hex_lower(receiveAddressBytes.begin(), receiveAddressBytes.end(),
-                std::back_inserter(request->receiveAddress));
+            request->receiveAddress = evmAddress2String(_msg->destination);
         }
 
         request->codeAddress = request->receiveAddress;
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         break;
     case EVMC_DELEGATECALL:
+    {
+        if (!m_executive->blockContext().lock()->isWasm())
+        {
+            if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+            {
+                request->delegateCall = true;
+                request->codeAddress = evmAddress2String(_msg->destination);
+                request->delegateCallSender = evmAddress2String(_msg->sender);
+                request->receiveAddress = codeAddress();
+                request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+                break;
+            }
+        }
+
+        // old logic
+        evmc_result result;
+        result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
+        result.release = nullptr;  // no output to release
+        result.gas_left = 0;
+        return result;
+    }
+
     case EVMC_CALLCODE:
         // TODO: implement this, don't forget the compatibility
         evmc_result result;
@@ -167,7 +201,6 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     }
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
-    auto blockContext = m_executive->blockContext().lock();
 
     if (m_executive->isBuiltInPrecompiled(request->receiveAddress))
     {
@@ -182,7 +215,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     auto response = m_executive->externalCall(std::move(request));
 
-    // Convert CallParameters to evmc_result
+    // Convert CallParameters to evmc_resultx
     evmc_result result;
     result.status_code = evmc_status_code(response->status);
 

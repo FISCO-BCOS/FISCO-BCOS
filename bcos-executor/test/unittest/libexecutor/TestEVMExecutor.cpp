@@ -1351,6 +1351,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
     }
 }
 
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

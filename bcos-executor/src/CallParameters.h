@@ -60,6 +60,12 @@ struct CallParameters
      */
     bool internalCall = false;
 
+    // delegateCall
+    bool delegateCall = false;
+    bytes delegateCallCode;
+    std::string delegateCallSender;
+
+
     std::string toString()
     {
         std::stringstream ss;
@@ -100,7 +106,9 @@ struct CallParameters
            << "message:" << message << "|"
            << "newEVMContractAddress:" << newEVMContractAddress << "|"
            << "staticCall:" << staticCall << "|"
-           << "create :" << create << "|";
+           << "create :" << create << "|"
+           << "delegateCall:" << delegateCall << "|"
+           << "delegateCallSender" << delegateCallSender ;
         // clang-format on
         return ss.str();
     }
