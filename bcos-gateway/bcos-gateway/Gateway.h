@@ -26,8 +26,8 @@
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
-#include <bcos-gateway/libratelimit/BWRateStatistics.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
+#include <bcos-gateway/libratelimit/RateLimiterStatistics.h>
 #include <bcos-utilities/BoostLog.h>
 
 namespace bcos
@@ -41,7 +41,7 @@ public:
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
-        ratelimit::BWRateStatistics::Ptr _rateStatistics,
+        ratelimit::RateLimiterStatistics::Ptr _rateStatistics,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
         m_chainID(_chainID),
@@ -235,7 +235,7 @@ private:
     // For bandwidth limitation
     ratelimit::RateLimiterManager::Ptr m_rateLimiterManager;
     // For bandwidth statistics
-    ratelimit::BWRateStatistics::Ptr m_rateStatistics;
+    ratelimit::RateLimiterStatistics::Ptr m_rateStatistics;
 
     //
     uint32_t m_rateStatisticsPeriodMS = 60000;  // ms

@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file BWRateStatistics.cpp
+ * @file RateLimiterStatistics.cpp
  * @author: octopus
  * @date 2022-06-30
  */
@@ -21,7 +21,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/libratelimit/BWRateStatistics.h>
+#include <bcos-gateway/libratelimit/RateLimiterStatistics.h>
 #include <boost/lexical_cast.hpp>
 #include <iomanip>
 #include <optional>
@@ -32,8 +32,8 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimit;
 
-const std::string BWRateStatistics::TOTAL_INCOMING = " total    ";
-const std::string BWRateStatistics::TOTAL_OUTGOING = " total    ";
+const std::string RateLimiterStatistics::TOTAL_INCOMING = " total    ";
+const std::string RateLimiterStatistics::TOTAL_OUTGOING = " total    ";
 
 double Statistics::calcAvgRate(int64_t _data, int64_t _periodMS)
 {
@@ -65,22 +65,22 @@ std::optional<std::string> Statistics::toString(const std::string& _prefix, int6
     return ss.str();
 }
 
-std::string BWRateStatistics::toGroupKey(const std::string& _groupID)
+std::string RateLimiterStatistics::toGroupKey(const std::string& _groupID)
 {
     return " group :  " + _groupID;
 }
 
-std::string BWRateStatistics::toModuleKey(uint16_t _moduleID)
+std::string RateLimiterStatistics::toModuleKey(uint16_t _moduleID)
 {
     return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
 }
 
-std::string BWRateStatistics::toEndPointKey(const std::string& _ep)
+std::string RateLimiterStatistics::toEndPointKey(const std::string& _ep)
 {
     return " endpoint:  " + _ep;
 }
 
-void BWRateStatistics::updateInComing(const std::string& _endPoint, uint64_t _dataSize)
+void RateLimiterStatistics::updateInComing(const std::string& _endPoint, uint64_t _dataSize)
 {
     std::string epKey = toEndPointKey(_endPoint);
     std::string totalKey = TOTAL_OUTGOING;
@@ -100,7 +100,8 @@ void BWRateStatistics::updateInComing(const std::string& _endPoint, uint64_t _da
     epInStat.update(_dataSize);
 }
 
-void BWRateStatistics::updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc)
+void RateLimiterStatistics::updateOutGoing(
+    const std::string& _endPoint, uint64_t _dataSize, bool suc)
 {
     std::string epKey = toEndPointKey(_endPoint);
     std::string totalKey = TOTAL_OUTGOING;
@@ -125,7 +126,7 @@ void BWRateStatistics::updateOutGoing(const std::string& _endPoint, uint64_t _da
     }
 }
 
-void BWRateStatistics::updateInComing(
+void RateLimiterStatistics::updateInComing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize)
 {
     std::ignore = _moduleID;
@@ -155,7 +156,7 @@ void BWRateStatistics::updateInComing(
     */
 }
 
-void BWRateStatistics::updateOutGoing(
+void RateLimiterStatistics::updateOutGoing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
     std::ignore = _moduleID;
@@ -198,7 +199,7 @@ void BWRateStatistics::updateOutGoing(
     */
 }
 
-void BWRateStatistics::flushStat()
+void RateLimiterStatistics::flushStat()
 {
     {
         std::lock_guard<std::mutex> l(m_inLock);
@@ -217,7 +218,7 @@ void BWRateStatistics::flushStat()
     }
 }
 
-std::pair<std::string, std::string> BWRateStatistics::inAndOutStat(uint32_t _intervalMS)
+std::pair<std::string, std::string> RateLimiterStatistics::inAndOutStat(uint32_t _intervalMS)
 {
     std::string in = " <incoming bandwidth> :";
     {

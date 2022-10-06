@@ -44,7 +44,7 @@ public:
     };
 
     // config for rate limit
-    struct RateLimitConfig
+    struct RateLimiterConfig
     {
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
@@ -122,7 +122,7 @@ public:
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
-    RateLimitConfig rateLimitConfig() const { return m_rateLimitConfig; }
+    RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
 
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
@@ -145,11 +145,16 @@ private:
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
 
-    RateLimitConfig m_rateLimitConfig;
+    RateLimiterConfig m_rateLimiterConfig;
 
     std::string m_certPath;
     std::string m_nodePath;
     std::string m_nodeFileName;
+
+    // redis server
+    std::string m_redisServer;
+    // redis port
+    uint16_t m_redisPort;
 };
 
 }  // namespace gateway

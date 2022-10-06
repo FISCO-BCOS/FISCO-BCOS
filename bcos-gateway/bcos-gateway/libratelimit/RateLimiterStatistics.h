@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file BWRateStatistics.h
+ * @file RateLimiterStatistics.h
  * @author: octopus
  * @date 2022-06-30
  */
@@ -74,15 +74,15 @@ public:
     std::optional<std::string> toString(const std::string& _prefix, int64_t _periodMS);
 };
 
-class BWRateStatistics
+class RateLimiterStatistics
 {
 public:
     const static std::string TOTAL_INCOMING;
     const static std::string TOTAL_OUTGOING;
 
 public:
-    using Ptr = std::shared_ptr<BWRateStatistics>;
-    using ConstPtr = std::shared_ptr<const BWRateStatistics>;
+    using Ptr = std::shared_ptr<RateLimiterStatistics>;
+    using ConstPtr = std::shared_ptr<const RateLimiterStatistics>;
 
 public:
     void updateInComing(const std::string& _endPoint, uint64_t _dataSize);
