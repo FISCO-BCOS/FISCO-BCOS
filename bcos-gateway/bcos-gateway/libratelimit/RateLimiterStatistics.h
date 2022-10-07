@@ -35,7 +35,7 @@ namespace ratelimiter
 {
 
 //
-struct Statistics
+struct Stat
 {
     std::atomic<uint64_t> totalDataSize;
     std::atomic<uint64_t> lastDataSize;
@@ -102,15 +102,15 @@ public:
     std::pair<std::string, std::string> inAndOutStat(uint32_t _intervalMS);
 
 public:
-    const std::unordered_map<std::string, Statistics>& inStat() { return m_inStat; }
-    const std::unordered_map<std::string, Statistics>& outStat() { return m_outStat; }
+    const std::unordered_map<std::string, Stat>& inStat() { return m_inStat; }
+    const std::unordered_map<std::string, Stat>& outStat() { return m_outStat; }
 
 private:
     // TODO: How to clean up the disconnected connections
     std::mutex m_inLock;
     std::mutex m_outLock;
-    std::unordered_map<std::string, Statistics> m_inStat;
-    std::unordered_map<std::string, Statistics> m_outStat;
+    std::unordered_map<std::string, Stat> m_inStat;
+    std::unordered_map<std::string, Stat> m_outStat;
 };
 
 }  // namespace ratelimiter

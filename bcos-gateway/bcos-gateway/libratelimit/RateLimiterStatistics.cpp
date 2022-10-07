@@ -35,13 +35,13 @@ using namespace bcos::gateway::ratelimiter;
 const std::string RateLimiterStatistics::TOTAL_INCOMING = " total    ";
 const std::string RateLimiterStatistics::TOTAL_OUTGOING = " total    ";
 
-double Statistics::calcAvgRate(int64_t _data, int64_t _periodMS)
+double Stat::calcAvgRate(int64_t _data, int64_t _periodMS)
 {
     auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _periodMS;
     return avgRate;
 }
 
-std::optional<std::string> Statistics::toString(const std::string& _prefix, int64_t _periodMS)
+std::optional<std::string> Stat::toString(const std::string& _prefix, int64_t _periodMS)
 {
     if (lastDataSize.load() == 0)
     {
