@@ -1,7 +1,6 @@
 #include "DelegateHostContext.h"
 using namespace bcos;
 using namespace bcos::executor;
-
 DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameters,
     std::shared_ptr<TransactionExecutive> executive, std::string tableName)
   : HostContext(std::move(callParameters), executive, tableName)

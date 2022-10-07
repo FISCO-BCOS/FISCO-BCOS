@@ -2190,7 +2190,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setMessage(std::move(params->message));
     message->setLogEntries(std::move(params->logEntries));
     message->setNewEVMContractAddress(std::move(params->newEVMContractAddress));
-
     message->setDelegateCall(params->delegateCall);
     message->setDelegateCallAddress(std::move(params->codeAddress));
     message->setDelegateCallCode(std::move(params->delegateCallCode));
@@ -2365,7 +2364,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
-
     return callParameters;
 }
 

@@ -25,7 +25,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class DelegateHostContext : public HostContext
 {
 public:
