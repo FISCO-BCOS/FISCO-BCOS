@@ -344,6 +344,17 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         executiveState->callStack.push(newSeq);
         executiveState->message->setSeq(newSeq);
 
+        if (executiveState->message->data().toBytes() == bcos::protocol::GET_CODE_INPUT_BYTES)
+        {
+            // getCode
+            DMC_LOG(DEBUG) << "Get external code in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress());
+            bytes code = f_onGetCodeEvent(executiveState->message->delegateCallAddress());
+            executiveState->message->setData(code);
+            executiveState->message->setType(protocol::ExecutionMessage::FINISHED);
+            return MessageHint::NEED_SEND;
+        }
+
         if (executiveState->message->delegateCall())
         {
             bytes code = f_onGetCodeEvent(message->delegateCallAddress());

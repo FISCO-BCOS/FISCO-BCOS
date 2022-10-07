@@ -126,6 +126,25 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         input->delegateCallCode = toBytes(entry->get());
     }
 
+    if (input->data == bcos::protocol::GET_CODE_INPUT_BYTES)
+    {
+        EXECUTIVE_LOG(DEBUG) << "Get external code request"
+                             << LOG_KV("codeAddress", input->codeAddress);
+
+        auto tableName = getContractTableName(input->codeAddress, false);
+        auto& output = input;
+        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        if (!entry || entry->get().empty())
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            return std::move(output);
+        }
+        output->data = toBytes(entry->get());
+        return std::move(output);
+    }
+
     auto executive = std::make_shared<TransactionExecutive>(
         m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
 
