@@ -1458,10 +1458,9 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             auto executor = m_scheduler->executorManager()->dispatchCorrespondExecutor(address);
             if (!executor)
             {
-                SCHEDULER_LOG(ERROR)
-                    << "Could not dispatch correspond executor during getCode(). Trigger switch."
-                    << LOG_KV("address", address);
-                triggerSwitch();
+                SCHEDULER_LOG(DEBUG) << "Could not dispatch correspond executor during getCode(). "
+                                        "There may not be this address."
+                                     << LOG_KV("address", address);
                 return bcos::bytes();
             }
             else

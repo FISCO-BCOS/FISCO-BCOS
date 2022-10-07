@@ -2279,6 +2279,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, bool staticCall)
 {
     auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->status = input.status();
 
     switch (input.type())
     {
@@ -2289,6 +2290,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
+        callParameters->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
+        // callParameters->evmStatus = EVMC_REVERT;
         break;
     }
     case ExecutionMessage::FINISHED:
@@ -2323,7 +2326,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
-    callParameters->status = input.status();
     callParameters->keyLocks = input.takeKeyLocks();
     if (input.create())
     {

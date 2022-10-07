@@ -41,7 +41,8 @@ bool DmcExecutor::prepare()
             return true;
         });
 
-    bool hasScheduleOut = !m_executivePool.empty(MessageHint::NEED_SCHEDULE_OUT);
+    bool hasScheduleOut = !m_executivePool.empty(MessageHint::NEED_SCHEDULE_OUT) ||
+                          !m_executivePool.empty(MessageHint::NEED_PREPARE);
 
     // handle schedule out message
     m_executivePool.forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
@@ -348,14 +349,19 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
             bytes code = f_onGetCodeEvent(message->delegateCallAddress());
             if (code.empty())
             {
-                DMC_LOG(ERROR)
+                DMC_LOG(DEBUG)
                     << "Could not getCode() from correspond executor during delegateCall: "
                     << message->toString();
-                BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::ExecutorNotEstablishedError,
-                    "Could not getCode from correspond executor"));
+                message->setType(protocol::ExecutionMessage::REVERT);
+                message->setCreate(false);
+                message->setKeyLocks({});
+                message->setDelegateCall(false);
+                return MessageHint::NEED_PREPARE;
             }
-
-            executiveState->message->setDelegateCallCode(code);
+            else
+            {
+                executiveState->message->setDelegateCallCode(code);
+            }
         }
 
         return MessageHint::NEED_SEND;
