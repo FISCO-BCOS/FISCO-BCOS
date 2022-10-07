@@ -21,6 +21,7 @@
 #include <bcos-task/Wait.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <iterator>
@@ -50,17 +51,38 @@ public:
         m_groupID(std::move(groupID))
     {}
 
-    void toErrorResp(std::exception_ptr error, RespFunc& respFunc)
+    void toErrorResp(std::exception_ptr error, RespFunc respFunc)
     {
         try
         {
             std::rethrow_exception(error);
         }
-        catch (bcos::Error& bcosError)
+        catch (std::exception& e)
         {
-            Json::Value resp;
-            respFunc(std::make_shared<bcos::Error>(std::move(bcosError)), resp);
+            toErrorResp(error, std::move(respFunc));
         }
+    }
+
+    void toErrorResp(std::exception& error, RespFunc respFunc)
+    {
+        try
+        {
+            auto& bcosError = dynamic_cast<bcos::Error&>(error);
+            toErrorResp(std::make_shared<bcos::Error>(std::move(bcosError)), std::move(respFunc));
+        }
+        catch ([[maybe_unused]] std::bad_cast&)
+        {
+            // no bcos error
+            auto bcosError =
+                std::make_shared<bcos::Error>(-1, boost::diagnostic_information(error));
+            toErrorResp(std::move(bcosError), std::move(respFunc));
+        }
+    }
+
+    void toErrorResp(bcos::Error::Ptr error, RespFunc respFunc)
+    {
+        Json::Value resp;
+        respFunc(std::move(error), resp);
     }
 
     void call([[maybe_unused]] std::string_view groupID, [[maybe_unused]] std::string_view nodeName,
@@ -104,68 +126,65 @@ public:
         [[maybe_unused]] std::string_view _nodeName, std::string_view hexTransaction,
         [[maybe_unused]] bool requireProof, RespFunc respFunc) override
     {
-        bcos::bytes binData;
-        decodeData(hexTransaction, binData);
-        bcostars::Transaction transaction;
-        bcos::concepts::serialize::decode(binData, transaction);
+        bcos::task::wait([this](std::string_view hexTransaction,
+                             RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                bcos::bytes binData;
+                decodeData(hexTransaction, binData);
+                bcostars::Transaction transaction;
+                bcos::concepts::serialize::decode(binData, transaction);
 
-        bcos::bytes txHash;
-        bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
-        std::string txHashStr;
-        txHashStr.reserve(txHash.size() * 2);
-        boost::algorithm::hex_lower(txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
+                bcos::bytes txHash;
+                bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
+                std::string txHashStr;
+                txHashStr.reserve(txHash.size() * 2);
+                boost::algorithm::hex_lower(
+                    txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
 
-        LIGHTNODE_LOG(INFO) << "RPC send transaction request: "
-                            << "0x" << txHashStr;
+                LIGHTNODE_LOG(INFO) << "RPC send transaction request: "
+                                    << "0x" << txHashStr;
 
-        auto receipt = std::make_unique<bcostars::TransactionReceipt>();
-        auto& receiptRef = *receipt;
-        bcos::task::wait(
-            remoteTransactionPool().submitTransaction(std::move(transaction), receiptRef),
-            [this, m_receipt = std::move(receipt), m_txHashStr = std::move(txHashStr),
-                m_respFunc = std::move(respFunc)](std::exception_ptr error = {}) mutable {
-                if (error)
-                {
-                    toErrorResp(error, m_respFunc);
-                    return;
-                }
+                bcostars::TransactionReceipt receipt;
+                co_await remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
 
                 Json::Value resp;
-                toJsonResp<Hasher>(*m_receipt, m_txHashStr, resp);
+                toJsonResp<Hasher>(receipt, txHashStr, resp);
 
                 LIGHTNODE_LOG(INFO) << "RPC send transaction finished";
-                m_respFunc(nullptr, resp);
-            });
+                respFunc(nullptr, resp);
+            }
+            catch (std::exception& error)
+            {
+                toErrorResp(error, std::move(respFunc));
+            }
+        }(hexTransaction, std::move(respFunc)));
     }
 
     void getTransaction([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view txHash,
         [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get transaction request: " << txHash;
+        bcos::task::wait([this](std::string txHash, RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                LIGHTNODE_LOG(INFO) << "RPC get transaction request: " << txHash;
 
-        auto hashes = std::make_unique<std::array<bcos::h256, 1>>();
-        (*hashes)[0] = bcos::h256{txHash, bcos::h256::FromHex};
+                std::array<bcos::h256, 1> hashes{bcos::h256{txHash, bcos::h256::FromHex}};
+                std::vector<bcostars::Transaction> transactions;
 
-        auto transactions = std::make_unique<std::vector<bcostars::Transaction>>();
-
-        auto& hashesRef = *hashes;
-        auto& transactionsRef = *transactions;
-        bcos::task::wait(remoteLedger().getTransactions(hashesRef, transactionsRef),
-            [this, m_hashes = std::move(hashes), m_transactions = std::move(transactions),
-                m_respFunc = std::move(_respFunc)](std::exception_ptr error = {}) mutable {
-                if (error)
-                {
-                    toErrorResp(error, m_respFunc);
-                    return;
-                }
+                co_await remoteLedger().getTransactions(hashes, transactions);
 
                 Json::Value resp;
-                toJsonResp<Hasher>((*m_transactions)[0], resp);
+                toJsonResp<Hasher>(transactions[0], resp);
 
-                LIGHTNODE_LOG(INFO) << "RPC get transaction finished";
-                m_respFunc(nullptr, resp);
-            });
+                respFunc(nullptr, resp);
+            }
+            catch (std::exception& error)
+            {
+                toErrorResp(error, std::move(respFunc));
+            }
+        }(std::string(txHash), std::move(_respFunc)));
     }
 
     void getTransactionReceipt([[maybe_unused]] std::string_view groupID,

@@ -43,8 +43,6 @@ public:
                 constexpr bool await_ready() const noexcept { return false; }
                 void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) noexcept
                 {
-                    std::cout << "Final suspend: " << handle.address() << " | "
-                              << handle.promise().m_continuationHandle.address() << std::endl;
                     if (handle.promise().m_continuationHandle)
                     {
                         handle.promise().m_continuationHandle.resume();
@@ -59,7 +57,6 @@ public:
         {
             auto handle = CO_STD::coroutine_handle<promise_type>::from_promise(
                 *static_cast<PromiseImpl*>(this));
-            std::cout << "Creating: " << handle.address() << std::endl;
             return TaskImpl(handle);
         }
         void unhandled_exception()
