@@ -362,6 +362,9 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     [flow_control]
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
+    ;
+    ; rate limiter stat reporter info level, default: 1
+    ; stat_reporter_level=1
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
@@ -394,6 +397,9 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
 
     // stat_reporter_interval=60000
     int32_t statReporterInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
+
+    // stat_reporter_level=1
+    int32_t statReporterLevel = _pt.get<int32_t>("flow_control.stat_reporter_level", 1);
 
     // modules_without_bw_limit=raft,pbft
     std::string strNoLimitModules =
@@ -517,6 +523,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     }
 
     m_rateLimiterConfig.statReporterInterval = statReporterInterval;
+    m_rateLimiterConfig.statReporterLevel = statReporterLevel;
     m_rateLimiterConfig.modulesWithNoBwLimit = moduleIDs;
     m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
     m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
@@ -542,6 +549,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("rateLimiterConfigEffect",
                                     m_rateLimiterConfig.hasRateLimiterConfigEffect())
                              << LOG_KV("statReporterInterval", statReporterInterval)
+                             << LOG_KV("statReporterLevel", statReporterLevel)
                              << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
                              << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
                              << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)

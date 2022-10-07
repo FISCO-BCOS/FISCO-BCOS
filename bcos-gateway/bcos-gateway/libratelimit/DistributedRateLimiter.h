@@ -30,11 +30,6 @@ namespace gateway
 namespace ratelimiter
 {
 
-/**
- * @brief
- * Distributed limited bandwidth
- */
-
 class DistributedRateLimiter : public RateLimiterInterface
 {
 public:

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/GateWayRateLimiter.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-gateway/Common.h>
@@ -40,16 +41,14 @@ public:
     using Ptr = std::shared_ptr<Gateway>;
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
-        ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
-        ratelimiter::RateLimiterStat::Ptr _rateLimiterStat,
+        ratelimiter::GateWayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
         m_chainID(_chainID),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop),
-        m_rateLimiterManager(_rateLimiterManager),
-        m_rateLimiterStat(_rateLimiterStat)
+        m_gatewayRateLimiter(_gatewayRateLimiter)
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -58,20 +57,6 @@ public:
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
-
-        m_rateLimiterStatTimer =
-            std::make_shared<Timer>(m_rateLimiterStatPeriodMS, "ratelimiter_reporter");
-        auto rateLimiterStatTimer = m_rateLimiterStatTimer;
-        auto rateLimiterStatPeriodMS = m_rateLimiterStatPeriodMS;
-        m_rateLimiterStatTimer->registerTimeoutHandler(
-            [rateLimiterStatTimer, rateLimiterStatPeriodMS, _rateLimiterStat,
-                _rateLimiterManager]() {
-                auto io = _rateLimiterStat->inAndOutStat(rateLimiterStatPeriodMS);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.first);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.second);
-                _rateLimiterStat->flushStat();
-                rateLimiterStatTimer->restart();
-            });
     }
     ~Gateway() override { stop(); }
 
@@ -193,19 +178,6 @@ public:
         return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
-    // gateway traffic limiting policy impl
-    bool checkBWRateLimit(ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
-        const std::string& _endPoint, const std::string& _groupID, uint16_t _moduleID,
-        uint64_t _msgLength, SessionCallbackFunc _callback);
-    bool checkBWRateLimit(
-        SessionFace::Ptr _session, Message::Ptr _msg, SessionCallbackFunc _callback);
-
-    uint32_t rateLimiterStatPeriodMS() const { return m_rateLimiterStatPeriodMS; }
-    void setRateLimiterStatPeriodMS(uint32_t _rateLimiterStatPeriodMS)
-    {
-        m_rateLimiterStatPeriodMS = _rateLimiterStatPeriodMS;
-    }
-
 protected:
     // for UT
     Gateway() {}
@@ -234,15 +206,8 @@ private:
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
 
-    // For bandwidth limitation
-    ratelimiter::RateLimiterManager::Ptr m_rateLimiterManager;
     // For bandwidth statistics
-    ratelimiter::RateLimiterStat::Ptr m_rateLimiterStat;
-
-    //
-    uint32_t m_rateLimiterStatPeriodMS = 60000;  // ms
-    // the timer that periodically prints the rate
-    std::shared_ptr<Timer> m_rateLimiterStatTimer;
+    ratelimiter::GateWayRateLimiter::Ptr m_gatewayRateLimiter;
 };
 }  // namespace gateway
 }  // namespace bcos
