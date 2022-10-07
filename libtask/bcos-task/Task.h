@@ -159,6 +159,8 @@ public:
     };
     Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
 
+    constexpr bool lazy() const { return type == Type::LAZY; }
+
     friend Awaitable;
 };
 
