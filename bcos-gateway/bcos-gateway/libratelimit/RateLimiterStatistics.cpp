@@ -30,7 +30,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimit;
+using namespace bcos::gateway::ratelimiter;
 
 const std::string RateLimiterStatistics::TOTAL_INCOMING = " total    ";
 const std::string RateLimiterStatistics::TOTAL_OUTGOING = " total    ";

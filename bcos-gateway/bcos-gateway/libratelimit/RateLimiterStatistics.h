@@ -31,7 +31,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 //
@@ -113,6 +113,6 @@ private:
     std::unordered_map<std::string, Statistics> m_outStat;
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

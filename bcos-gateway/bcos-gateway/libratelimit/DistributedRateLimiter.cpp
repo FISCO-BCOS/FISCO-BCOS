@@ -28,7 +28,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimit;
+using namespace bcos::gateway::ratelimiter;
 
 DistributedRateLimiter::DistributedRateLimiter(int64_t _maxQPS)
 {

@@ -27,7 +27,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 /**
@@ -80,6 +80,6 @@ public:
     void rollback(int64_t _requiredPermits) override;
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

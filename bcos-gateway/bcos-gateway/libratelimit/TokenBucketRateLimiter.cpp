@@ -26,7 +26,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimit;
+using namespace bcos::gateway::ratelimiter;
 
 TokenBucketRateLimiter::TokenBucketRateLimiter(int64_t _maxQPS)
   : m_maxQPS(_maxQPS),

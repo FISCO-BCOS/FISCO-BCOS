@@ -150,11 +150,6 @@ private:
     std::string m_certPath;
     std::string m_nodePath;
     std::string m_nodeFileName;
-
-    // redis server
-    std::string m_redisServer;
-    // redis port
-    uint16_t m_redisPort;
 };
 
 }  // namespace gateway
