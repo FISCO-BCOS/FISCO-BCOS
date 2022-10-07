@@ -46,8 +46,13 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
-        // report interval ms
+        // stat reporter interval ms
         int32_t statReporterInterval = 60000;
+        // stat reporter info level
+        // 0:
+        // 1:
+        // 2:
+        int32_t statReporterLevel = 0;
 
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
