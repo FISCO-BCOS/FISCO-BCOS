@@ -43,6 +43,15 @@ public:
         std::string enNodeKey;
     };
 
+    // config for redis
+    struct RedisConfig
+    {
+        std::string redisServerIP = "127.0.0.1";
+        uint16_t redisServerPort = 6379;
+        int32_t redisTimeOut = -1;
+        int32_t redisPoolSize = 16;
+    };
+
     // config for rate limit
     struct RateLimiterConfig
     {
@@ -128,6 +137,7 @@ public:
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
     RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
+    RedisConfig redisConfig() const { return m_redisConfig; }
 
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
@@ -151,6 +161,7 @@ private:
     SMCertConfig m_smCertConfig;
 
     RateLimiterConfig m_rateLimiterConfig;
+    RedisConfig m_redisConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

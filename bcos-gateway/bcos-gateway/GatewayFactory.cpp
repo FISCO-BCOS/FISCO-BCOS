@@ -5,6 +5,8 @@
 
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/GateWayRateLimiter.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -29,7 +31,11 @@
 #include <openssl/asn1.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <chrono>
+#include <exception>
 #include <memory>
+#include <string>
+#include <thread>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -396,10 +402,11 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     rateLimiterManager->setModulesWithNoBwLimit(_rateLimiterConfig.modulesWithNoBwLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
 
-
+    /*
     // TODO:
     auto dsRateLimiter = std::make_shared<ratelimiter::DistributedRateLimiter>(-1);
     std::ignore = dsRateLimiter;
+    */
 
     return rateLimiterManager;
 }
@@ -467,6 +474,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->setMessageFactory(messageFactory);
         service->setKeyFactory(keyFactory);
 
+// TODO: add the redis initialization switch
+#if 0
+        auto redisConfig = _config->redisConfig();
+
+        auto redis = initRedis(redisConfig.redisServerIP, redisConfig.redisServerPort,
+            redisConfig.redisPoolSize, redisConfig.redisTimeOut);
+#endif
+
         // init rate limit
         const auto& rateLimiterConfig = _config->rateLimiterConfig();
         auto rateLimiterManager = buildRateLimiterManager(_config->rateLimiterConfig());
@@ -504,8 +519,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop,
-            gatewayRateLimiter, _gatewayServiceName);
+        auto gateway = std::make_shared<Gateway>(
+            m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
@@ -544,12 +559,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
             std::string groupID = msgExtAttributes ? msgExtAttributes->groupID() : std::string();
             uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
-            std::string endPoint = _session->nodeIPEndpoint().address();
+            std::string endpoint = _session->nodeIPEndpoint().address();
             uint64_t msgLength = _msg->length();
 
             // bandwidth limit check
-            auto r = gatewayRateLimiter->checkOutGoing(endPoint, groupID, moduleID, msgLength);
-
+            auto r = gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
             if (!r.first && _callback)
             {
                 _callback(NetworkException(BandwidthOverFlow, r.second), Message::Ptr());
@@ -563,9 +577,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 auto rateLimiterStat = rateLimiterStatWeakPtr.lock();
                 if (rateLimiterStat)
                 {
-                    auto endPoint = _session->nodeIPEndpoint().address();
+                    auto endpoint = _session->nodeIPEndpoint().address();
                     auto msgLength = _message->length();
-                    rateLimiterStat->updateInComing(endPoint, msgLength);
+                    rateLimiterStat->updateInComing(endpoint, msgLength);
                 }
             });
 
@@ -630,6 +644,97 @@ void GatewayFactory::initFailOver(
             }
         });
     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initFailOver for gateway success");
+}
+
+/**
+ * @brief init redis
+ *
+ * @param _redisIP
+ * @param _redisPort
+ * @param _redisPoolSize
+ * @param _redisTimeOut
+ * @return std::shared_ptr<sw::redis::Redis>
+ */
+std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(const std::string& _redisIP,
+    uint16_t _redisPort, uint32_t _redisPoolSize, uint32_t _redisTimeOut)
+{
+    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_KV("redisIP", _redisIP)
+                              << LOG_KV("redisPort", _redisPort)
+                              << LOG_KV("redisPoolSize", _redisPoolSize)
+                              << LOG_KV("redisTimeOut(ms)", _redisTimeOut);
+
+    sw::redis::ConnectionOptions connection_options;
+    connection_options.host = _redisIP;    // Required.
+    connection_options.port = _redisPort;  // Optional.
+    // connection_options.password = "auth";  // Optional. No password by default.
+    // connection_options.db = 1;  // Optional. Use the 0th database by default.
+
+    // Optional. Timeout before we successfully send request to or receive response from redis.
+    // By default, the timeout is 0ms, i.e. never timeout and block until we send or receive
+    // successfully. NOTE: if any command is timed out, we throw a TimeoutError exception.
+    connection_options.socket_timeout = std::chrono::milliseconds(_redisTimeOut);
+    // connection_options.connect_timeout = std::chrono::milliseconds(3000);
+    connection_options.keep_alive = true;
+
+    sw::redis::ConnectionPoolOptions pool_options;
+    // Pool size, i.e. max number of connections.
+    pool_options.size = _redisPoolSize;
+
+    std::shared_ptr<sw::redis::Redis> redis = nullptr;
+    try
+    {
+        // Connect to Redis server with a connection pool.
+        redis = std::make_shared<sw::redis::Redis>(connection_options, pool_options);
+
+        // test whether redis functions properly
+        // 1. set key
+        // 2. get key
+        // 3. del key
+
+        std::string key = "Gateway -> " + std::to_string(utcTime());
+        std::string value = "Hello, FISCO-BCOS 3.0.";
+
+        bool setR = redis->set(key, value);
+        if (setR)
+        {
+            GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("set ok");
+
+            auto getR = redis->get(key);
+            if (getR)
+            {
+                GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("get ok")
+                                          << LOG_KV("key", key) << LOG_KV("value", getR.value());
+            }
+            else
+            {
+                GATEWAY_FACTORY_LOG(WARNING)
+                    << LOG_BADGE("initRedis") << LOG_DESC("get failed, why???");
+            }
+
+            redis->del(key);
+        }
+        else
+        {
+            GATEWAY_FACTORY_LOG(WARNING)
+                << LOG_BADGE("initRedis") << LOG_DESC("set failed, why???");
+        }
+    }
+    catch (std::exception& e)
+    {
+        // Note: redis++ exception handling
+        //  https://github.com/sewenew/redis-plus-plus#exception
+        std::exception_ptr ePtr = std::make_exception_ptr(e);
+
+        GATEWAY_FACTORY_LOG(ERROR)
+            << LOG_BADGE("initRedis") << LOG_DESC("initialize redis exception")
+            << LOG_KV("error", e.what());
+
+        std::throw_with_nested(e);
+    }
+
+    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("initialize redis completely");
+
+    return redis;
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(

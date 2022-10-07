@@ -22,6 +22,7 @@
 
 #include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
+#include <sw/redis++/redis++.h>
 
 namespace bcos
 {
@@ -38,7 +39,10 @@ public:
     using UniquePtr = std::unique_ptr<const DistributedRateLimiter>;
 
 public:
-    DistributedRateLimiter(int64_t _maxQPS);
+    DistributedRateLimiter(const std::string& _rateLimitKey, int64_t _tokenRate,
+        std::shared_ptr<sw::redis::Redis> _redis)
+      : m_rateLimitKey(_rateLimitKey), m_tokenRate(_tokenRate), m_redis(_redis)
+    {}
 
     DistributedRateLimiter(DistributedRateLimiter&&) = delete;
     DistributedRateLimiter(const DistributedRateLimiter&) = delete;
@@ -73,6 +77,19 @@ public:
      * @return
      */
     void rollback(int64_t _requiredPermits) override;
+
+public:
+    std::string rateLimitKey() const { return m_rateLimitKey; }
+    int64_t tokenRate() const { return m_tokenRate; }
+    std::shared_ptr<sw::redis::Redis> redis() const { return m_redis; }
+
+private:
+    // key of distributed  limit
+    std::string m_rateLimitKey;
+    // rate
+    int64_t m_tokenRate;
+    // redis instance
+    std::shared_ptr<sw::redis::Redis> m_redis;
 };
 
 }  // namespace ratelimiter

@@ -22,11 +22,11 @@
 
 using namespace bcos::gateway::ratelimiter;
 
-std::pair<bool, std::string> GateWayRateLimiter::checkOutGoing(const std::string& _endPoint,
+std::pair<bool, std::string> GateWayRateLimiter::checkOutGoing(const std::string& _endpoint,
     const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength)
 {
     // endpoint of the p2p connection
-    const std::string& endPoint = _endPoint;
+    const std::string& endpoint = _endpoint;
     // group of the message, empty string means the message is p2p's own message
     const std::string& groupID = _groupID;
     // moduleID of the message, zero means the message is p2p's own message
@@ -44,7 +44,7 @@ std::pair<bool, std::string> GateWayRateLimiter::checkOutGoing(const std::string
 
         // connection outgoing bandwidth
         ratelimiter::RateLimiterInterface::Ptr connOutGoingBWLimit =
-            m_rateLimiterManager->getConnRateLimiter(endPoint);
+            m_rateLimiterManager->getConnRateLimiter(endpoint);
 
         // group outgoing bandwidth
         ratelimiter::RateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
@@ -105,7 +105,7 @@ std::pair<bool, std::string> GateWayRateLimiter::checkOutGoing(const std::string
             {
                 // connection outgoing bandwidth overflow
                 errorMsg =
-                    "the network connection outgoing bandwidth overflow, endpoint: " + endPoint;
+                    "the network connection outgoing bandwidth overflow, endpoint: " + endpoint;
                 if (totalOutGoingBWLimit)
                 {
                     totalOutGoingBWLimit->rollback(msgLength);
@@ -132,13 +132,13 @@ std::pair<bool, std::string> GateWayRateLimiter::checkOutGoing(const std::string
             }
         }
 
-        m_rateLimiterStat->updateOutGoing(endPoint, msgLength, true);
+        m_rateLimiterStat->updateOutGoing(endpoint, msgLength, true);
         m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, true);
 
         return std::pair<bool, std::string>(true, "");
     } while (0);
 
-    m_rateLimiterStat->updateOutGoing(endPoint, msgLength, false);
+    m_rateLimiterStat->updateOutGoing(endpoint, msgLength, false);
     m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
 
     return std::pair<bool, std::string>(false, errorMsg);
