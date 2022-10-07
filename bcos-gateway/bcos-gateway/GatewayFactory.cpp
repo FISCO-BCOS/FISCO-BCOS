@@ -467,9 +467,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         const auto& rateLimiterConfig = _config->rateLimiterConfig();
         auto rateLimiterManager = buildRateLimiterManager(_config->rateLimiterConfig());
 
-        auto rateLimiterStatistics = std::make_shared<ratelimiter::RateLimiterStatistics>();
-        auto rateLimiterStatisticsWeakPtr =
-            std::weak_ptr<ratelimiter::RateLimiterStatistics>(rateLimiterStatistics);
+        auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
+        auto rateLimiterStatWeakPtr = std::weak_ptr<ratelimiter::RateLimiterStat>(rateLimiterStat);
 
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
@@ -497,7 +496,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
         // init Gateway
         auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop,
-            rateLimiterManager, rateLimiterStatistics, _gatewayServiceName);
+            rateLimiterManager, rateLimiterStat, _gatewayServiceName);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
@@ -534,13 +533,13 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         });
 
         service->setOnMessageHandler(
-            [rateLimiterStatisticsWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
-                auto rateLimiterStatistics = rateLimiterStatisticsWeakPtr.lock();
-                if (rateLimiterStatistics)
+            [rateLimiterStatWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
+                auto rateLimiterStat = rateLimiterStatWeakPtr.lock();
+                if (rateLimiterStat)
                 {
                     auto endPoint = _session->nodeIPEndpoint().address();
                     auto msgLength = _message->length();
-                    rateLimiterStatistics->updateInComing(endPoint, msgLength);
+                    rateLimiterStat->updateInComing(endPoint, msgLength);
                 }
             });
 
