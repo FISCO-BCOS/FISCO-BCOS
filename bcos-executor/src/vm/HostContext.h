@@ -145,6 +145,7 @@ public:
 
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
+    virtual bcos::bytes externalCodeRequest(const std::string_view& _a);
 
 private:
     void depositFungibleAsset(

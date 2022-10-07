@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief interface of ExecutionParams
- * @file ExecutionParams.h
+ * @file ExecutionMessage.h
  * @author: ancelmo
  * @date: 2021-09-22
  */
@@ -35,6 +35,8 @@ namespace protocol
 
 static const std::string SERIAL_EXECUTIVE_FLOW_ADDRESS =
     std::string("serial_executive_flow_address");
+
+const bcos::bytes GET_CODE_INPUT_BYTES = asBytes(std::string("getCode"));
 
 class ExecutionMessage
 {

@@ -26,6 +26,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
+#include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
@@ -123,15 +124,21 @@ void HostContext::set(const std::string_view& _key, std::string _value)
     m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
-std::string evmAddress2String(const evmc_address& address)
+
+std::string addressBytesStr2String(std::string_view receiveAddressBytes)
 {
     std::string strAddress;
-    auto receiveAddressBytes = fromEvmC(address);
     strAddress.reserve(receiveAddressBytes.size() * 2);
     boost::algorithm::hex_lower(
         receiveAddressBytes.begin(), receiveAddressBytes.end(), std::back_inserter(strAddress));
 
     return std::move(strAddress);
+}
+
+std::string evmAddress2String(const evmc_address& address)
+{
+    auto receiveAddressBytes = fromEvmC(address);
+    return addressBytesStr2String(receiveAddressBytes);
 }
 
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
@@ -164,6 +171,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         break;
     case EVMC_DELEGATECALL:
+    case EVMC_CALLCODE:
     {
         if (!m_executive->blockContext().lock()->isWasm())
         {
@@ -185,14 +193,6 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         result.gas_left = 0;
         return result;
     }
-
-    case EVMC_CALLCODE:
-        // TODO: implement this, don't forget the compatibility
-        evmc_result result;
-        result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
-        result.release = nullptr;  // no output to release
-        result.gas_left = 0;
-        return result;
     case EVMC_CREATE:
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
@@ -331,16 +331,41 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
     }
 }
 
+bcos::bytes HostContext::externalCodeRequest(const std::string_view& _a)
+{
+    auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    request->senderAddress = myAddress();
+    request->receiveAddress = myAddress();
+    request->data = bcos::protocol::GET_CODE_INPUT_BYTES;
+    request->origin = origin();
+    request->status = 0;
+    request->delegateCall = false;
+    request->codeAddress = addressBytesStr2String(_a);
+    auto response = m_executive->externalCall(std::move(request));
+    return std::move(response->data);
+}
+
 size_t HostContext::codeSizeAt(const std::string_view& _a)
 {
-    (void)_a;
-    return 1;  // TODO: 1 code size ok?
+    auto blockContext = m_executive->blockContext().lock();
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    {
+        auto code = externalCodeRequest(_a);
+        return code.size() * 2;  // OPCODE num is bytes.size * 2
+    }
+    return 1;
 }
 
 h256 HostContext::codeHashAt(const std::string_view& _a)
 {
-    (void)_a;
-    return h256();  // TODO: ok?
+    auto blockContext = m_executive->blockContext().lock();
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    {
+        auto code = externalCodeRequest(_a);
+        auto hash = hashImpl()->hash(code).asBytes();
+        return h256(hash);
+    }
+    return h256(0);
 }
 
 VMSchedule const& HostContext::vmSchedule() const
