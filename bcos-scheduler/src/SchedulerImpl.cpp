@@ -825,9 +825,9 @@ void SchedulerImpl::preExecuteBlock(
 
         blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
-        setPreparedBlock(blockNumber, timestamp, blockExecutive);
-
         blockExecutive->prepare();
+
+        setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
         callback(nullptr);
     }

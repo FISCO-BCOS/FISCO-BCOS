@@ -900,7 +900,7 @@ void BlockExecutive::DMCExecute(
 
             // handle batch result(only one thread can get in here)
             DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                          << "DMCExecute.5:\t <<< Joint all executor result\t"
+                          << "DMCExecute.5:\t <<< Join all executor result\t"
                           << LOG_KV("round", m_dmcRecorder->getRound())
                           << LOG_KV("checksum", m_dmcRecorder->getChecksum())
                           << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
@@ -951,6 +951,12 @@ void BlockExecutive::DMCExecute(
                          << LOG_KV("message", e.errorMessage());
         callback(
             std::make_unique<bcos::Error>(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
+    }
+    catch (...)
+    {
+        DMC_LOG(WARNING) << "DMCExecute exception. ";
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, "DMCExecute exception"),
+            nullptr, m_isSysBlock);
     }
 }
 
@@ -1217,6 +1223,8 @@ void BlockExecutive::batchBlockCommit(
         params, [rollbackVersion, status, this, callback](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
+//#define COMMIT_FAILED_NEED_ROLLBACK
+#ifdef COMMIT_FAILED_NEED_ROLLBACK
                 SCHEDULER_LOG(ERROR)
                     << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
                     << error->errorMessage();
@@ -1240,6 +1248,14 @@ void BlockExecutive::batchBlockCommit(
                         return;
                     }
                 });
+#else
+                SCHEDULER_LOG(WARNING)
+                        << BLOCK_NUMBER(number())
+                        << "Commit scheduler storage error, just return with no rollback" << error->errorMessage()
+                        << LOG_KV("rollbackVersion", rollbackVersion);
+                callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
+                            "Commit scheduler storage error, just return with no rollback"));
+#endif
                 return;
             }
             else
@@ -1437,6 +1453,41 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
                 onTxFinish(std::move(output));
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
+
+        dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
+            auto executor = m_scheduler->executorManager()->dispatchCorrespondExecutor(address);
+            if (!executor)
+            {
+                SCHEDULER_LOG(DEBUG) << "Could not dispatch correspond executor during getCode(). "
+                                        "There may not be this address."
+                                     << LOG_KV("address", address);
+                return bcos::bytes();
+            }
+            else
+            {
+                // getCode from executor
+                std::promise<bcos::bytes> codeFuture;
+                executor->getCode(
+                    address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
+                        if (error)
+                        {
+                            SCHEDULER_LOG(ERROR)
+                                << "Could not getCode from correspond executor. Trigger switch."
+                                << LOG_KV("code", error->errorCode())
+                                << LOG_KV("message", error->errorMessage());
+                            triggerSwitch();
+                            codeFuture.set_value(bcos::bytes());
+                        }
+                        else
+                        {
+                            codeFuture.set_value(std::move(codes));
+                        }
+                    });
+                bcos::bytes codes = std::move(codeFuture.get_future().get());
+
+                return codes;
+            }
+        });
 
         return dmcExecutor;
     }

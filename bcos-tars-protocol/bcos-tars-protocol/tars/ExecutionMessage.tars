@@ -24,5 +24,9 @@ struct ExecutionMessage
     20 optional string newEVMContractAddress;
     21 optional vector<string> keyLocks;
     22 optional string keyLockAcquired;
+    23 require bool delegateCall = false;
+    24 optional string delegateCallAddress;
+    25 optional vector<byte> delegateCallCode;
+    26 optional string delegateCallSender;
 };
 };

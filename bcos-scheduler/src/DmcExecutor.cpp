@@ -41,7 +41,8 @@ bool DmcExecutor::prepare()
             return true;
         });
 
-    bool hasScheduleOut = !m_executivePool.empty(MessageHint::NEED_SCHEDULE_OUT);
+    bool hasScheduleOut = !m_executivePool.empty(MessageHint::NEED_SCHEDULE_OUT) ||
+                          !m_executivePool.empty(MessageHint::NEED_PREPARE);
 
     // handle schedule out message
     m_executivePool.forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
@@ -342,6 +343,26 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         auto newSeq = executiveState->currentSeq++;
         executiveState->callStack.push(newSeq);
         executiveState->message->setSeq(newSeq);
+
+        if (executiveState->message->delegateCall())
+        {
+            bytes code = f_onGetCodeEvent(message->delegateCallAddress());
+            if (code.empty())
+            {
+                DMC_LOG(DEBUG)
+                    << "Could not getCode() from correspond executor during delegateCall: "
+                    << message->toString();
+                message->setType(protocol::ExecutionMessage::REVERT);
+                message->setCreate(false);
+                message->setKeyLocks({});
+                message->setDelegateCall(false);
+                return MessageHint::NEED_PREPARE;
+            }
+            else
+            {
+                executiveState->message->setDelegateCallCode(code);
+            }
+        }
 
         return MessageHint::NEED_SEND;
     }
