@@ -1,5 +1,4 @@
 #include "DelegateHostContext.h"
-
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -13,7 +12,6 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
                             << getCallParameters()->toFullString();
         exit(1);
     }
-
     setCode(getCallParameters()->delegateCallCode);
 }
 
@@ -29,7 +27,6 @@ bool DelegateHostContext::setCode(bytes code)
     m_code = codeEntry;
     return true;
 }
-
 
 std::string_view DelegateHostContext::caller() const
 {

@@ -65,7 +65,6 @@ struct CallParameters
     bytes delegateCallCode;
     std::string delegateCallSender;
 
-
     std::string toString()
     {
         std::stringstream ss;

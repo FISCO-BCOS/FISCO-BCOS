@@ -134,7 +134,6 @@ std::string evmAddress2String(const evmc_address& address)
     return std::move(strAddress);
 }
 
-
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
 {
     // Convert evmc_message to CallParameters

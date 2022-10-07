@@ -118,13 +118,11 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             auto& output = input;
             EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
                                  << LOG_KV("codeAddress", input->codeAddress);
-
             output->data = bytes();
             output->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
             // output->evmStatus = EVMC_REVERT; remember to update TransactionExecutor.cpp:2293
             return std::move(output);
         }
-
         input->delegateCallCode = toBytes(entry->get());
     }
 
@@ -917,8 +915,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     callResults->type = CallParameters::REVERT;
     // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm
     // need this
-    // callResults->evmStatus = _result.status(); remember to set EVMC_REVERT in delegatecall(ask
-    // jimmyshi)
+    // callResults->evmStatus = _result.status(); remember set in delegatecall(ask jimmyshi)
     auto outputRef = _result.output();
     switch (_result.status())
     {

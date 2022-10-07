@@ -18,9 +18,7 @@
  * @author: xingqiangbai
  * @date: 2022-09-30
  */
-
 #pragma once
-
 #include "HostContext.h"
 
 namespace bcos
@@ -35,11 +33,8 @@ public:
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
 
     virtual ~DelegateHostContext() = default;
-
     std::optional<storage::Entry> code() override;
-
     bool setCode(bytes code) override;
-
     std::string_view caller() const override;
 
 private:
