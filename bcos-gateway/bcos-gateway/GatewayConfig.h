@@ -46,6 +46,9 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
+        // report interval ms
+        int32_t statReporterInterval = 60000;
+
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
 
@@ -63,7 +66,7 @@ public:
         std::set<uint16_t> modulesWithNoBwLimit;
 
         // whether any configuration takes effect
-        bool isConfigEffect() const
+        bool hasRateLimiterConfigEffect() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
