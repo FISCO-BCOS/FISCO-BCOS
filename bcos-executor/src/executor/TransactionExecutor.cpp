@@ -1797,14 +1797,24 @@ void TransactionExecutor::getCode(
 
     storage::StateStorageInterface::Ptr stateStorage;
 
-    // create temp state storage
-    if (m_cachedStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage);
+        std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
+        if (!m_stateStorages.empty())
+        {
+            stateStorage = m_stateStorages.front().storage;
+        }
     }
-    else
+    // create temp state storage
+    if (!stateStorage)
     {
-        stateStorage = createStateStorage(m_backendStorage);
+        if (m_cachedStorage)
+        {
+            stateStorage = createStateStorage(m_cachedStorage);
+        }
+        else
+        {
+            stateStorage = createStateStorage(m_backendStorage);
+        }
     }
 
     auto tableName = getContractTableName(contract);
