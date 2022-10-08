@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+    cmake_minimum_required(VERSION 3.14)
 
 if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
@@ -30,6 +30,10 @@ add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-utilities)
+
+if(WITH_LIGHTNODE)
+    add_subdirectory(lightnode)
+endif()
 
 if(FULLNODE)
     include(ProjectWABT)
@@ -71,10 +75,6 @@ endif()
 
 if(WITH_CPPSDK)
     add_subdirectory(bcos-sdk)
-endif()
-
-if(WITH_LIGHTNODE)
-    add_subdirectory(lightnode)
 endif()
 
 if(WITH_BENCHMARK)
