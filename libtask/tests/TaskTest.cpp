@@ -74,12 +74,13 @@ Task<int> asyncLevel2(tbb::task_group& taskGroup)
         void await_suspend(CO_STD::coroutine_handle<> handle)
         {
             std::cout << "Start run async thread: " << handle.address() << std::endl;
-            taskGroup.run([this, m_handle = std::move(handle)]() mutable {
+            taskGroup.run([this, m_handle = std::move(handle)]() {
                 std::this_thread::sleep_for(std::chrono::seconds(2));
                 num = 100;
 
                 std::cout << "Call m_handle.resume(): " << m_handle.address() << std::endl;
-                m_handle.resume();
+                auto handle = const_cast<decltype(m_handle)&>(m_handle);
+                handle.resume();
             });
         }
 

@@ -46,13 +46,11 @@ public:
     uint64_t receiptsSize() const override { return 0; }
     void setNonceList(const protocol::NonceList& _nonceList) override {}
     void setNonceList(protocol::NonceList&& _nonceList) override {}
-    const protocol::NonceList& nonceList() const override
-    {
-        return std::move(protocol::NonceList());
-    }
+    const protocol::NonceList& nonceList() const override { return m_nonceList; }
 
 
 private:
     protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);
+    protocol::NonceList m_nonceList;
 };
 }  // namespace bcos::test
