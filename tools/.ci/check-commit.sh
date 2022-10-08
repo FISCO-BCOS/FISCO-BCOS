@@ -76,6 +76,7 @@ function check_PR_limit() {
     # fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
     local empty_lines=$(git diff HEAD^ | grep -P '^\s*$' | wc -l)
+    local block_lines=$(git diff HEAD^ | grep -P '^\s*[\{\}]\s*$' | wc -l)
     local comment_lines=$(git diff HEAD^ | grep -E "^\+\ +\/\/" | wc -l)
     local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local tool_insertions=$(git diff --numstat HEAD^ | grep "tools/" | awk -F ' ' '{sum+=$1}END{print sum}')
