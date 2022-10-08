@@ -21,7 +21,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/libratelimit/RateLimiterStatistics.h>
+#include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <boost/lexical_cast.hpp>
 #include <iomanip>
 #include <optional>
@@ -79,12 +79,12 @@ std::string RateLimiterStat::toEndPointKey(const std::string& _ep)
     return " endpoint:  " + _ep;
 }
 
-void RateLimiterStat::updateInComing(const std::string& _endPoint, uint64_t _dataSize)
+void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dataSize)
 {
-    std::string epKey = toEndPointKey(_endPoint);
+    std::string epKey = toEndPointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endPoint", _endPoint)
+    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endpoint", _endpoint)
     //                     << LOG_KV("dataSize", _dataSize);
 
     std::lock_guard<std::mutex> l(m_inLock);
@@ -99,9 +99,9 @@ void RateLimiterStat::updateInComing(const std::string& _endPoint, uint64_t _dat
     epInStat.update(_dataSize);
 }
 
-void RateLimiterStat::updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc)
+void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc)
 {
-    std::string epKey = toEndPointKey(_endPoint);
+    std::string epKey = toEndPointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
     std::lock_guard<std::mutex> l(m_outLock);
