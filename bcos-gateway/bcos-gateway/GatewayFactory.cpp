@@ -406,9 +406,10 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     rateLimiterManager->setModulesWithNoBwLimit(_rateLimiterConfig.modulesWithNoBwLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
 
-
+    /*
     auto dsRateLimiter = std::make_shared<ratelimiter::DistributedRateLimiter>(-1);
     std::ignore = dsRateLimiter;
+    */
 
     return rateLimiterManager;
 }
