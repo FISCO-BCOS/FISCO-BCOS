@@ -4,9 +4,13 @@
  */
 
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
+#include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-gateway/gateway/GatewayMessageExtAttributes.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/gateway/ProGatewayNodeManager.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
@@ -17,6 +21,7 @@
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
+#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
@@ -26,7 +31,11 @@
 #include <openssl/asn1.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <chrono>
+#include <exception>
 #include <memory>
+#include <string>
+#include <thread>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -406,9 +415,11 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     rateLimiterManager->setModulesWithNoBwLimit(_rateLimiterConfig.modulesWithNoBwLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
 
-
+    /*
+    // TODO:
     auto dsRateLimiter = std::make_shared<ratelimiter::DistributedRateLimiter>(-1);
     std::ignore = dsRateLimiter;
+    */
 
     return rateLimiterManager;
 }
@@ -476,12 +487,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->setMessageFactory(messageFactory);
         service->setKeyFactory(keyFactory);
 
-        // init rate limit
-        const auto& rateLimiterConfig = _config->rateLimiterConfig();
-        auto rateLimiterManager = buildRateLimiterManager(_config->rateLimiterConfig());
-
-        auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
-        auto rateLimiterStatWeakPtr = std::weak_ptr<ratelimiter::RateLimiterStat>(rateLimiterStat);
+        auto gatewayRateLimiter =
+            buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());
+        auto gatewayRateLimiterWeakPtr =
+            std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
 
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
@@ -508,22 +517,22 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop,
-            rateLimiterManager, rateLimiterStat, _gatewayServiceName);
-        auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
+        auto gateway = std::make_shared<Gateway>(
+            m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+        auto GatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
-            [weakptrGatewayNodeManager](NetworkException e, P2PSession::Ptr p2pSession) {
+            [GatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
                 (void)e;
-                auto gatewayNodeManager = weakptrGatewayNodeManager.lock();
+                auto gatewayNodeManager = GatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {
                     gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
                 }
             });
         service->registerUnreachableHandler(
-            [weakptrGatewayNodeManager](std::string const& _unreachableNode) {
-                auto nodeMgr = weakptrGatewayNodeManager.lock();
+            [GatewayNodeManagerWeakPtr](std::string const& _unreachableNode) {
+                auto nodeMgr = GatewayNodeManagerWeakPtr.lock();
                 if (!nodeMgr)
                 {
                     return;
@@ -531,29 +540,49 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 nodeMgr->onRemoveNodeIDs(_unreachableNode);
             });
 
-        auto gatewayWeakPtr = std::weak_ptr<Gateway>(gateway);
-
-        service->setBeforeMessageHandler([gatewayWeakPtr](SessionFace::Ptr _session,
+        service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
                                              Message::Ptr _msg, SessionCallbackFunc _callback) {
-            auto gateway = gatewayWeakPtr.lock();
-            if (!gateway)
+            auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+            if (!gatewayRateLimiter)
             {
                 return true;
             }
 
+            GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
+            if (_msg->extAttributes())
+            {
+                msgExtAttributes =
+                    std::dynamic_pointer_cast<GatewayMessageExtAttributes>(_msg->extAttributes());
+            }
+
+            std::string groupID = msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+            uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+            std::string endpoint = _session->nodeIPEndpoint().address();
+            uint64_t msgLength = _msg->length();
+
             // bandwidth limit check
-            return gateway->checkBWRateLimit(_session, _msg, _callback);
+            auto r = gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
+            if (!r.first && _callback)
+            {
+                _callback(NetworkException(BandwidthOverFlow, r.second), Message::Ptr());
+            }
+
+            return r.first;
         });
 
         service->setOnMessageHandler(
-            [rateLimiterStatWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
-                auto rateLimiterStat = rateLimiterStatWeakPtr.lock();
-                if (rateLimiterStat)
+            [gatewayRateLimiterWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
+                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                if (!gatewayRateLimiter)
                 {
-                    auto endPoint = _session->nodeIPEndpoint().address();
-                    auto msgLength = _message->length();
-                    rateLimiterStat->updateInComing(endPoint, msgLength);
+                    return true;
                 }
+
+                auto endpoint = _session->nodeIPEndpoint().address();
+                auto msgLength = _message->length();
+                gatewayRateLimiter->checkInComing(endpoint, msgLength);
+
+                return true;
             });
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
