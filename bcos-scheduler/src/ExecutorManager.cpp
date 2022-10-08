@@ -66,6 +66,22 @@ bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispa
     return executorInfo->executor;
 }
 
+bcos::executor::ParallelTransactionExecutorInterface::Ptr
+ExecutorManager::dispatchCorrespondExecutor(const std::string_view& contract)
+{
+    UpgradableGuard l(m_mutex);
+    auto executorIt = m_contract2ExecutorInfo.find(contract);
+    if (executorIt != m_contract2ExecutorInfo.end())
+    {
+        return executorIt->second->executor;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+
 bcos::scheduler::ExecutorManager::ExecutorInfo::Ptr ExecutorManager::getExecutorInfo(
     const std::string_view& contract)
 {

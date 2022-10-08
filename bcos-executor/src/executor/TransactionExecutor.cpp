@@ -1797,14 +1797,24 @@ void TransactionExecutor::getCode(
 
     storage::StateStorageInterface::Ptr stateStorage;
 
-    // create temp state storage
-    if (m_cachedStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage);
+        std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
+        if (!m_stateStorages.empty())
+        {
+            stateStorage = m_stateStorages.front().storage;
+        }
     }
-    else
+    // create temp state storage
+    if (!stateStorage)
     {
-        stateStorage = createStateStorage(m_backendStorage);
+        if (m_cachedStorage)
+        {
+            stateStorage = createStateStorage(m_cachedStorage);
+        }
+        else
+        {
+            stateStorage = createStateStorage(m_backendStorage);
+        }
     }
 
     auto tableName = getContractTableName(contract);
@@ -2029,7 +2039,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 auto callParameters = createCallParameters(*input, *tx);
 
                 ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
+                    getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -2067,7 +2077,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
         ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
+            getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr&& error,
@@ -2190,6 +2200,10 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setMessage(std::move(params->message));
     message->setLogEntries(std::move(params->logEntries));
     message->setNewEVMContractAddress(std::move(params->newEVMContractAddress));
+    message->setDelegateCall(params->delegateCall);
+    message->setDelegateCallAddress(std::move(params->codeAddress));
+    message->setDelegateCallCode(std::move(params->delegateCallCode));
+    message->setDelegateCallSender(std::move(params->delegateCallSender));
 
     return message;
 }
@@ -2274,6 +2288,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, bool staticCall)
 {
     auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->status = input.status();
 
     switch (input.type())
     {
@@ -2284,6 +2299,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
+        callParameters->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
+        // callParameters->evmStatus = EVMC_REVERT;
         break;
     }
     case ExecutionMessage::FINISHED:
@@ -2318,11 +2335,17 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
-    callParameters->status = input.status();
     callParameters->keyLocks = input.takeKeyLocks();
     if (input.create())
     {
         callParameters->abi = input.abi();
+    }
+    callParameters->delegateCall = input.delegateCall();
+    callParameters->delegateCallCode = input.takeDelegateCallCode();
+    callParameters->delegateCallSender = input.delegateCallSender();
+    if (input.delegateCall())
+    {
+        callParameters->codeAddress = input.delegateCallAddress();
     }
 
     return callParameters;
@@ -2348,6 +2371,9 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
+    callParameters->delegateCall = false;
+    callParameters->delegateCallCode = bytes();
+    callParameters->delegateCallSender = "";
     return callParameters;
 }
 
