@@ -20,7 +20,7 @@ class NodeTimeMaintenance
 public:
     using Ptr = std::shared_ptr<NodeTimeMaintenance>;
 
-    void tryToUpdatePeerTimeInfo(bcos::crypto::NodeIDPtr nodeID, const std::int64_t time);
+    void tryToUpdatePeerTimeInfo(bcos::crypto::PublicPtr nodeId, const std::int64_t time);
     int64_t getAlignedTime() const;
     int64_t medianTimeOffset() const { return m_medianTimeOffset; }
 
@@ -31,7 +31,7 @@ private:
 private:
     // maps between nodeID and the timeOffset
     mutable Mutex x_mutex;
-    std::map<bcos::crypto::NodeIDPtr, std::int64_t> m_node2TimeOffset;
+    std::map<bcos::crypto::PublicPtr, std::int64_t, bcos::crypto::KeyCompare> m_node2TimeOffset;
 
     std::atomic_int64_t m_medianTimeOffset{ 0 };
 

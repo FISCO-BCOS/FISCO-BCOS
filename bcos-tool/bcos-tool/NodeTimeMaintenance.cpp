@@ -13,7 +13,7 @@
 using namespace bcos::tool;
 
 void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(
-    bcos::crypto::NodeIDPtr nodeID, const std::int64_t time)
+    bcos::crypto::PublicPtr nodeID, const std::int64_t time)
 {
     std::int64_t localTime = utcTime();
     auto peerTimeOffset = time - localTime;
@@ -60,15 +60,16 @@ void NodeTimeMaintenance::updateTimeInfo()
     {
         Guard l(x_mutex);
         for (auto const& it : m_node2TimeOffset)
-            timeOffsetVec.push_back(it.second);
+            timeOffsetVec.emplace_back(it.second);
     }
     std::sort(timeOffsetVec.begin(), timeOffsetVec.end());
-    int64_t medianIndex = timeOffsetVec.size() / 2;
-    int64_t medianTimeOffset;
+
+    auto medianIndex = timeOffsetVec.size() >> 1;
+    std::int64_t medianTimeOffset{ 0 };
     if (timeOffsetVec.size() % 2 == 0)
     {
         medianTimeOffset =
-            (std::int64_t)(timeOffsetVec[medianIndex] + timeOffsetVec[medianIndex - 1]) / 2;
+            (std::int64_t)(timeOffsetVec[medianIndex] + timeOffsetVec[medianIndex - 1]) >> 1;
     }
     else
     {

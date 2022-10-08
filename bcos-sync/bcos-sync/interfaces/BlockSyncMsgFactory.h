@@ -19,6 +19,7 @@
  * @date 2021-05-23
  */
 #pragma once
+#include "bcos-sync/utilities/Common.h"
 #include "bcos-sync/interfaces/BlockRequestInterface.h"
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
@@ -34,17 +35,16 @@ public:
     virtual ~BlockSyncMsgFactory() {}
 
     virtual BlockSyncMsgInterface::Ptr createBlockSyncMsg(bytesConstRef _data) = 0;
-    virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg() = 0;
+    virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(int32_t version = 0) = 0;
     virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(bytesConstRef _data) = 0;
     virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(
         BlockSyncMsgInterface::Ptr _msg) = 0;
     virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(
         bcos::protocol::BlockNumber _number, bcos::crypto::HashType const& _hash,
-        bcos::crypto::HashType const& _gensisHash, int64_t const time = utcTime(),
-        int32_t _version = 0)
+        bcos::crypto::HashType const& _gensisHash,int32_t _version = 0, 
+        int64_t const time = utcTime())
     {
-        auto statusMsg = createBlockSyncStatusMsg();
-        statusMsg->setVersion(_version);
+        auto statusMsg = createBlockSyncStatusMsg(_version);
         statusMsg->setNumber(_number);
         statusMsg->setHash(_hash);
         statusMsg->setGenesisHash(_gensisHash);
