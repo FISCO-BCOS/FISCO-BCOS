@@ -22,72 +22,47 @@
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
 #include <bcos-utilities/Common.h>
-
-#include <memory>
-#include <tuple>
+#include <exception>
+#include <string>
 
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimiter;
 
-DistributedRateLimiter::DistributedRateLimiter(int64_t _maxQPS)
-{
-    std::ignore = _maxQPS;
-}
-
-/*
-std::shared_ptr<sw::redis::Redis> DistributedRateLimiter::initRedis(
-    const std::string& _redisIP, uint16_t& _redisPort)
-{
-
-     std::string redisIP = "127.0.0.1";
-    uint16_t redisPort = 6379;
-    m_redis = initRedis(redisIP, redisPort);
-
-    RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][DistributedRateLimiter]")
-                        << LOG_KV("redisIP", redisIP) << LOG_KV("redisPort", redisPort);
-
-
-    sw::redis::ConnectionOptions connection_options;
-    connection_options.host = _redisIP;    // Required.
-    connection_options.port = _redisPort;  // Optional.
-    // connection_options.password = "auth";  // Optional. No password by default.
-    // connection_options.db = 1;  // Optional. Use the 0th database by default.
-
-    // Optional. Timeout before we successfully send request to or receive response from redis.
-    // By default, the timeout is 0ms, i.e. never timeout and block until we send or receive
-    // successfully. NOTE: if any command is timed out, we throw a TimeoutError exception.
-    connection_options.socket_timeout = std::chrono::milliseconds(2000);
-    connection_options.connect_timeout = std::chrono::milliseconds(2000);
-
-    sw::redis::ConnectionPoolOptions pool_options;
-    // Pool size, i.e. max number of connections.
-    pool_options.size = 100;
-
-    // Connect to Redis server with a connection pool.
-    auto redis = std::make_shared<sw::redis::Redis>(connection_options, pool_options);
-
-
-    std::string key = "Redis Key";
-    std::string value = "Hello, Redis.";
-    redis->set(key, value);
-
-    auto r = redis->get(key);
-    if (r)
-    {
-    RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][DistributedRateLimiter]")
-            << LOG_DESC("redis get") << LOG_KV("key", key)
-            << LOG_KV("value", r.value());
-    }
-    else
-    {
-    RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][DistributedRateLimiter]")
-            << LOG_DESC("redis get failed");
-    }
-
-    return redis;
-}
-*/
+// lua script for redis distributed rate limit
+const std::string DistributedRateLimiter::luaScript = R"(
+        -- 限流key
+        local key = KEYS[1]
+        -- 限流大小, 初始token数目
+        local initialToken = tonumber(ARGV[1])
+        -- 申请token数目
+        local requestToken = tonumber(ARGV[2])
+        -- 限流间隔，单位秒
+        local interval = tonumber(ARGV[3])
+        
+        -- key不存在, 未初始化或过期, 初始化
+        local r = redis.call('get', key)
+        if not r then
+            -- 设置限流值
+            redis.call('set', key, ARGV[1])
+            -- 设置过期时间
+            redis.call("EXPIRE", key, ARGV[3])
+        end
+        
+        -- 剩余token
+        local curentToken = tonumber(redis.call('get', key) or '0')
+        
+        -- 是否超出限流
+        if curentToken < requestToken then
+            -- 返回(拒绝)
+            return -1
+        else
+            -- 更新 curentToken
+            redis.call("DECRBY", key, requestToken)
+            -- 返回(放行)
+            return requestToken
+        end
+        )";
 
 /**
  * @brief acquire permits
@@ -97,6 +72,7 @@ std::shared_ptr<sw::redis::Redis> DistributedRateLimiter::initRedis(
  */
 void DistributedRateLimiter::acquire(int64_t _requiredPermits)
 {
+    // TODO: This operation is not supported
     std::ignore = _requiredPermits;
 }
 
@@ -109,8 +85,39 @@ void DistributedRateLimiter::acquire(int64_t _requiredPermits)
  */
 bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
-    std::ignore = _requiredPermits;
-    return true;
+    try
+    {
+        auto start = utcTime();
+
+        auto keys = {m_rateLimitKey};
+        std::vector<std::string> args = {
+            std::to_string(m_maxPermits), std::to_string(_requiredPermits), "1"};
+
+        auto result =
+            m_redis->eval<int64_t>(luaScript, keys.begin(), keys.end(), args.begin(), args.end());
+
+        auto end = utcTime();
+
+        if (1)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter::tryAcquire")
+                               << LOG_KV("elapsedTime", (end - start))
+                               << LOG_KV("maxPermits", m_maxPermits)
+                               << LOG_KV("requiredPermits", _requiredPermits)
+                               << LOG_KV("result", result);
+        }
+
+        return result >= 0;
+    }
+    catch (const std::exception& e)
+    {
+        // TODO: statistics failure Information
+        GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter::tryAcquire")
+                           << LOG_KV("rateLimitKey", m_rateLimitKey) << LOG_KV("error", e.what());
+
+        // exception throw, allow this acquire
+        return true;
+    }
 }
 
 /**
@@ -120,6 +127,6 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
  */
 void DistributedRateLimiter::rollback(int64_t _requiredPermits)
 {
+    // TODO: This operation is not supported
     std::ignore = _requiredPermits;
-    return;
 }
