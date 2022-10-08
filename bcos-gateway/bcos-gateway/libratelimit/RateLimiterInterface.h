@@ -26,7 +26,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 class RateLimiterInterface
@@ -71,6 +71,6 @@ public:
     virtual void rollback(int64_t _requiredPermits) = 0;
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

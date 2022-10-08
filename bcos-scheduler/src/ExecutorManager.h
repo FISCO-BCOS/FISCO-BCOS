@@ -33,6 +33,9 @@ public:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchExecutor(
         const std::string_view& contract);
 
+    // return nullptr if there is no executor dispatched in this contract before
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchCorrespondExecutor(
+        const std::string_view& contract);
 
     void removeExecutor(const std::string_view& name);
 

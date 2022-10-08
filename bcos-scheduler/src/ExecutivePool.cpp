@@ -164,22 +164,23 @@ void ExecutivePool::forEach(MessageHint type, ExecutiveStateHandler handler, boo
         break;
     }
 
-    for (auto contextID : *pool)
+    tbb::concurrent_set<ContextID> currentPool = *pool;
+
+    if (needClear)
+    {
+        pool->clear();
+    }
+    for (auto contextID : currentPool)
     {
         auto executiveState = get(contextID);
         if (executiveState != nullptr)
         {
             if (!handler(contextID, executiveState))
             {
-                // break if no need to contiue
+                // break if no need to continue
                 break;
             }
         }
-    }
-
-    if (needClear)
-    {
-        pool->clear();
     }
 }
 

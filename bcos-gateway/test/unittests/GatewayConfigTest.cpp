@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-        BOOST_CHECK(!rateLimiterConfig.isConfigEffect());
+        BOOST_CHECK(!rateLimiterConfig.hasRateLimiterConfigEffect());
     }
 
     {
@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.isConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.isConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
