@@ -34,6 +34,7 @@ namespace protocol
 enum MessageExtFieldFlag : uint32_t
 {
     Response = 0x0001,
+    Compress = 0x0010,
 };
 enum NodeType : uint32_t
 {
