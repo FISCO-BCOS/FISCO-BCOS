@@ -263,7 +263,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
                           << LOG_KV("contractAbiSize", contractAbi.size());
     int validCode =
         checkLinkParam(_executive, contractAddress, contractName, contractVersion, contractAbi);
-    auto linkTableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;
+    auto linkTableName = std::string(USER_APPS_PREFIX) + contractName + '/' + contractVersion;
 
     if (validCode < 0 || !checkPathValid(linkTableName))
     {

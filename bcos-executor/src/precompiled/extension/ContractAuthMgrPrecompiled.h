@@ -85,7 +85,7 @@ private:
 
     inline std::string getAuthTableName(const std::string& _name)
     {
-        return executor::USER_APPS_PREFIX + _name + executor::CONTRACT_SUFFIX;
+        return std::string(executor::USER_APPS_PREFIX) + _name + executor::CONTRACT_SUFFIX;
     }
 };
 }  // namespace bcos::precompiled

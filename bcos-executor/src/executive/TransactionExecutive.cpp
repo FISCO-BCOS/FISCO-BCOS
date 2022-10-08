@@ -21,6 +21,7 @@
 
 #include "TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
+#include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/DelegateHostContext.h"
@@ -35,6 +36,7 @@
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Exceptions.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Common.h>
@@ -230,33 +232,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         return {std::move(hostContext), nullptr};
     }
 
-    // check permission
-    if (blockContext->isAuthCheck())
+    // check permission first
+    if (blockContext->isAuthCheck() && !checkAuth(callParameters))
     {
-        if (!checkContractAvailable(callParameters))
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Contract is frozen";
-            callParameters->data.clear();
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("tableName", tableName)
-                                << LOG_KV("origin", callParameters->origin);
-            return {nullptr, std::move(callParameters)};
-        }
-        if (!checkAuth(callParameters, false))
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Call permission denied";
-            callParameters->data.clear();
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("tableName", tableName)
-                                << LOG_KV("origin", callParameters->origin);
-            return {nullptr, std::move(callParameters)};
-        }
+        revert();
+        return {nullptr, std::move(callParameters)};
     }
     auto hostContext = make_unique<HostContext>(
         std::move(callParameters), shared_from_this(), std::move(tableName));
@@ -349,28 +329,18 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                          << LOG_KV("abi len", extraData->abi.size())
                          << LOG_KV("sender", callParameters->senderAddress)
                          << LOG_KV("internalCreate", callParameters->internalCreate);
+
+    // check permission first
     if (callParameters->internalCreate)
     {
         return {nullptr, internalCreate(std::move(callParameters))};
     }
 
-    // check permission first
-    if (blockContext->isAuthCheck())
+    if (blockContext->isAuthCheck() && !checkAuth(callParameters))
     {
-        if (!checkAuth(callParameters, true))
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Create permission denied";
-            callParameters->create = false;
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("newAddress", newAddress)
-                                << LOG_KV("origin", callParameters->origin);
-            return {nullptr, std::move(callParameters)};
-        }
+        revert();
+        return {nullptr, std::move(callParameters)};
     }
-
     // Create table
     try
     {
@@ -456,7 +426,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     std::string tableName;
     std::string codeString;
     codec.decode(ref(callParameters->data), tableName, codeString);
-    EXECUTIVE_LOG(TRACE) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
                          << LOG_KV("codeString", codeString);
 
     if (blockContext->isWasm())
@@ -1152,9 +1122,75 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
     return response == (int)precompiled::CODE_SUCCESS;
 }
 
-bool TransactionExecutive::checkAuth(
-    const CallParameters::UniquePtr& callParameters, bool _isCreate)
+bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParameters)
 {
+    auto blockContext = m_blockContext.lock();
+    // check account first
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    {
+        if (!checkAccountAvailable(callParameters))
+        {
+            callParameters->status = (int32_t)TransactionStatus::AccountFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Account's status is abnormal";
+            callParameters->create = false;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+    }
+    if (callParameters->create)
+    {
+        // if create contract, then
+        //      check exec auth
+        if (!checkExecAuth(callParameters))
+        {
+            auto newAddress = string(callParameters->codeAddress);
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Create permission denied";
+            callParameters->create = false;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("newAddress", newAddress)
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+    }
+    else
+    {
+        auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
+        // if call contract, then
+        //      check contract available
+        //      check exec auth
+        if (!checkContractAvailable(callParameters))
+        {
+            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Contract is frozen";
+            callParameters->data.clear();
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("tableName", tableName)
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+        if (!checkExecAuth(callParameters))
+        {
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Call permission denied";
+            callParameters->data.clear();
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("tableName", tableName)
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callParameters)
+{
+    // static call does not have 'origin', so return true for now
     if (callParameters->staticCall)
         return true;
     auto blockContext = m_blockContext.lock();
@@ -1165,9 +1201,10 @@ bool TransactionExecutive::checkAuth(
     std::string address = callParameters->origin;
     auto path = callParameters->receiveAddress;
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
-                         << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
+                         << LOG_KV("isCreate", callParameters->create)
+                         << LOG_KV("originAddress", address);
     bool result = true;
-    if (_isCreate)
+    if (callParameters->create)
     {
         /// external call authMgrAddress to check deploy auth
         auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
@@ -1198,4 +1235,21 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     EXECUTIVE_LOG(TRACE) << "check contract status" << LOG_KV("codeAddress", path);
 
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
+}
+
+bool TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
+{
+    if (callParameters->staticCall || callParameters->origin != callParameters->senderAddress)
+    {
+        // static call sender and origin will be empty
+        // contract calls, pass through
+        return true;
+    }
+    auto blockContext = m_blockContext.lock();
+    AccountPrecompiled::Ptr accountPrecompiled =
+        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
+            m_constantPrecompiled->at(ACCOUNT_ADDRESS));
+    EXECUTIVE_LOG(TRACE) << "check account status" << LOG_KV("account", callParameters->origin);
+
+    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this()) == 0;
 }

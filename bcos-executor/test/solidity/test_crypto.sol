@@ -15,8 +15,8 @@ contract TestCrypto {
         return crypto.keccak256Hash(data);
     }
 
-    function sm2Verify(bytes memory message, bytes memory sign) public view returns (bool, address){
-        return crypto.sm2Verify(message, sign);
+    function sm2Verify(bytes32 message, bytes memory publicKey, bytes32 r, bytes32 s) public view returns (bool, address){
+        return crypto.sm2Verify(message, publicKey, r, s);
     }
 
     function getSha256(bytes memory _memory) public returns(bytes32 result)
