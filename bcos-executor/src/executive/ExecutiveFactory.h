@@ -58,11 +58,14 @@ public:
 
 
 private:
+    void registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive);
+
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
+    std::map<std::string, std::shared_ptr<precompiled::Precompiled>, std::less<>> m_extPrecompiled;
     std::weak_ptr<BlockContext> m_blockContext;
     std::shared_ptr<wasm::GasInjector> m_gasInjector;
 };

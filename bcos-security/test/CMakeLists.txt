@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for bcos-security
+# Top-level CMake file for ut of bcos-tool
 # ------------------------------------------------------------------------------
-# Copyright (C) 2021 bcos-security
+# Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+file(GLOB_RECURSE SOURCES "*.cpp")
 
-cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
+# cmake settings
+set(TEST_BINARY_NAME test-bcos-security)
+find_package(Boost REQUIRED unit_test_framework)
 
-include(Version)
-project(bcos-security VERSION ${VERSION})
+add_executable(${TEST_BINARY_NAME} ${SOURCES})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-aux_source_directory(./bcos-security SRC_LIST)
-include_directories(./bcos-security)
-add_library(${SECURITY_TARGET} ${SRC_LIST})
-
-find_package(jsoncpp REQUIRED)
-
-target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
-
-if(TESTS)
-  enable_testing()
-  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
-  add_subdirectory(test)
-endif()
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SECURITY_TARGET} Boost::unit_test_framework)
+add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
