@@ -38,5 +38,10 @@ enum SyncState : int32_t
     Idle = 0x00,         //< Initial chain sync complete. Waiting for new packets
     Downloading = 0x01,  //< Downloading blocks
 };
+enum class BlockSyncMsgVersion
+{
+    v0,
+    v1
+};
 }  // namespace sync
 }  // namespace bcos
