@@ -75,9 +75,11 @@ public:
     };
     struct PromiseValue : public PromiseBase<PromiseValue>
     {
-        void return_value(Value&& value)
+        template <class ReturnValue>
+        void return_value(ReturnValue&& value)
         {
-            PromiseBase<PromiseValue>::m_value.template emplace<Value>(std::forward<Value>(value));
+            PromiseBase<PromiseValue>::m_value.template emplace<Value>(
+                std::forward<ReturnValue>(value));
         }
     };
 
