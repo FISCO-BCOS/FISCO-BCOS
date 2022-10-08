@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-file(GLOB_RECURSE SOURCES "bcos-task/*.h")
-
-add_library(bcos-task INTERFACE ${SOURCES})
+add_library(bcos-task INTERFACE)
 target_include_directories(bcos-task INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
