@@ -29,7 +29,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 class TokenBucketRateLimiter : public RateLimiterInterface
@@ -126,6 +126,6 @@ public:
     }
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

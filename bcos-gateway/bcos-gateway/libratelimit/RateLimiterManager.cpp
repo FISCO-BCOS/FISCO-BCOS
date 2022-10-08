@@ -23,7 +23,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimit;
+using namespace bcos::gateway::ratelimiter;
 
 const std::string RateLimiterManager::TOTAL_OUTGOING_KEY = "total-outgoing-key";
 
