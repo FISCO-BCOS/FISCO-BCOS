@@ -85,10 +85,10 @@ public:
     using ConstPtr = std::shared_ptr<const RateLimiterStat>;
 
 public:
-    void updateInComing(const std::string& _endPoint, uint64_t _dataSize);
+    void updateInComing(const std::string& _endpoint, uint64_t _dataSize);
     void updateInComing(const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize);
 
-    void updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc);
+    void updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc);
     void updateOutGoing(
         const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc);
 
