@@ -103,7 +103,7 @@ enum class Version : uint32_t
 };
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
-const std::string V3_1_VERSION_STR = "3.0.1";
+const std::string V3_1_VERSION_STR = "3.1.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 

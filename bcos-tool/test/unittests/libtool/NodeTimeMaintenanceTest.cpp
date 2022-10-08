@@ -1,7 +1,9 @@
 #include <bcos-crypto/signature/key/KeyImpl.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -15,28 +17,31 @@ namespace test
 BOOST_AUTO_TEST_CASE(testNodeTimeMaintenance_doubleNode)
 {
     // create four node
-    auto node0Bytes = fromHexString(
-        "6a6abf9afddd087e006019c61ef15ccdf6d1df8b51cb77abddadfd442c89283f51203e88f9988a514606ef6812"
-        "21ff165c84f29532209ff0a8866548073d04b3");
-    NodeIDPtr node0 = std::make_shared<KeyImpl>(*node0Bytes);
-    auto node1Bytes = fromHexString(
-        "b996782ddf307feef401d2316a42eebf15c52254113a99bc02adea3fadcc965ba94d472b5863e6a078d859fa14"
-        "ad129e4a848d0d351cd0228f3077d1bd231684");
-    NodeIDPtr node1 = std::make_shared<KeyImpl>(*node1Bytes);
-    auto node2Bytes = fromHexString(
-        "55da209c504014f48a77a40fb152b7a0965b4e12662deda1956887200364e1ffd53a7b9b82931232304f8037eb"
-        "f5147e9c29c0ee7244bde733ff5c68ee20648e");
-    NodeIDPtr node2 = std::make_shared<KeyImpl>(*node2Bytes);
-    auto node3Bytes = fromHexString(
-        "c21606c9ae25e82ba7f60ced0a61914d0a4c2a92eaa52dbc762e844cc73a535afbb5b65cea4134a65e44b49cdd"
-        "b3a2da84703123d12be3c00609c1755c6828a3");
-    NodeIDPtr node3 = std::make_shared<KeyImpl>(*node3Bytes);
+    auto fixedSec1 = h256(
+        "4edbf97a0c6c3decde00ccd41f069dc30377f859fb1a9eb5759d0c9c995be244");
+    auto sec1 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec1.asBytes());
+    auto pub1 = secp256k1PriToPub(sec1);
+
+    auto fixedSec2 = h256(
+        "52ca4bd084c9d5a309dd5d5e08e6ddb3424168ee329e9a65cdf9f20c791dbe4d");
+    auto sec2 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec2.asBytes());
+    auto pub2 = secp256k1PriToPub(sec2);
+
+    auto fixedSec3 = h256(
+        "ba7699fcdc502b1ae4a7eb924ccc02db80e7d04056d2b3a114b2b2ccada4928d");
+    auto sec3 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec3.asBytes());
+    auto pub3 = secp256k1PriToPub(sec3);
+
+    auto fixedSec4 = h256(
+        "21b08860aa297501e51089e01631cc915d305d18c145136a55560277ad18b283");
+    auto sec4 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec4.asBytes());
+    auto pub4 = secp256k1PriToPub(sec4);
 
     NodeTimeMaintenance nodeTimeMaintenance;
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node0, utcTime());
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node1, utcTime() + 1 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node2, utcTime() + 2 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node3, utcTime() + 3 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub1, utcTime());
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub2, utcTime() + 1 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub3, utcTime() + 2 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub4, utcTime() + 3 * 60 * 1000);
 
     BOOST_CHECK_EQUAL(1.5 * 60 * 1000, nodeTimeMaintenance.medianTimeOffset());
     BOOST_CHECK_EQUAL(utcTime() + 1.5 * 60 * 1000, nodeTimeMaintenance.getAlignedTime());
@@ -45,33 +50,37 @@ BOOST_AUTO_TEST_CASE(testNodeTimeMaintenance_doubleNode)
 BOOST_AUTO_TEST_CASE(testNodeTimeMaintenance_singlarNode)
 {
     // create five node
-    auto node0Bytes = fromHexString(
-        "6a6abf9afddd087e006019c61ef15ccdf6d1df8b51cb77abddadfd442c89283f51203e88f9988a514606ef6812"
-        "21ff165c84f29532209ff0a8866548073d04b3");
-    NodeIDPtr node0 = std::make_shared<KeyImpl>(*node0Bytes);
-    auto node1Bytes = fromHexString(
-        "b996782ddf307feef401d2316a42eebf15c52254113a99bc02adea3fadcc965ba94d472b5863e6a078d859fa14"
-        "ad129e4a848d0d351cd0228f3077d1bd231684");
-    NodeIDPtr node1 = std::make_shared<KeyImpl>(*node1Bytes);
-    auto node2Bytes = fromHexString(
-        "55da209c504014f48a77a40fb152b7a0965b4e12662deda1956887200364e1ffd53a7b9b82931232304f8037eb"
-        "f5147e9c29c0ee7244bde733ff5c68ee20648e");
-    NodeIDPtr node2 = std::make_shared<KeyImpl>(*node2Bytes);
-    auto node3Bytes = fromHexString(
-        "c21606c9ae25e82ba7f60ced0a61914d0a4c2a92eaa52dbc762e844cc73a535afbb5b65cea4134a65e44b49cdd"
-        "b3a2da84703123d12be3c00609c1755c6828a3");
-    NodeIDPtr node3 = std::make_shared<KeyImpl>(*node3Bytes);
-    auto node4Bytes = fromHexString(
-        "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15"
-        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1");
-    NodeIDPtr node4 = std::make_shared<KeyImpl>(*node4Bytes);
+auto fixedSec1 = h256(
+        "4edbf97a0c6c3decde00ccd41f069dc30377f859fb1a9eb5759d0c9c995be244");
+    auto sec1 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec1.asBytes());
+    auto pub1 = secp256k1PriToPub(sec1);
+
+    auto fixedSec2 = h256(
+        "52ca4bd084c9d5a309dd5d5e08e6ddb3424168ee329e9a65cdf9f20c791dbe4d");
+    auto sec2 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec2.asBytes());
+    auto pub2 = secp256k1PriToPub(sec2);
+
+    auto fixedSec3 = h256(
+        "ba7699fcdc502b1ae4a7eb924ccc02db80e7d04056d2b3a114b2b2ccada4928d");
+    auto sec3 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec3.asBytes());
+    auto pub3 = secp256k1PriToPub(sec3);
+
+    auto fixedSec4 = h256(
+        "21b08860aa297501e51089e01631cc915d305d18c145136a55560277ad18b283");
+    auto sec4 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec4.asBytes());
+    auto pub4 = secp256k1PriToPub(sec4);
+
+    auto fixedSec5 = h256(
+        "badf6be7ea9865501aec46322b3ab2f0ddbd54e1c2c2c0502251eef85992ec1e");
+    auto sec5 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec5.asBytes());
+    auto pub5 = secp256k1PriToPub(sec5);
 
     NodeTimeMaintenance nodeTimeMaintenance;
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node0, utcTime());
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node1, utcTime() + 1 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node2, utcTime() + 2 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node3, utcTime() + 3 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(node4, utcTime() + 4 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub1, utcTime());
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub2, utcTime() + 1 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub3, utcTime() + 2 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub4, utcTime() + 3 * 60 * 1000);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub5, utcTime() + 4 * 60 * 1000);
 
     BOOST_CHECK_EQUAL(2 * 60 * 1000, nodeTimeMaintenance.medianTimeOffset());
     BOOST_CHECK_EQUAL(utcTime() + 2 * 60 * 1000, nodeTimeMaintenance.getAlignedTime());

@@ -132,6 +132,11 @@ private:
         }
     };
 
+    inline std::string toLowerAddress(const std::string_view& address)
+    {
+        return boost::algorithm::hex_lower(std::string(address));
+    }
+
     tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
         m_contract2ExecutorInfo;
     std::unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
