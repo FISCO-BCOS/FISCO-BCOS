@@ -48,6 +48,6 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters);
     void createAccountWithStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec,
-        std::string_view accountHex, uint16_t status = 0) const;
+        std::string_view accountHex, uint8_t status = 0) const;
 };
 }  // namespace bcos::precompiled

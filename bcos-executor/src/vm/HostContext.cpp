@@ -350,8 +350,13 @@ size_t HostContext::codeSizeAt(const std::string_view& _a)
     auto blockContext = m_executive->blockContext().lock();
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
     {
+        // precompiled return 1;
+        if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
+        {
+            return 1;
+        }
         auto code = externalCodeRequest(_a);
-        return code.size() * 2;  // OPCODE num is bytes.size * 2
+        return code.size();  // OPCODE num is bytes.size
     }
     return 1;
 }
@@ -361,6 +366,11 @@ h256 HostContext::codeHashAt(const std::string_view& _a)
     auto blockContext = m_executive->blockContext().lock();
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
     {
+        // precompiled return 0 hash;
+        if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
+        {
+            return h256(0);
+        }
         auto code = externalCodeRequest(_a);
         auto hash = hashImpl()->hash(code).asBytes();
         return h256(hash);
