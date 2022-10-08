@@ -165,7 +165,6 @@ public:
                             },
                             *anyLedger);
 
-
                         bcos::bytes responseBuffer;
                         bcos::concepts::serialize::encode(response, responseBuffer);
                         sharedFront->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETSTATUS,
