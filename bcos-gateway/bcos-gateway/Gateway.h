@@ -27,7 +27,7 @@
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
-#include <bcos-gateway/libratelimit/RateLimiterStatistics.h>
+#include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <bcos-utilities/BoostLog.h>
 
 namespace bcos
