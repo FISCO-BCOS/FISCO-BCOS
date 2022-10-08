@@ -47,8 +47,8 @@ bool RateLimiterManager::registerRateLimiter(
         return false;
     }
 
-    RATELIMIT_LOG(INFO) << LOG_BADGE("registerRateLimiter")
-                        << LOG_KV("rateLimiterKey", _rateLimiterKey);
+    RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("registerRateLimiter")
+                            << LOG_KV("rateLimiterKey", _rateLimiterKey);
 
     std::unique_lock lock(x_rateLimiters);
     auto result = m_rateLimiters.try_emplace(_rateLimiterKey, _rateLimiter);
@@ -57,8 +57,8 @@ bool RateLimiterManager::registerRateLimiter(
 
 bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
 {
-    RATELIMIT_LOG(INFO) << LOG_BADGE("removeRateLimiter")
-                        << LOG_KV("rateLimiterKey", _rateLimiterKey);
+    RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("removeRateLimiter")
+                            << LOG_KV("rateLimiterKey", _rateLimiterKey);
 
     std::unique_lock lock(x_rateLimiters);
     return m_rateLimiters.erase(_rateLimiterKey) > 0;
@@ -74,9 +74,9 @@ RateLimiterInterface::Ptr RateLimiterManager::ensureRateLimiterExist(
         return rateLimiter;
     }
 
-    RATELIMIT_LOG(INFO) << LOG_BADGE("ensureRateLimiterExist")
-                        << LOG_KV("rateLimiterKey", _rateLimiterKey)
-                        << LOG_KV("maxPermits", _maxPermits);
+    RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("ensureRateLimiterExist")
+                            << LOG_KV("rateLimiterKey", _rateLimiterKey)
+                            << LOG_KV("maxPermits", _maxPermits);
 
     // create ratelimiter
     rateLimiter = m_rateLimiterFactory->buildRateLimiter(_maxPermits);

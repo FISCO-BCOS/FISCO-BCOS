@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -55,6 +56,7 @@ public:
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
         bool _server, const GatewayConfig::SMCertConfig& _smCertConfig);
+
     //
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
         const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);

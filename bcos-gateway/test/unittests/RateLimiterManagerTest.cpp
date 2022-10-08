@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
     boost::property_tree::ini_parser::read_ini(configIni, pt);
 
     auto config = std::make_shared<GatewayConfig>();
-    config->initRatelimitConfig(pt);
+    config->initRateLimitConfig(pt);
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
     boost::property_tree::ini_parser::read_ini(configIni, pt);
 
     auto config = std::make_shared<GatewayConfig>();
-    config->initRatelimitConfig(pt);
+    config->initRateLimitConfig(pt);
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");

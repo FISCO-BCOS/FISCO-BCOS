@@ -59,51 +59,43 @@ public:
     {
         if (m_running)
         {
-            RATELIMIT_LOG(INFO) << LOG_DESC("GatewayRateLimiter is running");
+            RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+                                << LOG_DESC("gateway ratelimiter is running");
             return;
         }
         m_running = true;
+        if (m_rateLimiterStat)
+        {
+            m_rateLimiterStat->start();
+        }
 
-        auto statReporterInterval = m_rateLimiterManager->rateLimiterConfig().statReporterInterval;
-
-        m_rateLimiterStatTimer =
-            std::make_shared<Timer>(statReporterInterval, "ratelimiter_reporter");
-        auto rateLimiterStatTimer = m_rateLimiterStatTimer;
-        auto rateLimiterStat = m_rateLimiterStat;
-
-        m_rateLimiterStatTimer->registerTimeoutHandler(
-            [rateLimiterStatTimer, statReporterInterval, rateLimiterStat]() {
-                auto io = rateLimiterStat->inAndOutStat(statReporterInterval);
-                GATEWAY_LOG(INFO) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.first);
-                GATEWAY_LOG(INFO) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.second);
-                rateLimiterStat->flushStat();
-                rateLimiterStatTimer->restart();
-            });
-
-        RATELIMIT_LOG(INFO) << LOG_DESC("GatewayRateLimiter start ok")
-                            << LOG_KV("statReporterInterval", statReporterInterval);
+        RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+                            << LOG_DESC("gateway ratelimiter start ok");
     }
 
     void stop()
     {
         if (!m_running)
         {
-            RATELIMIT_LOG(INFO) << LOG_DESC("GatewayRateLimiter has been stopped");
+            RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+                                << LOG_DESC("gateway ratelimiter has been stopped");
             return;
         }
 
         m_running = false;
-        if (m_rateLimiterStatTimer)
+        if (m_rateLimiterStat)
         {
-            m_rateLimiterStatTimer->stop();
+            m_rateLimiterStat->stop();
         }
 
-        RATELIMIT_LOG(INFO) << LOG_DESC("GatewayRateLimiter stop end");
+        RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+                            << LOG_DESC("gateway ratelimiter stop end");
     }
 
 public:
     std::pair<bool, std::string> checkOutGoing(const std::string& _endpoint,
         const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength);
+
 
     std::pair<bool, std::string> checkInComing(const std::string& _endpoint, uint64_t _msgLength);
     std::pair<bool, std::string> checkInComing(
@@ -114,8 +106,6 @@ private:
 
     ratelimiter::RateLimiterManager::Ptr m_rateLimiterManager;
     ratelimiter::RateLimiterStat::Ptr m_rateLimiterStat;
-    // the timer that periodically report the stat
-    std::shared_ptr<Timer> m_rateLimiterStatTimer;
 };
 
 }  // namespace ratelimiter

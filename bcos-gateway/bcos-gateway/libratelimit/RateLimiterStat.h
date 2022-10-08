@@ -19,6 +19,8 @@
  */
 #pragma once
 
+#include "bcos-gateway/Common.h"
+#include "bcos-utilities/Timer.h"
 #include <array>
 #include <memory>
 #include <mutex>
@@ -74,7 +76,7 @@ public:
     std::optional<std::string> toString(const std::string& _prefix, uint32_t _periodMS);
 };
 
-class RateLimiterStat
+class RateLimiterStat : public std::enable_shared_from_this<RateLimiterStat>
 {
 public:
     const static std::string TOTAL_INCOMING;
@@ -83,6 +85,10 @@ public:
 public:
     using Ptr = std::shared_ptr<RateLimiterStat>;
     using ConstPtr = std::shared_ptr<const RateLimiterStat>;
+
+public:
+    void start();
+    void stop();
 
 public:
     void updateInComing(const std::string& _endpoint, uint64_t _dataSize);
@@ -105,12 +111,25 @@ public:
     const std::unordered_map<std::string, Stat>& inStat() { return m_inStat; }
     const std::unordered_map<std::string, Stat>& outStat() { return m_outStat; }
 
+    int32_t statReporterInterval() const { return m_statReporterInterval; }
+    void setStatReporterInterval(int32_t _statReporterInterval)
+    {
+        m_statReporterInterval = _statReporterInterval;
+    }
+
 private:
+    bool m_running = false;
+
     // TODO: How to clean up the disconnected connections
     std::mutex m_inLock;
     std::mutex m_outLock;
     std::unordered_map<std::string, Stat> m_inStat;
     std::unordered_map<std::string, Stat> m_outStat;
+
+    // report period, default 1 min
+    int32_t m_statReporterInterval = 60000;
+    // the timer that periodically report the stat
+    std::shared_ptr<Timer> m_statTimer;
 };
 
 }  // namespace ratelimiter
