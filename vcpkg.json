@@ -25,6 +25,7 @@
     "boost-multiprecision",
     "boost-program-options",
     "ms-gsl",
+    "zstd",
     "tbb",
     "zlib",
     "redis-plus-plus",
