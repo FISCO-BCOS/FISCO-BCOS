@@ -213,10 +213,6 @@ void TransactionExecutor::initEvmEnvironment()
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
-        m_constantPrecompiled->insert({ACCOUNT_MGR_ADDRESS,
-            std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl)});
-        m_constantPrecompiled->insert(
-            {ACCOUNT_ADDRESS, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl)});
     }
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
@@ -273,10 +269,6 @@ void TransactionExecutor::initWasmEnvironment()
             {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
-        m_constantPrecompiled->insert({ACCOUNT_MANAGER_NAME,
-            std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl)});
-        m_constantPrecompiled->insert(
-            {ACCOUNT_ADDRESS, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl)});
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     storage::StorageInterface::Ptr storage = m_backendStorage;
