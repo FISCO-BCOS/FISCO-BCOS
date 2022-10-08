@@ -125,7 +125,7 @@ public:
             bcos::protocol::LIGHTNODE_GETSTATUS, [ledger, weakFront](bcos::crypto::NodeIDPtr nodeID,
                                                      const std::string& id, bytesConstRef data) {
                 task::wait([](auto weakFront, auto ledger, auto nodeID, std::string id,
-                               auto data) -> task::Task<void> {
+                               bytesConstRef data) -> task::Task<void> {
                     auto front = weakFront.lock();
                     if (!front)
                     {
