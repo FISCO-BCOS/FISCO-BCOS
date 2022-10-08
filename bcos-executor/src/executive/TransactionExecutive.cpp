@@ -23,6 +23,7 @@
 #include "../precompiled/BFSPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
+#include "../vm/DelegateHostContext.h"
 #include "../vm/EVMHostInterface.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
@@ -106,6 +107,44 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         input->codeAddress = newAddress;
     }
 
+    if (input->delegateCall)
+    {
+        assert(!m_blockContext.lock()->isWasm());
+        auto tableName = getContractTableName(input->codeAddress, false);
+
+        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        if (!entry || entry->get().empty())
+        {
+            auto& output = input;
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            output->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
+            // output->evmStatus = EVMC_REVERT; remember to update TransactionExecutor.cpp:2293
+            return std::move(output);
+        }
+        input->delegateCallCode = toBytes(entry->get());
+    }
+
+    if (input->data == bcos::protocol::GET_CODE_INPUT_BYTES)
+    {
+        EXECUTIVE_LOG(DEBUG) << "Get external code request"
+                             << LOG_KV("codeAddress", input->codeAddress);
+
+        auto tableName = getContractTableName(input->codeAddress, false);
+        auto& output = input;
+        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        if (!entry || entry->get().empty())
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            return std::move(output);
+        }
+        output->data = toBytes(entry->get());
+        return std::move(output);
+    }
+
     auto executive = std::make_shared<TransactionExecutive>(
         m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
 
@@ -171,16 +210,27 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
 
     EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("executive call")
-                         << LOG_KV("contract", callParameters->codeAddress)
+                         << LOG_KV("contract", callParameters->receiveAddress)
                          << LOG_KV("sender", callParameters->senderAddress)
-                         << LOG_KV("internalCall", callParameters->internalCall);
+                         << LOG_KV("internalCall", callParameters->internalCall)
+                         << LOG_KV("delegateCall", callParameters->delegateCall)
+                         << LOG_KV("codeAddress", callParameters->codeAddress);
 
-    if (isPrecompiled(callParameters->codeAddress) || callParameters->internalCall)
+    if (isPrecompiled(callParameters->receiveAddress) || callParameters->internalCall)
     {
         return {nullptr, callPrecompiled(std::move(callParameters))};
     }
-    auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
-    // check permission first
+    auto tableName = getContractTableName(callParameters->receiveAddress, blockContext->isWasm());
+
+    // delegateCall is just about to replace code, no need to check permission beforehand
+    if (callParameters->delegateCall)
+    {
+        auto hostContext = make_unique<DelegateHostContext>(
+            std::move(callParameters), shared_from_this(), std::move(tableName));
+        return {std::move(hostContext), nullptr};
+    }
+
+    // check permission
     if (blockContext->isAuthCheck())
     {
         if (!checkContractAvailable(callParameters))
@@ -884,6 +934,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     callResults->type = CallParameters::REVERT;
     // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm
     // need this
+    // callResults->evmStatus = _result.status(); remember set in delegatecall(ask jimmyshi)
     auto outputRef = _result.output();
     switch (_result.status())
     {
@@ -1112,7 +1163,7 @@ bool TransactionExecutive::checkAuth(
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     std::string address = callParameters->origin;
-    auto path = callParameters->codeAddress;
+    auto path = callParameters->receiveAddress;
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
                          << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
     bool result = true;
@@ -1143,7 +1194,7 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     auto blockContext = m_blockContext.lock();
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    auto path = callParameters->codeAddress;
+    auto path = callParameters->receiveAddress;
     EXECUTIVE_LOG(TRACE) << "check contract status" << LOG_KV("codeAddress", path);
 
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
