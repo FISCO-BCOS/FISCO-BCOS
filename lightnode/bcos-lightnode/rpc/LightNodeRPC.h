@@ -6,6 +6,7 @@
 #include "Converter.h"
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
+#include "bcos-concepts/Exception.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
@@ -32,6 +33,10 @@
 
 namespace bcos::rpc
 {
+
+// clang-format off
+struct NotFoundTransactionHash: public bcos::exception::Exception {};
+// clang-format on
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
     bcos::concepts::ledger::Ledger RemoteLedgerType,
@@ -149,7 +154,7 @@ public:
                 co_await remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
 
                 Json::Value resp;
-                toJsonResp<Hasher>(receipt, txHashStr, resp);
+                toJsonResp<Hasher>(receipt, transaction, txHashStr, resp);
 
                 LIGHTNODE_LOG(INFO) << "RPC send transaction finished";
                 respFunc(nullptr, resp);
@@ -189,32 +194,32 @@ public:
 
     void getTransactionReceipt([[maybe_unused]] std::string_view groupID,
         [[maybe_unused]] std::string_view nodeName, [[maybe_unused]] std::string_view txHash,
-        [[maybe_unused]] bool requireProof, RespFunc _respFunc) override
+        [[maybe_unused]] bool requireProof, RespFunc respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get receipt request: " << txHash;
-
-        auto hashes = std::make_unique<std::array<bcos::h256, 1>>();
-        (*hashes)[0] = bcos::h256{txHash, bcos::h256::FromHex};
-
-        auto receipts = std::make_unique<std::vector<bcostars::TransactionReceipt>>();
-
-        auto& hashesRef = *hashes;
-        auto& receiptsRef = *receipts;
-        bcos::task::wait(remoteLedger().getTransactions(hashesRef, receiptsRef),
-            [this, m_hashes = std::move(hashes), m_receipts = std::move(receipts),
-                m_txHash = std::string(txHash),
-                m_respFunc = std::move(_respFunc)](std::exception_ptr error = {}) mutable {
-                if (error)
+        bcos::task::wait(
+            [this](auto remoteLedger, std::string txHash, RespFunc respFunc) -> task::Task<void> {
+                try
                 {
-                    toErrorResp(error, m_respFunc);
-                    return;
+                    LIGHTNODE_LOG(INFO) << "RPC get receipt request: " << txHash;
+
+                    std::array<bcos::h256, 1> hashes{bcos::h256{txHash, bcos::h256::FromHex}};
+                    std::vector<bcostars::TransactionReceipt> receipts(1);
+                    std::vector<bcostars::Transaction> transactions(1);
+
+                    co_await remoteLedger.getTransactions(hashes, receipts);
+                    co_await remoteLedger.getTransactions(hashes, transactions);
+
+
+                    Json::Value resp;
+                    toJsonResp<Hasher>(receipts[0], transactions[0], txHash, resp);
+
+                    respFunc(nullptr, resp);
                 }
-
-                Json::Value resp;
-                toJsonResp<Hasher>((*m_receipts)[0], m_txHash, resp);
-
-                m_respFunc(nullptr, resp);
-            });
+                catch (std::exception& error)
+                {
+                    toErrorResp(error, std::move(respFunc));
+                }
+            }(remoteLedger(), std::string(txHash), std::move(respFunc)));
     }
 
     void getBlockByHash([[maybe_unused]] std::string_view _groupID,
