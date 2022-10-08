@@ -4,9 +4,13 @@
  */
 
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
+#include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-gateway/gateway/GatewayMessageExtAttributes.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/gateway/ProGatewayNodeManager.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
@@ -17,6 +21,7 @@
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
+#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
@@ -26,7 +31,11 @@
 #include <openssl/asn1.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <chrono>
+#include <exception>
 #include <memory>
+#include <string>
+#include <thread>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -350,6 +359,22 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
+std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
+    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
+    const GatewayConfig::RedisConfig& _redisConfig)
+{
+    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig);
+    auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
+
+    auto gatewayRateLimiter =
+        std::make_shared<ratelimiter::GatewayRateLimiter>(rateLimiterManager, rateLimiterStat);
+
+    // TODO: for test
+    initRedis("127.0.0.1", 6379, 16);
+
+    return gatewayRateLimiter;
+}
+
 std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimiterManager(
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
 {
@@ -393,9 +418,11 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     rateLimiterManager->setModulesWithNoBwLimit(_rateLimiterConfig.modulesWithNoBwLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
 
-
+    /*
+    // TODO:
     auto dsRateLimiter = std::make_shared<ratelimiter::DistributedRateLimiter>(-1);
     std::ignore = dsRateLimiter;
+    */
 
     return rateLimiterManager;
 }
@@ -463,12 +490,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->setMessageFactory(messageFactory);
         service->setKeyFactory(keyFactory);
 
-        // init rate limit
-        const auto& rateLimiterConfig = _config->rateLimiterConfig();
-        auto rateLimiterManager = buildRateLimiterManager(_config->rateLimiterConfig());
-
-        auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
-        auto rateLimiterStatWeakPtr = std::weak_ptr<ratelimiter::RateLimiterStat>(rateLimiterStat);
+        auto gatewayRateLimiter =
+            buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());
+        auto gatewayRateLimiterWeakPtr =
+            std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
 
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
@@ -495,22 +520,22 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop,
-            rateLimiterManager, rateLimiterStat, _gatewayServiceName);
-        auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
+        auto gateway = std::make_shared<Gateway>(
+            m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+        auto GatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
-            [weakptrGatewayNodeManager](NetworkException e, P2PSession::Ptr p2pSession) {
+            [GatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
                 (void)e;
-                auto gatewayNodeManager = weakptrGatewayNodeManager.lock();
+                auto gatewayNodeManager = GatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {
                     gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
                 }
             });
         service->registerUnreachableHandler(
-            [weakptrGatewayNodeManager](std::string const& _unreachableNode) {
-                auto nodeMgr = weakptrGatewayNodeManager.lock();
+            [GatewayNodeManagerWeakPtr](std::string const& _unreachableNode) {
+                auto nodeMgr = GatewayNodeManagerWeakPtr.lock();
                 if (!nodeMgr)
                 {
                     return;
@@ -518,29 +543,49 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 nodeMgr->onRemoveNodeIDs(_unreachableNode);
             });
 
-        auto gatewayWeakPtr = std::weak_ptr<Gateway>(gateway);
-
-        service->setBeforeMessageHandler([gatewayWeakPtr](SessionFace::Ptr _session,
+        service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
                                              Message::Ptr _msg, SessionCallbackFunc _callback) {
-            auto gateway = gatewayWeakPtr.lock();
-            if (!gateway)
+            auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+            if (!gatewayRateLimiter)
             {
                 return true;
             }
 
+            GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
+            if (_msg->extAttributes())
+            {
+                msgExtAttributes =
+                    std::dynamic_pointer_cast<GatewayMessageExtAttributes>(_msg->extAttributes());
+            }
+
+            std::string groupID = msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+            uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+            std::string endpoint = _session->nodeIPEndpoint().address();
+            uint64_t msgLength = _msg->length();
+
             // bandwidth limit check
-            return gateway->checkBWRateLimit(_session, _msg, _callback);
+            auto r = gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
+            if (!r.first && _callback)
+            {
+                _callback(NetworkException(BandwidthOverFlow, r.second), Message::Ptr());
+            }
+
+            return r.first;
         });
 
         service->setOnMessageHandler(
-            [rateLimiterStatWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
-                auto rateLimiterStat = rateLimiterStatWeakPtr.lock();
-                if (rateLimiterStat)
+            [gatewayRateLimiterWeakPtr](SessionFace::Ptr _session, Message::Ptr _message) {
+                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                if (!gatewayRateLimiter)
                 {
-                    auto endPoint = _session->nodeIPEndpoint().address();
-                    auto msgLength = _message->length();
-                    rateLimiterStat->updateInComing(endPoint, msgLength);
+                    return true;
                 }
+
+                auto endpoint = _session->nodeIPEndpoint().address();
+                auto msgLength = _message->length();
+                gatewayRateLimiter->checkInComing(endpoint, msgLength);
+
+                return true;
             });
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
@@ -604,6 +649,97 @@ void GatewayFactory::initFailOver(
             }
         });
     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initFailOver for gateway success");
+}
+
+/**
+ * @brief init redis
+ *
+ * @param _redisIP
+ * @param _redisPort
+ * @param _redisPoolSize
+ * @param _redisTimeOut
+ * @return std::shared_ptr<sw::redis::Redis>
+ */
+std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(const std::string& _redisIP,
+    uint16_t _redisPort, uint32_t _redisPoolSize, uint32_t _redisTimeOut)
+{
+    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_KV("redisIP", _redisIP)
+                              << LOG_KV("redisPort", _redisPort)
+                              << LOG_KV("redisPoolSize", _redisPoolSize)
+                              << LOG_KV("redisTimeOut(ms)", _redisTimeOut);
+
+    sw::redis::ConnectionOptions connection_options;
+    connection_options.host = _redisIP;    // Required.
+    connection_options.port = _redisPort;  // Optional.
+    // connection_options.password = "auth";  // Optional. No password by default.
+    // connection_options.db = 1;  // Optional. Use the 0th database by default.
+
+    // Optional. Timeout before we successfully send request to or receive response from redis.
+    // By default, the timeout is 0ms, i.e. never timeout and block until we send or receive
+    // successfully. NOTE: if any command is timed out, we throw a TimeoutError exception.
+    connection_options.socket_timeout = std::chrono::milliseconds(_redisTimeOut);
+    // connection_options.connect_timeout = std::chrono::milliseconds(3000);
+    connection_options.keep_alive = true;
+
+    sw::redis::ConnectionPoolOptions pool_options;
+    // Pool size, i.e. max number of connections.
+    pool_options.size = _redisPoolSize;
+
+    std::shared_ptr<sw::redis::Redis> redis = nullptr;
+    try
+    {
+        // Connect to Redis server with a connection pool.
+        redis = std::make_shared<sw::redis::Redis>(connection_options, pool_options);
+
+        // test whether redis functions properly
+        // 1. set key
+        // 2. get key
+        // 3. del key
+
+        std::string key = "Gateway -> " + std::to_string(utcTime());
+        std::string value = "Hello, FISCO-BCOS 3.0.";
+
+        bool setR = redis->set(key, value);
+        if (setR)
+        {
+            GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("set ok");
+
+            auto getR = redis->get(key);
+            if (getR)
+            {
+                GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("get ok")
+                                          << LOG_KV("key", key) << LOG_KV("value", getR.value());
+            }
+            else
+            {
+                GATEWAY_FACTORY_LOG(WARNING)
+                    << LOG_BADGE("initRedis") << LOG_DESC("get failed, why???");
+            }
+
+            redis->del(key);
+        }
+        else
+        {
+            GATEWAY_FACTORY_LOG(WARNING)
+                << LOG_BADGE("initRedis") << LOG_DESC("set failed, why???");
+        }
+    }
+    catch (std::exception& e)
+    {
+        // Note: redis++ exception handling
+        //  https://github.com/sewenew/redis-plus-plus#exception
+        std::exception_ptr ePtr = std::make_exception_ptr(e);
+
+        GATEWAY_FACTORY_LOG(ERROR)
+            << LOG_BADGE("initRedis") << LOG_DESC("initialize redis exception")
+            << LOG_KV("error", e.what());
+
+        std::throw_with_nested(e);
+    }
+
+    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("initialize redis completely");
+
+    return redis;
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(

@@ -38,6 +38,10 @@ using namespace bcos::crypto;
 
 void Gateway::start()
 {
+    if (m_gatewayRateLimiter)
+    {
+        m_gatewayRateLimiter->start();
+    }
     if (m_p2pInterface)
     {
         m_p2pInterface->start();
@@ -50,10 +54,6 @@ void Gateway::start()
     {
         m_gatewayNodeManager->start();
     }
-    if (m_rateLimiterStatTimer)
-    {
-        m_rateLimiterStatTimer->start();
-    }
 
     GATEWAY_LOG(INFO) << LOG_DESC("start end.");
 
@@ -62,10 +62,6 @@ void Gateway::start()
 
 void Gateway::stop()
 {
-    if (m_rateLimiterStatTimer)
-    {
-        m_rateLimiterStatTimer->stop();
-    }
     // erase the registered handler
     if (m_p2pInterface)
     {
@@ -80,6 +76,10 @@ void Gateway::stop()
     if (m_gatewayNodeManager)
     {
         m_gatewayNodeManager->stop();
+    }
+    if (m_gatewayRateLimiter)
+    {
+        m_gatewayRateLimiter->stop();
     }
     GATEWAY_LOG(INFO) << LOG_DESC("stop end.");
     return;
@@ -437,155 +437,6 @@ bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     return true;
 }
 
-bool Gateway::checkBWRateLimit(ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
-    const std::string& _endPoint, const std::string& _groupID, uint16_t _moduleID,
-    uint64_t _msgLength, SessionCallbackFunc _callback)
-{
-    // endpoint of the p2p connection
-    const std::string& endPoint = _endPoint;
-    // group of the message, empty string means the message is p2p's own message
-    const std::string& groupID = _groupID;
-    // moduleID of the message, zero means the message is p2p's own message
-    uint16_t moduleID = _moduleID;
-    // the length of the message
-    uint64_t msgLength = _msgLength;
-
-    std::string errorMsg;
-    do
-    {
-        // total outgoing bandwidth
-        ratelimiter::RateLimiterInterface::Ptr totalOutGoingBWLimit =
-            _rateLimiterManager->getRateLimiter(
-                ratelimiter::RateLimiterManager::TOTAL_OUTGOING_KEY);
-
-        // connection outgoing bandwidth
-        ratelimiter::RateLimiterInterface::Ptr connOutGoingBWLimit =
-            _rateLimiterManager->getConnRateLimiter(endPoint);
-
-        // group outgoing bandwidth
-        ratelimiter::RateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
-        if (!groupID.empty())
-        {
-            groupOutGoingBWLimit = _rateLimiterManager->getGroupRateLimiter(groupID);
-        }
-
-        auto modulesWithNoBwLimit = _rateLimiterManager->modulesWithNoBwLimit();
-
-        // if moduleID is zero, the P2P network itself's message, the ratelimiter does not limit
-        // P2P own's messages
-        if (moduleID == 0)
-        {
-            if (totalOutGoingBWLimit)
-            {
-                totalOutGoingBWLimit->tryAcquire(msgLength);
-            }
-
-            if (connOutGoingBWLimit)
-            {
-                connOutGoingBWLimit->tryAcquire(msgLength);
-            }
-        }
-        // if moduleID is not zero, the message comes from the front
-        // There are two scenarios:
-        //  1. ulimit module message rate or
-        //  2. limit module message rate
-        else if (modulesWithNoBwLimit.count(moduleID))
-        {  // case 1: ulimit module message rate or, just for statistic
-
-            if (totalOutGoingBWLimit)
-            {
-                totalOutGoingBWLimit->tryAcquire(msgLength);
-            }
-
-            if (connOutGoingBWLimit)
-            {
-                connOutGoingBWLimit->tryAcquire(msgLength);
-            }
-
-            if (groupOutGoingBWLimit)
-            {
-                groupOutGoingBWLimit->tryAcquire(msgLength);
-            }
-        }
-        else
-        {  // case 2: limit module message rate
-
-            if (totalOutGoingBWLimit && !totalOutGoingBWLimit->tryAcquire(msgLength))
-            {
-                // total outgoing bandwidth overflow
-                errorMsg = "the network total outgoing bandwidth overflow";
-                break;
-            }
-
-            if (connOutGoingBWLimit && !connOutGoingBWLimit->tryAcquire(msgLength))
-            {
-                // connection outgoing bandwidth overflow
-                errorMsg =
-                    "the network connection outgoing bandwidth overflow, endpoint: " + endPoint;
-                if (totalOutGoingBWLimit)
-                {
-                    totalOutGoingBWLimit->rollback(msgLength);
-                }
-
-                break;
-            }
-
-            if (groupOutGoingBWLimit && !groupOutGoingBWLimit->tryAcquire(msgLength))
-            {
-                // group outgoing bandwidth overflow
-                errorMsg = "the group outgoing bandwidth overflow, groupID: " + groupID;
-                if (totalOutGoingBWLimit)
-                {
-                    totalOutGoingBWLimit->rollback(msgLength);
-                }
-
-                if (connOutGoingBWLimit)
-                {
-                    connOutGoingBWLimit->rollback(msgLength);
-                }
-
-                break;
-            }
-        }
-
-        m_rateLimiterStat->updateOutGoing(endPoint, msgLength, true);
-        m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, true);
-
-        return true;
-    } while (0);
-
-    m_rateLimiterStat->updateOutGoing(endPoint, msgLength, false);
-    m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
-
-    // TODO: use thread pool
-    if (_callback)
-    {
-        _callback(NetworkException(BandwidthOverFlow, errorMsg), Message::Ptr());
-    }
-
-    return false;
-}
-
-// gateway bw check
-bool Gateway::checkBWRateLimit(
-    SessionFace::Ptr _session, Message::Ptr _msg, SessionCallbackFunc _callback)
-{
-    GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
-    if (_msg->extAttributes())
-    {
-        msgExtAttributes =
-            std::dynamic_pointer_cast<GatewayMessageExtAttributes>(_msg->extAttributes());
-    }
-
-    std::string groupID = msgExtAttributes ? msgExtAttributes->groupID() : std::string();
-    uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
-    std::string endPoint = _session->nodeIPEndpoint().address();
-    uint64_t msgLength = _msg->length();
-
-    return checkBWRateLimit(
-        m_rateLimiterManager, endPoint, groupID, moduleID, msgLength, _callback);
-}
-
 void Gateway::asyncNotifyGroupInfo(
     bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> _callback)
 {
@@ -641,7 +492,7 @@ void Gateway::onReceiveP2PMessage(
     }
     */
 
-    m_rateLimiterStat->updateInComing(groupID, moduleID, _msg->length());
+    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
 
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
@@ -689,7 +540,7 @@ void Gateway::onReceiveBroadcastMessage(
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    m_rateLimiterStat->updateInComing(groupID, moduleID, _msg->length());
+    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
 
     /*
     // TODO: if outgoing bandwidth exceeds the upper limit
