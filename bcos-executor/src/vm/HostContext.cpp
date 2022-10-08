@@ -132,7 +132,7 @@ std::string addressBytesStr2String(std::string_view receiveAddressBytes)
     boost::algorithm::hex_lower(
         receiveAddressBytes.begin(), receiveAddressBytes.end(), std::back_inserter(strAddress));
 
-    return std::move(strAddress);
+    return strAddress;
 }
 
 std::string evmAddress2String(const evmc_address& address)

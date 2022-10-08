@@ -38,8 +38,9 @@ void ExecutorManager::addExecutor(
 }
 
 bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispatchExecutor(
-    const std::string_view& contract)
+    const std::string_view& _contract)
 {
+    auto contract = toLowerAddress(_contract);
     UpgradableGuard l(m_mutex);
     if (m_name2Executors.empty())
     {
@@ -67,8 +68,9 @@ bcos::executor::ParallelTransactionExecutorInterface::Ptr ExecutorManager::dispa
 }
 
 bcos::executor::ParallelTransactionExecutorInterface::Ptr
-ExecutorManager::dispatchCorrespondExecutor(const std::string_view& contract)
+ExecutorManager::dispatchCorrespondExecutor(const std::string_view& _contract)
 {
+    auto contract = toLowerAddress(_contract);
     UpgradableGuard l(m_mutex);
     auto executorIt = m_contract2ExecutorInfo.find(contract);
     if (executorIt != m_contract2ExecutorInfo.end())
@@ -83,8 +85,9 @@ ExecutorManager::dispatchCorrespondExecutor(const std::string_view& contract)
 
 
 bcos::scheduler::ExecutorManager::ExecutorInfo::Ptr ExecutorManager::getExecutorInfo(
-    const std::string_view& contract)
+    const std::string_view& _contract)
 {
+    auto contract = toLowerAddress(_contract);
     ReadGuard l(m_mutex);
     auto it = m_contract2ExecutorInfo.find(contract);
     if (it == m_contract2ExecutorInfo.end())
