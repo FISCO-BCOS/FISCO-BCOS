@@ -21,6 +21,7 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-utilities/ZstdCompress.h>
 #include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcos;
@@ -187,6 +188,15 @@ bool P2PMessage::encode(bytes& _buffer)
 {
     bytes emptyBuffer;
     _buffer.swap(emptyBuffer);
+
+    // compress payload
+    std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
+    bool isCompressSuccess = false;
+    if (tryToCompressPayload(compressData))
+    {
+        isCompressSuccess = true;
+    }
+
     if (!encodeHeader(_buffer))
     {
         return false;
@@ -198,7 +208,18 @@ bool P2PMessage::encode(bytes& _buffer)
     }
 
     // encode payload
-    _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
+    if (isCompressSuccess)
+    {
+        P2PMSG_LOG(TRACE) << LOG_DESC("compress payload success")
+                          << LOG_KV("compressedData", (char*)compressData->data())
+                          << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
+                          << LOG_KV("seq", m_seq);
+        _buffer.insert(_buffer.end(), compressData->begin(), compressData->end());
+    }
+    else
+    {
+        _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
+    }
 
     // calc total length and modify the length value in the buffer
     auto length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
@@ -207,6 +228,25 @@ bool P2PMessage::encode(bytes& _buffer)
     std::copy((byte*)&length, (byte*)&length + 4, _buffer.data());
     // set buffer size to m_length
     m_length = _buffer.size();
+    return true;
+}
+
+/// compress the payload data to be sended
+bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
+{
+    if (m_payload->size() <= bcos::gateway::c_compressThreshold)
+    {
+        return false;
+    }
+
+    size_t compressSize =
+        ZstdCompress::compress(ref(*m_payload), *compressData, bcos::gateway::c_zstdCompressLevel);
+    if (compressSize == CompressError)
+    {
+        return false;
+    }
+    // update compress flag
+    m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
     return true;
 }
 
@@ -275,8 +315,34 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     uint32_t length = _buffer.size();
     CHECK_OFFSET_WITH_THROW_EXCEPTION(m_length, length);
     auto data = _buffer.getCroppedData(offset, m_length - offset);
-    // payload
-    m_payload = std::make_shared<bytes>(data.begin(), data.end());
+    // raw data cropped from buffer, maybe be compressed or not
+    auto rawData = std::make_shared<bytes>(data.begin(), data.end());
+
+    // uncompress payload
+    // payload has been compressed
+    if ((m_ext & bcos::protocol::MessageExtFieldFlag::Compress) ==
+        bcos::protocol::MessageExtFieldFlag::Compress)
+    {
+        size_t uncompressSize = ZstdCompress::uncompress(ref(*rawData), *m_payload);
+        if (uncompressSize == UnCompressError)
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("ZstdCompress decode message error, uncompress failed")
+                              << LOG_KV("uncompressSize", uncompressSize)
+                              << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
+                              << LOG_KV("seq", m_seq);
+            // invalid packet?
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+        P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
+                          << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
+                          << LOG_KV("rawData", (char*)(rawData->data())) << LOG_KV("seq", m_seq);
+        // reset ext
+        m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
+    }
+    else
+    {
+        m_payload = std::move(rawData);
+    }
 
     return m_length;
 }

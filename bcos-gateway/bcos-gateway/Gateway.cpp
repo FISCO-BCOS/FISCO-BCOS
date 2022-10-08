@@ -715,8 +715,8 @@ void Gateway::onReceiveBroadcastMessage(
 
     auto type = _msg->ext();
     GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage") << LOG_KV("groupID", groupID)
-                       << LOG_KV("src", _msg->srcP2PNodeID())
-                       << LOG_KV("dst", _msg->dstP2PNodeID());
+                       << LOG_KV("src", _msg->srcP2PNodeID()) << LOG_KV("dst", _msg->dstP2PNodeID())
+                       << LOG_KV("type", type);
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
 }
