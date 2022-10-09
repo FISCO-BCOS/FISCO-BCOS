@@ -34,7 +34,7 @@ namespace bcos::test
 class FileSystemPrecompiledFixture : public PrecompiledFixture
 {
 public:
-    FileSystemPrecompiledFixture() { init(false); }
+    FileSystemPrecompiledFixture() = default;
 
     ~FileSystemPrecompiledFixture() override {}
 
@@ -350,7 +350,7 @@ public:
         return result4;
     };
 
-    ExecutionMessage::UniquePtr link(bool _isWasm, protocol::BlockNumber _number,
+    ExecutionMessage::UniquePtr link([[maybe_unused]] bool _isWasm, protocol::BlockNumber _number,
         std::string const& name, std::string const& version, std::string const& address,
         std::string const& abi, int _errorCode = 0, bool _isCover = false)
     {
@@ -473,6 +473,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledFileSystemTest, FileSystemPrecompiledFixture
 
 BOOST_AUTO_TEST_CASE(lsTest)
 {
+    init(false);
     BlockNumber _number = 3;
 
     // ls dir
@@ -589,6 +590,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
 
 BOOST_AUTO_TEST_CASE(mkdirTest)
 {
+    init(false);
     BlockNumber _number = 3;
     // simple mkdir
     {
@@ -648,6 +650,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 
 BOOST_AUTO_TEST_CASE(linkTest)
 {
+    init(false);
     BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
