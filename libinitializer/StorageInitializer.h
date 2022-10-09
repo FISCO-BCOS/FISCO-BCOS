@@ -37,7 +37,8 @@ class StorageInitializer
 {
 public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
+        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt,
+        [[maybe_unused]] size_t keyPageSize = 0)
     {
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
