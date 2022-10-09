@@ -405,7 +405,10 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
     auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(_syncMsg);
     m_syncStatus->updatePeerStatus(_nodeID, statusMsg);
     
-    m_config->nodeTimeMaintenance()->tryToUpdatePeerTimeInfo(_nodeID, statusMsg->time());
+    if(_syncMsg->version() > static_cast<int32_t>(BlockSyncMsgVersion::v0))
+    {
+        m_config->nodeTimeMaintenance()->tryToUpdatePeerTimeInfo(_nodeID, statusMsg->time());
+    }
 }
 
 void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
@@ -755,7 +758,8 @@ void BlockSync::maintainPeersConnection()
         }
         // create a peer
         auto newPeerStatus = m_config->msgFactory()->createBlockSyncStatusMsg(
-            m_config->blockNumber(), m_config->hash(), m_config->genesisHash());
+            m_config->blockNumber(), m_config->hash(), m_config->genesisHash(),
+            static_cast<int32_t>(BlockSyncMsgVersion::v1));
         m_syncStatus->updatePeerStatus(m_config->nodeID(), newPeerStatus);
         BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to peer")
                            << LOG_KV("number", newPeerStatus->number())

@@ -99,24 +99,14 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
 
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   return hostContext.codeSizeAt(fromEvmC(*_addr));
-
-    // always return 1
-    (void)_context;
-    (void)_addr;
-    return 1;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return hostContext.codeSizeAt(fromEvmC(*_addr));
 }
 
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
-
-    // always return 0
-    (void)_context;
-    (void)_addr;
-    return toEvmC(h256());
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
 }
 
 /**

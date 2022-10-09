@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateLimiterStatistics.h
+ * @file RateLimiterStat.h
  * @author: octopus
  * @date 2022-06-30
  */
@@ -31,33 +31,33 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 //
-struct Statistics
+struct Stat
 {
     std::atomic<uint64_t> totalDataSize;
     std::atomic<uint64_t> lastDataSize;
 
-    std::atomic<uint64_t> totalCount;
-    std::atomic<int64_t> lastCount;
+    std::atomic<uint64_t> totalTimes;
+    std::atomic<int64_t> lastTimes;
 
-    std::atomic<uint64_t> totalFailedCount;
-    std::atomic<int64_t> lastFailedCount;
+    std::atomic<uint64_t> totalFailedTimes;
+    std::atomic<int64_t> lastFailedTimes;
 
 public:
     void resetLast()
     {
-        lastCount = 0;
+        lastTimes = 0;
         lastDataSize = 0;
-        lastFailedCount = 0;
+        lastFailedTimes = 0;
     }
 
     void update(uint64_t _dataSize)
     {
-        totalCount++;
-        lastCount++;
+        totalTimes++;
+        lastTimes++;
 
         totalDataSize += _dataSize;
         lastDataSize += _dataSize;
@@ -65,30 +65,30 @@ public:
 
     void updateFailed()
     {
-        totalFailedCount++;
-        lastFailedCount++;
+        totalFailedTimes++;
+        lastFailedTimes++;
     }
 
-    double calcAvgRate(int64_t _data, int64_t _periodMS);
+    double calcAvgRate(uint64_t _data, uint32_t _periodMS);
 
-    std::optional<std::string> toString(const std::string& _prefix, int64_t _periodMS);
+    std::optional<std::string> toString(const std::string& _prefix, uint32_t _periodMS);
 };
 
-class RateLimiterStatistics
+class RateLimiterStat
 {
 public:
     const static std::string TOTAL_INCOMING;
     const static std::string TOTAL_OUTGOING;
 
 public:
-    using Ptr = std::shared_ptr<RateLimiterStatistics>;
-    using ConstPtr = std::shared_ptr<const RateLimiterStatistics>;
+    using Ptr = std::shared_ptr<RateLimiterStat>;
+    using ConstPtr = std::shared_ptr<const RateLimiterStat>;
 
 public:
-    void updateInComing(const std::string& _endPoint, uint64_t _dataSize);
+    void updateInComing(const std::string& _endpoint, uint64_t _dataSize);
     void updateInComing(const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize);
 
-    void updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc);
+    void updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc);
     void updateOutGoing(
         const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc);
 
@@ -102,17 +102,17 @@ public:
     std::pair<std::string, std::string> inAndOutStat(uint32_t _intervalMS);
 
 public:
-    const std::unordered_map<std::string, Statistics>& inStat() { return m_inStat; }
-    const std::unordered_map<std::string, Statistics>& outStat() { return m_outStat; }
+    const std::unordered_map<std::string, Stat>& inStat() { return m_inStat; }
+    const std::unordered_map<std::string, Stat>& outStat() { return m_outStat; }
 
 private:
     // TODO: How to clean up the disconnected connections
     std::mutex m_inLock;
     std::mutex m_outLock;
-    std::unordered_map<std::string, Statistics> m_inStat;
-    std::unordered_map<std::string, Statistics> m_outStat;
+    std::unordered_map<std::string, Stat> m_inStat;
+    std::unordered_map<std::string, Stat> m_outStat;
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

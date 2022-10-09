@@ -31,7 +31,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 class RateLimiterManager
@@ -75,8 +75,8 @@ public:
     RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
 public:
-    ratelimit::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
-    void setRateLimiterFactory(ratelimit::RateLimiterFactory::Ptr _rateLimiterFactory)
+    ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
+    void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr _rateLimiterFactory)
     {
         m_rateLimiterFactory = _rateLimiterFactory;
     }
@@ -98,7 +98,7 @@ public:
 
 private:
     //   factory for RateLimiterInterface
-    ratelimit::RateLimiterFactory::Ptr m_rateLimiterFactory;
+    ratelimiter::RateLimiterFactory::Ptr m_rateLimiterFactory;
 
     // lock for m_group2RateLimiter
     mutable std::shared_mutex x_rateLimiters;
@@ -111,6 +111,6 @@ private:
     GatewayConfig::RateLimiterConfig m_rateLimiterConfig;
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

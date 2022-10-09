@@ -21,7 +21,6 @@
 #pragma once
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
-#include "bcos-sync/utilities/Common.h"
 
 namespace bcos
 {

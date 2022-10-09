@@ -46,6 +46,14 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
+        // stat reporter interval ms
+        int32_t statReporterInterval = 60000;
+        // stat reporter info level
+        // 0:
+        // 1:
+        // 2:
+        int32_t statReporterLevel = 0;
+
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
 
@@ -63,7 +71,7 @@ public:
         std::set<uint16_t> modulesWithNoBwLimit;
 
         // whether any configuration takes effect
-        bool isConfigEffect() const
+        bool hasRateLimiterConfigEffect() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
@@ -150,11 +158,6 @@ private:
     std::string m_certPath;
     std::string m_nodePath;
     std::string m_nodeFileName;
-
-    // redis server
-    std::string m_redisServer;
-    // redis port
-    uint16_t m_redisPort;
 };
 
 }  // namespace gateway
