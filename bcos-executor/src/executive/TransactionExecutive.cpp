@@ -220,6 +220,14 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                          << LOG_KV("delegateCall", callParameters->delegateCall)
                          << LOG_KV("codeAddress", callParameters->codeAddress);
 
+    auto tableName = getContractTableName(callParameters->receiveAddress, blockContext->isWasm());
+    // delegateCall is just about to replace code, no need to check permission beforehand
+    if (callParameters->delegateCall)
+    {
+        auto hostContext = make_unique<DelegateHostContext>(
+            std::move(callParameters), shared_from_this(), std::move(tableName));
+        return {std::move(hostContext), nullptr};
+    }
     // check permission first
     if (blockContext->isAuthCheck() && !checkAuth(callParameters))
     {
@@ -229,15 +237,6 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     if (isPrecompiled(callParameters->receiveAddress) || callParameters->internalCall)
     {
         return {nullptr, callPrecompiled(std::move(callParameters))};
-    }
-    auto tableName = getContractTableName(callParameters->receiveAddress, blockContext->isWasm());
-
-    // delegateCall is just about to replace code, no need to check permission beforehand
-    if (callParameters->delegateCall)
-    {
-        auto hostContext = make_unique<DelegateHostContext>(
-            std::move(callParameters), shared_from_this(), std::move(tableName));
-        return {std::move(hostContext), nullptr};
     }
 
     auto hostContext = make_unique<HostContext>(

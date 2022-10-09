@@ -409,7 +409,8 @@ public:
     };
 
     ExecutionMessage::UniquePtr getAccountStatusByManager(protocol::BlockNumber _number,
-        Address account, int _errorCode = 0, bool errorInAccountManager = false)
+        Address account, int _errorCode = 0, bool errorInAccountManager = false,
+        bool noExist = true)
     {
         nextBlock(_number, Version::V3_1_VERSION);
         bytes in = codec->encodeWithSig("getAccountStatus(address)", account);
@@ -583,8 +584,12 @@ BOOST_AUTO_TEST_CASE(createAccountTest)
         codec->decode(response->data(), status);
         BOOST_CHECK(status == 0);
 
+        // not exist account in chain, return 0 by default
         auto response2 = getAccountStatusByManager(number++, errorAccount);
-        BOOST_CHECK(response2->status() == 15);
+        BOOST_CHECK(response2->status() == 0);
+        uint8_t status2 = UINT8_MAX;
+        codec->decode(response2->data(), status2);
+        BOOST_CHECK(status2 == 0);
     }
 
     // check status by account contract

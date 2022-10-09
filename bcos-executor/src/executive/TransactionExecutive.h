@@ -178,7 +178,7 @@ protected:
 
         if (blockContext->isAuthCheck())
         {
-            if (_address.find(precompiled::SYS_ADDRESS_PREFIX) == 0)
+            if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
             {
                 return std::string(USER_SYS_PREFIX).append(_address);
             }

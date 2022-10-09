@@ -171,7 +171,7 @@ void AccountManagerPrecompiled::getAccountStatus(
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gas);
-    if (response->status == (uint32_t)TransactionStatus::CallAddressError)
+    if (response->status != (int32_t)TransactionStatus::None)
     {
         // maybe this address not exist in chain, return normal by default
         _callParameters->setExecResult(codec.encode((uint8_t)0));
