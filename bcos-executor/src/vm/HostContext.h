@@ -22,6 +22,7 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executive/BlockContext.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/storage/Table.h"
 #include <evmc/evmc.h>
@@ -88,6 +89,8 @@ public:
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
 
+    evmc_status_code toEVMStatus(std::unique_ptr<CallParameters> const& _response,
+        evmc_result _result, std::shared_ptr<BlockContext> _blockContext);
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
 
