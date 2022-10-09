@@ -36,13 +36,12 @@ private:
               : m_transactionImpl(transactionImpl), m_scheduler(scheduler), m_receipt(receipt)
             {}
 
-            constexpr void await_suspend(
-                CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
+            void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 bcos::concepts::getRef(m_scheduler)
                     .call(std::move(m_transactionImpl),
                         [this, m_handle = std::move(handle)](Error::Ptr&& error,
-                            protocol::TransactionReceipt::Ptr&& transactionReceipt) {
+                            protocol::TransactionReceipt::Ptr&& transactionReceipt) mutable {
                             if (!error)
                             {
                                 auto tarsImpl = std::dynamic_pointer_cast<
