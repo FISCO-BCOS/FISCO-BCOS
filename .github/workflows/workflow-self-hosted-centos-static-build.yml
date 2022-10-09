@@ -1,17 +1,10 @@
-name: Centos CI Check
+name: Centos Static build
 on:
-  push:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  release:
-    types: [push]
+    branches:
+      - feature-3.1.0
+    types: [closed] 
+    
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true

@@ -65,8 +65,18 @@ jobs:
           make -j8
 
       - name: Test
-        run:
+        run: |
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+          make cov
+      
+      - name: Generate covreage report
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v2
+        with:
+          version: "v0.1.15"
+          file: ./build/coverage.info
+          name: FISCO BCOS 3.0.0 coverage
+          fail_ci_if_error: true
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh
