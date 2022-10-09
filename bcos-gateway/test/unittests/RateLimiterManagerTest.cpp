@@ -35,33 +35,34 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
 {
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
     bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-    auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+    bcos::gateway::GatewayConfig::RedisConfig redisConfig;
+    auto rateLimiterManager =
+        gatewayFactory->buildRateLimiterManager(rateLimiterConfig, redisConfig);
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
 
     BOOST_CHECK(rateLimiterManager->registerRateLimiter(
-        "192.108.0.0", rateLimiterFactory->buildRateLimiter(10)));
+        "192.108.0.0", rateLimiterFactory->buildTokenBucketRateLimiter(10)));
     BOOST_CHECK(!rateLimiterManager->registerRateLimiter(
-        "192.108.0.0", rateLimiterFactory->buildRateLimiter(10)));
+        "192.108.0.0", rateLimiterFactory->buildTokenBucketRateLimiter(10)));
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") != nullptr);
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.0"));
     BOOST_CHECK(!rateLimiterManager->removeRateLimiter("192.108.0.0"));
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
-
-    BOOST_CHECK(rateLimiterManager->ensureRateLimiterExist("a", 111) != nullptr);
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("a") != nullptr);
-    BOOST_CHECK(rateLimiterManager->ensureRateLimiterExist("a", 111) != nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(test_rateLimiterManagerDefaultConfig)
 {
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
 
+
     bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-    auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+    bcos::gateway::GatewayConfig::RedisConfig redisConfig;
+    auto rateLimiterManager =
+        gatewayFactory->buildRateLimiterManager(rateLimiterConfig, redisConfig);
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter(
                     bcos::gateway::ratelimiter::RateLimiterManager::TOTAL_OUTGOING_KEY) == nullptr);
@@ -85,7 +86,8 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
-    auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+    auto rateLimiterManager =
+        gatewayFactory->buildRateLimiterManager(rateLimiterConfig, config->redisConfig());
 
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
@@ -95,15 +97,15 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
         BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group0") != nullptr);
         BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group1") != nullptr);
         BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group3") != nullptr);
+        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group3") == nullptr);
 
         BOOST_CHECK(rateLimiterManager->removeGroupRateLimiter("group3"));
         BOOST_CHECK(!rateLimiterManager->removeGroupRateLimiter("group3"));
         BOOST_CHECK(rateLimiterManager->removeGroupRateLimiter("group2"));
         BOOST_CHECK(!rateLimiterManager->removeGroupRateLimiter("group2"));
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
+        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") == nullptr);
         BOOST_CHECK(!rateLimiterManager->registerGroupRateLimiter(
-            "group2", rateLimiterFactory->buildRateLimiter(10)));
+            "group2", rateLimiterFactory->buildTokenBucketRateLimiter(10)));
         BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
     }
 
@@ -111,21 +113,21 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
         BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.1") != nullptr);
         BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
         BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.3") != nullptr);
+        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") == nullptr);
+
+        BOOST_CHECK(!rateLimiterManager->registerConnRateLimiter(
+            "192.108.0.0", rateLimiterFactory->buildTokenBucketRateLimiter(10)));
         BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
 
         BOOST_CHECK(!rateLimiterManager->registerConnRateLimiter(
-            "192.108.0.0", rateLimiterFactory->buildRateLimiter(10)));
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
-
-        BOOST_CHECK(!rateLimiterManager->registerConnRateLimiter(
-            "192.108.0.0", rateLimiterFactory->buildRateLimiter(10)));
+            "192.108.0.0", rateLimiterFactory->buildTokenBucketRateLimiter(10)));
 
         BOOST_CHECK(rateLimiterManager->removeConnRateLimiter("192.108.0.2"));
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
+        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") == nullptr);
         BOOST_CHECK(rateLimiterManager->removeConnRateLimiter("192.108.0.2"));
 
-        BOOST_CHECK(!rateLimiterManager->registerConnRateLimiter(
-            "192.108.0.2", rateLimiterFactory->buildRateLimiter(10)));
+        BOOST_CHECK(rateLimiterManager->registerConnRateLimiter(
+            "192.108.0.2", rateLimiterFactory->buildTokenBucketRateLimiter(10)));
         BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
     }
 }
@@ -142,7 +144,8 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
-    auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+    auto rateLimiterManager =
+        gatewayFactory->buildRateLimiterManager(rateLimiterConfig, config->redisConfig());
 
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
@@ -151,18 +154,6 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
     BOOST_CHECK(rateLimiterConfig.totalOutgoingBwLimit > 0);
     BOOST_CHECK(rateLimiterConfig.connOutgoingBwLimit > 0);
     BOOST_CHECK(rateLimiterConfig.groupOutgoingBwLimit > 0);
-
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("group-group0") == nullptr);
-    BOOST_CHECK(rateLimiterManager->ensureRateLimiterExist("group-group0", 10) != nullptr);
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("group-group0") != nullptr);
-    BOOST_CHECK(rateLimiterManager->removeRateLimiter("group-group0"));
-    BOOST_CHECK(!rateLimiterManager->removeRateLimiter("group-group0"));
-
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("ip-127.0.0.1") == nullptr);
-    BOOST_CHECK(rateLimiterManager->ensureRateLimiterExist("ip-127.0.0.1", 10) != nullptr);
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("ip-127.0.0.1") != nullptr);
-    BOOST_CHECK(rateLimiterManager->removeRateLimiter("ip-127.0.0.1"));
-    BOOST_CHECK(!rateLimiterManager->removeRateLimiter("ip-127.0.0.1"));
 }
 
 

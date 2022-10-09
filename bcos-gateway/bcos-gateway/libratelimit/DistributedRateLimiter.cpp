@@ -98,6 +98,7 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
 
         auto end = utcTime();
 
+        // TODO: statistics request cost information
         if (1)
         {
             GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("tryAcquire")
@@ -111,7 +112,7 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
     }
     catch (const std::exception& e)
     {
-        // TODO: statistics failure Information
+        // TODO: statistics failure information
         GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("tryAcquire")
                            << LOG_KV("rateLimitKey", m_rateLimitKey) << LOG_KV("error", e.what());
 

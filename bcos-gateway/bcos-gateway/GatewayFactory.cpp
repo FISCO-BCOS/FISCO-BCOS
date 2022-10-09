@@ -363,17 +363,10 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
     const GatewayConfig::RedisConfig& _redisConfig)
 {
-    std::shared_ptr<sw::redis::Redis> redis = nullptr;
-    if (_rateLimiterConfig.isDistributedRateLimitOn())
-    {  // init redis first
-        redis = initRedis(_redisConfig.redisServerIP, _redisConfig.redisServerPort,
-            _redisConfig.redisPoolSize, _redisConfig.redisTimeOut);
-    }
-
     auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
     rateLimiterStat->setStatReporterInterval(_rateLimiterConfig.statReporterInterval);
 
-    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig);
+    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig, _redisConfig);
 
     auto gatewayRateLimiter =
         std::make_shared<ratelimiter::GatewayRateLimiter>(rateLimiterManager, rateLimiterStat);
@@ -382,10 +375,20 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
 }
 
 std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimiterManager(
-    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
+    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
+    const GatewayConfig::RedisConfig& _redisConfig)
 {
+    // redis instance
+    std::shared_ptr<sw::redis::Redis> redis = nullptr;
+
+    if (_rateLimiterConfig.isDistributedRateLimitOn())
+    {  // init redis first
+        redis = initRedis(_redisConfig.redisServerIP, _redisConfig.redisServerPort,
+            _redisConfig.redisPoolSize, _redisConfig.redisTimeOut);
+    }
+
     // rate limiter factory
-    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>();
+    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>(redis);
     // rate limiter manager
     auto rateLimiterManager = std::make_shared<ratelimiter::RateLimiterManager>(_rateLimiterConfig);
 
@@ -393,8 +396,8 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     ratelimiter::RateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
     if (_rateLimiterConfig.totalOutgoingBwLimit > 0)
     {
-        totalOutgoingRateLimiter =
-            rateLimiterFactory->buildRateLimiter(_rateLimiterConfig.totalOutgoingBwLimit);
+        totalOutgoingRateLimiter = rateLimiterFactory->buildTokenBucketRateLimiter(
+            _rateLimiterConfig.totalOutgoingBwLimit);
 
         rateLimiterManager->registerRateLimiter(
             ratelimiter::RateLimiterManager::TOTAL_OUTGOING_KEY, totalOutgoingRateLimiter);
@@ -405,7 +408,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     {
         for (const auto& [ip, bandWidth] : _rateLimiterConfig.ip2BwLimit)
         {
-            auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
+            auto rateLimiterInterface = rateLimiterFactory->buildTokenBucketRateLimiter(bandWidth);
             rateLimiterManager->registerConnRateLimiter(ip, rateLimiterInterface);
         }
     }
@@ -415,8 +418,18 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     {
         for (const auto& [group, bandWidth] : _rateLimiterConfig.group2BwLimit)
         {
-            auto rateLimiterInterface = rateLimiterFactory->buildRateLimiter(bandWidth);
-            rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
+            if (_rateLimiterConfig.isDistributedRateLimitOn())
+            {
+                auto rateLimiterInterface = rateLimiterFactory->buildRedisDistributedRateLimiter(
+                    bandWidth, rateLimiterFactory->toTokenKey(group));
+                rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
+            }
+            else
+            {
+                auto rateLimiterInterface =
+                    rateLimiterFactory->buildTokenBucketRateLimiter(bandWidth);
+                rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
+            }
         }
     }
 

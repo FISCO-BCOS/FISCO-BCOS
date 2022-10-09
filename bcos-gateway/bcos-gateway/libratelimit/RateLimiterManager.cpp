@@ -19,6 +19,7 @@
  */
 
 #include "bcos-gateway/Common.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 
 using namespace bcos;
@@ -42,7 +43,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& 
 bool RateLimiterManager::registerRateLimiter(
     const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter)
 {
-    if (getGroupRateLimiter(_rateLimiterKey))
+    if (getRateLimiter(_rateLimiterKey))
     {
         return false;
     }
@@ -62,39 +63,6 @@ bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
 
     std::unique_lock lock(x_rateLimiters);
     return m_rateLimiters.erase(_rateLimiterKey) > 0;
-}
-
-RateLimiterInterface::Ptr RateLimiterManager::ensureRateLimiterExist(
-    const std::string& _rateLimiterKey, int64_t _maxPermits)
-{
-    // ratelimiter exist
-    auto rateLimiter = getRateLimiter(_rateLimiterKey);
-    if (rateLimiter)
-    {
-        return rateLimiter;
-    }
-
-    RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("ensureRateLimiterExist")
-                            << LOG_KV("rateLimiterKey", _rateLimiterKey)
-                            << LOG_KV("maxPermits", _maxPermits);
-
-    // create ratelimiter
-    rateLimiter = m_rateLimiterFactory->buildRateLimiter(_maxPermits);
-
-    {
-        std::unique_lock lock(x_rateLimiters);
-        auto it = m_rateLimiters.find(_rateLimiterKey);
-        if (it != m_rateLimiters.end())
-        {
-            rateLimiter = it->second;
-        }
-        else
-        {
-            m_rateLimiters[_rateLimiterKey] = rateLimiter;
-        }
-    }
-
-    return rateLimiter;
 }
 
 bool RateLimiterManager::registerGroupRateLimiter(
@@ -130,7 +98,32 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
 
         if (groupOutgoingBwLimit > 0)
         {
-            rateLimiter = ensureRateLimiterExist(rateLimiterKey, groupOutgoingBwLimit);
+            auto rateLimiter = getRateLimiter(rateLimiterKey);
+            // ratelimiter not exist
+            if (!rateLimiter)
+            {
+                RATELIMIT_MGR_LOG(INFO)
+                    << LOG_BADGE("getGroupRateLimiter") << LOG_DESC("group rate limiter not exist")
+                    << LOG_KV("rateLimiterKey", rateLimiterKey)
+                    << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
+                    << LOG_KV("isDistributedRateLimitOn",
+                           m_rateLimiterConfig.isDistributedRateLimitOn());
+
+                if (m_rateLimiterConfig.isDistributedRateLimitOn())
+                {
+                    // create ratelimiter
+                    rateLimiter = m_rateLimiterFactory->buildRedisDistributedRateLimiter(
+                        groupOutgoingBwLimit, m_rateLimiterFactory->toTokenKey(_group));
+                }
+                else
+                {
+                    // create ratelimiter
+                    rateLimiter =
+                        m_rateLimiterFactory->buildTokenBucketRateLimiter(groupOutgoingBwLimit);
+                }
+
+                registerGroupRateLimiter(_group, rateLimiter);
+            }
         }
     }
 
@@ -170,7 +163,21 @@ RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::stri
 
         if (connOutgoingBwLimit > 0)
         {
-            rateLimiter = ensureRateLimiterExist(rateLimiterKey, connOutgoingBwLimit);
+            auto rateLimiter = getRateLimiter(rateLimiterKey);
+            // ratelimiter not exist
+            if (!rateLimiter)
+            {
+                RATELIMIT_MGR_LOG(INFO)
+                    << LOG_BADGE("getConnRateLimiter") << LOG_DESC("conn rate limiter not exist")
+                    << LOG_KV("rateLimiterKey", rateLimiterKey)
+                    << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit);
+
+                // create ratelimiter
+                rateLimiter =
+                    m_rateLimiterFactory->buildTokenBucketRateLimiter(connOutgoingBwLimit);
+
+                registerConnRateLimiter(_connIP, rateLimiter);
+            }
         }
     }
 

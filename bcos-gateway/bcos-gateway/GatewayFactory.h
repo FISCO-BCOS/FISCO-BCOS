@@ -59,7 +59,8 @@ public:
 
     //
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
-        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
+        const GatewayConfig::RedisConfig& _redisConfig);
 
     /**
      * @brief construct Gateway
