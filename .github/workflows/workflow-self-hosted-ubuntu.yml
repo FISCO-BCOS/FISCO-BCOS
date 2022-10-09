@@ -70,7 +70,6 @@ jobs:
           make cov
           
       - name: Generate covreage report
-        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v2
         with:
           version: "v0.1.15"
