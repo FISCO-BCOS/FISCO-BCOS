@@ -4,6 +4,8 @@
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <tbb/blocked_range.h>
+#include <tbb/enumerable_thread_specific.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/program_options.hpp>
 #include <chrono>
@@ -17,17 +19,16 @@ std::string generateTestData(int count)
 {
     std::string buffer;
     buffer.resize(count * Hasher::HASH_SIZE);
-#pragma omp parallel
-    {
-        Hasher hasher;
-#pragma omp for
-        for (int i = 0; i < count; ++i)
+    tbb::enumerable_thread_specific<Hasher> hasher;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, count), [&hasher, &buffer](auto const& range) {
+        auto& localHasher = hasher.local();
+        for (size_t i = range.begin(); i < range.end(); ++i)
         {
-            hasher.update(i);
+            localHasher.update(i);
             std::span<char> view(&buffer[i * Hasher::HASH_SIZE], Hasher::HASH_SIZE);
-            hasher.final(view);
+            localHasher.final(view);
         }
-    }
+    });
 
     return buffer;
 }

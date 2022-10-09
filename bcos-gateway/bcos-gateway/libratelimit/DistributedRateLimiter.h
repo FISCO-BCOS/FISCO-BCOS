@@ -20,8 +20,11 @@
 
 #pragma once
 
+#include "bcos-gateway/Common.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
+#include <sw/redis++/redis++.h>
 
 namespace bcos
 {
@@ -29,11 +32,6 @@ namespace gateway
 {
 namespace ratelimiter
 {
-
-/**
- * @brief
- * Distributed limited bandwidth
- */
 
 class DistributedRateLimiter : public RateLimiterInterface
 {
@@ -43,7 +41,18 @@ public:
     using UniquePtr = std::unique_ptr<const DistributedRateLimiter>;
 
 public:
-    DistributedRateLimiter(int64_t _maxQPS);
+    const static std::string luaScript;
+
+public:
+    DistributedRateLimiter(const std::string& _rateLimitKey, int64_t _maxPermits,
+        std::shared_ptr<sw::redis::Redis> _redis)
+      : m_rateLimitKey(_rateLimitKey), m_maxPermits(_maxPermits), m_redis(_redis)
+    {
+        GATEWAY_LOG(INFO) << LOG_BADGE("DistributedRateLimiter::NEWOBJ")
+                          << LOG_DESC("construct distributed rate limiter")
+                          << LOG_KV("rateLimitKey", _rateLimitKey)
+                          << LOG_KV("maxPermits", _maxPermits);
+    }
 
     DistributedRateLimiter(DistributedRateLimiter&&) = delete;
     DistributedRateLimiter(const DistributedRateLimiter&) = delete;
@@ -71,13 +80,25 @@ public:
      */
     bool tryAcquire(int64_t _requiredPermits) override;
 
-
     /**
      * @brief
      *
      * @return
      */
     void rollback(int64_t _requiredPermits) override;
+
+public:
+    int64_t maxPermits() const { return m_maxPermits; }
+    std::string rateLimitKey() const { return m_rateLimitKey; }
+    std::shared_ptr<sw::redis::Redis> redis() const { return m_redis; }
+
+private:
+    // key for distributed limit
+    std::string m_rateLimitKey;
+    //
+    int64_t m_maxPermits;
+    // redis instance
+    std::shared_ptr<sw::redis::Redis> m_redis;
 };
 
 }  // namespace ratelimiter
