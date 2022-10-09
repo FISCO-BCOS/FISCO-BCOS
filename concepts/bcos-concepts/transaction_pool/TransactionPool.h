@@ -13,7 +13,7 @@ public:
     auto submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        return impl().impl_submitTransaction(std::move(transaction), receipt);
+        return impl().impl_submitTransaction(transaction, receipt);
     }
 
 private:

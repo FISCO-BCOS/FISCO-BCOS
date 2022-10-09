@@ -1,3 +1,4 @@
+#include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
 #include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
@@ -75,14 +76,16 @@ BOOST_AUTO_TEST_CASE(mtTxPool)
     bcostars::TransactionReceipt receipt;
 
     std::cout << "submitTransaction start at " << std::this_thread::get_id() << std::endl;
-    transactionPool.submitTransaction(transaction, receipt);
+    bcos::task::syncWait(transactionPool.submitTransaction(transaction, receipt));
     std::cout << "submitTransaction success at " << std::this_thread::get_id() << std::endl;
     BOOST_CHECK_EQUAL(receipt.data.blockNumber, 10086);
     BOOST_CHECK_EQUAL(receipt.data.status, 100);
 
     MockTransactionPoolMT<true> mock2;
     bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
-    auto task = transactionPool2.submitTransaction(transaction, receipt);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(transactionPool2.submitTransaction(transaction, receipt)),
+        bcos::Error);
 }
 
 BOOST_AUTO_TEST_CASE(stTxPool)
@@ -92,7 +95,7 @@ BOOST_AUTO_TEST_CASE(stTxPool)
 
     MockTransactionPoolST mock3;
     bcos::transaction_pool::TransactionPoolImpl transactionPool3(mock3);
-    transactionPool3.submitTransaction(transaction, receipt);
+    bcos::task::syncWait(transactionPool3.submitTransaction(transaction, receipt));
 
     BOOST_CHECK_EQUAL(receipt.data.status, 79);
 }
@@ -110,7 +113,7 @@ bcos::task::Task<void> mainTask()
 
 BOOST_AUTO_TEST_CASE(multiCoro)
 {
-    mainTask();
+    bcos::task::syncWait(mainTask());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
