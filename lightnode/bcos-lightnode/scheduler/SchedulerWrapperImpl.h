@@ -1,9 +1,9 @@
 #pragma once
 
-#include <bcos-concepts/Task.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
+#include <bcos-task/Task.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 
@@ -36,13 +36,12 @@ private:
               : m_transactionImpl(transactionImpl), m_scheduler(scheduler), m_receipt(receipt)
             {}
 
-            constexpr void await_suspend(
-                CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
+            void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 bcos::concepts::getRef(m_scheduler)
                     .call(std::move(m_transactionImpl),
-                        [this](Error::Ptr&& error,
-                            protocol::TransactionReceipt::Ptr&& transactionReceipt) {
+                        [this, m_handle = std::move(handle)](Error::Ptr&& error,
+                            protocol::TransactionReceipt::Ptr&& transactionReceipt) mutable {
                             if (!error)
                             {
                                 auto tarsImpl = std::dynamic_pointer_cast<
@@ -55,9 +54,9 @@ private:
                             {
                                 m_error = std::move(error);
                             }
-                        });
 
-                handle.resume();
+                            m_handle.resume();
+                        });
             }
 
             decltype(transactionImpl)& m_transactionImpl;
