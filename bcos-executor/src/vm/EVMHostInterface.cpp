@@ -26,6 +26,7 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
+#include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
@@ -126,6 +127,12 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
     size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
+
+    if(hostContext.blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        hostContext.setCodeNewVersion(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
+        return _bufferSize;
+    }
 
     hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
     return _bufferSize;

@@ -24,6 +24,7 @@
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
 #include <bcos-framework/executor/ExecutionMessage.h>
@@ -331,6 +332,52 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
     }
 }
 
+bool HostContext::setCodeNewVersion(bytes code)
+{
+    auto contractTable = m_executive->storage().openTable(m_tableName);
+    Entry codeHashEntry;
+    auto codeHash = hashImpl()->hash(code);
+    if (contractTable)
+    {
+        codeHashEntry.importFields({codeHash.asBytes()});
+        m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+    }
+    auto codeTable = m_executive->storage().openTable(bcos::ledger::SYS_CODE_BINARY);
+    if (codeTable)
+    {
+        if (m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex()))
+        {
+            return true;
+        }
+        Entry codeEntry;
+        codeEntry.importFields({std::move(code)});
+        m_executive->storage().setRow(
+            bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
+        return true;
+    }
+    EXECUTOR_LOG(INFO) << LOG_DESC("SYS_CODE_BINARY is not existed");
+    return false;
+}
+
+void HostContext::setCodeAndAbi(bytes code, string abi, uint32_t blockVersion)
+{
+    EXECUTOR_LOG(TRACE) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
+                        << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
+    // blockVersion is 0x03000000 in FISCO Version V3.0.0
+    if (blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        if (setCodeNewVersion(std::move(code)))
+        {
+            Entry abiEntry;
+            abiEntry.importFields({std::move(abi)});
+            m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);
+        }
+        return;
+    }
+    setCodeAndAbi(code, abi);
+    return;
+}
+
 bcos::bytes HostContext::externalCodeRequest(const std::string_view& _a)
 {
     auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
@@ -451,6 +498,12 @@ int64_t HostContext::blockNumber() const
 {
     return m_executive->blockContext().lock()->number();
 }
+
+uint32_t HostContext::blockVersion() const
+{
+    return m_executive->blockContext().lock()->blockVersion();
+}
+
 int64_t HostContext::timestamp() const
 {
     return m_executive->blockContext().lock()->timestamp();
@@ -469,16 +522,28 @@ std::optional<storage::Entry> HostContext::code()
     return entry;
 }
 
+std::optional<storage::Entry> HostContext::code(uint32_t blockVersion)
+{
+    if (blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        auto codehash = codeHash();
+        auto start = utcTimeUs();
+        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codehash.hex());
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
+        return entry;
+    }
+    std::cout << "进入到code()" << std::endl;
+    return code();
+}
+
 h256 HostContext::codeHash()
 {
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
     if (entry)
     {
-        auto code = entry->getField(0);
-
-        return h256(std::string(code));  // TODO: h256 support decode from string_view
+        auto codehash = entry->getField(0);
+        return h256(codehash, FixedBytes<32>::StringDataType::FromBinary);  // TODO: h256 support decode from string_view
     }
-
     return h256();
 }
 
