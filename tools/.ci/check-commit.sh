@@ -12,7 +12,7 @@ SHELL_FOLDER=$(
 )
 
 check_script="clang-format"
-commit_limit=6
+commit_limit=100
 file_limit=35
 insert_limit=300
 new_file_header_length=60
