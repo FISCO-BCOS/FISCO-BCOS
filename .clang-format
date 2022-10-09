@@ -22,7 +22,7 @@ BinPackParameters: true
 BreakBeforeBinaryOperators: None
 BreakBeforeBraces: Custom
 BraceWrapping:
-  AfterClass: true  
+  AfterClass: true
   AfterCaseLabel: true
   AfterControlStatement: true
   AfterEnum: true
