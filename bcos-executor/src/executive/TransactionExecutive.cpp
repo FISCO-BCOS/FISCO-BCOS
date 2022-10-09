@@ -19,7 +19,6 @@
  * @date: 2021-05-24
  */
 
-#include "TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
@@ -32,6 +31,7 @@
 #include "../vm/VMInstance.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
+#include "TransactionExecutive.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -48,6 +48,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+
 
 using namespace std;
 using namespace bcos;
@@ -123,8 +124,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
                                  << LOG_KV("codeAddress", input->codeAddress);
             output->data = bytes();
-            output->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
-            // output->evmStatus = EVMC_REVERT; remember to update TransactionExecutor.cpp:2293
+            output->status = (int32_t)TransactionStatus::RevertInstruction;
+            output->evmStatus = EVMC_REVERT;
             return std::move(output);
         }
         input->delegateCallCode = toBytes(entry->get());
@@ -905,7 +906,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     callResults->type = CallParameters::REVERT;
     // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm
     // need this
-    // callResults->evmStatus = _result.status(); remember set in delegatecall(ask jimmyshi)
+    callResults->evmStatus = _result.status();
     auto outputRef = _result.output();
     switch (_result.status())
     {
