@@ -165,7 +165,6 @@ inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(
     groupInfo->setGroupID(_tarsGroupInfo.groupID);
     groupInfo->setGenesisConfig(_tarsGroupInfo.genesisConfig);
     groupInfo->setIniConfig(_tarsGroupInfo.iniConfig);
-    groupInfo->setWasm(_tarsGroupInfo.isWasm);
     for (auto const& tarsNodeInfo : _tarsGroupInfo.nodeList)
     {
         groupInfo->appendNodeInfo(toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo));
@@ -212,7 +211,6 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
     tarsGroupInfo.groupID = _groupInfo->groupID();
     tarsGroupInfo.genesisConfig = _groupInfo->genesisConfig();
     tarsGroupInfo.iniConfig = _groupInfo->iniConfig();
-    tarsGroupInfo.isWasm = _groupInfo->wasm() ? 1 : 0;
     // set nodeList
     std::vector<bcostars::ChainNodeInfo> tarsNodeList;
     auto bcosNodeList = _groupInfo->nodeInfos();

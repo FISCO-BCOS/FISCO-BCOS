@@ -103,29 +103,6 @@ public:
     std::string_view keyLockAcquired() const override { return m_keyLockAcquired; }
     void setKeyLockAcquired(std::string keyLock) override { m_keyLockAcquired = keyLock; }
 
-
-    bool delegateCall() const override { return m_delegateCall; }
-    void setDelegateCall(bool delegateCall) override { m_delegateCall = delegateCall; }
-
-    std::string_view delegateCallAddress() const override { return m_delegateCallAddress; }
-    void setDelegateCallAddress(std::string delegateCallAddress) override
-    {
-        m_delegateCallAddress = std::move(delegateCallAddress);
-    }
-
-    bcos::bytesConstRef delegateCallCode() const override { return ref(m_delegateCallCode); }
-    bcos::bytes takeDelegateCallCode() override { return std::move(m_delegateCallCode); }
-    void setDelegateCallCode(bcos::bytes delegateCallCode) override
-    {
-        m_delegateCallCode = std::move(delegateCallCode);
-    }
-
-    std::string_view delegateCallSender() const override { return m_delegateCallSender; }
-    void setDelegateCallSender(std::string delegateCallSender) override
-    {
-        m_delegateCallSender = std::move(delegateCallSender);
-    }
-
     bcos::crypto::HashType m_transactionHash;
     int64_t m_contextID = 0;
     int64_t m_seq = 0;
@@ -154,12 +131,6 @@ public:
     bool m_staticCall = false;
     bool m_internalCreate = false;
     bool m_internalCall = false;
-
-    // for delegateCall
-    bool m_delegateCall = false;
-    std::string m_delegateCallAddress;
-    bcos::bytes m_delegateCallCode;
-    std::string m_delegateCallSender;
 };
 
 class NativeExecutionMessageFactory : public protocol::ExecutionMessageFactory

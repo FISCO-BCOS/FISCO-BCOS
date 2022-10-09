@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateLimiterStat.cpp
+ * @file BWRateStatistics.cpp
  * @author: octopus
  * @date 2022-06-30
  */
@@ -21,7 +21,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/libratelimit/RateLimiterStat.h>
+#include <bcos-gateway/libratelimit/BWRateStatistics.h>
 #include <boost/lexical_cast.hpp>
 #include <iomanip>
 #include <optional>
@@ -30,18 +30,18 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimiter;
+using namespace bcos::gateway::ratelimit;
 
-const std::string RateLimiterStat::TOTAL_INCOMING = " total    ";
-const std::string RateLimiterStat::TOTAL_OUTGOING = " total    ";
+const std::string BWRateStatistics::TOTAL_INCOMING = " total    ";
+const std::string BWRateStatistics::TOTAL_OUTGOING = " total    ";
 
-double Stat::calcAvgRate(uint64_t _data, uint32_t _periodMS)
+double Statistics::calcAvgRate(int64_t _data, int64_t _periodMS)
 {
     auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _periodMS;
     return avgRate;
 }
 
-std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _periodMS)
+std::optional<std::string> Statistics::toString(const std::string& _prefix, int64_t _periodMS)
 {
     if (lastDataSize.load() == 0)
     {
@@ -52,39 +52,40 @@ std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _
 
     std::stringstream ss;
 
+
     ss << " \t[" << _prefix << "] "
        << " \t"
        << " |total data: " << totalDataSize.load() << " |last data: " << lastDataSize.load()
-       << " |total times: " << totalTimes.load() << " |last times: " << lastTimes.load()
-       << " |total failed times: " << totalFailedTimes.load()
-       << " |last failed times: " << lastFailedTimes.load() << " |avg rate(Mb/s): ";
+       << " |total count: " << totalCount.load() << " |last count: " << lastCount.load()
+       << " |total failed: " << totalFailedCount.load()
+       << " |last failed: " << lastFailedCount.load() << " |avg rate(Mb/s): ";
 
     ss << std::fixed << std::setprecision(2) << avgRate;
 
     return ss.str();
 }
 
-std::string RateLimiterStat::toGroupKey(const std::string& _groupID)
+std::string BWRateStatistics::toGroupKey(const std::string& _groupID)
 {
     return " group :  " + _groupID;
 }
 
-std::string RateLimiterStat::toModuleKey(uint16_t _moduleID)
+std::string BWRateStatistics::toModuleKey(uint16_t _moduleID)
 {
     return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
 }
 
-std::string RateLimiterStat::toEndPointKey(const std::string& _ep)
+std::string BWRateStatistics::toEndPointKey(const std::string& _ep)
 {
     return " endpoint:  " + _ep;
 }
 
-void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dataSize)
+void BWRateStatistics::updateInComing(const std::string& _endPoint, uint64_t _dataSize)
 {
-    std::string epKey = toEndPointKey(_endpoint);
+    std::string epKey = toEndPointKey(_endPoint);
     std::string totalKey = TOTAL_OUTGOING;
 
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endpoint", _endpoint)
+    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endPoint", _endPoint)
     //                     << LOG_KV("dataSize", _dataSize);
 
     std::lock_guard<std::mutex> l(m_inLock);
@@ -99,9 +100,9 @@ void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dat
     epInStat.update(_dataSize);
 }
 
-void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc)
+void BWRateStatistics::updateOutGoing(const std::string& _endPoint, uint64_t _dataSize, bool suc)
 {
-    std::string epKey = toEndPointKey(_endpoint);
+    std::string epKey = toEndPointKey(_endPoint);
     std::string totalKey = TOTAL_OUTGOING;
 
     std::lock_guard<std::mutex> l(m_outLock);
@@ -124,7 +125,7 @@ void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dat
     }
 }
 
-void RateLimiterStat::updateInComing(
+void BWRateStatistics::updateInComing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize)
 {
     std::ignore = _moduleID;
@@ -154,7 +155,7 @@ void RateLimiterStat::updateInComing(
     */
 }
 
-void RateLimiterStat::updateOutGoing(
+void BWRateStatistics::updateOutGoing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
     std::ignore = _moduleID;
@@ -197,7 +198,7 @@ void RateLimiterStat::updateOutGoing(
     */
 }
 
-void RateLimiterStat::flushStat()
+void BWRateStatistics::flushStat()
 {
     {
         std::lock_guard<std::mutex> l(m_inLock);
@@ -216,7 +217,7 @@ void RateLimiterStat::flushStat()
     }
 }
 
-std::pair<std::string, std::string> RateLimiterStat::inAndOutStat(uint32_t _intervalMS)
+std::pair<std::string, std::string> BWRateStatistics::inAndOutStat(uint32_t _intervalMS)
 {
     std::string in = " <incoming bandwidth> :";
     {

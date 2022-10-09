@@ -164,9 +164,8 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     encodeMsg->setVersion(_version);
     uint32_t seq = 0x12345678;
     uint16_t packetType = 0x4321;
-    uint16_t ext = 0x1101;
+    uint16_t ext = 0x1111;
     auto payload = std::make_shared<bytes>(10000, 'a');
-    uint16_t compressedDataSize = 19;
 
     auto version = encodeMsg->version();
     int16_t headerLen = 14;
@@ -184,11 +183,13 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     auto r = encodeMsg->encode(*buffer.get());
     BOOST_CHECK_EQUAL(r, true);
 
+    BOOST_CHECK_EQUAL(buffer->size(), headerLen + payload->size());
+
     // decode default
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK_EQUAL(ret, headerLen + compressedDataSize);
-    BOOST_CHECK_EQUAL(decodeMsg->length(), headerLen + compressedDataSize);
+    BOOST_CHECK_EQUAL(ret, headerLen + payload->size());
+    BOOST_CHECK_EQUAL(decodeMsg->length(), headerLen + payload->size());
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), packetType);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), seq);
     BOOST_CHECK_EQUAL(decodeMsg->ext(), ext);
@@ -357,7 +358,7 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
     uint16_t version = 0x1234;
     uint32_t seq = 0x12345678;
     uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
-    uint16_t ext = 0x1101;
+    uint16_t ext = 0x1111;
     auto payload = std::make_shared<bytes>(10000, 'a');
 
     encodeMsg->setVersion(version);
@@ -393,7 +394,7 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
     BOOST_CHECK_EQUAL(decodeMsg->version(), version);
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), packetType);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), seq);
-    BOOST_CHECK_EQUAL((decodeMsg->ext() & ext), ext);
+    BOOST_CHECK_EQUAL(decodeMsg->ext(), ext);
     BOOST_CHECK_EQUAL(decodeMsg->payload()->size(), payload->size());
 
     auto decodeOptions = decodeMsg->options();

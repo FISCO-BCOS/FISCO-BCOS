@@ -356,13 +356,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
 void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
 {
     /*
-    [redis]
-    ; url=127.0.0.1:6379
-
     [flow_control]
-    ; rate limiter stat reporter interval, unit: ms
-    ; stat_reporter_interval=60000
-
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
@@ -391,9 +385,6 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     ;   group_group1=2
     ;   group_group2=2
     */
-
-    // stat_reporter_interval=60000
-    int32_t statReporterInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
 
     // modules_without_bw_limit=raft,pbft
     std::string strNoLimitModules =
@@ -495,10 +486,10 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                             "flow_control.ip_x.x.x.x config, invalid ip format, ip: " + ip));
                 }
                 double bw = boost::lexical_cast<double>(value);
-                m_rateLimiterConfig.ip2BwLimit[ip] = doubleMBToBit(bw);
+                m_rateLimitConfig.ip2BwLimit[ip] = doubleMBToBit(bw);
 
                 GATEWAY_CONFIG_LOG(INFO)
-                    << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add ip bandwidth limit")
+                    << LOG_BADGE("initRateLimitConfig") << LOG_DESC("add ip bandwidth limit")
                     << LOG_KV("ip", ip) << LOG_KV("bandwidth", bw);
             }
             else if (boost::starts_with(key, "group_") &&
@@ -507,20 +498,19 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                 // group_xxxx =
                 std::string group = key.substr(6);
                 double bw = boost::lexical_cast<double>(value);
-                m_rateLimiterConfig.group2BwLimit[group] = doubleMBToBit(bw);
+                m_rateLimitConfig.group2BwLimit[group] = doubleMBToBit(bw);
 
                 GATEWAY_CONFIG_LOG(INFO)
-                    << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add group bandwidth limit")
+                    << LOG_BADGE("initRateLimitConfig") << LOG_DESC("add group bandwidth limit")
                     << LOG_KV("group", group) << LOG_KV("bandwidth", bw);
             }
         }
     }
 
-    m_rateLimiterConfig.statReporterInterval = statReporterInterval;
-    m_rateLimiterConfig.modulesWithNoBwLimit = moduleIDs;
-    m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
-    m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
-    m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
+    m_rateLimitConfig.modulesWithNoBwLimit = moduleIDs;
+    m_rateLimitConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
+    m_rateLimitConfig.connOutgoingBwLimit = connOutgoingBwLimit;
+    m_rateLimitConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
 
     if (totalOutgoingBwLimit > 0 && connOutgoingBwLimit > 0 &&
         connOutgoingBwLimit > totalOutgoingBwLimit)
@@ -538,16 +528,14 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                                   "than flow_control.total_outgoing_bw_limit"));
     }
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimiterConfig")
-                             << LOG_KV("rateLimiterConfigEffect",
-                                    m_rateLimiterConfig.hasRateLimiterConfigEffect())
-                             << LOG_KV("statReporterInterval", statReporterInterval)
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimitConfig")
+                             << LOG_KV("rateLimitConfigEffect", m_rateLimitConfig.isConfigEffect())
                              << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
                              << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
                              << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
                              << LOG_KV("moduleIDs", boost::join(modules, ","))
-                             << LOG_KV("ips size", m_rateLimiterConfig.ip2BwLimit.size())
-                             << LOG_KV("groups size", m_rateLimiterConfig.group2BwLimit.size());
+                             << LOG_KV("ips size", m_rateLimitConfig.ip2BwLimit.size())
+                             << LOG_KV("groups size", m_rateLimitConfig.group2BwLimit.size());
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)

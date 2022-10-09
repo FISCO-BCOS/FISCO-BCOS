@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateLimiterManager.cpp
+ * @file GroupBWRateLimiter.cpp
  * @author: octopus
  * @date 2022-06-30
  */
@@ -23,11 +23,11 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimiter;
+using namespace bcos::gateway::ratelimit;
 
 const std::string RateLimiterManager::TOTAL_OUTGOING_KEY = "total-outgoing-key";
 
-RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& _rateLimiterKey)
+BWRateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& _rateLimiterKey)
 {
     std::shared_lock lock(x_rateLimiters);
     auto it = m_rateLimiters.find(_rateLimiterKey);
@@ -40,7 +40,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& 
 }
 
 bool RateLimiterManager::registerRateLimiter(
-    const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter)
+    const std::string& _rateLimiterKey, BWRateLimiterInterface::Ptr _rateLimiter)
 {
     if (getGroupRateLimiter(_rateLimiterKey))
     {
@@ -64,7 +64,7 @@ bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
     return m_rateLimiters.erase(_rateLimiterKey) > 0;
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::ensureRateLimiterExist(
+BWRateLimiterInterface::Ptr RateLimiterManager::ensureRateLimiterExist(
     const std::string& _rateLimiterKey, int64_t _maxPermits)
 {
     // ratelimiter exist
@@ -98,7 +98,7 @@ RateLimiterInterface::Ptr RateLimiterManager::ensureRateLimiterExist(
 }
 
 bool RateLimiterManager::registerGroupRateLimiter(
-    const std::string& _group, RateLimiterInterface::Ptr _rateLimiter)
+    const std::string& _group, BWRateLimiterInterface::Ptr _rateLimiter)
 {
     return registerRateLimiter("group-" + _group, _rateLimiter);
 }
@@ -108,7 +108,7 @@ bool RateLimiterManager::removeGroupRateLimiter(const std::string& _group)
     return removeRateLimiter("group-" + _group);
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
+BWRateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
 {
     std::string rateLimiterKey = "group-" + _group;
 
@@ -118,14 +118,14 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
     {
         int64_t groupOutgoingBwLimit = -1;
 
-        auto it = m_rateLimiterConfig.group2BwLimit.find(_group);
-        if (it != m_rateLimiterConfig.group2BwLimit.end())
+        auto it = m_rateLimitConfig.group2BwLimit.find(_group);
+        if (it != m_rateLimitConfig.group2BwLimit.end())
         {
             groupOutgoingBwLimit = it->second;
         }
-        else if (m_rateLimiterConfig.groupOutgoingBwLimit > 0)
+        else if (m_rateLimitConfig.groupOutgoingBwLimit > 0)
         {
-            groupOutgoingBwLimit = m_rateLimiterConfig.groupOutgoingBwLimit;
+            groupOutgoingBwLimit = m_rateLimitConfig.groupOutgoingBwLimit;
         }
 
         if (groupOutgoingBwLimit > 0)
@@ -138,7 +138,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
 }
 
 bool RateLimiterManager::registerConnRateLimiter(
-    const std::string& _connIP, RateLimiterInterface::Ptr _rateLimiter)
+    const std::string& _connIP, BWRateLimiterInterface::Ptr _rateLimiter)
 {
     return registerRateLimiter("ip-" + _connIP, _rateLimiter);
 }
@@ -148,24 +148,24 @@ bool RateLimiterManager::removeConnRateLimiter(const std::string& _connIP)
     return removeRateLimiter("ip-" + _connIP);
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
+BWRateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
 {
     std::string rateLimiterKey = "ip-" + _connIP;
 
     auto rateLimiter = getRateLimiter(rateLimiterKey);
 
-    if (rateLimiter == nullptr && m_rateLimiterConfig.connOutgoingBwLimit > 0)
+    if (rateLimiter == nullptr && m_rateLimitConfig.connOutgoingBwLimit > 0)
     {
         int64_t connOutgoingBwLimit = -1;
 
-        auto it = m_rateLimiterConfig.ip2BwLimit.find(_connIP);
-        if (it != m_rateLimiterConfig.ip2BwLimit.end())
+        auto it = m_rateLimitConfig.ip2BwLimit.find(_connIP);
+        if (it != m_rateLimitConfig.ip2BwLimit.end())
         {
             connOutgoingBwLimit = it->second;
         }
-        else if (m_rateLimiterConfig.connOutgoingBwLimit > 0)
+        else if (m_rateLimitConfig.connOutgoingBwLimit > 0)
         {
-            connOutgoingBwLimit = m_rateLimiterConfig.connOutgoingBwLimit;
+            connOutgoingBwLimit = m_rateLimitConfig.connOutgoingBwLimit;
         }
 
         if (connOutgoingBwLimit > 0)

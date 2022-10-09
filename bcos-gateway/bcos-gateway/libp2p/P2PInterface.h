@@ -9,6 +9,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 
 namespace bcos
 {

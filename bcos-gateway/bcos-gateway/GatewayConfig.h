@@ -44,16 +44,8 @@ public:
     };
 
     // config for rate limit
-    struct RateLimiterConfig
+    struct RateLimitConfig
     {
-        // stat reporter interval ms
-        int32_t statReporterInterval = 60000;
-        // stat reporter info level
-        // 0:
-        // 1:
-        // 2:
-        int32_t statReporterLevel = 0;
-
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
 
@@ -71,7 +63,7 @@ public:
         std::set<uint16_t> modulesWithNoBwLimit;
 
         // whether any configuration takes effect
-        bool hasRateLimiterConfigEffect() const
+        bool isConfigEffect() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
@@ -130,7 +122,7 @@ public:
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
-    RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
+    RateLimitConfig rateLimitConfig() const { return m_rateLimitConfig; }
 
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
@@ -153,7 +145,7 @@ private:
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
 
-    RateLimiterConfig m_rateLimiterConfig;
+    RateLimitConfig m_rateLimitConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

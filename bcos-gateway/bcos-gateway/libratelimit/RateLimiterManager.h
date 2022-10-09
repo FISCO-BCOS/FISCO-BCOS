@@ -13,15 +13,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateLimiterManager.h
+ * @file GroupBWRateLimiter.h
  * @author: octopus
  * @date 2022-06-30
  */
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/BWRateLimiter.h"
 #include "bcos-gateway/libratelimit/ModuleWhiteList.h"
-#include "bcos-gateway/libratelimit/TokenBucketRateLimiter.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/Common.h>
 #include <shared_mutex>
@@ -31,7 +31,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimiter
+namespace ratelimit
 {
 
 class RateLimiterManager
@@ -45,38 +45,38 @@ public:
     const static std::string TOTAL_OUTGOING_KEY;
 
 public:
-    RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
-      : m_rateLimiterConfig(_rateLimiterConfig)
+    RateLimiterManager(const GatewayConfig::RateLimitConfig& _rateLimitConfig)
+      : m_rateLimitConfig(_rateLimitConfig)
     {}
 
 public:
-    RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
+    BWRateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 
     bool registerRateLimiter(
-        const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter);
+        const std::string& _rateLimiterKey, BWRateLimiterInterface::Ptr _rateLimiter);
     bool removeRateLimiter(const std::string& _rateLimiterKey);
 
-    RateLimiterInterface::Ptr ensureRateLimiterExist(
+    BWRateLimiterInterface::Ptr ensureRateLimiterExist(
         const std::string& _rateLimiterKey, int64_t _maxPermit);
 
 public:
     bool registerGroupRateLimiter(
-        const std::string& _group, RateLimiterInterface::Ptr _rateLimiter);
+        const std::string& _group, BWRateLimiterInterface::Ptr _rateLimiter);
 
     bool removeGroupRateLimiter(const std::string& _group);
 
-    RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
+    BWRateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
 
     bool registerConnRateLimiter(
-        const std::string& _connIP, RateLimiterInterface::Ptr _rateLimiter);
+        const std::string& _connIP, BWRateLimiterInterface::Ptr _rateLimiter);
 
     bool removeConnRateLimiter(const std::string& _connIP);
 
-    RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
+    BWRateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
 public:
-    ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
-    void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr _rateLimiterFactory)
+    ratelimit::BWRateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
+    void setRateLimiterFactory(ratelimit::BWRateLimiterFactory::Ptr _rateLimiterFactory)
     {
         m_rateLimiterFactory = _rateLimiterFactory;
     }
@@ -87,30 +87,27 @@ public:
         m_modulesWithNoBwLimit = std::move(_modulesWithNoBwLimit);
     }
 
-    void setRateLimiterConfig(GatewayConfig::RateLimiterConfig _rateLimiterConfig)
+    void setRateLimitConfig(GatewayConfig::RateLimitConfig _rateLimitConfig)
     {
-        m_rateLimiterConfig = _rateLimiterConfig;
+        m_rateLimitConfig = _rateLimitConfig;
     }
-    const GatewayConfig::RateLimiterConfig& rateLimiterConfig() const
-    {
-        return m_rateLimiterConfig;
-    }
+    const GatewayConfig::RateLimitConfig& rateLimitConfig() const { return m_rateLimitConfig; }
 
 private:
-    //   factory for RateLimiterInterface
-    ratelimiter::RateLimiterFactory::Ptr m_rateLimiterFactory;
+    //   factory for BWRateLimiterInterface
+    ratelimit::BWRateLimiterFactory::Ptr m_rateLimiterFactory;
 
     // lock for m_group2RateLimiter
     mutable std::shared_mutex x_rateLimiters;
     // group/ip => ratelimiter
-    std::unordered_map<std::string, RateLimiterInterface::Ptr> m_rateLimiters;
+    std::unordered_map<std::string, BWRateLimiterInterface::Ptr> m_rateLimiters;
 
     // the message of modules that do not limit bandwidth
     std::set<uint16_t> m_modulesWithNoBwLimit;
 
-    GatewayConfig::RateLimiterConfig m_rateLimiterConfig;
+    GatewayConfig::RateLimitConfig m_rateLimitConfig;
 };
 
-}  // namespace ratelimiter
+}  // namespace ratelimit
 }  // namespace gateway
 }  // namespace bcos

@@ -213,6 +213,10 @@ void TransactionExecutor::initEvmEnvironment()
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({ACCOUNT_MGR_ADDRESS,
+            std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert(
+            {ACCOUNT_ADDRESS, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl)});
     }
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
@@ -269,6 +273,10 @@ void TransactionExecutor::initWasmEnvironment()
             {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({ACCOUNT_MANAGER_NAME,
+            std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert(
+            {ACCOUNT_ADDRESS, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl)});
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     storage::StorageInterface::Ptr storage = m_backendStorage;
@@ -462,18 +470,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        auto blockHeader = m_lastCommittedBlockHeader;
-
-        if (!blockHeader)
-        {
-            auto message = "dmcCall could not get current block header, contextID: " +
-                           boost::lexical_cast<std::string>(input->contextID()) +
-                           " seq: " + boost::lexical_cast<std::string>(input->seq());
-            EXECUTOR_NAME_LOG(ERROR) << message;
-            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
-            return;
-        }
-
+        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
         storage::StorageInterface::Ptr prev;
 
         if (m_cachedStorage)
@@ -489,9 +486,9 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext =
-            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
-                blockHeader->version(), std::move(storage));  // TODO: complete the block info
+        // TODO: pass blockHash, version here
+        blockContext = createBlockContext(
+            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -642,17 +639,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        auto blockHeader = m_lastCommittedBlockHeader;
-        if (!blockHeader)
-        {
-            auto message = "dmcCall could not get current block header, contextID: " +
-                           boost::lexical_cast<std::string>(input->contextID()) +
-                           " seq: " + boost::lexical_cast<std::string>(input->seq());
-            EXECUTOR_NAME_LOG(ERROR) << message;
-            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
-            return;
-        }
-
+        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
         storage::StorageInterface::Ptr prev;
 
         if (m_cachedStorage)
@@ -668,9 +655,9 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext =
-            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
-                blockHeader->version(), std::move(storage));  // TODO: complete the block info
+        // TODO: pass blockHash, version here
+        blockContext = createBlockContext(
+            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1697,7 +1684,7 @@ void TransactionExecutor::commit(
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
-        m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
+        m_lastCommittedBlockNumber = blockNumber;
 
         removeCommittedState();
 
@@ -1789,24 +1776,14 @@ void TransactionExecutor::getCode(
 
     storage::StateStorageInterface::Ptr stateStorage;
 
-    {
-        std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
-        if (!m_stateStorages.empty())
-        {
-            stateStorage = m_stateStorages.front().storage;
-        }
-    }
     // create temp state storage
-    if (!stateStorage)
+    if (m_cachedStorage)
     {
-        if (m_cachedStorage)
-        {
-            stateStorage = createStateStorage(m_cachedStorage);
-        }
-        else
-        {
-            stateStorage = createStateStorage(m_backendStorage);
-        }
+        stateStorage = createStateStorage(m_cachedStorage);
+    }
+    else
+    {
+        stateStorage = createStateStorage(m_backendStorage);
     }
 
     auto tableName = getContractTableName(contract);
@@ -2031,7 +2008,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 auto callParameters = createCallParameters(*input, *tx);
 
                 ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
+                    getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -2069,7 +2046,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
         ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
+            getExecutiveFlow(blockContext, callParameters->codeAddress, useCoroutine);
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr&& error,
@@ -2192,10 +2169,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setMessage(std::move(params->message));
     message->setLogEntries(std::move(params->logEntries));
     message->setNewEVMContractAddress(std::move(params->newEVMContractAddress));
-    message->setDelegateCall(params->delegateCall);
-    message->setDelegateCallAddress(std::move(params->codeAddress));
-    message->setDelegateCallCode(std::move(params->delegateCallCode));
-    message->setDelegateCallSender(std::move(params->delegateCallSender));
 
     return message;
 }
@@ -2280,7 +2253,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, bool staticCall)
 {
     auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-    callParameters->status = input.status();
 
     switch (input.type())
     {
@@ -2291,8 +2263,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
-        callParameters->status = (int32_t)TransactionStatus::RevertInstruction;
-        callParameters->evmStatus = EVMC_REVERT;
         break;
     }
     case ExecutionMessage::FINISHED:
@@ -2327,17 +2297,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
+    callParameters->status = input.status();
     callParameters->keyLocks = input.takeKeyLocks();
     if (input.create())
     {
         callParameters->abi = input.abi();
-    }
-    callParameters->delegateCall = input.delegateCall();
-    callParameters->delegateCallCode = input.takeDelegateCallCode();
-    callParameters->delegateCallSender = input.delegateCallSender();
-    if (input.delegateCall())
-    {
-        callParameters->codeAddress = input.delegateCallAddress();
     }
 
     return callParameters;
@@ -2363,9 +2327,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
-    callParameters->delegateCall = false;
-    callParameters->delegateCallCode = bytes();
-    callParameters->delegateCallSender = "";
     return callParameters;
 }
 
@@ -2441,29 +2402,6 @@ protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()
 
     return blockNumberFuture.get_future().get();
 }
-
-protocol::BlockHeader::Ptr TransactionExecutor::getBlockHeaderInStorage(
-    protocol::BlockNumber number)
-{
-    std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-
-    m_ledger->asyncGetBlockDataByNumber(number, bcos::ledger::HEADER,
-        [this, &blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get getBlockHeader from storage failed";
-                blockHeaderFuture.set_value(nullptr);
-            }
-            else
-            {
-                blockHeaderFuture.set_value(block->blockHeader());
-            }
-        });
-
-
-    return blockHeaderFuture.get_future().get();
-}
-
 
 void TransactionExecutor::stop()
 {

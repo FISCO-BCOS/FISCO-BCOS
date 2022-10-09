@@ -13,21 +13,21 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file DistributedRateLimiter.h
+ * @file DistributedBWRateLimiter.h
  * @author: octopus
  * @date 2022-06-30
  */
 
 #pragma once
 
-#include <bcos-gateway/libratelimit/RateLimiterInterface.h>
+#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos
 {
 namespace gateway
 {
-namespace ratelimiter
+namespace ratelimit
 {
 
 /**
@@ -35,23 +35,23 @@ namespace ratelimiter
  * Distributed limited bandwidth
  */
 
-class DistributedRateLimiter : public RateLimiterInterface
+class DistributedBWRateLimiter : public BWRateLimiterInterface
 {
 public:
-    using Ptr = std::shared_ptr<DistributedRateLimiter>;
-    using ConstPtr = std::shared_ptr<const DistributedRateLimiter>;
-    using UniquePtr = std::unique_ptr<const DistributedRateLimiter>;
+    using Ptr = std::shared_ptr<DistributedBWRateLimiter>;
+    using ConstPtr = std::shared_ptr<const DistributedBWRateLimiter>;
+    using UniquePtr = std::unique_ptr<const DistributedBWRateLimiter>;
 
 public:
-    DistributedRateLimiter(int64_t _maxQPS);
+    DistributedBWRateLimiter(int64_t _maxQPS);
 
-    DistributedRateLimiter(DistributedRateLimiter&&) = delete;
-    DistributedRateLimiter(const DistributedRateLimiter&) = delete;
-    DistributedRateLimiter& operator=(const DistributedRateLimiter&) = delete;
-    DistributedRateLimiter& operator=(DistributedRateLimiter&&) = delete;
+    DistributedBWRateLimiter(DistributedBWRateLimiter&&) = delete;
+    DistributedBWRateLimiter(const DistributedBWRateLimiter&) = delete;
+    DistributedBWRateLimiter& operator=(const DistributedBWRateLimiter&) = delete;
+    DistributedBWRateLimiter& operator=(DistributedBWRateLimiter&&) = delete;
 
 public:
-    ~DistributedRateLimiter() override {}
+    ~DistributedBWRateLimiter() override {}
 
 public:
     /**
@@ -80,6 +80,6 @@ public:
     void rollback(int64_t _requiredPermits) override;
 };
 
-}  // namespace ratelimiter
+}  // namespace ratelimit
 }  // namespace gateway
 }  // namespace bcos

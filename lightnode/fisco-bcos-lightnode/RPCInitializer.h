@@ -86,7 +86,6 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             groupInfo->setChainID(nodeConfig->chainId());
             groupInfo->setGenesisConfig(genesisConfigStr);
             groupInfo->setGroupID(nodeConfig->groupId());
-            groupInfo->setWasm(nodeConfig->isWasm());
             groupInfo->setIniConfig("");
 
             auto nodeInfo = std::make_shared<bcos::group::ChainNodeInfo>();
@@ -107,7 +106,6 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             nodeInfo->setNodeCryptoType(
                 (nodeConfig->smCryptoType() ? group::NodeCryptoType::SM_NODE :
                                               group::NodeCryptoType::NON_SM_NODE));
-
 
             auto protocol = bcos::protocol::ProtocolInfo();
             protocol.setMinVersion(4);

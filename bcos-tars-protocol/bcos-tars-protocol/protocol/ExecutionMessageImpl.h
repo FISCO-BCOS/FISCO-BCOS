@@ -171,39 +171,6 @@ public:
     std::vector<bcos::protocol::LogEntry> takeLogEntries() override;
     void setLogEntries(std::vector<bcos::protocol::LogEntry> logEntries) override;
 
-    bool delegateCall() const override { return m_inner()->delegateCall; }
-    void setDelegateCall(bool delegateCall) override { m_inner()->delegateCall = delegateCall; }
-
-    std::string_view delegateCallAddress() const override { return m_inner()->delegateCallAddress; }
-    void setDelegateCallAddress(std::string delegateCallAddress) override
-    {
-        m_inner()->delegateCallAddress = delegateCallAddress;
-    }
-
-
-    bcos::bytesConstRef delegateCallCode() const override
-    {
-        return bcos::bytesConstRef(
-            reinterpret_cast<const bcos::byte*>(m_inner()->delegateCallCode.data()),
-            m_inner()->delegateCallCode.size());
-    }
-
-    bcos::bytes takeDelegateCallCode() override
-    {
-        return bcos::bytes(m_inner()->delegateCallCode.begin(), m_inner()->delegateCallCode.end());
-    }
-    void setDelegateCallCode(bcos::bytes delegateCallCode) override
-    {
-        m_inner()->delegateCallCode.assign(delegateCallCode.begin(), delegateCallCode.end());
-    }
-
-
-    std::string_view delegateCallSender() const override { return m_inner()->delegateCallSender; }
-    void setDelegateCallSender(std::string delegateCallSender) override
-    {
-        m_inner()->delegateCallSender = delegateCallSender;
-    }
-
     bcostars::ExecutionMessage inner() const { return *(m_inner()); }
 
 protected:

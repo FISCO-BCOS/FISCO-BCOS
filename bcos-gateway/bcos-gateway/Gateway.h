@@ -26,8 +26,8 @@
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-gateway/libratelimit/BWRateStatistics.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
-#include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <bcos-utilities/BoostLog.h>
 
 namespace bcos
@@ -40,8 +40,8 @@ public:
     using Ptr = std::shared_ptr<Gateway>;
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
-        ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
-        ratelimiter::RateLimiterStat::Ptr _rateLimiterStat,
+        ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
+        ratelimit::BWRateStatistics::Ptr _rateStatistics,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
         m_chainID(_chainID),
@@ -49,7 +49,7 @@ public:
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop),
         m_rateLimiterManager(_rateLimiterManager),
-        m_rateLimiterStat(_rateLimiterStat)
+        m_rateStatistics(_rateStatistics)
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -59,18 +59,16 @@ public:
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
 
-        m_rateLimiterStatTimer =
-            std::make_shared<Timer>(m_rateLimiterStatPeriodMS, "ratelimiter_reporter");
-        auto rateLimiterStatTimer = m_rateLimiterStatTimer;
-        auto rateLimiterStatPeriodMS = m_rateLimiterStatPeriodMS;
-        m_rateLimiterStatTimer->registerTimeoutHandler(
-            [rateLimiterStatTimer, rateLimiterStatPeriodMS, _rateLimiterStat,
-                _rateLimiterManager]() {
-                auto io = _rateLimiterStat->inAndOutStat(rateLimiterStatPeriodMS);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.first);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.second);
-                _rateLimiterStat->flushStat();
-                rateLimiterStatTimer->restart();
+        m_rateStatisticsTimer = std::make_shared<Timer>(m_rateStatisticsPeriodMS, "rate_reporter");
+        auto rateStatisticsTimer = m_rateStatisticsTimer;
+        auto _rateStatisticsPeriodMS = m_rateStatisticsPeriodMS;
+        m_rateStatisticsTimer->registerTimeoutHandler(
+            [rateStatisticsTimer, _rateStatisticsPeriodMS, _rateStatistics, _rateLimiterManager]() {
+                auto io = _rateStatistics->inAndOutStat(_rateStatisticsPeriodMS);
+                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate stat]") << LOG_DESC(io.first);
+                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate stat]") << LOG_DESC(io.second);
+                _rateStatistics->flushStat();
+                rateStatisticsTimer->restart();
             });
     }
     ~Gateway() override { stop(); }
@@ -194,16 +192,16 @@ public:
     }
 
     // gateway traffic limiting policy impl
-    bool checkBWRateLimit(ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
+    bool checkBWRateLimit(ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
         const std::string& _endPoint, const std::string& _groupID, uint16_t _moduleID,
         uint64_t _msgLength, SessionCallbackFunc _callback);
     bool checkBWRateLimit(
         SessionFace::Ptr _session, Message::Ptr _msg, SessionCallbackFunc _callback);
 
-    uint32_t rateLimiterStatPeriodMS() const { return m_rateLimiterStatPeriodMS; }
-    void setRateLimiterStatPeriodMS(uint32_t _rateLimiterStatPeriodMS)
+    uint32_t rateStatisticsPeriodMS() const { return m_rateStatisticsPeriodMS; }
+    void setRateStatisticsPeriodMS(uint32_t _rateStatisticsPeriodMS)
     {
-        m_rateLimiterStatPeriodMS = _rateLimiterStatPeriodMS;
+        m_rateStatisticsPeriodMS = _rateStatisticsPeriodMS;
     }
 
 protected:
@@ -235,14 +233,14 @@ private:
     bcos::amop::AMOPImpl::Ptr m_amop;
 
     // For bandwidth limitation
-    ratelimiter::RateLimiterManager::Ptr m_rateLimiterManager;
+    ratelimit::RateLimiterManager::Ptr m_rateLimiterManager;
     // For bandwidth statistics
-    ratelimiter::RateLimiterStat::Ptr m_rateLimiterStat;
+    ratelimit::BWRateStatistics::Ptr m_rateStatistics;
 
     //
-    uint32_t m_rateLimiterStatPeriodMS = 60000;  // ms
+    uint32_t m_rateStatisticsPeriodMS = 60000;  // ms
     // the timer that periodically prints the rate
-    std::shared_ptr<Timer> m_rateLimiterStatTimer;
+    std::shared_ptr<Timer> m_rateStatisticsTimer;
 };
 }  // namespace gateway
 }  // namespace bcos

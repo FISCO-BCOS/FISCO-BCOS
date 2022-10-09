@@ -106,91 +106,34 @@ void AccountManagerPrecompiled::createAccount(
     }
 
     // prefix + address + tableName
-    createAccountWithStatus(_executive, _callParameters, codec, account.hex());
-    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
-}
-void AccountManagerPrecompiled::createAccountWithStatus(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec,
-    std::string_view accountHex, uint16_t status) const
-{
-    auto accountTableName = getAccountTableName(accountHex);
-
-    // prefix + address + tableName
     std::string codeString = getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, accountTableName);
+
     auto input = codec.encode(accountTableName, codeString);
 
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
-        _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gas);
+        _callParameters->m_codeAddress, account.hex(), false, true, _callParameters->m_gas);
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
-                              << LOG_DESC("createAccount failed")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("createAccount")
                               << LOG_KV("accountTableName", accountTableName)
                               << LOG_KV("status", response->status);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
     }
 
-    auto newParams = codec.encodeWithSig("setAccountStatus(uint16)", status);
-    auto setStatusRes = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
-        _callParameters->m_codeAddress, accountHex, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
-
-    if (setStatusRes->status != (int32_t)TransactionStatus::None)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
-                               << LOG_DESC("set status failed")
-                               << LOG_KV("accountTableName", accountTableName)
-                               << LOG_KV("status", response->status);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Set account status failed."));
-    }
-    _callParameters->setExternalResult(std::move(setStatusRes));
+    Entry statusEntry;
+    statusEntry.importFields({"0"});
+    _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
+    Entry updateEntry;
+    updateEntry.importFields({std::to_string(blockContext->number())});
+    _executive->storage().setRow(accountTableName, ACCOUNT_LAST_UPDATE, std::move(updateEntry));
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
 
 void AccountManagerPrecompiled::setAccountStatus(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters)
-{
-    // setAccountStatus(address,uint16)
-    Address account;
-    uint16_t status = 0;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(_callParameters->params(), account, status);
-    std::string accountStr = account.hex();
-
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("setAccountStatus")
-                          << LOG_KV("account", accountStr) << LOG_KV("status", status);
-
-    if (!checkSenderFromAuth(_callParameters->m_sender))
-    {
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        return;
-    }
-
-    // check account exist, if not exist, create first
-    auto accountTableName = getAccountTableName(account.hex());
-    auto table = _executive->storage().openTable(accountTableName);
-    if (!table)
-    {
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                              << LOG_BADGE("AccountManagerPrecompiled")
-                              << LOG_DESC("setAccountStatus table not exist, create first")
-                              << LOG_KV("account", accountStr) << LOG_KV("status", status);
-        // create table
-        createAccountWithStatus(_executive, _callParameters, codec, accountStr, status);
-        return;
-    }
-
-    // table must exist, then call
-    auto newParams = codec.encodeWithSig("setAccountStatus(uint16)", status);
-    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
-        _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
-    _callParameters->setExternalResult(std::move(response));
-}
+    [[maybe_unused]] const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[maybe_unused]] const PrecompiledExecResult::Ptr& _callParameters)
+{}
 
 void AccountManagerPrecompiled::getAccountStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,

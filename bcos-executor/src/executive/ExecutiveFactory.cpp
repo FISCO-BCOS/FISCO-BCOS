@@ -22,13 +22,8 @@
 #include "ExecutiveFactory.h"
 #include "CoroutineTransactionExecutive.h"
 #include "TransactionExecutive.h"
-#include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
-#include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/protocol/Protocol.h"
 
 using namespace bcos::executor;
-using namespace bcos::precompiled;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
@@ -49,32 +44,7 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     executive->setEVMPrecompiled(m_precompiledContract);
     executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
-    registerExtPrecompiled(executive);
-    return executive;
-}
-void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
-{
-    auto blockContext = m_blockContext.lock();
-    if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_1_VERSION)
-    {
-        if (!m_extPrecompiled.contains(ACCOUNT_MANAGER_NAME) &&
-            !m_extPrecompiled.contains(ACCOUNT_MGR_ADDRESS))
-        {
-            m_extPrecompiled.insert(
-                {blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-                    std::make_shared<AccountManagerPrecompiled>(blockContext->hashHandler())});
-        }
-        executive->setConstantPrecompiled(
-            blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-            m_extPrecompiled.at(ACCOUNT_MGR_ADDRESS));
-
-        if (!m_extPrecompiled.contains(ACCOUNT_ADDRESS))
-        {
-            m_extPrecompiled.insert({std::string(ACCOUNT_ADDRESS),
-                std::make_shared<AccountPrecompiled>(blockContext->hashHandler())});
-        }
-        executive->setConstantPrecompiled(ACCOUNT_ADDRESS, m_extPrecompiled.at(ACCOUNT_ADDRESS));
-    }
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
+    return executive;
 }

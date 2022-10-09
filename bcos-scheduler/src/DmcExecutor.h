@@ -90,11 +90,6 @@ public:
         f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
     }
 
-    void setOnGetCodeHandler(std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
-    {
-        f_onGetCodeEvent = std::move(onGetCodeEvent);
-    }
-
     void triggerSwitch()
     {
         if (f_onNeedSwitchEvent)
@@ -139,7 +134,6 @@ private:
     std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> f_onTxFinished;
     std::function<void()> f_onNeedSwitchEvent;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
-    std::function<bcos::bytes(std::string_view)> f_onGetCodeEvent;
 };
 
 }  // namespace bcos::scheduler

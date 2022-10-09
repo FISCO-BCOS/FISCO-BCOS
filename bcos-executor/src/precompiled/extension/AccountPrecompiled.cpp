@@ -79,33 +79,11 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
 }
 
 
-void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
-    const PrecompiledExecResult::Ptr& _callParameters)
-{
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto accountMgrSender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
-    if (_callParameters->m_sender != accountMgrSender)
-    {
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        return;
-    }
-
-    uint16_t status = 0;
-    codec.decode(data, status);
-
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountPrecompiled")
-                          << LOG_DESC("setAccountStatus") << LOG_KV("account", accountTableName)
-                          << LOG_KV("status", status);
-    Entry statusEntry;
-    statusEntry.importFields({std::to_string(status)});
-    _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
-    Entry updateEntry;
-    updateEntry.importFields({std::to_string(blockContext->number())});
-    _executive->storage().setRow(accountTableName, ACCOUNT_LAST_UPDATE, std::move(updateEntry));
-    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
-}
+void AccountPrecompiled::setAccountStatus([[maybe_unused]] const std::string& tableName,
+    [[maybe_unused]] const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[maybe_unused]] bytesConstRef& data,
+    [[maybe_unused]] const PrecompiledExecResult::Ptr& _callParameters)
+{}
 
 void AccountPrecompiled::getAccountStatus(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -118,7 +96,7 @@ void AccountPrecompiled::getAccountStatus(const std::string& tableName,
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
                                << LOG_DESC("Status row not exist, return 0 by default");
-        _callParameters->setExecResult(codec.encode(uint16_t(0), u256(0)));
+        _callParameters->setExecResult(codec.encode(uint16_t(0)));
         return;
     }
     auto statusStr = entry->get();

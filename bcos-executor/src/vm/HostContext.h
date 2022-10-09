@@ -93,7 +93,7 @@ public:
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
 
-    virtual bool setCode(bytes code);
+    bool setCode(bytes code);
 
     void setCodeAndAbi(bytes code, std::string abi);
 
@@ -123,11 +123,11 @@ public:
 
     /// ------ get interfaces related to HostContext------
     std::string_view myAddress() const;
-    virtual std::string_view caller() const { return m_callParameters->senderAddress; }
+    std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
-    virtual std::optional<storage::Entry> code();
+    std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
     h256 codeHash();
     u256 salt() const { return m_salt; }
@@ -144,10 +144,6 @@ public:
     uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
 
     bool isWasm();
-
-protected:
-    const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
-    virtual bcos::bytes externalCodeRequest(const std::string_view& _a);
 
 private:
     void depositFungibleAsset(

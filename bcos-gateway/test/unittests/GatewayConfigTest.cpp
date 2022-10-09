@@ -162,11 +162,11 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
     }
 }
 
-BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
+BOOST_AUTO_TEST_CASE(test_initRateLimitConfig)
 {
     {
-        bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-        BOOST_CHECK(!rateLimiterConfig.hasRateLimiterConfigEffect());
+        bcos::gateway::GatewayConfig::RateLimitConfig rateLimitConfig;
+        BOOST_CHECK(!rateLimitConfig.isConfigEffect());
     }
 
     {
@@ -178,31 +178,31 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         auto config = std::make_shared<GatewayConfig>();
         config->initRatelimitConfig(pt);
 
-        auto rateLimiterConfig = config->rateLimiterConfig();
+        auto rateLimitConfig = config->rateLimitConfig();
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimitConfig.isConfigEffect());
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithNoBwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.ip2BwLimit.find("192.108.0.1")->second, 1 * 1024 * 1024 / 8);
+            rateLimitConfig.ip2BwLimit.find("192.108.0.1")->second, 1 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.ip2BwLimit.find("192.108.0.2")->second, 2 * 1024 * 1024 / 8);
+            rateLimitConfig.ip2BwLimit.find("192.108.0.2")->second, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.ip2BwLimit.find("192.108.0.3")->second, 3 * 1024 * 1024 / 8);
+            rateLimitConfig.ip2BwLimit.find("192.108.0.3")->second, 3 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.group2BwLimit.find("group0")->second, 2 * 1024 * 1024 / 8);
+            rateLimitConfig.group2BwLimit.find("group0")->second, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.group2BwLimit.find("group1")->second, 2 * 1024 * 1024 / 8);
+            rateLimitConfig.group2BwLimit.find("group1")->second, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.group2BwLimit.find("group2")->second, 2 * 1024 * 1024 / 8);
+            rateLimitConfig.group2BwLimit.find("group2")->second, 2 * 1024 * 1024 / 8);
     }
 
     {
@@ -214,18 +214,18 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         auto config = std::make_shared<GatewayConfig>();
         config->initRatelimitConfig(pt);
 
-        auto rateLimiterConfig = config->rateLimiterConfig();
+        auto rateLimitConfig = config->rateLimitConfig();
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimitConfig.isConfigEffect());
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithNoBwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 0);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 0);
+        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 0);
+        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 0);
     }
 }
 

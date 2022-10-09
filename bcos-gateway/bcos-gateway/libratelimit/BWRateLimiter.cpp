@@ -15,32 +15,32 @@
  * (c) 2016-2020 fisco-dev contributors.
  */
 /**
- * @brief : Implement of  TokenBucketRateLimiter
- * @file:  TokenBucketRateLimiter.cpp
+ * @brief : Implement of  BWRateLimiter
+ * @file:  BWRateLimiter.cpp
  * @author: yujiechen
  * @date: 2020-04-15
  */
 #include <bcos-gateway/Common.h>
-#include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
+#include <bcos-gateway/libratelimit/BWRateLimiter.h>
 #include <thread>
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimiter;
+using namespace bcos::gateway::ratelimit;
 
-TokenBucketRateLimiter::TokenBucketRateLimiter(int64_t _maxQPS)
+BWRateLimiter::BWRateLimiter(int64_t _maxQPS)
   : m_maxQPS(_maxQPS),
     m_permitsUpdateInterval((double)1000000 / (double)m_maxQPS),
     m_lastPermitsUpdateTime(utcSteadyTimeUs()),
     m_maxPermits(m_maxQPS),
     m_futureBurstResetTime(m_lastPermitsUpdateTime + m_burstTimeInterval)
 {
-    RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][TokenBucketRateLimiter]")
+    RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][BWRateLimiter]")
                         << LOG_KV("permitsUpdateInterval", m_permitsUpdateInterval)
                         << LOG_KV("maxPermits", m_maxPermits);
 }
 
-void TokenBucketRateLimiter::setMaxPermitsSize(int64_t const& _maxPermitsSize)
+void BWRateLimiter::setMaxPermitsSize(int64_t const& _maxPermitsSize)
 {
     m_maxPermits = _maxPermitsSize;
 
@@ -48,7 +48,7 @@ void TokenBucketRateLimiter::setMaxPermitsSize(int64_t const& _maxPermitsSize)
                         << LOG_KV("maxPermitsSize", m_maxPermits);
 }
 
-void TokenBucketRateLimiter::setBurstTimeInterval(int64_t const& _burstInterval)
+void BWRateLimiter::setBurstTimeInterval(int64_t const& _burstInterval)
 {
     m_burstTimeInterval = _burstInterval;
 
@@ -56,7 +56,7 @@ void TokenBucketRateLimiter::setBurstTimeInterval(int64_t const& _burstInterval)
                         << LOG_KV("burstTimeInterval", m_burstTimeInterval);
 }
 
-void TokenBucketRateLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
+void BWRateLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
 {
     m_maxBurstReqNum = _maxBurstReqNum;
 
@@ -64,13 +64,13 @@ void TokenBucketRateLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
                         << LOG_KV("maxBurstReqNum", m_maxBurstReqNum);
 }
 
-bool TokenBucketRateLimiter::tryAcquire(int64_t _requiredPermits)
+bool BWRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
     int64_t waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false, utcSteadyTimeUs());
     return (waitTime == 0);
 }
 
-void TokenBucketRateLimiter::acquire(int64_t _requiredPermits)
+void BWRateLimiter::acquire(int64_t _requiredPermits)
 {
     int64_t waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false, utcSteadyTimeUs());
     if (waitTime > 0)
@@ -80,7 +80,7 @@ void TokenBucketRateLimiter::acquire(int64_t _requiredPermits)
     return;
 }
 
-void TokenBucketRateLimiter::rollback(int64_t _requiredPermits)
+void BWRateLimiter::rollback(int64_t _requiredPermits)
 {
     Guard l(m_mutex);
     m_currentStoredPermits += _requiredPermits;
@@ -91,7 +91,7 @@ void TokenBucketRateLimiter::rollback(int64_t _requiredPermits)
     return;
 }
 
-int64_t TokenBucketRateLimiter::fetchPermitsAndGetWaitTime(
+int64_t BWRateLimiter::fetchPermitsAndGetWaitTime(
     int64_t _requiredPermits, bool _fetchPermitsWhenRequireWait, int64_t _now)
 {
     Guard l(m_mutex);
@@ -129,7 +129,7 @@ int64_t TokenBucketRateLimiter::fetchPermitsAndGetWaitTime(
     return std::max(waitAvailableTime, (int64_t)0);
 }
 
-void TokenBucketRateLimiter::updateCurrentStoredPermits(int64_t _requiredPermits)
+void BWRateLimiter::updateCurrentStoredPermits(int64_t _requiredPermits)
 {
     double waitTime = 0;
 
@@ -148,7 +148,7 @@ void TokenBucketRateLimiter::updateCurrentStoredPermits(int64_t _requiredPermits
     }
 }
 
-void TokenBucketRateLimiter::updatePermits(int64_t _now)
+void BWRateLimiter::updatePermits(int64_t _now)
 {
     if (_now <= m_lastPermitsUpdateTime)
     {
