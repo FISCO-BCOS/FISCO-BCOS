@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file BWRateLimiterInterface.h
+ * @file RateLimiterInterface.h
  * @author: octopus
  * @date 2022-06-30
  */
@@ -26,24 +26,24 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
-class BWRateLimiterInterface
+class RateLimiterInterface
 {
 public:
-    using Ptr = std::shared_ptr<BWRateLimiterInterface>;
-    using ConstPtr = std::shared_ptr<const BWRateLimiterInterface>;
-    using UniquePtr = std::unique_ptr<BWRateLimiterInterface>;
+    using Ptr = std::shared_ptr<RateLimiterInterface>;
+    using ConstPtr = std::shared_ptr<const RateLimiterInterface>;
+    using UniquePtr = std::unique_ptr<RateLimiterInterface>;
 
 public:
-    BWRateLimiterInterface() = default;
-    BWRateLimiterInterface(BWRateLimiterInterface&&) = default;
-    BWRateLimiterInterface(const BWRateLimiterInterface&) = default;
-    BWRateLimiterInterface& operator=(const BWRateLimiterInterface&) = default;
-    BWRateLimiterInterface& operator=(BWRateLimiterInterface&&) = default;
+    RateLimiterInterface() = default;
+    RateLimiterInterface(RateLimiterInterface&&) = default;
+    RateLimiterInterface(const RateLimiterInterface&) = default;
+    RateLimiterInterface& operator=(const RateLimiterInterface&) = default;
+    RateLimiterInterface& operator=(RateLimiterInterface&&) = default;
 
-    virtual ~BWRateLimiterInterface() {}
+    virtual ~RateLimiterInterface() {}
 
 public:
     /**
@@ -71,6 +71,6 @@ public:
     virtual void rollback(int64_t _requiredPermits) = 0;
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

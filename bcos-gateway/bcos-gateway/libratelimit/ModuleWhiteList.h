@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include <sys/types.h>
 #include <array>
 #include <memory>
 
@@ -28,7 +27,7 @@ namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
 /**
@@ -42,7 +41,16 @@ enum ModuleID
     Raft = 1001,
     BlockSync = 2000,
     TxsSync = 2001,
+    ConsTxsSync = 2002,
     AMOP = 3000,
+
+    LIGHTNODE_GETBLOCK = 4000,
+    LIGHTNODE_GETTRANSACTIONS,
+    LIGHTNODE_GETRECEIPTS,
+    LIGHTNODE_GETSTATUS,
+    LIGHTNODE_SENDTRANSACTION,
+    LIGHTNODE_CALL,
+    LIGHTNODE_END = 4999
 };
 */
 
@@ -58,16 +66,16 @@ public:
 public:
     bool isModuleExist(uint16_t _moduleID)
     {
-        uint index = _moduleID / BIT_NUMBER_PER_UINT32;
-        uint temp = _moduleID % BIT_NUMBER_PER_UINT32;
+        unsigned int index = _moduleID / BIT_NUMBER_PER_UINT32;
+        unsigned temp = _moduleID % BIT_NUMBER_PER_UINT32;
 
         return m_moduleIDsBitMap.at(index) & (1 << temp);
     }
 
     bool addModuleID(uint16_t _moduleID)
     {
-        uint index = _moduleID / BIT_NUMBER_PER_UINT32;
-        uint temp = _moduleID % BIT_NUMBER_PER_UINT32;
+        unsigned index = _moduleID / BIT_NUMBER_PER_UINT32;
+        unsigned temp = _moduleID % BIT_NUMBER_PER_UINT32;
 
         if (m_moduleIDsBitMap.at(index) & (1 << temp))
         {  // already exist
@@ -81,8 +89,8 @@ public:
 
     bool removeModuleID(uint16_t _moduleID)
     {
-        uint index = _moduleID / BIT_NUMBER_PER_UINT32;
-        uint temp = _moduleID % BIT_NUMBER_PER_UINT32;
+        unsigned index = _moduleID / BIT_NUMBER_PER_UINT32;
+        unsigned temp = _moduleID % BIT_NUMBER_PER_UINT32;
 
         if (m_moduleIDsBitMap.at(index) & (1 << temp))
         {
@@ -98,6 +106,6 @@ private:
     std::array<uint32_t, UINT16_MAX / BIT_NUMBER_PER_UINT32 + 1> m_moduleIDsBitMap = {0};
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

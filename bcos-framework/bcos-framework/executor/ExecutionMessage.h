@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief interface of ExecutionParams
- * @file ExecutionParams.h
+ * @file ExecutionMessage.h
  * @author: ancelmo
  * @date: 2021-09-22
  */
@@ -35,6 +35,8 @@ namespace protocol
 
 static const std::string SERIAL_EXECUTIVE_FLOW_ADDRESS =
     std::string("serial_executive_flow_address");
+
+const bcos::bytes GET_CODE_INPUT_BYTES = asBytes(std::string("getCode"));
 
 class ExecutionMessage
 {
@@ -85,6 +87,12 @@ public:
             ss << toHex(lock) << ".";
         }
         ss << "]";
+
+        if (delegateCall())
+        {
+            ss << "(delegateCall|" << delegateCallSender() << "|" << from() << "->"
+               << delegateCallAddress() << "|code.size=" << delegateCallCode().size() << ")";
+        }
         return ss.str();
     }
 
@@ -170,6 +178,19 @@ public:
 
     virtual std::string_view keyLockAcquired() const = 0;
     virtual void setKeyLockAcquired(std::string keyLock) = 0;
+
+    virtual bool delegateCall() const = 0;
+    virtual void setDelegateCall(bool delegateCall) = 0;
+
+    virtual std::string_view delegateCallAddress() const = 0;
+    virtual void setDelegateCallAddress(std::string delegateCallAddress) = 0;
+
+    virtual bcos::bytesConstRef delegateCallCode() const = 0;
+    virtual bytes takeDelegateCallCode() = 0;
+    virtual void setDelegateCallCode(bcos::bytes delegateCallCode) = 0;
+
+    virtual std::string_view delegateCallSender() const = 0;
+    virtual void setDelegateCallSender(std::string delegateCallSender) = 0;
 };
 
 class ExecutionMessageFactory

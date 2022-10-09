@@ -15,39 +15,39 @@
  * (c) 2016-2020 fisco-dev contributors.
  */
 /**
- * @brief : Implement of BWRateLimiter
- * @file: BWRateLimiter.h
+ * @brief : Implement of TokenBucketRateLimiter
+ * @file: TokenBucketRateLimiter.h
  * @author: yujiechen
  * @date: 2020-04-15
  */
 #pragma once
 
-#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
+#include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos
 {
 namespace gateway
 {
-namespace ratelimit
+namespace ratelimiter
 {
 
-class BWRateLimiter : public BWRateLimiterInterface
+class TokenBucketRateLimiter : public RateLimiterInterface
 {
 public:
-    using Ptr = std::shared_ptr<BWRateLimiter>;
-    using ConstPtr = std::shared_ptr<const BWRateLimiter>;
-    using UniquePtr = std::unique_ptr<const BWRateLimiter>;
+    using Ptr = std::shared_ptr<TokenBucketRateLimiter>;
+    using ConstPtr = std::shared_ptr<const TokenBucketRateLimiter>;
+    using UniquePtr = std::unique_ptr<const TokenBucketRateLimiter>;
 
 public:
-    BWRateLimiter(int64_t _maxQPS);
+    TokenBucketRateLimiter(int64_t _maxQPS);
 
-    BWRateLimiter(BWRateLimiter&&) = delete;
-    BWRateLimiter(const BWRateLimiter&) = delete;
-    BWRateLimiter& operator=(const BWRateLimiter&) = delete;
-    BWRateLimiter& operator=(BWRateLimiter&&) = delete;
+    TokenBucketRateLimiter(TokenBucketRateLimiter&&) = delete;
+    TokenBucketRateLimiter(const TokenBucketRateLimiter&) = delete;
+    TokenBucketRateLimiter& operator=(const TokenBucketRateLimiter&) = delete;
+    TokenBucketRateLimiter& operator=(TokenBucketRateLimiter&&) = delete;
 
-    ~BWRateLimiter() override {}
+    ~TokenBucketRateLimiter() override {}
 
 public:
     /**
@@ -111,21 +111,21 @@ private:
     uint64_t m_burstTimeInterval = 1000000;
 };
 
-class BWRateLimiterFactory
+class RateLimiterFactory
 {
 public:
-    using Ptr = std::shared_ptr<BWRateLimiterFactory>;
-    using ConstPtr = std::shared_ptr<const BWRateLimiterFactory>;
-    using UniquePtr = std::unique_ptr<const BWRateLimiterFactory>;
+    using Ptr = std::shared_ptr<RateLimiterFactory>;
+    using ConstPtr = std::shared_ptr<const RateLimiterFactory>;
+    using UniquePtr = std::unique_ptr<const RateLimiterFactory>;
 
 public:
-    BWRateLimiterInterface::Ptr buildRateLimiter(int64_t _maxPermits)
+    RateLimiterInterface::Ptr buildRateLimiter(int64_t _maxPermits)
     {
-        auto rateLimiter = std::make_shared<BWRateLimiter>(_maxPermits);
+        auto rateLimiter = std::make_shared<TokenBucketRateLimiter>(_maxPermits);
         return rateLimiter;
     }
 };
 
-}  // namespace ratelimit
+}  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

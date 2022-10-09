@@ -13,21 +13,32 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Common.h
- * @author: lucasli
- * @date 2022-04-27
+ * @brief host context for delegateCall
+ * @file DelegateHostContext.h
+ * @author: xingqiangbai
+ * @date: 2022-09-30
  */
 #pragma once
+#include "HostContext.h"
 
 namespace bcos
 {
-namespace boostssl
+namespace executor
 {
+class DelegateHostContext : public HostContext
+{
+public:
+    DelegateHostContext(CallParameters::UniquePtr callParameters,
+        std::shared_ptr<TransactionExecutive> executive, std::string tableName);
 
-enum MessageExtFieldFlag
-{
-    Response = 0x0001,
+    virtual ~DelegateHostContext() = default;
+    std::optional<storage::Entry> code() override;
+    bool setCode(bytes code) override;
+    std::string_view caller() const override;
+
+private:
+    storage::Entry m_code;
 };
 
-}  // namespace boostssl
+}  // namespace executor
 }  // namespace bcos

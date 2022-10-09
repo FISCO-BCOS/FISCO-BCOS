@@ -37,7 +37,9 @@ namespace storage
 constexpr int scan_batch_size = 64;
 
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath);
+    const std::vector<std::string>& pdAddrs, const std::string& logPath,
+    const std::string& caPath = std::string(""), const std::string& certPath = std::string(""),
+    const std::string& keyPath = std::string(""));
 
 class TiKVStorage : public TransactionalStorageInterface
 {
