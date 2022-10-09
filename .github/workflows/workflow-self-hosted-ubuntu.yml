@@ -70,9 +70,7 @@ jobs:
           make cov
           
       - name: Generate covreage report
-        uses: codecov/codecov-action@v2
-        with:
-          version: "v0.1.15"
+        uses: codecov/codecov-action@v3
           file: ./build/coverage.info
           name: FISCO BCOS 3 coverage
           fail_ci_if_error: true
