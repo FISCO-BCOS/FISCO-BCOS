@@ -569,14 +569,6 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
 // loads redis config
 void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
 {
-    /*
-    [redis]
-        server_ip=
-        server_port=
-        request_timeout=
-        connection_pool_size=
-     */
-
     // server_ip
     std::string redisServerIP = _pt.get<std::string>("redis.server_ip", "");
     if (redisServerIP.empty())

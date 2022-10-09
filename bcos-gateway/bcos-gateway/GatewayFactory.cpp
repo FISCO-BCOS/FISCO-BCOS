@@ -350,6 +350,13 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
+/**
+ * @brief
+ *
+ * @param _rateLimiterConfig
+ * @param _redisConfig
+ * @return std::shared_ptr<ratelimiter::GatewayRateLimiter>
+ */
 std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
     const GatewayConfig::RedisConfig& _redisConfig)
@@ -660,10 +667,7 @@ std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(const std::string& _
         // Connect to Redis server with a connection pool.
         redis = std::make_shared<sw::redis::Redis>(connection_options, pool_options);
 
-        // test whether redis functions properly
-        // 1. set key
-        // 2. get key
-        // 3. del key
+        // test whether redis functions properly // 1. set key // 2. get key // 3. del key
 
         std::string key = "Gateway -> " + std::to_string(utcTime());
         std::string value = "Hello, FISCO-BCOS 3.0.";

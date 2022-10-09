@@ -12,6 +12,7 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
+#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
 
@@ -83,6 +84,17 @@ public:
     Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
         std::string const& _gatewayServiceName);
+
+    /**
+     * @brief
+     *
+     * @param _rateLimiterConfig
+     * @param _redisConfig
+     * @return std::shared_ptr<ratelimiter::GatewayRateLimiter>
+     */
+    std::shared_ptr<ratelimiter::GatewayRateLimiter> buildGatewayRateLimiter(
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
+        const GatewayConfig::RedisConfig& _redisConfig);
 
     /**
      * @brief init redis

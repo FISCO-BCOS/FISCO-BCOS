@@ -80,7 +80,6 @@ public:
      */
     bool tryAcquire(int64_t _requiredPermits) override;
 
-
     /**
      * @brief
      *

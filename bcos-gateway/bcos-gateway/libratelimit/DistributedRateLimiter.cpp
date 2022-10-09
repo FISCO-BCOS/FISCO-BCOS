@@ -87,8 +87,8 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
     try
     {
-        auto start = utcTime();
-
+        // TODO: for compile
+        /*
         auto keys = {m_rateLimitKey};
         std::vector<std::string> args = {
             std::to_string(m_maxPermits), std::to_string(_requiredPermits), "1"};
@@ -96,25 +96,15 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
         auto result =
             m_redis->eval<int64_t>(luaScript, keys.begin(), keys.end(), args.begin(), args.end());
 
-        auto end = utcTime();
-
-        if (1)
-        {
-            GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter::tryAcquire")
-                               << LOG_KV("elapsedTime", (end - start))
-                               << LOG_KV("maxPermits", m_maxPermits)
-                               << LOG_KV("requiredPermits", _requiredPermits)
-                               << LOG_KV("result", result);
-        }
-
         return result >= 0;
+        */
+        return true;
     }
     catch (const std::exception& e)
     {
         // TODO: statistics failure Information
         GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter::tryAcquire")
                            << LOG_KV("rateLimitKey", m_rateLimitKey) << LOG_KV("error", e.what());
-
         // exception throw, allow this acquire
         return true;
     }
