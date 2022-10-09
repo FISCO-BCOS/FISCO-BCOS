@@ -29,7 +29,6 @@
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -233,7 +232,9 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     return result;
 }
 
+
 evmc_status_code HostContext::toEVMStatus(std::unique_ptr<CallParameters> const& _response, evmc_result _result,
+
     std::shared_ptr<bcos::executor::BlockContext> _blockContext)
 {
     if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION))
