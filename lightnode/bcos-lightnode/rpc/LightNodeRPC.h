@@ -6,6 +6,7 @@
 #include "Converter.h"
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
+#include "bcos-concepts/Exception.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
@@ -18,16 +19,24 @@
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
+#include <bcos-task/Wait.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <exception>
 #include <iterator>
+#include <memory>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
 
 namespace bcos::rpc
 {
+
+// clang-format off
+struct NotFoundTransactionHash: public bcos::exception::Exception {};
+// clang-format on
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
     bcos::concepts::ledger::Ledger RemoteLedgerType,
@@ -47,175 +56,292 @@ public:
         m_groupID(std::move(groupID))
     {}
 
-    void call([[maybe_unused]] std::string_view _groupID,
-        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view to,
-        [[maybe_unused]] std::string_view hexTransaction, RespFunc respFunc) override
+    void toErrorResp(std::exception_ptr error, RespFunc respFunc)
+    {
+        try
+        {
+            std::rethrow_exception(error);
+        }
+        catch (std::exception& e)
+        {
+            toErrorResp(error, std::move(respFunc));
+        }
+    }
+
+    void toErrorResp(std::exception& error, RespFunc respFunc)
+    {
+        try
+        {
+            auto& bcosError = dynamic_cast<bcos::Error&>(error);
+            toErrorResp(std::make_shared<bcos::Error>(std::move(bcosError)), std::move(respFunc));
+        }
+        catch ([[maybe_unused]] std::bad_cast&)
+        {
+            // no bcos error
+            auto bcosError =
+                std::make_shared<bcos::Error>(-1, boost::diagnostic_information(error));
+            toErrorResp(std::move(bcosError), std::move(respFunc));
+        }
+    }
+
+    void toErrorResp(bcos::Error::Ptr error, RespFunc respFunc)
+    {
+        Json::Value resp;
+        respFunc(std::move(error), resp);
+    }
+
+    void call([[maybe_unused]] std::string_view groupID, [[maybe_unused]] std::string_view nodeName,
+        [[maybe_unused]] std::string_view to, [[maybe_unused]] std::string_view hexTransaction,
+        RespFunc respFunc) override
     {
         // call data is json
-        bcostars::Transaction transaction;
-        decodeData(hexTransaction, transaction.data.input);
-        transaction.data.to = to;
-        transaction.data.nonce = "0";
-        transaction.data.blockLimit = 0;
-        transaction.data.chainID = "";
-        transaction.data.groupID = "";
-        transaction.importTime = 0;
+        auto transaction = std::make_unique<bcostars::Transaction>();
+        decodeData(hexTransaction, transaction->data.input);
+        transaction->data.to = to;
+        transaction->data.nonce = "0";
+        transaction->data.blockLimit = 0;
+        transaction->data.chainID = "";
+        transaction->data.groupID = "";
+        transaction->importTime = 0;
 
         LIGHTNODE_LOG(INFO) << "RPC call request, to: " << to;
 
-        bcostars::TransactionReceipt receipt;
-        scheduler().call(transaction, receipt);
+        auto receipt = std::make_unique<bcostars::TransactionReceipt>();
 
-        Json::Value resp;
-        toJsonResp<Hasher>(receipt, {}, resp);
+        auto& transactionRef = *transaction;
+        auto& receiptRef = *receipt;
+        bcos::task::wait(scheduler().call(transactionRef, receiptRef),
+            [this, m_transaction = std::move(transaction), m_receipt = std::move(receipt),
+                m_respFunc = std::move(respFunc)](std::exception_ptr error = {}) mutable {
+                if (error)
+                {
+                    toErrorResp(error, m_respFunc);
+                    return;
+                }
 
-        LIGHTNODE_LOG(INFO) << "RPC call transaction finished";
-        respFunc(nullptr, resp);
+                Json::Value resp;
+                toJsonResp<Hasher>(*m_receipt, {}, resp);
+
+                LIGHTNODE_LOG(INFO) << "RPC call transaction finished";
+                m_respFunc(nullptr, resp);
+            });
     }
 
     void sendTransaction([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, std::string_view hexTransaction,
         [[maybe_unused]] bool requireProof, RespFunc respFunc) override
     {
-        bcos::bytes binData;
-        decodeData(hexTransaction, binData);
-        bcostars::Transaction transaction;
-        bcos::concepts::serialize::decode(binData, transaction);
+        bcos::task::wait([this](std::string_view hexTransaction,
+                             RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                bcos::bytes binData;
+                decodeData(hexTransaction, binData);
+                bcostars::Transaction transaction;
+                bcos::concepts::serialize::decode(binData, transaction);
 
-        bcos::bytes txHash;
-        bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
-        std::string txHashStr;
-        txHashStr.reserve(txHash.size() * 2);
-        boost::algorithm::hex_lower(txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
+                bcos::bytes txHash;
+                bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
+                std::string txHashStr;
+                txHashStr.reserve(txHash.size() * 2);
+                boost::algorithm::hex_lower(
+                    txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
 
-        LIGHTNODE_LOG(INFO) << "RPC send transaction request: "
-                            << "0x" << txHashStr;
+                LIGHTNODE_LOG(INFO) << "RPC send transaction request: "
+                                    << "0x" << txHashStr;
 
-        bcostars::TransactionReceipt receipt;
-        remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
+                bcostars::TransactionReceipt receipt;
+                co_await remoteTransactionPool().submitTransaction(std::move(transaction), receipt);
 
-        Json::Value resp;
-        toJsonResp<Hasher>(receipt, txHashStr, resp);
+                Json::Value resp;
+                toJsonResp<Hasher>(receipt, transaction, txHashStr, resp);
 
-        LIGHTNODE_LOG(INFO) << "RPC send transaction finished";
-        respFunc(nullptr, resp);
+                LIGHTNODE_LOG(INFO) << "RPC send transaction finished";
+                respFunc(nullptr, resp);
+            }
+            catch (std::exception& error)
+            {
+                toErrorResp(error, std::move(respFunc));
+            }
+        }(hexTransaction, std::move(respFunc)));
     }
 
     void getTransaction([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view txHash,
         [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get transaction request: " << txHash;
+        bcos::task::wait([this](std::string txHash, RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                LIGHTNODE_LOG(INFO) << "RPC get transaction request: " << txHash;
 
-        std::array<bcos::h256, 1> hashes{bcos::h256{txHash, bcos::h256::FromHex}};
-        std::vector<bcostars::Transaction> transactions;
-        remoteLedger().getTransactions(hashes, transactions);
+                std::array<bcos::h256, 1> hashes{bcos::h256{txHash, bcos::h256::FromHex}};
+                std::vector<bcostars::Transaction> transactions;
 
-        Json::Value resp;
-        toJsonResp<Hasher>(transactions[0], resp);
+                co_await remoteLedger().getTransactions(hashes, transactions);
 
-        LIGHTNODE_LOG(INFO) << "RPC get transaction finished";
-        _respFunc(nullptr, resp);
+                Json::Value resp;
+                toJsonResp<Hasher>(transactions[0], resp);
+
+                respFunc(nullptr, resp);
+            }
+            catch (std::exception& error)
+            {
+                toErrorResp(error, std::move(respFunc));
+            }
+        }(std::string(txHash), std::move(_respFunc)));
     }
 
     void getTransactionReceipt([[maybe_unused]] std::string_view groupID,
         [[maybe_unused]] std::string_view nodeName, [[maybe_unused]] std::string_view txHash,
-        [[maybe_unused]] bool requireProof, RespFunc _respFunc) override
+        [[maybe_unused]] bool requireProof, RespFunc respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get receipt request: " << txHash;
+        bcos::task::wait(
+            [this](auto remoteLedger, std::string txHash, RespFunc respFunc) -> task::Task<void> {
+                try
+                {
+                    LIGHTNODE_LOG(INFO) << "RPC get receipt request: " << txHash;
 
-        std::array<bcos::h256, 1> hashes{bcos::h256{txHash, bcos::h256::FromHex}};
-        std::vector<bcostars::TransactionReceipt> receipts;
-        remoteLedger().getTransactions(hashes, receipts);
+                    std::array<bcos::h256, 1> hashes{bcos::h256{txHash, bcos::h256::FromHex}};
+                    std::vector<bcostars::TransactionReceipt> receipts(1);
+                    std::vector<bcostars::Transaction> transactions(1);
 
-        Json::Value resp;
-        toJsonResp<Hasher>(receipts[0], txHash, resp);
+                    co_await remoteLedger.getTransactions(hashes, receipts);
+                    co_await remoteLedger.getTransactions(hashes, transactions);
 
-        _respFunc(nullptr, resp);
+
+                    Json::Value resp;
+                    toJsonResp<Hasher>(receipts[0], transactions[0], txHash, resp);
+
+                    respFunc(nullptr, resp);
+                }
+                catch (std::exception& error)
+                {
+                    toErrorResp(error, std::move(respFunc));
+                }
+            }(remoteLedger(), std::string(txHash), std::move(respFunc)));
     }
 
     void getBlockByHash([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view blockHash,
-        [[maybe_unused]] bool _onlyHeader, [[maybe_unused]] bool _onlyTxHash,
-        RespFunc _respFunc) override
+        bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) override
     {
-        int64_t blockNumber = -1;
-        std::array<std::byte, Hasher::HASH_SIZE> hash;
-        hex2Bin(blockHash, hash);
+        auto blockNumber = std::make_unique<int64_t>(-1);
+        auto hash = std::make_unique<std::array<std::byte, Hasher::HASH_SIZE>>();
+        hex2Bin(blockHash, *hash);
 
-        localLedger().getBlockNumberByHash(hash, blockNumber);
+        auto& hashRef = *hash;
+        auto& blockNumberRef = *blockNumber;
+        bcos::task::wait(localLedger().getBlockNumberByHash(hashRef, blockNumberRef),
+            [this, m_hash = std::move(hash), m_blockNumber = std::move(blockNumber),
+                m_onlyHeader = _onlyHeader, m_respFunc = std::move(_respFunc),
+                m_groupID = std::string(_groupID), m_nodeName = std::string(_nodeName),
+                m_onlyTxHash = _onlyTxHash](std::exception_ptr error = {}) mutable {
+                if (error)
+                {
+                    toErrorResp(error, m_respFunc);
+                    return;
+                }
 
-        LIGHTNODE_LOG(INFO) << "RPC get block by hash request: 0x" << blockHash << " "
-                            << blockNumber << " " << _onlyHeader;
-        if (blockNumber < 0)
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Unable to find block hash!"});
+                LIGHTNODE_LOG(INFO)
+                    << "RPC get block by hash request: 0x"
+                    // << bcos::toHex<decltype(*m_hash), std::string>(*m_hash) << " "
+                    << *m_blockNumber << " " << m_onlyHeader;
+                if (*m_blockNumber < 0)
+                    BOOST_THROW_EXCEPTION(std::runtime_error{"Unable to find block hash!"});
 
-        getBlockByNumber(
-            _groupID, _nodeName, blockNumber, _onlyHeader, _onlyTxHash, std::move(_respFunc));
+                getBlockByNumber(m_groupID, m_nodeName, *m_blockNumber, m_onlyHeader, m_onlyTxHash,
+                    std::move(m_respFunc));
+            });
+        ;
     }
 
-    void getBlockByNumber([[maybe_unused]] std::string_view _groupID,
-        [[maybe_unused]] std::string_view _nodeName, int64_t _blockNumber, bool _onlyHeader,
-        bool _onlyTxHash, RespFunc _respFunc) override
+    void getBlockByNumber([[maybe_unused]] std::string_view groupID,
+        [[maybe_unused]] std::string_view nodeName, int64_t blockNumber, bool onlyHeader,
+        bool onlyTxHash, RespFunc respFunc) override
     {
-        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << _blockNumber << " "
-                            << _onlyHeader;
+        LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << blockNumber << " "
+                            << onlyHeader;
 
-        bcostars::Block block;
-        if (_onlyHeader)
-        {
-            localLedger().template getBlock<bcos::concepts::ledger::HEADER>(_blockNumber, block);
-        }
-        else
-        {
-            remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(_blockNumber, block);
-
-            if (!RANGES::empty(block.transactionsMetaData))
+        auto getBlockCoroutine = [this](bool onlyHeader,
+                                     int64_t blockNumber) -> task::Task<bcostars::Block> {
+            bcostars::Block block;
+            if (onlyHeader)
             {
-                // Check transaction merkle
-                crypto::merkle::Merkle<Hasher> merkle;
-                auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-                ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
-                    return transactionMetaData.hash;
-                });
-                std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
-                merkle.generateMerkle(hashesRange, merkles);
-
-                if (RANGES::empty(merkles))
-                    BOOST_THROW_EXCEPTION(
-                        std::runtime_error{"Unable to generate transaction merkle root!"});
-
-                if (!bcos::concepts::bytebuffer::equalTo(
-                        block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
-                    BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
+                co_await localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                    blockNumber, block);
             }
-
-            // Check parentBlock
-            if (_blockNumber > 0)
+            else
             {
-                decltype(block) parentBlock;
-                localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                    _blockNumber - 1, parentBlock);
+                co_await remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
+                    blockNumber, block);
 
-                std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-                bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
-
-                if (RANGES::empty(block.blockHeader.data.parentInfo) ||
-                    (block.blockHeader.data.parentInfo[0].blockNumber !=
-                        parentBlock.blockHeader.data.blockNumber) ||
-                    !bcos::concepts::bytebuffer::equalTo(
-                        block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                if (!RANGES::empty(block.transactionsMetaData))
                 {
-                    LIGHTNODE_LOG(ERROR) << "No match parentHash!";
-                    BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                    // Check transaction merkle
+                    crypto::merkle::Merkle<Hasher> merkle;
+                    auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
+                    ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
+                        return transactionMetaData.hash;
+                    });
+                    std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
+                    merkle.generateMerkle(hashesRange, merkles);
+
+                    if (RANGES::empty(merkles))
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            std::runtime_error{"Unable to generate transaction merkle root!"});
+                    }
+
+                    if (!bcos::concepts::bytebuffer::equalTo(
+                            block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
+                    {
+                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
+                    }
+                }
+
+                // Check parentBlock
+                if (blockNumber > 0)
+                {
+                    decltype(block) parentBlock;
+                    co_await localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                        blockNumber - 1, parentBlock);
+
+                    std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                    bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
+
+                    if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                        (block.blockHeader.data.parentInfo[0].blockNumber !=
+                            parentBlock.blockHeader.data.blockNumber) ||
+                        !bcos::concepts::bytebuffer::equalTo(
+                            block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                    {
+                        LIGHTNODE_LOG(ERROR) << "No match parentHash!";
+                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                    }
                 }
             }
-        }
 
-        Json::Value resp;
-        toJsonResp<Hasher>(block, resp, _onlyHeader);
+            co_return block;
+        };
 
-        _respFunc(nullptr, resp);
+        bcos::task::wait(getBlockCoroutine(onlyHeader, blockNumber),
+            [this, m_respFunc = std::move(respFunc), m_onlyHeader = onlyHeader](
+                auto&& result) mutable {
+                using ResultType = std::remove_cvref_t<decltype(result)>;
+                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+                {
+                    toErrorResp(result, m_respFunc);
+                    return;
+                }
+                else
+                {
+                    Json::Value resp;
+                    toJsonResp<Hasher>(result, resp, m_onlyHeader);
+
+                    m_respFunc(nullptr, resp);
+                }
+            });
     }
 
     void getBlockHashByNumber([[maybe_unused]] std::string_view _groupID,
@@ -224,12 +350,20 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block hash by number request: " << blockNumber;
 
-        bcos::h256 hash;
-        localLedger().getBlockHashByNumber(blockNumber, hash);
+        auto hash = std::make_unique<bcos::h256>();
+        auto& hashRef = *hash;
+        bcos::task::wait(localLedger().getBlockHashByNumber(blockNumber, hashRef),
+            [this, m_hash = std::move(hash), m_respFunc = std::move(respFunc)](
+                std::exception_ptr error = {}) mutable {
+                if (error)
+                {
+                    toErrorResp(error, m_respFunc);
+                    return;
+                }
+                Json::Value resp = bcos::toHexStringWithPrefix(*m_hash);
 
-        Json::Value resp = bcos::toHexStringWithPrefix(hash);
-
-        respFunc(nullptr, resp);
+                m_respFunc(nullptr, resp);
+            });
     }
 
     void getBlockNumber(
@@ -237,13 +371,22 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block number request";
 
-        auto task = localLedger().getStatus();
-        auto count = task.getResult();
+        bcos::task::wait(localLedger().getStatus(),
+            [this, m_respFunc = std::move(_respFunc)](auto&& result) mutable {
+                using ResultType = std::remove_cvref_t<decltype(result)>;
+                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+                {
+                    toErrorResp(result, m_respFunc);
+                    return;
+                }
+                else
+                {
+                    Json::Value resp = result.blockNumber;
 
-        Json::Value resp = count.blockNumber;
-
-        LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << count.blockNumber;
-        _respFunc(nullptr, resp);
+                    LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << result.blockNumber;
+                    m_respFunc(nullptr, resp);
+                }
+            });
     }
 
     void getCode(std::string_view _groupID, std::string_view _nodeName,
@@ -353,13 +496,22 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get group block number request";
 
-        auto task = localLedger().getStatus();
-        auto count = task.getResult();
+        bcos::task::wait(localLedger().getStatus(),
+            [this, m_respFunc = std::move(_respFunc)](auto&& result) mutable {
+                using ResultType = std::remove_cvref_t<decltype(result)>;
+                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+                {
+                    toErrorResp(result, m_respFunc);
+                    return;
+                }
+                else
+                {
+                    Json::Value resp = result.blockNumber;
 
-        Json::Value resp(Json::objectValue);
-        resp[m_groupID] = count.blockNumber;
-
-        _respFunc(nullptr, resp);
+                    LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << result.blockNumber;
+                    m_respFunc(nullptr, resp);
+                }
+            });
     }
 
 private:
