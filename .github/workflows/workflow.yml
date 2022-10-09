@@ -1,4 +1,4 @@
-name: FISCO-BCOS GitHub Actions
+name: Others CI check
 on:
   push:
     paths-ignore:
@@ -11,7 +11,10 @@ on:
       - "Changelog.md"
       - "README.md"
   release:
-    types: [published, created, edited]
+    types: [published, push]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -21,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2019, macos-12]
+        os: [windows-2019, macos-12]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -75,8 +78,9 @@ jobs:
           make cov
       - name: Generate covreage report
         if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v2
         with:
+          version: "v0.1.15"
           file: ./build/coverage.info
           name: FISCO BCOS 3.0.0 coverage
           fail_ci_if_error: true

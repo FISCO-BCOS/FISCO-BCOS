@@ -27,38 +27,13 @@ using namespace bcos::crypto;
 
 PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
   : m_config(_config), m_index(_index)
-{
-    // Timer is used to manage checkpoint timeout
-    m_timer = std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "pbftCacheTimer");
-}
-void PBFTCache::init()
-{
-    // register timeout handler
-    auto self = std::weak_ptr<PBFTCache>(shared_from_this());
-    m_timer->registerTimeoutHandler([self]() {
-        try
-        {
-            auto cache = self.lock();
-            if (!cache)
-            {
-                return;
-            }
-            cache->onCheckPointTimeout();
-        }
-        catch (std::exception const& e)
-        {
-            PBFT_LOG(WARNING) << LOG_DESC("onCheckPointTimeout error")
-                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
-}
+{}
+
 void PBFTCache::onCheckPointTimeout()
 {
     // Note: this logic is unreachable
     if (!m_checkpointProposal)
     {
-        PBFT_LOG(WARNING) << LOG_DESC("onCheckPointTimeout but the checkpoint proposal is null")
-                          << m_config->printCurrentState();
         return;
     }
     if (m_committedIndexNotifier && m_config->timer()->running() == false)
@@ -76,7 +51,6 @@ void PBFTCache::onCheckPointTimeout()
     // only broadcast message to consensus node
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
-    m_timer->restart();
 }
 
 bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -362,8 +336,6 @@ void PBFTCache::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
         return;
     }
     m_checkpointProposal = _proposal;
-    // Note: the timer can only been started after setCheckPointProposal success
-    m_timer->start();
     PBFT_LOG(INFO) << LOG_DESC("setCheckPointProposal") << printPBFTProposal(m_checkpointProposal)
                    << m_config->printCurrentState();
 }

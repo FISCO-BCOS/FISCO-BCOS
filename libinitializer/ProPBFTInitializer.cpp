@@ -53,14 +53,12 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     // init rpc client
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
-    // TODO: tars
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
-    // TODO: tars
     auto gatewayServicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
         withoutTarsFramework, gatewayServiceName, endPoints);
     m_gateway =
@@ -152,24 +150,17 @@ void ProPBFTInitializer::init()
     // Note: m_leaderElection is created after PBFTInitializer::init
     if (m_leaderElection)
     {
-        // should report the latest nodeInfo actively to rpc/gateway when the electionCluster is
-        // down
         m_leaderElection->registerOnElectionClusterException([this]() {
-            if (m_pbft->masterNode())
-            {
-                INITIALIZER_LOG(INFO)
-                    << LOG_DESC("OnElectionClusterException: reportNodeInfo to rpc/gateway")
-                    << LOG_KV("nodeName", m_nodeConfig->nodeName());
-                reportNodeInfo();
-                m_timer->start();
-            }
+            INITIALIZER_LOG(INFO) << LOG_DESC("OnElectionClusterException")
+                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
         });
-        // stop reportNodeInfo to rpc/gateway
         m_leaderElection->registerOnElectionClusterRecover([this]() {
             INITIALIZER_LOG(INFO) << LOG_DESC(
                 "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
-            m_timer->stop();
         });
     }
-    reportNodeInfo();
+    else
+    {
+        reportNodeInfo();
+    }
 }

@@ -86,12 +86,14 @@ void BlockSync::enableAsMaster(bool _masterNode)
         return;
     }
     m_config->setMasterNode(_masterNode);
-    m_masterNode = _masterNode;
     if (!_masterNode)
     {
+        m_masterNode = _masterNode;
         return;
     }
     init();
+    // only set m_masterNode to be true when init success
+    m_masterNode = _masterNode;
 }
 
 void BlockSync::initSendResponseHandler()

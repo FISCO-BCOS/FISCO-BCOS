@@ -99,7 +99,6 @@ void ExecutorServiceApp::createAndInitExecutor()
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
 
-    // TODO: tars
     auto txpoolServicePrx = createServantProxy<bcostars::TxPoolServicePrx>(
         withoutTarsFramework, txpoolServiceName, endPoints);
 
@@ -110,7 +109,6 @@ void ExecutorServiceApp::createAndInitExecutor()
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create SchedulerServiceClient")
                                << LOG_KV("schedulerServiceName", schedulerServiceName);
 
-    // TODO: tars
     auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(schedulerServiceName);
 
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(

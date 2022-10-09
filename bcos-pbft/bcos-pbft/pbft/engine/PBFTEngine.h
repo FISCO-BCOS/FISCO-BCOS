@@ -24,6 +24,7 @@
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/Timer.h>
 
 namespace bcos
 {
@@ -95,7 +96,7 @@ public:
     void clearAllCache();
     void recoverState();
 
-    void fetchAndUpdatesLedgerConfig();
+    void fetchAndUpdateLedgerConfig();
     void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
     {
         m_ledgerFetcher = _ledgerFetcher;
@@ -103,6 +104,7 @@ public:
 
 protected:
     virtual void initSendResponseHandler();
+    virtual void tryToResendCheckPoint();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse);
 
@@ -235,6 +237,9 @@ protected:
 
     std::atomic_bool m_stopped = {false};
     bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
+
+    // the timer used to resend checkPointProposal
+    std::shared_ptr<bcos::Timer> m_timer;
 };
 }  // namespace consensus
 }  // namespace bcos

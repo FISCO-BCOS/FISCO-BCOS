@@ -74,8 +74,7 @@ void SchedulerServiceApp::createAndInitSchedulerService()
 
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
-
-    // TODO: tars
+    
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
 
@@ -87,8 +86,6 @@ void SchedulerServiceApp::createAndInitSchedulerService()
                                 << LOG_KV("txpoolServiceName", txpoolServiceName);
 
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
-
-    // TODO: tars
     auto txpoolServicePrx = bcostars::createServantProxy<bcostars::TxPoolServicePrx>(
         withoutTarsFramework, txpoolServiceName, endPoints);
 

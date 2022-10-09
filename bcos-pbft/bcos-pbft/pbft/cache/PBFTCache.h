@@ -118,7 +118,6 @@ public:
         }
         return 0;
     }
-    void init();
 
     void resetState()
     {
@@ -126,7 +125,6 @@ public:
         m_submitted.store(false);
         m_precommitted.store(false);
         m_checkpointProposal = nullptr;
-        m_timer->stop();
     }
 
 protected:
@@ -217,10 +215,9 @@ protected:
     PBFTMessageInterface::Ptr m_precommitWithoutData = nullptr;
 
     PBFTProposalInterface::Ptr m_checkpointProposal = nullptr;
+
     CollectionCacheType m_checkpointCacheList;
     QuorumRecoderType m_checkpointCacheWeight;
-
-    PBFTTimer::Ptr m_timer;
 
     std::function<void(bcos::protocol::BlockNumber)> m_committedIndexNotifier;
 };

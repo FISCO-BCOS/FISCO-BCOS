@@ -119,6 +119,9 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 
             std::string errorMessage =
                 "RocksDB get failed!, " + boost::lexical_cast<std::string>(status.ToString());
+            STORAGE_ROCKSDB_LOG(WARNING)
+                << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table) << LOG_KV("key", _key)
+                << LOG_KV("error", errorMessage);
             if (status.getState())
             {
                 errorMessage.append(" ").append(status.getState());
@@ -405,6 +408,7 @@ void RocksDBStorage::asyncCommit(
                     << LOG_DESC("asyncCommit failed") << LOG_KV("number", params.number)
                     << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("time(ms)", utcTime() - start);
+                lock.release();
                 callback(err, 0);
                 return;
             }
@@ -487,7 +491,14 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         }
     }
     WriteOptions options;
-    m_db->Write(options, &writeBatch);
+    auto status = m_db->Write(options, &writeBatch);
+    auto err = checkStatus(status);
+    if (err)
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows failed") << LOG_KV("message", err->errorMessage());
+        return err;
+    }
     return nullptr;
 }
 
