@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build_centos:
     name: centos ci check
-    runs-on: self-hosted-centos
+    runs-on: self-hosted-static-centos
     strategy:
       fail-fast: false
     env:
