@@ -75,7 +75,7 @@ jobs:
         with:
           version: "v0.1.15"
           file: ./build/coverage.info
-          name: FISCO BCOS 3.0.0 coverage
+          name: FISCO BCOS 3 coverage
           fail_ci_if_error: true
 
       - name: Integration test - Air
