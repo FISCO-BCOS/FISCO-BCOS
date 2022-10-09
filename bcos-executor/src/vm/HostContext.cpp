@@ -29,7 +29,6 @@
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -216,8 +215,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     // Convert CallParameters to evmc_resultx
     evmc_result result;
-    result.status_code = evmc_status_code(response->status);
-
+    result.status_code = toEVMStatus(response, blockContext);
+ 
     result.create_address =
         toEvmC(boost::algorithm::unhex(response->newEVMContractAddress));  // TODO: check if ok
 
@@ -231,6 +230,21 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     m_responseStore.emplace_back(std::move(response));
 
     return result;
+}
+
+evmc_result HostContext::toEVMStatus( std::unique_ptr<CallParameters> const& _response,
+    std::shared_ptr<bcos::executor::BlockContext> _blockContext)
+{
+    if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION))
+    {
+        result.status_code = evmc_status_code(_response->evmStatus);
+        return result.status_code 
+    }
+    else
+    {
+        result.status_code = evmc_status_code(_response->_status);
+        return result.status_code ;
+    }
 }
 
 evmc_result HostContext::callBuiltInPrecompiled(

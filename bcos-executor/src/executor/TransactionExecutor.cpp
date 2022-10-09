@@ -2291,8 +2291,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
-        callParameters->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
-        // callParameters->evmStatus = EVMC_REVERT;
+        callParameters->status = (int32_t)TransactionStatus::RevertInstruction;
+        callParameters->evmStatus = EVMC_REVERT;
         break;
     }
     case ExecutionMessage::FINISHED:

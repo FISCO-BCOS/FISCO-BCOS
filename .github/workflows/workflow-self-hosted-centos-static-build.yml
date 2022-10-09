@@ -1,17 +1,10 @@
-name: Centos CI Check
+name: Centos Static build
 on:
-  push:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  release:
-    types: [push]
+    branches:
+      - feature-3.1.0
+    types: [closed] 
+    
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -66,7 +59,7 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           . /opt/rh/llvm-toolset-7/enable
           alias cmake='cmake3'
-          cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
 
       - name: Test
