@@ -238,7 +238,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
     bcostars::Block block;
     block.blockHeader.data.blockNumber = 100;
 
-    for (auto i = 0u; i < count; ++i)
+    for (auto i = 0U; i < count; ++i)
     {
         bcostars::Transaction transaction;
         transaction.data.blockLimit = 1000;
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
     bcos::concepts::hash::calculate<Hasher>(genesisBlock, lastBlockHash);
 
     constexpr static size_t blockCount = 10;
-    for (auto number = 1u; number < blockCount; ++number)
+    for (auto number = 1U; number < blockCount; ++number)
     {
         // write some block
         bcostars::Block block;
@@ -333,7 +333,7 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
         bcos::concepts::bytebuffer::assignTo(lastBlockHash, parentInfo.blockHash);
         block.blockHeader.data.parentInfo.push_back(parentInfo);
 
-        for (auto i = 0u; i < count; ++i)
+        for (auto i = 0U; i < count; ++i)
         {
             bcostars::Transaction transaction;
             transaction.data.blockLimit = 1000;

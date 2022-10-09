@@ -73,7 +73,8 @@ public:
         TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
     {
         auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
-            decltype(input.dataHash) hash(Hasher::HASH_SIZE);
+            // decltype(input.dataHash) hash(Hasher::HASH_SIZE);
+            std::array<char, Hasher::HASH_SIZE> hash;
             bcos::concepts::hash::calculate<Hasher>(input, hash);
             return hash;
         });
@@ -85,11 +86,12 @@ public:
 
         constexpr auto isTransaction =
             bcos::concepts::transaction::Transaction<RANGES::range_value_t<decltype(inputs)>>;
-        return setTransactionBuffers<isTransaction>(hashesRange, std::move(buffersRange));
+        return setTransactionBuffers<isTransaction>(
+            std::move(hashesRange), std::move(buffersRange));
     }
 
     template <bool isTransaction>
-    auto setTransactionBuffers(RANGES::range auto const& hashes, RANGES::range auto buffers)
+    auto setTransactionBuffers(RANGES::range auto hashes, RANGES::range auto buffers)
     {
         return impl().template impl_setTransactions<isTransaction>(hashes, std::move(buffers));
     }
