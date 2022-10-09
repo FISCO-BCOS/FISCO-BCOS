@@ -71,6 +71,7 @@ jobs:
           
       - name: Generate covreage report
         uses: codecov/codecov-action@v3
+        with:  
           file: ./build/coverage.info
           name: FISCO BCOS 3 coverage
           fail_ci_if_error: true
