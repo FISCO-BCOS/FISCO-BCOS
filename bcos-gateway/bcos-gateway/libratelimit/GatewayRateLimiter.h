@@ -105,7 +105,6 @@ public:
     std::pair<bool, std::string> checkOutGoing(const std::string& _endpoint,
         const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength);
 
-
     std::pair<bool, std::string> checkInComing(const std::string& _endpoint, uint64_t _msgLength);
     std::pair<bool, std::string> checkInComing(
         const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength);

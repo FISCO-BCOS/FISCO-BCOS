@@ -356,10 +356,10 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
 void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
 {
     /*
-    [redis]
-    ; url=127.0.0.1:6379
-
     [flow_control]
+    ; the switch for distributed rate limit
+    ; distributed_ratelimit_switch=true
+    ;
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
 
@@ -391,6 +391,10 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     ;   group_group1=2
     ;   group_group2=2
     */
+
+    // distributed_ratelimit_switch=false
+    bool distributedRatelimitSwitch =
+        _pt.get<bool>("flow_control.distributed_ratelimit_switch", false);
 
     // stat_reporter_interval=60000
     int32_t statReporterInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
@@ -521,6 +525,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
     m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
     m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
+    m_rateLimiterConfig.distributedRatelimitSwitch = distributedRatelimitSwitch;
 
     if (totalOutgoingBwLimit > 0 && connOutgoingBwLimit > 0 &&
         connOutgoingBwLimit > totalOutgoingBwLimit)
@@ -542,12 +547,67 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("rateLimiterConfigEffect",
                                     m_rateLimiterConfig.hasRateLimiterConfigEffect())
                              << LOG_KV("statReporterInterval", statReporterInterval)
+                             << LOG_KV("distributedRatelimitSwitch", distributedRatelimitSwitch)
                              << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
                              << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
                              << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
                              << LOG_KV("moduleIDs", boost::join(modules, ","))
                              << LOG_KV("ips size", m_rateLimiterConfig.ip2BwLimit.size())
                              << LOG_KV("groups size", m_rateLimiterConfig.group2BwLimit.size());
+
+    if (m_rateLimiterConfig.isDistributedRatelimitSwitch())
+    {
+        GATEWAY_CONFIG_LOG(INFO)
+            << LOG_BADGE("initRateLimiterConfig")
+            << LOG_DESC(
+                   "distributed ratelimit switch is turn on, then load the redis configurations");
+
+        initRedisConfig(_pt);
+    }
+}
+
+// loads redis config
+void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
+{
+    // server_ip
+    std::string redisServerIP = _pt.get<std::string>("redis.server_ip", "");
+    if (redisServerIP.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "initRedisConfig: invalid redis.server_ip! Must be non-empty!"));
+    }
+
+    if (!isValidIP(redisServerIP))
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "initRedisConfig: invalid redis.server_ip! Invalid ip format!"));
+    }
+
+    // server_port
+    uint16_t redisServerPort = _pt.get<uint16_t>("redis.server_port", 0);
+    if (!isValidPort(redisServerPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("initRedisConfig: invalid redis.server_port! "
+                                                  "redis port must be in range (1024,65535]!"));
+    }
+
+    // request_timeout
+    int32_t redisTimeout = _pt.get<int32_t>("redis.request_timeout", -1);
+
+    // connection_pool_size
+    int32_t redisPoolSize = _pt.get<int32_t>("redis.connection_pool_size", 16);
+
+    m_redisConfig.redisServerIP = redisServerIP;
+    m_redisConfig.redisServerPort = redisServerPort;
+    m_redisConfig.redisTimeOut = redisTimeout;
+    m_redisConfig.redisPoolSize = redisPoolSize;
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRedisConfig")
+                             << LOG_KV("redisServerIP", redisServerIP)
+                             << LOG_KV("redisServerPort", redisServerPort)
+                             << LOG_KV("redisTimeout", redisTimeout)
+                             << LOG_KV("redisPoolSize", redisPoolSize);
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)
