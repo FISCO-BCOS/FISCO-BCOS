@@ -8,6 +8,7 @@
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Gateway.h>
+#include <bcos-lightnode/Log.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
@@ -102,19 +103,27 @@ private:
     task::Task<bcos::concepts::ledger::Status> impl_getStatus()
     {
         bcostars::RequestGetStatus request;
-
         bcostars::ResponseGetStatus response;
+
         auto nodeID = co_await p2p().randomSelectNode();
+
         co_await p2p().sendMessageByNodeID(
             protocol::LIGHTNODE_GETSTATUS, std::move(nodeID), request, response);
 
         if (response.error.errorCode)
+        {
+            LIGHTNODE_LOG(WARNING) << "Get status failed, errorCode: " << response.error.errorCode
+                                   << " " << response.error.errorMessage;
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        }
 
         bcos::concepts::ledger::Status status;
         status.total = response.total;
         status.failed = response.failed;
         status.blockNumber = response.blockNumber;
+
+        LIGHTNODE_LOG(DEBUG) << "Got status from remote: " << status.blockNumber << " "
+                             << response.blockNumber;
 
         co_return status;
     }
