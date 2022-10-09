@@ -19,7 +19,6 @@
  * @date: 2021-09-01
  */
 
-#include "TransactionExecutor.h"
 #include "../Common.h"
 #include "../dag/Abi.h"
 #include "../dag/ClockCache.h"
@@ -50,6 +49,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "ExecuteOutputs.h"
+#include "TransactionExecutor.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
@@ -2291,8 +2291,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
-        callParameters->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
-        // callParameters->evmStatus = EVMC_REVERT;
+        callParameters->status = (int32_t)TransactionStatus::RevertInstruction;
+        callParameters->evmStatus = EVMC_REVERT;
         break;
     }
     case ExecutionMessage::FINISHED:
