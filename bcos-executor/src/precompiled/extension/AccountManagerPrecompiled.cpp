@@ -124,7 +124,7 @@ void AccountManagerPrecompiled::setAccountStatus(
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                           << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("setAccountStatus")
-                          << LOG_KV("account", accountStr) << LOG_KV("status", status);
+                          << LOG_KV("account", accountStr) << LOG_KV("status", (uint32_t)status);
 
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
@@ -171,5 +171,11 @@ void AccountManagerPrecompiled::getAccountStatus(
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gas);
+    if (response->status == (uint32_t)TransactionStatus::CallAddressError)
+    {
+        // maybe this address not exist in chain, return normal by default
+        _callParameters->setExecResult(codec.encode((uint8_t)0));
+        return;
+    }
     _callParameters->setExternalResult(std::move(response));
 }

@@ -125,7 +125,7 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
     if (!entry.has_value())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
-                               << LOG_DESC("Status row not exist, return 0 by default");
+                               << LOG_DESC(" Status row not exist, return 0 by default");
         return 0;
     }
     auto statusStr = entry->get();

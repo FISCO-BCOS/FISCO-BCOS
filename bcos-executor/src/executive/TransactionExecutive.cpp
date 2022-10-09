@@ -90,7 +90,9 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     input->contextID = m_contextID;
 
     std::string newAddress;
-    if (isCreate && !m_blockContext.lock()->isWasm())
+    // if internalCreate, sometimes it will use given address, if receiveAddress is empty then give
+    // a new address
+    if (isCreate && !m_blockContext.lock()->isWasm() && std::empty(input->receiveAddress))
     {
         if (input->createSalt)
         {
@@ -218,6 +220,12 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                          << LOG_KV("delegateCall", callParameters->delegateCall)
                          << LOG_KV("codeAddress", callParameters->codeAddress);
 
+    // check permission first
+    if (blockContext->isAuthCheck() && !checkAuth(callParameters))
+    {
+        revert();
+        return {nullptr, std::move(callParameters)};
+    }
     if (isPrecompiled(callParameters->receiveAddress) || callParameters->internalCall)
     {
         return {nullptr, callPrecompiled(std::move(callParameters))};
@@ -232,12 +240,6 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         return {std::move(hostContext), nullptr};
     }
 
-    // check permission first
-    if (blockContext->isAuthCheck() && !checkAuth(callParameters))
-    {
-        revert();
-        return {nullptr, std::move(callParameters)};
-    }
     auto hostContext = make_unique<HostContext>(
         std::move(callParameters), shared_from_this(), std::move(tableName));
     return {std::move(hostContext), nullptr};
@@ -1158,7 +1160,13 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
     }
     else
     {
-        auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
+        // if internal call, then not check auth
+        if (callParameters->internalCall)
+        {
+            return true;
+        }
+        auto tableName =
+            getContractTableName(callParameters->receiveAddress, blockContext->isWasm());
         // if call contract, then
         //      check contract available
         //      check exec auth
@@ -1191,7 +1199,8 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
 bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callParameters)
 {
     // static call does not have 'origin', so return true for now
-    if (callParameters->staticCall)
+    // precompiled return true by default
+    if (callParameters->staticCall || isPrecompiled(callParameters->receiveAddress))
         return true;
     auto blockContext = m_blockContext.lock();
     auto authMgrAddress =
@@ -1228,6 +1237,12 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
 
 bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
 {
+    // precompiled always available
+    if (isPrecompiled(callParameters->receiveAddress) ||
+        c_systemTxsAddress.contains(callParameters->receiveAddress))
+    {
+        return true;
+    }
     auto blockContext = m_blockContext.lock();
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
@@ -1239,7 +1254,8 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
 
 bool TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
 {
-    if (callParameters->staticCall || callParameters->origin != callParameters->senderAddress)
+    if (callParameters->staticCall || callParameters->origin != callParameters->senderAddress ||
+        callParameters->internalCall)
     {
         // static call sender and origin will be empty
         // contract calls, pass through

@@ -315,6 +315,7 @@ public:
         }
 
         result2->setSeq(1001);
+        result2->takeKeyLocks();
 
         // external create
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
@@ -451,6 +452,7 @@ public:
         }
 
         result2->setSeq(1001);
+        result2->takeKeyLocks();
 
         // external call
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
@@ -462,6 +464,7 @@ public:
         auto result3 = executePromise3.get_future().get();
 
         result3->setSeq(1000);
+        result3->takeKeyLocks();
 
         // external call callback
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
