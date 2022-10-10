@@ -19,6 +19,7 @@
  * @date: 2021-10-19
  */
 #ifndef __aarch64__
+
 #include "../liquid/hello_world.h"
 #include "../liquid/hello_world_caller.h"
 #include "../liquid/transfer.h"
@@ -29,7 +30,6 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -40,8 +40,8 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <unistd.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -256,7 +256,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
@@ -338,7 +339,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     // start new block
-    auto blockHeader2 = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
     ledger->setBlockNumber(blockHeader2->number() - 1);
     std::promise<void> nextPromise2;
@@ -451,7 +453,8 @@ BOOST_AUTO_TEST_CASE(deployError)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
@@ -548,7 +551,8 @@ BOOST_AUTO_TEST_CASE(deployError)
 
         NativeExecutionMessage paramsBak = *params;
 
-        blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
         ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> p1;
@@ -635,7 +639,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
@@ -718,7 +723,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     // start new block
-    auto blockHeader2 = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
     ledger->setBlockNumber(blockHeader2->number() - 1);
     std::promise<void> nextPromise2;
@@ -864,7 +870,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         params->setTransactionHash(hash);
         params->setCreate(true);
 
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
         ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
@@ -945,7 +952,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         params->setTransactionHash(hash);
         params->setCreate(true);
 
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
         ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
@@ -1016,7 +1024,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         params->setData(data);
         params->setType(NativeExecutionMessage::MESSAGE);
 
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(3);
         ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
@@ -1104,7 +1113,8 @@ BOOST_AUTO_TEST_CASE(performance)
     params->setTransactionHash(hash);
     params->setCreate(true);
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;

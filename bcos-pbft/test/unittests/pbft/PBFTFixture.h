@@ -32,10 +32,11 @@
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/protobuf/PBBlockFactory.h>
-#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+// #include <bcos-protocol/protobuf/PBBlockFactory.h>
+// #include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
+// #include <bcos-protocol/protobuf/PBTransactionFactory.h>
+// #include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/bind/bind.hpp>
 #include <boost/test/unit_test.hpp>

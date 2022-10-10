@@ -24,7 +24,8 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
