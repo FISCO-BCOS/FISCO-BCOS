@@ -53,6 +53,20 @@ function check_and_clear_cache() {
     fi
 }
 
+function check_file_and_clear_cache() {
+    file=${1}
+    cache_dir=${2}
+
+    if [ $(git diff HEAD^ |grep diff |grep ${file}|wc -l) > 0 ]; then
+      echo "File ${file} has changed. Clear build cache: \"${cache_dir}\" "
+      rm -rf ${cache_dir}
+    fi
+}
+
+# Fisrt: check file change
+# check_file_and_clear_cache CMake ${BUILD_DIR}
+
+# Second: check dir change
 check_and_clear_cache .github/workflows ${BUILD_DIR}
 check_and_clear_cache bcos-tars-protocol/bcos-tars-protocol ${BUILD_DIR}/generated
 check_and_clear_cache bcos-sync/bcos-sync/protocol/proto ${BUILD_DIR}/bcos-sync

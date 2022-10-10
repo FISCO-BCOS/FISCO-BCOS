@@ -34,7 +34,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.1"
+default_version="v3.1.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -1225,7 +1225,23 @@ generate_common_ini() {
     ; MB
     max_log_file_size=200
 
+[redis]
+    ; redis server ip
+    server_ip=127.0.0.1
+    ; redis server port
+    server_port=6379
+    ; redis request timeout, unit ms
+    request_timeout=3000
+    ; redis connection pool size 
+    connection_pool_size=16
+
 [flow_control]
+    ; the switch for distributed rate limit
+    ; distributed_ratelimit_switch=false
+
+    ; rate limiter stat reporter interval, unit: ms
+    ; stat_reporter_interval=60000
+
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
@@ -1403,8 +1419,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.0.0
-    compatibility_version=3.0.0
+    ; the default is 3.1.0
+    compatibility_version=3.1.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000

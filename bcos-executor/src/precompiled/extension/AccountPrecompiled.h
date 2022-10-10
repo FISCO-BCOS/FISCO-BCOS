@@ -37,6 +37,9 @@ public:
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
+    uint8_t getAccountStatus(const std::string& accountTable,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
+
 private:
     void setAccountStatus(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,

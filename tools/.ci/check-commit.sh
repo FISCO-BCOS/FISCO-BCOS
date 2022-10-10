@@ -12,7 +12,7 @@ SHELL_FOLDER=$(
 )
 
 check_script="clang-format"
-commit_limit=6
+commit_limit=10
 file_limit=35
 insert_limit=300
 new_file_header_length=35
@@ -75,12 +75,15 @@ function check_PR_limit() {
     #     exit 1
     # fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
-    local comment_lines=$(git diff HEAD^ | grep -E "^\+\ +\/\/" | wc -l)
-    local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
+    local empty_lines=$(git diff HEAD^ | grep -P '^\s*$' | wc -l)
+    local block_lines=$(git diff HEAD^ | grep -P '^\s*[\{\}]\s*$' | wc -l)
+    local include_lines=$(git diff HEAD^ | grep -P '^\#include' | wc -l)
+    local comment_lines=$(git diff HEAD^ | grep -P "^\s*\/\/" | wc -l)
+    local test_insertions=$(git diff --numstat HEAD^ | grep "tests?/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local tool_insertions=$(git diff --numstat HEAD^ | grep "tools/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local demo_insertions=$(git diff --numstat HEAD^ | grep "fisco-bcos/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
-    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions - tool_insertions - demo_insertions - comment_lines))
+    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions - tool_insertions - demo_insertions - comment_lines - empty_lines - block_lines - include_lines))
     if [ ${insert_limit} -lt ${valid_insertions} ]; then
         LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
         exit 1
@@ -95,13 +98,13 @@ function check_PR_limit() {
         LOG_ERROR "${commits} commits, limit is ${commit_limit}"
         exit 1
     fi
-    local unique_commit=$(git log --format=%s HEAD^..HEAD | sort -u | wc -l)
+    local unique_commit=$(git log --format="%an %s" HEAD^..HEAD | sort -u | wc -l)
     if [ ${unique_commit} -ne ${commits} ]; then
         LOG_ERROR "${commits} != ${unique_commit}, please make commit message unique!"
         exit 1
     fi
     local merges=$(git log --format=%s HEAD^..HEAD | grep -i merge | wc -l)
-    if [ ${merges} -gt 2 ]; then
+    if [ ${merges} -gt 5 ]; then
         LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi

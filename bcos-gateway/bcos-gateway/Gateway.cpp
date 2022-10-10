@@ -50,9 +50,9 @@ void Gateway::start()
     {
         m_gatewayNodeManager->start();
     }
-    if (m_rateLimiterStatisticsTimer)
+    if (m_rateLimiterStatTimer)
     {
-        m_rateLimiterStatisticsTimer->start();
+        m_rateLimiterStatTimer->start();
     }
 
     GATEWAY_LOG(INFO) << LOG_DESC("start end.");
@@ -62,9 +62,9 @@ void Gateway::start()
 
 void Gateway::stop()
 {
-    if (m_rateLimiterStatisticsTimer)
+    if (m_rateLimiterStatTimer)
     {
-        m_rateLimiterStatisticsTimer->stop();
+        m_rateLimiterStatTimer->stop();
     }
     // erase the registered handler
     if (m_p2pInterface)
@@ -548,14 +548,14 @@ bool Gateway::checkBWRateLimit(ratelimiter::RateLimiterManager::Ptr _rateLimiter
             }
         }
 
-        m_rateLimiterStatistics->updateOutGoing(endPoint, msgLength, true);
-        m_rateLimiterStatistics->updateOutGoing(groupID, moduleID, msgLength, true);
+        m_rateLimiterStat->updateOutGoing(endPoint, msgLength, true);
+        m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, true);
 
         return true;
     } while (0);
 
-    m_rateLimiterStatistics->updateOutGoing(endPoint, msgLength, false);
-    m_rateLimiterStatistics->updateOutGoing(groupID, moduleID, msgLength, false);
+    m_rateLimiterStat->updateOutGoing(endPoint, msgLength, false);
+    m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
 
     // TODO: use thread pool
     if (_callback)
@@ -641,7 +641,7 @@ void Gateway::onReceiveP2PMessage(
     }
     */
 
-    m_rateLimiterStatistics->updateInComing(groupID, moduleID, _msg->length());
+    m_rateLimiterStat->updateInComing(groupID, moduleID, _msg->length());
 
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
@@ -689,7 +689,7 @@ void Gateway::onReceiveBroadcastMessage(
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    m_rateLimiterStatistics->updateInComing(groupID, moduleID, _msg->length());
+    m_rateLimiterStat->updateInComing(groupID, moduleID, _msg->length());
 
     /*
     // TODO: if outgoing bandwidth exceeds the upper limit
@@ -715,8 +715,8 @@ void Gateway::onReceiveBroadcastMessage(
 
     auto type = _msg->ext();
     GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage") << LOG_KV("groupID", groupID)
-                       << LOG_KV("src", _msg->srcP2PNodeID())
-                       << LOG_KV("dst", _msg->dstP2PNodeID());
+                       << LOG_KV("src", _msg->srcP2PNodeID()) << LOG_KV("dst", _msg->dstP2PNodeID())
+                       << LOG_KV("type", type);
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
 }

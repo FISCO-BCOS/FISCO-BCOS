@@ -43,10 +43,21 @@ public:
         std::string enNodeKey;
     };
 
+    // config for redis
+    struct RedisConfig
+    {
+        std::string redisServerIP;
+        uint16_t redisServerPort;
+        int32_t redisTimeOut = -1;
+        int32_t redisPoolSize = 16;
+    };
+
     // config for rate limit
     struct RateLimiterConfig
     {
-        // report interval ms
+        // if turn on distributed ratelimit
+        bool distributedRatelimitSwitch = false;
+        // stat reporter interval, unit: ms
         int32_t statReporterInterval = 60000;
 
         // total outgoing bandwidth limit
@@ -64,6 +75,11 @@ public:
 
         // the message of modules that do not limit bandwidth
         std::set<uint16_t> modulesWithNoBwLimit;
+
+        bool isDistributedRatelimitSwitch() const
+        {
+            return distributedRatelimitSwitch && hasRateLimiterConfigEffect();
+        }
 
         // whether any configuration takes effect
         bool hasRateLimiterConfigEffect() const
@@ -113,6 +129,8 @@ public:
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
     void initRatelimitConfig(const boost::property_tree::ptree& _pt);
+    // loads redis config
+    void initRedisConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
     void checkFileExist(const std::string& _path);
     // load p2p connected peers
@@ -126,6 +144,7 @@ public:
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
     RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
+    RedisConfig redisConfig() const { return m_redisConfig; }
 
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
@@ -149,6 +168,7 @@ private:
     SMCertConfig m_smCertConfig;
 
     RateLimiterConfig m_rateLimiterConfig;
+    RedisConfig m_redisConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

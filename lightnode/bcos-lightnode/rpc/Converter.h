@@ -63,7 +63,7 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     resp["blockNumber"] = Json::Value((Json::Int64)receipt.data.blockNumber);
     resp["output"] = toHexStringWithPrefix(receipt.data.output);
     resp["message"] = receipt.message;
-    resp["transactionHash"] = std::string(txHash);
+    resp["transactionHash"] = "0x" + std::string(txHash);
 
     std::string hash;
     bcos::concepts::hash::calculate<Hasher>(receipt, hash);
@@ -83,6 +83,18 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
         jLog["data"] = toHexStringWithPrefix(logEntry.data);
         resp["logEntries"].append(std::move(jLog));
     }
+}
+
+template <bcos::crypto::hasher::Hasher Hasher>
+void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
+    bcos::concepts::transaction::Transaction auto const& transaction, std::string_view txHash,
+    Json::Value& resp)
+{
+    toJsonResp<Hasher>(receipt, txHash, resp);
+
+    resp["input"] = toHexStringWithPrefix(transaction.data.input);
+    resp["from"] = toHexStringWithPrefix(transaction.sender);
+    resp["to"] = transaction.data.to;
 }
 
 template <bcos::crypto::hasher::Hasher Hasher>

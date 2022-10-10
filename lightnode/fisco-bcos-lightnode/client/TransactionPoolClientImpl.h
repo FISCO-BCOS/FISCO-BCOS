@@ -8,7 +8,6 @@
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
-#include <future>
 
 namespace bcos::transaction_pool
 {
