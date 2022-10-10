@@ -23,7 +23,6 @@ BreakBeforeBinaryOperators: None
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterClass: true
-  AfterCaseLabel: true
   AfterControlStatement: true
   AfterEnum: true
   AfterFunction: true

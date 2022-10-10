@@ -236,7 +236,7 @@ public:
         }
     }
 
-    void nextBlock(int64_t blockNumber, protocol::Version version = protocol::Version::V3_0_VERSION)
+    void nextBlock(int64_t blockNumber, protocol::Version version = protocol::Version::V3_1_VERSION)
     {
         auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
         blockHeader->setNumber(blockNumber);

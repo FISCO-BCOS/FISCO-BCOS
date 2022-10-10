@@ -19,10 +19,10 @@
  * @date: 2021-05-24
  */
 
-#include "HostContext.h"
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "HostContext.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-table/src/StateStorage.h"
@@ -42,6 +42,7 @@
 #include <limits>
 #include <sstream>
 #include <vector>
+
 
 using namespace std;
 using namespace bcos;
@@ -217,7 +218,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     // Convert CallParameters to evmc_resultx
     evmc_result result;
-    result.status_code = evmc_status_code(response->status);
+    result.status_code = toEVMStatus(response, result, blockContext);
 
     result.create_address =
         toEvmC(boost::algorithm::unhex(response->newEVMContractAddress));  // TODO: check if ok
@@ -232,6 +233,21 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     m_responseStore.emplace_back(std::move(response));
 
     return result;
+}
+
+evmc_status_code HostContext::toEVMStatus(std::unique_ptr<CallParameters> const& _response,
+    evmc_result _result, std::shared_ptr<bcos::executor::BlockContext> _blockContext)
+{
+    if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION))
+    {
+        _result.status_code = evmc_status_code(_response->evmStatus);
+        return _result.status_code;
+    }
+    else
+    {
+        _result.status_code = evmc_status_code(_response->status);
+        return _result.status_code;
+    }
 }
 
 evmc_result HostContext::callBuiltInPrecompiled(
@@ -397,8 +413,13 @@ size_t HostContext::codeSizeAt(const std::string_view& _a)
     auto blockContext = m_executive->blockContext().lock();
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
     {
+        // precompiled return 1;
+        if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
+        {
+            return 1;
+        }
         auto code = externalCodeRequest(_a);
-        return code.size() * 2;  // OPCODE num is bytes.size * 2
+        return code.size();  // OPCODE num is bytes.size
     }
     return 1;
 }
@@ -408,6 +429,11 @@ h256 HostContext::codeHashAt(const std::string_view& _a)
     auto blockContext = m_executive->blockContext().lock();
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
     {
+        // precompiled return 0 hash;
+        if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
+        {
+            return h256(0);
+        }
         auto code = externalCodeRequest(_a);
         auto hash = hashImpl()->hash(code).asBytes();
         return h256(hash);

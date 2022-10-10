@@ -178,7 +178,7 @@ protected:
 
         if (blockContext->isAuthCheck())
         {
-            if (_address.find(precompiled::SYS_ADDRESS_PREFIX) == 0)
+            if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
             {
                 return std::string(USER_SYS_PREFIX).append(_address);
             }
@@ -198,8 +198,10 @@ protected:
         return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
-    bool checkAuth(const CallParameters::UniquePtr& callParameters, bool _isCreate);
+    bool checkAuth(const CallParameters::UniquePtr& callParameters);
+    bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     bool checkContractAvailable(const CallParameters::UniquePtr& callParameters);
+    bool checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
 
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);

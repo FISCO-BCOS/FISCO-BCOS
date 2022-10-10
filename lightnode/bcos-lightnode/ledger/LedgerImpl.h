@@ -178,8 +178,7 @@ private:
     }
 
     template <bool isTransaction>
-    task::Task<void> impl_setTransactions(
-        RANGES::range auto const& hashes, RANGES::range auto buffers)
+    task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto buffers)
     {
         auto count = RANGES::size(buffers);
         if (count != RANGES::size(hashes))

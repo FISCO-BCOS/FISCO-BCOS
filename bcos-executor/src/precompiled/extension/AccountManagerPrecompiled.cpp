@@ -25,7 +25,6 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/protocol/Exceptions.h>
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;
@@ -34,14 +33,12 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::protocol;
 
-const char* const AM_METHOD_CREATE_ACCOUNT = "createAccount(address)";
-const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(address,uint16)";
+const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(address,uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus(address)";
 
 AccountManagerPrecompiled::AccountManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
   : Precompiled(_hashImpl)
 {
-    name2Selector[AM_METHOD_CREATE_ACCOUNT] = getFuncSelector(AM_METHOD_CREATE_ACCOUNT, _hashImpl);
     name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
         getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, _hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
@@ -56,11 +53,7 @@ std::shared_ptr<PrecompiledExecResult> AccountManagerPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
 
     /// directly passthrough data to call
-    if (func == name2Selector[AM_METHOD_CREATE_ACCOUNT])
-    {
-        createAccount(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
+    if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
     {
         setAccountStatus(_executive, _callParameters);
     }
@@ -78,41 +71,10 @@ std::shared_ptr<PrecompiledExecResult> AccountManagerPrecompiled::call(
     return _callParameters;
 }
 
-void AccountManagerPrecompiled::createAccount(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters)
-{
-    // createAccount(address)
-    Address account;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(_callParameters->params(), account);
-
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("AccountManagerPrecompiled")
-                          << LOG_KV("createAccount", account.hex());
-    if (!checkSenderFromAuth(_callParameters->m_sender))
-    {
-        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
-        return;
-    }
-    auto accountTableName = getAccountTableName(account.hex());
-    auto table = _executive->storage().openTable(accountTableName);
-    if (table)
-    {
-        // table already exist
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_ALREADY_EXIST)));
-        return;
-    }
-
-    // prefix + address + tableName
-    createAccountWithStatus(_executive, _callParameters, codec, account.hex());
-    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
-}
 void AccountManagerPrecompiled::createAccountWithStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec,
-    std::string_view accountHex, uint16_t status) const
+    std::string_view accountHex, uint8_t status) const
 {
     auto accountTableName = getAccountTableName(accountHex);
 
@@ -132,7 +94,7 @@ void AccountManagerPrecompiled::createAccountWithStatus(
         BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
     }
 
-    auto newParams = codec.encodeWithSig("setAccountStatus(uint16)", status);
+    auto newParams = codec.encodeWithSig("setAccountStatus(uint8)", status);
     auto setStatusRes = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountHex, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gas);
@@ -152,9 +114,9 @@ void AccountManagerPrecompiled::setAccountStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
-    // setAccountStatus(address,uint16)
+    // setAccountStatus(address,uint8)
     Address account;
-    uint16_t status = 0;
+    uint8_t status = 0;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), account, status);
@@ -162,7 +124,7 @@ void AccountManagerPrecompiled::setAccountStatus(
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                           << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("setAccountStatus")
-                          << LOG_KV("account", accountStr) << LOG_KV("status", status);
+                          << LOG_KV("account", accountStr) << LOG_KV("status", (uint32_t)status);
 
     if (!checkSenderFromAuth(_callParameters->m_sender))
     {
@@ -185,7 +147,7 @@ void AccountManagerPrecompiled::setAccountStatus(
     }
 
     // table must exist, then call
-    auto newParams = codec.encodeWithSig("setAccountStatus(uint16)", status);
+    auto newParams = codec.encodeWithSig("setAccountStatus(uint8)", status);
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gas);
@@ -209,5 +171,11 @@ void AccountManagerPrecompiled::getAccountStatus(
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gas);
+    if (response->status != (int32_t)TransactionStatus::None)
+    {
+        // maybe this address not exist in chain, return normal by default
+        _callParameters->setExecResult(codec.encode((uint8_t)0));
+        return;
+    }
     _callParameters->setExternalResult(std::move(response));
 }
