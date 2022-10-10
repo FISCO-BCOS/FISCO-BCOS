@@ -702,7 +702,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
     LEDGER_LOG(TRACE) << "GetTransactionReceiptByHash" << LOG_KV("hash", key);
 
     asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(key),
-        [this, callback = std::move(_onGetTx), key, _withProof](
+        [this, callback = std::move(_onGetTx), _withProof](
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)
             {
