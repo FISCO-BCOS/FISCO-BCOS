@@ -23,7 +23,7 @@
 
 #include "SyncStorageWrapper.h"
 #include "TransactionExecutive.h"
-
+#include <boost/coroutine2/coroutine.hpp>
 
 namespace bcos
 {
