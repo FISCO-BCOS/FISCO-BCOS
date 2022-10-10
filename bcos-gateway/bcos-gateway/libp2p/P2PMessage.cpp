@@ -239,6 +239,11 @@ bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
         return false;
     }
 
+    if (m_version < (uint16_t)(bcos::protocol::ProtocolVersion::V2))
+    {
+        return false;
+    }
+
     bool isCompressSuccess =
         ZstdCompress::compress(ref(*m_payload), *compressData, bcos::gateway::c_zstdCompressLevel);
     if (!isCompressSuccess)
