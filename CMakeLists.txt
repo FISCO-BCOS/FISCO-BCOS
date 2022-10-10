@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+    cmake_minimum_required(VERSION 3.14)
 
 if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
@@ -31,6 +31,10 @@ add_subdirectory(bcos-framework)
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-utilities)
 
+if(WITH_LIGHTNODE)
+    add_subdirectory(lightnode)
+endif()
+
 if(FULLNODE)
     include(ProjectWABT)
     include(ProjectBCOSWASM)
@@ -57,6 +61,7 @@ if(FULLNODE)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
     add_subdirectory(concepts)
+    add_subdirectory(libtask)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
@@ -70,10 +75,6 @@ endif()
 
 if(WITH_CPPSDK)
     add_subdirectory(bcos-sdk)
-endif()
-
-if(WITH_LIGHTNODE)
-    add_subdirectory(lightnode)
 endif()
 
 if(WITH_BENCHMARK)

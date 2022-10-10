@@ -43,16 +43,22 @@ public:
         std::string enNodeKey;
     };
 
+    // config for redis
+    struct RedisConfig
+    {
+        std::string redisServerIP;
+        uint16_t redisServerPort;
+        int32_t redisTimeOut = -1;
+        int32_t redisPoolSize = 16;
+    };
+
     // config for rate limit
     struct RateLimiterConfig
     {
-        // stat reporter interval ms
+        // if turn on distributed ratelimit
+        bool distributedRateLimitOn = false;
+        // stat reporter interval, unit: ms
         int32_t statReporterInterval = 60000;
-        // stat reporter info level
-        // 0:
-        // 1:
-        // 2:
-        int32_t statReporterLevel = 0;
 
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
@@ -69,6 +75,11 @@ public:
 
         // the message of modules that do not limit bandwidth
         std::set<uint16_t> modulesWithNoBwLimit;
+
+        bool isDistributedRateLimitOn() const
+        {
+            return distributedRateLimitOn && hasRateLimiterConfigEffect();
+        }
 
         // whether any configuration takes effect
         bool hasRateLimiterConfigEffect() const
@@ -117,7 +128,9 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRatelimitConfig(const boost::property_tree::ptree& _pt);
+    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
+    // loads redis config
+    void initRedisConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
     void checkFileExist(const std::string& _path);
     // load p2p connected peers
@@ -131,6 +144,7 @@ public:
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
     RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
+    RedisConfig redisConfig() const { return m_redisConfig; }
 
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
@@ -154,6 +168,7 @@ private:
     SMCertConfig m_smCertConfig;
 
     RateLimiterConfig m_rateLimiterConfig;
+    RedisConfig m_redisConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

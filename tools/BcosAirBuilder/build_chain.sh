@@ -1225,7 +1225,23 @@ generate_common_ini() {
     ; MB
     max_log_file_size=200
 
+[redis]
+    ; redis server ip
+    server_ip=127.0.0.1
+    ; redis server port
+    server_port=6379
+    ; redis request timeout, unit ms
+    request_timeout=3000
+    ; redis connection pool size 
+    connection_pool_size=16
+
 [flow_control]
+    ; the switch for distributed rate limit
+    ; distributed_ratelimit_on=false
+
+    ; rate limiter stat reporter interval, unit: ms
+    ; stat_reporter_interval=60000
+
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;

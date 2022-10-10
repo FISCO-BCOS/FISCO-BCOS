@@ -48,12 +48,12 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
 
 inline std::string getTableName(const std::string_view& _tableName)
 {
-    if (_tableName.substr(0, strlen(executor::USER_TABLE_PREFIX)) == executor::USER_TABLE_PREFIX)
+    if (_tableName.starts_with(executor::USER_TABLE_PREFIX))
     {
         return std::string(_tableName);
     }
     auto tableName = (_tableName[0] == '/') ? _tableName.substr(1) : _tableName;
-    return executor::USER_TABLE_PREFIX + std::string(tableName);
+    return std::string(executor::USER_TABLE_PREFIX) + std::string(tableName);
 }
 
 inline std::string getActualTableName(const std::string& _tableName)
@@ -63,12 +63,12 @@ inline std::string getActualTableName(const std::string& _tableName)
 
 inline std::string getAccountTableName(std::string_view _account)
 {
-    if (_account.substr(0, strlen(executor::USER_USR_PREFIX)) == executor::USER_USR_PREFIX)
+    if (_account.starts_with(executor::USER_USR_PREFIX))
     {
         return std::string(_account);
     }
     auto tableName = (_account[0] == '/') ? _account.substr(1) : _account;
-    return executor::USER_USR_PREFIX + std::string(tableName);
+    return std::string(executor::USER_USR_PREFIX) + std::string(tableName);
 }
 
 inline std::string getDynamicPrecompiledCodeString(
