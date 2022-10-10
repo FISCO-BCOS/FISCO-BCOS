@@ -1390,7 +1390,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 
                     if (params->create)
                     {
-                        executionResults[i] = (std::move(inputs[i]));
+                        executionResults[i] = toExecutionResult(std::move(inputs[i]));
                         executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                         continue;
                     }
