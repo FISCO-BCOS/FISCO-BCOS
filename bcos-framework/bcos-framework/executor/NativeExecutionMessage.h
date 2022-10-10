@@ -64,6 +64,9 @@ public:
     std::optional<u256> createSalt() const override { return m_createSalt; }
     void setCreateSalt(u256 createSalt) override { m_createSalt = createSalt; }
 
+    int32_t evmStatus() const override { return m_evmStatus; }
+    void setStatus(int32_t evmStatus) override { m_evmStatus = evmStatus; }
+
     int32_t status() const override { return m_status; }
     void setStatus(int32_t status) override { m_status = status; }
 
@@ -146,7 +149,8 @@ public:
 
     std::vector<std::string> m_keyLocks;
     std::string m_keyLockAcquired;
-
+    
+    int32_t m_evmStatus = 0;
     int32_t m_status = 0;
     int32_t m_depth = 0;
     Type m_type = TXHASH;

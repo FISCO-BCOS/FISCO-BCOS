@@ -32,7 +32,6 @@ namespace bcos
 {
 namespace protocol
 {
-
 static const std::string SERIAL_EXECUTIVE_FLOW_ADDRESS =
     std::string("serial_executive_flow_address");
 
@@ -151,6 +150,9 @@ public:
     // for evm
     virtual std::optional<u256> createSalt() const = 0;
     virtual void setCreateSalt(u256 createSalt) = 0;
+
+    virtual int32_t evmStatus() const = 0;
+    virtual void setEvmStatus(int32_t evmstatus) = 0;
 
     // -----------------------------------------------
     // Response fields

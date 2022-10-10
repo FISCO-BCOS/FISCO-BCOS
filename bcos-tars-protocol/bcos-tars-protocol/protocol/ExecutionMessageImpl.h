@@ -153,6 +153,8 @@ public:
     void setMessage(std::string message) override { m_inner()->message = message; }
 
     // for evm
+    int32_t evmStatus() const override { return m_inner()->evmStatus; }
+    void setEvmStatus(int32_t evmStatus) override { m_inner()->evmStatus = evmStatus; }
     std::string_view newEVMContractAddress() const override
     {
         return m_inner()->newEVMContractAddress;

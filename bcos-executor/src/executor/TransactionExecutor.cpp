@@ -1390,7 +1390,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 
                     if (params->create)
                     {
-                        executionResults[i] = toExecutionResult(std::move(inputs[i]));
+                        executionResults[i] = (std::move(inputs[i]));
                         executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                         continue;
                     }
@@ -2188,6 +2188,7 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
         message->setCreateSalt(*params->createSalt);
     }
 
+    message->setEvmStatus(params->evmStatus);
     message->setStatus(params->status);
     message->setMessage(std::move(params->message));
     message->setLogEntries(std::move(params->logEntries));
