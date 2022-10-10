@@ -2293,7 +2293,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::RevertInstruction;
-        callParameters->evmStatus = EVMC_REVERT;
+        callParameters->evmStatus = input.evmStatus();
         break;
     }
     case ExecutionMessage::FINISHED:
@@ -2323,6 +2323,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();
+    callParameters->evmStatus = input.evmStatus();
     callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
