@@ -19,15 +19,20 @@
  * @date: 2021-03-23
  */
 #pragma once
-#include "bcos-protocol/protobuf/PBBlock.h"
-#include "bcos-protocol/protobuf/PBBlockFactory.h"
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
-#include "bcos-protocol/testutils/protocol/FakeTransaction.h"
-#include "bcos-protocol/testutils/protocol/FakeTransactionReceipt.h"
+#include "FakeBlockHeader.h"
+#include "FakeTransaction.h"
+#include "FakeTransactionReceipt.h"
+#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
@@ -54,10 +59,14 @@ inline CryptoSuite::Ptr createSMCryptoSuite()
 
 inline BlockFactory::Ptr createBlockFactory(CryptoSuite::Ptr _cryptoSuite)
 {
-    auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
-    auto transactionFactory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
-    auto receiptFactory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-    return std::make_shared<PBBlockFactory>(blockHeaderFactory, transactionFactory, receiptFactory);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
+    auto transactionFactory =
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
+    return std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        _cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory);
 }
 
 inline void checkBlock(CryptoSuite::Ptr _cryptoSuite, Block::Ptr block, Block::Ptr decodedBlock)
@@ -154,7 +163,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
         auto tx = fakeTransaction(_cryptoSuite, utcTime() + i);
         block->appendTransaction(tx);
 
-        auto metaData = std::make_shared<PBTransactionMetaData>();
+        auto metaData = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>();
         metaData->setHash(tx->hash());
         metaData->setTo(std::string(tx->to()));
 

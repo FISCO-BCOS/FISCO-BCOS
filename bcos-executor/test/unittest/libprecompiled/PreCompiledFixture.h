@@ -22,8 +22,7 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-protocol/testutils/protocol/FakeBlock.h"
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -38,6 +37,8 @@
 #include <bcos-crypto/signature/sm2.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-tars-protocol/testutil/FakeBlock.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -238,7 +239,8 @@ public:
 
     void nextBlock(int64_t blockNumber, protocol::Version version = protocol::Version::V3_1_VERSION)
     {
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);

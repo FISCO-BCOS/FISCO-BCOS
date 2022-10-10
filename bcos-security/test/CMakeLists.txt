@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for ut of bcos-ledger
+# Top-level CMake file for ut of bcos-tool
 # ------------------------------------------------------------------------------
 # Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
@@ -18,15 +18,11 @@
 file(GLOB_RECURSE SOURCES "*.cpp")
 
 # cmake settings
-list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
-set(TEST_BINARY_NAME test-bcos-ledger)
-
-add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-framework)
-
+set(TEST_BINARY_NAME test-bcos-security)
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${LEDGER_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
-target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
-add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+add_executable(${TEST_BINARY_NAME} ${SOURCES})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
+
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SECURITY_TARGET} Boost::unit_test_framework)
+add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

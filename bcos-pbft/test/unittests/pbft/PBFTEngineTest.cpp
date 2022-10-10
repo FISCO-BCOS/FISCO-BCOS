@@ -18,6 +18,9 @@
  * @author: yujiechen
  * @date 2021-05-31
  */
+#include <bcos-tars-protocol/testutil/FakeBlock.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
 #include <bcos-crypto/hash/Keccak256.h>

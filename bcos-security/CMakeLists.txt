@@ -29,3 +29,9 @@ add_library(${SECURITY_TARGET} ${SRC_LIST})
 find_package(jsoncpp REQUIRED)
 
 target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
+
+if(TESTS)
+  enable_testing()
+  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+  add_subdirectory(test)
+endif()

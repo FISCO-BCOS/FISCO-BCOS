@@ -43,6 +43,7 @@ public:
 
 public:
     void init() override;
+    void init(const std::string& dataKey, const bool smCryptoType) override;
 
     std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
 
