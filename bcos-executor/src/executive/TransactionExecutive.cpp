@@ -687,7 +687,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
 
             assert(extraData != nullptr);
-            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
             if (!blockContext->isWasm())
             {
                 if (outputRef.empty())
@@ -705,8 +704,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     revert();
                     return callResults;
                 }
-                hostContext.setCode(outputRef.toBytes());
             }
+            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi, blockContext->blockVersion());
 
             callResults->gas -= outputRef.size() * hostContext.vmSchedule().createDataGas;
             callResults->newEVMContractAddress = callResults->codeAddress;
@@ -721,7 +720,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         }
         else
         {
-            auto codeEntry = hostContext.code();
+            auto codeEntry = hostContext.code(blockContext->blockVersion());
             if (!codeEntry.has_value())
             {
                 revert();

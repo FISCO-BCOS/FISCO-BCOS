@@ -1423,6 +1423,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+        SYS_CODE_BINARY,SYS_VALUE,
     };
     // clang-format on
     size_t total = sizeof(tables) / sizeof(std::string_view);
