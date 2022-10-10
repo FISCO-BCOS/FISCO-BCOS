@@ -54,10 +54,10 @@ namespace executor
 #define PARA_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 
 
-static const char* const USER_TABLE_PREFIX = "/tables/";
-static const char* const USER_APPS_PREFIX = "/apps/";
-static const char* const USER_SYS_PREFIX = "/sys/";
-static const char* const USER_USR_PREFIX = "/usr/";
+static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
+static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
+static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
+static constexpr std::string_view USER_USR_PREFIX = "/usr/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";

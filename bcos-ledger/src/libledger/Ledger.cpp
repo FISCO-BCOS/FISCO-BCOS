@@ -1455,6 +1455,11 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
+    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+    if (versionNumber >= (uint32_t)protocol::Version::V3_1_VERSION)
+    {
+        header->setVersion(versionNumber);
+    }
     header->setExtraData(bcos::bytes(_genesisData.begin(), _genesisData.end()));
 
     auto block = m_blockFactory->createBlock();
@@ -1506,7 +1511,6 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
                      << LOG_KV("versionNumber", versionNumber);
     // write compatibility version

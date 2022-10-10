@@ -19,7 +19,6 @@
  * @date: 2021-09-01
  */
 
-#include "TransactionExecutor.h"
 #include "../Common.h"
 #include "../dag/Abi.h"
 #include "../dag/ClockCache.h"
@@ -50,6 +49,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "ExecuteOutputs.h"
+#include "TransactionExecutor.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"

@@ -2,7 +2,7 @@ name: Ubuntu Static Build
 on:
   pull_request:
     branches:
-      - feature-3.1.0
+      - release-3.1.0
     types: [closed] 
 
 concurrency:
