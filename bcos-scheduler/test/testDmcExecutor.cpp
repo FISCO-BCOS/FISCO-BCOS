@@ -21,7 +21,6 @@
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-
 using namespace std;
 using namespace bcos;
 using namespace bcos::scheduler;

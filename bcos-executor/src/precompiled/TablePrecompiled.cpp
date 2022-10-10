@@ -280,16 +280,29 @@ void TablePrecompiled::count(const std::string& tableName,
                            << LOG_KV("tableName", tableName)
                            << LOG_KV("ConditionSize", conditions.size());
 
-    auto keyCondition = std::make_optional<storage::Condition>();
-    // will throw exception when wrong condition cmp or limit count overflow
-    buildKeyCondition(keyCondition, std::move(conditions), {});
+    uint32_t totalCount = 0;
+    uint32_t singleCount = 0;
+    do
+    {
+        auto keyCondition = std::make_optional<storage::Condition>();
+        // will throw exception when wrong condition cmp or limit count overflow
+        buildKeyCondition(
+            keyCondition, std::move(conditions), {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
 
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+        singleCount = _executive->storage().getPrimaryKeys(tableName, keyCondition).size();
+        if (totalCount > totalCount + singleCount)
+        {
+            // overflow
+            totalCount = UINT32_MAX;
+            break;
+        }
+        totalCount += singleCount;
+    } while (singleCount >= USER_TABLE_MAX_LIMIT_COUNT);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
-                           << LOG_KV("entries.size", tableKeyList.size());
+                           << LOG_KV("totalCount", totalCount);
     // update the memory gas and the computation gas
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    _callParameters->setExecResult(codec.encode(uint32_t(tableKeyList.size())));
+    _callParameters->setExecResult(codec.encode(uint32_t(totalCount)));
 }
 
 void TablePrecompiled::insert(const std::string& tableName,
