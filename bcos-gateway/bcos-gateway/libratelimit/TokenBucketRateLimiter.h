@@ -111,21 +111,6 @@ private:
     uint64_t m_burstTimeInterval = 1000000;
 };
 
-class RateLimiterFactory
-{
-public:
-    using Ptr = std::shared_ptr<RateLimiterFactory>;
-    using ConstPtr = std::shared_ptr<const RateLimiterFactory>;
-    using UniquePtr = std::unique_ptr<const RateLimiterFactory>;
-
-public:
-    RateLimiterInterface::Ptr buildRateLimiter(int64_t _maxPermits)
-    {
-        auto rateLimiter = std::make_shared<TokenBucketRateLimiter>(_maxPermits);
-        return rateLimiter;
-    }
-};
-
 }  // namespace ratelimiter
 }  // namespace gateway
 }  // namespace bcos

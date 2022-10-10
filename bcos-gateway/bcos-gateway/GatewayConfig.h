@@ -56,7 +56,7 @@ public:
     struct RateLimiterConfig
     {
         // if turn on distributed ratelimit
-        bool distributedRatelimitSwitch = false;
+        bool distributedRateLimitOn = false;
         // stat reporter interval, unit: ms
         int32_t statReporterInterval = 60000;
 
@@ -76,9 +76,9 @@ public:
         // the message of modules that do not limit bandwidth
         std::set<uint16_t> modulesWithNoBwLimit;
 
-        bool isDistributedRatelimitSwitch() const
+        bool isDistributedRateLimitOn() const
         {
-            return distributedRatelimitSwitch && hasRateLimiterConfigEffect();
+            return distributedRateLimitOn && hasRateLimiterConfigEffect();
         }
 
         // whether any configuration takes effect
@@ -128,7 +128,7 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRatelimitConfig(const boost::property_tree::ptree& _pt);
+    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
     // loads redis config
     void initRedisConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
