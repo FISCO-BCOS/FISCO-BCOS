@@ -51,7 +51,8 @@ public:
     virtual ~LeaderEntryPointFactory() {}
 
     virtual LeaderEntryPointInterface::Ptr createLeaderEntryPoint(std::string const& _etcdEndPoint,
-        std::string const& _watchDir, std::string const& _purpose) = 0;
+        std::string const& _watchDir, std::string const& _purpose, const std::string& _caPath,
+        const std::string& _certPath, const std::string& _keyPath) = 0;
 };
 }  // namespace election
 }  // namespace bcos

@@ -73,10 +73,11 @@ public:
     ~LeaderEntryPointFactoryImpl() override {}
 
     LeaderEntryPointInterface::Ptr createLeaderEntryPoint(std::string const& _etcdEndPoint,
-        std::string const& _watchDir, std::string const& _purpose) override
+        std::string const& _watchDir, std::string const& _purpose, const std::string& _caPath,
+        const std::string& _certPath, const std::string& _keyPath) override
     {
-        auto config =
-            std::make_shared<WatcherConfig>(_etcdEndPoint, _watchDir, m_memberFactory, _purpose);
+        auto config = std::make_shared<WatcherConfig>(
+            _etcdEndPoint, _watchDir, m_memberFactory, _purpose, _caPath, _certPath, _keyPath);
         ELECTION_LOG(INFO) << LOG_DESC("createLeaderEntryPoint")
                            << LOG_KV("etcdAddr", _etcdEndPoint) << LOG_KV("watchDir", _watchDir)
                            << LOG_KV("purpose", _purpose);

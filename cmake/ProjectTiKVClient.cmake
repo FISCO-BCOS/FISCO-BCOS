@@ -20,8 +20,6 @@ ExternalProject_Get_Property(tikv_client_project BINARY_DIR)
 set(KVCLIENT_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${KVCLIENT_INCLUDE_DIRS})  # Must exist.
 
-# find_package(Boost REQUIRED context)
-# find_package(Protobuf CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 add_library(kv_client INTERFACE IMPORTED)
