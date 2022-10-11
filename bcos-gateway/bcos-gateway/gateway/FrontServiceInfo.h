@@ -24,6 +24,7 @@
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tars-protocol/client/FrontServiceClient.h>
+#include <bcos-tars-protocol/impl/TarsServantProxyCallback.h>
 namespace bcos
 {
 namespace gateway

@@ -10,7 +10,7 @@ namespace bcos::concepts
 {
 
 // clang-format off
-struct NoEnoughSpace : public bcos::exception::Exception {};
+struct NoEnoughSpace : public bcos::error::Exception {};
 // clang-format on
 
 template <class ByteBufferType>
