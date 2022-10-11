@@ -20,7 +20,9 @@
  */
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
-#ifndef __aarch64__
+
+// FIXME: wasm ut crash on aarch64 linux, https://github.com/bytecodealliance/wasmtime/issues/4972
+#if !defined(__aarch64__) && !defined(__linux__)
 
 #include "../liquid/hello_world.h"
 #include "../liquid/transfer.h"

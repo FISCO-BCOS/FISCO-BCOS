@@ -36,6 +36,12 @@ message(STATUS "set rustc to ${RUSTC_VERSION_REQUIRED} of path ${CMAKE_CURRENT_S
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/)
 execute_process(COMMAND rustup override set ${RUSTC_VERSION_REQUIRED} --path ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/ OUTPUT_QUIET ERROR_QUIET)
 
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(BCOS_WASM_BUILD_MODE "debug")
+else()
+    set(BCOS_WASM_BUILD_MODE "release")
+endif()
+
 ExternalProject_Add(bcos_wasm_project
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
         # DOWNLOAD_NO_PROGRESS 1
@@ -44,13 +50,13 @@ ExternalProject_Add(bcos_wasm_project
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND ${CARGO_COMMAND} build --release
+        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1
         LOG_BUILD 0
         LOG_INSTALL 1
-        BUILD_BYPRODUCTS <SOURCE_DIR>/target/release/libbcos_wasm.a <SOURCE_DIR>/FBWASM.h
+        BUILD_BYPRODUCTS <SOURCE_DIR>/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a <SOURCE_DIR>/FBWASM.h
 )
 
 ExternalProject_Get_Property(bcos_wasm_project SOURCE_DIR)
