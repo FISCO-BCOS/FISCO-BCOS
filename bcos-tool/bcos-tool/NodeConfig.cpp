@@ -279,7 +279,7 @@ void NodeConfig::getTarsClientProxyEndpoints(
 
 void NodeConfig::checkService(std::string const& _serviceType, std::string const& _serviceName)
 {
-    if (_serviceName.size() == 0)
+    if (_serviceName.empty())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Must set service name for " + _serviceType + "!"));
@@ -294,7 +294,7 @@ void NodeConfig::checkService(std::string const& _serviceType, std::string const
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(errorMsg));
     }
-    for (auto serviceName : serviceNameList)
+    for (const auto& serviceName : serviceNameList)
     {
         if (!isalNumStr(serviceName))
         {
@@ -504,10 +504,10 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
-    if (m_minSealTime <= 0 || m_minSealTime > 3000)
+    if (m_minSealTime <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set consensus.min_seal_time between 1 and 3000!"));
+                                  "Please set consensus.min_seal_time larger than 0!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
