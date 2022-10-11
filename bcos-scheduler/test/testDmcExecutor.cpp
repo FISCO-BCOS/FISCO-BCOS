@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
         });
 
     dmcExecutor->setOnTxFinishedHandler(
-        [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
+        [&dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
             std::string outputStr((char*)outputBytes.data(), outputBytes.size());
             SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
@@ -130,13 +130,13 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
             }
         });
 
-    dmcExecutor->setOnNeedSwitchEventHandler([this, &dmcFlagStruct]() {
+    dmcExecutor->setOnNeedSwitchEventHandler([&dmcFlagStruct]() {
         SCHEDULER_LOG(DEBUG) << "Transaction Perform Error , Need Switch.";
         dmcFlagStruct.switchFlag = true;
     });
 
 
-    auto executorCallback = [this, &dmcFlagStruct](
+    auto executorCallback = [&dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
@@ -267,7 +267,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
         });
 
     dmcExecutor->setOnTxFinishedHandler(
-        [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
+        [&dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
             std::string outputStr((char*)outputBytes.data(), outputBytes.size());
             SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
@@ -291,12 +291,12 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
             }
         });
 
-    dmcExecutor->setOnNeedSwitchEventHandler([this, &dmcFlagStruct]() {
+    dmcExecutor->setOnNeedSwitchEventHandler([&dmcFlagStruct]() {
         SCHEDULER_LOG(DEBUG) << "Transaction Perform Error , Need Switch.";
         dmcFlagStruct.switchFlag = true;
     });
 
-    auto executorCallback = [this, &dmcFlagStruct](
+    auto executorCallback = [&dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
