@@ -460,7 +460,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     BlockContext::Ptr blockContext;
     switch (input->type())
     {
-    case protocol::ExecutionMessage::MESSAGE: 
+    case protocol::ExecutionMessage::MESSAGE:
     {
         auto blockHeader = m_lastCommittedBlockHeader;
 
@@ -509,7 +509,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         break;
     }
     case protocol::ExecutionMessage::FINISHED:
-    case protocol::ExecutionMessage::REVERT: 
+    case protocol::ExecutionMessage::REVERT:
     {
         tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
         m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
@@ -640,7 +640,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     BlockContext::Ptr blockContext;
     switch (input->type())
     {
-    case protocol::ExecutionMessage::MESSAGE: 
+    case protocol::ExecutionMessage::MESSAGE:
     {
         auto blockHeader = m_lastCommittedBlockHeader;
         if (!blockHeader)
@@ -688,7 +688,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         break;
     }
     case protocol::ExecutionMessage::FINISHED:
-    case protocol::ExecutionMessage::REVERT: 
+    case protocol::ExecutionMessage::REVERT:
     {
         tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
         m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
@@ -707,7 +707,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
 
         break;
     }
-    default: 
+    default:
     {
         auto message =
             "Call error, Unknown call type: " + boost::lexical_cast<std::string>(input->type());
@@ -826,7 +826,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
 
         switch (params->type())
         {
-        case ExecutionMessage::TXHASH: 
+        case ExecutionMessage::TXHASH:
         {
 #pragma omp critical
             {
@@ -845,7 +845,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
             callParametersList->at(i) = createCallParameters(*params, params->staticCall());
             break;
         }
-        default: 
+        default:
         {
             auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
             EXECUTOR_NAME_LOG(ERROR)
@@ -1063,7 +1063,7 @@ void TransactionExecutor::dagExecuteTransactions(
         auto& params = inputs[i];
         switch (params->type())
         {
-        case ExecutionMessage::TXHASH: 
+        case ExecutionMessage::TXHASH:
         {
 #pragma omp critical
             {
@@ -1074,12 +1074,12 @@ void TransactionExecutor::dagExecuteTransactions(
 
             break;
         }
-        case ExecutionMessage::MESSAGE: 
+        case ExecutionMessage::MESSAGE:
         {
             callParametersList->at(i) = createCallParameters(*params, false);
             break;
         }
-        default: 
+        default:
         {
             auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
             EXECUTOR_NAME_LOG(ERROR) << "DAG Execute error, " << message;
@@ -1196,24 +1196,24 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
 
         switch (conflictField.kind)
         {
-        case All: 
+        case All:
         {
             EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `All`");
             return nullptr;
         }
-        case Len: 
+        case Len:
         {
             EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Len`");
             break;
         }
-        case Env: 
+        case Env:
         {
             assert(conflictField.value.size() == 1);
 
             auto envKind = conflictField.value[0];
             switch (envKind)
             {
-            case EnvKind::Caller: 
+            case EnvKind::Caller:
             {
                 const auto& sender = params.senderAddress;
                 criticalKey.insert(criticalKey.end(), sender.begin(), sender.end());
@@ -1222,7 +1222,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                                          << LOG_DESC("use `Caller`") << LOG_KV("caller", sender);
                 break;
             }
-            case EnvKind::Origin: 
+            case EnvKind::Origin:
             {
                 const auto& sender = params.origin;
                 criticalKey.insert(criticalKey.end(), sender.begin(), sender.end());
@@ -1231,7 +1231,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                                          << LOG_DESC("use `Origin`") << LOG_KV("origin", sender);
                 break;
             }
-            case EnvKind::Now: 
+            case EnvKind::Now:
             {
                 auto now = _blockContext->timestamp();
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&now));
@@ -1241,7 +1241,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                                          << LOG_DESC("use `Now`") << LOG_KV("now", now);
                 break;
             }
-            case EnvKind::BlockNumber: 
+            case EnvKind::BlockNumber:
             {
                 auto blockNumber = _blockContext->number();
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&blockNumber));
@@ -1253,7 +1253,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                     << LOG_KV("blockNumber", blockNumber);
                 break;
             }
-            case EnvKind::Addr: 
+            case EnvKind::Addr:
             {
                 criticalKey.insert(criticalKey.end(), to.begin(), to.end());
 
@@ -1261,7 +1261,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                                          << LOG_DESC("use `Addr`") << LOG_KV("addr", to);
                 break;
             }
-            default: 
+            default:
             {
                 EXECUTOR_NAME_LOG(ERROR) << LOG_BADGE("unknown env kind in conflict field")
                                          << LOG_KV("envKind", envKind);
@@ -1270,7 +1270,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             }
             break;
         }
-        case Params: 
+        case Params:
         {
             assert(!conflictField.value.empty());
             const ParameterAbi* paramAbi = nullptr;
@@ -1326,7 +1326,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
             break;
         }
-        case Const: 
+        case Const:
         {
             criticalKey.insert(
                 criticalKey.end(), conflictField.value.begin(), conflictField.value.end());
@@ -1336,14 +1336,14 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
             break;
         }
-        case None: 
+        case None:
         {
             EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `None`")
                                      << LOG_KV("functionName", functionAbi.name)
                                      << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
             break;
         }
-        default: 
+        default:
         {
             EXECUTOR_NAME_LOG(ERROR) << LOG_BADGE("unknown conflict field kind")
                                      << LOG_KV("conflictFieldKind", conflictField.kind);
@@ -1983,7 +1983,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                              << LOG_KV("Create", input->create());
     switch (input->type())
     {
-    case bcos::protocol::ExecutionMessage::TXHASH: 
+    case bcos::protocol::ExecutionMessage::TXHASH:
     {
         // Get transaction first
         auto txHashes = std::make_shared<bcos::crypto::HashList>(1);
@@ -2065,7 +2065,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     case bcos::protocol::ExecutionMessage::MESSAGE:
     case bcos::protocol::ExecutionMessage::REVERT:
     case bcos::protocol::ExecutionMessage::FINISHED:
-    case bcos::protocol::ExecutionMessage::KEY_LOCK: 
+    case bcos::protocol::ExecutionMessage::KEY_LOCK:
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
         ExecutiveFlowInterface::Ptr executiveFlow =
@@ -2099,7 +2099,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
 
         break;
     }
-    default: 
+    default:
     {
         EXECUTOR_NAME_LOG(ERROR) << "Unknown message type: " << input->type();
         callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
@@ -2285,21 +2285,21 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     switch (input.type())
     {
-    case ExecutionMessage::MESSAGE: 
+    case ExecutionMessage::MESSAGE:
     {
         break;
     }
-    case ExecutionMessage::REVERT: 
+    case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
         break;
     }
-    case ExecutionMessage::FINISHED: 
+    case ExecutionMessage::FINISHED:
     {
         callParameters->type = CallParameters::FINISHED;
         break;
     }
-    case ExecutionMessage::KEY_LOCK: 
+    case ExecutionMessage::KEY_LOCK:
     {
         break;
     }
