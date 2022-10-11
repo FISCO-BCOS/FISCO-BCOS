@@ -529,7 +529,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
 
         break;
     }
-    default: 
+    default:
     {
         auto message =
             "dmcCall error, Unknown call type: " + boost::lexical_cast<std::string>(input->type());
@@ -840,7 +840,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
         case ExecutionMessage::MESSAGE:
         case bcos::protocol::ExecutionMessage::REVERT:
         case bcos::protocol::ExecutionMessage::FINISHED:
-        case bcos::protocol::ExecutionMessage::KEY_LOCK: 
+        case bcos::protocol::ExecutionMessage::KEY_LOCK:
         {
             callParametersList->at(i) = createCallParameters(*params, params->staticCall());
             break;
@@ -2304,7 +2304,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         break;
     }
     case ExecutionMessage::SEND_BACK:
-    case ExecutionMessage::TXHASH: 
+    case ExecutionMessage::TXHASH:
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
             ExecuteError::EXECUTE_ERROR, "Unexpected execution message type: " +
