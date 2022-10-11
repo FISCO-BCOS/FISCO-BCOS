@@ -361,13 +361,13 @@ BOOST_AUTO_TEST_CASE(dagTest)
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
     blockExecutive->start();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(!error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
@@ -399,13 +399,13 @@ BOOST_AUTO_TEST_CASE(dagTest2)
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
     blockExecutive->start();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
@@ -434,10 +434,10 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
-    blockExecutive->asyncExecute([this](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+    blockExecutive->asyncExecute([](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                      bool) { BOOST_CHECK(error); });
     blockExecutive->start();
-    blockExecutive->asyncExecute([this](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+    blockExecutive->asyncExecute([](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                      bool) { BOOST_CHECK(!error); });
 }
 
