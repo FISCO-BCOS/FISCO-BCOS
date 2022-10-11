@@ -102,13 +102,13 @@ private:
     int64_t m_lastPermitsUpdateTime;
     int64_t m_maxPermits = 0;
 
-    std::atomic<int64_t> m_futureBurstResetTime;
     // the current burstReqNum, every m_burstTimeInterval is refreshed to 0
     std::atomic<int64_t> m_burstReqNum = {0};
     // the max burst num during m_burstTimeInterval
     int64_t m_maxBurstReqNum = 0;
     // default burst interval is 1s
     uint64_t m_burstTimeInterval = 1000000;
+    std::atomic<int64_t> m_futureBurstResetTime;
 };
 
 }  // namespace ratelimiter

@@ -22,6 +22,7 @@
 #include "../ErrorConverter.h"
 #include "../protocol/BlockHeaderImpl.h"
 #include "../protocol/ExecutionMessageImpl.h"
+#include <memory>
 
 using namespace bcostars;
 
@@ -125,10 +126,11 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             m_callback;
     };
-    auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
+    auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
+
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_executeTransaction(
-        new Callback(std::move(callback)), executionMsgImpl->inner());
+        new Callback(std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -161,10 +163,10 @@ void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr in
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             m_callback;
     };
-    auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
+    auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_call(
-        new Callback(std::move(callback)), executionMsgImpl->inner());
+        new Callback(std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient::executeTransactions(std::string contractAddress,
@@ -210,8 +212,8 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
     std::vector<bcostars::ExecutionMessage> tarsInputs;
     for (auto const& it : inputs)
     {
-        auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
-        tarsInputs.emplace_back(executionMsgImpl->inner());
+        auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
+        tarsInputs.emplace_back(executionMsgImpl.inner());
     }
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_executeTransactions(
@@ -261,8 +263,8 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
     std::vector<bcostars::ExecutionMessage> tarsInputs;
     for (auto const& it : inputs)
     {
-        auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
-        tarsInputs.emplace_back(executionMsgImpl->inner());
+        auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
+        tarsInputs.emplace_back(executionMsgImpl.inner());
     }
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_dmcExecuteTransactions(
@@ -312,8 +314,8 @@ void ExecutorServiceClient::dagExecuteTransactions(
     std::vector<bcostars::ExecutionMessage> tarsInput;
     for (auto const& it : inputs)
     {
-        auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)it);
-        tarsInput.emplace_back(executionMsgImpl->inner());
+        auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
+        tarsInput.emplace_back(executionMsgImpl.inner());
     }
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_dagExecuteTransactions(
@@ -350,10 +352,10 @@ void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr 
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             m_callback;
     };
-    auto executionMsgImpl = std::move((bcostars::protocol::ExecutionMessageImpl::UniquePtr&)input);
+    auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_dmcCall(
-        new Callback(std::move(callback)), executionMsgImpl->inner());
+        new Callback(std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,

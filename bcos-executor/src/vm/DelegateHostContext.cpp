@@ -18,7 +18,7 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
 std::optional<storage::Entry> DelegateHostContext::code()
 {
     return m_code;
-};
+}
 
 bool DelegateHostContext::setCode(bytes code)
 {
