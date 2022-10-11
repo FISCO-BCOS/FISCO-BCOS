@@ -48,7 +48,7 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext(){
+    virtual ~HostContext(){
         // auto total = utcTimeUs() - m_startTime;
         // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
         //                      << LOG_KV("storageTimeProportion",
@@ -58,6 +58,8 @@ public:
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
+    HostContext(HostContext&&) = delete;
+    HostContext& operator=(HostContext&&) = delete;
 
     std::string get(const std::string_view& _key);
 

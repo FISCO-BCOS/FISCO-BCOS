@@ -30,20 +30,23 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
 
-    # add_compile_options(-Werror)
+    add_compile_options(-Werror)
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
-    add_compile_options(-Wno-unknown-pragmas)
-    add_compile_options(-fno-omit-frame-pointer)
 
+    # Ignore warnings
+    add_compile_options(-Wno-unused-parameter)
+    add_compile_options(-Wno-unused-variable)
+    add_compile_options(-Wno-unknown-pragmas)
+
+    add_compile_options(-fno-omit-frame-pointer)
+    
     if(NOT APPLE)
         set(CMAKE_CXX_VISIBILITY_PRESET hidden)
         add_compile_options(-fvisibility=hidden)
         add_compile_options(-fvisibility-inlines-hidden)
     endif()
-    add_compile_options(-Wno-unused-variable)
-    add_compile_options(-fexceptions)
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)

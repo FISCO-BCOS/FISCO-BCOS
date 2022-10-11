@@ -5,7 +5,7 @@ set(TEST_BINARY_NAME bcos-dispatcher-test)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR}/bcos-scheduler/src)
-target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
+target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 find_package(Boost REQUIRED unit_test_framework serialization)
 

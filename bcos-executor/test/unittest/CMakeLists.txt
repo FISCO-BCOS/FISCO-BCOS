@@ -11,7 +11,7 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(TBB CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} ${EXECUTOR_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} ${PROTOCOL_TARGET} bcos-framework Boost::serialization Boost::unit_test_framework)
-target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -fno-var-tracking -Wno-unused-parameter)
+target_compile_options(${TEST_BINARY_NAME} PRIVATE -fno-var-tracking -Wno-unused-parameter)
 add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage

@@ -30,7 +30,7 @@ class ProtocolInfo
 public:
     using Ptr = std::shared_ptr<ProtocolInfo>;
     using ConstPtr = std::shared_ptr<ProtocolInfo const>;
-    ProtocolInfo() = default;
+    ProtocolInfo() : m_protocolModuleID{}, m_minVersion{}, m_maxVersion{}, m_version{} {}
     ProtocolInfo(ProtocolModuleID _moduleID, uint32_t _minVersion, uint32_t _maxVersion)
       : m_protocolModuleID(_moduleID),
         m_minVersion(_minVersion),
