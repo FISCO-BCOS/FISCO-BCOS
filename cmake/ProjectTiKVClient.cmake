@@ -1,6 +1,12 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(TIKV_BUILD_MODE  "debug")
+else()
+    set(TIKV_BUILD_MODE "release")
+endif()
+
 # FIXME: when release 3.1.0 modify tikv-client log level to info
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -9,9 +15,9 @@ ExternalProject_Add(tikv_client_project
   BUILD_IN_SOURCE true
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   CONFIGURE_COMMAND cargo install cxxbridge-cmd@1.0.75
-  BUILD_COMMAND cargo build --release && make target/release/libtikv_client.a
+  BUILD_COMMAND cargo build && cargo build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
   INSTALL_COMMAND ""
-  BUILD_BYPRODUCTS <SOURCE_DIR>/target/release/libtikv_client.a
+  BUILD_BYPRODUCTS <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a
   # LOG_BUILD true
 )
 
@@ -24,6 +30,6 @@ find_package(OpenSSL REQUIRED)
 
 add_library(kv_client INTERFACE IMPORTED)
 set_property(TARGET kv_client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${KVCLIENT_INCLUDE_DIRS})
-set_property(TARGET kv_client PROPERTY INTERFACE_LINK_LIBRARIES ${SOURCE_DIR}/target/release/libtikv_client.a OpenSSL::SSL OpenSSL::Crypto)
+set_property(TARGET kv_client PROPERTY INTERFACE_LINK_LIBRARIES ${SOURCE_DIR}/target/${TIKV_BUILD_MODE}/libtikv_client.a OpenSSL::SSL OpenSSL::Crypto)
 
 add_dependencies(kv_client tikv_client_project)

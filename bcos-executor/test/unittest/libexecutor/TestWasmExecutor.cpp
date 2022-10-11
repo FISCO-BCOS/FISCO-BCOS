@@ -18,7 +18,9 @@
  * @author: catli
  * @date: 2021-10-19
  */
-#ifndef __aarch64__
+
+// FIXME: wasm ut crash on aarch64 linux, https://github.com/bytecodealliance/wasmtime/issues/4972
+#if !defined(__aarch64__) && !defined(__linux__)
 
 #include "../liquid/hello_world.h"
 #include "../liquid/hello_world_caller.h"
