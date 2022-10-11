@@ -166,7 +166,6 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     uint16_t packetType = 0x4321;
     uint16_t ext = 0x1101;
     auto payload = std::make_shared<bytes>(10000, 'a');
-    uint16_t compressedDataSize = 19;
 
     auto version = encodeMsg->version();
     int16_t headerLen = 14;
@@ -187,8 +186,8 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     // decode default
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK_EQUAL(ret, headerLen + compressedDataSize);
-    BOOST_CHECK_EQUAL(decodeMsg->length(), headerLen + compressedDataSize);
+    BOOST_CHECK_EQUAL(ret, headerLen + payload->size());
+    BOOST_CHECK_EQUAL(decodeMsg->length(), headerLen + payload->size());
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), packetType);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), seq);
     BOOST_CHECK_EQUAL(decodeMsg->ext(), ext);
@@ -426,7 +425,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto encodeMsgWithoutCompress = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
 
-    uint16_t version = 0x1234;
+    // only version >= V2 support p2p network compress
+    uint16_t version = 2;
     uint32_t seq = 0x12345678;
     uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
     uint16_t ext = 0x1101;
