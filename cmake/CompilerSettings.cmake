@@ -34,16 +34,19 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
-    add_compile_options(-Wno-unused-parameter)
-    add_compile_options(-fno-omit-frame-pointer)
-    # add_compile_options(-Wno-unknown-pragmas)
 
+    # Ignore warnings
+    add_compile_options(-Wno-unused-parameter)
+    add_compile_options(-Wno-unused-variable)
+    add_compile_options(-Wno-unknown-pragmas)
+
+    add_compile_options(-fno-omit-frame-pointer)
+    
     if(NOT APPLE)
         set(CMAKE_CXX_VISIBILITY_PRESET hidden)
         add_compile_options(-fvisibility=hidden)
         add_compile_options(-fvisibility-inlines-hidden)
     endif()
-    add_compile_options(-Wno-unused-variable)
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
