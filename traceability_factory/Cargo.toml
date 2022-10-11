@@ -1,0 +1,61 @@
+[package]
+name = "traceability_factory"
+version = "0.1.0"
+authors = ["[your_name] <you_email>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+scale = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive", "full"] }
+
+liquid_lang = { version = "1.0.0-rc2", git = "https://github.com/WeBankBlockchain/liquid", tag = "v1.0.0-rc2", package = "liquid_lang", default-features = false, features = ["contract"] }
+liquid_primitives = { version = "1.0.0-rc2", git = "https://github.com/WeBankBlockchain/liquid", tag = "v1.0.0-rc2", package = "liquid_primitives", default-features = false }
+liquid_prelude = { version = "1.0.0-rc2", git = "https://github.com/WeBankBlockchain/liquid", tag = "v1.0.0-rc2", package = "liquid_prelude", default-features = false }
+liquid_macro = { version = "1.0.0-rc2", git = "https://github.com/WeBankBlockchain/liquid", tag = "v1.0.0-rc2", package = "liquid_macro", default-features = false }
+liquid_abi_gen = { version = "1.0.0-rc2", git = "https://github.com/WeBankBlockchain/liquid", tag = "v1.0.0-rc2", package = "liquid_abi_gen", default-features = false, optional = true }
+
+[dev-dependencies]
+predicates = "1.0.5"
+
+[lib]
+name = "traceability_factory"
+crate-type = [
+    # Used for normal contract Wasm blobs.
+    "cdylib",
+    # Used for ABI generation.
+    "rlib",
+]
+
+[features]
+default = ["std"]
+std = [
+    "liquid_lang/std",
+    "scale/std",
+    "liquid_primitives/std",
+    "liquid_prelude/std",
+    "liquid_macro/std",
+]
+liquid-abi-gen = [
+    "std",
+    "liquid_abi_gen",
+    "liquid_lang/contract-abi-gen",
+]
+gm = [
+    "liquid_lang/gm",
+    "liquid_primitives/gm",
+]
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "z"
+overflow-checks = true
+
+[workspace]
+members = [
+    ".liquid/abi_gen",
+]
+exclude = [
+    ".liquid",
+]
