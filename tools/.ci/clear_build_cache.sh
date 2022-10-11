@@ -56,15 +56,26 @@ function check_and_clear_cache() {
 function check_file_and_clear_cache() {
     file=${1}
     cache_dir=${2}
+    checksum_file=${file}_check.md5sum
+    tmp_checksum_file=${file}_tmp.md5sum
 
-    if [ $(git diff HEAD^ |grep diff |grep ${file}|wc -l) > 0 ]; then
-      echo "File ${file} has changed. Clear build cache: \"${cache_dir}\" "
-      rm -rf ${cache_dir}
+    md5sum $(find . -type f |grep -ia ${file} |grep -vE 'build|vcpkg|deps|md5sum') > ${tmp_checksum_file}
+    if [ -f "${checksum_file}" ]; then
+        if diff ${checksum_file} ${tmp_checksum_file}; then
+            echo "Verify ok! No need to clear cache for ${file}"
+            return;
+        fi
     fi
+
+    # checksum not ok
+
+    echo "File ${file} has changed. Clear build cache: \"${cache_dir}\" "
+    rm -rf ${cache_dir}
+    mv ${tmp_checksum_file} ${checksum_file}
 }
 
-# Fisrt: check file change
-# check_file_and_clear_cache CMake ${BUILD_DIR}
+# First: check file change
+check_file_and_clear_cache cmake ${BUILD_DIR}
 
 # Second: check dir change
 check_and_clear_cache .github/workflows ${BUILD_DIR}
