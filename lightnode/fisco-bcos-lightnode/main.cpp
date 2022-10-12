@@ -104,7 +104,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                 LIGHTNODE_LOG(INFO)
                     << "Sync block fail, may be connecting" << boost::diagnostic_information(e);
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
 
@@ -115,8 +115,9 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
 void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto front, auto gateway,
     auto keyFactory, auto nodeID)
 {
-    // clients
-    auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(front, gateway, keyFactory);
+    LIGHTNODE_LOG(INFO) << "Init lightnode p2p client...";
+    auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(
+        front, gateway, keyFactory, nodeConfig->groupId());
     auto remoteLedger = std::make_shared<bcos::ledger::LedgerClientImpl>(p2pClient);
     auto remoteTransactionPool =
         std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
@@ -124,18 +125,19 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
         std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
     auto scheduler = std::make_shared<bcos::scheduler::SchedulerClientImpl>(p2pClient);
 
-    // Prepare genesis block
+    LIGHTNODE_LOG(INFO) << "Prepare genesis block...";
     bcostars::Block genesisBlock;
     genesisBlock.blockHeader.data.blockNumber = 0;
     bcos::concepts::bytebuffer::assignTo(
         nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
     ~ledger->setupGenesisBlock(std::move(genesisBlock));
 
-    // rpc
+    LIGHTNODE_LOG(INFO) << "Init lightnode rpc...";
     auto wsService = bcos::lightnode::initRPC(
         nodeConfig, nodeID, gateway, keyFactory, ledger, remoteLedger, transactionPool, scheduler);
     wsService->start();
 
+    LIGHTNODE_LOG(INFO) << "Init lightnode block syner...";
     auto stopToken = std::make_shared<std::atomic_bool>(false);
     auto syncer = startSyncerThread(
         remoteLedger, ledger, wsService, nodeConfig->groupId(), nodeConfig->nodeName(), stopToken);
