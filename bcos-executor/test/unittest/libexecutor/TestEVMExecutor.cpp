@@ -28,6 +28,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
+#include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -1158,7 +1159,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::OutOfGas);
-        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)TransactionStatus::OutOfGas);
+        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)evmc_status_code::EVMC_OUT_OF_GAS);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
         BOOST_CHECK_EQUAL(result->create(), false);
@@ -1341,7 +1342,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::Unknown);
-        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)TransactionStatus::Unknown);
+        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)evmc_status_code::EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
         BOOST_CHECK_EQUAL(result->create(), false);
