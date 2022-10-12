@@ -153,7 +153,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
-        initRatelimitConfig(pt);
+        initRateLimitConfig(pt);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -353,12 +353,12 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
 }
 
 // loads rate limit configuration items from the configuration file
-void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
+void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
 {
     /*
     [flow_control]
     ; the switch for distributed rate limit
-    ; distributed_ratelimit_switch=true
+    ; distributed_ratelimit_on=true
     ;
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
@@ -392,9 +392,8 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     ;   group_group2=2
     */
 
-    // distributed_ratelimit_switch=false
-    bool distributedRatelimitSwitch =
-        _pt.get<bool>("flow_control.distributed_ratelimit_switch", false);
+    // distributed_ratelimit_on=false
+    bool distributedRateLimitOn = _pt.get<bool>("flow_control.distributed_ratelimit_on", false);
 
     // stat_reporter_interval=60000
     int32_t statReporterInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
@@ -525,7 +524,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
     m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
     m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
-    m_rateLimiterConfig.distributedRatelimitSwitch = distributedRatelimitSwitch;
+    m_rateLimiterConfig.distributedRateLimitOn = distributedRateLimitOn;
 
     if (totalOutgoingBwLimit > 0 && connOutgoingBwLimit > 0 &&
         connOutgoingBwLimit > totalOutgoingBwLimit)
@@ -547,7 +546,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("rateLimiterConfigEffect",
                                     m_rateLimiterConfig.hasRateLimiterConfigEffect())
                              << LOG_KV("statReporterInterval", statReporterInterval)
-                             << LOG_KV("distributedRatelimitSwitch", distributedRatelimitSwitch)
+                             << LOG_KV("distributedRateLimitOn", distributedRateLimitOn)
                              << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
                              << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
                              << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
@@ -555,7 +554,7 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("ips size", m_rateLimiterConfig.ip2BwLimit.size())
                              << LOG_KV("groups size", m_rateLimiterConfig.group2BwLimit.size());
 
-    if (m_rateLimiterConfig.isDistributedRatelimitSwitch())
+    if (m_rateLimiterConfig.isDistributedRateLimitOn())
     {
         GATEWAY_CONFIG_LOG(INFO)
             << LOG_BADGE("initRateLimiterConfig")
@@ -569,6 +568,14 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
 // loads redis config
 void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
 {
+    /*
+    [redis]
+        server_ip=
+        server_port=
+        request_timeout=
+        connection_pool_size=
+     */
+
     // server_ip
     std::string redisServerIP = _pt.get<std::string>("redis.server_ip", "");
     if (redisServerIP.empty())

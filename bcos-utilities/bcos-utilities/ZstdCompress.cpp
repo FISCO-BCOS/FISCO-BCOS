@@ -24,7 +24,7 @@
 
 namespace bcos
 {
-size_t ZstdCompress::compress(bytesConstRef inputData, bytes& compressedData, int compressionLevel)
+bool ZstdCompress::compress(bytesConstRef inputData, bytes& compressedData, int compressionLevel)
 {
     // auto start_t = utcTimeUs();
     size_t const cBuffSize = ZSTD_compressBound(inputData.size());
@@ -40,7 +40,7 @@ size_t ZstdCompress::compress(bytesConstRef inputData, bytes& compressedData, in
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdCompress")
                         << LOG_DESC("compress failed, error code check failed")
                         << LOG_KV("code", code);
-        return CompressError;
+        return false;
     }
     compressedData.resize(compressedSize);
 #if 0
@@ -50,10 +50,10 @@ size_t ZstdCompress::compress(bytesConstRef inputData, bytes& compressedData, in
             << LOG_KV("timecost", (utcTimeUs() - start_t));
 #endif
 
-    return compressedSize;
+    return true;
 }
 
-size_t ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
+bool ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
 {
     // auto start_t = utcTimeUs();
     size_t const cBuffSize = ZSTD_getFrameContentSize(compressedData.data(), compressedData.size());
@@ -63,7 +63,7 @@ size_t ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompresse
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdUncompress")
                         << LOG_DESC("compress failed, compressedData size error")
                         << LOG_KV("compressedData size", cBuffSize);
-        return UnCompressError;
+        return false;
     }
 
     uncompressedData.resize(cBuffSize);
@@ -78,7 +78,7 @@ size_t ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompresse
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdUncompress")
                         << LOG_DESC("uncompress failed, error code check failed")
                         << LOG_KV("code", code);
-        return UnCompressError;
+        return false;
     }
     uncompressedData.resize(uncompressSize);
 #if 0
@@ -89,6 +89,6 @@ size_t ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompresse
                << LOG_KV("timecost", (utcTimeUs() - start_t));
 #endif
 
-    return uncompressSize;
+    return true;
 }
 }  // namespace bcos

@@ -27,7 +27,7 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::protocol;
 
-const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint16)";
+const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
 
 AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
@@ -92,14 +92,14 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
         return;
     }
 
-    uint16_t status = 0;
+    uint8_t status = 0;
     codec.decode(data, status);
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountPrecompiled")
                           << LOG_DESC("setAccountStatus") << LOG_KV("account", accountTableName)
                           << LOG_KV("status", status);
     Entry statusEntry;
-    statusEntry.importFields({std::to_string(status)});
+    statusEntry.importFields({boost::lexical_cast<std::string>(status)});
     _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
     Entry updateEntry;
     updateEntry.importFields({std::to_string(blockContext->number())});
@@ -113,21 +113,24 @@ void AccountPrecompiled::getAccountStatus(const std::string& tableName,
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto entry = _executive->storage().getRow(tableName, ACCOUNT_STATUS);
+    uint8_t status = getAccountStatus(tableName, _executive);
+    _callParameters->setExecResult(codec.encode(status));
+}
+
+uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive) const
+{
+    auto accountTable = getAccountTableName(account);
+    auto entry = _executive->storage().getRow(accountTable, ACCOUNT_STATUS);
     if (!entry.has_value())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
-                               << LOG_DESC("Status row not exist, return 0 by default");
-        _callParameters->setExecResult(codec.encode(uint16_t(0), u256(0)));
-        return;
+                               << LOG_DESC(" Status row not exist, return 0 by default");
+        return 0;
     }
     auto statusStr = entry->get();
-    auto lastUpdateEntry = _executive->storage().getRow(tableName, ACCOUNT_LAST_UPDATE);
-    auto lastUpdateStr = lastUpdateEntry->get();
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
-                           << LOG_KV("status", statusStr)
-                           << LOG_KV("lastUpdateNumber", lastUpdateStr);
-    uint16_t status = boost::lexical_cast<uint16_t>(statusStr);
-    u256 blockNumber = boost::lexical_cast<u256>(lastUpdateStr);
-    _callParameters->setExecResult(codec.encode(status, blockNumber));
+                           << LOG_KV("status", statusStr);
+    uint8_t status = boost::lexical_cast<uint8_t>(statusStr);
+    return status;
 }

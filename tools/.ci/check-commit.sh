@@ -98,7 +98,7 @@ function check_PR_limit() {
         LOG_ERROR "${commits} commits, limit is ${commit_limit}"
         exit 1
     fi
-    local unique_commit=$(git log --format=%s HEAD^..HEAD | sort -u | wc -l)
+    local unique_commit=$(git log --format="%an %s" HEAD^..HEAD | sort -u | wc -l)
     if [ ${unique_commit} -ne ${commits} ]; then
         LOG_ERROR "${commits} != ${unique_commit}, please make commit message unique!"
         exit 1

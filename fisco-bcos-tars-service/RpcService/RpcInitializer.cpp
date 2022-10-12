@@ -63,7 +63,8 @@ void RpcInitializer::init(std::string const& _configDir)
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
         auto watchDir = "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
+            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange",
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
     }
 #endif
     // init rpc config

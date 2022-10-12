@@ -444,7 +444,7 @@ BOOST_AUTO_TEST_CASE(rollback3)
     auto entry = table->newEntry();
     entry.set("value");
     table->setRow("name", entry);
-    auto hash = tableFactory->hash(hashImpl);
+    tableFactory->hash(hashImpl);
     // first rollback
     tableFactory->rollback(*savePoint0);
 

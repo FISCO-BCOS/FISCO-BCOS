@@ -67,6 +67,9 @@ public:
     int32_t status() const override { return m_status; }
     void setStatus(int32_t status) override { m_status = status; }
 
+    int32_t evmStatus() const override { return m_evmStatus; }
+    void setEvmStatus(int32_t evmStatus) override { m_evmStatus = evmStatus; }
+
     std::string_view message() const override { return m_message; }
     void setMessage(std::string message) override { m_message = std::move(message); }
 
@@ -149,6 +152,7 @@ public:
 
     int32_t m_status = 0;
     int32_t m_depth = 0;
+    int32_t m_evmStatus = 0;
     Type m_type = TXHASH;
     bool m_create = false;
     bool m_staticCall = false;

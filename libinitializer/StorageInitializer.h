@@ -37,7 +37,8 @@ class StorageInitializer
 {
 public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt, size_t keyPageSize = 0)
+        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt,
+        [[maybe_unused]] size_t keyPageSize = 0)
     {
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
@@ -77,11 +78,20 @@ public:
 
 #ifdef WITH_TIKV
     static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::vector<std::string>& _pdAddrs, const std::string& _logPath)
+        const std::vector<std::string>& _pdAddrs, const std::string& _logPath,
+        const std::string& caPath = std::string(""), const std::string& certPath = std::string(""),
+        const std::string& keyPath = std::string(""))
     {
         boost::filesystem::create_directories(_logPath);
-        auto cluster = storage::newTiKVClient(_pdAddrs, _logPath);
-
+        std::shared_ptr<tikv_client::TransactionClient> cluster = nullptr;
+        if (!caPath.empty() && !certPath.empty() && !keyPath.empty())
+        {
+            cluster = storage::newTiKVClientWithSSL(_pdAddrs, _logPath, caPath, certPath, keyPath);
+        }
+        else
+        {
+            cluster = storage::newTiKVClient(_pdAddrs, _logPath);
+        }
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
     }
 #endif
