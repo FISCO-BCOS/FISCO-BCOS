@@ -126,9 +126,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             {
                 auto& output = input;
                 EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
-                                     << LOG_KV("codeAddress", input->codeAddress);
+                                        << LOG_KV("codeAddress", input->codeAddress);
                 output->data = bytes();
-                output->status = EVMC_REVERT;
+                output->status = (int32_t)TransactionStatus::RevertInstruction;
+                output->evmStatus = EVMC_REVERT;
                 return std::move(output);
             }
             input->delegateCallCode = toBytes(entry->get());
@@ -140,10 +141,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             {
                 auto& output = input;
                 EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
-                                     << LOG_KV("codeAddress", input->codeAddress);
+                                        << LOG_KV("codeAddress", input->codeAddress);
                 output->data = bytes();
-                output->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
-                // output->evmStatus = EVMC_REVERT; remember to update TransactionExecutor.cpp:2293
+                output->status = (int32_t)TransactionStatus::RevertInstruction;
+                output->evmStatus = EVMC_REVERT;
                 return std::move(output);
             }
             input->delegateCallCode = toBytes(entry->get());
