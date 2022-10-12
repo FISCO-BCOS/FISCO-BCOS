@@ -26,9 +26,9 @@
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-utilities/ThreadPool.h>
 
-namespace bcos
-{
-namespace consensus
+#include <utility>
+
+namespace bcos::consensus
 {
 class LedgerStorage : public PBFTStorage, public std::enable_shared_from_this<LedgerStorage>
 {
@@ -37,10 +37,10 @@ public:
     LedgerStorage(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         bcos::protocol::BlockFactory::Ptr _blockFactory, PBFTMessageFactory::Ptr _messageFactory)
-      : m_scheduler(_scheduler),
-        m_storage(_storage),
-        m_blockFactory(_blockFactory),
-        m_messageFactory(_messageFactory)
+      : m_scheduler(std::move(_scheduler)),
+        m_storage(std::move(_storage)),
+        m_blockFactory(std::move(_blockFactory)),
+        m_messageFactory(std::move(_messageFactory))
     {
         createKVTable(m_pbftCommitDB);
         m_commitBlockWorker = std::make_shared<ThreadPool>("blockSubmit", 1);
@@ -119,5 +119,4 @@ protected:
         m_onStableCheckPointCommitFailed;
     std::shared_ptr<ThreadPool> m_commitBlockWorker;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

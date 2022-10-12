@@ -37,7 +37,7 @@ public:
         m_sealingManager = std::make_shared<SealingManager>(_sealerConfig);
         m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
     }
-    virtual ~Sealer() {}
+    ~Sealer() override = default;
 
     void start() override;
     void stop() override;

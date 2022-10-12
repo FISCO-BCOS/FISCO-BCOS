@@ -25,6 +25,7 @@
 #include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
+#include <utility>
 
 namespace bcos
 {
@@ -74,7 +75,7 @@ public:
 
     virtual void initState(PBFTProposalList const& _proposals, bcos::crypto::NodeIDPtr _fromNode)
     {
-        m_cacheProcessor->initState(_proposals, _fromNode);
+        m_cacheProcessor->initState(_proposals, std::move(_fromNode));
     }
 
     virtual void asyncNotifyNewBlock(
@@ -99,7 +100,7 @@ public:
     void fetchAndUpdateLedgerConfig();
     void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
     {
-        m_ledgerFetcher = _ledgerFetcher;
+        m_ledgerFetcher = std::move(_ledgerFetcher);
     }
 
 protected:
@@ -121,19 +122,24 @@ protected:
     virtual bool handlePrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg,
         bool _needVerifyProposal, bool _generatedFromNewView = false,
         bool _needCheckSignature = true);
+    // When handlePrePrepareMsg return false, then reset sealed txs
     virtual void resetSealedTxs(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
 
+    // To check pre-prepare msg valid
     virtual CheckResult checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
+    // To check pbft msg sign valid
     virtual CheckResult checkSignature(std::shared_ptr<PBFTBaseMessageInterface> _req);
     virtual bool checkProposalSignature(
         IndexType _generatedFrom, PBFTProposalInterface::Ptr _proposal);
 
     virtual CheckResult checkPBFTMsgState(std::shared_ptr<PBFTMessageInterface> _pbftReq) const;
 
+    // When pre-prepare proposal seems ok, then broadcast prepare msg
     virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
 
     // Process the Prepare type message packet
     virtual bool handlePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prepareMsg);
+    // To check 'Prepare' or 'Commit' type proposal
     virtual CheckResult checkPBFTMsg(std::shared_ptr<PBFTMessageInterface> _prepareMsg);
 
     virtual bool handleCommitMsg(std::shared_ptr<PBFTMessageInterface> _commitMsg);

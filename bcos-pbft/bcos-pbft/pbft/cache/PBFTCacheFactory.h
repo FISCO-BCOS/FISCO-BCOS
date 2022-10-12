@@ -20,9 +20,7 @@
  */
 #pragma once
 #include "PBFTCache.h"
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTCacheFactory
 {
@@ -40,5 +38,4 @@ public:
         return cache;
     }
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

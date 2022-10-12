@@ -18,21 +18,27 @@
  * @date: 2021-05-20
  */
 #include "SealerFactory.h"
+
 #include "Sealer.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::sealer;
 
 SealerFactory::SealerFactory(bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime, bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
-  : m_blockFactory(_blockFactory), m_txpool(_txpool), m_minSealTime(_minSealTime), 
-    m_nodeTimeMaintenance(_nodeTimeMaintenance)
+    bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+  : m_blockFactory(std::move(_blockFactory)),
+    m_txpool(std::move(_txpool)),
+    m_minSealTime(_minSealTime),
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
 {}
 
 Sealer::Ptr SealerFactory::createSealer()
 {
-    auto sealerConfig = std::make_shared<SealerConfig>(m_blockFactory, m_txpool, m_nodeTimeMaintenance);
+    auto sealerConfig =
+        std::make_shared<SealerConfig>(m_blockFactory, m_txpool, m_nodeTimeMaintenance);
     sealerConfig->setMinSealTime(m_minSealTime);
     return std::make_shared<Sealer>(sealerConfig);
 }

@@ -22,16 +22,14 @@
 #include "../config/PBFTConfig.h"
 #include "../interfaces/PBFTMessageInterface.h"
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTCache : public std::enable_shared_from_this<PBFTCache>
 {
 public:
     using Ptr = std::shared_ptr<PBFTCache>;
     PBFTCache(PBFTConfig::Ptr _config, bcos::protocol::BlockNumber _index);
-    virtual ~PBFTCache() {}
+    virtual ~PBFTCache() = default;
     bool existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg);
     bool conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg);
     bool conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg);
@@ -107,7 +105,7 @@ public:
     void registerCommittedIndexNotify(
         std::function<void(bcos::protocol::BlockNumber)> _committedIndexNotifier)
     {
-        m_committedIndexNotifier = _committedIndexNotifier;
+        m_committedIndexNotifier = std::move(_committedIndexNotifier);
     }
 
     uint64_t getCollectedCheckPointWeight(bcos::crypto::HashType const& _hash)
@@ -221,5 +219,4 @@ protected:
 
     std::function<void(bcos::protocol::BlockNumber)> m_committedIndexNotifier;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

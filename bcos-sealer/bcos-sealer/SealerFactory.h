@@ -32,7 +32,7 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
 
-    virtual ~SealerFactory() {}
+    virtual ~SealerFactory() = default;
     Sealer::Ptr createSealer();
 
 protected:

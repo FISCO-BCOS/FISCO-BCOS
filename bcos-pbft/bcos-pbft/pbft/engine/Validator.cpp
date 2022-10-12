@@ -70,7 +70,7 @@ void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag, bool _empt
             {
                 txsHash->emplace_back(block->transactionHash(i));
             }
-            if (txsHash->size() == 0)
+            if (txsHash->empty())
             {
                 return;
             }
