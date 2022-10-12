@@ -21,8 +21,8 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
 
-// FIXME: wasm ut crash on aarch64 linux, https://github.com/bytecodealliance/wasmtime/issues/4972
-#if !defined(__aarch64__) && !defined(__linux__)
+// if wasm ut crash on aarch64 linux check https://github.com/bytecodealliance/wasmtime/issues/4972
+// #if !defined(__aarch64__) && !defined(__linux__)
 
 #include "../liquid/hello_world.h"
 #include "../liquid/transfer.h"
@@ -1124,4 +1124,4 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
-#endif
+// #endif
