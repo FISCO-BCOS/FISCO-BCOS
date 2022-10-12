@@ -125,9 +125,8 @@ private:
                 for (auto index = range.begin(); index != range.end(); ++index)
                 {
                     if (!entries[index]) [[unlikely]]
-                        BOOST_THROW_EXCEPTION(
-                            NotFoundTransaction{}
-                            << bcos::error::ErrorMessage{"Get transaction not found"});
+                        BOOST_THROW_EXCEPTION(NotFoundTransaction{} << bcos::error::ErrorMessage{
+                                                  "Get transaction not found"});
 
                     auto field = entries[index]->getField(0);
                     bcos::concepts::serialize::decode(field, out[index]);
@@ -248,8 +247,8 @@ private:
                         block.blockHeader.data.parentInfo[0].blockHash, parentHash))
                 {
                     LEDGER_LOG(ERROR) << "ParentHash mismatch!";
-                    BOOST_THROW_EXCEPTION(MismatchParentHash{}
-                                          << bcos::error::ErrorMessage{"No match parentHash!"});
+                    BOOST_THROW_EXCEPTION(
+                        MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
                 }
             }
 
@@ -277,8 +276,8 @@ private:
             auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
             if (!entry) [[unlikely]]
             {
-                BOOST_THROW_EXCEPTION(NotFoundBlockHeader{}
-                                      << bcos::error::ErrorMessage{"Not found block header!"});
+                BOOST_THROW_EXCEPTION(
+                    NotFoundBlockHeader{} << bcos::error::ErrorMessage{"Not found block header!"});
             }
 
             auto field = entry->getField(0);
@@ -328,7 +327,6 @@ private:
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
         {
-            // TODO: add get nonce logic
             auto entry = storage().getRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey);
             if (!entry)
             {
