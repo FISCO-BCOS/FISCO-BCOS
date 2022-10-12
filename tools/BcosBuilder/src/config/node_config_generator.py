@@ -11,6 +11,7 @@ import os
 import sys
 
 from common.utilities import execute_command_and_getoutput
+from common.utilities import mkdir
 
 class NodeConfigGenerator:
     """
@@ -266,6 +267,7 @@ class NodeConfigGenerator:
 
     def __genesis_config_generated(self, group_config):
         if os.path.exists(group_config.genesis_config_path):
+            utilities.log_info("* the genesis config file has been set, path: %s" % group_config.genesis_config_path)
             return True
         return False
 
@@ -390,6 +392,10 @@ class NodeConfigGenerator:
         agency_name = service_config.agency_config.name
         chain_id = service_config.agency_config.chain_id
         tars_conf_dir = os.path.join(self.output_dir, chain_id)
+
+        if os.path.exists(tars_conf_dir) is False:
+            utilities.mkdir(tars_conf_dir)
+
         agency_tars_conf_path = os.path.join(tars_conf_dir, agency_name + "_tars_proxy.ini")
 
         tars_proxy_config = configparser.ConfigParser(
