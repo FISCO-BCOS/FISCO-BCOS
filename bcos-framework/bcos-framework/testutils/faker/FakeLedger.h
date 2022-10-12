@@ -163,6 +163,7 @@ public:
         {
             auto txData = (*_txToStore)[i];
             m_txsHashToData[hash] = txData;
+            i++;
         }
         _onTxStored(nullptr);
     }

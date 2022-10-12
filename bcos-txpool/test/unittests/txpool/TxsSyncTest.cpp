@@ -124,6 +124,8 @@ void testTransactionSync(bool _onlyTxsStatus = false)
             while (txpoolPeer->txpool()->txpoolStorage()->size() < txsNum &&
                    (utcTime() - startT <= 10000))
             {
+                // maintain the downloading txs
+                txpoolPeer->sync()->maintainDownloadingTransactions();
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
             std::cout << "### txpoolSize: " << txpoolPeer->txpool()->txpoolStorage()->size()
@@ -147,6 +149,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         while (
             txpoolPeer->txpool()->txpoolStorage()->size() < txsNum && (utcTime() - startT <= 10000))
         {
+            txpoolPeer->sync()->maintainDownloadingTransactions();
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         BOOST_CHECK(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
