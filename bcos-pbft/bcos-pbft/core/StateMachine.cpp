@@ -30,7 +30,7 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
     ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
     std::function<void(int64_t)> _onExecuteFinished)
 {
-    auto self = std::weak_ptr<StateMachine>(shared_from_this());
+    auto self = weak_from_this();
     // Note: async here to increase performance
     m_worker->enqueue(
         [self, _timeout, _lastAppliedProposal, _proposal, _executedProposal, _onExecuteFinished]() {
@@ -47,7 +47,7 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
 void StateMachine::asyncPreApply(
     ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
 {
-    auto self = std::weak_ptr<StateMachine>(shared_from_this());
+    auto self = weak_from_this();
     // Note: async here to increase performance, trigger preExecuteBlock
     m_schedulerWorker->enqueue([self, _proposal, _onPreApplyFinished]() {
         auto stateMachine = self.lock();

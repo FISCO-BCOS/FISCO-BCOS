@@ -323,7 +323,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
         // notify the leader to seal when all txs of all proposals have been resetted
-        auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+        auto self = weak_from_this();
         m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
             auto config = self.lock();
             if (!config)
@@ -358,7 +358,7 @@ void PBFTConfig::asyncNotifySealProposal(
     {
         return;
     }
-    auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+    auto self = weak_from_this();
     m_sealProposalNotifier(_proposalIndex, _proposalEndIndex, _maxTxsToSeal,
         [_proposalIndex, _proposalEndIndex, _maxTxsToSeal, self, _retryTime](Error::Ptr _error) {
             if (_error == nullptr)

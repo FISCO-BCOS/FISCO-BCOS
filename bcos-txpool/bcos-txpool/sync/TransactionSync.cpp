@@ -112,7 +112,7 @@ void TransactionSync::onRecvSyncMessage(
         // receive txs request, and response the transactions
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsRequestPacket)
         {
-            auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, txsSyncMsg, _sendResponse, _nodeID]() {
                 try
                 {
@@ -133,7 +133,7 @@ void TransactionSync::onRecvSyncMessage(
         }
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
         {
-            auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+            auto self = weak_from_this();
             m_txsRequester->enqueue([self, _nodeID, txsSyncMsg]() {
                 try
                 {
@@ -206,7 +206,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
     auto missedTxsSet =
         std::make_shared<std::set<HashType>>(_missedTxs->begin(), _missedTxs->end());
     auto startT = utcTime();
-    auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+    auto self = weak_from_this();
     m_config->ledger()->asyncGetBatchTxsByHashList(_missedTxs, false,
         [self, startT, _verifiedProposal, missedTxsSet, _generatedNodeID, _onVerifyFinished](
             Error::Ptr _error, TransactionsPtr _fetchedTxs,
@@ -318,7 +318,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
     auto encodedData = txsRequest->encode();
     startT = utcTime();
-    auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+    auto self = weak_from_this();
     m_config->frontService()->asyncSendMessageByNodeID(protocolID, _generatedNodeID,
         ref(*encodedData), m_config->networkTimeout(),
         [self, startT, _missedTxs, _verifiedProposal, proposalHeader, _onVerifyFinished](
@@ -470,7 +470,7 @@ void TransactionSync::maintainDownloadingTransactions()
             << LOG_KV("shardSize", m_downloadTxsBuffer->size());
         return;
     }
-    auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+    auto self = weak_from_this();
     for (size_t i = 0; i < localBuffer->size(); ++i)
     {
         auto txsBuffer = (*localBuffer)[i];

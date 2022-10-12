@@ -111,7 +111,7 @@ void PBFTEngine::start()
     // when the node setup, start the timer for view recovery
     m_config->timer()->start();
     // register timeout handler
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     m_timer->registerTimeoutHandler([self]() {
         try
         {
@@ -297,7 +297,7 @@ void PBFTEngine::onProposalApplySuccess(
 void PBFTEngine::onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
     PBFTProposalInterface::Ptr _executedProposal)
 {
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _errorCode, _proposal, _executedProposal]() {
         try
         {
@@ -447,7 +447,7 @@ void PBFTEngine::asyncNotifyNewBlock(
 void PBFTEngine::onReceivePBFTMessage(
     bcos::Error::Ptr _error, std::string const& _id, NodeIDPtr _nodeID, bytesConstRef _data)
 {
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     onReceivePBFTMessage(_error, _nodeID, _data, [_id, _nodeID, self](bytesConstRef _respData) {
         try
         {
@@ -491,7 +491,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         // the committed proposal request message
         if (pbftMsg->packetType() == PacketType::CommittedProposalRequest)
         {
-            auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
                 try
                 {
@@ -513,7 +513,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         // the precommitted proposals request message
         if (pbftMsg->packetType() == PacketType::PreparedProposalRequest)
         {
-            auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
                 try
                 {
@@ -847,7 +847,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         return true;
     }
     // verify the proposal
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     auto leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
     if (!leaderNodeInfo)
     {
@@ -1294,7 +1294,7 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
     m_config->notifyResetSealing();
     auto const& prePrepareList = _newViewReq->prePrepareList();
     auto maxProposalIndex = m_config->committedProposal()->index();
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     for (auto prePrepare : prePrepareList)
     {
         // empty block proposal
@@ -1471,7 +1471,7 @@ void PBFTEngine::onReceiveCommittedProposalRequest(
         sendCommittedProposalResponse(proposalList, _sendResponse);
         return;
     }
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     m_config->storage()->asyncGetCommittedProposals(pbftRequest->index(), pbftRequest->size(),
         [self, pbftRequest, _sendResponse](PBFTProposalListPtr _proposalList) {
             auto engine = self.lock();

@@ -276,7 +276,7 @@ public:
 
     virtual void notifyResetSealing(bcos::protocol::BlockNumber _consIndex)
     {
-        auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+        auto self = weak_from_this();
         notifyResetSealing([self, _consIndex]() {
             auto config = self.lock();
             if (!config)

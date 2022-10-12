@@ -203,7 +203,7 @@ protected:
         }
         auto callback = m_verifyCompletedHook;
         m_verifyCompletedHook = nullptr;
-        auto self = std::weak_ptr<TxsValidator>(shared_from_this());
+        auto self = weak_from_this();
         m_worker->enqueue([self, callback]() {
             auto validator = self.lock();
             if (!validator)

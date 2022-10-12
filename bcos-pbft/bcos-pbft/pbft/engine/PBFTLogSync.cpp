@@ -38,7 +38,7 @@ void PBFTLogSync::requestCommittedProposals(
 {
     auto pbftRequest = m_config->pbftMessageFactory()->populateFrom(
         PacketType::CommittedProposalRequest, _startIndex, _offset);
-    auto self = std::weak_ptr<PBFTLogSync>(shared_from_this());
+    auto self = weak_from_this();
     requestPBFTData(_from, pbftRequest,
         [self, _startIndex, _offset](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
             std::string const&, SendResponseCallback _sendResponse) {
@@ -60,7 +60,7 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
     PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                    << LOG_KV("index", _prePrepareMsg->index())
                    << LOG_KV("hash", _prePrepareMsg->hash().abridged());
-    auto self = std::weak_ptr<PBFTLogSync>(shared_from_this());
+    auto self = weak_from_this();
     requestPBFTData(_from, pbftRequest,
         [self, _prePrepareMsg, _prePrepareCallback](Error::Ptr _error, NodeIDPtr _nodeID,
             bytesConstRef _data, std::string const&, SendResponseCallback _sendResponse) {
@@ -77,7 +77,7 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
 void PBFTLogSync::requestPBFTData(
     PublicPtr _from, PBFTRequestInterface::Ptr _pbftRequest, CallbackFunc _callback)
 {
-    auto self = std::weak_ptr<PBFTLogSync>(shared_from_this());
+    auto self = weak_from_this();
     m_requestThread->enqueue([self, _from, _pbftRequest, _callback]() {
         try
         {

@@ -86,7 +86,7 @@ void SealingManager::clearPendingTxs()
     {
         unHandledTxs->emplace_back(txMetaData->hash());
     }
-    auto self = std::weak_ptr<SealingManager>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, unHandledTxs]() {
         try
         {
@@ -241,7 +241,7 @@ void SealingManager::fetchTransactions()
     m_fetchingTxs = true;
     ssize_t startSealingNumber = m_startSealingNumber;
     ssize_t endSealingNumber = m_endSealingNumber;
-    auto self = std::weak_ptr<SealingManager>(shared_from_this());
+    auto self = weak_from_this();
     m_config->txpool()->asyncSealTxs(txsToFetch, nullptr,
         [self, startSealingNumber, endSealingNumber](
             Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
