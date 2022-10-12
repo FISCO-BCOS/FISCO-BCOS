@@ -127,7 +127,8 @@ void testTransactionSync(bool _onlyTxsStatus = false)
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
             std::cout << "### txpoolSize: " << txpoolPeer->txpool()->txpoolStorage()->size()
-                      << ", txsNum:" << txsNum << std::endl;
+                      << ", txsNum:" << txsNum << ", peer: " << txpoolPeer->nodeID()->shortHex()
+                      << std::endl;
             BOOST_CHECK(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
         }
         // maintain transactions again

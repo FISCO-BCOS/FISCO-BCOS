@@ -569,6 +569,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
     std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite);
+    std::cout << "#### txPoolInitAndSubmitTransactionTest finish" << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(testTxPoolInitAndSubmitTransaction)

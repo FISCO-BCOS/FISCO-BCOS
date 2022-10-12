@@ -133,8 +133,14 @@ void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
     {
         _onNotifyFinished(nullptr);
     }
-    m_txsResultNotifier->enqueue([this, _blockNumber, _txsResult]() {
-        m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
+    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    m_txsResultNotifier->enqueue([self, _blockNumber, _txsResult]() {
+        auto txpool = self.lock();
+        if (!txpool)
+        {
+            return;
+        }
+        txpool->m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
     });
 }
 
