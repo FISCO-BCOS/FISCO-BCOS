@@ -1837,14 +1837,12 @@ void TransactionExecutor::getCode(
 
     auto tableName = getContractTableName(contract);
     std::string codeKey = "code";
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         std::string codeHash;
         getCodeHash(tableName, stateStorage, codeHash);
         codeKey = codeHash;
         tableName = bcos::ledger::SYS_CODE_BINARY;
-        std::cout << "TransactionExecutor::getCode新逻辑codeKey为 " << codeKey
-              << std::endl;
     }
 
     stateStorage->asyncGetRow(tableName, codeKey,

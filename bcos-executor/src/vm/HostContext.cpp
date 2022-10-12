@@ -305,7 +305,7 @@ bool HostContext::setCode(bytes code)
 {
     // set code will cause exception when exec revert
     // new logic
-    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         auto contractTable = m_executive->storage().openTable(m_tableName);
         // set code hash in contract table
@@ -502,7 +502,7 @@ std::string_view HostContext::myAddress() const
 
 std::optional<storage::Entry> HostContext::code()
 {
-    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         auto codehash = codeHash();
         auto start = utcTimeUs();

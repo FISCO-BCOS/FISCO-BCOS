@@ -113,7 +113,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         auto tableName = getContractTableName(input->codeAddress, false);
 
         auto blockContext = m_blockContext.lock();
-        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
         {
             // get codeHash in contract table
             auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
@@ -159,7 +159,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         auto tableName = getContractTableName(input->codeAddress, false);
         auto& output = input;
         auto blockContext = m_blockContext.lock();
-        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
         {
             // get codeHash in contract table
             auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
@@ -526,7 +526,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         /// create contract table
         m_storageWrapper->createTable(newAddress, STORAGE_VALUE);
         /// set code field
-        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
         {
             // set code hash
             auto codeHash = m_hashImpl->hash(codeString);
@@ -575,7 +575,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         m_storageWrapper->createTable(codeTable, STORAGE_VALUE);
 
         /// set code field
-        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
         {
             // set code hash
             auto codeHash = m_hashImpl->hash(codeString);
