@@ -112,18 +112,42 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         assert(!m_blockContext.lock()->isWasm());
         auto tableName = getContractTableName(input->codeAddress, false);
 
-        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
-        if (!entry || entry->get().empty())
+        auto blockContext = m_blockContext.lock();
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
         {
-            auto& output = input;
-            EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
-                                 << LOG_KV("codeAddress", input->codeAddress);
-            output->data = bytes();
-            output->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
-            // output->evmStatus = EVMC_REVERT; remember to update TransactionExecutor.cpp:2293
-            return std::move(output);
+            // get codeHash in contract table
+            auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+            auto codeHash =
+                h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+
+            // get code in code binary table
+            auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+            if (!entry || entry->get().empty())
+            {
+                auto& output = input;
+                EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
+                                     << LOG_KV("codeAddress", input->codeAddress);
+                output->data = bytes();
+                output->status = EVMC_REVERT;
+                return std::move(output);
+            }
+            input->delegateCallCode = toBytes(entry->get());
         }
-        input->delegateCallCode = toBytes(entry->get());
+        else
+        {
+            auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+            if (!entry || entry->get().empty())
+            {
+                auto& output = input;
+                EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
+                                     << LOG_KV("codeAddress", input->codeAddress);
+                output->data = bytes();
+                output->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
+                // output->evmStatus = EVMC_REVERT; remember to update TransactionExecutor.cpp:2293
+                return std::move(output);
+            }
+            input->delegateCallCode = toBytes(entry->get());
+        }
     }
 
     if (input->data == bcos::protocol::GET_CODE_INPUT_BYTES)
@@ -133,16 +157,40 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         auto tableName = getContractTableName(input->codeAddress, false);
         auto& output = input;
-        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
-        if (!entry || entry->get().empty())
+        auto blockContext = m_blockContext.lock();
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
         {
-            EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
-                                 << LOG_KV("codeAddress", input->codeAddress);
-            output->data = bytes();
+            // get codeHash in contract table
+            auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+            auto codeHash =
+                h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+
+            // get code in code binary table
+            auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+            if (!entry || entry->get().empty())
+            {
+                auto& output = input;
+                EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
+                                     << LOG_KV("codeAddress", input->codeAddress);
+                output->data = bytes();
+                return std::move(output);
+            }
+            output->data = toBytes(entry->get());
             return std::move(output);
         }
-        output->data = toBytes(entry->get());
-        return std::move(output);
+        else
+        {
+            auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+            if (!entry || entry->get().empty())
+            {
+                EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
+                                     << LOG_KV("codeAddress", input->codeAddress);
+                output->data = bytes();
+                return std::move(output);
+            }
+            output->data = toBytes(entry->get());
+            return std::move(output);
+        }
     }
 
     auto executive = std::make_shared<TransactionExecutive>(
@@ -477,9 +525,30 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         /// create contract table
         m_storageWrapper->createTable(newAddress, STORAGE_VALUE);
         /// set code field
-        Entry entry = {};
-        entry.importFields({codeString});
-        m_storageWrapper->setRow(newAddress, ACCOUNT_CODE, std::move(entry));
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+        {
+            // set code hash
+            auto codeHash = m_hashImpl->hash(codeString);
+            Entry codeHashEntry = {};
+            codeHashEntry.importFields({codeHash.asBytes()});
+            m_storageWrapper->setRow(newAddress, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+
+            // search code hash in SYS_CODE_BINARY table
+            auto codeEntry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+            if (!codeEntry || codeEntry->get().empty())
+            {
+                Entry entry = {};
+                entry.importFields({codeString});
+                m_storageWrapper->setRow(
+                    bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(entry));
+            }
+        }
+        else
+        {
+            Entry entry = {};
+            entry.importFields({codeString});
+            m_storageWrapper->setRow(newAddress, ACCOUNT_CODE, std::move(entry));
+        }
     }
     else
     {
@@ -505,9 +574,30 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         m_storageWrapper->createTable(codeTable, STORAGE_VALUE);
 
         /// set code field
-        Entry entry = {};
-        entry.importFields({codeString});
-        m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
+        if (blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+        {
+            // set code hash
+            auto codeHash = m_hashImpl->hash(codeString);
+            Entry codeHashEntry = {};
+            codeHashEntry.importFields({codeHash.asBytes()});
+            m_storageWrapper->setRow(newAddress, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+
+            // search SYS_CODE_BINARY table
+            auto codeEntry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+            if (!codeEntry || codeEntry->get().empty())
+            {
+                Entry entry = {};
+                entry.importFields({codeString});
+                m_storageWrapper->setRow(
+                    bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(entry));
+            }
+        }
+        else
+        {
+            Entry entry = {};
+            entry.importFields({codeString});
+            m_storageWrapper->setRow(newAddress, ACCOUNT_CODE, std::move(entry));
+        }
 
         /// set link data
         Entry addressEntry = {};
@@ -705,7 +795,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     return callResults;
                 }
             }
-            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi, blockContext->blockVersion());
+            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
 
             callResults->gas -= outputRef.size() * hostContext.vmSchedule().createDataGas;
             callResults->newEVMContractAddress = callResults->codeAddress;
@@ -720,7 +810,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         }
         else
         {
-            auto codeEntry = hostContext.code(blockContext->blockVersion());
+            auto codeEntry = hostContext.code();
             if (!codeEntry.has_value())
             {
                 revert();

@@ -95,10 +95,6 @@ public:
 
     void setCodeAndAbi(bytes code, std::string abi);
 
-    bool setCodeNewVersion(bytes code);
-
-    void setCodeAndAbi(bytes code, std::string abi, uint32_t blockVersion);
-
     size_t codeSizeAt(const std::string_view& _a);
 
     h256 codeHashAt(const std::string_view& _a);

@@ -304,8 +304,40 @@ evmc_result HostContext::callBuiltInPrecompiled(
 bool HostContext::setCode(bytes code)
 {
     // set code will cause exception when exec revert
-    auto table = m_executive->storage().openTable(m_tableName);
-    if (table)
+    // new logic
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
+    {
+        auto contractTable = m_executive->storage().openTable(m_tableName);
+        // set code hash in contract table
+        Entry codeHashEntry;
+        auto codeHash = hashImpl()->hash(code);
+        if (contractTable)
+        {
+            codeHashEntry.importFields({codeHash.asBytes()});
+            bytes codeHashBytes = codeHash.asBytes();
+            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+        }
+        // get code in code binary table
+        auto codeTable = m_executive->storage().openTable(bcos::ledger::SYS_CODE_BINARY);
+        if (codeTable)
+        {
+            if (m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex()))
+            {
+                return true;
+            }
+            Entry codeEntry;
+            codeEntry.importFields({std::move(code)});
+            m_executive->storage().setRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
+            return true;
+        }
+        EXECUTOR_LOG(INFO) << LOG_DESC("SYS_CODE_BINARY is not existed");
+        return false;
+    }
+
+    // old logic
+    auto contractTable = m_executive->storage().openTable(m_tableName);
+    if (contractTable)
     {
         Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
@@ -330,52 +362,6 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
         abiEntry.importFields({std::move(abi)});
         m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);
     }
-}
-
-bool HostContext::setCodeNewVersion(bytes code)
-{
-    auto contractTable = m_executive->storage().openTable(m_tableName);
-    Entry codeHashEntry;
-    auto codeHash = hashImpl()->hash(code);
-    if (contractTable)
-    {
-        codeHashEntry.importFields({codeHash.asBytes()});
-        m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-    }
-    auto codeTable = m_executive->storage().openTable(bcos::ledger::SYS_CODE_BINARY);
-    if (codeTable)
-    {
-        if (m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex()))
-        {
-            return true;
-        }
-        Entry codeEntry;
-        codeEntry.importFields({std::move(code)});
-        m_executive->storage().setRow(
-            bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
-        return true;
-    }
-    EXECUTOR_LOG(INFO) << LOG_DESC("SYS_CODE_BINARY is not existed");
-    return false;
-}
-
-void HostContext::setCodeAndAbi(bytes code, string abi, uint32_t blockVersion)
-{
-    EXECUTOR_LOG(TRACE) << LOG_DESC("save code and abi") << LOG_KV("tableName", m_tableName)
-                        << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
-    // blockVersion is 0x03000000 in FISCO Version V3.0.0
-    if (blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
-    {
-        if (setCodeNewVersion(std::move(code)))
-        {
-            Entry abiEntry;
-            abiEntry.importFields({std::move(abi)});
-            m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);
-        }
-        return;
-    }
-    setCodeAndAbi(code, abi);
-    return;
 }
 
 bcos::bytes HostContext::externalCodeRequest(const std::string_view& _a)
@@ -516,15 +502,7 @@ std::string_view HostContext::myAddress() const
 
 std::optional<storage::Entry> HostContext::code()
 {
-    auto start = utcTimeUs();
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
-    return entry;
-}
-
-std::optional<storage::Entry> HostContext::code(uint32_t blockVersion)
-{
-    if (blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
     {
         auto codehash = codeHash();
         auto start = utcTimeUs();
@@ -532,7 +510,10 @@ std::optional<storage::Entry> HostContext::code(uint32_t blockVersion)
         m_getTimeUsed.fetch_add(utcTimeUs() - start);
         return entry;
     }
-    return code();
+    auto start = utcTimeUs();
+    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+    m_getTimeUsed.fetch_add(utcTimeUs() - start);
+    return entry;
 }
 
 h256 HostContext::codeHash()
