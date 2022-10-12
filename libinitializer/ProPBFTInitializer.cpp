@@ -155,7 +155,7 @@ void ProPBFTInitializer::init()
             INITIALIZER_LOG(INFO) << LOG_DESC("OnElectionClusterException")
                                   << LOG_KV("nodeName", m_nodeConfig->nodeName());
         });
-        m_leaderElection->registerOnElectionClusterRecover([this]() {
+        m_leaderElection->registerOnElectionClusterRecover([]() {
             INITIALIZER_LOG(INFO) << LOG_DESC(
                 "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
         });

@@ -26,6 +26,6 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 find_package(Boost REQUIRED unit_test_framework)
 find_package(jsoncpp REQUIRED)
 
-target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
+target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 target_link_libraries(${TEST_BINARY_NAME} PRIVATE ${TARS_PROTOCOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework jsoncpp_static)
 add_test(NAME test-tars-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

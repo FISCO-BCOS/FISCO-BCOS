@@ -239,9 +239,14 @@ bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
         return false;
     }
 
-    size_t compressSize =
+    if (m_version < (uint16_t)(bcos::protocol::ProtocolVersion::V2))
+    {
+        return false;
+    }
+
+    bool isCompressSuccess =
         ZstdCompress::compress(ref(*m_payload), *compressData, bcos::gateway::c_zstdCompressLevel);
-    if (compressSize == CompressError)
+    if (!isCompressSuccess)
     {
         return false;
     }
@@ -323,11 +328,10 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     if ((m_ext & bcos::protocol::MessageExtFieldFlag::Compress) ==
         bcos::protocol::MessageExtFieldFlag::Compress)
     {
-        size_t uncompressSize = ZstdCompress::uncompress(ref(*rawData), *m_payload);
-        if (uncompressSize == UnCompressError)
+        bool isUncompressSuccess = ZstdCompress::uncompress(ref(*rawData), *m_payload);
+        if (!isUncompressSuccess)
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("ZstdCompress decode message error, uncompress failed")
-                              << LOG_KV("uncompressSize", uncompressSize)
                               << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
                               << LOG_KV("seq", m_seq);
             // invalid packet?

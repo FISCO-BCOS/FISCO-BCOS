@@ -113,6 +113,9 @@ public:
     std::string const& storageType() const { return m_storageType; }
     size_t keyPageSize() const { return m_keyPageSize; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
+    std::string const& pdCaPath() const { return m_pdCaPath; }
+    std::string const& pdCertPath() const { return m_pdCertPath; }
+    std::string const& pdKeyPath() const { return m_pdKeyPath; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
 
@@ -288,6 +291,10 @@ private:
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 8192;
     std::vector<std::string> m_pd_addrs;
+    std::string m_pdCaPath = "";
+    std::string m_pdCertPath = "";
+    std::string m_pdKeyPath = "";
+
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
 

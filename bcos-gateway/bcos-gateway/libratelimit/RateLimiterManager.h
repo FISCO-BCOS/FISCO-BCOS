@@ -21,7 +21,7 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/ModuleWhiteList.h"
-#include "bcos-gateway/libratelimit/TokenBucketRateLimiter.h"
+#include "bcos-gateway/libratelimit/RateLimiterFactory.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/Common.h>
 #include <shared_mutex>
@@ -55,9 +55,6 @@ public:
     bool registerRateLimiter(
         const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter);
     bool removeRateLimiter(const std::string& _rateLimiterKey);
-
-    RateLimiterInterface::Ptr ensureRateLimiterExist(
-        const std::string& _rateLimiterKey, int64_t _maxPermit);
 
 public:
     bool registerGroupRateLimiter(

@@ -28,5 +28,6 @@ struct ExecutionMessage
     24 optional string delegateCallAddress;
     25 optional vector<byte> delegateCallCode;
     26 optional string delegateCallSender;
+    27 optional int evmStatus;
 };
 };

@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         boost::property_tree::ini_parser::read_ini(configIni, pt);
 
         auto config = std::make_shared<GatewayConfig>();
-        config->initRatelimitConfig(pt);
+        config->initRateLimitConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
@@ -212,7 +212,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         boost::property_tree::ini_parser::read_ini(configIni, pt);
 
         auto config = std::make_shared<GatewayConfig>();
-        config->initRatelimitConfig(pt);
+        config->initRateLimitConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 

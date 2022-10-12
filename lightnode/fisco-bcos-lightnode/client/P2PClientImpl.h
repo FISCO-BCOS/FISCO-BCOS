@@ -16,17 +16,19 @@ namespace bcos::p2p
 {
 
 // clang-format off
-struct NoNodeAvailable: public bcos::exception::Exception {};
+struct NoNodeAvailable: public bcos::error::Exception {};
 // clang-format on
 
 class P2PClientImpl
 {
 public:
     P2PClientImpl(bcos::front::FrontServiceInterface::Ptr front,
-        bcos::gateway::GatewayInterface::Ptr gateway, bcos::crypto::KeyFactoryImpl::Ptr keyFactory)
+        bcos::gateway::GatewayInterface::Ptr gateway, bcos::crypto::KeyFactoryImpl::Ptr keyFactory,
+        std::string groupID)
       : m_front(std::move(front)),
         m_gateway(std::move(gateway)),
         m_keyFactory(std::move(keyFactory)),
+        m_groupID(std::move(groupID)),
         m_rng(std::random_device{}())
     {}
 
@@ -99,8 +101,9 @@ public:
     {
         struct Awaitable
         {
-            Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::mt19937& rng)
-              : m_gateway(gateway), m_rng(rng)
+            Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::string& groupID,
+                std::mt19937& rng)
+              : m_gateway(gateway), m_groupID(groupID), m_rng(rng)
             {}
 
             constexpr bool await_ready() const noexcept { return false; }
@@ -120,7 +123,7 @@ public:
                             {
                                 auto groups = peerGatewayInfos->at(0);
                                 auto nodeIDInfo = groups->nodeIDInfo();
-                                auto it = nodeIDInfo.find("group0");
+                                auto it = nodeIDInfo.find(m_groupID);
                                 if (it != nodeIDInfo.end())
                                 {
                                     auto& nodeIDs = it->second;
@@ -131,7 +134,9 @@ public:
                                         auto nodeIDIt = nodeIDs.begin();
                                         auto step = distribution(m_rng);
                                         for (size_t i = 0; i < step; ++i)
+                                        {
                                             ++nodeIDIt;
+                                        }
 
                                         m_nodeID = *nodeIDIt;
                                     }
@@ -152,13 +157,14 @@ public:
             }
 
             bcos::gateway::GatewayInterface::Ptr& m_gateway;
+            std::string& m_groupID;
             std::mt19937& m_rng;
 
             Error::Ptr m_error;
             std::string m_nodeID;
         };
 
-        auto nodeID = co_await Awaitable(m_gateway, m_rng);
+        auto nodeID = co_await Awaitable(m_gateway, m_groupID, m_rng);
         if (nodeID.empty())
         {
             BOOST_THROW_EXCEPTION(NoNodeAvailable{});
@@ -174,6 +180,7 @@ private:
     bcos::front::FrontServiceInterface::Ptr m_front;
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     bcos::crypto::KeyFactoryImpl::Ptr m_keyFactory;
+    std::string m_groupID;
     std::mt19937 m_rng;
 };
 }  // namespace bcos::p2p

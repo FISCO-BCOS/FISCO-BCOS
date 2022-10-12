@@ -36,6 +36,7 @@ public:
 
 public:
     virtual void init() = 0;
+    virtual void init(const std::string& dataKey, const bool smCryptoType) = 0;
 
     // use to decrypt node.key
     virtual std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) = 0;

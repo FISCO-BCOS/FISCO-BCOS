@@ -19,7 +19,9 @@
  * @date 2021-05-25
  */
 #pragma once
-#include "bcos-protocol/protobuf/PBTransactionMetaData.h"
+#include <bcos-tars-protocol/testutil/FakeBlock.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
@@ -30,10 +32,10 @@
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/protobuf/PBBlockFactory.h>
-#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -103,11 +105,13 @@ public:
         m_blockLimit(_blockLimit),
         m_fakeGateWay(_fakeGateWay)
     {
-        auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
-        auto txFactory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
-        auto receiptFactory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-        m_blockFactory =
-            std::make_shared<PBBlockFactory>(blockHeaderFactory, txFactory, receiptFactory);
+        auto blockHeaderFactory =
+            std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
+        auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
+        auto receiptFactory =
+            std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
+        m_blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+            _cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
 

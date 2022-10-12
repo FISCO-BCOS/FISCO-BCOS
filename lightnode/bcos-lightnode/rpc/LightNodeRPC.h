@@ -35,7 +35,7 @@ namespace bcos::rpc
 {
 
 // clang-format off
-struct NotFoundTransactionHash: public bcos::exception::Exception {};
+struct NotFoundTransactionHash: public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,

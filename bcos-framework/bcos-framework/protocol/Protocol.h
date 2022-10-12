@@ -92,6 +92,7 @@ enum ProtocolVersion : uint32_t
 {
     V0 = 0,
     V1 = 1,
+    V2 = 2,
 };
 enum class Version : uint32_t
 {

@@ -31,17 +31,21 @@ BOOST_FIXTURE_TEST_SUITE(ZstdCompressTests, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testZstdCompress)
 {
     auto payload = std::make_shared<bytes>(10000, 'a');
+    auto wrongCompressedData = std::make_shared<bytes>(10000, 'b');
     std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
     std::shared_ptr<bytes> uncompressData = std::make_shared<bytes>();
 
-    // compress
-    size_t compressSize = ZstdCompress::compress(ref(*payload), *compressData, 1);
-    BOOST_CHECK_EQUAL(compressSize, 19);
-
-    // uncompress
-    size_t uncompressSize = ZstdCompress::uncompress(ref(*compressData), *uncompressData);
+    // compress uncompress success
+    bool retCompress = ZstdCompress::compress(ref(*payload), *compressData, 1);
+    BOOST_CHECK(retCompress);
+    ssize_t retUncompress = ZstdCompress::uncompress(ref(*compressData), *uncompressData);
+    BOOST_CHECK(retUncompress);
     BOOST_CHECK_EQUAL(std::string(uncompressData->begin(), uncompressData->end()),
         std::string(payload->begin(), payload->end()));
+
+    // uncompress fail
+    bool retUncompressFail = ZstdCompress::uncompress(ref(*wrongCompressedData), *uncompressData);
+    BOOST_CHECK(!retUncompressFail);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

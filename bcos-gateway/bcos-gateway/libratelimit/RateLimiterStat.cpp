@@ -64,6 +64,61 @@ std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _
     return ss.str();
 }
 
+void RateLimiterStat::start()
+{
+    if (m_running)
+    {
+        RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat")
+                            << LOG_DESC("ratelimiter stat is running");
+        return;
+    }
+    m_running = true;
+
+    m_statTimer = std::make_shared<Timer>(m_statReporterInterval, "ratelimiter_reporter");
+
+    auto statReporterInterval = m_statReporterInterval;
+    auto statTimer = m_statTimer;
+    auto rateLimiterStatWeakPtr = std::weak_ptr<RateLimiterStat>(shared_from_this());
+    m_statTimer->registerTimeoutHandler(
+        [statTimer, rateLimiterStatWeakPtr, statReporterInterval]() {
+            auto rateLimiterStat = rateLimiterStatWeakPtr.lock();
+            if (!rateLimiterStat)
+            {
+                return;
+            }
+
+            auto io = rateLimiterStat->inAndOutStat(statReporterInterval);
+            GATEWAY_LOG(INFO) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.first);
+            GATEWAY_LOG(INFO) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.second);
+            rateLimiterStat->flushStat();
+            statTimer->restart();
+        });
+
+    m_statTimer->start();
+
+    RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat start ok")
+                        << LOG_KV("statReporterInterval", statReporterInterval);
+}
+
+void RateLimiterStat::stop()
+{
+    if (!m_running)
+    {
+        RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat")
+                            << LOG_DESC("ratelimiter stat has been stopped");
+        return;
+    }
+
+    m_running = false;
+    if (m_statTimer)
+    {
+        m_statTimer->stop();
+    }
+
+    RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat stop end");
+}
+
+
 std::string RateLimiterStat::toGroupKey(const std::string& _groupID)
 {
     return " group :  " + _groupID;

@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "../Common.h"
 #include "BlockImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
 #include <bcos-framework/protocol/BlockFactory.h>

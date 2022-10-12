@@ -155,9 +155,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
 #endif
     }
     else
@@ -315,9 +318,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::visit(
         [&](auto& hasher) {
             using Hasher = std::remove_cvref_t<decltype(hasher)>;
-            auto ledger = std::make_shared<bcos::initializer::AnyLedger>(
-                bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>(
-                    std::move(storageWrapper)));
+            auto ledger =
+                std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
+                    std::move(storageWrapper));
 
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
