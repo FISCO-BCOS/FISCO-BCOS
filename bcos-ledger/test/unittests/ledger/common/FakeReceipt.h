@@ -19,10 +19,12 @@
  */
 
 #pragma once
-#include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
+#include "bcos-protocol/TransactionStatus.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
@@ -64,7 +66,8 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
     {
         output += contractAddressBytes.asBytes();
     }
-    auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
+    auto factory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
     auto receipt = factory->createReceipt(
         gasUsed, contractAddress, logEntries, (int32_t)status, output, _blockNumber);
     return receipt;

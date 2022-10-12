@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(forEachTest)
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
-        [this, &needPrepare](int64_t contextID, ExecutiveState::Ptr) {
+        [&needPrepare](int64_t contextID, ExecutiveState::Ptr) {
             // BCOS_LOG(DEBUG) << LOG_BADGE("scheduel_test") << LOG_KV("setlen", needPrepare.size())
             //                 << LOG_KV("contextID", contextID);
             auto iter = needPrepare.find(contextID);
@@ -175,14 +175,14 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         });
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
-        [this, &needSchedule](int64_t contextID, ExecutiveState::Ptr) {
+        [&needSchedule](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSchedule.find(contextID);
             needSchedule.erase(iter);
             return true;
         });
 
-    executivePool->forEach(ExecutivePool::MessageHint::END,
-        [this, &needRemove](int64_t contextID, ExecutiveState::Ptr) {
+    executivePool->forEach(
+        ExecutivePool::MessageHint::END, [&needRemove](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needRemove.find(contextID);
             needRemove.erase(iter);
             return true;
@@ -226,8 +226,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
     BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
 
-    executivePool->forEachAndClear(ExecutivePool::MessageHint::NEED_SEND,
-        [this, &needSend](int64_t contextID, ExecutiveState::Ptr) {
+    executivePool->forEachAndClear(
+        ExecutivePool::MessageHint::NEED_SEND, [&needSend](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = needSend.find(contextID);
             needSend.erase(iter);
             // BCOS_LOG(DEBUG) << LOG_BADGE("SCHEDULE") << LOG_DESC("set length is")
@@ -235,8 +235,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
 
             return true;
         });
-    executivePool->forEachAndClear(ExecutivePool::MessageHint::LOCKED,
-        [this, &locked](int64_t contextID, ExecutiveState::Ptr) {
+    executivePool->forEachAndClear(
+        ExecutivePool::MessageHint::LOCKED, [&locked](int64_t contextID, ExecutiveState::Ptr) {
             auto iter = locked.find(contextID);
             locked.erase(iter);
             return true;

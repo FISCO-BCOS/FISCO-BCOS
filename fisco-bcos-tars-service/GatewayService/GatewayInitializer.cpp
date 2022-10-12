@@ -62,7 +62,8 @@ void GatewayInitializer::init(std::string const& _configPath)
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
         auto watchDir = "/" + nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
+            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange", nodeConfig->pdCaPath(),
+            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
     }
 #endif
 

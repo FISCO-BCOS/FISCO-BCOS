@@ -236,4 +236,34 @@ private:
     std::function<void(const tars::TC_Endpoint& ep)> m_onCloseHandler;
 };
 
+template <typename T>
+bool checkConnection(std::string const& _module, std::string const& _func, const T& prx,
+    std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
+{
+    auto cb = prx->tars_get_push_callback();
+    assert(cb);
+    auto* tarsServantProxyCallback = (TarsServantProxyCallback*)cb.get();
+
+    if (tarsServantProxyCallback->available())
+    {
+        return true;
+    }
+
+    if (_errorCallback && _callsErrorCallback)
+    {
+        std::string errorMessage =
+            _module + " calls interface " + _func + " failed for empty connection";
+        _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
+    }
+    return false;
+}
+
+template <typename T>
+auto tarsProxyAvailableEndPoints(const T& prx)
+{
+    auto cb = prx->tars_get_push_callback();
+    assert(cb);
+    return ((TarsServantProxyCallback*)cb.get())->activeEndpoints();
+}
+
 }  // namespace bcostars

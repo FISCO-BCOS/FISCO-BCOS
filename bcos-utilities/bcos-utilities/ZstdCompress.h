@@ -24,17 +24,14 @@
 #include "Common.h"
 #include "zstd.h"
 
-#define CompressError -1
-#define UnCompressError -1
-
 namespace bcos
 {
 
 class ZstdCompress
 {
 public:
-    static size_t compress(bytesConstRef inputData, bytes& compressedData, int compressionLevel);
-    static size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData);
+    static bool compress(bytesConstRef inputData, bytes& compressedData, int compressionLevel);
+    static bool uncompress(bytesConstRef compressedData, bytes& uncompressedData);
 };
 
 }  // namespace bcos

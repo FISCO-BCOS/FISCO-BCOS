@@ -23,10 +23,12 @@
 #include "FakeReceipt.h"
 #include "FakeTransaction.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
-#include "bcos-protocol/protobuf/PBBlock.h"
-#include "bcos-protocol/protobuf/PBBlockFactory.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -45,10 +47,14 @@ inline CryptoSuite::Ptr createCryptoSuite()
 
 inline BlockFactory::Ptr createBlockFactory(CryptoSuite::Ptr _cryptoSuite)
 {
-    auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
-    auto transactionFactory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
-    auto receiptFactory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-    return std::make_shared<PBBlockFactory>(blockHeaderFactory, transactionFactory, receiptFactory);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
+    auto transactionFactory =
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
+    return std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        _cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory);
 }
 
 inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _blockFactory,

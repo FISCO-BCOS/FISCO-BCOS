@@ -29,11 +29,11 @@ namespace bcos::ledger
 {
 
 // clang-format off
-struct NotFoundTransaction : public bcos::exception::Exception {};
-struct UnexpectedRowIndex : public bcos::exception::Exception {};
-struct MismatchTransactionCount : public bcos::exception::Exception {};
-struct MismatchParentHash: public bcos::exception::Exception {};
-struct NotFoundBlockHeader: public bcos::exception::Exception {};
+struct NotFoundTransaction : public bcos::error::Exception {};
+struct UnexpectedRowIndex : public bcos::error::Exception {};
+struct MismatchTransactionCount : public bcos::error::Exception {};
+struct MismatchParentHash: public bcos::error::Exception {};
+struct NotFoundBlockHeader: public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
@@ -125,9 +125,8 @@ private:
                 for (auto index = range.begin(); index != range.end(); ++index)
                 {
                     if (!entries[index]) [[unlikely]]
-                        BOOST_THROW_EXCEPTION(
-                            NotFoundTransaction{}
-                            << bcos::exception::ErrorMessage{"Get transaction not found"});
+                        BOOST_THROW_EXCEPTION(NotFoundTransaction{} << bcos::error::ErrorMessage{
+                                                  "Get transaction not found"});
 
                     auto field = entries[index]->getField(0);
                     bcos::concepts::serialize::decode(field, out[index]);
@@ -166,7 +165,7 @@ private:
                 break;
             default:
                 BOOST_THROW_EXCEPTION(
-                    UnexpectedRowIndex{} << bcos::exception::ErrorMessage{
+                    UnexpectedRowIndex{} << bcos::error::ErrorMessage{
                         "Unexpected getRows index: " + boost::lexical_cast<std::string>(i)});
                 break;
             }
@@ -178,14 +177,13 @@ private:
     }
 
     template <bool isTransaction>
-    task::Task<void> impl_setTransactions(
-        RANGES::range auto const& hashes, RANGES::range auto buffers)
+    task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto buffers)
     {
         auto count = RANGES::size(buffers);
         if (count != RANGES::size(hashes))
         {
             BOOST_THROW_EXCEPTION(
-                MismatchTransactionCount{} << bcos::exception::ErrorMessage{"No match count"});
+                MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count"});
         }
         constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
 
@@ -249,8 +247,8 @@ private:
                         block.blockHeader.data.parentInfo[0].blockHash, parentHash))
                 {
                     LEDGER_LOG(ERROR) << "ParentHash mismatch!";
-                    BOOST_THROW_EXCEPTION(MismatchParentHash{}
-                                          << bcos::exception::ErrorMessage{"No match parentHash!"});
+                    BOOST_THROW_EXCEPTION(
+                        MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
                 }
             }
 
@@ -278,8 +276,8 @@ private:
             auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
             if (!entry) [[unlikely]]
             {
-                BOOST_THROW_EXCEPTION(NotFoundBlockHeader{}
-                                      << bcos::exception::ErrorMessage{"Not found block header!"});
+                BOOST_THROW_EXCEPTION(
+                    NotFoundBlockHeader{} << bcos::error::ErrorMessage{"Not found block header!"});
             }
 
             auto field = entry->getField(0);
@@ -329,7 +327,6 @@ private:
         }
         else if constexpr (std::is_same_v<Flag, concepts::ledger::NONCES>)
         {
-            // TODO: add get nonce logic
             auto entry = storage().getRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey);
             if (!entry)
             {

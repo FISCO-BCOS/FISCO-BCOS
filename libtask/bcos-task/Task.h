@@ -16,7 +16,7 @@ namespace bcos::task
 {
 
 // clang-format off
-struct NoReturnValue : public bcos::exception::Exception {};
+struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
 template <class TaskImpl, class Value>

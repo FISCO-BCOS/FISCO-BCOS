@@ -72,7 +72,7 @@ const std::string DistributedRateLimiter::luaScript = R"(
  */
 void DistributedRateLimiter::acquire(int64_t _requiredPermits)
 {
-    // TODO: This operation is not supported
+    // Note: This operation is not supported
     std::ignore = _requiredPermits;
 }
 
@@ -87,24 +87,35 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
     try
     {
-        // TODO: for compile
-        /*
+        auto start = utcTime();
+
         auto keys = {m_rateLimitKey};
         std::vector<std::string> args = {
             std::to_string(m_maxPermits), std::to_string(_requiredPermits), "1"};
 
         auto result =
-            m_redis->eval<int64_t>(luaScript, keys.begin(), keys.end(), args.begin(), args.end());
+            m_redis->eval<long long>(luaScript, keys.begin(), keys.end(), args.begin(), args.end());
+
+        auto end = utcTime();
+
+        // TODO: statistics request cost information
+        if (1)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("tryAcquire")
+                               << LOG_KV("elapsedTime", (end - start))
+                               << LOG_KV("maxPermits", m_maxPermits)
+                               << LOG_KV("requiredPermits", _requiredPermits)
+                               << LOG_KV("result", result);
+        }
 
         return result >= 0;
-        */
-        return true;
     }
     catch (const std::exception& e)
     {
-        // TODO: statistics failure Information
-        GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter::tryAcquire")
+        // TODO: statistics failure information
+        GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("tryAcquire")
                            << LOG_KV("rateLimitKey", m_rateLimitKey) << LOG_KV("error", e.what());
+
         // exception throw, allow this acquire
         return true;
     }
@@ -117,6 +128,6 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
  */
 void DistributedRateLimiter::rollback(int64_t _requiredPermits)
 {
-    // TODO: This operation is not supported
+    // Note: This operation is not supported
     std::ignore = _requiredPermits;
 }

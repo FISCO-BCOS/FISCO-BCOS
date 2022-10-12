@@ -18,23 +18,24 @@
  * @date: 2021-03-16
  */
 #pragma once
-#include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
+#include "../protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
-using namespace bcos::protocol;
 using namespace bcos::crypto;
+using namespace bcos::protocol;
 
 namespace bcos
 {
 namespace test
 {
-inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
+inline protocol::LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
 {
-    LogEntriesPtr logEntries = std::make_shared<LogEntries>();
+    auto logEntries = std::make_shared<protocol::LogEntries>();
     for (size_t i = 0; i < _size; i++)
     {
         auto topic = _hashImpl->hash(std::to_string(i));
@@ -42,13 +43,13 @@ inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
         topics.push_back(topic);
         auto address = right160(topic).asBytes();
         bytes output = topic.asBytes();
-        LogEntry logEntry(address, topics, output);
+        protocol::LogEntry logEntry(address, topics, output);
         logEntries->push_back(logEntry);
     }
     return logEntries;
 }
 
-inline void checkReceipts(Hash::Ptr hashImpl, TransactionReceipt::ConstPtr receipt,
+inline void checkReceipts(Hash::Ptr hashImpl, bcos::protocol::TransactionReceipt::ConstPtr receipt,
     TransactionReceipt::ConstPtr decodedReceipt)
 {
     // check the decodedReceipt
@@ -82,7 +83,8 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
     {
         output += toAddress(contractAddress).asBytes();
     }
-    auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
+    auto factory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
     auto receipt =
         factory->createReceipt(gasUsed, std::string_view((char*)contractAddress.data(), 20),
             logEntries, (int32_t)status, output, 0);
