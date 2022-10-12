@@ -14,13 +14,13 @@
  *  limitations under the License.
  */
 /**
- * @brief : unitest for Wasm executor implementation
+ * @brief : unittest for Wasm executor implementation
  * @author: catli
  * @date: 2021-10-19
  */
 
-// FIXME: wasm ut crash on aarch64 linux, https://github.com/bytecodealliance/wasmtime/issues/4972
-#if !defined(__aarch64__) && !defined(__linux__)
+// if wasm ut crash on aarch64 linux check https://github.com/bytecodealliance/wasmtime/issues/4972
+// #if !defined(__aarch64__) && !defined(__linux__)
 
 #include "../liquid/hello_world.h"
 #include "../liquid/hello_world_caller.h"
@@ -1259,4 +1259,4 @@ BOOST_AUTO_TEST_CASE(performance)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
-#endif
+// #endif
