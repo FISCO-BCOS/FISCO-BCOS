@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto result = executePromise.get_future().get();
     BOOST_CHECK_EQUAL(result->status(), 0);
-
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result->origin(), sender);
     BOOST_CHECK_EQUAL(result->from(), paramsBak.to());
     BOOST_CHECK_EQUAL(result->to(), sender);
@@ -299,6 +299,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     BOOST_CHECK(result2);
     BOOST_CHECK_EQUAL(result2->status(), 0);
+    BOOST_CHECK_EQUAL(result2->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result2->message(), "");
     BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
@@ -332,6 +333,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     BOOST_CHECK(result3);
     BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result3->message(), "");
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), "");
     BOOST_CHECK_LT(result3->gasAvailable(), gas);
@@ -441,6 +443,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     auto address = result->newEVMContractAddress();
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
     BOOST_CHECK_GT(address.size(), 0);
     BOOST_CHECK(result->keyLocks().empty());
 
@@ -516,6 +519,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), addressString2);
     BOOST_CHECK_EQUAL(result3->create(), false);
     BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
     BOOST_CHECK(result3->logEntries().size() == 0);
     BOOST_CHECK(result3->keyLocks().empty());
 
@@ -576,6 +580,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result5->from(), std::string(addressString2));
     BOOST_CHECK_EQUAL(result5->to(), std::string(address));
     BOOST_CHECK_EQUAL(result5->status(), 0);
+    BOOST_CHECK_EQUAL(result5->evmStatus(), 0);
     BOOST_CHECK(result5->message().empty());
     BOOST_CHECK_EQUAL(result5->keyLocks().size(), 0);
 
@@ -601,6 +606,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result6->to(), std::string(sender));
     BOOST_CHECK_EQUAL(result6->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result6->status(), 0);
+    BOOST_CHECK_EQUAL(result6->evmStatus(), 0);
     BOOST_CHECK(result6->message().empty());
     BOOST_CHECK(result6->logEntries().size() == 1);
     BOOST_CHECK_EQUAL(result6->keyLocks().size(), 0);
@@ -645,6 +651,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     BOOST_CHECK_EQUAL(callResult->type(), protocol::ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(callResult->status(), 0);
+    BOOST_CHECK_EQUAL(callResult->evmStatus(), 0);
 
     auto expectResult = codec->encode(s256(1000));
     BOOST_CHECK(callResult->data().toBytes() == expectResult);
@@ -680,6 +687,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     BOOST_CHECK_EQUAL(callResult2->type(), protocol::ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(callResult2->status(), 0);
+    BOOST_CHECK_EQUAL(callResult2->evmStatus(), 0);
 
     auto expectResult2 = codec->encode(s256(1000));
     BOOST_CHECK(callResult2->data().toBytes() == expectResult);
@@ -1046,7 +1054,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         }
 
         BOOST_CHECK_EQUAL(result->status(), 0);
-
+        BOOST_CHECK_EQUAL(result->evmStatus(), 0);
         BOOST_CHECK(result->message().empty());
         BOOST_CHECK(!result->newEVMContractAddress().empty());
         BOOST_CHECK_LT(result->gasAvailable(), gas);
@@ -1150,6 +1158,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::OutOfGas);
+        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)TransactionStatus::OutOfGas);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
         BOOST_CHECK_EQUAL(result->create(), false);
@@ -1332,6 +1341,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::Unknown);
+        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)TransactionStatus::Unknown);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
         BOOST_CHECK_EQUAL(result->create(), false);
@@ -1484,6 +1494,7 @@ contract DelegateCallTest {
 
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
 
 
     // --------------------------------
