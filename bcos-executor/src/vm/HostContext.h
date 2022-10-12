@@ -22,6 +22,7 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executive/BlockContext.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/storage/Table.h"
 #include <evmc/evmc.h>
@@ -47,7 +48,7 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext(){
+    virtual ~HostContext(){
         // auto total = utcTimeUs() - m_startTime;
         // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
         //                      << LOG_KV("storageTimeProportion",
@@ -57,6 +58,8 @@ public:
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
+    HostContext(HostContext&&) = delete;
+    HostContext& operator=(HostContext&&) = delete;
 
     std::string get(const std::string_view& _key);
 
@@ -87,6 +90,9 @@ public:
 
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
+
+    evmc_status_code toEVMStatus(std::unique_ptr<CallParameters> const& _response,
+        evmc_result _result, std::shared_ptr<BlockContext> _blockContext);
 
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);

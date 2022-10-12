@@ -66,7 +66,8 @@ void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecuti
         }
         executive->setConstantPrecompiled(
             blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-            m_extPrecompiled.at(ACCOUNT_MGR_ADDRESS));
+            m_extPrecompiled.at(
+                blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS));
 
         if (!m_extPrecompiled.contains(ACCOUNT_ADDRESS))
         {

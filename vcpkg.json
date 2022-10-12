@@ -78,7 +78,10 @@
       "description": "ETCD dependencies",
       "dependencies": [
         "etcd-cpp-apiv3",
-        "grpc"
+        {
+          "name": "grpc",
+          "version>=": "1.44.0"
+        }
       ]
     },
     "tcmalloc": {

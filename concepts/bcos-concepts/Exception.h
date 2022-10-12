@@ -4,7 +4,7 @@
 #include <boost/exception/exception.hpp>
 #include <exception>
 
-namespace bcos::exception
+namespace bcos::error
 {
 struct Exception : public virtual std::exception, public virtual boost::exception
 {
@@ -12,4 +12,4 @@ struct Exception : public virtual std::exception, public virtual boost::exceptio
 
 using ErrorCode = boost::error_info<struct ErrorCodeTag, int>;
 using ErrorMessage = boost::error_info<struct ErrorMessageTag, std::string>;
-}  // namespace bcos::exception
+}  // namespace bcos::error

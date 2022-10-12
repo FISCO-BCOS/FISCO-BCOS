@@ -58,7 +58,7 @@ protected:
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
         gatewayConfig->initP2PConfig(pt, true);
-        gatewayConfig->initRatelimitConfig(pt);
+        gatewayConfig->initRateLimitConfig(pt);
         gatewayConfig->setCertPath(tars::ServerConfig::BasePath);
         gatewayConfig->setNodePath(tars::ServerConfig::BasePath);
         if (gatewayConfig->smSSL())

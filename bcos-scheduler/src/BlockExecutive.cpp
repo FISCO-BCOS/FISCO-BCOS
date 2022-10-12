@@ -1483,7 +1483,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
                             codeFuture.set_value(std::move(codes));
                         }
                     });
-                bcos::bytes codes = std::move(codeFuture.get_future().get());
+                bcos::bytes codes = codeFuture.get_future().get();
 
                 return codes;
             }

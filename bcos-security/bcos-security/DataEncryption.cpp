@@ -57,9 +57,27 @@ void DataEncryption::init()
     }
 
     if (false == smCryptoType)
+    {
         m_symmetricEncrypt = std::make_shared<AESCrypto>();
+    }
     else
+    {
         m_symmetricEncrypt = std::make_shared<SM4Crypto>();
+    }
+}
+
+void DataEncryption::init(const std::string& dataKey, const bool smCryptoType)
+{
+    m_dataKey = dataKey;
+
+    if (false == smCryptoType)
+    {
+        m_symmetricEncrypt = std::make_shared<AESCrypto>();
+    }
+    else
+    {
+        m_symmetricEncrypt = std::make_shared<SM4Crypto>();
+    }
 }
 
 std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<bytes>& content)

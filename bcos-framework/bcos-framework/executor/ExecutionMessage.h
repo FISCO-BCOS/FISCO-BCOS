@@ -158,6 +158,9 @@ public:
     virtual int32_t status() const = 0;
     virtual void setStatus(int32_t status) = 0;
 
+    virtual int32_t evmStatus() const = 0;
+    virtual void setEvmStatus(int32_t evmstatus) = 0;
+
     virtual std::string_view message() const = 0;
     virtual void setMessage(std::string message) = 0;
 

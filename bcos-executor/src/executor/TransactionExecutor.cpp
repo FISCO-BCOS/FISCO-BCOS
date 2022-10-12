@@ -2226,6 +2226,7 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
         message->setCreateSalt(*params->createSalt);
     }
 
+    message->setEvmStatus(params->evmStatus);
     message->setStatus(params->status);
     message->setMessage(std::move(params->message));
     message->setLogEntries(std::move(params->logEntries));
@@ -2329,8 +2330,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     case ExecutionMessage::REVERT:
     {
         callParameters->type = CallParameters::REVERT;
-        callParameters->status = EVMC_REVERT;  //(int32_t)TransactionStatus::RevertInstruction;
-        // callParameters->evmStatus = EVMC_REVERT;
         break;
     }
     case ExecutionMessage::FINISHED:
@@ -2360,6 +2359,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();
+    callParameters->evmStatus = input.evmStatus();
     callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
@@ -2394,6 +2394,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->codeAddress = input.to();
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = input.staticCall();
+    callParameters->evmStatus = input.evmStatus();
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
     callParameters->internalCall = input.internalCall();

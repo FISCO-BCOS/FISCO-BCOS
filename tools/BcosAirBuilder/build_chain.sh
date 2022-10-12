@@ -393,7 +393,7 @@ download_monitor_bin()
     fi
     mtail_binary_path="bin/${mtail_binary_name}"
     package_name="${mtail_binary_name}_${compatibility_mtail_version}_${mtail_postfix}.tar.gz"
-    
+
     local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/mtail/${package_name}"
     local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
     # the binary can obtained from the cos
@@ -672,7 +672,7 @@ generate_lightnode_scripts() {
     local output=${1}
     local lightnode_binary_name=${2}
 
-    generate_script_template "$output/start.sh"      
+    generate_script_template "$output/start.sh"
     generate_script_template "$output/stop.sh"
     chmod u+x "${output}/stop.sh"
 
@@ -1137,7 +1137,7 @@ generate_config_ini() {
     local disable_ssl="${6}"
 
     local disable_ssl_content=";disable_ssl=true"
-    if [[ "${disable_ssl}" == "true" ]]; then 
+    if [[ "${disable_ssl}" == "true" ]]; then
         disable_ssl_content="disable_ssl=true"
     fi
 
@@ -1206,6 +1206,9 @@ generate_common_ini() {
     enable_cache=true
     ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
     key_page_size=${key_page_size}
+    pd_ssl_ca_path=
+    pd_ssl_cert_path=
+    pd_ssl_key_path=
 
 [txpool]
     ; size of the txpool, default is 15000
@@ -1232,12 +1235,12 @@ generate_common_ini() {
     server_port=6379
     ; redis request timeout, unit ms
     request_timeout=3000
-    ; redis connection pool size 
+    ; redis connection pool size
     connection_pool_size=16
 
 [flow_control]
     ; the switch for distributed rate limit
-    ; distributed_ratelimit_switch=false
+    ; distributed_ratelimit_on=false
 
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
@@ -1281,7 +1284,7 @@ generate_sm_config_ini() {
     local disable_ssl="${6}"
 
     local disable_ssl_content=";disable_ssl=true"
-    if [[ "${disable_ssl}" == "true" ]]; then 
+    if [[ "${disable_ssl}" == "true" ]]; then
         disable_ssl_content="disable_ssl=true"
     fi
 
@@ -1331,7 +1334,7 @@ generate_p2p_connected_conf() {
     else
         local ip_array=(${ip_params//,/ })
         local ip_length=${#ip_array[@]}
-    
+
         local i=0
         for (( ; i < ip_length; i++)); do
             local ip=${ip_array[i]}
@@ -1750,12 +1753,12 @@ generate_template_package()
     local genesis_conf_path="${3}"
     local output_dir="${4}"
 
-    # do not support docker 
+    # do not support docker
     if [ -n "${docker_mode}" ];then
         LOG_FATAL "Docker mode is not supported on building template install package"
     fi
 
-    # do not support monitor 
+    # do not support monitor
     if "${monitor_mode}" ;then
         LOG_FATAL "Monitor mode is not support on building template install package"
     fi

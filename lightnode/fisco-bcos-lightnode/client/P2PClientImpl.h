@@ -16,7 +16,7 @@ namespace bcos::p2p
 {
 
 // clang-format off
-struct NoNodeAvailable: public bcos::exception::Exception {};
+struct NoNodeAvailable: public bcos::error::Exception {};
 // clang-format on
 
 class P2PClientImpl
