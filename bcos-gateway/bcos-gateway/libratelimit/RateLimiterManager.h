@@ -57,18 +57,7 @@ public:
     bool removeRateLimiter(const std::string& _rateLimiterKey);
 
 public:
-    bool registerGroupRateLimiter(
-        const std::string& _group, RateLimiterInterface::Ptr _rateLimiter);
-
-    bool removeGroupRateLimiter(const std::string& _group);
-
     RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
-
-    bool registerConnRateLimiter(
-        const std::string& _connIP, RateLimiterInterface::Ptr _rateLimiter);
-
-    bool removeConnRateLimiter(const std::string& _connIP);
-
     RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
 public:
@@ -84,7 +73,7 @@ public:
         m_modulesWithNoBwLimit = std::move(_modulesWithNoBwLimit);
     }
 
-    void setRateLimiterConfig(GatewayConfig::RateLimiterConfig _rateLimiterConfig)
+    void setRateLimiterConfig(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
     {
         m_rateLimiterConfig = _rateLimiterConfig;
     }

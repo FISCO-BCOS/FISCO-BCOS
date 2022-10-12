@@ -55,6 +55,9 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
+        bool groupRateLimitOn = false;
+        bool conRateLimitOn = false;
+
         // if turn on distributed ratelimit
         bool distributedRateLimitOn = false;
         // stat reporter interval, unit: ms
