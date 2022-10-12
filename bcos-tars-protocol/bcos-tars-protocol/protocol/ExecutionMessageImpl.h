@@ -149,6 +149,9 @@ public:
     int32_t status() const override { return m_inner()->status; }
     void setStatus(int32_t status) override { m_inner()->status = status; }
 
+    int32_t evmStatus() const override { return m_inner()->evmStatus; }
+    void setEvmStatus(int32_t evmStatus) override { m_inner()->evmStatus = evmStatus; }
+
     std::string_view message() const override { return m_inner()->message; }
     void setMessage(std::string message) override { m_inner()->message = message; }
 
