@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../Basic.h"
-#include "../Receipt.h"
-#include "../Transaction.h"
+#include "../protocol/Receipt.h"
+#include "../protocol/Transaction.h"
 
 namespace bcos::concepts::scheduler
 {

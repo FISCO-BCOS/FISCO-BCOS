@@ -1,11 +1,8 @@
 #pragma once
-#include "Basic.h"
-#include "Hash.h"
 #include "Receipt.h"
-#include "Serialize.h"
 #include "Transaction.h"
-#include <concepts>
 #include <bcos-utilities/Ranges.h>
+#include <concepts>
 #include <type_traits>
 
 namespace bcos::concepts::block
@@ -62,14 +59,17 @@ template <class BlockType>
 concept Block = requires(BlockType block)
 {
     serialize::Serializable<BlockType>;
+    hash::Hashable<BlockType>;
     BlockType{};
     std::integral<decltype(block.version)>;
     std::integral<decltype(block.type)>;
     BlockHeader<decltype(block.blockHeader)>;
-    requires RANGES::range<decltype(block.transactions)>;  // TODO: add transaction concept
-    requires RANGES::range<decltype(block.receipts)>;      // TODO: add receipt concept
-    requires RANGES::range<decltype(block.transactionsMetaData)>;  // TODO: add metadata
-                                                                        // concept
+    requires RANGES::range<decltype(block.transactions)> &&
+        bcos::concepts::transaction::Transaction<
+            RANGES::range_value_t<decltype(block.transactions)>>;
+    requires RANGES::range<decltype(block.receipts)> && bcos::concepts::receipt::TransactionReceipt<
+        RANGES::range_value_t<decltype(block.receipts)>>;
+    requires RANGES::range<decltype(block.transactionsMetaData)>;  // TODO: add metadata concept
     requires RANGES::range<decltype(block.receiptsHash)> &&
         ByteBuffer<RANGES::range_value_t<decltype(block.receiptsHash)>>;
     requires RANGES::range<decltype(block.nonceList)> &&
