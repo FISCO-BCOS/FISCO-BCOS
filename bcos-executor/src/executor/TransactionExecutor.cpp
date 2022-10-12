@@ -1774,6 +1774,32 @@ void TransactionExecutor::reset(std::function<void(bcos::Error::Ptr)> callback)
     callback(nullptr);
 }
 
+void TransactionExecutor::getCodeHash(std::string_view tableName,
+    storage::StateStorageInterface::Ptr stateStorage, std::string& codeHash)
+{
+    GetRowResponse value;
+    stateStorage->asyncGetRow(
+        tableName, ACCOUNT_CODE_HASH, [&value](auto&& error, auto&& entry) mutable {
+            value = {std::move(error), std::move(entry)};
+        });
+
+    auto& [error, entry] = value;
+
+    if (error)
+    {
+        BOOST_THROW_EXCEPTION(*error);
+    }
+    if (!entry)
+    {
+        EXECUTOR_NAME_LOG(DEBUG) << "Get codeHashs success, empty codeHash";
+    }
+    else
+    {
+        auto codeHashStr  = entry->getField(0);
+        codeHash = h256(std::string(codeHashStr), FixedBytes<32>::StringDataType::FromBinary).hex();
+    }
+}
+
 void TransactionExecutor::getCode(
     std::string_view contract, std::function<void(bcos::Error::Ptr, bcos::bytes)> callback)
 {
@@ -1810,42 +1836,15 @@ void TransactionExecutor::getCode(
     }
 
     auto tableName = getContractTableName(contract);
-    auto codeKey = "code";
-    if(m_blockContext->blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    std::string codeKey = "code";
+    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_0_VERSION))
     {
-        stateStorage->asyncGetRow(tableName, "codeHash",
-            [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
-                if (!m_isRunning)
-                {
-                    callback(BCOS_ERROR_UNIQUE_PTR(
-                                ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                        {});
-                    return;
-                }
-
-                if (error)
-                {
-                    EXECUTOR_NAME_LOG(INFO) << "Get codeHash error: " << error->errorMessage();
-
-                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get codeHash error", *error), {});
-                    return;
-                }
-
-                if (!entry)
-                {
-                    EXECUTOR_NAME_LOG(DEBUG) << "Get codeHash success, empty codeHash";
-
-                    callback(nullptr, bcos::bytes());
-                    return;
-                }
-
-                auto codeHash = entry->getField(0);
-                EXECUTOR_NAME_LOG(INFO) << "Get codeHash success" << LOG_KV("codeHash size", codeHash.size());
-
-                codeKey = h256(codehash, FixedBytes<32>::StringDataType::FromBinary).hex();
-                // auto codeHashBytes = bcos::bytes(codeHash.begin(), codeHash.end());
-                // callback(nullptr, std::move(codeHashBytes));
-            });
+        std::string codeHash;
+        getCodeHash(tableName, stateStorage, codeHash);
+        codeKey = codeHash;
+        tableName = bcos::ledger::SYS_CODE_BINARY;
+        std::cout << "TransactionExecutor::getCode新逻辑codeKey为 " << codeKey
+              << std::endl;
     }
 
     stateStorage->asyncGetRow(tableName, codeKey,
