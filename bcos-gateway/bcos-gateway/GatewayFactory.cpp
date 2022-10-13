@@ -409,7 +409,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
         for (const auto& [ip, bandWidth] : _rateLimiterConfig.ip2BwLimit)
         {
             auto rateLimiterInterface = rateLimiterFactory->buildTokenBucketRateLimiter(bandWidth);
-            rateLimiterManager->registerConnRateLimiter(ip, rateLimiterInterface);
+            rateLimiterManager->registerRateLimiter(ip, rateLimiterInterface);
         }
     }
 
@@ -418,18 +418,18 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     {
         for (const auto& [group, bandWidth] : _rateLimiterConfig.group2BwLimit)
         {
+            ratelimiter::RateLimiterInterface::Ptr rateLimiterInterface = nullptr;
             if (_rateLimiterConfig.isDistributedRateLimitOn())
             {
-                auto rateLimiterInterface = rateLimiterFactory->buildRedisDistributedRateLimiter(
+                rateLimiterInterface = rateLimiterFactory->buildRedisDistributedRateLimiter(
                     bandWidth, rateLimiterFactory->toTokenKey(group));
-                rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
             }
             else
             {
-                auto rateLimiterInterface =
-                    rateLimiterFactory->buildTokenBucketRateLimiter(bandWidth);
-                rateLimiterManager->registerGroupRateLimiter(group, rateLimiterInterface);
+                rateLimiterInterface = rateLimiterFactory->buildTokenBucketRateLimiter(bandWidth);
             }
+
+            rateLimiterManager->registerRateLimiter(group, rateLimiterInterface);
         }
     }
 
