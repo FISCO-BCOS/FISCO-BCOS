@@ -47,10 +47,17 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
 
     // invalid key
     std::string invalidKey = "ABCDCD";
-    BOOST_CHECK_THROW(
+    try
+    {
         _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(), ciperData->size(),
-            (const unsigned char*)invalidKey.c_str(), invalidKey.size()),
-        DecryptException);
+            (const unsigned char*)invalidKey.c_str(), invalidKey.size());
+        BOOST_CHECK(std::string_view((const char*)ciperData->data(), ciperData->size()) !=
+                    std::string_view(plainData));
+    }
+    catch (std::exception& e)
+    {
+        BOOST_CHECK_NO_THROW(dynamic_cast<DecryptException&>(e));
+    }
 
     // invalid ciper
     (*ciperData)[0] += 10;
