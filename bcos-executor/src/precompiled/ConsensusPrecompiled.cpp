@@ -41,7 +41,8 @@ const char* const CSS_METHOD_REMOVE = "remove(string)";
 const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
 const auto NODE_LENGTH = 128U;
 
-ConsensusPrecompiled::ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl) : Precompiled(_hashImpl)
+ConsensusPrecompiled::ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl)
+  : Precompiled(_hashImpl)
 {
     name2Selector[CSS_METHOD_ADD_SEALER] = getFuncSelector(CSS_METHOD_ADD_SEALER, _hashImpl);
     name2Selector[CSS_METHOD_ADD_SER] = getFuncSelector(CSS_METHOD_ADD_SER, _hashImpl);
@@ -390,8 +391,8 @@ void ConsensusPrecompiled::showConsensusTable(
     {
         auto& [nodeID, weight, type, enableNumber] = node;
 
-        consensusTable << "ConsensusPrecompiled: " << nodeID << "," << type << "," << enableNumber << ","
-          << weight << "\n";
+        consensusTable << "ConsensusPrecompiled: " << nodeID << "," << type << "," << enableNumber
+                       << "," << weight << "\n";
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
                            << LOG_KV("consensusTable", consensusTable.str());
