@@ -1,5 +1,5 @@
 #pragma once
-#include "../Block.h"
+#include "../protocol/Block.h"
 #include "../storage/Storage.h"
 #include <bcos-utilities/Ranges.h>
 #include <concepts>
