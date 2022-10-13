@@ -57,24 +57,19 @@ void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecuti
     auto blockContext = m_blockContext.lock();
     if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_1_VERSION)
     {
-        if (!m_extPrecompiled.contains(ACCOUNT_MANAGER_NAME) &&
-            !m_extPrecompiled.contains(ACCOUNT_MGR_ADDRESS))
+        if (!executive->isPrecompiled(ACCOUNT_MGR_ADDRESS) &&
+            !executive->isPrecompiled(ACCOUNT_MANAGER_NAME))
         {
-            m_extPrecompiled.insert(
-                {blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-                    std::make_shared<AccountManagerPrecompiled>(blockContext->hashHandler())});
+            executive->setConstantPrecompiled(
+                blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
+                std::make_shared<AccountManagerPrecompiled>(blockContext->hashHandler()));
         }
-        executive->setConstantPrecompiled(
-            blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-            m_extPrecompiled.at(
-                blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS));
 
-        if (!m_extPrecompiled.contains(ACCOUNT_ADDRESS))
+        if (!executive->isPrecompiled(ACCOUNT_ADDRESS))
         {
-            m_extPrecompiled.insert({std::string(ACCOUNT_ADDRESS),
-                std::make_shared<AccountPrecompiled>(blockContext->hashHandler())});
+            executive->setConstantPrecompiled(
+                ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(blockContext->hashHandler()));
         }
-        executive->setConstantPrecompiled(ACCOUNT_ADDRESS, m_extPrecompiled.at(ACCOUNT_ADDRESS));
     }
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
