@@ -392,9 +392,14 @@ void MemoryStorage::notifyTxResult(
     _txSubmitResult->setTo(std::string(_tx->to()));
     // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
     // avoid shared_ptr circular reference
-    m_notifier->enqueue([txHash, _txSubmitResult, txSubmitCallback]() {
+    auto self = weak_from_this();
+    m_notifier->enqueue([self, txHash, _txSubmitResult, txSubmitCallback]() {
         try
         {
+            if (!self.lock())
+            {
+                return;
+            }
             txSubmitCallback(nullptr, _txSubmitResult);
         }
         catch (std::exception const& e)
