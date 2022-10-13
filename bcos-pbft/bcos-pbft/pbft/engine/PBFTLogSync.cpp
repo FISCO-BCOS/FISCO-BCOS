@@ -38,10 +38,16 @@ void PBFTLogSync::requestCommittedProposals(
 {
     auto pbftRequest = m_config->pbftMessageFactory()->populateFrom(
         PacketType::CommittedProposalRequest, _startIndex, _offset);
+    auto self = weak_from_this();
     requestPBFTData(_from, pbftRequest,
-        [this, _startIndex, _offset](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
+        [self, _startIndex, _offset](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
             std::string const&, SendResponseCallback _sendResponse) {
-            return this->onRecvCommittedProposalsResponse(
+            auto logSync = self.lock();
+            if (!logSync)
+            {
+                return;
+            }
+            return logSync->onRecvCommittedProposalsResponse(
                 _error, _nodeID, _data, _startIndex, _offset, _sendResponse);
         });
 }
@@ -54,10 +60,16 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
     PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                    << LOG_KV("index", _prePrepareMsg->index())
                    << LOG_KV("hash", _prePrepareMsg->hash().abridged());
+    auto self = weak_from_this();
     requestPBFTData(_from, pbftRequest,
-        [this, _prePrepareMsg, _prePrepareCallback](Error::Ptr _error, NodeIDPtr _nodeID,
+        [self, _prePrepareMsg, _prePrepareCallback](Error::Ptr _error, NodeIDPtr _nodeID,
             bytesConstRef _data, std::string const&, SendResponseCallback _sendResponse) {
-            return this->onRecvPrecommitResponse(
+            auto logSync = self.lock();
+            if (!logSync)
+            {
+                return;
+            }
+            return logSync->onRecvPrecommitResponse(
                 _error, _nodeID, _data, _prePrepareMsg, _prePrepareCallback, _sendResponse);
         });
 }
@@ -65,7 +77,7 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
 void PBFTLogSync::requestPBFTData(
     PublicPtr _from, PBFTRequestInterface::Ptr _pbftRequest, CallbackFunc _callback)
 {
-    auto self = std::weak_ptr<PBFTLogSync>(shared_from_this());
+    auto self = weak_from_this();
     m_requestThread->enqueue([self, _from, _pbftRequest, _callback]() {
         try
         {

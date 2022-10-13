@@ -46,7 +46,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     BOOST_CHECK(*decryptedData == plainDataBytes);
 
     // invalid key
-    std::string invalidKey = "ABCD";
+    std::string invalidKey = "ABCDCD";
     BOOST_CHECK_THROW(
         _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(), ciperData->size(),
             (const unsigned char*)invalidKey.c_str(), invalidKey.size()),

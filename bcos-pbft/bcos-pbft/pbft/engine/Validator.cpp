@@ -99,12 +99,18 @@ void TxsValidator::asyncResetTxsFlag(
         proposalNumber = -1;
         proposalHash = bcos::crypto::HashType();
     }
+    auto self = std::weak_ptr<TxsValidator>(shared_from_this());
     m_txPool->asyncMarkTxs(_txsHashList, _flag, proposalNumber, proposalHash,
-        [this, _block, blockHeader, _txsHashList, _flag, _emptyTxBatchHash](Error::Ptr _error) {
+        [self, _block, blockHeader, _txsHashList, _flag, _emptyTxBatchHash](Error::Ptr _error) {
+            auto validator = self.lock();
+            if (!validator)
+            {
+                return;
+            }
             // must ensure asyncResetTxsFlag success before seal new next blocks
             if (_flag)
             {
-                eraseResettingProposal(blockHeader->hash());
+                validator->eraseResettingProposal(blockHeader->hash());
             }
             if (_error == nullptr)
             {
@@ -120,7 +126,7 @@ void TxsValidator::asyncResetTxsFlag(
                               << LOG_KV("msg", _error->errorMessage());
             if (_flag)
             {
-                insertResettingProposal(blockHeader->hash());
+                validator->insertResettingProposal(blockHeader->hash());
             }
         });
 }

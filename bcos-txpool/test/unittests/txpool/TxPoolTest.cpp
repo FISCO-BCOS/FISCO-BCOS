@@ -429,7 +429,6 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     auto txpoolStorage = txpool->txpoolStorage();
     // case1: the node is not in the consensus/observerList
     auto tx = fakeTransaction(_cryptoSuite, utcTime());
-    tx->setStoreToBackend(true);
     checkTxSubmit(txpool, txpoolStorage, tx, HashType(),
         (uint32_t)TransactionStatus::RequestNotBelongToTheGroup, 0);
 
@@ -438,7 +437,6 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     auto ledger = faker->ledger();
     tx = fakeTransaction(_cryptoSuite, utcTime() + 11000, ledger->blockNumber() + blockLimit + 1,
         faker->chainId(), faker->groupId());
-    tx->setStoreToBackend(true);
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::BlockLimitCheckFail, 0);
 
@@ -448,28 +446,24 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
     tx = fakeTransaction(_cryptoSuite, duplicatedNonce, ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
-    tx->setStoreToBackend(true);
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::NonceCheckFail, 0);
 
     // case4: invalid groupId
     tx = fakeTransaction(_cryptoSuite, utcTime(), ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), "invalidGroup");
-    tx->setStoreToBackend(true);
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::InvalidGroupId, 0);
 
     // case5: invalid chainId
     tx = fakeTransaction(_cryptoSuite, utcTime(), ledger->blockNumber() + blockLimit - 4,
         "invalidChainId", faker->groupId());
-    tx->setStoreToBackend(true);
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::InvalidChainId, 0);
 
     // case6: invalid signature
     tx = fakeTransaction(_cryptoSuite, utcTime() + 100000, ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
-    tx->setStoreToBackend(true);
     auto pbTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
     bcos::crypto::KeyPairInterface::Ptr invalidKeyPair = signatureImpl->generateKeyPair();
     auto invalidHash = hashImpl->hash(std::string("test"));
@@ -493,7 +487,6 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     importedTxNum++;
     tx = fakeTransaction(_cryptoSuite, utcTime() + 2000000, ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
-    tx->setStoreToBackend(true);
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None,
         importedTxNum, false, false, true);
     // case8: submit duplicated tx
@@ -508,7 +501,6 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     {
         auto tmpTx = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i,
             ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
-        tmpTx->setStoreToBackend(true);
         transactions.push_back(tmpTx);
     }
 
@@ -522,7 +514,8 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
             }
         });
     importedTxNum += transactions.size();
-    while (txpoolStorage->size() < importedTxNum)
+    auto startT = utcTime();
+    while ((txpoolStorage->size() < importedTxNum) && (utcTime() - startT <= 10000))
     {
         std::cout << "#### txpoolStorage->size:" << txpoolStorage->size() << std::endl;
         std::cout << "#### importedTxNum:" << importedTxNum << std::endl;
@@ -531,13 +524,17 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     std::cout << "#### txpoolStorage size:" << txpoolStorage->size() << std::endl;
     std::cout << "#### importedTxNum:" << importedTxNum << std::endl;
     // check txs submitted to the ledger
-    auto const& txsHash2Data = ledger->txsHashToData();
+    auto txsHash2Data = ledger->txsHashToData();
     for (size_t i = 0; i < transactions.size(); i++)
     {
-        while (!txsHash2Data.count(transactions[i]->hash()))
+        auto startT = utcTime();
+        while (!txsHash2Data.count(transactions[i]->hash()) && (utcTime() - startT <= 5000))
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            txsHash2Data = ledger->txsHashToData();
         }
+        std::cout << "### txsHash2Data size: " << txsHash2Data.size() << ", i: " << i
+                  << ", transactions size:" << transactions.size() << std::endl;
     }
     // case9: the txpool is full
     txpoolConfig->setPoolLimit(importedTxNum);
@@ -569,6 +566,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
     std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite);
+    std::cout << "#### txPoolInitAndSubmitTransactionTest finish" << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(testTxPoolInitAndSubmitTransaction)

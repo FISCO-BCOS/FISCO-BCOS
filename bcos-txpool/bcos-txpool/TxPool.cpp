@@ -67,7 +67,7 @@ void TxPool::stop()
 void TxPool::asyncSubmit(bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
 {
     // verify and try to submit the valid transaction
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _txData, _txSubmitCallback]() {
         try
         {
@@ -112,7 +112,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
     std::function<void(Error::Ptr, Block::Ptr, Block::Ptr)> _sealCallback)
 {
     // Note: not block seal new block here
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_sealer->enqueue([self, _txsLimit, _avoidTxs, _sealCallback]() {
         auto txpool = self.lock();
         if (!txpool)
@@ -133,8 +133,14 @@ void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
     {
         _onNotifyFinished(nullptr);
     }
-    m_txsResultNotifier->enqueue([this, _blockNumber, _txsResult]() {
-        m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
+    auto self = weak_from_this();
+    m_txsResultNotifier->enqueue([self, _blockNumber, _txsResult]() {
+        auto txpool = self.lock();
+        if (!txpool)
+        {
+            return;
+        }
+        txpool->m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
     });
 }
 
@@ -148,7 +154,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                      << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null");
     // Note: here must have thread pool for lock in the callback
     // use single thread here to decrease thread competition
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_verifier->enqueue([self, _generatedNodeID, blockHeader, block, _onVerifyFinished]() {
         try
         {
@@ -233,7 +239,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
 void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uuid,
     NodeIDPtr _nodeID, bytesConstRef _data, std::function<void(Error::Ptr _error)> _onRecv)
 {
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_transactionSync->onRecvSyncMessage(
         _error, _nodeID, _data, [self, _uuid, _nodeID](bytesConstRef _respData) {
             try
@@ -286,7 +292,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
     std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
     // fetch from the local ledger
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _txsHash, _missedTxs, _onBlockFilled]() {
         auto txpool = self.lock();
         if (!txpool)
@@ -322,7 +328,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
 void TxPool::asyncFillBlock(
     HashListPtr _txsHash, std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_filler->enqueue([self, _txsHash, _onBlockFilled]() {
         auto txpool = self.lock();
         if (!txpool)
@@ -478,7 +484,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
         txsHashList->emplace_back(_block->transactionHash(i));
     }
 
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     auto startT = utcTime();
     asyncFillBlock(
         txsHashList, [self, startT, blockHeader, _block](Error::Ptr _error, TransactionsPtr _txs) {

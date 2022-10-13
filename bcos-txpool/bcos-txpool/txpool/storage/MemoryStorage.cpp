@@ -264,7 +264,7 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
 
 void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
 {
-    auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _tx]() {
         try
         {
@@ -664,7 +664,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
 void MemoryStorage::removeInvalidTxs()
 {
-    auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_notifier->enqueue([self]() {
         try
         {
@@ -884,7 +884,8 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
         return;
     }
     auto unsealedTxsSize = unSealedTxsSizeWithoutLock();
-    m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, this](Error::Ptr _error) {
+    auto self = weak_from_this();
+    m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, self](Error::Ptr _error) {
         if (_error == nullptr)
         {
             return;
@@ -892,11 +893,16 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
         TXPOOL_LOG(WARNING) << LOG_DESC("notifyUnsealedTxsSize failed")
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMsg", _error->errorMessage());
-        if (_retryTime >= c_maxRetryTime)
+        auto memoryStorage = self.lock();
+        if (!memoryStorage)
         {
             return;
         }
-        this->notifyUnsealedTxsSize((_retryTime + 1));
+        if (_retryTime >= memoryStorage->c_maxRetryTime)
+        {
+            return;
+        }
+        memoryStorage->notifyUnsealedTxsSize((_retryTime + 1));
     });
 }
 

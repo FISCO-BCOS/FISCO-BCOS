@@ -45,7 +45,7 @@ public:
         m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
         m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
     {
-        m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { this->noteNewTransactions(); });
+        m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { noteNewTransactions(); });
     }
 
     ~TransactionSync() {}

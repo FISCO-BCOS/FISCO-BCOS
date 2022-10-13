@@ -112,7 +112,7 @@ void TransactionSync::onRecvSyncMessage(
         // receive txs request, and response the transactions
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsRequestPacket)
         {
-            auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, txsSyncMsg, _sendResponse, _nodeID]() {
                 try
                 {
@@ -133,7 +133,7 @@ void TransactionSync::onRecvSyncMessage(
         }
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
         {
-            auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+            auto self = weak_from_this();
             m_txsRequester->enqueue([self, _nodeID, txsSyncMsg]() {
                 try
                 {
@@ -206,18 +206,25 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
     auto missedTxsSet =
         std::make_shared<std::set<HashType>>(_missedTxs->begin(), _missedTxs->end());
     auto startT = utcTime();
+    auto self = weak_from_this();
     m_config->ledger()->asyncGetBatchTxsByHashList(_missedTxs, false,
-        [this, startT, _verifiedProposal, missedTxsSet, _generatedNodeID, _onVerifyFinished](
+        [self, startT, _verifiedProposal, missedTxsSet, _generatedNodeID, _onVerifyFinished](
             Error::Ptr _error, TransactionsPtr _fetchedTxs,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>>) {
+            auto txsSync = self.lock();
+            if (!txsSync)
+            {
+                return;
+            }
             // hit all the txs
-            auto missedTxsSize = this->onGetMissedTxsFromLedger(
+            auto missedTxsSize = txsSync->onGetMissedTxsFromLedger(
                 *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished);
             if (missedTxsSize == 0)
             {
                 return;
             }
-            if (!_generatedNodeID || _generatedNodeID->data() == m_config->nodeID()->data())
+            if (!_generatedNodeID ||
+                _generatedNodeID->data() == txsSync->m_config->nodeID()->data())
             {
                 SYNC_LOG(WARNING)
                     << LOG_DESC("requestMissedTxs failed from the ledger for Transaction missing")
@@ -242,7 +249,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                 << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeader() ?
                                       _verifiedProposal->blockHeader()->hash().abridged() :
                                       "null");
-            this->requestMissedTxsFromPeer(
+            txsSync->requestMissedTxsFromPeer(
                 _generatedNodeID, ledgerMissedTxs, _verifiedProposal, _onVerifyFinished);
         });
 }
@@ -259,7 +266,7 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
         return _missedTxs.size();
     }
     // import and verify the transactions
-    auto ret = this->importDownloadedTxs(m_config->nodeID(), _fetchedTxs, _verifiedProposal);
+    auto ret = importDownloadedTxs(m_config->nodeID(), _fetchedTxs, _verifiedProposal);
     if (!ret)
     {
         SYNC_LOG(WARNING) << LOG_DESC("onGetMissedTxsFromLedger: verify tx failed");
@@ -311,7 +318,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
     auto encodedData = txsRequest->encode();
     startT = utcTime();
-    auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+    auto self = weak_from_this();
     m_config->frontService()->asyncSendMessageByNodeID(protocolID, _generatedNodeID,
         ref(*encodedData), m_config->networkTimeout(),
         [self, startT, _missedTxs, _verifiedProposal, proposalHeader, _onVerifyFinished](
@@ -463,14 +470,20 @@ void TransactionSync::maintainDownloadingTransactions()
             << LOG_KV("shardSize", m_downloadTxsBuffer->size());
         return;
     }
+    auto self = weak_from_this();
     for (size_t i = 0; i < localBuffer->size(); ++i)
     {
         auto txsBuffer = (*localBuffer)[i];
         auto transactions =
             m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
         // async here to accelerate the txs process
-        m_worker->enqueue([this, txsBuffer, transactions]() {
-            importDownloadedTxs(txsBuffer->from(), transactions);
+        m_worker->enqueue([self, txsBuffer, transactions]() {
+            auto txsSync = self.lock();
+            if (!txsSync)
+            {
+                return;
+            }
+            txsSync->importDownloadedTxs(txsBuffer->from(), transactions);
         });
     }
 }

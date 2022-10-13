@@ -290,7 +290,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
     {
         return;
     }
-    auto self = std::weak_ptr<BlockSync>(shared_from_this());
+    auto self = weak_from_this();
     asyncNotifyBlockSyncMessage(
         _error, _nodeID, _data,
         [_uuid, _nodeID, self](bytesConstRef _respData) {
@@ -333,23 +333,19 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
         auto syncMsg = m_config->msgFactory()->createBlockSyncMsg(_data);
         switch (syncMsg->packetType())
         {
-        case BlockSyncPacketType::BlockStatusPacket:
-        {
+        case BlockSyncPacketType::BlockStatusPacket: {
             onPeerStatus(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockRequestPacket:
-        {
+        case BlockSyncPacketType::BlockRequestPacket: {
             onPeerBlocksRequest(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockResponsePacket:
-        {
+        case BlockSyncPacketType::BlockResponsePacket: {
             onPeerBlocks(_nodeID, syncMsg);
             break;
         }
-        default:
-        {
+        default: {
             BLKSYNC_LOG(WARNING) << LOG_DESC(
                                         "asyncNotifyBlockSyncMessage: unknown block sync message")
                                  << LOG_KV("type", syncMsg->packetType())
@@ -404,8 +400,8 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
     }
     auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(_syncMsg);
     m_syncStatus->updatePeerStatus(_nodeID, statusMsg);
-    
-    if(_syncMsg->version() > static_cast<int32_t>(BlockSyncMsgVersion::v0))
+
+    if (_syncMsg->version() > static_cast<int32_t>(BlockSyncMsgVersion::v0))
     {
         m_config->nodeTimeMaintenance()->tryToUpdatePeerTimeInfo(_nodeID, statusMsg->time());
     }
@@ -667,7 +663,7 @@ void BlockSync::fetchAndSendBlock(
 {
     // only fetch blockHeader and transactions
     auto blockFlag = HEADER | TRANSACTIONS;
-    auto self = std::weak_ptr<BlockSync>(shared_from_this());
+    auto self = weak_from_this();
     m_config->ledger()->asyncGetBlockDataByNumber(_number, blockFlag,
         [self, _reqQueue, _peer, _number](Error::Ptr _error, Block::Ptr _block) {
             if (_error != nullptr)
