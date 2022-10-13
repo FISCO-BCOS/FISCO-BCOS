@@ -39,9 +39,9 @@ const char* const CSS_METHOD_ADD_SEALER = "addSealer(string,uint256)";
 const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 const char* const CSS_METHOD_REMOVE = "remove(string)";
 const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
-const auto NODE_LENGTH = 128u;
+const auto NODE_LENGTH = 128U;
 
-ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
+ConsensusPrecompiled::ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl) : Precompiled(_hashImpl)
 {
     name2Selector[CSS_METHOD_ADD_SEALER] = getFuncSelector(CSS_METHOD_ADD_SEALER, _hashImpl);
     name2Selector[CSS_METHOD_ADD_SER] = getFuncSelector(CSS_METHOD_ADD_SER, _hashImpl);
@@ -121,7 +121,7 @@ int ConsensusPrecompiled::addSealer(
                           << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),
-            [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
+            [](unsigned char _ch) { return std::isxdigit(_ch); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -148,16 +148,23 @@ int ConsensusPrecompiled::addSealer(
         entry.emplace(Entry());
     }
 
-    auto it = std::find_if(consensusList.begin(), consensusList.end(),
+    auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
-    if (it != consensusList.end())
+    if (node != consensusList.end())
     {
-        it->weight = weight;
-        it->type = ledger::CONSENSUS_SEALER;
-        it->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+        // exist
+        node->weight = weight;
+        node->type = ledger::CONSENSUS_SEALER;
+        node->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
     }
     else
     {
+        // no exist
+        if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_1_VERSION)
+        {
+            // version >= 3.1.0, only allow adding sealer in observer list
+            return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;
+        }
         consensusList.emplace_back(nodeID, weight, std::string{ledger::CONSENSUS_SEALER},
             boost::lexical_cast<std::string>(blockContext->number() + 1));
     }
@@ -208,28 +215,27 @@ int ConsensusPrecompiled::addObserver(
     {
         entry.emplace(Entry());
     }
-    auto it = std::find_if(consensusList.begin(), consensusList.end(),
+    auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
-    if (it != consensusList.end())
+    if (node != consensusList.end())
     {
-        it->weight = 0;
-        it->type = ledger::CONSENSUS_OBSERVER;
-        it->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+        // find it in consensus list
+        auto sealerCount = std::count_if(consensusList.begin(), consensusList.end(),
+            [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
+        if (sealerCount == 1)
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                                   << LOG_DESC("addObserver failed, because last sealer");
+            return CODE_LAST_SEALER;
+        }
+        node->weight = 0;
+        node->type = ledger::CONSENSUS_OBSERVER;
+        node->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
     }
     else
     {
         consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
             boost::lexical_cast<std::string>(blockContext->number() + 1));
-    }
-
-    auto sealerCount = std::count_if(consensusList.begin(), consensusList.end(),
-        [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
-
-    if (sealerCount == 0)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("addObserver failed, because last sealer");
-        return CODE_LAST_SEALER;
     }
 
     entry->setObject(consensusList);
@@ -270,11 +276,11 @@ int ConsensusPrecompiled::removeNode(
     {
         entry.emplace(Entry());
     }
-    auto it = std::find_if(consensusList.begin(), consensusList.end(),
+    auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
-    if (it != consensusList.end())
+    if (node != consensusList.end())
     {
-        consensusList.erase(it);
+        consensusList.erase(node);
     }
     else
     {
@@ -335,16 +341,16 @@ int ConsensusPrecompiled::setWeight(
 
         consensusList = decodeConsensusList(value);
     }
-    auto it = std::find_if(consensusList.begin(), consensusList.end(),
+    auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
-    if (it != consensusList.end())
+    if (node != consensusList.end())
     {
-        if (it->type != ledger::CONSENSUS_SEALER)
+        if (node->type != ledger::CONSENSUS_SEALER)
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
-        it->weight = weight;
-        it->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+        node->weight = weight;
+        node->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
     }
     else
     {
@@ -378,15 +384,15 @@ void ConsensusPrecompiled::showConsensusTable(
     }
     auto consensusList = entry->getObject<ConsensusNodeList>();
 
-    std::stringstream s;
-    s << "ConsensusPrecompiled show table:\n";
-    for (auto& it : consensusList)
+    std::stringstream consensusTable;
+    consensusTable << "ConsensusPrecompiled show table:\n";
+    for (auto& node : consensusList)
     {
-        auto& [nodeID, weight, type, enableNumber] = it;
+        auto& [nodeID, weight, type, enableNumber] = node;
 
-        s << "ConsensusPrecompiled: " << nodeID << "," << type << "," << enableNumber << ","
+        consensusTable << "ConsensusPrecompiled: " << nodeID << "," << type << "," << enableNumber << ","
           << weight << "\n";
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
-                           << LOG_KV("consensusTable", s.str());
+                           << LOG_KV("consensusTable", consensusTable.str());
 }

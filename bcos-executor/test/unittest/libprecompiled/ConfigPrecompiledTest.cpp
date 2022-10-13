@@ -42,7 +42,7 @@ public:
         paraTestAddress = Address("0x420f853b49838bd3e9412385a4cc3428c960dde2").hex();
     }
 
-    virtual ~ConfigPrecompiledFixture() {}
+    ~ConfigPrecompiledFixture() override = default;
     void deployTest(std::string _bin, std::string _address)
     {
         bytes input;
@@ -382,16 +382,20 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
     int64_t number = 2;
 
-    std::string node1;
-    std::string node2;
-    std::string errorNode;
-    for (int i = 0; i < 128; ++i)
-    {
-        node1 += "1";
-        node2 += "2";
-    }
-    errorNode = node1.substr(0, 127);
-    errorNode += "s";
+    std::stringstream nodeFactory;
+    nodeFactory << std::setfill('1') << std::setw(128) << 1;
+    std::string node1 = nodeFactory.str();
+    std::stringstream().swap(nodeFactory);
+
+    nodeFactory << std::setfill('2') << std::setw(128) << 2;
+    std::string node2 = nodeFactory.str();
+    std::stringstream().swap(nodeFactory);
+
+    nodeFactory << std::setfill('3') << std::setw(128) << 3;
+    std::string node3 = nodeFactory.str();
+    std::stringstream().swap(nodeFactory);
+
+    std::string errorNode = node1.substr(0, 127) + "s";
 
     auto callFunc = [&](protocol::BlockNumber _number, const std::string& method,
                         const std::string& _nodeId, int _w = -1, int _errorCode = 0) {
@@ -463,6 +467,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
     // add sealer node1
     {
+        callFunc(number++, "addObserverTest(string)", node1, -1, 0);
         callFunc(number++, "addSealerTest(string,uint256)", node1, 1, 0);
     }
 
@@ -531,6 +536,14 @@ BOOST_AUTO_TEST_CASE(consensus_test)
     // set weigh to not exist node2
     {
         callFunc(number++, "setWeightTest(string,uint256)", node2, 123, CODE_NODE_NOT_EXIST);
+    }
+
+    // add node3 to sealer
+    {
+        callFunc(number++, "addSealerTest(string,uint256)", node3, 1,
+            CODE_ADD_SEALER_SHOULD_IN_OBSERVER);
+        callFunc(number++, "addObserverTest(string)", node3, -1, 0);
+        callFunc(number++, "addSealerTest(string,uint256)", node3, 1, 0);
     }
 }
 

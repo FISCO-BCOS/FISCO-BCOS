@@ -127,10 +127,11 @@ enum PrecompiledErrorCode : int
     // SystemConfigPrecompiled -51399 ~ -51300
 
     // ConsensusPrecompiled -51199 ~ -51100
-    CODE_INVALID_NODE_ID = -51100,
-    CODE_LAST_SEALER = -51101,
-    CODE_INVALID_WEIGHT = -51102,
+    CODE_ADD_SEALER_SHOULD_IN_OBSERVER = -51104,
     CODE_NODE_NOT_EXIST = -51103,
+    CODE_INVALID_WEIGHT = -51102,
+    CODE_LAST_SEALER = -51101,
+    CODE_INVALID_NODE_ID = -51100,
 
     // AuthPrecompiledTest -51099 ~ -51000
     CODE_TABLE_AUTH_TYPE_DECODE_ERROR = -51004,
