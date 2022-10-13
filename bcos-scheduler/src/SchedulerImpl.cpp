@@ -430,7 +430,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 (boost::format("commitBlock: Another block is committing! Block "
                                "number: %ld, hash: %s") %
                     requestBlockNumber %
-                    m_blocks->front()->block()->blockHeaderConst()->hash().abridged())
+                    header->hash().abridged())
                     .str();
 
 

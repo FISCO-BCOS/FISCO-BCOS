@@ -1793,7 +1793,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = m_stateStorages.front().storage;
+            stateStorage = createStateStorage(m_stateStorages.front().storage);
         }
     }
     // create temp state storage
