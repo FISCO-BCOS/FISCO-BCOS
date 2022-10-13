@@ -93,11 +93,24 @@ void Gateway::asyncGetPeers(
         return;
     }
     auto sessionInfos = m_p2pInterface->sessionInfos();
+    auto peersNodeIDList = m_gatewayNodeManager->peersRouterTable()->getAllPeers();
     GatewayInfosPtr peerGatewayInfos = std::make_shared<GatewayInfos>();
+    // append the peers sessionInfos
     for (auto const& info : sessionInfos)
     {
         auto gatewayInfo = std::make_shared<GatewayInfo>(info);
         auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.p2pID);
+        gatewayInfo->setNodeIDInfo(std::move(nodeIDList));
+        peerGatewayInfos->emplace_back(gatewayInfo);
+        peersNodeIDList.erase(info.p2pID);
+    }
+    // append peers that are not directly connected to nodeSelf
+    for (auto const& peer : peersNodeIDList)
+    {
+        P2PInfo p2pInfo;
+        p2pInfo.p2pID = peer;
+        auto gatewayInfo = std::make_shared<GatewayInfo>(p2pInfo);
+        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(peer);
         gatewayInfo->setNodeIDInfo(std::move(nodeIDList));
         peerGatewayInfos->emplace_back(gatewayInfo);
     }

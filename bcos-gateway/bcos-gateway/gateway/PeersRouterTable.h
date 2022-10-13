@@ -59,6 +59,8 @@ public:
     void asyncBroadcastMsg(
         uint16_t _type, std::string const& _group, uint16_t _moduleID, P2PMessage::Ptr _msg);
 
+    std::set<P2pID> getAllPeers() const;
+
 protected:
     void batchInsertNodeList(
         P2pID const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList);
