@@ -54,4 +54,4 @@ private:
 
     void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 };
-}  // namespace bcos
+}  // namespace bcos::precompiled
