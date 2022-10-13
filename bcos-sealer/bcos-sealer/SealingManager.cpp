@@ -78,11 +78,11 @@ void SealingManager::clearPendingTxs()
     SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
                    << LOG_KV("size", pendingTxsSize);
     HashListPtr unHandledTxs = std::make_shared<HashList>();
-    for (auto txMetaData : *m_pendingTxs)
+    for (const auto& txMetaData : *m_pendingTxs)
     {
         unHandledTxs->emplace_back(txMetaData->hash());
     }
-    for (auto txMetaData : *m_pendingSysTxs)
+    for (const auto& txMetaData : *m_pendingSysTxs)
     {
         unHandledTxs->emplace_back(txMetaData->hash());
     }
@@ -178,7 +178,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
     // Note: When the last block(N) sealed by this node contains system transactions,
     //       if other nodes do not wait until block(N) is committed and directly seal block(N+1),
     //       will cause system exceptions.
-    return std::pair(containSysTxs, block);
+    return {containSysTxs, block};
 }
 
 size_t SealingManager::pendingTxsSize()

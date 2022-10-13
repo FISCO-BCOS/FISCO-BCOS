@@ -20,6 +20,7 @@
  */
 #include "PBFTLogSync.h"
 #include <bcos-framework/protocol/Protocol.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::front;
@@ -28,8 +29,8 @@ using namespace bcos::crypto;
 using namespace bcos::consensus;
 
 PBFTLogSync::PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache)
-  : m_config(_config),
-    m_pbftCache(_pbftCache),
+  : m_config(std::move(_config)),
+    m_pbftCache(std::move(_pbftCache)),
     m_requestThread(std::make_shared<ThreadPool>("pbftLogSync", 1))
 {}
 
@@ -39,7 +40,7 @@ void PBFTLogSync::requestCommittedProposals(
     auto pbftRequest = m_config->pbftMessageFactory()->populateFrom(
         PacketType::CommittedProposalRequest, _startIndex, _offset);
     auto self = weak_from_this();
-    requestPBFTData(_from, pbftRequest,
+    requestPBFTData(std::move(_from), pbftRequest,
         [self, _startIndex, _offset](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
             std::string const&, SendResponseCallback _sendResponse) {
             auto logSync = self.lock();
@@ -47,8 +48,8 @@ void PBFTLogSync::requestCommittedProposals(
             {
                 return;
             }
-            return logSync->onRecvCommittedProposalsResponse(
-                _error, _nodeID, _data, _startIndex, _offset, _sendResponse);
+            return logSync->onRecvCommittedProposalsResponse(std::move(_error), std::move(_nodeID),
+                _data, _startIndex, _offset, std::move(_sendResponse));
         });
 }
 
@@ -61,16 +62,18 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
                    << LOG_KV("index", _prePrepareMsg->index())
                    << LOG_KV("hash", _prePrepareMsg->hash().abridged());
     auto self = weak_from_this();
-    requestPBFTData(_from, pbftRequest,
-        [self, _prePrepareMsg, _prePrepareCallback](Error::Ptr _error, NodeIDPtr _nodeID,
-            bytesConstRef _data, std::string const&, SendResponseCallback _sendResponse) {
+    requestPBFTData(std::move(_from), pbftRequest,
+        [self, _prePrepareMsg = std::move(_prePrepareMsg),
+            _prePrepareCallback = std::move(_prePrepareCallback)](Error::Ptr _error,
+            NodeIDPtr _nodeID, bytesConstRef _data, std::string const&,
+            SendResponseCallback _sendResponse) {
             auto logSync = self.lock();
             if (!logSync)
             {
                 return;
             }
-            return logSync->onRecvPrecommitResponse(
-                _error, _nodeID, _data, _prePrepareMsg, _prePrepareCallback, _sendResponse);
+            return logSync->onRecvPrecommitResponse(std::move(_error), std::move(_nodeID), _data,
+                _prePrepareMsg, _prePrepareCallback, std::move(_sendResponse));
         });
 }
 

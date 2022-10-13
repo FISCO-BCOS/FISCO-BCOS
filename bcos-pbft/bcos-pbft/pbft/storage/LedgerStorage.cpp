@@ -109,7 +109,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
         BOOST_THROW_EXCEPTION(InitPBFTException() << errinfo_comment(
                                   "loadState failed for fetch committedProposal failed"));
     }
-    if (!m_stateProposals || m_stateProposals->size() == 0)
+    if (!m_stateProposals || m_stateProposals->empty())
     {
         m_maxCommittedProposalIndex = _stabledIndex;
     }
@@ -194,7 +194,7 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
                     storage->m_signalled.notify_all();
                     return;
                 }
-                if (_value.size() == 0)
+                if (_value.empty())
                 {
                     storage->m_maxCommittedProposalIndexFetched = true;
                     storage->m_signalled.notify_all();

@@ -29,9 +29,7 @@
 #include <bcos-utilities/Error.h>
 
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 // ConsensusInterface is the interface of consensus exposed to other modules
 class ConsensusInterface
@@ -39,7 +37,7 @@ class ConsensusInterface
 public:
     using Ptr = std::shared_ptr<ConsensusInterface>;
     ConsensusInterface() = default;
-    virtual ~ConsensusInterface() {}
+    virtual ~ConsensusInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -85,5 +83,4 @@ public:
 
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber) {}
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

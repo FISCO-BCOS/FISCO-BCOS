@@ -213,12 +213,8 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     }
     ReadGuard l(x_committedProposal);
     auto committedIndex = m_committedProposal->index();
-    if (_msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
-        _msg->index() <= m_waitResealUntil)
-    {
-        return true;
-    }
-    return false;
+    return _msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
+           _msg->index() <= m_waitResealUntil;
 }
 
 bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
@@ -229,7 +225,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     }
     auto nodeList = connectedNodeList();
     // empty connection
-    if (nodeList.size() == 0)
+    if (nodeList.empty())
     {
         return false;
     }
