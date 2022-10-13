@@ -504,15 +504,12 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         transactions.push_back(tmpTx);
     }
 
-    tbb::parallel_for(
-        tbb::blocked_range<int>(0, transactions.size()), [&](const tbb::blocked_range<int>& _r) {
-            for (auto i = _r.begin(); i < _r.end(); i++)
-            {
-                auto tmpTx = transactions[i];
-                checkTxSubmit(txpool, txpoolStorage, tmpTx, tmpTx->hash(),
-                    (uint32_t)TransactionStatus::None, 0, false, true, true);
-            }
-        });
+    for (size_t i = 0; i < transactions.size(); i++)
+    {
+        auto tmpTx = transactions[i];
+        checkTxSubmit(txpool, txpoolStorage, tmpTx, tmpTx->hash(),
+            (uint32_t)TransactionStatus::None, 0, false, true, true);
+    }
     importedTxNum += transactions.size();
     auto startT = utcTime();
     while ((txpoolStorage->size() < importedTxNum) && (utcTime() - startT <= 10000))
@@ -566,6 +563,8 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
     std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite);
+    // clear all the txs before exit
+    txpool->txpoolStorage()->clear();
     std::cout << "#### txPoolInitAndSubmitTransactionTest finish" << std::endl;
 }
 

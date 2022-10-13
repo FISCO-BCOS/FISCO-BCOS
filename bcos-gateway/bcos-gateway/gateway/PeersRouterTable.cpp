@@ -202,6 +202,17 @@ PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
     return nodeIDList;
 }
 
+std::set<P2pID> PeersRouterTable::getAllPeers() const
+{
+    std::set<P2pID> peers;
+    ReadGuard l(x_peersStatus);
+    for (auto const& peerInfo : m_peersStatus)
+    {
+        peers.insert(peerInfo.first);
+    }
+    return peers;
+}
+
 GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
 {
     ReadGuard l(x_gatewayInfos);

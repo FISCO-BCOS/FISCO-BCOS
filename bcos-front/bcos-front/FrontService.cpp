@@ -291,8 +291,14 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
                              << LOG_KV("data.size()", _data.size()) << LOG_KV("timeout", _timeout);
         }  // if (_callback)
 
+        auto self = weak_from_this();
         sendMessage(_moduleID, _nodeID, uuid, _data, false,
-            [this, _moduleID, _nodeID, uuid](Error::Ptr _error) {
+            [self, _moduleID, _nodeID, uuid](Error::Ptr _error) {
+                auto front = self.lock();
+                if (!front)
+                {
+                    return;
+                }
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
                     /*
@@ -300,7 +306,7 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
                                      << LOG_KV("errorCode", _error->errorCode())
                                      << LOG_KV("errorMessage", _error->errorMessage());
                 */
-                    handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
+                    front->handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
                 }
             });
     }

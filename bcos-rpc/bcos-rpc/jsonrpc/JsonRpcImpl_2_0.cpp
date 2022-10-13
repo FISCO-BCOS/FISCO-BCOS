@@ -104,10 +104,8 @@ bcos::bytes JsonRpcImpl_2_0::decodeData(std::string_view _data)
     auto end = _data.end();
     auto length = _data.size();
 
-    if ((length == 0) || (length % 2 != 0)) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
-    }
+    if ((length == 0) || (length % 2 != 0))
+        [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"}); }
 
     if (*begin == '0' && *(begin + 1) == 'x')
     {
@@ -1200,8 +1198,11 @@ void JsonRpcImpl_2_0::gatewayInfoToJson(
 {
     auto p2pInfo = _gatewayInfo->p2pInfo();
     _response["p2pNodeID"] = p2pInfo.p2pID;
-    _response["endPoint"] =
-        p2pInfo.nodeIPEndpoint.address() + ":" + std::to_string(p2pInfo.nodeIPEndpoint.port());
+    if (!p2pInfo.nodeIPEndpoint.address().empty())
+    {
+        _response["endPoint"] =
+            p2pInfo.nodeIPEndpoint.address() + ":" + std::to_string(p2pInfo.nodeIPEndpoint.port());
+    }
     // set the groupNodeIDInfo
     auto groupNodeIDInfo = _gatewayInfo->nodeIDInfo();
     Json::Value groupInfo(Json::arrayValue);
