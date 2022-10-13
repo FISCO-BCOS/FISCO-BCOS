@@ -66,7 +66,7 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
         return;
     }
     // Note: to fetch the remote proposal(the from node hits all transactions)
-    auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
+    auto self = weak_from_this();
     m_config->validator()->verifyProposal(_fromNode, _proposal,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try
@@ -408,7 +408,7 @@ void PBFTCacheProcessor::applyStateMachine(
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState()
                    << LOG_KV("unAppliedProposals", m_committedQueue.size());
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
-    auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
+    auto self = weak_from_this();
     auto startT = utcTime();
     m_config->stateMachine()->asyncApply(m_config->timer()->timeout(), _lastAppliedProposal,
         _proposal, executedProposal, [self, startT, _proposal, executedProposal](int64_t _ret) {
@@ -456,7 +456,7 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
     {
         // Note: since cache is created and freed frequently, it should be safer to use weak_ptr in
         // the callback
-        auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
+        auto self = weak_from_this();
         m_caches[index] = m_cacheFactory->createPBFTCache(
             m_config, index, [self](bcos::protocol::BlockNumber _proposalIndex) {
                 try

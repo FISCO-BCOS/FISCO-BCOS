@@ -33,7 +33,6 @@
 
 namespace bcos::rpc
 {
-
 // clang-format off
 struct NotFoundTransactionHash: public bcos::error::Exception {};
 // clang-format on
@@ -331,7 +330,7 @@ public:
                 using ResultType = std::remove_cvref_t<decltype(result)>;
                 if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
                 {
-                    toErrorResp(result, m_respFunc);
+                    this->toErrorResp(result, m_respFunc);
                     return;
                 }
                 else
@@ -357,7 +356,7 @@ public:
                 std::exception_ptr error = {}) mutable {
                 if (error)
                 {
-                    toErrorResp(error, m_respFunc);
+                    this->toErrorResp(error, m_respFunc);
                     return;
                 }
                 Json::Value resp = bcos::toHexStringWithPrefix(*m_hash);
@@ -376,7 +375,7 @@ public:
                 using ResultType = std::remove_cvref_t<decltype(result)>;
                 if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
                 {
-                    toErrorResp(result, m_respFunc);
+                    this->toErrorResp(result, m_respFunc);
                     return;
                 }
                 else
@@ -501,7 +500,7 @@ public:
                 using ResultType = std::remove_cvref_t<decltype(result)>;
                 if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
                 {
-                    toErrorResp(result, m_respFunc);
+                    this->toErrorResp(result, m_respFunc);
                     return;
                 }
                 else
@@ -527,10 +526,8 @@ private:
         auto end = RANGES::end(input);
         auto length = RANGES::size(input);
 
-        if ((length == 0) || (length % 2 != 0)) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
-        }
+        if ((length == 0) || (length % 2 != 0))
+            [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"}); }
 
         if (*begin == '0' && *(begin + 1) == 'x')
         {

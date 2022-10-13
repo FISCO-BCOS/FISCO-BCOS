@@ -28,7 +28,7 @@ namespace bcos
 {
 namespace consensus
 {
-class StateMachine : public StateMachineInterface
+class StateMachine : public StateMachineInterface, public std::enable_shared_from_this<StateMachine>
 {
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,

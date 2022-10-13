@@ -276,9 +276,15 @@ public:
 
     virtual void notifyResetSealing(bcos::protocol::BlockNumber _consIndex)
     {
-        notifyResetSealing([this, _consIndex]() {
+        auto self = weak_from_this();
+        notifyResetSealing([self, _consIndex]() {
+            auto config = self.lock();
+            if (!config)
+            {
+                return;
+            }
             // notify the sealer to reseal
-            reNotifySealer(_consIndex);
+            config->reNotifySealer(_consIndex);
         });
     }
 

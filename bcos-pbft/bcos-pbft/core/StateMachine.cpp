@@ -30,10 +30,16 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
     ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
     std::function<void(int64_t)> _onExecuteFinished)
 {
+    auto self = weak_from_this();
     // Note: async here to increase performance
     m_worker->enqueue(
-        [this, _timeout, _lastAppliedProposal, _proposal, _executedProposal, _onExecuteFinished]() {
-            this->apply(
+        [self, _timeout, _lastAppliedProposal, _proposal, _executedProposal, _onExecuteFinished]() {
+            auto stateMachine = self.lock();
+            if (!stateMachine)
+            {
+                return;
+            }
+            stateMachine->apply(
                 _timeout, _lastAppliedProposal, _proposal, _executedProposal, _onExecuteFinished);
         });
 }
@@ -41,9 +47,15 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
 void StateMachine::asyncPreApply(
     ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
 {
+    auto self = weak_from_this();
     // Note: async here to increase performance, trigger preExecuteBlock
-    m_schedulerWorker->enqueue([this, _proposal, _onPreApplyFinished]() {
-        this->preApply(_proposal, _onPreApplyFinished);
+    m_schedulerWorker->enqueue([self, _proposal, _onPreApplyFinished]() {
+        auto stateMachine = self.lock();
+        if (!stateMachine)
+        {
+            return;
+        }
+        stateMachine->preApply(_proposal, _onPreApplyFinished);
     });
 }
 

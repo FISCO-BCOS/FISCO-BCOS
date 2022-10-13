@@ -277,7 +277,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
         return;
     }
     auto startT = utcTime();
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->scheduler()->executeBlock(_block, true,
         [self, startT, _block](
             Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader, bool _sysBlock) {
@@ -403,7 +403,7 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
                       << LOG_KV("currentNumber", m_config->blockNumber())
                       << LOG_KV("hash", blockHeader->hash().abridged());
 
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->consensus()->asyncCheckBlock(_block, [self, _block, blockHeader](
                                                        Error::Ptr _error, bool _ret) {
         try
@@ -515,7 +515,7 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
             }
         });
     auto startT = utcTime();
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->ledger()->asyncStoreTransactions(
         txsData, txsHashList, [self, startT, _block, blockHeader](Error::Ptr _error) {
             try
@@ -556,7 +556,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
     BLKSYNC_LOG(INFO) << LOG_DESC("commitBlockState") << LOG_KV("number", blockHeader->number())
                       << LOG_KV("hash", blockHeader->hash().abridged());
     auto startT = utcTime();
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->scheduler()->commitBlock(blockHeader, [self, startT, _block, blockHeader](
                                                         Error::Ptr&& _error,
                                                         LedgerConfig::Ptr&& _ledgerConfig) {
