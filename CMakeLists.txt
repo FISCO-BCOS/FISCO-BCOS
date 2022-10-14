@@ -70,15 +70,12 @@ if(FULLNODE)
     if(TESTS)
         enable_testing()
         add_subdirectory(tests)
+        add_subdirectory(benchmark)
     endif()
 endif()
 
 if(WITH_CPPSDK)
     add_subdirectory(bcos-sdk)
-endif()
-
-if(WITH_BENCHMARK)
-    add_subdirectory(benchmark)
 endif()
 
 # for code coverage
