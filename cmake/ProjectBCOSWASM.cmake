@@ -62,12 +62,6 @@ ExternalProject_Add(bcos_wasm_project
 ExternalProject_Get_Property(bcos_wasm_project SOURCE_DIR)
 set(HERA_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
-# if(DEBUG)
-#     set(HERA_LIBRARIES ${HERA_LIBRARIES} ${EVMC_INSTRUCTIONS_LIBRARIES})
-# endif()
-# if(NOT APPLE)
-#     set(HERA_LIBRARIES ${HERA_LIBRARIES} rt)
-# endif()
 
 add_library(fbwasm STATIC IMPORTED)
 set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/release/libbcos_wasm.a)
