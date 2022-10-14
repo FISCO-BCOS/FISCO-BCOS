@@ -289,12 +289,22 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
             std::atomic_uint64_t putCount{0};
             std::atomic_uint64_t deleteCount{0};
             if (m_committer)
-            {
+            {  // should wait for the previous committer to timeout
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now() - m_committerCreateTime)
+                                    .count();
                 STORAGE_TIKV_LOG(DEBUG)
-                    << "asyncPrepare clean old committer" << LOG_KV("blockNumber", params.number);
+                    << "asyncPrepare clean old committer" << LOG_KV("blockNumber", params.number)
+                    << LOG_KV("duration(ms)", duration);
+                if (duration < m_commitTimeout)
+                {
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(m_commitTimeout - duration));
+                }
                 m_committer->rollback();
                 m_committer = nullptr;
             }
+            m_committerCreateTime = std::chrono::system_clock::now();
             m_committer = m_cluster->new_optimistic_transaction();
             storage.parallelTraverse(true, [&](const std::string_view& table,
                                                const std::string_view& key, Entry const& entry) {

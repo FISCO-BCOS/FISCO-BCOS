@@ -481,6 +481,60 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
     cleanupTestTableData();
 }
 
+
+BOOST_AUTO_TEST_CASE(asyncPrepareTimeout)
+{
+    prepareTestTableData();
+
+    auto hashImpl = std::make_shared<Header256Hash>();
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto table1Name = "table1";
+    auto table2Name = "table2";
+    BOOST_CHECK_EQUAL(
+        stateStorage->createTable(table1Name, "value1,value2,value3").has_value(), true);
+    BOOST_CHECK_EQUAL(
+        stateStorage->createTable(table2Name, "value1,value2,value3,value4,value5").has_value(),
+        true);
+    auto table1 = stateStorage->openTable(table1Name);
+    auto table2 = stateStorage->openTable(table2Name);
+
+    BOOST_CHECK_NE(table1.has_value(), false);
+    BOOST_CHECK_NE(table2.has_value(), false);
+
+    std::vector<std::string> table1Keys;
+    std::vector<std::string> table2Keys;
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        auto entry = table1->newEntry();
+        auto key1 = "key" + boost::lexical_cast<std::string>(i);
+        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        table1->setRow(key1, entry);
+        table1Keys.push_back(key1);
+
+        auto entry2 = table2->newEntry();
+        auto key2 = "key" + boost::lexical_cast<std::string>(i);
+        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        table2->setRow(key2, entry2);
+        table2Keys.push_back(key2);
+    }
+
+    storage->asyncPrepare(
+        bcos::protocol::TwoPCParams(), *stateStorage, [&](Error::Ptr error, uint64_t ts) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_NE(ts, 0);
+        });
+    auto now = std::chrono::system_clock::now();
+    storage->asyncPrepare(
+        bcos::protocol::TwoPCParams(), *stateStorage, [&](Error::Ptr error, uint64_t ts) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_NE(ts, 0);
+        });
+    auto end = std::chrono::system_clock::now();
+    BOOST_CHECK_GE(std::chrono::duration_cast<std::chrono::milliseconds>(end - now).count(), 3000);
+    cleanupTestTableData();
+}
+
 BOOST_AUTO_TEST_CASE(multiStorageCommit)
 {
     // FIXME: this test case will crash, because tikv-rust client only resolve timeout lock
