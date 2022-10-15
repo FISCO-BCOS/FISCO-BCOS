@@ -22,6 +22,12 @@ public:
     void start() override {}
     void stop() override {}
     void asyncSubmit(bytesPointer, bcos::protocol::TxSubmitCallback) override {}
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override
+    {
+        co_return nullptr;
+    }
+
     void asyncSealTxs(uint64_t, bcos::txpool::TxsHashSetPtr,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
         override

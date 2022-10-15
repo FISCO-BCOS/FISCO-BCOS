@@ -149,12 +149,13 @@ protected:
         std::string_view _groupID, std::string_view _nodeName, std::string_view _command);
 
     template <typename T>
-    void checkService(T _service, std::string _serviceName)
+    void checkService(T _service, std::string_view _serviceName)
     {
         if (!_service)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::ServiceNotInitCompleted,
-                "The service " + _serviceName + " has not been initted completed yet!"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                JsonRpcError::ServiceNotInitCompleted, "The service " + std::string(_serviceName) +
+                                                           " has not been initted completed yet!"));
         }
     }
 

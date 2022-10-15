@@ -20,8 +20,11 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <tbb/parallel_invoke.h>
+#include <boost/throw_exception.hpp>
+#include <coroutine>
 #include <memory>
 #include <tuple>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -90,6 +93,72 @@ TransactionStatus MemoryStorage::submitTransaction(
         notifyInvalidReceipt(HashType(), TransactionStatus::Malform, _txSubmitCallback);
         return TransactionStatus::Malform;
     }
+}
+
+task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
+    protocol::Transaction::Ptr transaction)
+{
+    transaction->setImportTime(utcTime());
+    struct Awaitable
+    {
+        constexpr bool await_ready() { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            try
+            {
+                auto result = m_self->verifyAndSubmitTransaction(
+                    std::move(m_transaction),
+                    [this, m_handle = handle](Error::Ptr error,
+                        bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                        if (error)
+                        {
+                            m_submitResult.emplace<Error::Ptr>(std::move(error));
+                        }
+                        else
+                        {
+                            m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
+                                std::move(result));
+                        }
+                        if (m_handle)
+                        {
+                            auto handle = std::move(m_handle);
+                            handle.resume();
+                        }
+                    },
+                    true, true);
+
+                if (result != TransactionStatus::None)
+                {
+                    m_submitResult.emplace<Error::Ptr>(
+                        BCOS_ERROR_PTR((int32_t)result, "Invalid transaction"));
+                }
+            }
+            catch (std::exception& e)
+            {
+                m_submitResult.emplace<Error::Ptr>(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Invalid transaction"));
+            }
+        }
+        bcos::protocol::TransactionSubmitResult::Ptr await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+            }
+
+            return std::move(
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+        }
+
+        protocol::Transaction::Ptr m_transaction;
+        std::shared_ptr<MemoryStorage> m_self;
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
+
+    co_return co_await Awaitable{.m_transaction = std::move(transaction),
+        .m_self = shared_from_this(),
+        .m_submitResult = {}};
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)
