@@ -29,6 +29,8 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <exception>
 
 using namespace bcos::txpool;
 using namespace bcos::sync;
@@ -71,12 +73,22 @@ void importTransactionsNew(
     Transactions transactions;
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto transaction = fakeTransaction(std::move(_cryptoSuite), utcTime() + 1000 + i,
+        auto transaction = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i,
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
-        auto result = ~txpool->submitTransaction(transaction);
+        task::wait(txpool->submitTransaction(transaction), [](auto&& result) {
+            using ResultType = std::decay_t<decltype(result)>;
+            if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+            {
+                std::rethrow_exception(result);
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(result->status(), 0);
+            }
 
-        BOOST_CHECK_EQUAL(result->status(), 0);
+            TXPOOL_LOG(DEBUG) << "Submit transaction successed";
+        });
     }
     auto startT = utcTime();
     while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))

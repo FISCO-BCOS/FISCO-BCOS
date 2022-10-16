@@ -121,7 +121,8 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         }
                         if (m_handle)
                         {
-                            auto handle = std::move(m_handle);
+                            auto handle = m_handle;
+                            m_handle = {};
                             handle.resume();
                         }
                     },
