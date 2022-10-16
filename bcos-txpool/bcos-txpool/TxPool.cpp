@@ -94,7 +94,7 @@ void TxPool::asyncSubmit(bytesPointer _txData, TxSubmitCallback _txSubmitCallbac
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {
-    co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
+    return m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)

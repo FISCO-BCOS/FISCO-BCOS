@@ -402,8 +402,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
             transactionData, false);
 
-        auto bakTransaction = transaction;
-
         RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
                             << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
         auto start = utcTime();
@@ -412,7 +410,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         auto submitResult = co_await txpool->submitTransaction(transaction);
 
         Json::Value jResp;
-        // jResp["input"] = toHexStringWithPrefix(transaction->input());
+        jResp["input"] = toHexStringWithPrefix(transaction->input());
 
         auto txHash = submitResult->txHash();
         auto hexPreTxHash = txHash.hexPrefixed();
