@@ -131,8 +131,11 @@ public:
         auto tarsCallback = std::make_unique<TarsCallback>();
         tarsCallback->m_cryptoSuite = m_cryptoSuite;
 
-        co_return co_await Awaitable{
-            .m_callback = tarsCallback.release(), .m_transaction = {}, .m_proxy = {}};
+        auto awaitable = Awaitable{.m_callback = tarsCallback.release(),
+            .m_transaction = std::move(transaction),
+            .m_proxy = m_proxy};
+
+        co_return co_await awaitable;
     }
 
     void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
