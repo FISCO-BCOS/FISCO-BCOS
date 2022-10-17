@@ -56,7 +56,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     }
     catch (std::exception& e)
     {
-        BOOST_CHECK_NO_THROW(dynamic_cast<DecryptException&>(e));
+        BOOST_CHECK_MESSAGE(false, e.what());
     }
 
     // invalid ciper
