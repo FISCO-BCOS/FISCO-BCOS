@@ -85,8 +85,15 @@ protected:
         // init the log
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(m_iniConfigPath, pt);
+        // init service.without_tars_framework first for determine the log path
+        nodeConfig->loadWithoutTarsFrameworkConfig(pt);
+
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-        m_logInitializer->setLogPath(getLogPath());
+        if (!nodeConfig->withoutTarsFramework())
+        {
+            m_logInitializer->setLogPath(getLogPath());
+        }
+
         m_logInitializer->initLog(pt);
         nodeConfig->loadServiceConfig(pt);
         // for stat the nodeVersion

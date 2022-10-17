@@ -130,6 +130,21 @@ void NodeConfig::loadServiceConfig(boost::property_tree::ptree const& _pt)
     }
 }
 
+void NodeConfig::loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+        [service]
+            without_tars_framework = true
+            tars_proxy_conf = conf/tars_proxy.ini
+         */
+
+    auto withoutTarsFramework = _pt.get<bool>("service.without_tars_framework", false);
+    m_withoutTarsFramework = withoutTarsFramework;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadWithoutTarsFrameworkConfig")
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+}
+
 void NodeConfig::loadNodeServiceConfig(
     std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require)
 {

@@ -65,19 +65,29 @@ void ExecutorServiceApp::createAndInitExecutor()
                                << LOG_KV("iniConfigPath", m_iniConfigPath)
                                << LOG_KV("genesisConfigPath", m_genesisConfigPath);
 
+    m_nodeConfig =
+        std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+
     // init log
     boost::property_tree::ptree pt;
-    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_iniConfigPath, pt);
-    boost::property_tree::read_ini(m_genesisConfigPath, genesisPt);
+
+    // init service.without_tars_framework first for determine the log path
+    m_nodeConfig->loadWithoutTarsFrameworkConfig(pt);
+
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    m_logInitializer->setLogPath(getLogPath());
+    if (!m_nodeConfig->withoutTarsFramework())
+    {
+        m_logInitializer->setLogPath(getLogPath());
+    }
     m_logInitializer->initLog(pt);
+
+    boost::property_tree::ptree genesisPt;
+    boost::property_tree::read_ini(m_genesisConfigPath, genesisPt);
 
     // load protocolInitializer
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("loadNodeConfig");
-    m_nodeConfig =
-        std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+
     m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadGenesisConfig(genesisPt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
