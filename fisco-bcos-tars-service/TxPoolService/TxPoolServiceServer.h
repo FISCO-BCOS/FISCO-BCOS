@@ -55,6 +55,9 @@ public:
     bcostars::Error asyncSubmit(const vector<tars::Char>& tx,
         bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current) override;
 
+    bcostars::Error submit(const bcostars::Transaction& tx,
+        bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current) override;
+
     bcostars::Error asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
         const vector<tars::Char>& block, tars::Bool& result, tars::TarsCurrentPtr current) override;
 
