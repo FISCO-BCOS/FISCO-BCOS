@@ -128,9 +128,9 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
     };
     auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
 
-    // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_executeTransaction(
-        new Callback(std::move(callback)), executionMsgImpl.inner());
+    // timeout is 2 min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_executeTransaction(new Callback(std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -164,9 +164,9 @@ void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr in
             m_callback;
     };
     auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
-    // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_call(
-        new Callback(std::move(callback)), executionMsgImpl.inner());
+    // timeout is 2min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_call(new Callback(std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient::executeTransactions(std::string contractAddress,
@@ -215,9 +215,9 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
         auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
         tarsInputs.emplace_back(executionMsgImpl.inner());
     }
-    // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_executeTransactions(
-        new Callback(std::move(callback)), contractAddress, tarsInputs);
+    // timeout is 2min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_executeTransactions(new Callback(std::move(callback)), contractAddress, tarsInputs);
 }
 
 void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
@@ -266,9 +266,10 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
         auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
         tarsInputs.emplace_back(executionMsgImpl.inner());
     }
-    // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_dmcExecuteTransactions(
-        new Callback(std::move(callback)), contractAddress, tarsInputs);
+    // timeout is 2min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_dmcExecuteTransactions(
+            new Callback(std::move(callback)), contractAddress, tarsInputs);
 }
 
 void ExecutorServiceClient::dagExecuteTransactions(
@@ -317,9 +318,9 @@ void ExecutorServiceClient::dagExecuteTransactions(
         auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
         tarsInput.emplace_back(executionMsgImpl.inner());
     }
-    // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_dagExecuteTransactions(
-        new Callback(std::move(callback)), tarsInput);
+    // timeout is 2min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_dagExecuteTransactions(new Callback(std::move(callback)), tarsInput);
 }
 
 void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -353,9 +354,9 @@ void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr 
             m_callback;
     };
     auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
-    // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_dmcCall(
-        new Callback(std::move(callback)), executionMsgImpl.inner());
+    // timeout is 2min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_dmcCall(new Callback(std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
