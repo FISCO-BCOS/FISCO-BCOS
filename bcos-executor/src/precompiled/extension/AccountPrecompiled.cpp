@@ -30,12 +30,12 @@ using namespace bcos::protocol;
 const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
 
-AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
+AccountPrecompiled::AccountPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
 {
     name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, _hashImpl);
+        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, _hashImpl);
+        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
@@ -55,7 +55,7 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
-    if (!table.has_value())
+    if (!table.has_value()) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
     }
@@ -81,11 +81,12 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
 
 void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
-    const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters) const
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto accountMgrSender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    const auto* accountMgrSender =
+        blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
     if (_callParameters->m_sender != accountMgrSender)
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
@@ -101,15 +102,12 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     Entry statusEntry;
     statusEntry.importFields({boost::lexical_cast<std::string>(status)});
     _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
-    Entry updateEntry;
-    updateEntry.importFields({std::to_string(blockContext->number())});
-    _executive->storage().setRow(accountTableName, ACCOUNT_LAST_UPDATE, std::move(updateEntry));
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
 
 void AccountPrecompiled::getAccountStatus(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters) const
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
@@ -124,13 +122,13 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
     auto entry = _executive->storage().getRow(accountTable, ACCOUNT_STATUS);
     if (!entry.has_value())
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
                                << LOG_DESC(" Status row not exist, return 0 by default");
         return 0;
     }
     auto statusStr = entry->get();
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
                            << LOG_KV("status", statusStr);
-    uint8_t status = boost::lexical_cast<uint8_t>(statusStr);
+    auto status = boost::lexical_cast<uint8_t>(statusStr);
     return status;
 }

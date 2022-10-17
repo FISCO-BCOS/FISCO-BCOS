@@ -30,7 +30,7 @@ class AccountPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<AccountPrecompiled>;
-    AccountPrecompiled(crypto::Hash::Ptr _hashImpl);
+    AccountPrecompiled();
     ~AccountPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
@@ -43,10 +43,10 @@ public:
 private:
     void setAccountStatus(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
-        PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters) const;
 
     void getAccountStatus(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters) const;
 };
 }  // namespace bcos::precompiled

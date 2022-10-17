@@ -62,13 +62,13 @@ void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecuti
         {
             executive->setConstantPrecompiled(
                 blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-                std::make_shared<AccountManagerPrecompiled>(blockContext->hashHandler()));
+                std::make_shared<AccountManagerPrecompiled>());
         }
 
         if (!executive->isPrecompiled(ACCOUNT_ADDRESS))
         {
             executive->setConstantPrecompiled(
-                ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(blockContext->hashHandler()));
+                ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>());
         }
     }
     // TODO: register User developed Precompiled contract

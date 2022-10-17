@@ -79,7 +79,7 @@ function check_PR_limit() {
     local block_lines=$(git diff HEAD^ | grep -P '^\s*[\{\}]\s*$' | wc -l)
     local include_lines=$(git diff HEAD^ | grep -P '^\#include' | wc -l)
     local comment_lines=$(git diff HEAD^ | grep -P "^\s*\/\/" | wc -l)
-    local test_insertions=$(git diff --numstat HEAD^ | grep "tests?/" | awk -F ' ' '{sum+=$1}END{print sum}')
+    local test_insertions=$(git diff --numstat HEAD^ | grep -P "tests?/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local tool_insertions=$(git diff --numstat HEAD^ | grep "tools/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local demo_insertions=$(git diff --numstat HEAD^ | grep "fisco-bcos/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
