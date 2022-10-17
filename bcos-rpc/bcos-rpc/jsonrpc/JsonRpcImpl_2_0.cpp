@@ -220,35 +220,31 @@ void JsonRpcImpl_2_0::toJsonResp(
 }
 
 void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
-    bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr, bool _isWasm,
-    crypto::Hash::Ptr _hashImpl)
+    bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
+    crypto::Hash& hashImpl)
 {
-    jResp["version"] = _transactionReceiptPtr->version();
+    jResp["version"] = transactionReceipt.version();
 
-    std::string contractAddress = string(_transactionReceiptPtr->contractAddress());
+    std::string contractAddress = string(transactionReceipt.contractAddress());
     jResp["contractAddress"] = contractAddress;
     jResp["checksumContractAddress"] = contractAddress;
 
     if (!contractAddress.empty() && !_isWasm)
     {
         std::string checksumContractAddr = contractAddress;
-        toChecksumAddress(checksumContractAddr, _hashImpl->hash(contractAddress).hex());
+        toChecksumAddress(checksumContractAddr, hashImpl.hash(contractAddress).hex());
         jResp["checksumContractAddress"] = checksumContractAddr;
-
-        // RPC_IMPL_LOG(INFO) << LOG_DESC("TransactionReceipt toJsonResp") <<
-        // LOG_KV("contractAddress", contractAddress) << LOG_KV("checksumContractAddr",
-        // checksumContractAddr);
     }
 
-    jResp["gasUsed"] = _transactionReceiptPtr->gasUsed().str(16);
-    jResp["status"] = _transactionReceiptPtr->status();
-    jResp["blockNumber"] = _transactionReceiptPtr->blockNumber();
-    jResp["output"] = toHexStringWithPrefix(_transactionReceiptPtr->output());
-    jResp["message"] = _transactionReceiptPtr->message();
+    jResp["gasUsed"] = transactionReceipt.gasUsed().str(16);
+    jResp["status"] = transactionReceipt.status();
+    jResp["blockNumber"] = transactionReceipt.blockNumber();
+    jResp["output"] = toHexStringWithPrefix(transactionReceipt.output());
+    jResp["message"] = transactionReceipt.message();
     jResp["transactionHash"] = std::string(_txHash);
-    jResp["hash"] = _transactionReceiptPtr->hash().hexPrefixed();
+    jResp["hash"] = transactionReceipt.hash().hexPrefixed();
     jResp["logEntries"] = Json::Value(Json::arrayValue);
-    for (const auto& logEntry : _transactionReceiptPtr->logEntries())
+    for (const auto& logEntry : transactionReceipt.logEntries())
     {
         Json::Value jLog;
         jLog["address"] = std::string(logEntry.address());
@@ -382,71 +378,74 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
 void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view nodeName,
     std::string_view data, bool requireProof, RespFunc respFunc)
 {
-    bcos::task::wait([this](std::string_view groupID, std::string_view nodeName,
-                         std::string_view hexTransaction, bool requireProof,
-                         RespFunc respFunc) -> task::Task<void> {
-        auto transactionData = decodeData(hexTransaction);
-        auto nodeService = getNodeService(groupID, nodeName, "sendTransaction");
-        auto txpool = nodeService->txpool();
-        checkService(txpool, "txpool");
+    task::wait(
+        [](JsonRpcImpl_2_0* self, std::string_view groupID, std::string_view nodeName,
+            std::string_view data, bool requireProof, RespFunc respFunc) -> task::Task<void> {
+            auto nodeService = self->getNodeService(groupID, nodeName, "sendTransaction");
 
-        auto groupInfo = m_groupManager->getGroupInfo(groupID);
-        if (!groupInfo)
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
-                "The group " + std::string(groupID) + " does not exist!"));
-        }
+            auto txpool = nodeService->txpool();
+            if (!txpool) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
+            }
 
-        auto isWasm = groupInfo->wasm();
-        auto hashImpl = nodeService->blockFactory()->cryptoSuite()->hashImpl();
-        auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-            transactionData, false);
+            auto groupInfo = self->m_groupManager->getGroupInfo(groupID);
+            if (!groupInfo) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+                    "The group " + std::string(groupID) + " does not exist!"));
+            }
 
-        RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
-                            << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
-        auto start = utcTime();
-        auto sendTxTimeout = m_sendTxTimeout;
+            auto isWasm = groupInfo->wasm();
+            auto transactionData = decodeData(data);
+            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
+                transactionData, false);
 
-        auto submitResult = co_await txpool->submitTransaction(transaction);
+            RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
+                                << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+            auto start = utcTime();
+            auto sendTxTimeout = self->m_sendTxTimeout;
 
-        Json::Value jResp;
-        jResp["input"] = toHexStringWithPrefix(transaction->input());
+            auto submitResult = co_await txpool->submitTransaction(transaction);
 
-        auto txHash = submitResult->txHash();
-        auto hexPreTxHash = txHash.hexPrefixed();
+            Json::Value jResp;
 
-        auto end = utcTime();
-        auto totalTime = end - start;  // ms
-        if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
-        {
-            RPC_IMPL_LOG(WARNING) << LOG_BADGE("sendTransaction")
-                                  << LOG_DESC("submit callback timeout")
-                                  << LOG_KV("hexPreTxHash", hexPreTxHash)
-                                  << LOG_KV("requireProof", requireProof)
-                                  << LOG_KV("txCostTime", totalTime);
-        }
-        else
-        {
-            RPC_IMPL_LOG(TRACE) << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
-                                << LOG_KV("hexPreTxHash", hexPreTxHash)
-                                << LOG_KV("requireProof", requireProof)
-                                << LOG_KV("txCostTime", totalTime);
-        }
+            auto txHash = submitResult->txHash();
+            auto hexPreTxHash = txHash.hexPrefixed();
 
-        if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
-        {
-            std::stringstream errorMsg;
-            errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
-            jResp["errorMessage"] = errorMsg.str();
-        }
-        else
-        {
-            toJsonResp(jResp, hexPreTxHash, submitResult->transactionReceipt(), isWasm, hashImpl);
-            jResp["to"] = string(submitResult->to());
-            jResp["from"] = toHexStringWithPrefix(submitResult->sender());
-        }
-        respFunc(nullptr, jResp);
-    }(groupID, nodeName, data, requireProof, std::move(respFunc)));
+            auto end = utcTime();
+            auto totalTime = end - start;  // ms
+            if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
+            {
+                RPC_IMPL_LOG(WARNING)
+                    << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
+                    << LOG_KV("hexPreTxHash", hexPreTxHash) << LOG_KV("requireProof", requireProof)
+                    << LOG_KV("txCostTime", totalTime);
+            }
+            else
+            {
+                RPC_IMPL_LOG(TRACE)
+                    << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
+                    << LOG_KV("hexPreTxHash", hexPreTxHash) << LOG_KV("requireProof", requireProof)
+                    << LOG_KV("txCostTime", totalTime);
+            }
+
+            if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
+            {
+                std::stringstream errorMsg;
+                errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
+                jResp["errorMessage"] = errorMsg.str();
+            }
+            else
+            {
+                toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
+                    *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
+                jResp["to"] = string(submitResult->to());
+                jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+            }
+            respFunc(nullptr, jResp);
+        }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));
 }
 
 
@@ -586,7 +585,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                 return;
             }
 
-            toJsonResp(jResp, hash.hexPrefixed(), _transactionReceiptPtr, isWasm, hashImpl);
+            toJsonResp(jResp, hash.hexPrefixed(), *_transactionReceiptPtr, isWasm, *hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)

@@ -136,8 +136,8 @@ protected:
     static void toJsonResp(
         Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
     static void toJsonResp(Json::Value& jResp, std::string_view _txHash,
-        bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr, bool _isWasm,
-        crypto::Hash::Ptr _hashImpl);
+        bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
+        crypto::Hash& hashImpl);
     static void addProofToResponse(
         Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
 

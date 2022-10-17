@@ -121,9 +121,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         }
                         if (m_handle)
                         {
-                            auto handle = m_handle;
-                            m_handle = {};
-                            handle.resume();
+                            m_handle.resume();
                         }
                     },
                     true, true);
@@ -132,12 +130,14 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                 {
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, "Invalid transaction"));
+                    handle.resume();
                 }
             }
             catch (std::exception& e)
             {
                 m_submitResult.emplace<Error::Ptr>(
                     BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Invalid transaction"));
+                handle.resume();
             }
         }
         bcos::protocol::TransactionSubmitResult::Ptr await_resume()
@@ -157,9 +157,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             m_submitResult;
     };
 
-    co_return co_await Awaitable{.m_transaction = std::move(transaction),
-        .m_self = shared_from_this(),
-        .m_submitResult = {}};
+    Awaitable awaitable{
+        .m_transaction = transaction, .m_self = shared_from_this(), .m_submitResult = {}};
+    co_return co_await awaitable;
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)

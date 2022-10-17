@@ -74,14 +74,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-DBOOST_TEST_THREAD_SAFE)
     endif()
 
-    if(PROF)
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
-        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
-        SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
-    endif()
-
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -gdwarf-4")
+    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
