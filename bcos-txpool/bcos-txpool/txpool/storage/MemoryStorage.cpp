@@ -598,9 +598,10 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
+
     for (auto const& it : m_txsTable)
     {
-        auto tx = it.second;
+        auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
         if (!tx)
