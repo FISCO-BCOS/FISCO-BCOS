@@ -47,8 +47,9 @@ class TiKVStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
-    explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster)
-      : m_cluster(_cluster)
+    explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster,
+        int32_t _commitTimeout = 3000)
+      : m_cluster(_cluster), m_commitTimeout(_commitTimeout)
     {}
 
     virtual ~TiKVStorage() {}
@@ -87,6 +88,8 @@ private:
     std::shared_ptr<tikv_client::TransactionClient> m_cluster;
     std::shared_ptr<tikv_client::Transaction> m_committer;
     uint64_t m_currentStartTS = 0;
+    int32_t m_commitTimeout = 3000;
+    std::chrono::time_point<std::chrono::system_clock> m_committerCreateTime;
     mutable RecursiveMutex x_committer;
 };
 }  // namespace storage

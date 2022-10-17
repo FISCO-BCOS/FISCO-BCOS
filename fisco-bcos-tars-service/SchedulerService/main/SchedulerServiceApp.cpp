@@ -120,11 +120,18 @@ void SchedulerServiceApp::fetchConfig()
 void SchedulerServiceApp::initConfig()
 {
     boost::property_tree::ptree pt;
-    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_iniConfigPath, pt);
+
+    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_genesisConfigPath, pt);
+    // init service.without_tars_framework first for determine the log path
+    m_nodeConfig->loadWithoutTarsFrameworkConfig(pt);
+
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    m_logInitializer->setLogPath(getLogPath());
+    if (!m_nodeConfig->withoutTarsFramework())
+    {
+        m_logInitializer->setLogPath(getLogPath());
+    }
     m_logInitializer->initLog(pt);
 
     m_nodeConfig =
