@@ -888,6 +888,7 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
     {
         return;
     }
+
     auto unsealedTxsSize = unSealedTxsSizeWithoutLock();
     auto self = weak_from_this();
     m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, self](Error::Ptr _error) {
@@ -1030,12 +1031,15 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
+            TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed")
+                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("error", ret);
             continue;
         }
         successCount++;
     }
+    notifyUnsealedTxsSize();
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchImportTxs success") << LOG_KV("importTxs", successCount)
-                      << LOG_KV("totalTxs", _txs->size())
+                      << LOG_KV("totalTxs", _txs->size()) << LOG_KV("pendingTxs", m_txsTable.size())
                       << LOG_KV("timecost", (utcTime() - recordT));
 }
 
