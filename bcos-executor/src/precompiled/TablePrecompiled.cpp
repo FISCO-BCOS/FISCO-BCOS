@@ -156,8 +156,8 @@ void TablePrecompiled::desc(TableInfoTuple& _tableInfo, const std::string& _tabl
 void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyCondition,
     const std::vector<precompiled::ConditionTuple>& conditions, const LimitTuple& limit) const
 {
-    auto& offset = std::get<0>(limit);
-    auto& count = std::get<1>(limit);
+    const auto& offset = std::get<0>(limit);
+    const auto& count = std::get<1>(limit);
     if (count > USER_TABLE_MAX_LIMIT_COUNT || offset > offset + count)
     {
         PRECOMPILED_LOG(INFO) << LOG_DESC("build key condition limit overflow")
@@ -170,8 +170,8 @@ void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyC
     }
     for (const auto& condition : conditions)
     {
-        auto& cmp = std::get<0>(condition);
-        auto& value = std::get<1>(condition);
+        const auto& cmp = std::get<0>(condition);
+        const auto& value = std::get<1>(condition);
         switch (cmp)
         {
         case 0:
@@ -286,8 +286,7 @@ void TablePrecompiled::count(const std::string& tableName,
     {
         auto keyCondition = std::make_optional<storage::Condition>();
         // will throw exception when wrong condition cmp or limit count overflow
-        buildKeyCondition(
-            keyCondition, std::move(conditions), {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
+        buildKeyCondition(keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
 
         singleCount = _executive->storage().getPrimaryKeys(tableName, keyCondition).size();
         if (totalCount > totalCount + singleCount)

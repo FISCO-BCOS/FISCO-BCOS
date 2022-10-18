@@ -1231,7 +1231,6 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     auto path = callParameters->receiveAddress;
-    EXECUTIVE_LOG(TRACE) << "check contract status" << LOG_KV("codeAddress", path);
 
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }
@@ -1249,7 +1248,6 @@ bool TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr
     AccountPrecompiled::Ptr accountPrecompiled =
         dynamic_pointer_cast<precompiled::AccountPrecompiled>(
             m_constantPrecompiled->at(ACCOUNT_ADDRESS));
-    EXECUTIVE_LOG(TRACE) << "check account status" << LOG_KV("account", callParameters->origin);
 
     return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this()) == 0;
 }

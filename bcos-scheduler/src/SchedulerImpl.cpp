@@ -37,18 +37,26 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     // refresh block cache
     bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
     // note that genesis sysBlock is blockNumber 0, we need to ignore it
-    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() && currentNumber != 0)
-    {
-        SCHEDULER_LOG(DEBUG) << "Remove committed block on handleBlockQueue : "
-                             << m_blocks->front()->number() << " success";
-        m_blocks->pop_front();
-    }
 
     try
     {
+        if (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
+            currentNumber != 0)
+        {
+            SCHEDULER_LOG(DEBUG)
+                << "Doesn't receive block commit success callback but block has committed"
+                << LOG_KV("cacheFrontNumber", m_blocks->front()->number())
+                << LOG_KV("currentNumber", currentNumber);
+
+            triggerSwitch();
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "Doesn't receive block commit success callback but block has committed"));
+            return;
+        }
+
         if (m_blocks->empty())
         {
-            bcos::protocol::BlockNumber number = getBlockNumberFromStorage();
+            bcos::protocol::BlockNumber number = currentNumber;
             if (requestBlockNumber == 0)
             {
                 // handle genesis block, to execute or commit
@@ -257,7 +265,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     };
     auto whenException = [requestBlockNumber, callback](std::exception const& e) {
         auto message = (boost::format("ExecuteBlock exception %s") % e.what()).str();
-        SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << message;
+        SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber) << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, message), nullptr, false);
     };
 
@@ -414,7 +422,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto whenNewer = [whenAfterFront](bcos::protocol::BlockNumber) { whenAfterFront(); };
     auto whenException = [callback, requestBlockNumber](std::exception const& e) {
         auto message = (boost::format("CommitBlock exception %s") % e.what()).str();
-        SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << message;
+        SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber) << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, message), nullptr);
     };
 
@@ -426,12 +434,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
         if (!commitLock->owns_lock())
         {
-            std::string message =
-                (boost::format("commitBlock: Another block is committing! Block "
-                               "number: %ld, hash: %s") %
-                    requestBlockNumber %
-                    header->hash().abridged())
-                    .str();
+            std::string message = (boost::format("commitBlock: Another block is committing! Block "
+                                                 "number: %ld, hash: %s") %
+                                   requestBlockNumber % header->hash().abridged())
+                                      .str();
 
 
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "

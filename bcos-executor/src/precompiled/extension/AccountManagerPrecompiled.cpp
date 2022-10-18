@@ -36,13 +36,12 @@ using namespace bcos::protocol;
 const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(address,uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus(address)";
 
-AccountManagerPrecompiled::AccountManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
-  : Precompiled(_hashImpl)
+AccountManagerPrecompiled::AccountManagerPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
 {
     name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, _hashImpl);
+        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, _hashImpl);
+        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> AccountManagerPrecompiled::call(
@@ -112,7 +111,7 @@ void AccountManagerPrecompiled::createAccountWithStatus(
 
 void AccountManagerPrecompiled::setAccountStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters) const
 {
     // setAccountStatus(address,uint8)
     Address account;
@@ -124,12 +123,27 @@ void AccountManagerPrecompiled::setAccountStatus(
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                           << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("setAccountStatus")
-                          << LOG_KV("account", accountStr) << LOG_KV("status", (uint32_t)status);
+                          << LOG_KV("account", accountStr)
+                          << LOG_KV("status", std::to_string(status));
 
-    if (!checkSenderFromAuth(_callParameters->m_sender))
+    // check is governor
+    auto governors = getGovernorList(_executive, _callParameters, codec);
+    if (RANGES::find_if(governors, [&_callParameters](const Address& address) {
+            return address.hex() == _callParameters->m_sender;
+        }) == governors.end())
     {
+        // not from governor
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
+    }
+    if (RANGES::find(governors, account) != governors.end())
+    {
+        // set governor's status
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                              << LOG_BADGE("AccountManagerPrecompiled")
+                              << LOG_DESC("set governor's status") << LOG_KV("account", accountStr)
+                              << LOG_KV("status", std::to_string(status));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Should not set governor's status."));
     }
 
     // check account exist, if not exist, create first
@@ -156,7 +170,7 @@ void AccountManagerPrecompiled::setAccountStatus(
 
 void AccountManagerPrecompiled::getAccountStatus(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters)
+    const PrecompiledExecResult::Ptr& _callParameters) const
 {
     // getAccountStatus(address)
     Address account;
@@ -178,4 +192,44 @@ void AccountManagerPrecompiled::getAccountStatus(
         return;
     }
     _callParameters->setExternalResult(std::move(response));
+}
+
+std::vector<Address> AccountManagerPrecompiled::getGovernorList(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec) const
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto sender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    auto getCommittee = codec.encodeWithSig("_committee()");
+    auto getCommitteeResponse =
+        externalRequest(_executive, ref(getCommittee), _callParameters->m_origin, sender,
+            AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall, false, _callParameters->m_gas);
+    if (getCommitteeResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
+                               << LOG_DESC("get committee failed")
+                               << LOG_KV("status", getCommitteeResponse->status);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee failed."));
+    }
+
+    Address committee;
+    codec.decode(ref(getCommitteeResponse->data), committee);
+
+    auto getInfo = codec.encodeWithSig("getCommitteeInfo()");
+    auto getInfoResponse = externalRequest(_executive, ref(getInfo), _callParameters->m_origin,
+        sender, committee.hex(), _callParameters->m_staticCall, false, _callParameters->m_gas);
+
+    if (getInfoResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
+                               << LOG_DESC("get committee info failed")
+                               << LOG_KV("committee", committee.hex());
+        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee info failed."));
+    }
+    uint8_t participatesRate;
+    uint8_t winRate;
+    std::vector<Address> governors;
+    std::vector<uint32_t> weights;
+    codec.decode(ref(getInfoResponse->data), participatesRate, winRate, governors, weights);
+    return governors;
 }

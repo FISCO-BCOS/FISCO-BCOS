@@ -30,7 +30,7 @@ class AccountManagerPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<AccountManagerPrecompiled>;
-    AccountManagerPrecompiled(crypto::Hash::Ptr _hashImpl);
+    AccountManagerPrecompiled();
     ~AccountManagerPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
@@ -38,16 +38,18 @@ public:
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
-    void createAccount(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);
-
     void setAccountStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters) const;
 
     void getAccountStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
     void createAccountWithStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec,
         std::string_view accountHex, uint8_t status = 0) const;
+
+    std::vector<Address> getGovernorList(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec) const;
 };
 }  // namespace bcos::precompiled
