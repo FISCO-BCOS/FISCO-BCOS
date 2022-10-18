@@ -409,8 +409,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
             auto submitResult = co_await txpool->submitTransaction(transaction);
 
-            Json::Value jResp;
-
             auto txHash = submitResult->txHash();
             auto hexPreTxHash = txHash.hexPrefixed();
 
@@ -431,6 +429,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     << LOG_KV("txCostTime", totalTime);
             }
 
+            Json::Value jResp;
             if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
             {
                 std::stringstream errorMsg;
@@ -443,6 +442,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
                 jResp["to"] = string(submitResult->to());
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+                // jResp["input"] = toHexStringWithPrefix(transaction->input());
             }
             respFunc(nullptr, jResp);
         }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));

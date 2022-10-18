@@ -19,6 +19,8 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
@@ -598,7 +600,30 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
+    fetchedTxs->resize(_txsLimit);
 
+    std::atomic_size_t index{0};
+    tbb::parallel_for(m_txsTable.range(), [&_txsLimit, &fetchedTxs, &index](auto const& range) {
+        for (auto it = range.begin(); it != range.end() && index < _txsLimit; ++it)
+        {
+            auto& transaction = it->second;
+            if (!transaction || transaction->synced())
+            {
+                continue;
+            }
+
+            auto current = index.fetch_add(1);
+            if (current >= _txsLimit)
+            {
+                break;
+            }
+            transaction->setSynced(true);
+            (*fetchedTxs)[current] = transaction;
+        }
+    });
+    fetchedTxs->resize(index);
+
+#if 0
     for (auto const& it : m_txsTable)
     {
         auto& tx = it.second;
@@ -619,6 +644,7 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
             break;
         }
     }
+#endif
     return fetchedTxs;
 }
 
