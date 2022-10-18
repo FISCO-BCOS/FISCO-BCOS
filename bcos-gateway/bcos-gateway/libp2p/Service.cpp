@@ -102,7 +102,7 @@ void Service::heartBeat()
         }
         if (!it.second.empty() && isConnected(it.second))
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore connected")
+            SERVICE_LOG(TRACE) << LOG_DESC("heartBeat ignore connected")
                                << LOG_KV("endpoint", it.first) << LOG_KV("nodeid", it.second);
             continue;
         }
