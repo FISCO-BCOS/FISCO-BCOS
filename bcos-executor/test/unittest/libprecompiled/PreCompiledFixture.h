@@ -40,6 +40,7 @@
 #include <bcos-tars-protocol/testutil/FakeBlock.h>
 #include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <libinitializer/AuthInitializer.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <string>
@@ -109,6 +110,10 @@ public:
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
             64);
+        if (_isCheckAuth)
+        {
+            deployAuthSolidity(1);
+        }
     }
 
     void setSM(bool _isWasm)
@@ -266,6 +271,314 @@ public:
         commitPromise.get_future().get();
     }
 
+    void deployAuthSolidity(protocol::BlockNumber blockNumber)
+    {
+        static const char* committeeBin = bcos::initializer::committeeBin;
+
+        // deploy CommitteeManager
+
+        // hex bin code to bytes
+        bytes code;
+        boost::algorithm::unhex(committeeBin, std::back_inserter(code));
+
+        // constructor (address[] initGovernors,    = [authAdminAddress]
+        //        uint32[] memory weights,          = [0]
+        //        uint8 participatesRate,           = 0
+        //        uint8 winRate)                    = 0
+        std::vector<Address> initGovernors({Address(admin)});
+        std::vector<string32> weights({bcos::codec::toString32(h256(uint8_t(1)))});
+        // bytes code + abi encode constructor params
+        codec::abi::ContractABICodec abi(hashImpl);
+        bytes constructor = abi.abiIn("", initGovernors, weights,
+            codec::toString32(h256(uint8_t(0))), codec::toString32(h256(uint8_t(0))));
+        bytes input = code + constructor;
+
+        auto sender = admin;
+
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setContextID(99);
+        params->setSeq(1000);
+        params->setDepth(0);
+
+        params->setOrigin(sender);
+        params->setFrom(sender);
+
+        // toChecksumAddress(addressString, hashImpl);
+        params->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setData(input);
+        params->setType(NativeExecutionMessage::MESSAGE);
+        params->setCreate(true);
+        params->setData(input);
+
+        nextBlock(blockNumber);
+        // --------------------------------
+        // Create contract
+        // --------------------------------
+
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+        executor->dmcExecuteTransaction(
+            std::move(params), [&](bcos::Error::UniquePtr&& error,
+                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+
+        auto result = executePromise.get_future().get();
+
+        result->setSeq(1001);
+        /// call precompiled to get deploy auth
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+        executor->dmcExecuteTransaction(
+            std::move(result), [&](bcos::Error::UniquePtr&& error,
+                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+
+        auto result2 = executePromise2.get_future().get();
+
+        result2->setSeq(1000);
+        /// callback get deploy committeeManager context
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+
+        auto result3 = executePromise3.get_future().get();
+
+        BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result3->contextID(), 99);
+        BOOST_CHECK_EQUAL(result3->seq(), 1000);
+        BOOST_CHECK_EQUAL(result3->create(), true);
+        BOOST_CHECK_EQUAL(result3->origin(), sender);
+        BOOST_CHECK_EQUAL(result3->from(), precompiled::AUTH_COMMITTEE_ADDRESS);
+
+        result3->setSeq(1002);
+        result3->setTo("1111111111111111111111111111111111111111");
+        result3->setKeyLocks({});
+        /// new committee
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise4;
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+
+        auto result4 = executePromise4.get_future().get();
+
+        result4->setSeq(1003);
+        /// call precompiled to get deploy auth
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise5;
+        executor->dmcExecuteTransaction(
+            std::move(result4), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise5.set_value(std::move(result));
+            });
+
+        auto result5 = executePromise5.get_future().get();
+
+        result5->setSeq(1002);
+        /// callback get deploy committee context
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise6;
+        executor->dmcExecuteTransaction(
+            std::move(result5), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise6.set_value(std::move(result));
+            });
+
+        auto result6 = executePromise6.get_future().get();
+
+        BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result6->contextID(), 99);
+        BOOST_CHECK_EQUAL(result6->seq(), 1002);
+        BOOST_CHECK_EQUAL(result6->create(), false);
+        BOOST_CHECK_EQUAL(
+            result6->newEVMContractAddress(), "1111111111111111111111111111111111111111");
+        BOOST_CHECK_EQUAL(result6->origin(), sender);
+        BOOST_CHECK_EQUAL(result6->to(), precompiled::AUTH_COMMITTEE_ADDRESS);
+
+        result6->setSeq(1000);
+        // new committee address => committeeManager
+        // new proposalManager
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise7;
+        executor->dmcExecuteTransaction(
+            std::move(result6), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise7.set_value(std::move(result));
+            });
+
+        auto result7 = executePromise7.get_future().get();
+
+        BOOST_CHECK_EQUAL(result7->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result7->contextID(), 99);
+        BOOST_CHECK_EQUAL(result7->seq(), 1000);
+        BOOST_CHECK_EQUAL(result7->create(), true);
+        BOOST_CHECK_EQUAL(result7->origin(), sender);
+        BOOST_CHECK_EQUAL(result7->from(), precompiled::AUTH_COMMITTEE_ADDRESS);
+
+        result7->setSeq(1004);
+        result7->setTo("2222222222222222222222222222222222222222");
+        result7->setKeyLocks({});
+
+        // new proposalManager
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise8;
+        executor->dmcExecuteTransaction(
+            std::move(result7), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise8.set_value(std::move(result));
+            });
+
+        auto result8 = executePromise8.get_future().get();
+
+        result8->setSeq(1005);
+        /// call precompiled to get deploy auth
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise9;
+        executor->dmcExecuteTransaction(
+            std::move(result8), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise9.set_value(std::move(result));
+            });
+
+        auto result9 = executePromise9.get_future().get();
+
+        result9->setSeq(1004);
+        /// callback get deploy committee context
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise10;
+        executor->dmcExecuteTransaction(
+            std::move(result9), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise10.set_value(std::move(result));
+            });
+
+        auto result10 = executePromise10.get_future().get();
+
+        result10->setSeq(1006);
+        result10->setTo("3333333333333333333333333333333333333333");
+        result10->setKeyLocks({});
+
+        /// new voteComputer
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise11;
+        executor->dmcExecuteTransaction(
+            std::move(result10), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise11.set_value(std::move(result));
+            });
+
+        auto result11 = executePromise11.get_future().get();
+
+        result11->setSeq(1007);
+
+        /// call precompiled to get deploy auth
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise12;
+        executor->dmcExecuteTransaction(
+            std::move(result11), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise12.set_value(std::move(result));
+            });
+
+        auto result12 = executePromise12.get_future().get();
+
+        result12->setSeq(1006);
+
+        /// callback get deploy proposalMgr context
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise13;
+        executor->dmcExecuteTransaction(
+            std::move(result12), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise13.set_value(std::move(result));
+            });
+
+        auto result13 = executePromise13.get_future().get();
+
+        BOOST_CHECK_EQUAL(result13->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result13->contextID(), 99);
+        BOOST_CHECK_EQUAL(result13->seq(), 1006);
+        BOOST_CHECK_EQUAL(result13->create(), false);
+        BOOST_CHECK_EQUAL(result13->origin(), sender);
+        BOOST_CHECK_EQUAL(result13->to(), "1111111111111111111111111111111111111111");
+
+        /// call to committee, getWeights
+        result13->setSeq(1008);
+        // to committee
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise14;
+        executor->dmcExecuteTransaction(
+            std::move(result13), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise14.set_value(std::move(result));
+            });
+        auto result14 = executePromise14.get_future().get();
+
+        result14->setSeq(1006);
+
+        // committee callback to voteComputer
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise15;
+        executor->dmcExecuteTransaction(
+            std::move(result14), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise15.set_value(std::move(result));
+            });
+        auto result15 = executePromise15.get_future().get();
+
+        result15->setSeq(1004);
+
+        // new voteCompute => new ProposalMgr context
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise16;
+        executor->dmcExecuteTransaction(
+            std::move(result15), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise16.set_value(std::move(result));
+            });
+
+        auto result16 = executePromise16.get_future().get();
+
+        BOOST_CHECK_EQUAL(result16->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result16->contextID(), 99);
+        BOOST_CHECK_EQUAL(result16->seq(), 1004);
+        BOOST_CHECK_EQUAL(result16->create(), false);
+        BOOST_CHECK_EQUAL(result16->origin(), sender);
+        BOOST_CHECK_EQUAL(
+            result16->newEVMContractAddress(), "2222222222222222222222222222222222222222");
+        BOOST_CHECK_EQUAL(result16->to(), AUTH_COMMITTEE_ADDRESS);
+
+        result16->setSeq(1000);
+        // new proposalManager address => committeeManager
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise17;
+        executor->dmcExecuteTransaction(
+            std::move(result16), [&](bcos::Error::UniquePtr&& error,
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise17.set_value(std::move(result));
+            });
+
+        auto result17 = executePromise17.get_future().get();
+        BOOST_CHECK_EQUAL(result17->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result17->contextID(), 99);
+        BOOST_CHECK_EQUAL(result17->seq(), 1000);
+        BOOST_CHECK_EQUAL(result17->create(), false);
+        BOOST_CHECK_EQUAL(result17->origin(), sender);
+        BOOST_CHECK_EQUAL(result17->from(), precompiled::AUTH_COMMITTEE_ADDRESS);
+
+        commitBlock(blockNumber);
+    }
+
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;
@@ -282,5 +595,6 @@ protected:
     CodecWrapper::Ptr codec;
     int64_t gas = 300000000;
     bool isWasm = false;
+    std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
 };
 }  // namespace bcos::test
