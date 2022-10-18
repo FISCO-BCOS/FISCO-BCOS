@@ -56,6 +56,9 @@ public:
     void asyncSubmit(
         bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback) override;
 
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override;
+
     void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) override;

@@ -23,7 +23,9 @@
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionSubmitResult.h"
 #include "TxPoolTypeDef.h"
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
+
 namespace bcos
 {
 namespace txpool
@@ -48,6 +50,9 @@ public:
      */
     virtual void asyncSubmit(
         bytesPointer _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback) = 0;
+
+    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) = 0;
 
     /**
      * @brief fetch transactions from the txpool

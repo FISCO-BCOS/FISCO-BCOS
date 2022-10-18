@@ -30,7 +30,7 @@ add_library(bcos-framework INTERFACE)
 target_include_directories(bcos-framework INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
-target_link_libraries(bcos-framework INTERFACE bcos-crypto Microsoft.GSL::GSL)
+target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL)
 
 if (TESTS)
     enable_testing()

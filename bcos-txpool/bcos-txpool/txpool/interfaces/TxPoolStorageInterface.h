@@ -23,6 +23,7 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
 
 namespace bcos
@@ -38,6 +39,9 @@ public:
 
     virtual bcos::protocol::TransactionStatus submitTransaction(
         bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) = 0;
+
+    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) = 0;
     virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;

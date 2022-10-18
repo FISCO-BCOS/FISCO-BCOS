@@ -29,6 +29,8 @@
 #include "tbb/enumerable_thread_specific.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -410,20 +412,22 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override
     {
-#pragma omp parallel for
-        for (size_t i = 0; i < m_buckets.size(); ++i)
-        {
-            auto& bucket = m_buckets[i];
-
-            for (auto& it : bucket.container)
-            {
-                auto& entry = it.entry;
-                if (!onlyDirty || entry.dirty())
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
+            [this, &onlyDirty, &callback](auto const& range) {
+                for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    callback(it.table, it.key, entry);
+                    auto& bucket = m_buckets[i];
+
+                    for (auto& it : bucket.container)
+                    {
+                        auto& entry = it.entry;
+                        if (!onlyDirty || entry.dirty())
+                        {
+                            callback(it.table, it.key, entry);
+                        }
+                    }
                 }
-            }
-        }
+            });
     }
 
     void merge(bool onlyDirty, const TraverseStorageInterface& source) override
