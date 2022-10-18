@@ -600,40 +600,14 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
-    fetchedTxs->resize(_txsLimit);
+    fetchedTxs->reserve(_txsLimit);
 
-    std::atomic_size_t index{0};
-    tbb::parallel_for(m_txsTable.range(), [&_txsLimit, &fetchedTxs, &index](auto const& range) {
-        for (auto it = range.begin(); it != range.end() && index < _txsLimit; ++it)
-        {
-            auto& transaction = it->second;
-            if (!transaction || transaction->synced())
-            {
-                continue;
-            }
-
-            auto current = index.fetch_add(1);
-            if (current >= _txsLimit)
-            {
-                break;
-            }
-            transaction->setSynced(true);
-            (*fetchedTxs)[current] = transaction;
-        }
-    });
-    fetchedTxs->resize(index);
-
-#if 0
     for (auto const& it : m_txsTable)
     {
         auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
-        if (!tx)
-        {
-            continue;
-        }
-        if (tx->synced())
+        if (!tx || tx->synced())
         {
             continue;
         }
@@ -644,7 +618,6 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
             break;
         }
     }
-#endif
     return fetchedTxs;
 }
 
