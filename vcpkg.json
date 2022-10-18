@@ -31,7 +31,6 @@
     "redis-plus-plus",
     "jsoncpp",
     "protobuf",
-    "secp256k1",
     "cryptopp",
     {
       "name": "tarscpp",
