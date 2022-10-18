@@ -32,6 +32,7 @@
 #include <csignal>
 #include <exception>
 #include <future>
+#include <mutex>
 #include <optional>
 
 using namespace bcos::storage;
@@ -311,7 +312,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
         auto start = utcTime();
         {
-            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+            std::unique_lock lock(m_writeBatchMutex);
             if (!m_writeBatch)
             {
                 m_writeBatch = std::make_shared<WriteBatch>();
@@ -337,7 +338,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                                                    << LOG_KV("key", toHex(key));
                     }
                     ++deleteCount;
-                    tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                    std::unique_lock lock(m_writeBatchMutex);
                     m_writeBatch->Delete(dbKey);
                 }
                 else
@@ -349,14 +350,15 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                             << LOG_KV("key", toHex(key)) << LOG_KV("size", entry.size());
                     }
                     ++putCount;
-                    tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
 
                     std::string value(entry.get().data(), entry.get().size());
-
                     // Storage security
-                    if (false == value.empty() && nullptr != m_dataEncryption)
+                    if (!value.empty() && m_dataEncryption)
+                    {
                         value = m_dataEncryption->encrypt(value);
+                    }
 
+                    std::unique_lock lock(m_writeBatchMutex);
                     auto status = m_writeBatch->Put(dbKey, std::move(value));
                 }
                 return true;
@@ -365,7 +367,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         if (!isTableValid)
         {
             {
-                tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                std::unique_lock lock(m_writeBatchMutex);
                 m_writeBatch = nullptr;
             }
             STORAGE_ROCKSDB_LOG(ERROR)
@@ -394,7 +396,7 @@ void RocksDBStorage::asyncCommit(
     auto start = utcTime();
     std::ignore = params;
     {
-        tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+        std::unique_lock lock(m_writeBatchMutex);
         if (m_writeBatch)
         {
             WriteOptions options;
@@ -431,7 +433,7 @@ void RocksDBStorage::asyncRollback(
 
     std::ignore = params;
     {
-        tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+        std::unique_lock lock(m_writeBatchMutex);
         m_writeBatch = nullptr;
     }
     auto end = utcTime();
