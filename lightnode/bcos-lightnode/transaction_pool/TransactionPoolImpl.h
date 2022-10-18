@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../Log.h"
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-concepts/transaction_pool/TransactionPool.h>
@@ -24,8 +26,9 @@ class TransactionPoolImpl : public bcos::concepts::transacton_pool::TransactionP
         TransactionPoolImpl<TransactionPoolType>>;
 
 public:
-    TransactionPoolImpl(TransactionPoolType transactionPool)
-      : m_transactionPool(std::move(transactionPool))
+    TransactionPoolImpl(
+        bcos::crypto::CryptoSuite::Ptr cryptoSuite, TransactionPoolType transactionPool)
+      : m_cryptoSuite(std::move(cryptoSuite)), m_transactionPool(std::move(transactionPool))
     {}
 
 private:
@@ -35,65 +38,24 @@ private:
     {
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction request";
 
-        auto transactionData = std::make_shared<bcos::bytes>();
-        bcos::concepts::serialize::encode(transaction, *transactionData);
+        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+            [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
 
-        struct Awaitable
+        auto submitResult = co_await concepts::getRef(m_transactionPool)
+                                .submitTransaction(std::move(transactionImpl));
+
+        if (submitResult && submitResult->transactionReceipt())
         {
-            Awaitable(std::shared_ptr<bcos::bytes> transactionData,
-                TransactionPoolType& transactionPool,
-                std::remove_cvref_t<decltype(receipt)>& receipt)
-              : m_transactionData(std::move(transactionData)),
-                m_transactionPool(transactionPool),
-                m_receipt(receipt)
-            {}
+            auto receiptImpl =
+                std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
+                    submitResult->transactionReceipt());
+            receipt = std::move(const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
+        }
 
-            constexpr bool await_ready() const { return false; }
-            constexpr void await_suspend(CO_STD::coroutine_handle<> handle)
-            {
-                bcos::concepts::getRef(m_transactionPool)
-                    .asyncSubmit(std::move(m_transactionData),
-                        [this, m_handle = std::move(handle)](Error::Ptr error,
-                            bcos::protocol::TransactionSubmitResult::Ptr
-                                transactionSubmitResult) mutable {
-                            TRANSACTIONPOOL_LOG(INFO) << "Submit transaction callback";
-
-                            m_error = std::move(error);
-                            if (transactionSubmitResult &&
-                                transactionSubmitResult->transactionReceipt())
-                            {
-                                auto receiptImpl = std::dynamic_pointer_cast<
-                                    bcostars::protocol::TransactionReceiptImpl>(
-                                    transactionSubmitResult->transactionReceipt());
-                                m_receipt = std::move(const_cast<bcostars::TransactionReceipt&>(
-                                    receiptImpl->inner()));
-                                m_withReceipt = true;
-                            }
-
-                            m_handle.resume();
-                        });
-            }
-            constexpr void await_resume() const
-            {
-                if (m_error)
-                {
-                    BOOST_THROW_EXCEPTION(*m_error);
-                }
-            }
-
-            std::shared_ptr<bcos::bytes> m_transactionData;
-            TransactionPoolType& m_transactionPool;
-            std::remove_cvref_t<decltype(receipt)>& m_receipt;
-            Error::Ptr m_error;
-            bool m_withReceipt{};
-        };
-
-        auto awaitable = Awaitable(std::move(transactionData), m_transactionPool, receipt);
-
-        co_await awaitable;
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction successed";
     }
 
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     TransactionPoolType m_transactionPool;
 };
 }  // namespace bcos::transaction_pool

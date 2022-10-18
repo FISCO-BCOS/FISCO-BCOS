@@ -72,13 +72,17 @@ enum ModuleID
     ConsTxsSync = 2002,
     AMOP = 3000,
 
-    LIGHTNODE_GETBLOCK = 4000,
-    LIGHTNODE_GETTRANSACTIONS = 4001,
-    LIGHTNODE_GETRECEIPTS = 4002,
-    LIGHTNODE_GETSTATUS = 4003,
-    LIGHTNODE_SENDTRANSACTION = 4004,
+    LIGHTNODE_GET_BLOCK = 4000,
+    LIGHTNODE_GET_TRANSACTIONS = 4001,
+    LIGHTNODE_GET_RECEIPTS = 4002,
+    LIGHTNODE_GET_STATUS = 4003,
+    LIGHTNODE_SEND_TRANSACTION = 4004,
     LIGHTNODE_CALL = 4005,
-    LIGHTNODE_END = 4999
+    LIGHTNODE_END = 4999,
+
+    SYNC_PUSH_TRANSACTION = 5000,
+    SYNC_GET_TRANSACTIONS = 5001,
+    SYNC_END = 5999
 };
 enum ProtocolModuleID : uint32_t
 {
@@ -182,7 +186,7 @@ inline std::optional<ModuleID> stringToModuleID(const std::string& _moduleName)
     }
     else if (boost::iequals(_moduleName, "light_node"))
     {
-        return bcos::protocol::ModuleID::LIGHTNODE_GETBLOCK;
+        return bcos::protocol::ModuleID::LIGHTNODE_GET_BLOCK;
     }
     else
     {
@@ -206,7 +210,7 @@ inline std::string moduleIDToString(ModuleID _moduleID)
         return "cons_txs_sync";
     case ModuleID::AMOP:
         return "amop";
-    case ModuleID::LIGHTNODE_GETBLOCK:
+    case ModuleID::LIGHTNODE_GET_BLOCK:
         return "light_node";
     default:
         return "unrecognized module";

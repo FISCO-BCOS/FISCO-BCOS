@@ -23,6 +23,7 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
 #include "RPCInitializer.h"
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-lightnode/ledger/LedgerImpl.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>

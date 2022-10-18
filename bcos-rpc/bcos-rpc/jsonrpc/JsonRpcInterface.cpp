@@ -232,7 +232,6 @@ bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
         }
 
         bcos::bytes& m_buffer;
-        /* Other members */
     };
 
     bcos::bytes out;
