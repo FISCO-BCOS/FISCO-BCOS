@@ -94,7 +94,8 @@ public:
             ResponseType& m_response;
         };
 
-        co_await Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
+        auto awaitable = Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
+        co_await awaitable;
     }
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()
@@ -164,7 +165,8 @@ public:
             std::string m_nodeID;
         };
 
-        auto nodeID = co_await Awaitable(m_gateway, m_groupID, m_rng);
+        auto awaitable = Awaitable(m_gateway, m_groupID, m_rng);
+        auto nodeID = co_await awaitable;
         if (nodeID.empty())
         {
             BOOST_THROW_EXCEPTION(NoNodeAvailable{});
