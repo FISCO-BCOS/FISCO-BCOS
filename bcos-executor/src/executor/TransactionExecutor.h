@@ -168,6 +168,8 @@ public:
     void start() override { m_isRunning = true; }
     void stop() override;
 
+    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
+
 protected:
     void executeTransactionsInternal(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,
@@ -187,7 +189,7 @@ protected:
         const protocol::BlockHeader::ConstPtr& currentHeader,
         storage::StateStorageInterface::Ptr tableFactory);
 
-    virtual std::shared_ptr<BlockContext> createBlockContext(
+    virtual std::shared_ptr<BlockContext> createBlockContextForCall(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
         int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
 
@@ -317,6 +319,8 @@ protected:
     bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
+
+    std::function<void()> f_onNeedSwitchEvent;
 };
 
 }  // namespace executor

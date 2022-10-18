@@ -112,6 +112,16 @@ public:
         m_executiveFlows.clear();
     }
 
+    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
+
+    void triggerSwitch()
+    {
+        if (f_onNeedSwitchEvent)
+        {
+            f_onNeedSwitchEvent();
+        }
+    }
+
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
@@ -129,6 +139,7 @@ private:
     uint64_t m_txGasLimit = 3000000000;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
     crypto::Hash::Ptr m_hashImpl;
+    std::function<void()> f_onNeedSwitchEvent;
 };
 
 }  // namespace executor
