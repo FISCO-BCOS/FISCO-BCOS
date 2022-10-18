@@ -752,11 +752,21 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
         revert();
 
+
         if (e.errorCode() == DEAD_LOCK)
         {
             // DEAD LOCK revert need provide sender and receiver
             EXECUTOR_LOG(DEBUG) << "Revert by dead lock, sender: " << callResults->senderAddress
                                 << " receiver: " << callResults->receiveAddress;
+        }
+        else if (StorageError::ReadError == e.errorCode())
+        {
+            // is storage error
+            EXECUTOR_LOG(DEBUG)
+                << "Storage exception during tx execute. trigger switch(if this tx is not call). e:"
+                << diagnostic_information(e);
+            auto blockContext = m_blockContext.lock();
+            blockContext->triggerSwitch();
         }
         else
         {
