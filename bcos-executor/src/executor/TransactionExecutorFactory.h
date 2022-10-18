@@ -78,10 +78,17 @@ public:
 
     TransactionExecutor::Ptr build()
     {
-        return std::make_shared<TransactionExecutor>(m_ledger, m_txpool, m_cache, m_storage,
-            m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck, m_keyPageSize,
-            m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
+        auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool, m_cache,
+            m_storage, m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
+            m_keyPageSize, m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
+        if (f_onNeedSwitchEvent)
+        {
+            executor->registerNeedSwitchEvent(f_onNeedSwitchEvent);
+        }
+        return executor;
     }
+
+    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
 
 private:
     std::string m_name;
@@ -95,6 +102,7 @@ private:
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isWasm;
     bool m_isAuthCheck;
+    std::function<void()> f_onNeedSwitchEvent;
 };
 
 }  // namespace executor

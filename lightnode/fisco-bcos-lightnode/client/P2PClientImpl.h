@@ -111,9 +111,8 @@ public:
             void await_suspend(CO_STD::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
-                    [this, m_handle = std::move(handle)](Error::Ptr error,
-                        gateway::GatewayInfo::Ptr,
-                        gateway::GatewayInfosPtr peerGatewayInfos) mutable {
+                    [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
+                        const gateway::GatewayInfosPtr& peerGatewayInfos) mutable {
                         if (error)
                         {
                             m_error = std::move(error);
@@ -148,13 +147,12 @@ public:
                         m_handle.resume();
                     });
             }
-            std::string await_resume()
+            void await_resume()
             {
                 if (m_error)
                 {
                     BOOST_THROW_EXCEPTION(*(m_error));
                 }
-                return std::move(m_nodeID);
             }
 
             bcos::gateway::GatewayInterface::Ptr& m_gateway;
@@ -166,7 +164,9 @@ public:
         };
 
         auto awaitable = Awaitable(m_gateway, m_groupID, m_rng);
-        auto nodeID = co_await awaitable;
+        co_await awaitable;
+        auto& nodeID = awaitable.m_nodeID;
+
         if (nodeID.empty())
         {
             BOOST_THROW_EXCEPTION(NoNodeAvailable{});
