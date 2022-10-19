@@ -19,6 +19,8 @@
  * @date: 2022-04-19
  */
 #include "KeyPageStorage.h"
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <sstream>
 
 namespace bcos::storage
@@ -51,7 +53,7 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
         return;
     }
     std::vector<std::string> ret;
-    auto meta = &std::get<1>(data.value()->data);
+    auto* meta = &std::get<1>(data.value()->data);
     auto readLock = meta->rLock();
     auto& pageInfo = meta->getAllPageInfoNoLock();
     auto [offset, total] = _condition->getLimit();
@@ -139,7 +141,6 @@ void KeyPageStorage::asyncGetRows(std::string_view tableView,
             if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
             {
                 Error::UniquePtr err;
-                // #pragma omp parallel for
                 for (auto i = 0u; i < _keys.size(); ++i)
                 {
                     auto [error, entry] = getSysTableRawEntry(tableView, _keys[i]);
@@ -236,113 +237,121 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
         const std::string_view& table, const std::string_view& key, const Entry& entry)>
         callback) const
 {
-#pragma omp parallel for
-    for (size_t i = 0; i < m_buckets.size(); ++i)
-    {
-        auto& bucket = m_buckets[i];
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
+        [this, &onlyDirty, &callback](const tbb::blocked_range<size_t>& range) {
+            for (auto i = range.begin(); i != range.end(); ++i)
+            {
+                auto& bucket = m_buckets[i];
 
-        for (auto& it : bucket.container)
-        {
-            if (it.second->type == Data::Type::TableMeta)
-            {  // if metadata
-                if (!onlyDirty || it.second->entry.dirty())
+                for (auto& it : bucket.container)
                 {
-                    auto meta = &std::get<1>(it.second->data);
-                    auto readLock = meta->rLock();
-                    Entry entry;
-                    entry.setObject(*meta);
-                    readLock.unlock();
-                    if (!m_readOnly)
-                    {
-                        if (meta->size() <= 10)
-                        {  // FIXME: this log is only for debug, comment it when release
-                            KeyPage_LOG(DEBUG)
-                                << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
-                                << LOG_KV("key", toHex(it.first.second)) << LOG_KV("meta", *meta);
-                        }
-                        KeyPage_LOG(DEBUG)
-                            << LOG_DESC("Traverse TableMeta") << LOG_KV("table", it.first.first)
-                            << LOG_KV("pageCount", meta->size())
-                            << LOG_KV("rowCount", meta->rowCount()) << LOG_KV("size", entry.size())
-                            << LOG_KV("payloadRate",
-                                   sizeof(PageInfo) * meta->size() / (double)entry.size())
-                            << LOG_KV("predictHit", meta->hitRate());
-                    }
-                    callback(it.first.first, it.first.second, std::move(entry));
-                }
-            }
-            else if (it.second->type == Data::Type::Page)
-            {  // if page, encode and return
-                auto page = &std::get<0>(it.second->data);
-                if (!onlyDirty || it.second->entry.dirty())
-                {
-                    Entry entry;
-                    if (page->validCount() == 0)
-                    {
-                        if (!m_readOnly)
+                    if (it.second->type == Data::Type::TableMeta)
+                    {  // if metadata
+                        if (!onlyDirty || it.second->entry.dirty())
                         {
-                            KeyPage_LOG(DEBUG) << LOG_DESC("Traverse deleted Page")
-                                               << LOG_KV("table", it.first.first)
-                                               << LOG_KV("key", toHex(it.first.second))
-                                               << LOG_KV("validCount", page->validCount());
+                            auto meta = &std::get<1>(it.second->data);
+                            auto readLock = meta->rLock();
+                            Entry entry;
+                            entry.setObject(*meta);
+                            readLock.unlock();
+                            if (!m_readOnly)
+                            {
+                                if (meta->size() <= 10)
+                                {  // FIXME: this log is only for debug, comment it when release
+                                    KeyPage_LOG(DEBUG)
+                                        << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
+                                        << LOG_KV("key", toHex(it.first.second))
+                                        << LOG_KV("meta", *meta);
+                                }
+                                KeyPage_LOG(DEBUG)
+                                    << LOG_DESC("Traverse TableMeta")
+                                    << LOG_KV("table", it.first.first)
+                                    << LOG_KV("pageCount", meta->size())
+                                    << LOG_KV("rowCount", meta->rowCount())
+                                    << LOG_KV("size", entry.size())
+                                    << LOG_KV("payloadRate",
+                                           sizeof(PageInfo) * meta->size() / (double)entry.size())
+                                    << LOG_KV("predictHit", meta->hitRate());
+                            }
+                            callback(it.first.first, it.first.second, std::move(entry));
                         }
-                        entry.setStatus(Entry::Status::DELETED);
-                        callback(it.first.first, it.first.second, std::move(entry));
+                    }
+                    else if (it.second->type == Data::Type::Page)
+                    {  // if page, encode and return
+                        auto page = &std::get<0>(it.second->data);
+                        if (!onlyDirty || it.second->entry.dirty())
+                        {
+                            Entry entry;
+                            if (page->validCount() == 0)
+                            {
+                                if (!m_readOnly)
+                                {
+                                    KeyPage_LOG(DEBUG) << LOG_DESC("Traverse deleted Page")
+                                                       << LOG_KV("table", it.first.first)
+                                                       << LOG_KV("key", toHex(it.first.second))
+                                                       << LOG_KV("validCount", page->validCount());
+                                }
+                                entry.setStatus(Entry::Status::DELETED);
+                                callback(it.first.first, it.first.second, std::move(entry));
+                            }
+                            else
+                            {
+                                entry.setObject(*page);
+                                entry.setStatus(it.second->entry.status());
+                                if (!m_readOnly)
+                                {
+                                    KeyPage_LOG(DEBUG)
+                                        << LOG_DESC("Traverse Page")
+                                        << LOG_KV("table", it.first.first)
+                                        << LOG_KV("pageKey", toHex(it.first.second))
+                                        << LOG_KV("valid", page->validCount())
+                                        << LOG_KV("count", page->count())
+                                        << LOG_KV("status", (int)it.second->entry.status())
+                                        << LOG_KV("pageSize", page->size())
+                                        << LOG_KV("size", entry.size());
+                                }
+                                if (it.first.second != page->endKey())
+                                {
+                                    KeyPage_LOG(FATAL)
+                                        << LOG_DESC("Traverse Page pageKey not equal to map key")
+                                        << LOG_KV("table", it.first.first)
+                                        << LOG_KV("pageKey", page->endKey())
+                                        << LOG_KV("mapKey", it.first.second);
+                                }
+                                callback(it.first.first, it.first.second, std::move(entry));
+                            }
+                            auto invalidKeys = page->invalidKeySet();
+                            for (auto& k : invalidKeys)
+                            {
+                                if (!m_readOnly)
+                                {
+                                    KeyPage_LOG(DEBUG)
+                                        << LOG_DESC("Traverse Page delete invalid key")
+                                        << LOG_KV("currentKey", toHex(page->endKey()))
+                                        << LOG_KV("table", it.first.first)
+                                        << LOG_KV("key", toHex(k));
+                                }
+                                Entry e;
+                                e.setStatus(Entry::Status::DELETED);
+                                callback(it.first.first, k, std::move(e));
+                            }
+                        }
                     }
                     else
                     {
-                        entry.setObject(*page);
-                        entry.setStatus(it.second->entry.status());
-                        if (!m_readOnly)
+                        if (!onlyDirty || it.second->entry.dirty())
                         {
-                            KeyPage_LOG(DEBUG)
-                                << LOG_DESC("Traverse Page") << LOG_KV("table", it.first.first)
-                                << LOG_KV("pageKey", toHex(it.first.second))
-                                << LOG_KV("valid", page->validCount())
-                                << LOG_KV("count", page->count())
-                                << LOG_KV("status", (int)it.second->entry.status())
-                                << LOG_KV("pageSize", page->size()) << LOG_KV("size", entry.size());
+                            auto& entry = it.second->entry;
+                            // assert(it.first.first == SYS_TABLES);
+                            callback(it.first.first, it.first.second, entry);
                         }
-                        if (it.first.second != page->endKey())
-                        {
-                            KeyPage_LOG(FATAL)
-                                << LOG_DESC("Traverse Page pageKey not equal to map key")
-                                << LOG_KV("table", it.first.first)
-                                << LOG_KV("pageKey", page->endKey())
-                                << LOG_KV("mapKey", it.first.second);
-                        }
-                        callback(it.first.first, it.first.second, std::move(entry));
-                    }
-                    auto invalidKeys = page->invalidKeySet();
-                    for (auto& k : invalidKeys)
-                    {
-                        if (!m_readOnly)
-                        {
-                            KeyPage_LOG(DEBUG)
-                                << LOG_DESC("Traverse Page delete invalid key")
-                                << LOG_KV("currentKey", toHex(page->endKey()))
-                                << LOG_KV("table", it.first.first) << LOG_KV("key", toHex(k));
-                        }
-                        Entry e;
-                        e.setStatus(Entry::Status::DELETED);
-                        callback(it.first.first, k, std::move(e));
                     }
                 }
             }
-            else
-            {
-                if (!onlyDirty || it.second->entry.dirty())
-                {
-                    auto& entry = it.second->entry;
-                    // assert(it.first.first == SYS_TABLES);
-                    callback(it.first.first, it.first.second, entry);
-                }
-            }
-        }
-    }
+        });
 }
 
-crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const
+auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> crypto::HashType
 {
     bcos::crypto::HashType pagesHash(0);
     bcos::crypto::HashType entriesHash(0);
@@ -357,32 +366,35 @@ crypto::HashType KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) c
             allData.push_back(it.second.get());
         }
     }
-#pragma omp parallel for
-    for (size_t i = 0; i < allData.size(); ++i)
-    {
-        auto data = allData[i];
-        auto& entry = data->entry;
-        if (entry.dirty() && data->type != Data::Type::TableMeta)
-        {
-            if (data->type == Data::Type::Page)
+    std::mutex mutex;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, allData.size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i)
             {
-                auto page = &std::get<0>(data->data);
-                auto pageHash = page->hash(data->table, hashImpl);
-#pragma omp critical
-                pagesHash ^= pageHash;
-                ++pageCount;
+                const auto* data = allData[i];
+                const auto& entry = data->entry;
+                if (entry.dirty() && data->type != Data::Type::TableMeta)
+                {
+                    if (data->type == Data::Type::Page)
+                    {
+                        const auto* page = &std::get<0>(data->data);
+                        auto pageHash = page->hash(data->table, hashImpl, m_blockVersion);
+                        std::lock_guard<std::mutex> lock(mutex);
+                        pagesHash ^= pageHash;
+                        ++pageCount;
+                    }
+                    else
+                    {  // sys table
+                        auto hash = hashImpl->hash(data->table);
+                        hash ^= hashImpl->hash(data->key);
+                        hash ^= entry.hash(data->table, data->key, hashImpl, m_blockVersion);
+                        std::lock_guard<std::mutex> lock(mutex);
+                        entriesHash ^= hash;
+                        ++entrycount;
+                    }
+                }
             }
-            else
-            {  // sys table
-                auto hash = hashImpl->hash(data->table);
-                hash ^= hashImpl->hash(data->key);
-                hash ^= entry.hash(data->table, data->key, hashImpl);
-#pragma omp critical
-                entriesHash ^= hash;
-                ++entrycount;
-            }
-        }
-    }
+        });
     bcos::crypto::HashType totalHash(0);
     totalHash ^= pagesHash;
     totalHash ^= entriesHash;

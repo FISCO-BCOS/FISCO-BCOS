@@ -65,6 +65,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                            wsService = std::move(wsService), groupID = std::move(groupID),
                            nodeName = std::move(nodeName),
                            stopToken = std::move(stopToken)]() mutable {
+        bcos::pthread_setThreadName("blkNotify");
         while (!(*stopToken))
         {
             try
@@ -108,6 +109,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
+
 
     return worker;
 }
