@@ -241,17 +241,23 @@ public:
                     switch (m_status)
                     {
                     case MODIFIED:
-                        hasher.update(get());
+                    {
+                        auto data = get();
+                        hasher.update(data);
                         hasher.final(entryHash);
                         if (c_fileLogLevel >= TRACE)
                         {
                             STORAGE_LOG(TRACE)
                                 << "Entry hash, dirty entry: " << table << " | " << toHex(key)
-                                << " | " << toHex(table) << toHex(key) << toHex(get())
+                                << " | " << toHex(table)
+                                << toHex(key)
+                                << toHex(data)
                                 << LOG_KV("hash", entryHash.abridged());
                         }
                         break;
+                    }
                     case DELETED:
+                    {
                         hasher.final(entryHash);
                         if (c_fileLogLevel >= TRACE)
                         {
@@ -260,10 +266,13 @@ public:
                                 << LOG_KV("hash", entryHash.abridged());
                         }
                         break;
+                    }
                     default:
+                    {
                         STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | "
                                            << toHex(key) << " | " << (int)m_status;
                         break;
+                    }
                     }
                 },
                 anyHasher);
