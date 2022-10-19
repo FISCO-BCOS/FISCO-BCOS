@@ -231,36 +231,49 @@ public:
         bcos::crypto::HashType entryHash(0);
         if (blockVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
         {
-            std::string data(table);
-            data.append(key);
-            if (m_status == Entry::MODIFIED)
-            {
-                auto value = get();
-                data.append(value);
-                bcos::bytesConstRef ref((const bcos::byte*)data.data(), data.size());
-                entryHash = hashImpl->hash(ref);
-                if (c_fileLogLevel >= TRACE)
-                {
-                    STORAGE_LOG(TRACE)
-                        << "Entry hash, dirty entry: " << table << " | " << toHex(key) << " | "
-                        << toHex(value) << LOG_KV("hash", entryHash.abridged());
-                }
-            }
-            else if (m_status == Entry::DELETED)
-            {
-                bcos::bytesConstRef ref((const bcos::byte*)data.data(), data.size());
-                entryHash = hashImpl->hash(ref);
-                if (c_fileLogLevel >= TRACE)
-                {
-                    STORAGE_LOG(TRACE) << "Entry hash, deleted entry: " << table << " | "
-                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
-                }
-            }
-            else
-            {
-                STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
-                                   << " | " << (int)m_status;
-            }
+            auto anyHasher = hashImpl->hasher();
+
+            std::visit(
+                [this, &table, &key, &entryHash](auto& hasher) {
+                    hasher.update(table);
+                    hasher.update(key);
+
+                    switch (m_status)
+                    {
+                    case MODIFIED:
+                    {
+                        auto data = get();
+                        hasher.update(data);
+                        hasher.final(entryHash);
+                        if (c_fileLogLevel >= TRACE)
+                        {
+                            STORAGE_LOG(TRACE)
+                                << "Entry hash, dirty entry: " << table << " | " << toHex(key)
+                                << " | " << toHex(table) << toHex(key) << toHex(data)
+                                << LOG_KV("hash", entryHash.abridged());
+                        }
+                        break;
+                    }
+                    case DELETED:
+                    {
+                        hasher.final(entryHash);
+                        if (c_fileLogLevel >= TRACE)
+                        {
+                            STORAGE_LOG(TRACE)
+                                << "Entry hash, deleted entry: " << table << " | " << toHex(key)
+                                << LOG_KV("hash", entryHash.abridged());
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | "
+                                           << toHex(key) << " | " << (int)m_status;
+                        break;
+                    }
+                    }
+                },
+                anyHasher);
         }
         else
         {  // 3.0.0
