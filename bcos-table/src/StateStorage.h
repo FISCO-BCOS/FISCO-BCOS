@@ -48,14 +48,16 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 private:
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {}
+    {                                               \
+    }
     // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
     //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
 
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {}                                              \
+    {                                               \
+    }                                               \
     // log("SET", (table), (key), (entry), (desc))
 
     // for debug
@@ -84,8 +86,11 @@ private:
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
-    explicit BaseStorage(std::shared_ptr<StorageInterface> prev)
-      : storage::StateStorageInterface(prev), m_buckets(std::thread::hardware_concurrency())
+    explicit BaseStorage(std::shared_ptr<StorageInterface> prev,
+        uint32_t _blockVersion = (uint32_t)bcos::protocol::Version::V3_0_VERSION)
+      : storage::StateStorageInterface(prev),
+        m_blockVersion(_blockVersion),
+        m_buckets(std::thread::hardware_concurrency())
     {}
 
     BaseStorage(const BaseStorage&) = delete;
@@ -94,10 +99,7 @@ public:
     BaseStorage(BaseStorage&&) = delete;
     BaseStorage& operator=(BaseStorage&&) = delete;
 
-    ~BaseStorage() override
-    {
-        m_recoder.clear();
-    }
+    ~BaseStorage() override { m_recoder.clear(); }
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,
@@ -460,7 +462,7 @@ public:
                 if (entry.dirty())
                 {
                     auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                     entry.hash(it.table, it.key, hashImpl);
+                                     entry.hash(it.table, it.key, hashImpl, m_blockVersion);
                     bucketHash ^= entryHash;
                 }
             }
@@ -544,15 +546,9 @@ public:
         }
     }
 
-    void setEnableTraverse(bool enableTraverse)
-    {
-        m_enableTraverse = enableTraverse;
-    }
+    void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
 
-    void setMaxCapacity(ssize_t capacity)
-    {
-        m_maxCapacity = capacity;
-    }
+    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
 
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry)
@@ -631,6 +627,7 @@ private:
         std::mutex mutex;
         ssize_t capacity = 0;
     };
+    uint32_t m_blockVersion = 0;
     std::vector<Bucket> m_buckets;
 
     std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(

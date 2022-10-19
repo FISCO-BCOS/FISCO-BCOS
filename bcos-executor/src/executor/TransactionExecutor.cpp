@@ -129,6 +129,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
 
+    m_blockVersion = m_lastCommittedBlockHeader->version();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -326,8 +327,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     {
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
+                                << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId);
-
+        m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
@@ -1772,7 +1774,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage);
+            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
         }
     }
     // create temp state storage
@@ -1780,11 +1782,11 @@ void TransactionExecutor::getCode(
     {
         if (m_cachedStorage)
         {
-            stateStorage = createStateStorage(m_cachedStorage);
+            stateStorage = createStateStorage(m_cachedStorage, true);
         }
         else
         {
-            stateStorage = createStateStorage(m_backendStorage);
+            stateStorage = createStateStorage(m_backendStorage, true);
         }
     }
 
@@ -1841,11 +1843,11 @@ void TransactionExecutor::getABI(
     // create temp state storage
     if (m_cachedStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage);
+        stateStorage = createStateStorage(m_cachedStorage, true);
     }
     else
     {
-        stateStorage = createStateStorage(m_backendStorage);
+        stateStorage = createStateStorage(m_backendStorage, true);
     }
 
     auto tableName = getContractTableName(contract);
@@ -2390,7 +2392,7 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
     if (m_keyPageSize > 0)
     {
         return std::make_shared<bcos::storage::KeyPageStorage>(
-            storage, m_keyPageSize, m_keyPageIgnoreTables, ignoreNotExist);
+            storage, m_keyPageSize, m_blockVersion, m_keyPageIgnoreTables, ignoreNotExist);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }
