@@ -1605,10 +1605,6 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
 {
     std::array<std::string_view, tool::FS_ROOT_SUB_COUNT> rootSubNames = {
         tool::FS_APPS, tool::FS_USER, tool::FS_USER_TABLE, tool::FS_SYS_BIN};
-#if 1
-    // FIXME: not support now
-    blockVersion = (uint32_t)Version::V3_0_VERSION;
-#endif
 
     if (blockVersion >= (uint32_t)Version::V3_1_VERSION)
     {
@@ -1620,10 +1616,16 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
         {
             Entry entry;
             // type, status, acl_type, acl_white, acl_black, extra
-            entry.setObject<std::vector<std::string>>(
-                {tool::FS_TYPE_DIR.data(), "0", "0", "", "", ""});
+            tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::DIRECTOR);
             rootTable->setRow(subName.substr(1), std::move(entry));
         }
+
+        // add root in root, for ls
+        Entry rootEntry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(rootEntry, tool::FileType::DIRECTOR);
+        rootTable->setRow(tool::FS_ROOT, std::move(rootEntry));
+
         // build apps, usr, tables metadata
         tool::BfsFileFactory::createDir(m_storage, FS_USER);
         tool::BfsFileFactory::createDir(m_storage, FS_APPS);
@@ -1634,8 +1636,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
         {
             Entry entry;
             // type, status, acl_type, acl_white, acl_black, extra
-            entry.setObject<std::vector<std::string>>(
-                {tool::FS_TYPE_DIR.data(), "0", "0", "", "", ""});
+            tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::DIRECTOR);
             sysTable->setRow(subName.substr(tool::FS_SYS_BIN.size() + 1), std::move(entry));
         }
         // build sys contract

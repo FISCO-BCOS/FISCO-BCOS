@@ -193,8 +193,57 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
 
     if (table)
     {
-        std::string baseName;
-        std::tie(std::ignore, baseName) = getParentDirAndBaseName(absolutePath);
+        // exist
+        auto [parentDir, baseName] = getParentDirAndBaseName(absolutePath);
+        if (blockContext->blockVersion() >= (uint32_t)Version::V3_1_VERSION)
+        {
+            // check parent dir to get type
+            auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
+            if (!baseNameEntry) [[unlikely]]
+            {
+                // maybe hidden table
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
+                    << LOG_KV("absolutePath", absolutePath);
+                _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
+                return;
+            }
+            auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
+            if (baseFields[0] == tool::FS_TYPE_DIR)
+            {
+                // if type is dir, then return sub resource
+                auto keyCondition = std::make_optional<storage::Condition>();
+                // max return is 500
+                keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+                auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
+                for (const auto& key : keys | RANGES::views::all)
+                {
+                    auto entry = _executive->storage().getRow(absolutePath, key);
+                    auto fields = entry->getObject<std::vector<std::string>>();
+                    files.emplace_back(
+                        key, fields[0], std::vector<std::string>{fields.begin() + 1, fields.end()});
+                }
+            }
+            else if (baseFields[0] == tool::FS_TYPE_LINK)
+            {
+                // if type is link, then return link address
+                auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
+                auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
+                std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
+                    abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
+                BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
+                files.emplace_back(std::move(link));
+            }
+            else if (baseFields[0] == tool::FS_TYPE_CONTRACT)
+            {
+                // if type is contract, then return contract name
+                files.emplace_back(baseName, tool::FS_TYPE_CONTRACT,
+                    std::vector<std::string>{baseFields.begin() + 1, baseFields.end()});
+            }
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS), files));
+            return;
+        }
+
         // file exists, try to get type
         auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
         if (typeEntry)
@@ -364,7 +413,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     // touch(string absolute, string type)
-    std::string absolutePath, type;
+    std::string absolutePath;
+    std::string type;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath, type);
@@ -405,7 +455,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         }
     }
 
-    std::string parentDir, baseName;
+    std::string parentDir;
+    std::string baseName;
     if (type == FS_TYPE_DIR)
     {
         parentDir = absolutePath;
@@ -430,15 +481,26 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     }
 
     // set meta data in parent table
-    std::map<std::string, std::string> bfsInfo;
-    auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
-    auto&& out = asBytes(std::string(subEntry->getField(0)));
-    codec::scale::decode(bfsInfo, gsl::make_span(out));
-    bfsInfo.insert(std::make_pair(baseName, type));
-    subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-    _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
+    if (blockContext->blockVersion() >= (uint32_t)Version::V3_1_VERSION)
+    {
+        Entry subEntry;
+        tool::BfsFileFactory::buildDirEntry(subEntry, type);
+        _executive->storage().setRow(parentDir, baseName, std::move(subEntry));
 
-    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+    }
+    else
+    {
+        std::map<std::string, std::string> bfsInfo;
+        auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
+        auto&& out = asBytes(std::string(subEntry->getField(0)));
+        codec::scale::decode(bfsInfo, gsl::make_span(out));
+        bfsInfo.insert(std::make_pair(baseName, type));
+        subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+        _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
+
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+    }
 }
 
 bool BFSPrecompiled::recursiveBuildDir(
@@ -452,18 +514,19 @@ bool BFSPrecompiled::recursiveBuildDir(
     // transfer /usr/local/bin => ["usr", "local", "bin"]
     std::vector<std::string> dirList;
     std::string absoluteDir = _absoluteDir;
-    if (absoluteDir[0] == '/')
+    if (absoluteDir.starts_with('/'))
     {
         absoluteDir = absoluteDir.substr(1);
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+        absoluteDir.pop_back();
     }
     boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     std::string root = "/";
 
-    for (auto dir : dirList)
+    auto version = _executive->blockContext().lock()->blockVersion();
+    for (const auto& dir : dirList)
     {
         auto table = _executive->storage().openTable(root);
         if (!table)
@@ -473,67 +536,103 @@ bool BFSPrecompiled::recursiveBuildDir(
                                  << LOG_KV("tableName", root);
             return false;
         }
-        auto newTableName = ((root == "/") ? root : (root + "/")) + dir;
-        auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
-        if (typeEntry)
+        auto newTableName = ((root == "/") ? root : (root + "/")).append(dir);
+
+        if (version >= (uint32_t)Version::V3_1_VERSION)
         {
-            // can get type, then this type is directory
-            // try open root + dir
-            auto nextDirTable = _executive->storage().openTable(newTableName);
-            if (nextDirTable.has_value())
+            auto dirEntry = _executive->storage().getRow(root, dir);
+            if (!dirEntry)
             {
-                // root + dir table exist, try to get type entry
-                auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
-                if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
+                // not exist, then set row to root, create dir
+                Entry newEntry;
+                // type, status, acl_type, acl_white, acl_black, extra
+                tool::BfsFileFactory::buildDirEntry(newEntry, tool::FileType::DIRECTOR);
+                _executive->storage().setRow(root, dir, std::move(newEntry));
+
+                _executive->storage().createTable(newTableName, std::string(tool::FS_DIR_FIELDS));
+                root = newTableName;
+            }
+            else
+            {
+                auto dirFields = dirEntry->getObject<std::vector<std::string>>();
+                if (dirFields[0] == tool::FS_TYPE_DIR)
                 {
-                    // if success and dir is directory, continue
+                    // if dir is directory, continue
                     root = newTableName;
                     continue;
                 }
-
-                // can not get type, it means this dir is not a directory
+                // exist in root, it means this dir is not a directory
                 EXECUTIVE_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
                                      << LOG_DESC("file had already existed, and not directory type")
-                                     << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+                                     << LOG_KV("parentDir", root) << LOG_KV("dir", dir)
+                                     << LOG_KV("type", dirFields[0]);
                 return false;
             }
-
-            // root + dir not exist, create root + dir and build bfs info in root table
-            auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
-            auto&& out = asBytes(std::string(subEntry->getField(0)));
-            // codec to map
-            std::map<std::string, std::string> bfsInfo;
-            codec::scale::decode(bfsInfo, gsl::make_span(out));
-
-            /// create table and build bfs info
-            bfsInfo.insert(std::make_pair(dir, FS_TYPE_DIR));
-            _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
-            storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-            std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
-            _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
-            _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
-            _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));
-            _executive->storage().setRow(newTableName, FS_ACL_WHITE, std::move(aclWEntry));
-            _executive->storage().setRow(newTableName, FS_ACL_BLACK, std::move(aclBEntry));
-            _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
-
-            // set metadata in parent dir
-            subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-            _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
-            root = newTableName;
         }
         else
         {
-            EXECUTIVE_LOG(TRACE) << LOG_BADGE("recursiveBuildDir")
-                                 << LOG_DESC("parent type not found") << LOG_KV("parentDir", root)
-                                 << LOG_KV("dir", dir);
-            return false;
+            auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
+            if (typeEntry)
+            {
+                // can get type, then this type is directory
+                // try open root + dir
+                auto nextDirTable = _executive->storage().openTable(newTableName);
+                if (nextDirTable.has_value())
+                {
+                    // root + dir table exist, try to get type entry
+                    auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
+                    if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
+                    {
+                        // if success and dir is directory, continue
+                        root = newTableName;
+                        continue;
+                    }
+
+                    // can not get type, it means this dir is not a directory
+                    EXECUTIVE_LOG(DEBUG)
+                        << LOG_BADGE("recursiveBuildDir")
+                        << LOG_DESC("file had already existed, and not directory type")
+                        << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+                    return false;
+                }
+
+                // root + dir not exist, create root + dir and build bfs info in root table
+                auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
+                auto&& out = asBytes(std::string(subEntry->getField(0)));
+                // codec to map
+                std::map<std::string, std::string> bfsInfo;
+                codec::scale::decode(bfsInfo, gsl::make_span(out));
+
+                /// create table and build bfs info
+                bfsInfo.insert(std::make_pair(dir, FS_TYPE_DIR));
+                _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
+                storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+                std::map<std::string, std::string> newSubMap;
+                tEntry.importFields({FS_TYPE_DIR});
+                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+                aclTypeEntry.importFields({"0"});
+                aclWEntry.importFields({""});
+                aclBEntry.importFields({""});
+                extraEntry.importFields({""});
+                _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
+                _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
+                _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));
+                _executive->storage().setRow(newTableName, FS_ACL_WHITE, std::move(aclWEntry));
+                _executive->storage().setRow(newTableName, FS_ACL_BLACK, std::move(aclBEntry));
+                _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
+
+                // set metadata in parent dir
+                subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+                _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
+                root = newTableName;
+            }
+            else
+            {
+                EXECUTIVE_LOG(TRACE)
+                    << LOG_BADGE("recursiveBuildDir") << LOG_DESC("parent type not found")
+                    << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+                return false;
+            }
         }
     }
     return true;

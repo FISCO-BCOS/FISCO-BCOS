@@ -373,8 +373,6 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
     std::vector<std::string> v = {"apps", "usr", "sys", "tables"};
 
-#if 0
-// FIXME: not support now
     for (const auto& item : v)
     {
         std::promise<bool> p;
@@ -396,7 +394,6 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
             });
         p_1.get_future().get();
     }
-#endif
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);

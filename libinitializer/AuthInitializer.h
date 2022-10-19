@@ -75,6 +75,7 @@ public:
             _nodeConfig->groupId(), utcTime());
         tx->forceSender(authAdmin.asBytes());
         block->appendTransaction(tx);
+        block->blockHeader()->setVersion(_nodeConfig->compatibilityVersion());
 
         std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
         _scheduler->executeBlock(block, false,
