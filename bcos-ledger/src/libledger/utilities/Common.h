@@ -42,19 +42,6 @@ static const char* const FS_USER = "/usr";
 static const char* const FS_SYS_BIN = "/sys";
 static const char* const FS_USER_TABLE = "/tables";
 
-// FileSystem keys
-static const char* const FS_KEY_NAME = "name";
-static const char* const FS_KEY_TYPE = "type";
-static const char* const FS_KEY_SUB = "sub";
-static const char* const FS_ACL_TYPE = "acl_type";
-static const char* const FS_ACL_WHITE = "acl_white";
-static const char* const FS_ACL_BLACK = "acl_black";
-static const char* const FS_KEY_EXTRA = "extra";
-
-// FileSystem file type
-static const char* const FS_TYPE_DIR = "directory";
-static const char* const FS_TYPE_CONTRACT = "contract";
-
 enum LedgerError : int32_t
 {
     SUCCESS = 0,
