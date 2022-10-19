@@ -25,6 +25,7 @@
 #include "RPCInitializer.h"
 #include "bcos-lightnode/ledger/LedgerImpl.h"
 #include "libinitializer/CommandHelper.h"
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -44,15 +45,15 @@ static auto newStorage(const std::string& path)
     options.max_open_files = 512;
 
     // open DB
-    rocksdb::DB* db = nullptr;
-    rocksdb::Status s = rocksdb::DB::Open(options, path, &db);
-    if (!s.ok())
+    rocksdb::DB* rocksdb = nullptr;
+    rocksdb::Status status = rocksdb::DB::Open(options, path, &rocksdb);
+    if (!status.ok())
     {
-        BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", s.ToString());
-        BOOST_THROW_EXCEPTION(std::runtime_error("open rocksDB failed, err:" + s.ToString()));
+        BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", status.ToString());
+        BOOST_THROW_EXCEPTION(std::runtime_error("open rocksDB failed, err:" + status.ToString()));
     }
     return std::make_shared<bcos::storage::RocksDBStorage>(
-        std::unique_ptr<rocksdb::DB>(db), nullptr);
+        std::unique_ptr<rocksdb::DB>(rocksdb), nullptr);
 }
 
 static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
@@ -128,6 +129,13 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     LIGHTNODE_LOG(INFO) << "Prepare genesis block...";
     bcostars::Block genesisBlock;
     genesisBlock.blockHeader.data.blockNumber = 0;
+    if (nodeConfig->compatibilityVersion() >=
+        static_cast<uint32_t>(bcos::protocol::Version::V3_1_VERSION))
+    {
+        genesisBlock.blockHeader.data.version =
+            static_cast<decltype(genesisBlock.blockHeader.data.version)>(
+                nodeConfig->compatibilityVersion());
+    }
     bcos::concepts::bytebuffer::assignTo(
         nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
     ~ledger->setupGenesisBlock(std::move(genesisBlock));
@@ -152,11 +160,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     std::string configFile = param.configFilePath;
     std::string genesisFile = param.genesisFilePath;
 
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(configFile, pt);
+    boost::property_tree::ptree configProperty;
+    boost::property_tree::read_ini(configFile, configProperty);
 
     auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    logInitializer->initLog(pt);
+    logInitializer->initLog(configProperty);
 
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
@@ -188,9 +196,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     front->setGatewayInterface(gateway);
     front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
     front->registerModuleMessageDispatcher(bcos::protocol::BlockSync,
-        [](bcos::crypto::NodeIDPtr, const std::string&, bcos::bytesConstRef) {});
+        [](const bcos::crypto::NodeIDPtr&, const std::string&, bcos::bytesConstRef) {});
     front->registerModuleMessageDispatcher(bcos::protocol::AMOP,
-        [](bcos::crypto::NodeIDPtr, const std::string&, bcos::bytesConstRef) {});
+        [](const bcos::crypto::NodeIDPtr&, const std::string&, bcos::bytesConstRef) {});
     front->start();
 
     // local ledger
