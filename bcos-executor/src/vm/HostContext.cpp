@@ -19,10 +19,10 @@
  * @date: 2021-05-24
  */
 
+#include "HostContext.h"
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
-#include "HostContext.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
@@ -350,6 +350,7 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
 bcos::bytes HostContext::externalCodeRequest(const std::string_view& _a)
 {
     auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    request->gas = gas();
     request->senderAddress = myAddress();
     request->receiveAddress = myAddress();
     request->data = bcos::protocol::GET_CODE_INPUT_BYTES;
