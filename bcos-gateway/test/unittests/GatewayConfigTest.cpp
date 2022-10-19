@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithNoBwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithNoBwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 0);
         BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 0);
@@ -266,6 +266,24 @@ BOOST_AUTO_TEST_CASE(test_doubleMBToBit)
     BOOST_CHECK_EQUAL(config->doubleMBToBit(25.5), 255 * 1024 * 1024 / 8 / 10);
 
     BOOST_CHECK_EQUAL(config->doubleMBToBit(100), 100 * 1024 * 1024 / 8);
+}
+
+BOOST_AUTO_TEST_CASE(test_RedisConfig)
+{
+    auto config = std::make_shared<GatewayConfig>();
+    std::string configIni("data/config/config_ipv6.ini");
+
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+    config->initRedisConfig(pt);
+
+    BOOST_CHECK_EQUAL(config->redisConfig().host, "127.127.127.127");
+    BOOST_CHECK_EQUAL(config->redisConfig().port, 12345);
+    BOOST_CHECK_EQUAL(config->redisConfig().connectionPoolSize, 111);
+    BOOST_CHECK_EQUAL(config->redisConfig().timeout, 54321);
+    BOOST_CHECK_EQUAL(config->redisConfig().password, "abc");
+    BOOST_CHECK_EQUAL(config->redisConfig().db, 12);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
