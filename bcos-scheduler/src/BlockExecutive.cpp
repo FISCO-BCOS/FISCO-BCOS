@@ -1455,11 +1455,10 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
-            auto executor = m_scheduler->executorManager()->dispatchCorrespondExecutor(address);
+            auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
             {
-                SCHEDULER_LOG(DEBUG) << "Could not dispatch correspond executor during getCode(). "
-                                        "There may not be this address."
+                SCHEDULER_LOG(ERROR) << "Could not dispatch correspond executor during getCode(). "
                                      << LOG_KV("address", address);
                 return bcos::bytes();
             }
