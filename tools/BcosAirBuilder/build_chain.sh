@@ -1222,17 +1222,17 @@ generate_common_ini() {
 
 [redis]
     ; redis server ip
-    ; server_ip=127.0.0.1
+    ;server_ip=127.0.0.1
     ; redis server port
-    ; server_port=6379
+    ;server_port=6379
     ; redis request timeout, unit ms
-    ; request_timeout=3000
+    ;request_timeout=3000
     ; redis connection pool size
-    ; connection_pool_size=16
+    ;connection_pool_size=16
     ; redis password, default empty
-    ; password=
+    ;password=
     ; redis db, default 0th
-    ; db=0
+    ;db=0
 
 [flow_control]
     ; the switch for distributed rate limit
@@ -1256,18 +1256,18 @@ generate_common_ini() {
     ;
     ; conn_outgoing_bw_limit=2
     ;
-    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
-    ;   ip_192.108.0.1=3
-    ;   ip_192.108.0.2=3
-    ;   ip_192.108.0.3=3
+    ; specify IP to limit bandwidth, format: conn_outgoing_bw_limit_x.x.x.x=n
+    ;   conn_outgoing_bw_limit_192.108.0.1=3
+    ;   conn_outgoing_bw_limit_192.108.0.2=3
+    ;   conn_outgoing_bw_limit_192.108.0.3=3
     ;
     ; default bandwidth limit for the group
     ; group_outgoing_bw_limit=2
     ;
-    ; specify group to limit bandwidth, group_groupName=n
-    ;   group_group0=2
-    ;   group_group1=2
-    ;   group_group2=2
+    ; specify group to limit bandwidth, group_outgoing_bw_limit_groupName=n
+    ;   group_outgoing_bw_limit_group0=2
+    ;   group_outgoing_bw_limit_group1=2
+    ;   group_outgoing_bw_limit_group2=2
 
 [log]
     enable=true
