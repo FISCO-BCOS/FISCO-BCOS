@@ -1220,23 +1220,19 @@ generate_common_ini() {
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
 
-[log]
-    enable=true
-    log_path=./log
-    ; info debug trace
-    level=info
-    ; MB
-    max_log_file_size=200
-
 [redis]
     ; redis server ip
-    server_ip=127.0.0.1
+    ; server_ip=127.0.0.1
     ; redis server port
-    server_port=6379
+    ; server_port=6379
     ; redis request timeout, unit ms
-    request_timeout=3000
+    ; request_timeout=3000
     ; redis connection pool size
-    connection_pool_size=16
+    ; connection_pool_size=16
+    ; redis password, default empty
+    ; password=
+    ; redis db, default 0th
+    ; db=0
 
 [flow_control]
     ; the switch for distributed rate limit
@@ -1272,6 +1268,14 @@ generate_common_ini() {
     ;   group_group0=2
     ;   group_group1=2
     ;   group_group2=2
+
+[log]
+    enable=true
+    log_path=./log
+    ; info debug trace
+    level=info
+    ; MB
+    max_log_file_size=200
 EOF
 }
 

@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithNoBwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithNoBwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 0);
         BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 0);

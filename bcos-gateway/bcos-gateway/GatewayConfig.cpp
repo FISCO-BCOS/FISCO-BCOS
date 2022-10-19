@@ -399,15 +399,16 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     int32_t statReporterInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
 
     // modules_without_bw_limit=raft,pbft
-    std::string strNoLimitModules =
+    std::string strModulesWithoutLimit =
         _pt.get<std::string>("flow_control.modules_without_bw_limit", "raft,pbft,cons_txs_sync");
 
     std::set<uint16_t> moduleIDs;
     std::vector<std::string> modules;
 
-    if (!strNoLimitModules.empty())
+    if (!strModulesWithoutLimit.empty())
     {
-        boost::split(modules, strNoLimitModules, boost::is_any_of(","), boost::token_compress_on);
+        boost::split(
+            modules, strModulesWithoutLimit, boost::is_any_of(","), boost::token_compress_on);
 
         for (auto module : modules)
         {
@@ -528,7 +529,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     }
 
     m_rateLimiterConfig.statReporterInterval = statReporterInterval;
-    m_rateLimiterConfig.modulesWithNoBwLimit = moduleIDs;
+    m_rateLimiterConfig.modulesWithoutLimit = moduleIDs;
     m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
     m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
     m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
@@ -586,6 +587,8 @@ void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
         server_port=
         request_timeout=
         connection_pool_size=
+        password=
+        db=
      */
 
     // server_ip
@@ -617,16 +620,25 @@ void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
     // connection_pool_size
     int32_t redisPoolSize = _pt.get<int32_t>("redis.connection_pool_size", 16);
 
-    m_redisConfig.redisServerIP = redisServerIP;
-    m_redisConfig.redisServerPort = redisServerPort;
-    m_redisConfig.redisTimeOut = redisTimeout;
-    m_redisConfig.redisPoolSize = redisPoolSize;
+    // password
+    std::string redisPassword = _pt.get<std::string>("redis.password", "");
+
+    // db
+    int redisDB = _pt.get<int>("redis.db", 0);
+
+    m_redisConfig.host = redisServerIP;
+    m_redisConfig.port = redisServerPort;
+    m_redisConfig.timeout = redisTimeout;
+    m_redisConfig.connectionPoolSize = redisPoolSize;
+    m_redisConfig.password = redisPassword;
+    m_redisConfig.db = redisDB;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRedisConfig")
                              << LOG_KV("redisServerIP", redisServerIP)
                              << LOG_KV("redisServerPort", redisServerPort)
-                             << LOG_KV("redisTimeout", redisTimeout)
-                             << LOG_KV("redisPoolSize", redisPoolSize);
+                             << LOG_KV("redisDB", redisDB) << LOG_KV("redisTimeout", redisTimeout)
+                             << LOG_KV("redisPoolSize", redisPoolSize)
+                             << LOG_KV("redisPassword", redisPassword);
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)
