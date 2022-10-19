@@ -153,7 +153,7 @@ void WsService::reportConnectedNodes()
         }
         catch (std::exception const& e)
         {
-            BOOST_SSL_LOG(WARNING) << LOG_DESC("reportConnectedNodes exception")
+            BOOST_SSL_LOG(WARNING) << LOG_DESC("connected nodes exception")
                                    << LOG_KV("error", boost::diagnostic_information(e));
         }
     });

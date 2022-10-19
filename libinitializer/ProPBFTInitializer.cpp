@@ -86,8 +86,8 @@ void ProPBFTInitializer::reportNodeInfo()
         if (_error)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("reportNodeInfo to rpc error") << LOG_KV("code", _error->errorCode())
-                << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("asyncNotifyGroupInfo to rpc error")
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
 
@@ -96,7 +96,7 @@ void ProPBFTInitializer::reportNodeInfo()
         if (_error)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("reportNodeInfo to gateway error")
+                << LOG_DESC("asyncNotifyGroupInfo to gateway error")
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
