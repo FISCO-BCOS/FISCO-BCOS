@@ -17,8 +17,10 @@
  * @file Entry.cpp
  */
 
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -161,6 +163,59 @@ BOOST_AUTO_TEST_CASE(largeObject)
     entry.setField(0, std::string(1024, 'a'));
 
     BOOST_CHECK_EQUAL(entry.getField(0), std::string(1024, 'a'));
+}
+
+BOOST_AUTO_TEST_CASE(entryHash)
+{
+    auto data = "Hello world!"s;
+    auto table = "table!"s;
+    auto key = "key!"s;
+
+    Entry entry;
+    entry.setStatus(Entry::MODIFIED);
+    entry.setField(0, data);
+
+    auto sm3 = std::make_shared<bcos::crypto::SM3>();
+    auto oldHash = entry.hash(table, key, sm3, 0);
+    auto oldExpect = sm3->hash(bytesConstRef((bcos::byte*)data.data(), data.size()));
+    BOOST_CHECK_EQUAL(oldHash, oldExpect);
+
+    entry.setStatus(Entry::DELETED);
+    auto deletedHash = entry.hash(table, key, sm3, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+
+    auto anyHasher = sm3->hasher();
+    auto deletedExpect = std::visit(
+        [&](auto& hasher) {
+            hasher.update(table);
+            hasher.update(key);
+
+            bcos::crypto::HashType hash;
+            hasher.final(hash);
+            return hash;
+        },
+        anyHasher);
+    BOOST_CHECK_EQUAL(deletedHash, deletedExpect);
+
+    entry.setStatus(Entry::MODIFIED);
+    entry.setField(0, data);
+    auto modifyHash = entry.hash(table, key, sm3, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+    anyHasher = sm3->hasher();
+    auto modifyExpect = std::visit(
+        [&](auto& hasher) {
+            hasher.update(table);
+            hasher.update(key);
+            hasher.update(data);
+
+            bcos::crypto::HashType hash;
+            hasher.final(hash);
+            return hash;
+        },
+        anyHasher);
+    BOOST_CHECK_EQUAL(modifyHash, modifyExpect);
+
+    entry.setStatus(Entry::NORMAL);
+    auto normalHash = entry.hash(table, key, sm3, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+    BOOST_CHECK_EQUAL(normalHash, bcos::crypto::HashType{});
 }
 
 BOOST_AUTO_TEST_SUITE_END()
