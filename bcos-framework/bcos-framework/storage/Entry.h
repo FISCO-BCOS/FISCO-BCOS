@@ -249,9 +249,7 @@ public:
                         {
                             STORAGE_LOG(TRACE)
                                 << "Entry hash, dirty entry: " << table << " | " << toHex(key)
-                                << " | " << toHex(table)
-                                << toHex(key)
-                                << toHex(data)
+                                << " | " << toHex(table) << toHex(key) << toHex(data)
                                 << LOG_KV("hash", entryHash.abridged());
                         }
                         break;
