@@ -396,7 +396,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     bool distributedRateLimitOn = _pt.get<bool>("flow_control.distributed_ratelimit_on", false);
 
     // stat_reporter_interval=60000
-    int32_t statReporterInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
+    int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
 
     // modules_without_bw_limit=raft,pbft
     std::string strModulesWithoutLimit =
@@ -528,7 +528,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
         }
     }
 
-    m_rateLimiterConfig.statReporterInterval = statReporterInterval;
+    m_rateLimiterConfig.statInterval = statInterval;
     m_rateLimiterConfig.modulesWithoutLimit = moduleIDs;
     m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
     m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
@@ -556,7 +556,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimiterConfig")
                              << LOG_KV("rateLimiterConfigEffect",
                                     m_rateLimiterConfig.hasRateLimiterConfigEffect())
-                             << LOG_KV("statReporterInterval", statReporterInterval)
+                             << LOG_KV("statInterval", statInterval)
                              << LOG_KV("distributedRateLimitOn", distributedRateLimitOn)
                              << LOG_KV("groupRateLimitOn", groupRateLimitOn)
                              << LOG_KV("conRateLimitOn", conRateLimitOn)

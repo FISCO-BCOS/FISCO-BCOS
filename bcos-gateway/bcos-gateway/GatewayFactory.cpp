@@ -364,7 +364,7 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
     const GatewayConfig::RedisConfig& _redisConfig)
 {
     auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
-    rateLimiterStat->setStatReporterInterval(_rateLimiterConfig.statReporterInterval);
+    rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
 
     auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig, _redisConfig);
 
