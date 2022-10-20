@@ -1410,7 +1410,37 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     {
         // genesis block exists, quit
         LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
-        return true;
+        std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+        // get genesisBlockHeader
+        asyncGetBlockDataByNumber(
+            0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+                if (error)
+                {
+                    LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
+                    blockHeaderFuture.set_value(nullptr);
+                }
+                else
+                {
+                    blockHeaderFuture.set_value(block->blockHeader());
+                }
+            });
+        bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
+            blockHeaderFuture.get_future().get();
+        auto initialGenesisData = *toHexString(m_genesisBlockHeader->extraData());
+        // check genesisData whether inconsistent with initialGenesisData
+        if (initialGenesisData == _genesisData)
+        {
+            return true;
+        }
+        else
+        {
+            std::cout << "### Genesis Date:" << initialGenesisData << std::endl;
+            LEDGER_LOG(INFO) << LOG_DESC("InitialGenesisData")
+                             << LOG_KV("genesisData", initialGenesisData);
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << errinfo_comment(
+                    "The Genesis Data is inconsistent with the initial Genesis Data"));
+        }
     }
 
     // clang-format off
@@ -1445,6 +1475,11 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     createFileSystemTables(versionNumber);
+    if (versionNumber <= (uint32_t)protocol::Version::MAX_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                  "The genesis compatibilityVersion is " + _compatibilityVersion));
+    }
 
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
