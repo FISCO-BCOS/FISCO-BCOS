@@ -62,8 +62,8 @@ public:
         auto authAdmin = Address(_nodeConfig->authAdminAddress());
         std::vector<Address> initGovernors({authAdmin});
         std::vector<string32> weights({bcos::codec::toString32(h256(1))});
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("AuthInitializer")
-                               << LOG_KV("authAdminAddress", _nodeConfig->authAdminAddress());
+        INITIALIZER_LOG(INFO) << LOG_BADGE("AuthInitializer")
+                              << LOG_KV("authAdminAddress", _nodeConfig->authAdminAddress());
 
         // bytes code + abi encode constructor params
         codec::abi::ContractABICodec abi(_protocol->cryptoSuite()->hashImpl());
@@ -86,7 +86,7 @@ public:
                     BOOST_THROW_EXCEPTION(
                         BCOS_ERROR(-1, "AuthInitializer: scheduler executeBlock error"));
                 }
-                INITIALIZER_LOG(DEBUG)
+                INITIALIZER_LOG(INFO)
                     << LOG_BADGE("AuthInitializer") << LOG_DESC("scheduler execute block success!")
                     << LOG_KV("blockHash", block->blockHeader()->hash().hex());
                 executedHeader.set_value(std::move(_header));
