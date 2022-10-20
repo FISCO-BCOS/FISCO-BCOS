@@ -81,7 +81,7 @@ void EventSub::doLoop()
     m_timer->restart();
     {
         boost::shared_lock<boost::shared_mutex> lock(x_tasks);
-        EVENT_SUB(INFO) << LOG_BADGE("doLoop") << LOG_DESC("event sub tasks report")
+        EVENT_SUB(INFO) << LOG_BADGE("doLoop") << LOG_DESC("event sub tasks")
                         << LOG_KV("working event sub count", m_workingTasks.size())
                         << LOG_KV("suspend event sub count", m_suspendTasks.size());
     }

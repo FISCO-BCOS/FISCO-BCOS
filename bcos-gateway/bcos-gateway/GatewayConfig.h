@@ -46,10 +46,18 @@ public:
     // config for redis
     struct RedisConfig
     {
-        std::string redisServerIP;
-        uint16_t redisServerPort;
-        int32_t redisTimeOut = -1;
-        int32_t redisPoolSize = 16;
+        // redis server ip
+        std::string host;
+        // redis server port
+        uint16_t port;
+        // redis request timeout
+        int32_t timeout = -1;
+        // redis connection pool size, default 16
+        int32_t connectionPoolSize = 16;
+        // redis password, default empty
+        std::string password;
+        // redis db, default 0th
+        int db = 0;
     };
 
     // config for rate limit
@@ -61,7 +69,7 @@ public:
         // if turn on distributed ratelimit
         bool distributedRateLimitOn = false;
         // stat reporter interval, unit: ms
-        int32_t statReporterInterval = 60000;
+        int32_t statInterval = 60000;
 
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
@@ -77,7 +85,7 @@ public:
         std::unordered_map<std::string, int64_t> group2BwLimit;
 
         // the message of modules that do not limit bandwidth
-        std::set<uint16_t> modulesWithNoBwLimit;
+        std::set<uint16_t> modulesWithoutLimit;
 
         bool isDistributedRateLimitOn() const
         {

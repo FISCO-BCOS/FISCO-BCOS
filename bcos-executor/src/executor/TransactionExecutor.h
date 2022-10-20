@@ -310,6 +310,7 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
+    uint32_t m_blockVersion = 0;
     size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;

@@ -39,6 +39,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -470,7 +471,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         }
 
         /// create link table
-        m_storageWrapper->createTable(tableName, STORAGE_VALUE);
+        auto linkTable = m_storageWrapper->createTable(tableName, STORAGE_VALUE);
 
         /// create code index contract
         auto codeTable = getContractTableName(newAddress, false);
@@ -482,12 +483,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
 
         /// set link data
-        Entry addressEntry = {};
-        addressEntry.importFields({newAddress});
-        m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
-        Entry typeEntry = {};
-        typeEntry.importFields({FS_TYPE_LINK});
-        m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
+        tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
     }
     callParameters->type = CallParameters::FINISHED;
     callParameters->status = (int32_t)TransactionStatus::None;
@@ -1076,8 +1072,8 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.substr(0, 5) == USER_SYS_PREFIX ||
-        getContractTableName(_sender, false).substr(0, 5) == USER_SYS_PREFIX)
+    if (_tableName.starts_with(USER_SYS_PREFIX) ||
+        getContractTableName(_sender, false).starts_with(USER_SYS_PREFIX))
     {
         return;
     }
@@ -1099,25 +1095,7 @@ void TransactionExecutive::creatAuthTable(
 
     if (table)
     {
-        Entry adminEntry(table->tableInfo());
-        adminEntry.importFields({admin});
-        m_storageWrapper->setRow(authTableName, ADMIN_FIELD, std::move(adminEntry));
-
-        Entry statusEntry(table->tableInfo());
-        statusEntry.importFields({CONTRACT_NORMAL});
-        m_storageWrapper->setRow(authTableName, STATUS_FIELD, std::move(statusEntry));
-
-        Entry emptyType;
-        emptyType.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_TYPE, std::move(emptyType));
-
-        Entry emptyWhite;
-        emptyWhite.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_WHITE, std::move(emptyWhite));
-
-        Entry emptyBlack;
-        emptyBlack.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_BLACK, std::move(emptyBlack));
+        tool::BfsFileFactory::buildAuth(table.value(), admin);
     }
 }
 
@@ -1210,9 +1188,11 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     // static call does not have 'origin', so return true for now
     // precompiled return true by default
     if (callParameters->staticCall || isPrecompiled(callParameters->receiveAddress))
+    {
         return true;
+    }
     auto blockContext = m_blockContext.lock();
-    auto authMgrAddress =
+    const auto* authMgrAddress =
         blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
@@ -1236,8 +1216,7 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(
-            shared_from_this(), std::move(path), func, address);
+        result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
     }
     EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
                          << LOG_KV("result", result);

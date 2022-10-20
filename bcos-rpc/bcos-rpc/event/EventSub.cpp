@@ -308,7 +308,7 @@ void EventSub::executeAddTasks()
     m_addTasks.clear();
 
     auto taskCount = m_tasks.size();
-    EVENT_SUB(INFO) << LOG_BADGE("executeAddTasks") << LOG_DESC("report event subscribe tasks ")
+    EVENT_SUB(INFO) << LOG_BADGE("executeAddTasks") << LOG_DESC("event subscribe tasks ")
                     << LOG_KV("count", taskCount);
 }
 
@@ -337,7 +337,7 @@ void EventSub::executeCancelTasks()
     m_cancelTasks.clear();
 
     auto taskCount = m_tasks.size();
-    EVENT_SUB(INFO) << LOG_BADGE("executeCancelTasks") << LOG_DESC("report event subscribe tasks ")
+    EVENT_SUB(INFO) << LOG_BADGE("executeCancelTasks") << LOG_DESC("event subscribe tasks ")
                     << LOG_KV("count", taskCount);
 }
 

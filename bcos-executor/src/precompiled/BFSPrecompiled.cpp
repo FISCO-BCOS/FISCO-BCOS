@@ -24,6 +24,7 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-tool/BfsFileFactory.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -165,7 +166,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
         return;
     }
 
-    auto bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    const auto* bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
         absolutePath, FS_TYPE_DIR, _callParameters->m_gas);
@@ -284,12 +285,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
-            auto addressEntry = linkTable->newEntry();
-            addressEntry.importFields({contractAddress});
-            auto abiEntry = linkTable->newEntry();
-            abiEntry.importFields({contractAbi});
-            _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
-            _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
+            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
             return;
         }
@@ -313,17 +309,10 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         _callParameters->setExecResult(codec.encode((int32_t)CODE_FILE_BUILD_DIR_FAILED));
         return;
     }
-    _executive->storage().createTable(linkTableName, STORAGE_VALUE);
+    auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     // set link info to link table
-    Entry typeEntry, nameEntry, addressEntry, abiEntry;
-    typeEntry.importFields({FS_TYPE_LINK});
-    nameEntry.importFields({contractVersion});
-    addressEntry.importFields({contractAddress});
-    abiEntry.importFields({contractAbi});
-    _executive->storage().setRow(linkTableName, FS_KEY_TYPE, std::move(typeEntry));
-    _executive->storage().setRow(linkTableName, FS_KEY_NAME, std::move(nameEntry));
-    _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
-    _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
+    tool::BfsFileFactory::buildLink(
+        newLinkTable.value(), contractAddress, contractAbi, contractVersion);
     _callParameters->setExecResult(codec.encode((int32_t)CODE_SUCCESS));
 }
 
@@ -501,15 +490,12 @@ bool BFSPrecompiled::recursiveBuildDir(
                     root = newTableName;
                     continue;
                 }
-                else
-                {
-                    // can not get type, it means this dir is not a directory
-                    EXECUTIVE_LOG(DEBUG)
-                        << LOG_BADGE("recursiveBuildDir")
-                        << LOG_DESC("file had already existed, and not directory type")
-                        << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
-                    return false;
-                }
+
+                // can not get type, it means this dir is not a directory
+                EXECUTIVE_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
+                                     << LOG_DESC("file had already existed, and not directory type")
+                                     << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
+                return false;
             }
 
             // root + dir not exist, create root + dir and build bfs info in root table
