@@ -119,7 +119,6 @@ public:
     ~KeyPageStorage() override
     {
         m_recoder.clear();
-        // #pragma omp parallel for
         for (size_t i = 0; i < m_buckets.size(); ++i)
         {
             m_buckets[i].container.clear();

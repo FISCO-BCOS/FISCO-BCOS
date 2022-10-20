@@ -820,47 +820,49 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
     bool isStaticCall = true;
-#pragma omp parallel for
-    for (auto i = 0u; i < inputs.size(); ++i)
-    {
-        auto& params = inputs[i];
 
-        if (!params->staticCall())
+    std::mutex writeMutex;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0U, inputs.size()), [&, this](auto const& range) {
+        for (auto i = range.begin(); i < range.end(); ++i)
         {
-            isStaticCall = false;
-        }
+            auto& params = inputs[i];
 
-        switch (params->type())
-        {
-        case ExecutionMessage::TXHASH:
-        {
-#pragma omp critical
+            if (!params->staticCall())
             {
+                isStaticCall = false;
+            }
+
+            switch (params->type())
+            {
+            case ExecutionMessage::TXHASH:
+            {
+                std::unique_lock lock(writeMutex);
                 txHashes->emplace_back(params->transactionHash());
                 indexes.emplace_back(i);
                 fillInputs->emplace_back(std::move(params));
-            }
 
-            break;
+                break;
+            }
+            case ExecutionMessage::MESSAGE:
+            case bcos::protocol::ExecutionMessage::REVERT:
+            case bcos::protocol::ExecutionMessage::FINISHED:
+            case bcos::protocol::ExecutionMessage::KEY_LOCK:
+            {
+                callParametersList->at(i) = createCallParameters(*params, params->staticCall());
+                break;
+            }
+            default:
+            {
+                auto message =
+                    (boost::format("Unsupported message type: %d") % params->type()).str();
+                EXECUTOR_NAME_LOG(ERROR)
+                    << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
+                // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
+                break;
+            }
+            }
         }
-        case ExecutionMessage::MESSAGE:
-        case bcos::protocol::ExecutionMessage::REVERT:
-        case bcos::protocol::ExecutionMessage::FINISHED:
-        case bcos::protocol::ExecutionMessage::KEY_LOCK:
-        {
-            callParametersList->at(i) = createCallParameters(*params, params->staticCall());
-            break;
-        }
-        default:
-        {
-            auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
-            EXECUTOR_NAME_LOG(ERROR)
-                << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
-            // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
-            break;
-        }
-        }
-    }
+    });
 
     if (isStaticCall)
     {
@@ -903,13 +905,17 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
                     return;
                 }
                 auto recordT = utcTime();
-#pragma omp parallel for
-                for (size_t i = 0; i < transactions->size(); ++i)
-                {
-                    assert(transactions->at(i));
-                    callParametersList->at(indexes[i]) =
-                        createCallParameters(*fillInputs->at(i), *transactions->at(i));
-                }
+                tbb::parallel_for(tbb::blocked_range<size_t>(0U, transactions->size()),
+                    [this, &transactions, &callParametersList, &indexes, &fillInputs](
+                        auto const& range) {
+                        for (auto i = range.begin(); i < range.end(); ++i)
+                        {
+                            assert(transactions->at(i));
+                            callParametersList->at(indexes[i]) =
+                                createCallParameters(*fillInputs->at(i), *transactions->at(i));
+                        }
+                    });
+
                 auto prepareT = utcTime() - recordT;
                 recordT = utcTime();
 
@@ -1425,7 +1431,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         }
                         else
                         {
-                            // Note: must be sure that the log accessed data should be valid always
+                            // Note: must be sure that the log accessed data should be valid
+                            // always
                             EXECUTOR_NAME_LOG(DEBUG)
                                 << LOG_BADGE("dagExecuteTransactionsInternal")
                                 << LOG_DESC("the precompiled can't be parallel")

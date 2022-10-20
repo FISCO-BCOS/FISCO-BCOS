@@ -10,6 +10,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
+#include <tbb/blocked_range.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/asio/defer.hpp>
@@ -71,7 +72,6 @@ void BlockExecutive::prepare()
     {
         SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: empty block";
     }
-#pragma omp flush(m_hasDAG)
 
     // prepare all executors
     if (!m_hasDAG)
@@ -152,11 +152,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
 
     bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
-    {
-#pragma omp critical
-        m_hasDAG = enableDAG;
-    }
-#pragma omp flush(m_hasDAG)
+    m_hasDAG = enableDAG;
     return message;
 }
 
@@ -172,23 +168,26 @@ void BlockExecutive::buildExecutivesFromMetaData()
     if (m_blockTxs)
     {
         // can fetch tx from txpool, build message which type is MESSAGE
-#pragma omp parallel for
-        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
-        {
-            auto metaData = m_block->transactionMetaData(i);
-            if (metaData)
-            {
-                m_executiveResults[i].transactionHash = metaData->hash();
-                m_executiveResults[i].source = metaData->source();
-            }
-            auto contextID = i + m_startContextID;
-            auto message = buildMessage(contextID, (*m_blockTxs)[i]);
-            std::string to = {message->to().data(), message->to().size()};
-            bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
-#pragma omp critical
-            m_hasDAG = m_hasDAG || enableDAG;
-            saveMessage(to, std::move(message), enableDAG);
-        }
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
+            [this](auto const& range) {
+                for (auto i = range.begin(); i < range.end(); ++i)
+                {
+                    auto metaData = m_block->transactionMetaData(i);
+                    if (metaData)
+                    {
+                        m_executiveResults[i].transactionHash = metaData->hash();
+                        m_executiveResults[i].source = metaData->source();
+                    }
+                    auto contextID = i + m_startContextID;
+                    auto message = buildMessage(contextID, (*m_blockTxs)[i]);
+                    std::string to = {message->to().data(), message->to().size()};
+                    bool enableDAG =
+                        metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+
+                    m_hasDAG = m_hasDAG || enableDAG;
+                    saveMessage(std::move(to), std::move(message), enableDAG);
+                }
+            });
     }
     else
     {
@@ -937,13 +936,18 @@ void BlockExecutive::DMCExecute(
                       << LOG_KV("cost", utcTime() - lastT)
                       << LOG_KV("contractNum", contractAddress.size());
 
-// for each dmcExecutor
-#pragma omp parallel for
-        for (size_t i = 0; i < contractAddress.size(); i++)
-        {
-            auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
-            dmcExecutor->go(executorCallback);
-        }
+        // for each dmcExecutor
+        // Use isolate task_arena to avoid error
+        tbb::this_task_arena::isolate([this, &contractAddress, &executorCallback] {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0U, contractAddress.size()),
+                [this, &contractAddress, &executorCallback](auto const& range) {
+                    for (auto i = range.begin(); i < range.end(); ++i)
+                    {
+                        auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
+                        dmcExecutor->go(executorCallback);
+                    }
+                });
+        });
     }
     catch (bcos::Error& e)
     {
