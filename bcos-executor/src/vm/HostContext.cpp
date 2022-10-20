@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
@@ -319,8 +320,42 @@ evmc_result HostContext::callBuiltInPrecompiled(
 bool HostContext::setCode(bytes code)
 {
     // set code will cause exception when exec revert
-    auto table = m_executive->storage().openTable(m_tableName);
-    if (table)
+    // new logic
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        auto contractTable = m_executive->storage().openTable(m_tableName);
+        // set code hash in contract table
+        Entry codeHashEntry;
+        auto codeHash = hashImpl()->hash(code);
+        if (contractTable)
+        {
+            codeHashEntry.importFields({codeHash.asBytes()});
+            bytes codeHashBytes = codeHash.asBytes();
+            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+        }
+        // set code in code binary table
+        auto codeTable = m_executive->storage().openTable(bcos::ledger::SYS_CODE_BINARY);
+        if (!codeTable)
+        {
+            m_executive->storage().createTable(
+                std::string(bcos::ledger::SYS_CODE_BINARY), std::string(STORAGE_VALUE));
+        }
+        auto hasCodeEntry =
+            m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+        if (!hasCodeEntry || hasCodeEntry->get().empty())
+        {
+            Entry codeEntry;
+            codeEntry.importFields({std::move(code)});
+            m_executive->storage().setRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
+            return true;
+        }
+        else
+            return true;
+    }
+    // old logic
+    auto contractTable = m_executive->storage().openTable(m_tableName);
+    if (contractTable)
     {
         Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
@@ -478,6 +513,10 @@ int64_t HostContext::blockNumber() const
 {
     return m_executive->blockContext().lock()->number();
 }
+uint32_t HostContext::blockVersion() const
+{
+    return m_executive->blockContext().lock()->blockVersion();
+}
 int64_t HostContext::timestamp() const
 {
     return m_executive->blockContext().lock()->timestamp();
@@ -492,6 +531,16 @@ std::optional<storage::Entry> HostContext::code()
 {
     auto start = utcTimeUs();
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+    if (!entry || entry->get().empty())
+    {
+        if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+        {
+            auto codehash = codeHash();
+            entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codehash.hex());
+            m_getTimeUsed.fetch_add(utcTimeUs() - start);
+            return entry;
+        }
+    }
     m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return entry;
 }
@@ -503,7 +552,8 @@ h256 HostContext::codeHash()
     {
         auto code = entry->getField(0);
 
-        return h256(std::string(code));  // TODO: h256 support decode from string_view
+        return h256(code, FixedBytes<32>::StringDataType::FromBinary);  // TODO: h256 support decode
+                                                                        // from string_view
     }
 
     return h256();
