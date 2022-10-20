@@ -114,8 +114,8 @@ void SerialBlockExecutive::asyncExecute(
                 return;
             }
 
-            SERIAL_EXECUTE_LOG(INFO)
-                << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block begin");
+            SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                                     << LOG_DESC("serialExecute block begin");
 
             serialExecute([this, createMsgT, startT, callback = std::move(callback)](
                               bcos::Error::UniquePtr error, protocol::BlockHeader::Ptr header,

@@ -427,17 +427,24 @@ void BlockExecutive::asyncExecute(
                                         << LOG_KV("createMsgT", createMsgT)
                                         << LOG_KV("dagExecuteT", (utcTime() - startT))
                                         << LOG_KV("hash", blockHeader->hash().abridged());
+
+                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                                        << LOG_DESC("DMCExecute begin after DAGExecute");
                     DMCExecute(std::move(callback));
                 });
             }
             else
             {
+                SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                                    << LOG_DESC("DMCExecute begin without DAGExecute");
                 DMCExecute(std::move(callback));
             }
         });
     }
     else
     {
+        SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                             << LOG_DESC("DMCExecute begin for call");
         DMCExecute(std::move(callback));
     }
 }
