@@ -1411,10 +1411,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
         // get genesisBlockHeader
         asyncGetBlockDataByNumber(
-            number, HEADER, [this, &blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+            0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
                 if (error)
                 {
-                    EXECUTOR_NAME_LOG(INFO) << "Get genesisBlockHeader from storage failed";
+                    LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
                     blockHeaderFuture.set_value(nullptr);
                 }
                 else
@@ -1433,8 +1433,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         else
         {
             BOOST_THROW_EXCEPTION(
-                bcos::InvalidConfig() << bcos::errinfo_comment(
-                    "The Genesis Data is error, Inconsistent with the initial Genesis Data"));
+                bcos::tool::InvalidConfig() << errinfo_comment(
+                    "The Genesis Data is inconsistent with the initial Genesis Data"));
             std::cout << "### Genesis Date:" << initialGenesisData << std::endl;
             LEDGER_LOG(INFO) << LOG_DESC("InitialGenesisData")
                              << LOG_KV("genesisData", initialGenesisData);
@@ -1492,7 +1492,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     }
     else
     {
-        BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
                                   "The genesis compatibilityVersion is " + _compatibilityVersion));
     }
     header->setExtraData(bcos::bytes(_genesisData.begin(), _genesisData.end()));
