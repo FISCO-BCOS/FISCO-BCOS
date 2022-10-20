@@ -192,61 +192,66 @@ void BlockExecutive::buildExecutivesFromMetaData()
     else
     {
         // only has txHash, build message which type is TXHASH
-#pragma omp parallel for
-        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
-        {
-            auto metaData = m_block->transactionMetaData(i);
-            if (metaData)
-            {
-                m_executiveResults[i].transactionHash = metaData->hash();
-                m_executiveResults[i].source = metaData->source();
-            }
-
-            auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            auto contextID = i + m_startContextID;
-
-            message->setContextID(contextID);
-            message->setType(protocol::ExecutionMessage::TXHASH);
-            // Note: set here for fetching txs when send_back
-            message->setTransactionHash(metaData->hash());
-
-            if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-            {
-                // LIQUID
-                if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
+            [this](auto const& range) {
+                for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    message->setCreate(true);
-                }
-                message->setTo(std::string(metaData->to()));
-            }
-            else
-            {
-                // SOLIDITY
-                if (metaData->to().empty())
-                {
-                    message->setCreate(true);
-                }
-                else
-                {
-                    message->setTo(preprocessAddress(metaData->to()));
-                }
-            }
+                    auto metaData = m_block->transactionMetaData(i);
+                    if (metaData)
+                    {
+                        m_executiveResults[i].transactionHash = metaData->hash();
+                        m_executiveResults[i].source = metaData->source();
+                    }
 
-            message->setDepth(0);
-            message->setGasAvailable(m_gasLimit);
-            if (precompiled::c_systemTxsAddress.count(
-                    {metaData->to().data(), metaData->to().size()}))
-            {
-                message->setGasAvailable(TRANSACTION_GAS);
-            }
-            message->setStaticCall(false);
-            bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+                    auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
+                    auto contextID = i + m_startContextID;
 
-            std::string to = {message->to().data(), message->to().size()};
-#pragma omp critical
-            m_hasDAG = m_hasDAG || enableDAG;
-            saveMessage(to, std::move(message), enableDAG);
-        }
+                    message->setContextID(contextID);
+                    message->setType(protocol::ExecutionMessage::TXHASH);
+                    // Note: set here for fetching txs when send_back
+                    message->setTransactionHash(metaData->hash());
+
+                    if (metaData->attribute() &
+                        bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+                    {
+                        // LIQUID
+                        if (metaData->attribute() &
+                            bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+                        {
+                            message->setCreate(true);
+                        }
+                        message->setTo(std::string(metaData->to()));
+                    }
+                    else
+                    {
+                        // SOLIDITY
+                        if (metaData->to().empty())
+                        {
+                            message->setCreate(true);
+                        }
+                        else
+                        {
+                            message->setTo(preprocessAddress(metaData->to()));
+                        }
+                    }
+
+                    message->setDepth(0);
+                    message->setGasAvailable(m_gasLimit);
+                    if (precompiled::c_systemTxsAddress.count(
+                            {metaData->to().data(), metaData->to().size()}))
+                    {
+                        message->setGasAvailable(TRANSACTION_GAS);
+                    }
+                    message->setStaticCall(false);
+                    bool enableDAG =
+                        metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+
+                    std::string to = {message->to().data(), message->to().size()};
+
+                    m_hasDAG = m_hasDAG || enableDAG;
+                    saveMessage(to, std::move(message), enableDAG);
+                }
+            });
     }
 }
 
@@ -259,22 +264,24 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
                         << LOG_KV("tx count", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
-#pragma omp parallel for
-    for (size_t i = 0; i < m_block->transactionsSize(); ++i)
-    {
-        auto tx = m_block->transaction(i);
-        m_executiveResults[i].transactionHash = tx->hash();
-        m_executiveResults[i].source = tx->source();
 
-        auto contextID = i + m_startContextID;
-        auto message = buildMessage(contextID, tx);
-        std::string to = {message->to().data(), message->to().size()};
-        bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0U, m_block->transactionsSize()), [this](auto const& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                auto tx = m_block->transaction(i);
+                m_executiveResults[i].transactionHash = tx->hash();
+                m_executiveResults[i].source = tx->source();
 
-#pragma omp critical
-        m_hasDAG = m_hasDAG || enableDAG;
-        saveMessage(to, std::move(message), enableDAG);
-    }
+                auto contextID = i + m_startContextID;
+                auto message = buildMessage(contextID, tx);
+                std::string to = {message->to().data(), message->to().size()};
+                bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+
+                m_hasDAG = m_hasDAG || enableDAG;
+                saveMessage(to, std::move(message), enableDAG);
+            }
+        });
 }
 
 bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
@@ -773,12 +780,14 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 }
                 else
                 {
-#pragma omp parallel for
-                    for (size_t j = 0; j < responseMessages.size(); ++j)
-                    {
-                        assert(responseMessages[j]);
-                        iterators[j]->second->message = std::move(responseMessages[j]);
-                    }
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0U, responseMessages.size()),
+                        [&responseMessages, &iterators](auto const& range) {
+                            for (auto j = range.begin(); j < range.end(); ++j)
+                            {
+                                assert(responseMessages[j]);
+                                iterators[j]->second->message = std::move(responseMessages[j]);
+                            }
+                        });
                 }
 
                 if (totalCount->fetch_sub(messages->size()) == messages->size())
