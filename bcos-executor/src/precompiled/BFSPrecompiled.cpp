@@ -25,6 +25,7 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/BfsFileFactory.h>
+#include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -41,6 +42,7 @@ constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
+constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -49,6 +51,7 @@ BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashI
     name2Selector[FILE_SYSTEM_METHOD_LINK] = getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_TOUCH] = getFuncSelector(FILE_SYSTEM_METHOD_TOUCH, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_RLINK] = getFuncSelector(FILE_SYSTEM_METHOD_RLINK, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_INIT] = getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
     BfsTypeSet = {FS_TYPE_DIR, FS_TYPE_CONTRACT, FS_TYPE_LINK};
 }
 
@@ -81,6 +84,11 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     {
         // touch(string absolute,string type) => int32
         touch(_executive, _callParameters);
+    }
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_INIT])
+    {
+        // initBfs for the first time
+        initBfs(_executive, _callParameters);
     }
     else
     {
@@ -500,6 +508,54 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
         _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+    }
+}
+
+void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("initBfs");
+    auto table = _executive->storage().openTable(tool::FS_ROOT);
+    if (table.has_value())
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("initBfs, root table already exist, return by default");
+        return;
+    }
+    // create / dir
+    _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
+    // build root subs metadata
+    for (const auto& subName : tool::FS_ROOT_SUBS)
+    {
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::DIRECTOR);
+        _executive->storage().setRow(tool::FS_ROOT,
+            subName == tool::FS_ROOT ? subName : subName.substr(1), std::move(entry));
+    }
+    // build apps, usr, tables metadata
+    _executive->storage().createTable(std::string(tool::FS_USER), std::string(tool::FS_DIR_FIELDS));
+    _executive->storage().createTable(std::string(tool::FS_APPS), std::string(tool::FS_DIR_FIELDS));
+    _executive->storage().createTable(
+        std::string(tool::FS_USER_TABLE), std::string(tool::FS_DIR_FIELDS));
+    _executive->storage().createTable(
+        std::string(tool::FS_SYS_BIN), std::string(tool::FS_DIR_FIELDS));
+
+    // build /sys/
+    for (const auto& sysSub : precompiled::BFS_SYS_SUBS)
+    {
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::LINK);
+        _executive->storage().setRow(
+            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
+    }
+    // build sys contract
+    for (const auto& nameAddress : precompiled::SYS_NAME_ADDRESS_MAP)
+    {
+        auto linkTable =
+            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
+        tool::BfsFileFactory::buildLink(linkTable.value(), nameAddress.second, "");
     }
 }
 

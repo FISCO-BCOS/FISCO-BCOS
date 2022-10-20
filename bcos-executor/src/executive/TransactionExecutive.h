@@ -223,7 +223,7 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
 
     bcos::storage::Recoder::Ptr m_recoder;
-    std::shared_ptr<StorageWrapper> m_storageWrapper;
+    std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
 };
 
 }  // namespace executor

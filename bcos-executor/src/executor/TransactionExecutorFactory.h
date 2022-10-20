@@ -68,11 +68,6 @@ public:
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
                 std::string(ledger::SYS_CONFIG),
                 std::string(ledger::SYS_CONSENSUS),
-                ledger::FS_ROOT,
-                ledger::FS_APPS,
-                ledger::FS_USER,
-                ledger::FS_SYS_BIN,
-                ledger::FS_USER_TABLE,
                 storage::StorageInterface::SYS_TABLES,
             });
     }

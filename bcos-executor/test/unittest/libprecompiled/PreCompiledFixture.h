@@ -76,7 +76,7 @@ public:
     virtual ~PrecompiledFixture() {}
 
     /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = false)
+    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true)
     {
         isWasm = _isWasm;
         if (_isKeyPage)

@@ -64,6 +64,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/protocol/LogEntry.h>
@@ -113,7 +114,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize = 0,
-    std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
+    std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
   : m_name(std::move(name)),
     m_ledger(std::move(ledger)),
@@ -2424,6 +2425,11 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
+        if (m_blockVersion <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
+            !m_keyPageIgnoreTables->contains(tool::FS_ROOT))
+        {
+            m_keyPageIgnoreTables->insert(tool::FS_ROOT_SUBS.begin(), tool::FS_ROOT_SUBS.end());
+        }
         return std::make_shared<bcos::storage::KeyPageStorage>(
             storage, m_keyPageSize, m_blockVersion, m_keyPageIgnoreTables, ignoreNotExist);
     }
