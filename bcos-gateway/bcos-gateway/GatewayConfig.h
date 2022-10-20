@@ -69,7 +69,7 @@ public:
         // if turn on distributed ratelimit
         bool distributedRateLimitOn = false;
         // stat reporter interval, unit: ms
-        int32_t statReporterInterval = 60000;
+        int32_t statInterval = 60000;
 
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;

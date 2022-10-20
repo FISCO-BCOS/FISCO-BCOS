@@ -111,11 +111,8 @@ public:
     const std::unordered_map<std::string, Stat>& inStat() { return m_inStat; }
     const std::unordered_map<std::string, Stat>& outStat() { return m_outStat; }
 
-    int32_t statReporterInterval() const { return m_statReporterInterval; }
-    void setStatReporterInterval(int32_t _statReporterInterval)
-    {
-        m_statReporterInterval = _statReporterInterval;
-    }
+    int32_t statInterval() const { return m_statInterval; }
+    void setStatInterval(int32_t _statInterval) { m_statInterval = _statInterval; }
 
 private:
     bool m_running = false;
@@ -127,7 +124,7 @@ private:
     std::unordered_map<std::string, Stat> m_outStat;
 
     // report period, default 1 min
-    int32_t m_statReporterInterval = 60000;
+    int32_t m_statInterval = 60000;
     // the timer that periodically report the stat
     std::shared_ptr<Timer> m_statTimer;
 };
