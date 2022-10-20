@@ -1408,7 +1408,37 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     {
         // genesis block exists, quit
         LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
-        return true;
+        std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+        // get genesisBlockHeader
+        asyncGetBlockDataByNumber(
+            number, HEADER, [this, &blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get genesisBlockHeader from storage failed";
+                    blockHeaderFuture.set_value(nullptr);
+                }
+                else
+                {
+                    blockHeaderFuture.set_value(block->blockHeader());
+                }
+            });
+        bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
+            blockHeaderFuture.get_future().get();
+        auto initialGenesisData = *toHexString(m_genesisBlockHeader->extraData());
+        // check genesisData whether inconsistent with initialGenesisData
+        if (initialGenesisData == _genesisData)
+        {
+            return true;
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::InvalidConfig() << bcos::errinfo_comment(
+                    "The Genesis Data is error, Inconsistent with the initial Genesis Data"));
+            std::cout << "### Genesis Date:" << initialGenesisData << std::endl;
+            LEDGER_LOG(INFO) << LOG_DESC("InitialGenesisData")
+                             << LOG_KV("genesisData", initialGenesisData);
+        }
     }
 
     // clang-format off
@@ -1455,9 +1485,15 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+    // make sure current binary version not lower than genesisData
     if (versionNumber >= (uint32_t)protocol::Version::V3_1_VERSION)
     {
         header->setVersion(versionNumber);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
+                                  "The genesis compatibilityVersion is " + _compatibilityVersion));
     }
     header->setExtraData(bcos::bytes(_genesisData.begin(), _genesisData.end()));
 
