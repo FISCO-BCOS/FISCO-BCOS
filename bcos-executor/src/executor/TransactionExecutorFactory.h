@@ -23,6 +23,7 @@
 #include "TransactionExecutor.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include <bcos-table/src/CacheStorageFactory.h>
 
 
 namespace bcos
@@ -47,7 +48,7 @@ public:
     }
 
     TransactionExecutorFactory(bcos::ledger::LedgerInterface::Ptr ledger,
-        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cache,
+        txpool::TxPoolInterface::Ptr txpool, storage::CacheStorageFactory::Ptr cacheFactory,
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
@@ -56,7 +57,7 @@ public:
         m_keyPageSize(keyPageSize),
         m_ledger(ledger),
         m_txpool(txpool),
-        m_cache(cache),
+        m_cacheFactory(cacheFactory),
         m_storage(storage),
         m_executionMessageFactory(executionMessageFactory),
         m_hashImpl(hashImpl),
@@ -78,9 +79,10 @@ public:
 
     TransactionExecutor::Ptr build()
     {
-        auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool, m_cache,
-            m_storage, m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
-            m_keyPageSize, m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
+        auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool,
+            m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
+            m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck, m_keyPageSize,
+            m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
         if (f_onNeedSwitchEvent)
         {
             executor->registerNeedSwitchEvent(f_onNeedSwitchEvent);
@@ -96,7 +98,7 @@ private:
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
-    storage::MergeableStorageInterface::Ptr m_cache;
+    storage::CacheStorageFactory::Ptr m_cacheFactory;
     storage::TransactionalStorageInterface::Ptr m_storage;
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
