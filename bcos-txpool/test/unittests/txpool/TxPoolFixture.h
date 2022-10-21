@@ -219,28 +219,42 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     size_t expectedTxSize, bool _needWaitResult = true, bool _waitNothing = false,
     bool _maybeExpired = false)
 {
-    std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    auto submitResult = ~_txpool->submitTransaction(_tx);
-    std::cout << "#### expectedTxHash:" << _expectedTxHash.abridged() << std::endl;
-    std::cout << "##### receipt txHash:" << submitResult->txHash().abridged() << std::endl;
-    BOOST_CHECK(submitResult->txHash() == _expectedTxHash);
-    std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
-    std::cout << "##### receiptStatus:" << std::to_string(submitResult->status()) << std::endl;
-    if (_maybeExpired)
-    {
-        BOOST_CHECK((submitResult->status() == _expectedStatus) ||
-                    (submitResult->status() == (int32_t)TransactionStatus::BlockLimitCheckFail));
-    }
-    *verifyFinish = true;
+    std::promise<void> promise;
+    auto future = promise.get_future();
+    bcos::task::wait(_txpool->submitTransaction(std::move(_tx)),
+        [_expectedTxHash = _expectedTxHash, _expectedStatus = _expectedStatus,
+            _maybeExpired = _maybeExpired, &promise](auto&& submitResult) {
+            using ResultType = std::decay_t<decltype(submitResult)>;
+            if constexpr (!std::is_same_v<ResultType, std::exception_ptr>)
+            {
+                if (submitResult->txHash() != _expectedTxHash)
+                {
+                    // do something
+                    std::cout << "Mismatch!" << std::endl;
+                }
+                BOOST_CHECK_EQUAL(submitResult->txHash(), _expectedTxHash);
+                std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus)
+                          << std::endl;
+                std::cout << "##### receiptStatus:" << std::to_string(submitResult->status())
+                          << std::endl;
+                if (_maybeExpired)
+                {
+                    BOOST_CHECK((submitResult->status() == _expectedStatus) ||
+                                (submitResult->status() ==
+                                    (int32_t)TransactionStatus::BlockLimitCheckFail));
+                }
+            }
+
+            promise.set_value();
+        });
 
     if (_waitNothing)
     {
         return;
     }
-    while (!*verifyFinish && _needWaitResult)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
+
+    future.get();
+
     if (!_needWaitResult)
     {
         while (_storage->size() != expectedTxSize)

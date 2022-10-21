@@ -31,6 +31,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <exception>
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
@@ -429,6 +430,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     auto txpoolStorage = txpool->txpoolStorage();
     // case1: the node is not in the consensus/observerList
     auto tx = fakeTransaction(_cryptoSuite, utcTime());
+
     checkTxSubmit(txpool, txpoolStorage, tx, HashType(),
         (uint32_t)TransactionStatus::RequestNotBelongToTheGroup, 0);
 
@@ -475,7 +477,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     {
         importedTxNum++;
         checkTxSubmit(txpool, txpoolStorage, pbTx, pbTx->hash(), (uint32_t)TransactionStatus::None,
-            importedTxNum, false, false, true);
+            importedTxNum, false, true, true);
     }
     else
     {
@@ -488,7 +490,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     tx = fakeTransaction(_cryptoSuite, utcTime() + 2000000, ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None,
-        importedTxNum, false, false, true);
+        importedTxNum, false, true, true);
     // case8: submit duplicated tx
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
         (uint32_t)TransactionStatus::AlreadyInTxPool, importedTxNum);
