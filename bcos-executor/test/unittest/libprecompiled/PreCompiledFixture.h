@@ -39,6 +39,7 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-tars-protocol/testutil/FakeBlock.h>
 #include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -75,7 +76,7 @@ public:
     virtual ~PrecompiledFixture() {}
 
     /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = false)
+    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true)
     {
         isWasm = _isWasm;
         if (_isKeyPage)
@@ -163,82 +164,109 @@ public:
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
         }
 
-        // create / table
+        if (m_blockVersion >= protocol::Version::V3_1_VERSION)
         {
-            std::promise<std::optional<Table>> promise2;
-            storage->asyncCreateTable(
-                "/", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
-                    promise2.set_value(std::move(_table));
-                });
-            auto rootTable = promise2.get_future().get();
-            storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-            std::map<std::string, std::string> newSubMap;
-            newSubMap.insert(std::make_pair("apps", executor::FS_TYPE_DIR));
-            newSubMap.insert(std::make_pair("/", executor::FS_TYPE_DIR));
-            newSubMap.insert(std::make_pair("tables", executor::FS_TYPE_DIR));
-            tEntry.importFields({executor::FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
-            rootTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
-            rootTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
-            rootTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
-            rootTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
-            rootTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
-            rootTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
-        }
+            // create / table
+            {
+                auto rootTable =
+                    tool::BfsFileFactory::createDir(storage, std::string(tool::FS_ROOT));
+                storage::Entry appsEntry;
+                storage::Entry sysEntry;
+                storage::Entry tablesEntry;
+                storage::Entry rootEntry;
+                tool::BfsFileFactory::buildDirEntry(appsEntry, FileType::DIRECTOR);
+                tool::BfsFileFactory::buildDirEntry(sysEntry, FileType::DIRECTOR);
+                tool::BfsFileFactory::buildDirEntry(tablesEntry, FileType::DIRECTOR);
+                tool::BfsFileFactory::buildDirEntry(rootEntry, FileType::DIRECTOR);
+                rootTable->setRow(tool::FS_APPS.substr(1), std::move(appsEntry));
+                rootTable->setRow(tool::FS_SYS_BIN.substr(1), std::move(sysEntry));
+                rootTable->setRow(tool::FS_USER_TABLE.substr(1), std::move(tablesEntry));
+                rootTable->setRow(tool::FS_ROOT, std::move(rootEntry));
 
-        // create /tables table
-        {
-            std::promise<std::optional<Table>> promise3;
-            storage->asyncCreateTable(
-                "/tables", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
-                    promise3.set_value(std::move(_table));
-                });
-            auto tablesTable = promise3.get_future().get();
-            storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-            std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({executor::FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
-            tablesTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
-            tablesTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
-            tablesTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
-            tablesTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
-            tablesTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
-            tablesTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
+                tool::BfsFileFactory::createDir(storage, std::string(tool::FS_APPS));
+                tool::BfsFileFactory::createDir(storage, std::string(tool::FS_SYS_BIN));
+                tool::BfsFileFactory::createDir(storage, std::string(tool::FS_USER_TABLE));
+            }
         }
-
-        // create /apps table
+        else
         {
-            std::promise<std::optional<Table>> promise4;
-            storage->asyncCreateTable(
-                "/apps", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
-                    promise4.set_value(std::move(_table));
-                });
-            auto appsTable = promise4.get_future().get();
-            storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-            std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({executor::FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
-            appsTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
-            appsTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
-            appsTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
-            appsTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
-            appsTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
-            appsTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
+            // create / table
+            {
+                std::promise<std::optional<Table>> promise2;
+                storage->asyncCreateTable(
+                    "/", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
+                        BOOST_CHECK(!_error);
+                        promise2.set_value(std::move(_table));
+                    });
+                auto rootTable = promise2.get_future().get();
+                storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+                std::map<std::string, std::string> newSubMap;
+                newSubMap.insert(std::make_pair("apps", executor::FS_TYPE_DIR));
+                newSubMap.insert(std::make_pair("/", executor::FS_TYPE_DIR));
+                newSubMap.insert(std::make_pair("tables", executor::FS_TYPE_DIR));
+                tEntry.importFields({executor::FS_TYPE_DIR});
+                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+                aclTypeEntry.importFields({"0"});
+                aclWEntry.importFields({""});
+                aclBEntry.importFields({""});
+                extraEntry.importFields({""});
+                rootTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+                rootTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+                rootTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+                rootTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+                rootTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+                rootTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
+            }
+
+            // create /tables table
+            {
+                std::promise<std::optional<Table>> promise3;
+                storage->asyncCreateTable("/tables", "value",
+                    [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
+                        BOOST_CHECK(!_error);
+                        promise3.set_value(std::move(_table));
+                    });
+                auto tablesTable = promise3.get_future().get();
+                storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+                std::map<std::string, std::string> newSubMap;
+                tEntry.importFields({executor::FS_TYPE_DIR});
+                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+                aclTypeEntry.importFields({"0"});
+                aclWEntry.importFields({""});
+                aclBEntry.importFields({""});
+                extraEntry.importFields({""});
+                tablesTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+                tablesTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+                tablesTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+                tablesTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+                tablesTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+                tablesTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
+            }
+
+            // create /apps table
+            {
+                std::promise<std::optional<Table>> promise4;
+                storage->asyncCreateTable("/apps", "value",
+                    [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
+                        BOOST_CHECK(!_error);
+                        promise4.set_value(std::move(_table));
+                    });
+                auto appsTable = promise4.get_future().get();
+                storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+                std::map<std::string, std::string> newSubMap;
+                tEntry.importFields({executor::FS_TYPE_DIR});
+                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+                aclTypeEntry.importFields({"0"});
+                aclWEntry.importFields({""});
+                aclBEntry.importFields({""});
+                extraEntry.importFields({""});
+                appsTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+                appsTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+                appsTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+                appsTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+                appsTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+                appsTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
+            }
         }
     }
 
@@ -579,6 +607,45 @@ public:
         commitBlock(blockNumber);
     }
 
+    ExecutionMessage::UniquePtr list(
+        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
+    {
+        bytes in = codec->encodeWithSig("list(string)", path);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(1000);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+        nextBlock(_number, m_blockVersion);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->dmcExecuteTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+        if (_errorCode != 0)
+        {
+            std::vector<BfsTuple> empty;
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
+        }
+
+        commitBlock(_number);
+        return result2;
+    };
+
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;
@@ -596,5 +663,6 @@ protected:
     int64_t gas = 300000000;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
+    protocol::Version m_blockVersion = protocol::Version::V3_1_VERSION;
 };
 }  // namespace bcos::test
