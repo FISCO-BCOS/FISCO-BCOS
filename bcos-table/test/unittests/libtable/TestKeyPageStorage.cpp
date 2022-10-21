@@ -77,9 +77,7 @@ inline ostream& operator<<(ostream& os, const std::tuple<std::string, crypto::Ha
 }
 }  // namespace std
 
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 struct KeyPageStorageFixture
 {
@@ -140,6 +138,21 @@ BOOST_AUTO_TEST_CASE(create_Table)
     BOOST_REQUIRE_THROW(tableFactory->createTable(tableName, valueField), bcos::Error);
 }
 
+
+BOOST_AUTO_TEST_CASE(count_empty_Table)
+{
+    std::string tableName("t_test1");
+    auto countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+    auto table = tableFactory->openTable(tableName);
+
+    BOOST_REQUIRE(!table);
+    auto ret = tableFactory->createTable(tableName, valueField);
+    BOOST_REQUIRE(ret);
+    countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+}
+
 BOOST_AUTO_TEST_CASE(rollback)
 {
     auto ret = createDefaultTable();
@@ -151,6 +164,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     BOOST_REQUIRE_NO_THROW(table->setRow("name", deleteEntry));
 
     auto hash = tableFactory->hash(hashImpl);
+    auto countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
 
 #ifdef __APPLE__
 #undef __APPLE__
@@ -163,6 +178,9 @@ BOOST_AUTO_TEST_CASE(rollback)
     auto entry = std::make_optional(table->newEntry());
     BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
+
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
 
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
@@ -184,6 +202,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "12345");
     table->setRow("id", *entry);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -209,6 +229,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "500");
     table->setRow("balance", *entry);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -233,6 +255,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     auto deleteEntry2 = std::make_optional(table->newDeletedEntry());
     table->setRow("name", *deleteEntry2);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 
 // delete entry will cause hash mismatch
@@ -249,6 +273,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
     std::cout << "Try remove balance" << std::endl;
     tableFactory->rollback(*savePoint2);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -262,6 +288,8 @@ BOOST_AUTO_TEST_CASE(rollback)
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     tableFactory->rollback(*savePoint1);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -283,6 +311,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
 
     tableFactory->rollback(*savePoint);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
     hash = tableFactory->hash(hashImpl);
@@ -309,6 +339,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "new record");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -317,6 +349,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     entry = table->newDeletedEntry();
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     hash = tableFactory->hash(hashImpl);
     // delete entry will cause hash mismatch
 #if defined(__APPLE__)
@@ -2834,5 +2868,4 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
 
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace test
 }  // namespace bcos

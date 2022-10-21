@@ -296,7 +296,7 @@ public:
             }
             if (lastPageInfoIndex < pages->size())
             {
-                auto lastPageInfo = &pages->at(lastPageInfoIndex);
+                auto* lastPageInfo = &pages->at(lastPageInfoIndex);
                 if (lastPageInfo->getPageData())
                 {
                     auto page = &std::get<0>(lastPageInfo->getPageData()->data);
@@ -556,13 +556,12 @@ public:
                 m_invalidPageKeys.insert(std::string(pageKey));
             }
         }
-        Page(const Page& p)
-        {
-            entries = p.entries;
-            m_size = p.m_size;
-            m_validCount = p.m_validCount;
-            m_invalidPageKeys = p.m_invalidPageKeys;
-        }
+        Page(const Page& page)
+          : entries(page.entries),
+            m_size(page.m_size),
+            m_validCount(page.m_validCount),
+            m_invalidPageKeys(page.m_invalidPageKeys)
+        {}
         Page& operator=(const Page& p)
         {
             if (this != &p)
@@ -574,7 +573,7 @@ public:
             }
             return *this;
         }
-        Page(Page&& p)
+        Page(Page&& p) noexcept
         {
             entries = std::move(p.entries);
             m_size = p.m_size;
@@ -991,7 +990,7 @@ public:
             std::ignore = version;
             ar&(uint32_t)m_validCount;
             size_t count = 0;
-            for (auto& i : entries)
+            for (const auto& i : entries)
             {
                 if (i.second.status() == Entry::Status::DELETED)
                 {  // skip deleted entry
@@ -1040,7 +1039,7 @@ public:
             TableMeta = 1,
             NormalEntry = 2,
         };
-        Data(){};
+        Data() = default;
         ~Data() = default;
         Data(std::string _table, std::string _key, Entry _entry, Type _type)
           : table(std::move(_table)), key(std::move(_key)), type(_type), entry(std::move(_entry))
@@ -1091,8 +1090,7 @@ public:
 
     struct Bucket
     {
-        Bucket() {}
-        ~Bucket() = default;
+        Bucket() = default;
         std::unordered_map<std::pair<std::string, std::string>, std::shared_ptr<Data>> container;
         std::shared_mutex mutex;
         std::optional<Data*> find(std::string_view table, std::string_view key)
@@ -1145,14 +1143,15 @@ public:
         }
         return std::nullopt;
     }
+    auto count(const std::string_view& table) -> std::pair<size_t, Error::Ptr>;
 
 private:
-    std::shared_ptr<StorageInterface> getPrev()
+    auto getPrev() -> std::shared_ptr<StorageInterface>
     {
         std::shared_lock<std::shared_mutex> lock(m_prevMutex);
         return m_prev;
     }
-    size_t getBucketIndex(std::string_view table, std::string_view key) const
+    auto getBucketIndex(std::string_view table, std::string_view key) const -> size_t
     {
         auto hash = std::hash<std::string_view>{}(table);
         std::ignore = key;
@@ -1161,8 +1160,8 @@ private:
         return hash % m_buckets.size();
     }
 
-    Data* changePageKey(std::string table, const std::string& oldPageKey,
-        const std::string& newPageKey, bool isRevert = false)
+    auto changePageKey(std::string table, const std::string& oldPageKey,
+        const std::string& newPageKey, bool isRevert = false) -> Data*
     {
         if (newPageKey.empty() && !isRevert)
         {
@@ -1174,14 +1173,14 @@ private:
 
         auto [bucket, lock] = getMutBucket(table, oldPageKey);
         boost::ignore_unused(lock);
-        auto n = bucket->container.extract(std::make_pair(table, oldPageKey));
-        auto page = &std::get<0>(n.mapped()->data);
+        auto node = bucket->container.extract(std::make_pair(table, oldPageKey));
+        auto* page = &std::get<0>(node.mapped()->data);
         KeyPage_LOG(DEBUG) << LOG_DESC("changePageKey") << LOG_KV("table", table)
                            << LOG_KV("oldPageKey", toHex(oldPageKey))
                            << LOG_KV("newPageKey", toHex(newPageKey))
                            << LOG_KV("validCount", page->validCount());
-        n.key().second = newPageKey;
-        n.mapped()->key = newPageKey;
+        node.key().second = newPageKey;
+        node.mapped()->key = newPageKey;
         if (newPageKey.empty())
         {
             return nullptr;
@@ -1191,7 +1190,7 @@ private:
         {  // erase old page to update data
             bucket->container.erase(it);
         }
-        auto ret = bucket->container.insert(std::move(n));
+        auto ret = bucket->container.insert(std::move(node));
         assert(ret.inserted);
         return ret.position->second.get();
         // the bucket also need to be updated
