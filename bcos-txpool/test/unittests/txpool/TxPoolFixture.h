@@ -219,11 +219,12 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     size_t expectedTxSize, bool _needWaitResult = true, bool _waitNothing = false,
     bool _maybeExpired = false)
 {
-    std::promise<void> promise;
-    auto future = promise.get_future();
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+
     bcos::task::wait(_txpool->submitTransaction(std::move(_tx)),
         [_expectedTxHash = _expectedTxHash, _expectedStatus = _expectedStatus,
-            _maybeExpired = _maybeExpired, &promise](auto&& submitResult) {
+            _maybeExpired = _maybeExpired, promise](auto&& submitResult) {
             using ResultType = std::decay_t<decltype(submitResult)>;
             if constexpr (!std::is_same_v<ResultType, std::exception_ptr>)
             {
@@ -245,7 +246,7 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
                 }
             }
 
-            promise.set_value();
+            promise->set_value();
         });
 
     if (_waitNothing)
