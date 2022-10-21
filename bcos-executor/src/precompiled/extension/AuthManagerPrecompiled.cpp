@@ -21,7 +21,11 @@
 #include "AuthManagerPrecompiled.h"
 #include "../../vm/HostContext.h"
 #include "ContractAuthMgrPrecompiled.h"
+#include <bcos-tool/BfsFileFactory.h>
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
 #include <boost/core/ignore_unused.hpp>
+#include <boost/serialization/vector.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -524,14 +528,30 @@ std::string AuthManagerPrecompiled::getContractAdmin(
 u256 AuthManagerPrecompiled::getDeployAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
-    auto table = _executive->storage().openTable("/apps");
-    // table must exist
-    auto entry = table->getRow(FS_ACL_TYPE);
-    // entry must exist
+    std::string typeStr = "";
+    if (_executive->blockContext().lock()->blockVersion() >=
+        static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    {
+        auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
+        // apps must exist
+        if (!entry) [[unlikely]]
+        {
+            PRECOMPILED_LOG(FATAL)
+                << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+        }
+        auto fields = entry->getObject<std::vector<std::string>>();
+        typeStr.assign(fields[2]);
+    }
+    else
+    {
+        auto entry = _executive->storage().getRow(tool::FS_APPS, FS_ACL_TYPE);
+        // entry must exist
+        typeStr.assign(entry->get());
+    }
     u256 type = 0;
     try
     {
-        type = boost::lexical_cast<u256>(std::string(entry->getField(0)));
+        type = boost::lexical_cast<u256>(typeStr);
     }
     catch (...)
     {
@@ -572,17 +592,33 @@ void AuthManagerPrecompiled::setDeployType(
     u256 type = _type[_type.size() - 1];
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
                            << LOG_KV("type", type);
-    if (type > 2)
+    if (type > 2) [[unlikely]]
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("deploy auth type must be 1 or 2.");
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
     }
-    auto table = _executive->storage().openTable("/apps");
+    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    {
+        auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
+        // apps must exist
+        if (!entry) [[unlikely]]
+        {
+            PRECOMPILED_LOG(FATAL)
+                << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+        }
+        auto fields = entry->getObject<std::vector<std::string>>();
+        fields[2] = boost::lexical_cast<std::string>(type);
+        entry->setObject(fields);
+        _executive->storage().setRow(
+            tool::FS_ROOT, tool::FS_APPS.substr(1), std::move(entry.value()));
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
+        return;
+    }
     Entry entry;
     entry.importFields({boost::lexical_cast<std::string>(type)});
-    table->setRow(FS_ACL_TYPE, std::move(entry));
+    _executive->storage().setRow(tool::FS_APPS, FS_ACL_TYPE, std::move(entry));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
@@ -613,24 +649,53 @@ void AuthManagerPrecompiled::setDeployAuth(
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
                            << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
-    auto table = _executive->storage().openTable("/apps");
     auto type = getDeployAuthType(_executive);
-    auto getAclStr = (type == (int)AuthType::BLACK_LIST_MODE) ? FS_ACL_BLACK : FS_ACL_WHITE;
-
     std::map<std::string, bool> aclMap;
-    auto entry = table->getRow(getAclStr);
+    bool access = _isClose ? (type == (int)AuthType::BLACK_LIST_MODE) :
+                             (type == (int)AuthType::WHITE_LIST_MODE);
+
+    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    {
+        auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
+        // apps must exist
+        if (!entry) [[unlikely]]
+        {
+            PRECOMPILED_LOG(FATAL)
+                << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+        }
+        auto fields = entry->getObject<std::vector<std::string>>();
+
+        const auto insertIndex = (type == (int)AuthType::WHITE_LIST_MODE) ? 3 : 4;
+
+        auto mapStr = std::string(fields.at(insertIndex));
+        if (!mapStr.empty())
+        {
+            auto&& out = asBytes(mapStr);
+            codec::scale::decode(aclMap, gsl::make_span(out));
+        }
+        // covered writing
+        aclMap[account] = access;
+        fields[insertIndex] = asString(codec::scale::encode(aclMap));
+        entry->setObject(fields);
+
+        _executive->storage().setRow(
+            tool::FS_ROOT, tool::FS_APPS.substr(1), std::move(entry.value()));
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
+        return;
+    }
+
+    auto getAclStr = (type == (int)AuthType::BLACK_LIST_MODE) ? FS_ACL_BLACK : FS_ACL_WHITE;
+    auto entry = _executive->storage().getRow(tool::FS_APPS, getAclStr);
     auto mapStr = std::string(entry->getField(0));
     if (!mapStr.empty())
     {
         auto&& out = asBytes(mapStr);
         codec::scale::decode(aclMap, gsl::make_span(out));
     }
-    bool access = _isClose ? (type == (int)AuthType::BLACK_LIST_MODE) :
-                             (type == (int)AuthType::WHITE_LIST_MODE);
     // covered writing
     aclMap[account] = access;
     entry->setField(0, asString(codec::scale::encode(aclMap)));
-    table->setRow(getAclStr, std::move(entry.value()));
+    _executive->storage().setRow(tool::FS_APPS, getAclStr, std::move(entry.value()));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
@@ -660,16 +725,36 @@ void AuthManagerPrecompiled::hasDeployAuth(
 bool AuthManagerPrecompiled::checkDeployAuth(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _account)
 {
-    auto table = _executive->storage().openTable("/apps");
-    // table must exist
     auto type = getDeployAuthType(_executive);
     if (type == 0)
     {
         return true;
     }
-    auto getAclType = (type == (int)AuthType::WHITE_LIST_MODE) ? FS_ACL_WHITE : FS_ACL_BLACK;
-    auto entry = table->getRow(getAclType);
-    if (entry->getField(0).empty())
+    std::map<std::string, bool> aclMap;
+    std::string aclMapStr = "";
+
+    if (_executive->blockContext().lock()->blockVersion() >=
+        static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    {
+        auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
+        // apps must exist
+        if (!entry) [[unlikely]]
+        {
+            PRECOMPILED_LOG(FATAL)
+                << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+        }
+        auto fields = entry->getObject<std::vector<std::string>>();
+        auto getAclIndex = (type == (int)AuthType::WHITE_LIST_MODE) ? 3 : 4;
+        aclMapStr.assign(fields.at(getAclIndex));
+    }
+    else
+    {
+        auto getAclType = (type == (int)AuthType::WHITE_LIST_MODE) ? FS_ACL_WHITE : FS_ACL_BLACK;
+        auto entry = _executive->storage().getRow(tool::FS_APPS, getAclType);
+        aclMapStr.assign(entry->get());
+    }
+
+    if (aclMapStr.empty())
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("not deploy acl exist, return by default")
@@ -679,8 +764,7 @@ bool AuthManagerPrecompiled::checkDeployAuth(
         //      if black list mode， return true
         return type == (int)AuthType::BLACK_LIST_MODE;
     }
-    std::map<std::string, bool> aclMap;
-    auto&& out = asBytes(std::string(entry->getField(0)));
+    auto&& out = asBytes(aclMapStr);
     codec::scale::decode(aclMap, gsl::make_span(out));
     if (aclMap.find(_account) == aclMap.end())
     {

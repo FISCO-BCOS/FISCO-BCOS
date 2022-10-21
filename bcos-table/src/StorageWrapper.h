@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
@@ -10,7 +9,7 @@
 #include <thread>
 #include <vector>
 
-namespace bcos::executor
+namespace bcos::storage
 {
 using GetPrimaryKeysReponse = std::tuple<Error::UniquePtr, std::vector<std::string>>;
 using GetRowResponse = std::tuple<Error::UniquePtr, std::optional<storage::Entry>>;
@@ -160,4 +159,4 @@ private:
     storage::StateStorageInterface::Ptr m_storage;
     bcos::storage::Recoder::Ptr m_recoder;
 };
-}  // namespace bcos::executor
+}  // namespace bcos::storage

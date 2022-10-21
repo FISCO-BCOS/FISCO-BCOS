@@ -1,10 +1,10 @@
 #pragma once
 
 #include "../Common.h"
-#include "StorageWrapper.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StorageWrapper.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
@@ -13,10 +13,10 @@
 
 namespace bcos::executor
 {
-using KeyLockResponse = SetRowResponse;
+using KeyLockResponse = std::tuple<Error::UniquePtr>;
 using AcquireKeyLockResponse = std::tuple<Error::UniquePtr, std::vector<std::string>>;
 
-class SyncStorageWrapper : public StorageWrapper
+class SyncStorageWrapper : public storage::StorageWrapper
 {
 public:
     using Ptr = std::shared_ptr<SyncStorageWrapper>;

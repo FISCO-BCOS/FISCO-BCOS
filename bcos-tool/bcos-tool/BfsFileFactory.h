@@ -33,7 +33,9 @@ constexpr static const std::string_view FS_APPS{"/apps"};
 constexpr static const std::string_view FS_USER{"/usr"};
 constexpr static const std::string_view FS_SYS_BIN{"/sys"};
 constexpr static const std::string_view FS_USER_TABLE{"/tables"};
-constexpr static const uint8_t FS_ROOT_SUB_COUNT = 4;
+constexpr static const uint8_t FS_ROOT_SUB_COUNT = 5;
+constexpr static const std::array<std::string_view, FS_ROOT_SUB_COUNT> FS_ROOT_SUBS = {
+    FS_ROOT, FS_APPS, FS_USER, FS_USER_TABLE, FS_SYS_BIN};
 
 // not use in version > 3.1.0
 constexpr static const std::string_view FS_KEY_SUB{"sub"};
@@ -94,6 +96,8 @@ public:
     // sync create dir
     static std::optional<storage::Table> createDir(
         bcos::storage::StorageInterface::Ptr const& _storage, std::string _table);
+    static void buildDirEntry(
+        storage::Entry& _mutableEntry, std::variant<FileType, std::string> fileType);
     static bool buildLink(storage::Table& _table, std::string_view _address,
         const std::string& _abi, std::string name = "");
     static bool buildAuth(storage::Table& _table, const std::string& _admin);

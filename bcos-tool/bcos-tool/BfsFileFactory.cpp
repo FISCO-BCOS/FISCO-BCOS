@@ -20,6 +20,8 @@
 
 #include "BfsFileFactory.h"
 #include <bcos-framework/storage/Table.h>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/serialization/vector.hpp>
 #include <future>
 
 using namespace bcos::tool;
@@ -80,6 +82,32 @@ bool BfsFileFactory::buildDir(Table& _table)
 {
     return false;
 }
+
+void BfsFileFactory::buildDirEntry(
+    storage::Entry& _mutableEntry, std::variant<FileType, std::string> fileType)
+{
+    std::string_view type;
+    std::visit(
+        [&type](const auto& _type) {
+            using T = std::decay_t<decltype(_type)>;
+            if constexpr (std::is_same_v<T, std::string>)
+            {
+                type = _type;
+            }
+            else if constexpr (std::is_same_v<T, FileType>)
+            {
+                if (_type == FileType::DIRECTOR)
+                    type = FS_TYPE_DIR;
+                else if (_type == FileType::LINK)
+                    type = FS_TYPE_LINK;
+                else
+                    type = FS_TYPE_CONTRACT;
+            }
+        },
+        fileType);
+    _mutableEntry.setObject<std::vector<std::string>>({type.data(), "0", "0", "", "", ""});
+}
+
 bool BfsFileFactory::buildLink(
     Table& _table, std::string_view _address, const std::string& _abi, std::string name)
 {
