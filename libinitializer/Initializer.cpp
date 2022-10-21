@@ -26,6 +26,7 @@
 
 #include "Initializer.h"
 #include "AuthInitializer.h"
+#include "BfsInitializer.h"
 #include "ExecutorInitializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
@@ -368,23 +369,73 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
 
 void Initializer::initSysContract()
 {
+    // check is it deploy first time
+    std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
+        getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
+    });
+    auto getNumberTuple = getNumberPromise.get_future().get();
+    if (std::get<0>(getNumberTuple) != nullptr ||
+        std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
+    {
+        return;
+    }
+    auto block = m_protocolInitializer->blockFactory()->createBlock();
+    block->blockHeader()->setNumber(SYS_CONTRACT_DEPLOY_NUMBER);
+    block->blockHeader()->setVersion(m_nodeConfig->compatibilityVersion());
+
+    if (m_nodeConfig->compatibilityVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+    {
+        BfsInitializer::init(
+            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
+    }
+
     if (!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck())
     {
-        // check is it deploy first time
-        std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
-        m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
-            getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
-        });
-        auto getNumberTuple = getNumberPromise.get_future().get();
-        if (std::get<0>(getNumberTuple) != nullptr ||
-            std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
-        {
-            return;
-        }
-
         // add auth deploy func here
         AuthInitializer::init(
-            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, m_scheduler);
+            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
+    }
+
+
+    if (block->transactionsSize() > 0)
+    {
+        std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
+        m_scheduler->executeBlock(block, false,
+            [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool) {
+                if (_error)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        BCOS_ERROR(-1, "SysInitializer: scheduler executeBlock error"));
+                }
+                INITIALIZER_LOG(INFO)
+                    << LOG_BADGE("SysInitializer") << LOG_DESC("scheduler execute block success!")
+                    << LOG_KV("blockHash", block->blockHeader()->hash().hex());
+                executedHeader.set_value(std::move(_header));
+            });
+        auto header = executedHeader.get_future().get();
+
+        std::promise<std::tuple<Error::Ptr, bcos::ledger::LedgerConfig::Ptr>> committedConfig;
+        m_scheduler->commitBlock(
+            header, [&](Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _config) {
+                if (_error)
+                {
+                    INITIALIZER_LOG(ERROR) << LOG_BADGE("SysInitializer")
+                                           << LOG_KV("errorMsg", _error->errorMessage());
+                    committedConfig.set_value(std::make_tuple(std::move(_error), nullptr));
+                    return;
+                }
+                committedConfig.set_value(std::make_tuple(nullptr, std::move(_config)));
+            });
+        auto [error, newConfig] = committedConfig.get_future().get();
+        if (error != nullptr && newConfig->blockNumber() != SYS_CONTRACT_DEPLOY_NUMBER)
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SysInitializer") << LOG_DESC("Error in commitBlock")
+                << (error ? "errorMsg" + error->errorMessage() : "")
+                << LOG_KV("configNumber", newConfig->blockNumber());
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "SysInitializer commitBlock error"));
+        }
     }
 }
 

@@ -117,11 +117,12 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables()
         });
 }
 
-StateStorageInterface::Ptr createKeyPageStorage(StorageInterface::Ptr backend, size_t keyPageSize)
+StateStorageInterface::Ptr createKeyPageStorage(
+    StorageInterface::Ptr backend, size_t keyPageSize, uint32_t blockVersion)
 {
     auto keyPageIgnoreTables = getKeyPageIgnoreTables();
     return std::make_shared<bcos::storage::KeyPageStorage>(
-        backend, keyPageSize, keyPageIgnoreTables);
+        backend, keyPageSize, blockVersion, keyPageIgnoreTables);
 }
 
 void print(
@@ -274,7 +275,8 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            auto keyPageStorage = createKeyPageStorage(rocksdbStorage, keyPageSize);
+            auto keyPageStorage = createKeyPageStorage(
+                rocksdbStorage, keyPageSize, nodeConfig->compatibilityVersion());
             keyPageStorage->setReadOnly(true);
             storage = keyPageStorage;
         }
@@ -343,7 +345,8 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage = createKeyPageStorage(rocksdbStorage, keyPageSize);
+            storage = createKeyPageStorage(
+                rocksdbStorage, keyPageSize, nodeConfig->compatibilityVersion());
         }
         // std::promise<std::pair<Error::UniquePtr, std::optional<Entry>>> getPromise;
         // storage->asyncGetRow(
@@ -412,7 +415,8 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage = createKeyPageStorage(rocksdbStorage, keyPageSize);
+            storage = createKeyPageStorage(
+                rocksdbStorage, keyPageSize, nodeConfig->compatibilityVersion());
         }
         auto outputFileName = tableName + ".txt";
         boost::replace_all(outputFileName, "/", "_");
