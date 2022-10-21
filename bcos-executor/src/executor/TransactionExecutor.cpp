@@ -1847,9 +1847,59 @@ void TransactionExecutor::getCode(
     if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         std::string codeHash;
-        getCodeHash(tableName, stateStorage, codeHash);
+        getCodeHash(contractTableName, stateStorage, codeHash);
         codeKey = codeHash;
         tableName = bcos::ledger::SYS_CODE_BINARY;
+        stateStorage->asyncGetRow(tableName, codeKey,
+            [this, contractTableName, callback = std::move(callback)](
+                Error::UniquePtr error, std::optional<Entry> entry) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
+                        {});
+                    return;
+                }
+
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get code error: " << error->errorMessage();
+
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
+                    return;
+                }
+
+                if (!entry)
+                {
+                    EXECUTOR_NAME_LOG(DEBUG)
+                        << "Get code success, empty code, try to search in the contract table";
+
+                    auto codeEntry = m_blockContext->storage()
+                                         ->openTable(contractTableName)
+                                         ->getRow(ACCOUNT_CODE);
+                    if (!codeEntry || codeEntry->get().empty())
+                    {
+                        callback(nullptr, bcos::bytes());
+                        return;
+                    }
+                    else
+                    {
+                        auto code = codeEntry->getField(0);
+                        EXECUTOR_NAME_LOG(INFO)
+                            << "Get code success" << LOG_KV("code size", code.size());
+
+                        auto codeBytes = bcos::bytes(code.begin(), code.end());
+                        callback(nullptr, std::move(codeBytes));
+                        return;
+                    }
+                }
+
+                auto code = entry->getField(0);
+                EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
+
+                auto codeBytes = bcos::bytes(code.begin(), code.end());
+                callback(nullptr, std::move(codeBytes));
+            });
     }
 
     stateStorage->asyncGetRow(tableName, codeKey,
@@ -1884,6 +1934,7 @@ void TransactionExecutor::getCode(
             auto codeBytes = bcos::bytes(code.begin(), code.end());
             callback(nullptr, std::move(codeBytes));
         });
+    
 }
 
 void TransactionExecutor::getABI(
