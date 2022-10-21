@@ -25,6 +25,7 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/BfsFileFactory.h>
+#include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -41,6 +42,7 @@ constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
+constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -49,6 +51,7 @@ BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashI
     name2Selector[FILE_SYSTEM_METHOD_LINK] = getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_TOUCH] = getFuncSelector(FILE_SYSTEM_METHOD_TOUCH, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_RLINK] = getFuncSelector(FILE_SYSTEM_METHOD_RLINK, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_INIT] = getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
     BfsTypeSet = {FS_TYPE_DIR, FS_TYPE_CONTRACT, FS_TYPE_LINK};
 }
 
@@ -81,6 +84,11 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     {
         // touch(string absolute,string type) => int32
         touch(_executive, _callParameters);
+    }
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_INIT])
+    {
+        // initBfs for the first time
+        initBfs(_executive, _callParameters);
     }
     else
     {
@@ -193,8 +201,57 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
 
     if (table)
     {
-        std::string baseName;
-        std::tie(std::ignore, baseName) = getParentDirAndBaseName(absolutePath);
+        // exist
+        auto [parentDir, baseName] = getParentDirAndBaseName(absolutePath);
+        if (blockContext->blockVersion() >= (uint32_t)Version::V3_1_VERSION)
+        {
+            // check parent dir to get type
+            auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
+            if (!baseNameEntry) [[unlikely]]
+            {
+                // maybe hidden table
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
+                    << LOG_KV("absolutePath", absolutePath);
+                _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
+                return;
+            }
+            auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
+            if (baseFields[0] == tool::FS_TYPE_DIR)
+            {
+                // if type is dir, then return sub resource
+                auto keyCondition = std::make_optional<storage::Condition>();
+                // max return is 500
+                keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+                auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
+                for (const auto& key : keys | RANGES::views::all)
+                {
+                    auto entry = _executive->storage().getRow(absolutePath, key);
+                    auto fields = entry->getObject<std::vector<std::string>>();
+                    files.emplace_back(
+                        key, fields[0], std::vector<std::string>{fields.begin() + 1, fields.end()});
+                }
+            }
+            else if (baseFields[0] == tool::FS_TYPE_LINK)
+            {
+                // if type is link, then return link address
+                auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
+                auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
+                std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
+                    abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
+                BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
+                files.emplace_back(std::move(link));
+            }
+            else if (baseFields[0] == tool::FS_TYPE_CONTRACT)
+            {
+                // if type is contract, then return contract name
+                files.emplace_back(baseName, tool::FS_TYPE_CONTRACT,
+                    std::vector<std::string>{baseFields.begin() + 1, baseFields.end()});
+            }
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS), files));
+            return;
+        }
+
         // file exists, try to get type
         auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
         if (typeEntry)
@@ -364,7 +421,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     // touch(string absolute, string type)
-    std::string absolutePath, type;
+    std::string absolutePath;
+    std::string type;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath, type);
@@ -405,7 +463,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         }
     }
 
-    std::string parentDir, baseName;
+    std::string parentDir;
+    std::string baseName;
     if (type == FS_TYPE_DIR)
     {
         parentDir = absolutePath;
@@ -430,15 +489,74 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     }
 
     // set meta data in parent table
-    std::map<std::string, std::string> bfsInfo;
-    auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
-    auto&& out = asBytes(std::string(subEntry->getField(0)));
-    codec::scale::decode(bfsInfo, gsl::make_span(out));
-    bfsInfo.insert(std::make_pair(baseName, type));
-    subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-    _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
+    if (blockContext->blockVersion() >= (uint32_t)Version::V3_1_VERSION)
+    {
+        Entry subEntry;
+        tool::BfsFileFactory::buildDirEntry(subEntry, type);
+        _executive->storage().setRow(parentDir, baseName, std::move(subEntry));
 
-    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+    }
+    else
+    {
+        std::map<std::string, std::string> bfsInfo;
+        auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
+        auto&& out = asBytes(std::string(subEntry->getField(0)));
+        codec::scale::decode(bfsInfo, gsl::make_span(out));
+        bfsInfo.insert(std::make_pair(baseName, type));
+        subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+        _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
+
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+    }
+}
+
+void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("initBfs");
+    auto table = _executive->storage().openTable(tool::FS_ROOT);
+    if (table.has_value())
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("initBfs, root table already exist, return by default");
+        return;
+    }
+    // create / dir
+    _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
+    // build root subs metadata
+    for (const auto& subName : tool::FS_ROOT_SUBS)
+    {
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::DIRECTOR);
+        _executive->storage().setRow(tool::FS_ROOT,
+            subName == tool::FS_ROOT ? subName : subName.substr(1), std::move(entry));
+    }
+    // build apps, usr, tables metadata
+    _executive->storage().createTable(std::string(tool::FS_USER), std::string(tool::FS_DIR_FIELDS));
+    _executive->storage().createTable(std::string(tool::FS_APPS), std::string(tool::FS_DIR_FIELDS));
+    _executive->storage().createTable(
+        std::string(tool::FS_USER_TABLE), std::string(tool::FS_DIR_FIELDS));
+    _executive->storage().createTable(
+        std::string(tool::FS_SYS_BIN), std::string(tool::FS_DIR_FIELDS));
+
+    // build /sys/
+    for (const auto& sysSub : precompiled::BFS_SYS_SUBS)
+    {
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::LINK);
+        _executive->storage().setRow(
+            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
+    }
+    // build sys contract
+    for (const auto& nameAddress : precompiled::SYS_NAME_ADDRESS_MAP)
+    {
+        auto linkTable =
+            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
+        tool::BfsFileFactory::buildLink(linkTable.value(), nameAddress.second, "");
+    }
 }
 
 bool BFSPrecompiled::recursiveBuildDir(
@@ -452,18 +570,19 @@ bool BFSPrecompiled::recursiveBuildDir(
     // transfer /usr/local/bin => ["usr", "local", "bin"]
     std::vector<std::string> dirList;
     std::string absoluteDir = _absoluteDir;
-    if (absoluteDir[0] == '/')
+    if (absoluteDir.starts_with('/'))
     {
         absoluteDir = absoluteDir.substr(1);
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+        absoluteDir.pop_back();
     }
     boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     std::string root = "/";
 
-    for (auto dir : dirList)
+    auto version = _executive->blockContext().lock()->blockVersion();
+    for (const auto& dir : dirList)
     {
         auto table = _executive->storage().openTable(root);
         if (!table)
@@ -473,7 +592,42 @@ bool BFSPrecompiled::recursiveBuildDir(
                                  << LOG_KV("tableName", root);
             return false;
         }
-        auto newTableName = ((root == "/") ? root : (root + "/")) + dir;
+        auto newTableName = ((root == "/") ? root : (root + "/")).append(dir);
+
+        if (version >= (uint32_t)Version::V3_1_VERSION)
+        {
+            auto dirEntry = _executive->storage().getRow(root, dir);
+            if (!dirEntry)
+            {
+                // not exist, then set row to root, create dir
+                Entry newEntry;
+                // type, status, acl_type, acl_white, acl_black, extra
+                tool::BfsFileFactory::buildDirEntry(newEntry, tool::FileType::DIRECTOR);
+                _executive->storage().setRow(root, dir, std::move(newEntry));
+
+                _executive->storage().createTable(newTableName, std::string(tool::FS_DIR_FIELDS));
+                root = newTableName;
+                continue;
+            }
+            else
+            {
+                auto dirFields = dirEntry->getObject<std::vector<std::string>>();
+                if (dirFields[0] == tool::FS_TYPE_DIR)
+                {
+                    // if dir is directory, continue
+                    root = newTableName;
+                    continue;
+                }
+                // exist in root, it means this dir is not a directory
+                EXECUTIVE_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
+                                     << LOG_DESC("file had already existed, and not directory type")
+                                     << LOG_KV("parentDir", root) << LOG_KV("dir", dir)
+                                     << LOG_KV("type", dirFields[0]);
+                return false;
+            }
+        }
+
+        // if version < 3.0.0
         auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
         if (typeEntry)
         {

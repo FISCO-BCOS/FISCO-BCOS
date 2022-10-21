@@ -254,7 +254,6 @@ private:
 
     bool isValidPort(int port);
 
-private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
     size_t m_txpoolLimit;
@@ -293,9 +292,9 @@ private:
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 8192;
     std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath = "";
-    std::string m_pdCertPath = "";
-    std::string m_pdKeyPath = "";
+    std::string m_pdCaPath;
+    std::string m_pdCertPath;
+    std::string m_pdKeyPath;
 
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
