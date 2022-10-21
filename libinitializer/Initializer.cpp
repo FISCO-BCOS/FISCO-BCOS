@@ -209,11 +209,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
 
 
-    std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+    bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
     {
-        cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-        cache->setMaxCapacity(m_nodeConfig->cacheSize());
+        cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
+            storage, m_nodeConfig->cacheSize());
         INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
                               << m_nodeConfig->cacheSize();
     }
@@ -240,7 +240,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
+            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, storage, executionMessageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
         auto parallelExecutor =
