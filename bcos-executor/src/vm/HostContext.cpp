@@ -351,7 +351,9 @@ bool HostContext::setCode(bytes code)
             return true;
         }
         else
+        {
             return true;
+        }
     }
     // old logic
     auto contractTable = m_executive->storage().openTable(m_tableName);
