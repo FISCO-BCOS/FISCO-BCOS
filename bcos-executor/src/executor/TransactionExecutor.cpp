@@ -1842,7 +1842,8 @@ void TransactionExecutor::getCode(
         }
     }
 
-    auto tableName = getContractTableName(contract);
+    std::string contractTableName = getContractTableName(contract);
+    std::string tableName = contractTableName;
 
     std::string codeKey = "code";
     if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
