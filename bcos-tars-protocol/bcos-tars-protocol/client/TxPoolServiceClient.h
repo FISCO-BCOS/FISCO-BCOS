@@ -31,49 +31,12 @@ public:
     {}
     ~TxPoolServiceClient() override {}
 
-    void asyncSubmit(
-        bcos::bytesPointer _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback) override
-    {
-        class Callback : public bcostars::TxPoolServicePrxCallback
-        {
-        public:
-            Callback(bcos::protocol::TxSubmitCallback callback,
-                bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-              : m_callback(callback), m_cryptoSuite(cryptoSuite)
-            {}
-
-            void callback_asyncSubmit(const bcostars::Error& ret,
-                const bcostars::TransactionSubmitResult& result) override
-            {
-                auto bcosResult =
-                    std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(m_cryptoSuite,
-                        [inner = std::move(const_cast<bcostars::TransactionSubmitResult&>(
-                             result))]() mutable { return &inner; });
-                m_callback(toBcosError(ret), bcosResult);
-            }
-            void callback_asyncSubmit_exception(tars::Int32 ret) override
-            {
-                m_callback(toBcosError(ret), nullptr);
-            }
-
-        private:
-            bcos::protocol::TxSubmitCallback m_callback;
-            bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-        };
-
-        // set transaction timeout to 10min
-        // Note: tars_set_timeout unit is ms
-        m_proxy->tars_set_timeout(600000)->async_asyncSubmit(  // TODO: make timeout configable
-            new Callback(_txSubmitCallback, m_cryptoSuite),
-            std::vector<char>(_tx->begin(), _tx->end()));
-    }
-
     bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
         bcos::protocol::Transaction::Ptr transaction) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
         {
-            void callback_asyncSubmit(const bcostars::Error& ret,
+            void callback_submit(const bcostars::Error& ret,
                 const bcostars::TransactionSubmitResult& result) override
             {
                 auto bcosResult = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(
@@ -83,7 +46,7 @@ public:
                 m_submitResult = std::move(bcosResult);
                 m_handle.resume();
             }
-            void callback_asyncSubmit_exception(tars::Int32 ret) override
+            void callback_submit_exception(tars::Int32 ret) override
             {
                 m_submitResult = toBcosError(ret);
                 m_handle.resume();

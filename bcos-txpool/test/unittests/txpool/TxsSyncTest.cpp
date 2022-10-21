@@ -54,10 +54,7 @@ void importTransactions(
         auto transaction = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i,
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
-        bcos::bytes encodedData;
-        transaction->encode(encodedData);
-        auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-        txpool->asyncSubmit(txData, [&](Error::Ptr, TransactionSubmitResult::Ptr) {});
+        task::wait(txpool->submitTransaction(transaction));
     }
     auto startT = utcTime();
     while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))

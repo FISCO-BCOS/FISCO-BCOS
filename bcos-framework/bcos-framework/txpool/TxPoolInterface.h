@@ -44,13 +44,9 @@ public:
     /**
      * @brief submit a transaction
      *
-     * @param _tx the transaction to be submitted
-     * @param _onChainCallback trigger this callback when receive the notification of transaction
-     * on-chain
+     * @param transaction the transaction to be submitted
+     * @return protocol::TransactionSubmitResult::Ptr
      */
-    virtual void asyncSubmit(
-        bytesPointer _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback) = 0;
-
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) = 0;
 
