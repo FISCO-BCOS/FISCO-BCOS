@@ -1426,7 +1426,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             });
         bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
             blockHeaderFuture.get_future().get();
-        auto initialGenesisData = m_genesisBlockHeader->extraData().toString;
+        auto initialGenesisData = m_genesisBlockHeader->extraData().toString();
         // check genesisData whether inconsistent with initialGenesisData
         if (initialGenesisData == _genesisData)
         {
@@ -1434,7 +1434,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         }
         else
         {
-            if (initialGenesisData)
+            // GetBlockDataByNumber success but not consistent with initialGenesisData
+            if (m_genesisBlockHeader)
             {
                 std::cout << "### Initial Genesis Date is :" << initialGenesisData << std::endl;
                 BOOST_THROW_EXCEPTION(
