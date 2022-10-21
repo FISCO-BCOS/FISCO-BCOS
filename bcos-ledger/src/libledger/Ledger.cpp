@@ -1475,7 +1475,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     createFileSystemTables(versionNumber);
-    if (versionNumber <= (uint32_t)protocol::Version::MAX_VERSION)
+    if (versionNumber > (uint32_t)protocol::Version::MAX_VERSION)
     {
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
                                   "The genesis compatibilityVersion is " + _compatibilityVersion));
