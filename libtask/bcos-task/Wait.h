@@ -40,7 +40,7 @@ void wait(Task task, Callback callback)
 template <class Task>
 void wait(Task task)
 {
-    wait(std::move(task), []([[maybe_unused]] std::exception_ptr error = nullptr) {});
+    task.run();
 }
 
 template <class Task>

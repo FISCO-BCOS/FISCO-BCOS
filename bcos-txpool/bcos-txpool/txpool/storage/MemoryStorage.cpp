@@ -130,6 +130,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
                 if (result != TransactionStatus::None)
                 {
+                    TXPOOL_LOG(ERROR) << "Submit transaction error! " << result;
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, "Invalid transaction"));
                     handle.resume();
@@ -280,6 +281,10 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         {
             result = insertWithoutLock(_tx);
         }
+    }
+    else
+    {
+        return result;
     }
     return result;
 }

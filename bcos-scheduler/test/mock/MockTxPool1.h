@@ -21,7 +21,6 @@ public:
     using Ptr = std::shared_ptr<MockTxPool1>();
     void start() override {}
     void stop() override {}
-    void asyncSubmit(bytesPointer, bcos::protocol::TxSubmitCallback) override {}
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override
     {

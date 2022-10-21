@@ -4,6 +4,8 @@
 #pragma once
 #include "DuplicateTransactionFactory.h"
 #include "JsonRpcImpl_2_0.h"
+#include <bcos-task/Wait.h>
+#include <exception>
 
 namespace bcos
 {
@@ -77,10 +79,25 @@ public:
             [submitCallback = std::move(submitCallback), txpool](
                 bcos::protocol::Transaction::Ptr tx) {
                 // std::cout << "sendtx: " << tx->nonce() << std::endl;
-                bcos::bytes encodedData;
-                tx->encode(encodedData);
-                auto txData = std::make_shared<bytes>(std::move(encodedData));
-                txpool->asyncSubmit(txData, submitCallback);
+                task::wait(txpool->submitTransaction(std::move(tx)),
+                    [m_submitCallback = std::move(submitCallback)](auto&& result) {
+                        using ResultType = std::decay_t<decltype(result)>;
+                        if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+                        {
+                            try
+                            {
+                                std::rethrow_exception(result);
+                            }
+                            catch (bcos::Error& e)
+                            {
+                                m_submitCallback(std::make_shared<bcos::Error>(e), nullptr);
+                            }
+                        }
+                        else
+                        {
+                            m_submitCallback(nullptr, result);
+                        }
+                    });
             });
     }
 

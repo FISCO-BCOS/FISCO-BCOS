@@ -10,7 +10,6 @@ class MockTxPool : public txpool::TxPoolInterface
 public:
     void start() override {}
     void stop() override {}
-    void asyncSubmit(bytesPointer, bcos::protocol::TxSubmitCallback) override {}
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override
     {

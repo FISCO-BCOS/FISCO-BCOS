@@ -22,6 +22,7 @@
 #include <chrono>
 #include <cstdint>
 #include <iterator>
+#include <mutex>
 #include <thread>
 #include <utility>
 
@@ -167,9 +168,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
     m_executiveResults.resize(m_block->transactionsMetaDataSize());
     if (m_blockTxs)
     {
+        std::mutex saveMutex;
         // can fetch tx from txpool, build message which type is MESSAGE
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
-            [this](auto const& range) {
+            [this, &saveMutex](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
                     auto metaData = m_block->transactionMetaData(i);
@@ -185,15 +187,18 @@ void BlockExecutive::buildExecutivesFromMetaData()
                         metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
                     m_hasDAG = m_hasDAG || enableDAG;
+
+                    std::unique_lock lock(saveMutex);
                     saveMessage(std::move(to), std::move(message), enableDAG);
                 }
             });
     }
     else
     {
+        std::mutex saveMutex;
         // only has txHash, build message which type is TXHASH
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
-            [this](auto const& range) {
+            [this, &saveMutex](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
                     auto metaData = m_block->transactionMetaData(i);
@@ -249,6 +254,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
                     std::string to = {message->to().data(), message->to().size()};
 
                     m_hasDAG = m_hasDAG || enableDAG;
+
+                    std::unique_lock lock(saveMutex);
                     saveMessage(to, std::move(message), enableDAG);
                 }
             });
@@ -265,8 +272,9 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 
     m_executiveResults.resize(m_block->transactionsSize());
 
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0U, m_block->transactionsSize()), [this](auto const& range) {
+    std::mutex saveMutex;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsSize()),
+        [this, &saveMutex](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
                 auto tx = m_block->transaction(i);
@@ -279,6 +287,8 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
                 bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
                 m_hasDAG = m_hasDAG || enableDAG;
+
+                std::unique_lock lock(saveMutex);
                 saveMessage(to, std::move(message), enableDAG);
             }
         });
