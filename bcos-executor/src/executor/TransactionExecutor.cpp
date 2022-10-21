@@ -1903,39 +1903,42 @@ void TransactionExecutor::getCode(
                 callback(nullptr, std::move(codeBytes));
             });
     }
+    else
+    {
+        stateStorage->asyncGetRow(tableName, codeKey,
+            [this, callback = std::move(callback)](
+                Error::UniquePtr error, std::optional<Entry> entry) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
+                        {});
+                    return;
+                }
 
-    stateStorage->asyncGetRow(tableName, codeKey,
-        [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                             ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                    {});
-                return;
-            }
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get code error: " << error->errorMessage();
 
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get code error: " << error->errorMessage();
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
+                    return;
+                }
 
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
-                return;
-            }
+                if (!entry)
+                {
+                    EXECUTOR_NAME_LOG(DEBUG) << "Get code success, empty code";
 
-            if (!entry)
-            {
-                EXECUTOR_NAME_LOG(DEBUG) << "Get code success, empty code";
+                    callback(nullptr, bcos::bytes());
+                    return;
+                }
 
-                callback(nullptr, bcos::bytes());
-                return;
-            }
+                auto code = entry->getField(0);
+                EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
 
-            auto code = entry->getField(0);
-            EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
-
-            auto codeBytes = bcos::bytes(code.begin(), code.end());
-            callback(nullptr, std::move(codeBytes));
-        });
+                auto codeBytes = bcos::bytes(code.begin(), code.end());
+                callback(nullptr, std::move(codeBytes));
+            });
+    }
 }
 
 void TransactionExecutor::getABI(
