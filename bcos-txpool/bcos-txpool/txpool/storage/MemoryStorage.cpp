@@ -19,6 +19,8 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
@@ -598,17 +600,14 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
+    fetchedTxs->reserve(_txsLimit);
 
     for (auto const& it : m_txsTable)
     {
         auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
-        if (!tx)
-        {
-            continue;
-        }
-        if (tx->synced())
+        if (!tx || tx->synced())
         {
             continue;
         }
