@@ -326,7 +326,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
                 std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
-                    txpool);
+                    m_protocolInitializer->cryptoSuite(), txpool);
             auto scheduler =
                 std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
                     m_scheduler, m_protocolInitializer->cryptoSuite());

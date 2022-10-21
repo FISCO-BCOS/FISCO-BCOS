@@ -116,16 +116,15 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
 }
 
 
-void starLightnode(bcos::crypto::CryptoSuite::Ptr cryptoSuite,
-    bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto front, auto gateway, auto keyFactory,
-    auto nodeID)
+void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto front, auto gateway,
+    auto keyFactory, auto nodeID)
 {
     LIGHTNODE_LOG(INFO) << "Init lightnode p2p client...";
     auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(
         front, gateway, keyFactory, nodeConfig->groupId());
     auto remoteLedger = std::make_shared<bcos::ledger::LedgerClientImpl>(p2pClient);
     auto remoteTransactionPool =
-        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(cryptoSuite, p2pClient);
+        std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
     auto transactionPool =
         std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
     auto scheduler = std::make_shared<bcos::scheduler::SchedulerClientImpl>(p2pClient);
@@ -215,8 +214,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             std::move(storageWrapper));
 
-        starLightnode(protocolInitializer.cryptoSuite(), nodeConfig, localLedger, front, gateway,
-            keyFactory, nodeID);
+        starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
     }
     else
     {
@@ -224,8 +222,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             std::move(storageWrapper));
 
-        starLightnode(protocolInitializer.cryptoSuite(), nodeConfig, localLedger, front, gateway,
-            keyFactory, nodeID);
+        starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
     }
 
     return 0;
