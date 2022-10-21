@@ -1603,49 +1603,11 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
 void Ledger::createFileSystemTables(uint32_t blockVersion)
 {
-    std::array<std::string_view, tool::FS_ROOT_SUB_COUNT> rootSubNames = {
+    std::array<std::string_view, 4> rootSubNames = {
         tool::FS_APPS, tool::FS_USER, tool::FS_USER_TABLE, tool::FS_SYS_BIN};
-#if 1
-    // FIXME: not support now
-    blockVersion = (uint32_t)Version::V3_0_VERSION;
-#endif
 
-    if (blockVersion >= (uint32_t)Version::V3_1_VERSION)
-    {
-        // create / dir
-        auto rootTable = tool::BfsFileFactory::createDir(m_storage, FS_ROOT);
-
-        // build root subs metadata
-        for (const auto& subName : rootSubNames)
-        {
-            Entry entry;
-            // type, status, acl_type, acl_white, acl_black, extra
-            entry.setObject<std::vector<std::string>>(
-                {tool::FS_TYPE_DIR.data(), "0", "0", "", "", ""});
-            rootTable->setRow(subName.substr(1), std::move(entry));
-        }
-        // build apps, usr, tables metadata
-        tool::BfsFileFactory::createDir(m_storage, FS_USER);
-        tool::BfsFileFactory::createDir(m_storage, FS_APPS);
-        tool::BfsFileFactory::createDir(m_storage, FS_USER_TABLE);
-        auto sysTable = tool::BfsFileFactory::createDir(m_storage, FS_SYS_BIN);
-        // build /sys/
-        for (const auto& subName : precompiled::BFS_SYS_SUBS)
-        {
-            Entry entry;
-            // type, status, acl_type, acl_white, acl_black, extra
-            entry.setObject<std::vector<std::string>>(
-                {tool::FS_TYPE_DIR.data(), "0", "0", "", "", ""});
-            sysTable->setRow(subName.substr(tool::FS_SYS_BIN.size() + 1), std::move(entry));
-        }
-        // build sys contract
-        for (const auto& nameAddress : precompiled::SYS_NAME_ADDRESS_MAP)
-        {
-            auto table = buildDir(nameAddress.first, blockVersion);
-            BfsFileFactory::buildLink(table.value(), nameAddress.second, "");
-        }
-    }
-    else
+    /// blockVersion >= 3.1.0, use executor build
+    if (blockVersion <= (uint32_t)Version::V3_0_VERSION)
     {
         buildDir(tool::FS_ROOT, blockVersion);
         // root table must exist

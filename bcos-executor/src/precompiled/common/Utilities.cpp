@@ -334,21 +334,16 @@ std::pair<std::string, std::string> precompiled::getParentDirAndBaseName(
     // transfer /usr/local/bin => ["usr", "local", "bin"]
     if (_absolutePath == "/")
         return {"/", "/"};
-    std::vector<std::string> dirList;
+
     std::string absoluteDir = _absolutePath;
-    if (absoluteDir[0] == '/')
+
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(1);
+        absoluteDir.pop_back();
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
-    {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
-    }
-    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
-    std::string baseName = dirList.at(dirList.size() - 1);
-    dirList.pop_back();
-    std::string parentDir = "/" + boost::join(dirList, "/");
-    return {parentDir, baseName};
+    size_t index = absoluteDir.find_last_of('/');
+    auto parent = absoluteDir.substr(0, index);
+    return {parent.empty() ? "/" : parent, absoluteDir.substr(index + 1)};
 }
 
 executor::CallParameters::UniquePtr precompiled::externalRequest(

@@ -465,8 +465,8 @@ public:
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
                     auto& bucket = m_buckets[i];
-                    bcos::crypto::HashType bucketHash(0);
 
+                    bcos::crypto::HashType bucketHash(0);
                     for (auto& it : bucket.container)
                     {
                         auto& entry = it.entry;
