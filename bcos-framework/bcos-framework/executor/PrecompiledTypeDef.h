@@ -45,7 +45,12 @@ constexpr const char* const BFS_NAME = "/sys/bfs";
 constexpr const char* const GROUP_SIG_NAME = "/sys/group_sig";
 constexpr const char* const RING_SIG_NAME = "/sys/ring_sig";
 constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
-constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account";
+constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account_manager";
+constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 13;
+constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {
+    SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_NAME, AUTH_MANAGER_NAME,
+    KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME,
+    DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME};
 
 /// precompiled contract for solidity
 /// precompiled address should range in [0x1000, 0x20000)
@@ -74,6 +79,26 @@ constexpr const char* const AUTH_COMMITTEE_ADDRESS = "00000000000000000000000000
 constexpr const char* const AUTH_CONTRACT_MGR_ADDRESS = "0000000000000000000000000000000000010002";
 constexpr const char* const ACCOUNT_MGR_ADDRESS = "0000000000000000000000000000000000010003";
 constexpr const char* const ACCOUNT_ADDRESS = "0000000000000000000000000000000000010004";
+
+// clang-format off
+/// name to address, only for create sys table
+constexpr static const std::array<std::pair<std::string_view,std::string_view>, BFS_SYS_SUBS_COUNT>
+    SYS_NAME_ADDRESS_MAP ={
+    std::pair{SYS_CONFIG_NAME, SYS_CONFIG_ADDRESS},
+    {TABLE_NAME, TABLE_ADDRESS},
+    {TABLE_MANAGER_NAME, TABLE_MANAGER_ADDRESS},
+    {CONSENSUS_NAME, CONSENSUS_ADDRESS},
+    {AUTH_MANAGER_NAME, AUTH_MANAGER_ADDRESS},
+    {KV_TABLE_NAME, KV_TABLE_ADDRESS},
+    {CRYPTO_NAME, CRYPTO_ADDRESS},
+    {DAG_TRANSFER_NAME, DAG_TRANSFER_ADDRESS},
+    {BFS_NAME, BFS_ADDRESS},
+    {GROUP_SIG_NAME, GROUP_SIG_ADDRESS},
+    {RING_SIG_NAME, RING_SIG_ADDRESS},
+    {DISCRETE_ZKP_NAME, DISCRETE_ZKP_ADDRESS},
+    {ACCOUNT_MANAGER_NAME, ACCOUNT_MGR_ADDRESS}
+};
+// clang-format on
 
 const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
     bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,

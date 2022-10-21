@@ -45,6 +45,8 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters);
     void touch(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
+    void initBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);

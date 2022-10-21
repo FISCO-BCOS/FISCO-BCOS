@@ -89,6 +89,8 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
                 continue;
             }
 
+            EXECUTOR_LOG(DEBUG) << "Serial execute tx start" << txInput->toString();
+
             auto seq = txInput->seq;
             // build executive
             auto executive = m_executiveFactory->build(
@@ -103,6 +105,7 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             output->seq = seq;
 
             // call back
+            EXECUTOR_LOG(DEBUG) << "Serial execute tx finish" << output->toString();
             onTxReturn(std::move(output));
         }
 

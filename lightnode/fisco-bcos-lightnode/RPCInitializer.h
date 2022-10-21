@@ -48,6 +48,10 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
         bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(localLedger, remoteLedger,
         transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId());
 
+    auto jsonrpcWeakPtr = std::weak_ptr<bcos::rpc::LightNodeRPC<decltype(localLedger),
+        decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
+        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(jsonrpc);
+
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
         [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
@@ -162,6 +166,20 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                 }
             });
         });
+
+    auto httpServer = wsService->httpServer();
+    if (httpServer)
+    {
+        httpServer->setHttpReqHandler(
+            [jsonrpcWeakPtr](const std::string_view req, std::function<void(bcos::bytes)> sender) {
+                auto jsonrpc = jsonrpcWeakPtr.lock();
+                if (jsonrpc)
+                {
+                    jsonrpc->onRPCRequest(req, std::move(sender));
+                }
+            });
+    }
+
     return wsService;
 }
 

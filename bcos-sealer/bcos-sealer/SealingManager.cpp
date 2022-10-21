@@ -27,7 +27,8 @@ void SealingManager::resetSealing()
 {
     SEAL_LOG(INFO) << LOG_DESC("resetSealing") << LOG_KV("startNum", m_startSealingNumber)
                    << LOG_KV("endNum", m_endSealingNumber) << LOG_KV("sealingNum", m_sealingNumber)
-                   << LOG_KV("pendingTxs", pendingTxsSize());
+                   << LOG_KV("pendingTxs", pendingTxsSize())
+                   << LOG_KV("unsealedTxs", m_unsealedTxsSize);
     m_sealingNumber = m_endSealingNumber + 1;
     clearPendingTxs();
 }

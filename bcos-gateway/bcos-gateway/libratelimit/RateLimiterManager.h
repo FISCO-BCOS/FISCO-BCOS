@@ -67,10 +67,10 @@ public:
         m_rateLimiterFactory = _rateLimiterFactory;
     }
 
-    const std::set<uint16_t>& modulesWithNoBwLimit() const { return m_modulesWithNoBwLimit; }
-    void setModulesWithNoBwLimit(std::set<uint16_t> _modulesWithNoBwLimit)
+    const std::set<uint16_t>& modulesWithoutLimit() const { return m_modulesWithoutLimit; }
+    void setModulesWithoutLimit(std::set<uint16_t> _modulesWithoutLimit)
     {
-        m_modulesWithNoBwLimit = std::move(_modulesWithNoBwLimit);
+        m_modulesWithoutLimit = std::move(_modulesWithoutLimit);
     }
 
     void setRateLimiterConfig(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
@@ -92,7 +92,7 @@ private:
     std::unordered_map<std::string, RateLimiterInterface::Ptr> m_rateLimiters;
 
     // the message of modules that do not limit bandwidth
-    std::set<uint16_t> m_modulesWithNoBwLimit;
+    std::set<uint16_t> m_modulesWithoutLimit;
 
     GatewayConfig::RateLimiterConfig m_rateLimiterConfig;
 };

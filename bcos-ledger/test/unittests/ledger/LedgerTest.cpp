@@ -27,6 +27,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"
 #include <bcos-codec/scale/Scale.h>
@@ -49,6 +50,7 @@ using namespace bcos::ledger;
 using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
+using namespace bcos::tool;
 
 namespace std
 {
@@ -132,7 +134,7 @@ public:
         BOOST_CHECK(m_ledger != nullptr);
     }
 
-    inline void initFixture()
+    inline void initFixture(std::string version = bcos::protocol::V3_1_VERSION_STR)
     {
         m_param = std::make_shared<LedgerConfig>();
         m_param->setBlockNumber(0);
@@ -156,12 +158,10 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
-        auto result =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
+        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
-        auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
+        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
         BOOST_CHECK(result2);
     }
 
@@ -173,13 +173,13 @@ public:
         m_param->setBlockTxCountLimit(0);
 
         auto result1 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(result1);
         auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::RC4_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(!result2);
         auto result3 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::RC4_VERSION_STR);
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(result3);
     }
 
@@ -370,27 +370,99 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
                 m_param->observerNodeList().at(0)->nodeID()->hex());
             p6.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
+    BOOST_CHECK_EQUAL(f2.get(), true);
+    BOOST_CHECK_EQUAL(f3.get(), true);
+    BOOST_CHECK_EQUAL(f4.get(), true);
+    BOOST_CHECK_EQUAL(f5.get(), true);
+    BOOST_CHECK_EQUAL(f6.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
+{
+    initFixture(V3_0_VERSION_STR);
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
+        BOOST_CHECK(_error == nullptr);
+        BOOST_CHECK_EQUAL(_number, 0);
+        p1.set_value(true);
+    });
+
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
+    m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr _error, crypto::HashType _hash) {
+        BOOST_CHECK(_error == nullptr);
+        BOOST_CHECK(_hash != HashType(""));
+        m_ledger->asyncGetBlockNumberByHash(_hash, [&](Error::Ptr _error, BlockNumber _number) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_number, 0);
+            p2.set_value(true);
+        });
+    });
+
+    std::promise<bool> p3;
+    auto f3 = p3.get_future();
+    m_ledger->asyncGetBlockDataByNumber(0, HEADER, [&](Error::Ptr _error, Block::Ptr _block) {
+        BOOST_CHECK(_error == nullptr);
+        BOOST_CHECK(_block != nullptr);
+        BOOST_CHECK_EQUAL(_block->blockHeader()->number(), 0);
+        p3.set_value(true);
+    });
+
+    std::promise<bool> p4;
+    auto f4 = p4.get_future();
+    m_ledger->asyncGetTotalTransactionCount(
+        [&](Error::Ptr _error, int64_t _totalTxCount, int64_t _failedTxCount,
+            protocol::BlockNumber _latestBlockNumber) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_totalTxCount, 0);
+            BOOST_CHECK_EQUAL(_failedTxCount, 0);
+            BOOST_CHECK_EQUAL(_latestBlockNumber, 0);
+            p4.set_value(true);
+        });
+
+    std::promise<bool> p5;
+    auto f5 = p5.get_future();
+    m_ledger->asyncGetSystemConfigByKey(
+        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_value, "1000");
+            BOOST_CHECK_EQUAL(_number, 0);
+            p5.set_value(true);
+        });
+
+    std::promise<bool> p6;
+    auto f6 = p6.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
+                m_param->observerNodeList().at(0)->nodeID()->hex());
+            p6.set_value(true);
+        });
 
     std::promise<bool> p7;
     std::vector<std::string> v = {"apps", "usr", "sys", "tables"};
-    m_storage->asyncGetRow(FS_ROOT, FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
-        std::map<std::string, std::string> bfsInfos;
-        auto&& out = asBytes(std::string(_entry->getField(0)));
-        codec::scale::decode(bfsInfos, gsl::make_span(out));
-        for (const auto& item : v)
-        {
-            BOOST_CHECK(bfsInfos.find(item) != bfsInfos.end());
-            std::promise<bool> p;
-            m_storage->asyncOpenTable(
-                "/" + item, [&](Error::UniquePtr _error, std::optional<Table> _table) {
-                    BOOST_CHECK(!_error);
-                    BOOST_CHECK(_table.has_value());
-                    p.set_value(true);
-                });
-            p.get_future().get();
-        }
-        p7.set_value(true);
-    });
+    m_storage->asyncGetRow(
+        tool::FS_ROOT, tool::FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
+            std::map<std::string, std::string> bfsInfos;
+            auto&& out = asBytes(std::string(_entry->getField(0)));
+            codec::scale::decode(bfsInfos, gsl::make_span(out));
+            for (const auto& item : v)
+            {
+                BOOST_CHECK(bfsInfos.find(item) != bfsInfos.end());
+                std::promise<bool> p;
+                m_storage->asyncOpenTable(
+                    "/" + item, [&](Error::UniquePtr _error, std::optional<Table> _table) {
+                        BOOST_CHECK(!_error);
+                        BOOST_CHECK(_table.has_value());
+                        p.set_value(true);
+                    });
+                p.get_future().get();
+            }
+            p7.set_value(true);
+        });
     p7.get_future().get();
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);

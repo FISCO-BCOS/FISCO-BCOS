@@ -310,8 +310,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     bool commitBlockError = false;
     size_t errorNumber = 0;
     size_t queueFrontNumber = 0;
-
-    for (size_t i = 6; i < 11; ++i)
+    ledger->commitSuccess(true);
+    for (size_t i = 7; i < 11; ++i)
     {
         auto blockHeader = blockHeaderFactory->createBlockHeader();
         blockHeader->setNumber(i);
@@ -327,15 +327,14 @@ BOOST_AUTO_TEST_CASE(commitBlock)
                 }
                 else
                 {
-                    ledger->commitSuccess(true);
+                    ++queueFrontNumber;
                     BOOST_CHECK(config);
                     BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
                     BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
                     BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
                     BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
-                    BOOST_CHECK_EQUAL(config->hash().hex(), h256(5 + queueFrontNumber).hex());
+                    BOOST_CHECK_EQUAL(config->hash().hex(), h256(6).hex());
                     committedPromise.set_value(true);
-                    ++queueFrontNumber;
                 }
             });
         if (commitBlockError)
@@ -344,7 +343,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
         }
     }
     BOOST_CHECK_EQUAL(errorNumber, 1);
-    BOOST_CHECK_EQUAL(queueFrontNumber, 4);
+    BOOST_CHECK_EQUAL(queueFrontNumber, 3);
     BOOST_CHECK(!commitBlockError);
     SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
                          << LOG_KV("queueFrontNumber", queueFrontNumber);
@@ -364,73 +363,18 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             }
             else
             {
-                BOOST_CHECK_MESSAGE(false, "Check commit error failed");
+                ++queueFrontNumber;
+                BOOST_CHECK(config);
+                BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
+                BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
+                BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
+                BOOST_CHECK_EQUAL(config->observerNodeList().size(), 2);
+                BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
+                committedPromise.set_value(true);
             }
         });
     SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
                          << LOG_KV("queueFrontNumber", queueFrontNumber);
-
-
-    for (size_t i = 10; i < 13; ++i)
-    {
-        auto block = blockFactory->createBlock();
-        block->blockHeader()->setNumber(i);
-        for (size_t j = 0; j < 20; ++j)
-        {
-            auto metaTx =
-                std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
-            block->appendTransactionMetaData(std::move(metaTx));
-        }
-        // executeBlock
-        bcos::protocol::BlockHeader::Ptr blockHeader;
-        scheduler->executeBlock(block, false,
-            [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
-                SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
-                if (error)
-                {
-                    executeBlockError = true;
-                    BOOST_CHECK(error);
-                    SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
-                }
-                else
-                {
-                    BOOST_CHECK(!error);
-                    BOOST_CHECK(header);
-                    blockHeader = std::move(header);
-                }
-            });
-        if (!executeBlockError)
-        {
-            BOOST_CHECK(blockHeader);
-        }
-        executeBlockError = false;
-        blockHeader = nullptr;
-    }
-
-    // test blockNumber more than block cache
-    {
-        // current number is 9, queue front is 9
-        ledger->commitSuccess(true);
-        ledger->commitSuccess(true);
-        // current number is 11, queue front is 9
-        auto blockHeader = blockHeaderFactory->createBlockHeader();
-        blockHeader->setNumber(12);
-        std::promise<bool> committedFailedPromise;
-        scheduler->commitBlock(
-            blockHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
-                if (error)
-                {
-                    // must goes here
-                    committedFailedPromise.set_value(true);
-                }
-                else
-                {
-                    BOOST_CHECK_MESSAGE(false, "Could not check block number error");
-                    committedFailedPromise.set_value(true);
-                }
-            });
-        committedFailedPromise.get_future().get();
-    }
 }
 
 BOOST_AUTO_TEST_CASE(handlerBlockTest)

@@ -3,6 +3,7 @@
 #include "bcos-concepts/Exception.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-lightnode/Log.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -55,13 +56,15 @@ public:
             void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << m_moduleID << " | "
-                                     << m_nodeID << " | " << m_requestBuffer.size();
+                                     << m_nodeID->hex() << " | " << m_requestBuffer.size();
                 bcos::concepts::getRef(m_front).asyncSendMessageByNodeID(m_moduleID, m_nodeID,
-                    bcos::ref(m_requestBuffer), 0,
+                    bcos::ref(m_requestBuffer), 30000,
                     [m_handle = std::move(handle), this](Error::Ptr error, bcos::crypto::NodeIDPtr,
                         bytesConstRef data, const std::string&, front::ResponseFunc) mutable {
                         LIGHTNODE_LOG(DEBUG) << "P2P client receive message: " << m_moduleID
-                                             << " | " << m_nodeID << " | " << data.size();
+                                             << " | " << m_nodeID->hex() << " | " << data.size()
+                                             << " | " << (error ? error->errorCode() : 0) << " | "
+                                             << (error ? error->errorMessage() : "");
                         if (!error)
                         {
                             bcos::concepts::serialize::decode(data, m_response);
@@ -94,7 +97,8 @@ public:
             ResponseType& m_response;
         };
 
-        co_await Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
+        auto awaitable = Awaitable(m_front, moduleID, nodeID, std::move(requestBuffer), response);
+        co_await awaitable;
     }
 
     task::Task<crypto::NodeIDPtr> randomSelectNode()
@@ -110,9 +114,8 @@ public:
             void await_suspend(CO_STD::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
-                    [this, m_handle = std::move(handle)](Error::Ptr error,
-                        gateway::GatewayInfo::Ptr,
-                        gateway::GatewayInfosPtr peerGatewayInfos) mutable {
+                    [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
+                        const gateway::GatewayInfosPtr& peerGatewayInfos) mutable {
                         if (error)
                         {
                             m_error = std::move(error);
@@ -121,25 +124,30 @@ public:
                         {
                             if (!peerGatewayInfos->empty())
                             {
-                                auto groups = peerGatewayInfos->at(0);
-                                auto nodeIDInfo = groups->nodeIDInfo();
-                                auto it = nodeIDInfo.find(m_groupID);
-                                if (it != nodeIDInfo.end())
+                                std::set<std::string> nodeIDs;
+                                for (const auto& peerGatewayInfo : *peerGatewayInfos)
                                 {
-                                    auto& nodeIDs = it->second;
-                                    if (!nodeIDs.empty())
-                                    {
-                                        std::uniform_int_distribution<size_t> distribution{
-                                            0U, nodeIDs.size() - 1};
-                                        auto nodeIDIt = nodeIDs.begin();
-                                        auto step = distribution(m_rng);
-                                        for (size_t i = 0; i < step; ++i)
-                                        {
-                                            ++nodeIDIt;
-                                        }
+                                    auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
+                                    auto it = nodeIDInfo.find(m_groupID);
 
-                                        m_nodeID = *nodeIDIt;
+                                    if (it != nodeIDInfo.end() && !it->second.empty())
+                                    {
+                                        nodeIDs.insert(it->second.begin(), it->second.end());
                                     }
+                                }
+
+                                if (!nodeIDs.empty())
+                                {
+                                    std::uniform_int_distribution<size_t> distribution{
+                                        0U, nodeIDs.size() - 1};
+                                    auto nodeIDIt = nodeIDs.begin();
+                                    auto step = distribution(m_rng);
+                                    for (size_t i = 0; i < step; ++i)
+                                    {
+                                        ++nodeIDIt;
+                                    }
+
+                                    m_nodeID = *nodeIDIt;
                                 }
                             }
                         }
@@ -147,13 +155,12 @@ public:
                         m_handle.resume();
                     });
             }
-            std::string await_resume()
+            void await_resume()
             {
                 if (m_error)
                 {
                     BOOST_THROW_EXCEPTION(*(m_error));
                 }
-                return std::move(m_nodeID);
             }
 
             bcos::gateway::GatewayInterface::Ptr& m_gateway;
@@ -164,7 +171,10 @@ public:
             std::string m_nodeID;
         };
 
-        auto nodeID = co_await Awaitable(m_gateway, m_groupID, m_rng);
+        auto awaitable = Awaitable(m_gateway, m_groupID, m_rng);
+        co_await awaitable;
+        auto& nodeID = awaitable.m_nodeID;
+
         if (nodeID.empty())
         {
             BOOST_THROW_EXCEPTION(NoNodeAvailable{});

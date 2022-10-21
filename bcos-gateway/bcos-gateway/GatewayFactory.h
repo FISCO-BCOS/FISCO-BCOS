@@ -100,16 +100,12 @@ public:
         const GatewayConfig::RedisConfig& _redisConfig);
 
     /**
-     * @brief init redis
+     * @brief
      *
-     * @param _redisIP
-     * @param _redisPort
-     * @param _redisPoolSize
-     * @param _redisTimeOut
+     * @param _redisConfig
      * @return std::shared_ptr<sw::redis::Redis>
      */
-    std::shared_ptr<sw::redis::Redis> initRedis(const std::string& _redisIP, uint16_t _redisPort,
-        uint32_t _redisPoolSize, uint32_t _redisTimeOut = 3000);
+    std::shared_ptr<sw::redis::Redis> initRedis(const GatewayConfig::RedisConfig& _redisConfig);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(

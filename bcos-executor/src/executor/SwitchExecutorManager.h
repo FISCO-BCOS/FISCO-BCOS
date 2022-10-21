@@ -19,6 +19,8 @@ public:
     SwitchExecutorManager(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
     {
+        factory->registerNeedSwitchEvent([this]() { selfAsyncRefreshExecutor(); });
+
         refreshExecutor(INIT_SCHEDULER_TERM_ID);
     }
 
@@ -50,6 +52,11 @@ public:
                 oldExecutor->stop();
             }
         }
+    }
+
+    void selfAsyncRefreshExecutor()
+    {
+        m_pool.enqueue([this]() { refreshExecutor(m_schedulerTermId + 1); });
     }
 
     bool hasStopped()

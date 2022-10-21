@@ -82,6 +82,19 @@ public:
         m_exchangeMessage = std::move(callParameters);
     }
 
+    std::string getExchangeMessageStr()
+    {
+        if (m_exchangeMessage)
+        {
+            return m_exchangeMessage->toString();
+        }
+        else
+        {
+            return "[empty exchange message]";
+        }
+    }
+
+
     virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {
         std::copy(

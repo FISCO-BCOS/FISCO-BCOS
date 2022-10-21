@@ -96,8 +96,7 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
-        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables,
-        std::string name);
+        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;
 
@@ -168,6 +167,8 @@ public:
     void start() override { m_isRunning = true; }
     void stop() override;
 
+    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
+
 protected:
     void executeTransactionsInternal(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,
@@ -187,7 +188,7 @@ protected:
         const protocol::BlockHeader::ConstPtr& currentHeader,
         storage::StateStorageInterface::Ptr tableFactory);
 
-    virtual std::shared_ptr<BlockContext> createBlockContext(
+    virtual std::shared_ptr<BlockContext> createBlockContextForCall(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
         int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
 
@@ -308,15 +309,18 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
+    uint32_t m_blockVersion = 0;
     size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
-    std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
+    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
 
     bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
+
+    std::function<void()> f_onNeedSwitchEvent;
 };
 
 }  // namespace executor
