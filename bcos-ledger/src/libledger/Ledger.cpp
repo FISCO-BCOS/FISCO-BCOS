@@ -1426,7 +1426,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             });
         bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
             blockHeaderFuture.get_future().get();
-        auto initialGenesisData = *toHexString(m_genesisBlockHeader->extraData());
+        std::string initialGenesisData = *toHexString(m_genesisBlockHeader->extraData());
         // check genesisData whether inconsistent with initialGenesisData
         if (initialGenesisData == _genesisData)
         {
@@ -1434,12 +1434,19 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         }
         else
         {
-            std::cout << "### Genesis Date:" << initialGenesisData << std::endl;
-            LEDGER_LOG(INFO) << LOG_DESC("InitialGenesisData")
-                             << LOG_KV("genesisData", initialGenesisData);
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << errinfo_comment(
-                    "The Genesis Data is inconsistent with the initial Genesis Data"));
+            if (initialGenesisData)
+            {
+                std::cout << "### Initial Genesis Date is :" << initialGenesisData << std::endl;
+                LEDGER_LOG(INFO) << LOG_DESC("InitialGenesisData")
+                                 << LOG_KV("genesisData", initialGenesisData);
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "The Genesis Data is inconsistent with the initial Genesis Data"));
+            }
+            else
+            {
+                LEDGER_LOG(INFO) << "error! initialGenesisDate is null";
+            }
         }
     }
 
