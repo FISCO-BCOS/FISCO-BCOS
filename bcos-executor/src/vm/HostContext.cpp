@@ -532,17 +532,20 @@ std::string_view HostContext::myAddress() const
 std::optional<storage::Entry> HostContext::code()
 {
     auto start = utcTimeUs();
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-    if (!entry || entry->get().empty())
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
-        if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+        auto codehash = codeHash();
+        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codehash.hex());
+        if (!entry || entry->get().empty())
         {
-            auto codehash = codeHash();
-            entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codehash.hex());
+            auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
             m_getTimeUsed.fetch_add(utcTimeUs() - start);
-            return entry;
+            return codeEntry;
         }
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
+        return entry;
     }
+    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
     m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return entry;
 }
