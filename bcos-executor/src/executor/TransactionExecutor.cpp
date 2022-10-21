@@ -1406,8 +1406,11 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     auto abiKey = bytes(to.cbegin(), to.cend());
                     abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                     // if precompiled
-                    auto executive = createExecutive(
-                        m_blockContext, params->codeAddress, params->contextID, params->seq);
+                    auto executiveFactory =
+                        std::make_shared<ExecutiveFactory>(m_blockContext, m_precompiledContract,
+                            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+                    auto executive = executiveFactory->build(
+                        params->codeAddress, params->contextID, params->seq, false);
                     auto p = executive->getPrecompiled(params->receiveAddress);
                     if (p)
                     {
@@ -2298,22 +2301,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     return message;
 }
 
-
-TransactionExecutive::Ptr TransactionExecutor::createExecutive(
-    const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
-    int64_t contextID, int64_t seq)
-{
-    auto executive = std::make_shared<TransactionExecutive>(
-        _blockContext, _contractAddress, contextID, seq, m_gasInjector);
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_precompiledContract);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
-
-    // TODO: register User developed Precompiled contract
-    // registerUserPrecompiled(context);
-    return executive;
-}
-
 void TransactionExecutor::removeCommittedState()
 {
     if (m_stateStorages.empty())
@@ -2481,8 +2468,10 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
 
         auto& input = inputs[id];
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
         auto executive =
-            createExecutive(m_blockContext, input->codeAddress, input->contextID, input->seq);
+            executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
 
         EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                                  << LOG_DESC("Start transaction")

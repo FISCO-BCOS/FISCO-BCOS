@@ -148,9 +148,9 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 
 void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)
 {
-    int64_t configuredValue;
+    int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!c_supportedKey.count(key))
+    if (!c_supportedKey.contains(key))
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
@@ -191,7 +191,7 @@ void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string
         BOOST_THROW_EXCEPTION(
             PrecompiledError("The value for " + key + " must be a valid number."));
     }
-    if (m_sysValueCmp.count(key))
+    if (m_sysValueCmp.contains(key))
     {
         (m_sysValueCmp.at(key))(configuredValue);
     }

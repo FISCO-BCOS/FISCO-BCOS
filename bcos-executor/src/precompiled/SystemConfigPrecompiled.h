@@ -28,13 +28,6 @@ namespace bcos
 {
 namespace precompiled
 {
-#if 0
-contract SystemConfigTable
-{
-    // Return 1 means successful setting, and 0 means cannot find the config key.
-    function setValueByKey(string key, string value) public returns(int256);
-}
-#endif
 
 class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 {
