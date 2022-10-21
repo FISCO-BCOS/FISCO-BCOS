@@ -36,6 +36,7 @@
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -219,23 +220,19 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     bool _maybeExpired = false)
 {
     std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    bcos::bytes encodedData;
-    _tx->encode(encodedData);
-    auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-    _txpool->asyncSubmit(txData, [verifyFinish, _expectedTxHash, _expectedStatus, _maybeExpired](
-                                     Error::Ptr, TransactionSubmitResult::Ptr _result) {
-        std::cout << "#### expectedTxHash:" << _expectedTxHash.abridged() << std::endl;
-        std::cout << "##### receipt txHash:" << _result->txHash().abridged() << std::endl;
-        BOOST_CHECK(_result->txHash() == _expectedTxHash);
-        std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
-        std::cout << "##### receiptStatus:" << std::to_string(_result->status()) << std::endl;
-        if (_maybeExpired)
-        {
-            BOOST_CHECK((_result->status() == _expectedStatus) ||
-                        (_result->status() == (int32_t)TransactionStatus::BlockLimitCheckFail));
-        }
-        *verifyFinish = true;
-    });
+    auto submitResult = ~_txpool->submitTransaction(_tx);
+    std::cout << "#### expectedTxHash:" << _expectedTxHash.abridged() << std::endl;
+    std::cout << "##### receipt txHash:" << submitResult->txHash().abridged() << std::endl;
+    BOOST_CHECK(submitResult->txHash() == _expectedTxHash);
+    std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
+    std::cout << "##### receiptStatus:" << std::to_string(submitResult->status()) << std::endl;
+    if (_maybeExpired)
+    {
+        BOOST_CHECK((submitResult->status() == _expectedStatus) ||
+                    (submitResult->status() == (int32_t)TransactionStatus::BlockLimitCheckFail));
+    }
+    *verifyFinish = true;
+
     if (_waitNothing)
     {
         return;

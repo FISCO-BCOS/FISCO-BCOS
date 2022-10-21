@@ -70,7 +70,7 @@ BOOST_FIXTURE_TEST_SUITE(TransactionPoolTest, TransactionPoolFixture)
 BOOST_AUTO_TEST_CASE(mtTxPool)
 {
     MockTransactionPoolMT<false> mock1;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool(mock1);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool(nullptr, mock1);
 
     bcostars::Transaction transaction;
     bcostars::TransactionReceipt receipt;
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(mtTxPool)
     BOOST_CHECK_EQUAL(receipt.data.status, 100);
 
     MockTransactionPoolMT<true> mock2;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool2(nullptr, mock2);
     BOOST_CHECK_THROW(
         bcos::task::syncWait(transactionPool2.submitTransaction(transaction, receipt)),
         bcos::Error);
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(stTxPool)
     bcostars::TransactionReceipt receipt;
 
     MockTransactionPoolST mock3;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool3(mock3);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool3(nullptr, mock3);
     bcos::task::syncWait(transactionPool3.submitTransaction(transaction, receipt));
 
     BOOST_CHECK_EQUAL(receipt.data.status, 79);
@@ -106,7 +106,7 @@ bcos::task::Task<void> mainTask()
     bcostars::TransactionReceipt receipt;
 
     MockTransactionPoolMT<true> mock2;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool2(nullptr, mock2);
     BOOST_CHECK_THROW(co_await transactionPool2.submitTransaction(transaction, receipt),
         boost::wrapexcept<bcos::Error>);
 }
