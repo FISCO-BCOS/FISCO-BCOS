@@ -364,7 +364,7 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
     const GatewayConfig::RedisConfig& _redisConfig)
 {
     auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
-    rateLimiterStat->setStatReporterInterval(_rateLimiterConfig.statReporterInterval);
+    rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
 
     auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig, _redisConfig);
 
@@ -383,8 +383,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
 
     if (_rateLimiterConfig.isDistributedRateLimitOn())
     {  // init redis first
-        redis = initRedis(_redisConfig.redisServerIP, _redisConfig.redisServerPort,
-            _redisConfig.redisPoolSize, _redisConfig.redisTimeOut);
+        redis = initRedis(_redisConfig);
     }
 
     // rate limiter factory
@@ -434,7 +433,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     }
 
     // modules without bandwidth limit
-    rateLimiterManager->setModulesWithNoBwLimit(_rateLimiterConfig.modulesWithNoBwLimit);
+    rateLimiterManager->setModulesWithoutLimit(_rateLimiterConfig.modulesWithoutLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
 
     return rateLimiterManager;
@@ -665,38 +664,40 @@ void GatewayFactory::initFailOver(
 }
 
 /**
- * @brief init redis
+ * @brief
  *
- * @param _redisIP
- * @param _redisPort
- * @param _redisPoolSize
- * @param _redisTimeOut
+ * @param _redisConfig
  * @return std::shared_ptr<sw::redis::Redis>
  */
-std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(const std::string& _redisIP,
-    uint16_t _redisPort, uint32_t _redisPoolSize, uint32_t _redisTimeOut)
+std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(
+    const GatewayConfig::RedisConfig& _redisConfig)
 {
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("initRedis") << LOG_DESC("start connect to redis")
-                              << LOG_KV("redisIP", _redisIP) << LOG_KV("redisPort", _redisPort)
-                              << LOG_KV("redisPoolSize", _redisPoolSize)
-                              << LOG_KV("redisTimeOut(ms)", _redisTimeOut);
+                              << LOG_KV("host", _redisConfig.host)
+                              << LOG_KV("port", _redisConfig.port) << LOG_KV("db", _redisConfig.db)
+                              << LOG_KV("poolSize", _redisConfig.connectionPoolSize)
+                              << LOG_KV("timeout", _redisConfig.timeout)
+                              << LOG_KV("password", _redisConfig.password);
 
     sw::redis::ConnectionOptions connection_options;
-    connection_options.host = _redisIP;    // Required.
-    connection_options.port = _redisPort;  // Optional.
-    // connection_options.password = "auth";  // Optional. No password by default.
-    // connection_options.db = 1;  // Optional. Use the 0th database by default.
+    connection_options.host = _redisConfig.host;  // Required.
+    connection_options.port = _redisConfig.port;  // Optional.
+    connection_options.db = _redisConfig.db;      // Optional. Use the 0th database by default.
+    if (!_redisConfig.password.empty())
+    {
+        connection_options.password = _redisConfig.password;  // Optional. No password by default.
+    }
 
     // Optional. Timeout before we successfully send request to or receive response from redis.
     // By default, the timeout is 0ms, i.e. never timeout and block until we send or receive
     // successfully. NOTE: if any command is timed out, we throw a TimeoutError exception.
-    connection_options.socket_timeout = std::chrono::milliseconds(_redisTimeOut);
+    connection_options.socket_timeout = std::chrono::milliseconds(_redisConfig.timeout);
     // connection_options.connect_timeout = std::chrono::milliseconds(3000);
     connection_options.keep_alive = true;
 
     sw::redis::ConnectionPoolOptions pool_options;
     // Pool size, i.e. max number of connections.
-    pool_options.size = _redisPoolSize;
+    pool_options.size = _redisConfig.connectionPoolSize;
 
     std::shared_ptr<sw::redis::Redis> redis = nullptr;
     try

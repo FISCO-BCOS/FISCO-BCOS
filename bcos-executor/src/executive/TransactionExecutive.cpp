@@ -39,6 +39,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -470,7 +471,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         }
 
         /// create link table
-        m_storageWrapper->createTable(tableName, STORAGE_VALUE);
+        auto linkTable = m_storageWrapper->createTable(tableName, STORAGE_VALUE);
 
         /// create code index contract
         auto codeTable = getContractTableName(newAddress, false);
@@ -482,12 +483,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
 
         /// set link data
-        Entry addressEntry = {};
-        addressEntry.importFields({newAddress});
-        m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
-        Entry typeEntry = {};
-        typeEntry.importFields({FS_TYPE_LINK});
-        m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
+        tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
     }
     callParameters->type = CallParameters::FINISHED;
     callParameters->status = (int32_t)TransactionStatus::None;
@@ -752,11 +748,22 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
         revert();
 
+
         if (e.errorCode() == DEAD_LOCK)
         {
             // DEAD LOCK revert need provide sender and receiver
             EXECUTOR_LOG(DEBUG) << "Revert by dead lock, sender: " << callResults->senderAddress
                                 << " receiver: " << callResults->receiveAddress;
+        }
+        else if (StorageError::UnknownError <= e.errorCode() &&
+                 StorageError::TimestampMismatch <= e.errorCode())
+        {
+            // is storage error
+            EXECUTOR_LOG(DEBUG)
+                << "Storage exception during tx execute. trigger switch(if this tx is not call). e:"
+                << diagnostic_information(e);
+            auto blockContext = m_blockContext.lock();
+            blockContext->triggerSwitch();
         }
         else
         {
@@ -908,7 +915,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     auto outputRef = _result.output();
     switch (_result.status())
     {
-    case EVMC_SUCCESS: {
+    case EVMC_SUCCESS:
+    {
         callResults->type = CallParameters::FINISHED;
         callResults->status = _result.status();
         callResults->gas = _result.gasLeft();
@@ -919,7 +927,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         }
         break;
     }
-    case EVMC_REVERT: {
+    case EVMC_REVERT:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_REVERT") << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
@@ -934,7 +943,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         // m_excepted = TransactionStatus::RevertInstruction;
         break;
     }
-    case EVMC_OUT_OF_GAS: {
+    case EVMC_OUT_OF_GAS:
+    {
         revert();
         EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("OutOfGas")
                             << LOG_KV("to", callResults->receiveAddress)
@@ -943,7 +953,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         callResults->gas = _result.gasLeft();
         break;
     }
-    case EVMC_FAILURE: {
+    case EVMC_FAILURE:
+    {
         revert();
         EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("WASMTrap")
                             << LOG_KV("to", callResults->receiveAddress);
@@ -952,7 +963,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         break;
     }
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
-    case EVMC_UNDEFINED_INSTRUCTION: {
+    case EVMC_UNDEFINED_INSTRUCTION:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION")
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0; //TODO: why set remainGas to 0?
@@ -960,7 +972,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_BAD_JUMP_DESTINATION: {
+    case EVMC_BAD_JUMP_DESTINATION:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION")
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
@@ -968,7 +981,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_STACK_OVERFLOW: {
+    case EVMC_STACK_OVERFLOW:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_OVERFLOW")
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
@@ -976,7 +990,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_STACK_UNDERFLOW: {
+    case EVMC_STACK_UNDERFLOW:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_UNDERFLOW")
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
@@ -984,7 +999,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_INVALID_MEMORY_ACCESS: {
+    case EVMC_INVALID_MEMORY_ACCESS:
+    {
         // m_remainGas = 0;
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
                             << LOG_KV("to", callResults->receiveAddress);
@@ -992,7 +1008,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_STATIC_MODE_VIOLATION: {
+    case EVMC_STATIC_MODE_VIOLATION:
+    {
         // m_remainGas = 0;
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
                             << LOG_KV("to", callResults->receiveAddress);
@@ -1000,7 +1017,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_CONTRACT_VALIDATION_FAILURE: {
+    case EVMC_CONTRACT_VALIDATION_FAILURE:
+    {
         EXECUTIVE_LOG(INFO)
             << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.")
             << LOG_KV("to", callResults->receiveAddress);
@@ -1008,7 +1026,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         revert();
         break;
     }
-    case EVMC_ARGUMENT_OUT_OF_RANGE: {
+    case EVMC_ARGUMENT_OUT_OF_RANGE:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Argument Out Of Range")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
@@ -1016,7 +1035,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         break;
     }
     case EVMC_WASM_TRAP:
-    case EVMC_WASM_UNREACHABLE_INSTRUCTION: {
+    case EVMC_WASM_UNREACHABLE_INSTRUCTION:
+    {
         EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Unreachable/Trap Instruction")
                             << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("status", _result.status());
@@ -1025,7 +1045,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         break;
     }
     case EVMC_INTERNAL_ERROR:
-    default: {
+    default:
+    {
         EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
                                << LOG_KV("to", callResults->receiveAddress)
                                << LOG_KV("status", _result.status());
@@ -1051,8 +1072,8 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.substr(0, 5) == USER_SYS_PREFIX ||
-        getContractTableName(_sender, false).substr(0, 5) == USER_SYS_PREFIX)
+    if (_tableName.starts_with(USER_SYS_PREFIX) ||
+        getContractTableName(_sender, false).starts_with(USER_SYS_PREFIX))
     {
         return;
     }
@@ -1074,25 +1095,7 @@ void TransactionExecutive::creatAuthTable(
 
     if (table)
     {
-        Entry adminEntry(table->tableInfo());
-        adminEntry.importFields({admin});
-        m_storageWrapper->setRow(authTableName, ADMIN_FIELD, std::move(adminEntry));
-
-        Entry statusEntry(table->tableInfo());
-        statusEntry.importFields({CONTRACT_NORMAL});
-        m_storageWrapper->setRow(authTableName, STATUS_FIELD, std::move(statusEntry));
-
-        Entry emptyType;
-        emptyType.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_TYPE, std::move(emptyType));
-
-        Entry emptyWhite;
-        emptyWhite.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_WHITE, std::move(emptyWhite));
-
-        Entry emptyBlack;
-        emptyBlack.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_BLACK, std::move(emptyBlack));
+        tool::BfsFileFactory::buildAuth(table.value(), admin);
     }
 }
 
@@ -1185,9 +1188,11 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     // static call does not have 'origin', so return true for now
     // precompiled return true by default
     if (callParameters->staticCall || isPrecompiled(callParameters->receiveAddress))
+    {
         return true;
+    }
     auto blockContext = m_blockContext.lock();
-    auto authMgrAddress =
+    const auto* authMgrAddress =
         blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
@@ -1211,8 +1216,7 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(
-            shared_from_this(), std::move(path), func, address);
+        result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
     }
     EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
                          << LOG_KV("result", result);

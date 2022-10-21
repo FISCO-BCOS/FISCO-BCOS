@@ -40,8 +40,7 @@ public:
 
     void init(bool _isWasm)
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
-        setIsWasm(_isWasm);
+        setIsWasm(_isWasm, false, true);
         bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
         tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
         tableTestAddress1 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
@@ -247,45 +246,6 @@ public:
         }
         commitBlock(_number);
         return result6;
-    };
-
-    ExecutionMessage::UniquePtr list(
-        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
-    {
-        bytes in = codec->encodeWithSig("list(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto hash = tx->hash();
-        txpool->hash2Transaction.emplace(hash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(hash);
-        params2->setContextID(1000);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(bfsAddress);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-        if (_errorCode != 0)
-        {
-            std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
-        }
-
-        commitBlock(_number);
-        return result2;
     };
 
     ExecutionMessage::UniquePtr mkdir(protocol::BlockNumber _number, std::string const& path,
@@ -497,7 +457,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 1);
         BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_LINK);
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
     }
 
     // ls not exist
@@ -517,7 +477,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 3);  // with '/'
+        BOOST_CHECK(ls.size() == 4);  // with '/'
     }
 
     // mkdir invalid path
@@ -575,7 +535,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 3);  // with '/'
+        BOOST_CHECK(ls.size() == 4);  // with '/'
     }
 
     // mkdir invalid path
@@ -680,14 +640,14 @@ BOOST_AUTO_TEST_CASE(linkTest)
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(ls.size() == 1);
         BOOST_CHECK(std::get<0>(ls.at(0)) == contractVersion);
-        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_LINK);
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
 
         auto result2 = list(number++, "/apps/Hello/1.0");
         std::vector<BfsTuple> ls2;
         codec->decode(result2->data(), code, ls2);
         BOOST_CHECK(ls2.size() == 1);
         BOOST_CHECK(std::get<0>(ls2.at(0)) == contractVersion);
-        BOOST_CHECK(std::get<1>(ls2.at(0)) == FS_TYPE_LINK);
+        BOOST_CHECK(std::get<1>(ls2.at(0)) == tool::FS_TYPE_LINK);
         BOOST_CHECK(std::get<2>(ls2.at(0)).at(0) == addressString);
         BOOST_CHECK(std::get<2>(ls2.at(0)).at(1) == contractAbi);
 
@@ -707,7 +667,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(ls.size() == 2);
         BOOST_CHECK(std::get<0>(ls.at(0)) == contractVersion);
-        BOOST_CHECK(std::get<1>(ls.at(0)) == FS_TYPE_LINK);
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
 
         auto result2 = list(number++, "/apps/Hello/latest");
         std::vector<BfsTuple> ls2;

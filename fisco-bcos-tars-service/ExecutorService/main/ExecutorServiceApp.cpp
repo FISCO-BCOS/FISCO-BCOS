@@ -127,11 +127,12 @@ void ExecutorServiceApp::createAndInitExecutor()
     // create executor
     auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(),
         m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-    std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+
+    bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
     {
-        cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-        cache->setMaxCapacity(m_nodeConfig->cacheSize());
+        cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
+            storage, m_nodeConfig->cacheSize());
         EXECUTOR_SERVICE_LOG(INFO)
             << "createAndInitExecutor: enableLRUCacheStorage, size: " << m_nodeConfig->cacheSize();
     }
@@ -147,7 +148,7 @@ void ExecutorServiceApp::createAndInitExecutor()
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
-        m_txpool, cache, storage, executionMessageFactory,
+        m_txpool, cacheFactory, storage, executionMessageFactory,
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
 

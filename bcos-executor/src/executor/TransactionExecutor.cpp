@@ -64,6 +64,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/protocol/LogEntry.h>
@@ -113,10 +114,10 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize = 0,
-    std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
+    std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
   : m_name(std::move(name)),
-    m_ledger(ledger),
+    m_ledger(std::move(ledger)),
     m_txpool(std::move(txpool)),
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
@@ -125,10 +126,11 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
     m_keyPageSize(keyPageSize),
-    m_keyPageIgnoreTables(keyPageIgnoreTables)
+    m_keyPageIgnoreTables(std::move(keyPageIgnoreTables))
 {
     assert(m_backendStorage);
 
+    m_blockVersion = m_lastCommittedBlockHeader->version();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -288,10 +290,16 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(
         storage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
+
+    if (f_onNeedSwitchEvent)
+    {
+        context->registerNeedSwitchEvent(f_onNeedSwitchEvent);
+    }
+
     return context;
 }
 
-std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
+std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
@@ -320,8 +328,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     {
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
+                                << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId);
-
+        m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
@@ -489,9 +498,8 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext =
-            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
-                blockHeader->version(), std::move(storage));  // TODO: complete the block info
+        blockContext = createBlockContextForCall(blockHeader->number(), blockHeader->hash(),
+            blockHeader->timestamp(), blockHeader->version(), std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -668,9 +676,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext =
-            createBlockContext(blockHeader->number(), blockHeader->hash(), blockHeader->timestamp(),
-                blockHeader->version(), std::move(storage));  // TODO: complete the block info
+        blockContext = createBlockContextForCall(blockHeader->number(), blockHeader->hash(),
+            blockHeader->timestamp(), blockHeader->version(), std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1793,7 +1800,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage);
+            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
         }
     }
     // create temp state storage
@@ -1801,11 +1808,11 @@ void TransactionExecutor::getCode(
     {
         if (m_cachedStorage)
         {
-            stateStorage = createStateStorage(m_cachedStorage);
+            stateStorage = createStateStorage(m_cachedStorage, true);
         }
         else
         {
-            stateStorage = createStateStorage(m_backendStorage);
+            stateStorage = createStateStorage(m_backendStorage, true);
         }
     }
 
@@ -1862,11 +1869,11 @@ void TransactionExecutor::getABI(
     // create temp state storage
     if (m_cachedStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage);
+        stateStorage = createStateStorage(m_cachedStorage, true);
     }
     else
     {
-        stateStorage = createStateStorage(m_backendStorage);
+        stateStorage = createStateStorage(m_backendStorage, true);
     }
 
     auto tableName = getContractTableName(contract);
@@ -2418,8 +2425,13 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
+        if (m_blockVersion <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
+            !m_keyPageIgnoreTables->contains(tool::FS_ROOT))
+        {
+            m_keyPageIgnoreTables->insert(tool::FS_ROOT_SUBS.begin(), tool::FS_ROOT_SUBS.end());
+        }
         return std::make_shared<bcos::storage::KeyPageStorage>(
-            storage, m_keyPageSize, m_keyPageIgnoreTables, ignoreNotExist);
+            storage, m_keyPageSize, m_blockVersion, m_keyPageIgnoreTables, ignoreNotExist);
     }
     return std::make_shared<bcos::storage::StateStorage>(storage);
 }

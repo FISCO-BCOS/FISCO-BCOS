@@ -427,17 +427,24 @@ void BlockExecutive::asyncExecute(
                                         << LOG_KV("createMsgT", createMsgT)
                                         << LOG_KV("dagExecuteT", (utcTime() - startT))
                                         << LOG_KV("hash", blockHeader->hash().abridged());
+
+                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                                        << LOG_DESC("DMCExecute begin after DAGExecute");
                     DMCExecute(std::move(callback));
                 });
             }
             else
             {
+                SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                                    << LOG_DESC("DMCExecute begin without DAGExecute");
                 DMCExecute(std::move(callback));
             }
         });
     }
     else
     {
+        SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                             << LOG_DESC("DMCExecute begin for call");
         DMCExecute(std::move(callback));
     }
 }
@@ -1455,11 +1462,10 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
-            auto executor = m_scheduler->executorManager()->dispatchCorrespondExecutor(address);
+            auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
             {
-                SCHEDULER_LOG(DEBUG) << "Could not dispatch correspond executor during getCode(). "
-                                        "There may not be this address."
+                SCHEDULER_LOG(ERROR) << "Could not dispatch correspond executor during getCode(). "
                                      << LOG_KV("address", address);
                 return bcos::bytes();
             }

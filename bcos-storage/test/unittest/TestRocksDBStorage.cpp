@@ -223,8 +223,6 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
     prepareTestTableData();
 
-
-    // #pragma omp parallel for
     for (size_t i = 0; i < 1050; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);

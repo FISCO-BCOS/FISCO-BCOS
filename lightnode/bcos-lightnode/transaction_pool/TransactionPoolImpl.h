@@ -88,7 +88,9 @@ private:
             bool m_withReceipt{};
         };
 
-        co_await Awaitable(std::move(transactionData), m_transactionPool, receipt);
+        auto awaitable = Awaitable(std::move(transactionData), m_transactionPool, receipt);
+
+        co_await awaitable;
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction successed";
     }
 

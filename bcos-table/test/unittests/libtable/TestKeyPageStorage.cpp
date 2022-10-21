@@ -18,6 +18,7 @@
  */
 
 #include "Hash.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
@@ -578,6 +579,132 @@ BOOST_AUTO_TEST_CASE(hash)
     entries = table->getRows(keys);
     BOOST_REQUIRE(entries.size() == 1);
     // tableFactory->asyncCommit([](Error::Ptr, size_t) {});
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_V3_1_0)
+{
+    auto hashImpl2 = make_shared<Header256Hash>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_0_VERSION);
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory1 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory1->createTable(tableName, "value");
+        auto table = tableFactory1->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory2 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory2->createTable(tableName, "value");
+        auto table = tableFactory2->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    auto dbHash1 = tableFactory1->hash(hashImpl);
+    auto dbHash2 = tableFactory2->hash(hashImpl);
+    BOOST_REQUIRE_NE(dbHash1.hex(), dbHash2.hex());
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
+{
+    auto hashImpl2 = std::make_shared<Keccak256>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_0_VERSION);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_0_VERSION);
+    BOOST_REQUIRE(tableFactory1 != nullptr);
+    BOOST_REQUIRE(tableFactory2 != nullptr);
+
+    auto setData1 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable1";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable2";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    auto setData2 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable2";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable1";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    setData1(tableFactory1);
+    setData2(tableFactory2);
+    auto dbHash1 = tableFactory1->hash(hashImpl2);
+    auto dbHash2 = tableFactory2->hash(hashImpl2);
+    BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
+
+    auto tableFactory3 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+    auto tableFactory4 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+
+    setData1(tableFactory3);
+    setData2(tableFactory4);
+    auto dbHash3 = tableFactory3->hash(hashImpl2);
+    auto dbHash4 = tableFactory4->hash(hashImpl2);
+    BOOST_REQUIRE_NE(dbHash3.hex(), dbHash4.hex());
 }
 
 BOOST_AUTO_TEST_CASE(open_sysTables)
