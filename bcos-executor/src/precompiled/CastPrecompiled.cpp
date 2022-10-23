@@ -24,20 +24,6 @@ constexpr const char* const CAST_U256_STR = "u256ToString(uint256)";
 constexpr const char* const CAST_ADDR_STR = "addrToString(address)";
 constexpr const char* const CAST_BT32_STR = "bytes32ToString(bytes32)";
 
-static std::string setInt(CodecWrapper& codec, bytesConstRef _data)
-{
-    s256 num;
-    codec.decode(_data, num);
-    return boost::lexical_cast<std::string>(num);
-}
-
-static std::string setUInt(CodecWrapper& codec, bytesConstRef _data)
-{
-    u256 num;
-    codec.decode(_data, num);
-    return boost::lexical_cast<std::string>(num);
-}
-
 CastPrecompiled::CastPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {    
     name2Selector[CAST_STR_S256] = getFuncSelector(CAST_STR_S256, _hashImpl);
@@ -99,7 +85,9 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
     else if (func == name2Selector[CAST_S256_STR])
     {        
         // s256ToString(int256)
-        std::string value(setInt(codec, data));
+        s256 src;
+        codec.decode(data, src);
+        std::string value = boost::lexical_cast<std::string>(src);
         gasPricer->appendOperation(InterfaceOpcode::GetString);
         _callParameters->setExecResult(codec.encode(value));
 
@@ -107,7 +95,9 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
     else if (func == name2Selector[CAST_U256_STR])
     {
         // u256ToString(uint256)
-        std::string value(setUInt(codec, data));
+        u256 src;
+        codec.decode(data, src);
+        std::string value = boost::lexical_cast<std::string>(src);
         gasPricer->appendOperation(InterfaceOpcode::GetString);
         _callParameters->setExecResult(codec.encode(value));        
     }

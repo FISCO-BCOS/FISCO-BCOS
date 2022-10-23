@@ -34,7 +34,6 @@
 #include "../precompiled/BFSPrecompiled.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
-#include "../precompiled/CastPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
@@ -208,8 +207,6 @@ void TransactionExecutor::initEvmEnvironment()
         {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled->insert(
-        {CAST_ADDRESS, std::make_shared<precompiled::CastPrecompiled>(m_hashImpl)});
     /// auth precompiled
     if (m_isAuthCheck)
     {
@@ -262,8 +259,6 @@ void TransactionExecutor::initWasmEnvironment()
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled->insert({CAST_NAME, std::make_shared<CastPrecompiled>(m_hashImpl)});
-    
     m_constantPrecompiled->insert(
         {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
