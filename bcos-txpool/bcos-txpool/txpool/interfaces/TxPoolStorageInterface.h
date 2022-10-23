@@ -37,9 +37,6 @@ public:
     TxPoolStorageInterface() = default;
     virtual ~TxPoolStorageInterface() {}
 
-    virtual bcos::protocol::TransactionStatus submitTransaction(
-        bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) = 0;
-
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) = 0;
 

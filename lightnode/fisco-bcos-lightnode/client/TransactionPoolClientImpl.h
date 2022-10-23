@@ -33,7 +33,7 @@ private:
         bcostars::ResponseSendTransaction response;
         auto nodeID = co_await p2p().randomSelectNode();
         co_await p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_SENDTRANSACTION, nodeID, request, response);
+            bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, request, response);
 
         if (response.error.errorCode)
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));

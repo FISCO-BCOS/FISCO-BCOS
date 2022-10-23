@@ -74,29 +74,6 @@ void MemoryStorage::stop()
     }
 }
 
-TransactionStatus MemoryStorage::submitTransaction(
-    bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
-{
-    try
-    {
-        auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
-        tx->setImportTime(utcTime());
-        auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true, true);
-        if (result != TransactionStatus::None)
-        {
-            notifyInvalidReceipt(tx->hash(), result, _txSubmitCallback);
-        }
-        return result;
-    }
-    catch (std::exception const& e)
-    {
-        TXPOOL_LOG(WARNING) << LOG_DESC("Invalid transaction for decode exception")
-                            << LOG_KV("error", boost::diagnostic_information(e));
-        notifyInvalidReceipt(HashType(), TransactionStatus::Malform, _txSubmitCallback);
-        return TransactionStatus::Malform;
-    }
-}
-
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {

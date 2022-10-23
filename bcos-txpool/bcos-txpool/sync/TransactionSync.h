@@ -48,7 +48,7 @@ public:
         m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { noteNewTransactions(); });
     }
 
-    ~TransactionSync() {}
+    ~TransactionSync() override = default;
 
     void start() override;
     void stop() override;
