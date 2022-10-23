@@ -32,9 +32,7 @@
 #include <unordered_map>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
-namespace bcos
-{
-namespace tool
+namespace bcos::tool
 {
 class NodeConfig
 {
@@ -47,7 +45,7 @@ public:
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
 
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
-    virtual ~NodeConfig() {}
+    virtual ~NodeConfig() = default;
 
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true)
     {
@@ -213,7 +211,6 @@ public:
     {
         m_withoutTarsFramework = _withoutTarsFramework;
     }
-    //
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
@@ -362,5 +359,4 @@ private:
     // others config
     int m_sendTxTimeout = -1;
 };
-}  // namespace tool
-}  // namespace bcos
+}  // namespace bcos::tool
