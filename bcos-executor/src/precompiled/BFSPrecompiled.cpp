@@ -236,6 +236,13 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
         {
             // check parent dir to get type
             auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
+            if (baseName == tool::FS_ROOT)
+            {
+                // root special logic
+                Entry entry;
+                tool::BfsFileFactory::buildDirEntry(entry, FS_TYPE_DIR);
+                baseNameEntry = std::make_optional<Entry>(entry);
+            }
             if (!baseNameEntry) [[unlikely]]
             {
                 // maybe hidden table
@@ -711,7 +718,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     // create / dir
     _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
     // build root subs metadata
-    for (const auto& subName : tool::FS_ROOT_SUBS)
+    for (const auto& subName : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
     {
         Entry entry;
         // type, status, acl_type, acl_white, acl_black, extra
@@ -751,10 +758,12 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
     auto blockContext = _executive->blockContext().lock();
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
                           << LOG_KV("version", blockContext->blockVersion());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
     {
         rebuildBfs310(_executive);
     }
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
 
 void BFSPrecompiled::rebuildBfs310(
@@ -763,7 +772,7 @@ void BFSPrecompiled::rebuildBfs310(
     // child, parent, all absolute path
     std::queue<std::pair<std::string, std::string>> rebuildQ;
     rebuildQ.push({std::string(tool::FS_ROOT), ""});
-    bool rebuildSys = false;
+    bool rebuildSys = true;
     while (!rebuildQ.empty())
     {
         auto [rebuildPath, parentPath] = rebuildQ.front();
@@ -773,25 +782,23 @@ void BFSPrecompiled::rebuildBfs310(
         if (!subEntry.has_value() || table->tableInfo()->fields().size() > 1)
         {
             // not old data structure
-            if (!rebuildSys)
-            {
-                // root is new data structure
-                rebuildSys = (rebuildPath == tool::FS_ROOT);
-            }
+            // root is new data structure
+            rebuildSys = (rebuildPath != tool::FS_ROOT);
             continue;
         }
+
+        // root has no parent
+
+        // rewrite type, acl_type, acl_white, acl_black, extra to parent
+        auto typeEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_TYPE);
+        auto aclTypeEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_TYPE);
+        auto aclWhiteEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_WHITE);
+        auto aclBlackEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_BLACK);
+        auto extraEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_EXTRA);
         if (!parentPath.empty())
         {
-            // root has no parent
-
-            // rewrite type, acl_type, acl_white, acl_black, extra to parent
-            auto typeEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_TYPE);
-            auto aclTypeEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_TYPE);
-            auto aclWhiteEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_WHITE);
-            auto aclBlackEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_BLACK);
-            auto extraEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_EXTRA);
             Entry newFormEntry;
-            newFormEntry.importFields({
+            newFormEntry.setObject(std::vector<std::string>{
                 std::string(typeEntry->get()),
                 std::string("0"),
                 std::string(aclTypeEntry->get()),
@@ -801,22 +808,22 @@ void BFSPrecompiled::rebuildBfs310(
             });
             _executive->storage().setRow(
                 parentPath, getPathBaseName(rebuildPath), std::move(newFormEntry));
-            typeEntry->setStatus(Entry::Status::DELETED);
-            aclTypeEntry->setStatus(Entry::Status::DELETED);
-            aclWhiteEntry->setStatus(Entry::Status::DELETED);
-            aclBlackEntry->setStatus(Entry::Status::DELETED);
-            extraEntry->setStatus(Entry::Status::DELETED);
-            _executive->storage().setRow(
-                rebuildPath, tool::FS_KEY_TYPE, std::move(typeEntry.value()));
-            _executive->storage().setRow(
-                rebuildPath, tool::FS_ACL_TYPE, std::move(aclTypeEntry.value()));
-            _executive->storage().setRow(
-                rebuildPath, tool::FS_ACL_WHITE, std::move(aclWhiteEntry.value()));
-            _executive->storage().setRow(
-                rebuildPath, tool::FS_ACL_BLACK, std::move(aclBlackEntry.value()));
-            _executive->storage().setRow(
-                rebuildPath, tool::FS_KEY_EXTRA, std::move(extraEntry.value()));
         }
+        typeEntry->setStatus(Entry::Status::DELETED);
+        aclTypeEntry->setStatus(Entry::Status::DELETED);
+        aclWhiteEntry->setStatus(Entry::Status::DELETED);
+        aclBlackEntry->setStatus(Entry::Status::DELETED);
+        extraEntry->setStatus(Entry::Status::DELETED);
+        _executive->storage().setRow(rebuildPath, tool::FS_KEY_TYPE, std::move(typeEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_ACL_TYPE, std::move(aclTypeEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_ACL_WHITE, std::move(aclWhiteEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_ACL_BLACK, std::move(aclBlackEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_KEY_EXTRA, std::move(extraEntry.value()));
+
         std::map<std::string, std::string> bfsInfo;
         auto&& out = asBytes(std::string(subEntry->get()));
         codec::scale::decode(bfsInfo, gsl::make_span(out));
