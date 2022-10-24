@@ -41,11 +41,11 @@ constexpr const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LIST_PAGE = "list(string,uint,uint)";
 constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LINK_CNS = "link(string,string,string,string)";
-constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
+constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
-constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs()";
+constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint,uint)";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -113,8 +113,7 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
         // initBfs for the first time
         initBfs(_executive, _callParameters);
     }
-    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
-             func == name2Selector[FILE_SYSTEM_METHOD_REBUILD])
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_REBUILD])
     {
         // initBfs for the first time
         rebuildBfs(_executive, _callParameters);
@@ -756,10 +755,24 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     auto blockContext = _executive->blockContext().lock();
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
-                          << LOG_KV("version", blockContext->blockVersion());
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+    if (_callParameters->m_sender != precompiled::SYS_CONFIG_ADDRESS &&
+        _callParameters->m_sender != precompiled::SYS_CONFIG_NAME)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("rebuildBfs not called by sys config")
+                              << LOG_KV("sender", _callParameters->m_sender);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
+        return;
+    }
+    uint32_t fromVersion = 0;
+    uint32_t toVersion = 0;
+    codec.decode(_callParameters->params(), fromVersion, toVersion);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
+                          << LOG_KV("fromVersion", fromVersion) << LOG_KV("toVersion", toVersion);
+    // TODO: add from and to version check
+    if (fromVersion <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
+        toVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
     {
         rebuildBfs310(_executive);
     }

@@ -916,9 +916,8 @@ void BlockExecutive::DMCExecute(
 
             if (batchStatus->error != 0)
             {
-                DMC_LOG(ERROR) << BLOCK_NUMBER(number()) << "DMCExecute with errors: " << error ?
-                    error->errorMessage() :
-                    "null";
+                DMC_LOG(ERROR) << BLOCK_NUMBER(number()) << "DMCExecute with errors: "
+                               << (error ? error->errorMessage() : "null");
                 callback(std::move(error), nullptr, m_isSysBlock);
             }
             else if (batchStatus->paused != 0)  // new contract

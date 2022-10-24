@@ -20,6 +20,7 @@
 
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <json/json.h>
 
@@ -314,8 +315,16 @@ public:
         std::string const& name, std::string const& version, std::string const& address,
         std::string const& abi, int _errorCode = 0, bool _isCover = false)
     {
-        bytes in =
-            codec->encodeWithSig("link(string,string,string,string)", name, version, address, abi);
+        bytes in;
+        if (version.empty())
+        {
+            in = codec->encodeWithSig("link(string,string,string)", name, address, abi);
+        }
+        else
+        {
+            in = codec->encodeWithSig(
+                "link(string,string,string,string)", name, version, address, abi);
+        }
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -422,10 +431,14 @@ public:
         return result2;
     };
 
-    ExecutionMessage::UniquePtr rebuildBfs(protocol::BlockNumber _number, int _errorCode = 0)
+    ExecutionMessage::UniquePtr rebuildBfs(
+        protocol::BlockNumber _number, uint32_t from, uint32_t to, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("rebuildBfs()");
+        bytes in = codec->encodeWithSig("rebuildBfs(uint,uint)", from, to);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
+                                             std::string(precompiled::SYS_CONFIG_ADDRESS));
+        tx->forceSender(newSender.asBytes());
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -457,6 +470,70 @@ public:
 
         commitBlock(_number);
         return result2;
+    };
+
+    ExecutionMessage::UniquePtr rebuildBfsBySysConfig(
+        protocol::BlockNumber _number, std::string version, int _errorCode = 0)
+    {
+        bytes in = codec->encodeWithSig("setValueByKey(string,string)",
+            std::string(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), version);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        Address newSender = Address(std::string(precompiled::AUTH_COMMITTEE_ADDRESS));
+        tx->forceSender(newSender.asBytes());
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(1000);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(isWasm ? SYS_CONFIG_NAME : SYS_CONFIG_ADDRESS);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+        nextBlock(_number, m_blockVersion);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->dmcExecuteTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        // call to BFS
+        result2->setSeq(1001);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->dmcExecuteTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        // BFS callback to sys
+        result3->setSeq(1000);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->dmcExecuteTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result4;
     };
 
     ExecutionMessage::UniquePtr listPage(protocol::BlockNumber _number, std::string const& path,
@@ -1011,6 +1088,26 @@ BOOST_AUTO_TEST_CASE(linkTest)
         link(false, number++, contractName, errorVersion.str(), addressString, contractAbi,
             CODE_FILE_INVALID_PATH, true);
     }
+
+    // simple link without version
+    {
+        std::string newAbsolutePath = "link_test";
+        link(false, number++, newAbsolutePath, "", addressString, contractAbi);
+        auto result = list(number++, "/apps/link_test");
+        s256 code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "link_test");
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
+        BOOST_CHECK(std::get<2>(ls.at(0)).at(0) == addressString);
+        BOOST_CHECK(std::get<2>(ls.at(0)).at(1) == contractAbi);
+
+        auto result3 = readlink(number++, "/apps/link_test");
+        Address address;
+        codec->decode(result3->data(), address);
+        BOOST_CHECK_EQUAL(address.hex(), addressString);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(linkTest_3_0)
@@ -1206,7 +1303,8 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
     m_blockVersion = protocol::Version::V3_1_VERSION;
 
     boost::log::core::get()->set_logging_enabled(false);
-    rebuildBfs(_number++);
+    rebuildBfs(_number++, (uint32_t)protocol::Version::V3_0_VERSION,
+        (uint32_t)protocol::Version::V3_1_VERSION);
     boost::log::core::get()->set_logging_enabled(true);
 
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> p;
@@ -1218,6 +1316,160 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
     BOOST_CHECK(t->getRow(tool::FS_USER_TABLE.substr(1)).has_value());
     BOOST_CHECK(t->getRow(tool::FS_SYS_BIN.substr(1)).has_value());
     BOOST_CHECK(!t->getRow(tool::FS_KEY_SUB).has_value());
+
+    // ls dir
+    {
+        auto result = list(_number++, "/tables");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 2);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
+        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
+    }
+
+    // ls regular
+    {
+        auto result = list(_number++, "/tables/test2");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
+    }
+
+    // ls /
+    {
+        auto result = list(_number++, "/");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 3);
+    }
+
+    // ls /sys
+    {
+        auto result = list(_number++, "/sys");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+    }
+
+    // ls /apps/temp/temp2/temp3/temp4
+    {
+        auto result = list(_number++, "/apps/temp/temp2/temp3/temp4");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == USER_TABLE_MAX_LIMIT_COUNT);
+    }
+
+    // ls /apps/temp/temp2/temp3/temp4
+    {
+        auto result = listPage(_number++, "/apps/temp/temp2/temp3/temp4", 0, 10000);
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == mkdirCount);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
+{
+    init(false, protocol::Version::V3_0_VERSION);
+    BlockNumber _number = 3;
+
+    // ls dir
+    {
+        auto result = list(_number++, "/tables");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 2);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
+        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
+    }
+
+    // ls regular
+    {
+        auto result = list(_number++, "/tables/test2");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
+    }
+
+    // ls /
+    {
+        auto result = list(_number++, "/");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 3);
+    }
+
+    const int32_t mkdirCount = 1000;
+    mkdir(_number++, "/apps/temp/temp2/temp3/temp4");
+
+    boost::log::core::get()->set_logging_enabled(false);
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> temp4p;
+    storage->asyncOpenTable(
+        "/apps/temp/temp2/temp3/temp4", [&](Error::UniquePtr _e, std::optional<Table> _t) {
+            temp4p.set_value({std::move(_e), std::move(_t)});
+        });
+    auto [error, temp4T] = temp4p.get_future().get();
+    auto subEntry = temp4T->getRow(tool::FS_KEY_SUB);
+    std::map<std::string, std::string> bfsInfo;
+    auto&& out = asBytes(std::string(subEntry->get()));
+    codec::scale::decode(bfsInfo, gsl::make_span(out));
+    for (int i = 0; i < mkdirCount; ++i)
+    {
+        bfsInfo.insert({"test" + std::to_string(i), std::string(tool::FS_TYPE_DIR)});
+    }
+    subEntry->importFields({asString(codec::scale::encode(bfsInfo))});
+    temp4T->setRow(tool::FS_KEY_SUB, std::move(subEntry.value()));
+    boost::log::core::get()->set_logging_enabled(true);
+
+    // ls /apps/temp/temp2/temp3/temp4
+    {
+        auto result = list(_number++, "/apps/temp/temp2/temp3/temp4");
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == mkdirCount);
+    }
+
+    // upgrade to v3.1.0
+    boost::log::core::get()->set_logging_enabled(false);
+    auto updateNumber = _number++;
+    rebuildBfsBySysConfig(_number++, V3_1_VERSION_STR);
+    boost::log::core::get()->set_logging_enabled(true);
+
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> p;
+    storage->asyncOpenTable(tool::FS_ROOT, [&](Error::UniquePtr _e, std::optional<Table> _t) {
+        p.set_value({std::move(_e), std::move(_t)});
+    });
+    auto [e, t] = p.get_future().get();
+    BOOST_CHECK(t->getRow(tool::FS_APPS.substr(1)).has_value());
+    BOOST_CHECK(t->getRow(tool::FS_USER_TABLE.substr(1)).has_value());
+    BOOST_CHECK(t->getRow(tool::FS_SYS_BIN.substr(1)).has_value());
+    BOOST_CHECK(!t->getRow(tool::FS_KEY_SUB).has_value());
+
+    m_blockVersion = Version::V3_1_VERSION;
 
     // ls dir
     {

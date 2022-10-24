@@ -1,4 +1,4 @@
-s// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -9,6 +9,7 @@ pragma experimental ABIEncoderV2;
     }
 
 abstract contract BfsPrecompiled {
+    // @return return BfsInfo at most 500, if you want more, try list with paging interface
     function list(string memory absolutePath) public view returns (int32, BfsInfo[] memory);
     // @return int, >=0 -> BfsInfo left, <0 -> errorCode
     function list(string memory absolutePath, uint offset, uint limit) public view returns (int, BfsInfo[] memory);
@@ -23,5 +24,5 @@ abstract contract BfsPrecompiled {
 
     function touch(string memory absolutePath, string memory fileType) public returns (int32);
 
-    function rebuildBfs() public returns(int);
+    function rebuildBfs() public returns (int);
 }
