@@ -42,10 +42,10 @@ using namespace std;
 namespace bcos::storage
 {
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath)
+    const std::vector<std::string>& pdAddrs, const std::string& logPath, uint32_t grpcTimeout)
 {
     STORAGE_TIKV_LOG(INFO) << LOG_DESC("newTiKVClient") << LOG_KV("logPath", logPath);
-    return std::make_shared<tikv_client::TransactionClient>(pdAddrs, logPath);
+    return std::make_shared<tikv_client::TransactionClient>(pdAddrs, logPath, grpcTimeout);
 }
 
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClientWithSSL(
@@ -340,16 +340,18 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
             auto size = putCount + deleteCount;
             if (size == 0)
             {
-                STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare empty storage")
-                                        << LOG_KV("blockNumber", params.number);
                 m_committer->rollback();
                 m_committer = nullptr;
                 if (params.timestamp == 0)
                 {
+                    STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare empty storage")
+                                            << LOG_KV("blockNumber", params.number);
                     callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
                 }
                 else
                 {
+                    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare empty storage")
+                                           << LOG_KV("blockNumber", params.number);
                     callback(nullptr, 0);
                 }
                 return;

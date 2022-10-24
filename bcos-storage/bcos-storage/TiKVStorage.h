@@ -37,7 +37,7 @@ namespace storage
 constexpr int scan_batch_size = 64;
 
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath);
+    const std::vector<std::string>& pdAddrs, const std::string& logPath, uint32_t grpcTimeout = 3);
 
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClientWithSSL(
     const std::vector<std::string>& pdAddrs, const std::string& logPath, const std::string& caPath,
