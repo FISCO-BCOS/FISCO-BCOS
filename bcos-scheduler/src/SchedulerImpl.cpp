@@ -37,9 +37,16 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     // refresh block cache
     bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
     // note that genesis sysBlock is blockNumber 0, we need to ignore it
+    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() && currentNumber != 0)
+    {
+        SCHEDULER_LOG(DEBUG) << "Remove committed block on handleBlockQueue : "
+                             << m_blocks->front()->number() << " success";
+        m_blocks->pop_front();
+    }
 
     try
     {
+        /*
         if (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
             currentNumber != 0)
         {
@@ -53,6 +60,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
                 "Doesn't receive block commit success callback but block has committed"));
             return;
         }
+         */
 
         if (m_blocks->empty())
         {
