@@ -62,10 +62,10 @@ public:
     }
 
     RateLimiterInterface::Ptr buildRedisDistributedRateLimiter(
-        int64_t _maxPermits, const std::string& _tokenKey)
+        int64_t _maxPermits, int32_t _interval, const std::string& _tokenKey)
     {
         auto rateLimiter =
-            std::make_shared<DistributedRateLimiter>(_tokenKey, _maxPermits, m_redis);
+            std::make_shared<DistributedRateLimiter>(m_redis, _tokenKey, _maxPermits, _interval);
         return rateLimiter;
     }
 

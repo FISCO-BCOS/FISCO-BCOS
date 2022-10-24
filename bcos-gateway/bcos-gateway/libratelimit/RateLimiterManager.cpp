@@ -102,7 +102,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
         {
             // create ratelimiter
             rateLimiter = m_rateLimiterFactory->buildRedisDistributedRateLimiter(
-                groupOutgoingBwLimit, m_rateLimiterFactory->toTokenKey(_group));
+                groupOutgoingBwLimit, 1, m_rateLimiterFactory->toTokenKey(_group));
         }
         else
         {

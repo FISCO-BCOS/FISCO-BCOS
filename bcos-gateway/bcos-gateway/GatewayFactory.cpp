@@ -421,7 +421,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
             if (_rateLimiterConfig.isDistributedRateLimitOn())
             {
                 rateLimiterInterface = rateLimiterFactory->buildRedisDistributedRateLimiter(
-                    bandWidth, rateLimiterFactory->toTokenKey(group));
+                    bandWidth, 1, rateLimiterFactory->toTokenKey(group));
             }
             else
             {
