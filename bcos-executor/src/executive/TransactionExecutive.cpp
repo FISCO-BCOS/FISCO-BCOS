@@ -118,7 +118,13 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         assert(!m_blockContext.lock()->isWasm());
         auto tableName = getContractTableName(input->codeAddress, false);
 
-        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        // get codeHash in contract table
+        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        auto codeHash =
+            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+
+        // get code in code binary table
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
         if (!entry || entry->get().empty())
         {
             auto& output = input;
@@ -138,8 +144,15 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
                              << LOG_KV("codeAddress", input->codeAddress);
 
         auto tableName = getContractTableName(input->codeAddress, false);
+
+        // get codeHash in contract table
+        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        auto codeHash =
+            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+
+        // get code in code binary table
         auto& output = input;
-        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
         if (!entry || entry->get().empty())
         {
             EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
