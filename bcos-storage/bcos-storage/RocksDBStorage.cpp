@@ -102,8 +102,10 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
-        if (false == value.empty() && nullptr != m_dataEncryption)
+        if (!value.empty() && nullptr != m_dataEncryption)
+        {
             value = m_dataEncryption->decrypt(value);
+        }
 
         if (!status.ok())
         {
