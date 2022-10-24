@@ -23,7 +23,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
-#include <coroutine>
+
 #include <memory>
 #include <tuple>
 #include <variant>
