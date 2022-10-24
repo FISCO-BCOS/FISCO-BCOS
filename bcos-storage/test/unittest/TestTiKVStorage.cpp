@@ -49,7 +49,7 @@ struct TestTiKVStorageFixture
         std::vector<std::string> pd_addrs{"127.0.0.1:2379"};
         m_cluster = newTiKVClient(pd_addrs, "./");
 
-        storage = std::make_shared<TiKVStorage>(m_cluster);
+        storage = std::make_shared<TiKVStorage>(m_cluster, nullptr);
         storage->asyncOpenTable(testTableName, [&](auto error, auto table) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             if (table)
@@ -538,8 +538,8 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 {
     // FIXME: this test case will crash, because tikv-rust client only resolve timeout lock
     size_t tableEntries = 101;
-    auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
-    auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
+    auto storage2 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
+    auto storage3 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
     auto hashImpl = std::make_shared<Header256Hash>();
     auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
     auto testTable = stateStorage->openTable(testTableName);
@@ -742,8 +742,8 @@ BOOST_AUTO_TEST_CASE(singleStorageRollback)
 BOOST_AUTO_TEST_CASE(multiStorageRollback)
 {
     size_t tableEntries = 101;
-    auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
-    auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
+    auto storage2 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
+    auto storage3 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
     auto hashImpl = std::make_shared<Header256Hash>();
     auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
     auto testTable = stateStorage->openTable(testTableName);
@@ -834,8 +834,8 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
 BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
 {
     size_t tableEntries = 101;
-    auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
-    auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
+    auto storage2 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
+    auto storage3 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
     auto hashImpl = std::make_shared<Header256Hash>();
     auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
     auto testTable = stateStorage->openTable(testTableName);
@@ -905,8 +905,8 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
 BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 {
     size_t tableEntries = 101;
-    auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
-    auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
+    auto storage2 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
+    auto storage3 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
     auto hashImpl = std::make_shared<Header256Hash>();
     auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
     auto testTable = stateStorage->openTable(testTableName);
@@ -1125,8 +1125,8 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 {
     size_t tableEntries = 101;
-    auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
-    auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
+    auto storage2 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
+    auto storage3 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
     auto hashImpl = std::make_shared<Header256Hash>();
     auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
     auto testTable = stateStorage->openTable(testTableName);
@@ -1195,8 +1195,8 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     this_thread::sleep_for(chrono::seconds(3));
 
     // just recommit prewrite
-    storage = std::make_shared<TiKVStorage>(m_cluster);
-    auto storage4 = std::make_shared<TiKVStorage>(m_cluster);
+    storage = std::make_shared<TiKVStorage>(m_cluster, nullptr);
+    auto storage4 = std::make_shared<TiKVStorage>(m_cluster, nullptr);
     auto stateStorage4 = std::make_shared<bcos::storage::StateStorage>(storage3);
     params1.timestamp = 0;
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
