@@ -48,8 +48,8 @@ class TiKVStorage : public TransactionalStorageInterface
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
     explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster,
-        int32_t _commitTimeout = 3000)
-      : m_cluster(_cluster), m_commitTimeout(_commitTimeout)
+        std::function<void()> onNeedSwitchEvent, int32_t _commitTimeout = 3000)
+      : m_cluster(_cluster), f_onNeedSwitchEvent(onNeedSwitchEvent), m_commitTimeout(_commitTimeout)
     {}
 
     virtual ~TiKVStorage() {}
@@ -85,9 +85,13 @@ public:
         std::vector<std::string> values) noexcept override;
 
 private:
+    void triggerSwitch();
+
+private:
     std::shared_ptr<tikv_client::TransactionClient> m_cluster;
     std::shared_ptr<tikv_client::Transaction> m_committer;
     uint64_t m_currentStartTS = 0;
+    std::function<void()> f_onNeedSwitchEvent;
     int32_t m_commitTimeout = 3000;
     std::chrono::time_point<std::chrono::system_clock> m_committerCreateTime;
     mutable RecursiveMutex x_committer;

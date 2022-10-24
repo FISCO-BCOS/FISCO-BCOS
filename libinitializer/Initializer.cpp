@@ -156,10 +156,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+
+        auto onSwitchHandler = [switchExecutorManager = m_switchExecutorManager]() {
+            if (switchExecutorManager.lock())
+            {
+                switchExecutorManager.lock()->triggerSwitch();
+            }
+        };
+
+        storage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath, m_nodeConfig->pdCaPath(),
+                m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath(), onSwitchHandler);
+        schedulerStorage =
+            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath, m_nodeConfig->pdCaPath(),
+                m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath(), onSwitchHandler);
         consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
 #endif
@@ -244,9 +254,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, storage, executionMessageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
-        auto parallelExecutor =
+        auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
-        executorManager->addExecutor(executorName, parallelExecutor);
+        executorManager->addExecutor(executorName, switchExecutorManager);
+        m_switchExecutorManager = switchExecutorManager;
     }
 
     // build node time synchronization tool

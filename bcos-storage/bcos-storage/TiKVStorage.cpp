@@ -112,9 +112,10 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetPrimaryKeys failed")
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetPrimaryKeys failed, need trigger switch")
                                   << LOG_KV("table", _table) << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetPrimaryKeys failed!", e), {});
+        triggerSwitch();
     }
 }
 
@@ -159,9 +160,11 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table)
-                                  << LOG_KV("key", toHex(_key)) << LOG_KV("message", e.what());
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow failed, need trigger switch")
+                                  << LOG_KV("table", _table) << LOG_KV("key", toHex(_key))
+                                  << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRow failed!", e), {});
+        triggerSwitch();
     }
 }
 
@@ -223,10 +226,11 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
     }
     catch (const std::exception& e)
     {
-        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRows failed") << LOG_KV("table", _table)
-                                  << LOG_KV("message", e.what());
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRows failed, need trigger switch")
+                                  << LOG_KV("table", _table) << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ReadError, "asyncGetRows failed! ", e),
             std::vector<std::optional<Entry>>());
+        triggerSwitch();
     }
 }
 
@@ -562,4 +566,13 @@ bcos::Error::Ptr TiKVStorage::setRows(
         return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
     }
     return nullptr;
+}
+
+void TiKVStorage::triggerSwitch()
+{
+    if (f_onNeedSwitchEvent)
+    {
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("Trigger switch");
+        f_onNeedSwitchEvent();
+    }
 }
