@@ -44,14 +44,15 @@ public:
     using ConstPtr = std::shared_ptr<const DistributedRateLimiter>;
     using UniquePtr = std::unique_ptr<const DistributedRateLimiter>;
 
-    const static std::string luaScript;
+    const static std::string LUA_SCRIPT;
+    const static int32_t DEFAULT_LOCAL_CACHE_PERCENT = 15;
 
 public:
-    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis,
-        const std::string& _rateLimitKey, int64_t _maxPermits, int32_t _interval,
-        bool _enableLocalCache = true, int32_t _localCachePercent = 10)
+    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis> _redis,
+        const std::string& _rateLimiterKey, int64_t _maxPermits, int32_t _interval = 1,
+        bool _enableLocalCache = true, int32_t _localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT)
       : m_redis(_redis),
-        m_rateLimitKey(_rateLimitKey),
+        m_rateLimiterKey(_rateLimiterKey),
         m_maxPermits(_maxPermits),
         m_interval(_interval),
         m_enableLocalCache(_enableLocalCache),
@@ -60,15 +61,15 @@ public:
     {
         GATEWAY_LOG(INFO) << LOG_BADGE("DistributedRateLimiter::NEWOBJ")
                           << LOG_DESC("construct distributed rate limiter")
-                          << LOG_KV("rateLimitKey", _rateLimitKey) << LOG_KV("interval", _interval)
-                          << LOG_KV("maxPermits", _maxPermits)
+                          << LOG_KV("rateLimiterKey", _rateLimiterKey)
+                          << LOG_KV("interval", _interval) << LOG_KV("maxPermits", _maxPermits)
                           << LOG_KV("enableLocalCache", _enableLocalCache)
                           << LOG_KV("localCachePercent", _localCachePercent);
 
         if (m_enableLocalCache)
         {
             m_clearCacheTimer = std::make_shared<Timer>(_interval * 1000);
-            m_clearCacheTimer->registerTimeoutHandler([this]() { resetLocalCache(); });
+            m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
             m_clearCacheTimer->start();
         }
     }
@@ -183,36 +184,40 @@ public:
      * @brief
      *
      */
-    void resetLocalCache();
+    void refreshLocalCache();
 
 public:
     int64_t maxPermits() const { return m_maxPermits; }
-    std::string rateLimitKey() const { return m_rateLimitKey; }
+    int64_t interval() const { return m_interval; }
+    bool enableLocalCache() const { return m_enableLocalCache; }
+    int32_t localCachePercent() const { return m_localCachePercent; }
+    std::string rateLimitKey() const { return m_rateLimiterKey; }
     std::shared_ptr<sw::redis::Redis> redis() const { return m_redis; }
 
 private:
+    // stat statistics
+    Stat m_stat;
+
     // redis
     std::shared_ptr<sw::redis::Redis> m_redis;
     // key for distributed rate limit
-    std::string m_rateLimitKey;
+    std::string m_rateLimiterKey;
     // max token acquire in m_interval time
     int64_t m_maxPermits;
     //
     int32_t m_interval = 1;
-    //
-    Stat m_stat;
 
     // enable local cache for improve perf and reduce latency
     bool m_enableLocalCache = false;
     // lock for m_localCachePermits
-    std::mutex x_localCachePermits;
+    std::mutex x_localCache;
     // local cache percent of m_maxPermits
-    int32_t m_localCachePercent = 10;
+    int32_t m_localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT;
     // local cache value
     int64_t m_localCachePermits = 0;
     //
-    int64_t m_lastRequestFailedPermit = 0;
-    // clear m_localCachePermits periodically
+    int64_t m_lastFailedPermit = 0;
+    // clear local cache info periodically
     std::shared_ptr<bcos::Timer> m_clearCacheTimer = nullptr;
 };
 

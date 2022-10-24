@@ -56,13 +56,12 @@ public:
         const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter);
     bool removeRateLimiter(const std::string& _rateLimiterKey);
 
-public:
     RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
     RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
 public:
     ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
-    void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr _rateLimiterFactory)
+    void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr& _rateLimiterFactory)
     {
         m_rateLimiterFactory = _rateLimiterFactory;
     }

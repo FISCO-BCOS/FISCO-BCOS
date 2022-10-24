@@ -42,8 +42,8 @@ public:
     using UniquePtr = std::unique_ptr<const GatewayRateLimiter>;
 
 public:
-    GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
-        ratelimiter::RateLimiterStat::Ptr _rateLimiterStat)
+    GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr& _rateLimiterManager,
+        ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat)
       : m_rateLimiterManager(_rateLimiterManager), m_rateLimiterStat(_rateLimiterStat)
     {}
 

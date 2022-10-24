@@ -69,7 +69,7 @@ public:
         unsigned int index = _moduleID / BIT_NUMBER_PER_UINT32;
         unsigned temp = _moduleID % BIT_NUMBER_PER_UINT32;
 
-        return m_moduleIDsBitMap.at(index) & (1 << temp);
+        return (m_moduleIDsBitMap.at(index) & (1 << temp)) != 0U;
     }
 
     bool addModuleID(uint16_t _moduleID)
@@ -77,7 +77,7 @@ public:
         unsigned index = _moduleID / BIT_NUMBER_PER_UINT32;
         unsigned temp = _moduleID % BIT_NUMBER_PER_UINT32;
 
-        if (m_moduleIDsBitMap.at(index) & (1 << temp))
+        if ((m_moduleIDsBitMap.at(index) & (1 << temp)) != 0U)
         {  // already exist
             return false;
         }
@@ -92,7 +92,7 @@ public:
         unsigned index = _moduleID / BIT_NUMBER_PER_UINT32;
         unsigned temp = _moduleID % BIT_NUMBER_PER_UINT32;
 
-        if (m_moduleIDsBitMap.at(index) & (1 << temp))
+        if ((m_moduleIDsBitMap.at(index) & (1 << temp)) != 0U)
         {
             m_moduleIDsBitMap.at(index) &= ~(1 << temp);
             return true;

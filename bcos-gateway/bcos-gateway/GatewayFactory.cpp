@@ -366,7 +366,14 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
     auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
     rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
 
-    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig, _redisConfig);
+    // redis instance
+    std::shared_ptr<sw::redis::Redis> redis = nullptr;
+    if (_rateLimiterConfig.enableDistributedRatelimit)
+    {  // init redis first
+        redis = initRedis(_redisConfig);
+    }
+
+    auto rateLimiterManager = buildRateLimiterManager(_rateLimiterConfig, redis);
 
     auto gatewayRateLimiter =
         std::make_shared<ratelimiter::GatewayRateLimiter>(rateLimiterManager, rateLimiterStat);
@@ -376,18 +383,10 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
 
 std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimiterManager(
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-    const GatewayConfig::RedisConfig& _redisConfig)
+    std::shared_ptr<sw::redis::Redis> _redis)
 {
-    // redis instance
-    std::shared_ptr<sw::redis::Redis> redis = nullptr;
-
-    if (_rateLimiterConfig.isDistributedRateLimitOn())
-    {  // init redis first
-        redis = initRedis(_redisConfig);
-    }
-
     // rate limiter factory
-    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>(redis);
+    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>(_redis);
     // rate limiter manager
     auto rateLimiterManager = std::make_shared<ratelimiter::RateLimiterManager>(_rateLimiterConfig);
 
@@ -418,10 +417,12 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
         for (const auto& [group, bandWidth] : _rateLimiterConfig.group2BwLimit)
         {
             ratelimiter::RateLimiterInterface::Ptr rateLimiterInterface = nullptr;
-            if (_rateLimiterConfig.isDistributedRateLimitOn())
+            if (_rateLimiterConfig.enableDistributedRatelimit)
             {
                 rateLimiterInterface = rateLimiterFactory->buildRedisDistributedRateLimiter(
-                    bandWidth, 1, rateLimiterFactory->toTokenKey(group));
+                    rateLimiterFactory->toTokenKey(group), bandWidth, 1,
+                    _rateLimiterConfig.enableDistributedRateLimitCache,
+                    _rateLimiterConfig.distributedRateLimitCachePercent);
             }
             else
             {

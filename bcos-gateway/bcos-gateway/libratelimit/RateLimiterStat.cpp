@@ -141,7 +141,7 @@ void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dat
     // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endpoint", _endpoint)
     //                     << LOG_KV("dataSize", _dataSize);
 
-    std::lock_guard<std::mutex> l(m_inLock);
+    std::lock_guard<std::mutex> lock(m_inLock);
 
     auto& totalInStat = m_inStat[totalKey];
     auto& epInStat = m_inStat[epKey];
@@ -158,7 +158,7 @@ void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dat
     std::string epKey = toEndPointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
-    std::lock_guard<std::mutex> l(m_outLock);
+    std::lock_guard<std::mutex> lock(m_outLock);
     auto& totalOutStat = m_outStat[totalKey];
     auto& epOutStat = m_outStat[epKey];
 
@@ -191,7 +191,7 @@ void RateLimiterStat::updateInComing(
     //                     << LOG_KV("moduleID", _moduleID) << LOG_KV("dataSize", _dataSize);
 
     std::string groupKey = toGroupKey(_groupID);
-    std::lock_guard<std::mutex> l(m_inLock);
+    std::lock_guard<std::mutex> lock(m_inLock);
 
     auto& groupInStat = m_inStat[groupKey];
     groupInStat.update(_dataSize);
@@ -215,7 +215,7 @@ void RateLimiterStat::updateOutGoing(
     if (!_groupID.empty())
     {
         std::string groupKey = toGroupKey(_groupID);
-        std::lock_guard<std::mutex> l(m_outLock);
+        std::lock_guard<std::mutex> lock(m_outLock);
 
         auto& groupOutStat = m_outStat[groupKey];
         if (suc)
@@ -254,7 +254,7 @@ void RateLimiterStat::updateOutGoing(
 void RateLimiterStat::flushStat()
 {
     {
-        std::lock_guard<std::mutex> l(m_inLock);
+        std::lock_guard<std::mutex> lock(m_inLock);
         for (auto& [k, s] : m_inStat)
         {
             s.resetLast();
@@ -262,7 +262,7 @@ void RateLimiterStat::flushStat()
     }
 
     {
-        std::lock_guard<std::mutex> l(m_outLock);
+        std::lock_guard<std::mutex> lock(m_outLock);
         for (auto& [k, s] : m_outStat)
         {
             s.resetLast();
@@ -274,7 +274,7 @@ std::pair<std::string, std::string> RateLimiterStat::inAndOutStat(uint32_t _inte
 {
     std::string in = " <incoming bandwidth> :";
     {
-        std::lock_guard<std::mutex> l(m_inLock);
+        std::lock_guard<std::mutex> lock(m_inLock);
         for (auto& [k, s] : m_inStat)
         {
             in += "\t\n";
@@ -289,7 +289,7 @@ std::pair<std::string, std::string> RateLimiterStat::inAndOutStat(uint32_t _inte
 
     std::string out = " <outgoing bandwidth> :";
     {
-        std::lock_guard<std::mutex> l(m_outLock);
+        std::lock_guard<std::mutex> lock(m_outLock);
         for (auto& [k, s] : m_outStat)
         {
             out += "\t\n";
@@ -302,5 +302,5 @@ std::pair<std::string, std::string> RateLimiterStat::inAndOutStat(uint32_t _inte
         }
     }
 
-    return std::pair<std::string, std::string>(in, out);
+    return {in, out};
 }

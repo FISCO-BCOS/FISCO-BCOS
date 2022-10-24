@@ -45,6 +45,8 @@ BOOST_AUTO_TEST_CASE(test_moduleWhiteList)
 
     moduleWhiteList.removeModuleID(1001);
     BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
+    BOOST_CHECK(!moduleWhiteList.removeModuleID(1001));
+    BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

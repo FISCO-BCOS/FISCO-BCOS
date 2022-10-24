@@ -43,7 +43,7 @@ public:
     RateLimiterInterface& operator=(const RateLimiterInterface&) = default;
     RateLimiterInterface& operator=(RateLimiterInterface&&) = default;
 
-    virtual ~RateLimiterInterface() {}
+    virtual ~RateLimiterInterface() = default;
 
 public:
     /**

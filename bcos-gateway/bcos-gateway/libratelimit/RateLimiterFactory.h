@@ -26,6 +26,7 @@
 #include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <sw/redis++/redis++.h>
+#include <cstddef>
 
 namespace bcos
 {
@@ -51,7 +52,7 @@ public:
 public:
     static std::string toTokenKey(const std::string& _baseKey)
     {
-        return "FISCO-BCOS 3.0 Gateway RateLimit: " + _baseKey;
+        return "FISCO-BCOS 3.0 Gateway RateLimiter: " + _baseKey;
     }
 
 public:
@@ -61,16 +62,16 @@ public:
         return rateLimiter;
     }
 
-    RateLimiterInterface::Ptr buildRedisDistributedRateLimiter(
-        int64_t _maxPermits, int32_t _interval, const std::string& _tokenKey)
+    RateLimiterInterface::Ptr buildRedisDistributedRateLimiter(const std::string& _key,
+        int64_t _maxPermits, int32_t _interval, bool _enableCache, int32_t _cachePercent)
     {
-        auto rateLimiter =
-            std::make_shared<DistributedRateLimiter>(m_redis, _tokenKey, _maxPermits, _interval);
+        auto rateLimiter = std::make_shared<DistributedRateLimiter>(
+            m_redis, _key, _maxPermits, _interval, _enableCache, _cachePercent);
         return rateLimiter;
     }
 
 private:
-    std::shared_ptr<sw::redis::Redis> m_redis;
+    std::shared_ptr<sw::redis::Redis> m_redis = nullptr;
 };
 
 }  // namespace ratelimiter
