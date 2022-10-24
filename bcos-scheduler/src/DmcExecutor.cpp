@@ -352,7 +352,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
             bytes code = f_onGetCodeEvent(executiveState->message->delegateCallAddress());
             executiveState->message->setData(code);
             executiveState->message->setType(protocol::ExecutionMessage::FINISHED);
-            return MessageHint::NEED_SEND;
+            return MessageHint::NEED_PREPARE;
         }
 
         if (executiveState->message->delegateCall())
