@@ -159,6 +159,8 @@ public:
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override;
 
+    void getCodeHash(std::string_view tableName, storage::StateStorageInterface::Ptr stateStorage,
+        std::string& codeHash);
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
     void getABI(std::string_view contract,

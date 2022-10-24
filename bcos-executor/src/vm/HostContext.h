@@ -114,6 +114,7 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash() const;
     int64_t blockNumber() const;
+    uint32_t blockVersion() const;
     int64_t timestamp() const;
     int64_t blockGasLimit() const
     {
