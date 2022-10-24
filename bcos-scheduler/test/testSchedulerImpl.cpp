@@ -34,7 +34,6 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/write_batch.h>
-#include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <future>
