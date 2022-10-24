@@ -5,7 +5,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/parallel_for.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
