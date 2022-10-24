@@ -1,7 +1,6 @@
 #pragma once
 
 #include <boost/throw_exception.hpp>
-#include <coroutine>
 #include <variant>
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
