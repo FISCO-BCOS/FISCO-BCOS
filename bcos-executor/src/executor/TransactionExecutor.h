@@ -194,10 +194,6 @@ protected:
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
         int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
 
-    std::shared_ptr<TransactionExecutive> createExecutive(
-        const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
-        int64_t contextID, int64_t seq);
-
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
         bcos::protocol::ExecutionMessage::UniquePtr input, bool useCoroutine,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>

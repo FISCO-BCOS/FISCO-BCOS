@@ -108,7 +108,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            checkValueValid(configKey, configValue);
+            int64_t value = checkValueValid(configKey, configValue);
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -116,6 +116,11 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             entry.setObject(systemConfigEntry);
 
             table->setRow(configKey, std::move(entry));
+
+            if (shouldUpgradeChain(configKey, blockContext->blockVersion(), value))
+            {
+                upgradeChain(_executive, _callParameters, codec, value);
+            }
 
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
@@ -146,11 +151,11 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     return _callParameters;
 }
 
-void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)
+int64_t SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)
 {
-    int64_t configuredValue;
+    int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!c_supportedKey.count(key))
+    if (!c_supportedKey.contains(key))
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
@@ -191,10 +196,11 @@ void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string
         BOOST_THROW_EXCEPTION(
             PrecompiledError("The value for " + key + " must be a valid number."));
     }
-    if (m_sysValueCmp.count(key))
+    if (m_sysValueCmp.contains(key))
     {
         (m_sysValueCmp.at(key))(configuredValue);
     }
+    return configuredValue;
 }
 
 std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysConfigByKey(
@@ -223,5 +229,35 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
             "getSysConfigByKey for " + _key + "failed, e:" + boost::diagnostic_information(e);
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;
         return {errorMsg, -1};
+    }
+}
+
+void SystemConfigPrecompiled::upgradeChain(
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
+    uint32_t toVersion) const
+{
+    auto blockContext = _executive->blockContext().lock();
+
+    if (blockContext->blockVersion() <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
+        toVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
+    {
+        // rebuild Bfs
+        auto input =
+            codec.encodeWithSig("rebuildBfs(uint,uint)", blockContext->blockVersion(), toVersion);
+        std::string sender =
+            blockContext->isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
+        std::string toAddress =
+            blockContext->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
+        auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
+            toAddress, false, false, _callParameters->m_gas);
+
+        if (response->status != (int32_t)TransactionStatus::None)
+        {
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                                  << LOG_DESC("rebuildBfs failed")
+                                  << LOG_KV("status", response->status);
+            BOOST_THROW_EXCEPTION(PrecompiledError("Rebuild BFS error."));
+        }
     }
 }

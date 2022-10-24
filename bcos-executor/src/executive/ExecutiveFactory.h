@@ -38,9 +38,8 @@ class ExecutiveFactory
 public:
     using Ptr = std::shared_ptr<ExecutiveFactory>;
 
-
-    ExecutiveFactory(std::shared_ptr<BlockContext> blockContext,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
+    ExecutiveFactory(std::weak_ptr<BlockContext> blockContext,
+        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
@@ -56,11 +55,10 @@ public:
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true);
 
-
 private:
     void registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive);
 
-    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
+    std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled;
