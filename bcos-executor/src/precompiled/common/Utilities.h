@@ -26,6 +26,7 @@
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -114,6 +115,19 @@ inline bytesConstRef getParamData(bytesConstRef _param)
 bool checkPathValid(std::string const& _absolutePath);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
+
+inline std::string_view getPathBaseName(std::string_view _absolutePath)
+{
+    if (_absolutePath == tool::FS_ROOT)
+    {
+        return _absolutePath;
+    }
+    if (_absolutePath.ends_with('/'))
+    {
+        return {};
+    }
+    return _absolutePath.substr(_absolutePath.find_last_of('/') + 1);
+}
 
 inline bool checkSenderFromAuth(std::string_view _sender)
 {

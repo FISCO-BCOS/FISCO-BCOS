@@ -32,6 +32,7 @@
 #include "../vm/VMInstance.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
+#include "ExecutiveFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -164,12 +165,9 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         return std::move(output);
     }
 
-    auto executive = std::make_shared<TransactionExecutive>(
-        m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
-
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_evmPrecompiled);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
+    auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
+        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+    auto executive = executiveFactory->build(input->codeAddress, m_contextID, newSeq, false);
 
     auto output = executive->start(std::move(input));
 

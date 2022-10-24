@@ -76,7 +76,8 @@ public:
     virtual ~PrecompiledFixture() {}
 
     /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true)
+    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
+        protocol::Version version = Version::V3_1_VERSION)
     {
         isWasm = _isWasm;
         if (_isKeyPage)
@@ -98,7 +99,6 @@ public:
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
             storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth, false);
 
-        createSysTable();
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
@@ -111,42 +111,14 @@ public:
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
             64);
+        createSysTable(version);
         if (_isCheckAuth)
         {
             deployAuthSolidity(1);
         }
     }
 
-    void setSM(bool _isWasm)
-    {
-        isWasm = _isWasm;
-        storage = std::make_shared<MockTransactionalStorage>(smHashImpl);
-
-        blockFactory = createBlockFactory(smCryptoSuite);
-        auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
-        header->setNumber(1);
-
-        auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, smHashImpl, _isWasm, false, false);
-
-        createSysTable();
-        codec = std::make_shared<CodecWrapper>(smHashImpl, _isWasm);
-
-        keyPair = smCryptoSuite->signatureImpl()->generateKeyPair();
-        memcpy(keyPair->secretKey()->mutableData(),
-            fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
-                ->data(),
-            32);
-        memcpy(keyPair->publicKey()->mutableData(),
-            fromHexString(
-                "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
-                "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
-                ->data(),
-            64);
-    }
-
-    void createSysTable()
+    void createSysTable(protocol::Version version)
     {
         // create sys table
         {
@@ -164,29 +136,10 @@ public:
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
         }
 
+        m_blockVersion = version;
         if (m_blockVersion >= protocol::Version::V3_1_VERSION)
         {
-            // create / table
-            {
-                auto rootTable =
-                    tool::BfsFileFactory::createDir(storage, std::string(tool::FS_ROOT));
-                storage::Entry appsEntry;
-                storage::Entry sysEntry;
-                storage::Entry tablesEntry;
-                storage::Entry rootEntry;
-                tool::BfsFileFactory::buildDirEntry(appsEntry, FileType::DIRECTOR);
-                tool::BfsFileFactory::buildDirEntry(sysEntry, FileType::DIRECTOR);
-                tool::BfsFileFactory::buildDirEntry(tablesEntry, FileType::DIRECTOR);
-                tool::BfsFileFactory::buildDirEntry(rootEntry, FileType::DIRECTOR);
-                rootTable->setRow(tool::FS_APPS.substr(1), std::move(appsEntry));
-                rootTable->setRow(tool::FS_SYS_BIN.substr(1), std::move(sysEntry));
-                rootTable->setRow(tool::FS_USER_TABLE.substr(1), std::move(tablesEntry));
-                rootTable->setRow(tool::FS_ROOT, std::move(rootEntry));
-
-                tool::BfsFileFactory::createDir(storage, std::string(tool::FS_APPS));
-                tool::BfsFileFactory::createDir(storage, std::string(tool::FS_SYS_BIN));
-                tool::BfsFileFactory::createDir(storage, std::string(tool::FS_USER_TABLE));
-            }
+            initBfs(1);
         }
         else
         {
@@ -202,7 +155,7 @@ public:
                 storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
                 std::map<std::string, std::string> newSubMap;
                 newSubMap.insert(std::make_pair("apps", executor::FS_TYPE_DIR));
-                newSubMap.insert(std::make_pair("/", executor::FS_TYPE_DIR));
+                newSubMap.insert(std::make_pair("sys", executor::FS_TYPE_DIR));
                 newSubMap.insert(std::make_pair("tables", executor::FS_TYPE_DIR));
                 tEntry.importFields({executor::FS_TYPE_DIR});
                 newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
@@ -248,6 +201,31 @@ public:
                 std::promise<std::optional<Table>> promise4;
                 storage->asyncCreateTable("/apps", "value",
                     [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
+                        BOOST_CHECK(!_error);
+                        promise4.set_value(std::move(_table));
+                    });
+                auto appsTable = promise4.get_future().get();
+                storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+                std::map<std::string, std::string> newSubMap;
+                tEntry.importFields({executor::FS_TYPE_DIR});
+                newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+                aclTypeEntry.importFields({"0"});
+                aclWEntry.importFields({""});
+                aclBEntry.importFields({""});
+                extraEntry.importFields({""});
+                appsTable->setRow(executor::FS_KEY_TYPE, std::move(tEntry));
+                appsTable->setRow(executor::FS_KEY_SUB, std::move(newSubEntry));
+                appsTable->setRow(executor::FS_ACL_TYPE, std::move(aclTypeEntry));
+                appsTable->setRow(executor::FS_ACL_WHITE, std::move(aclWEntry));
+                appsTable->setRow(executor::FS_ACL_BLACK, std::move(aclBEntry));
+                appsTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
+            }
+
+            // create /usr table
+            {
+                std::promise<std::optional<Table>> promise4;
+                storage->asyncCreateTable(
+                    "/sys", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
                         BOOST_CHECK(!_error);
                         promise4.set_value(std::move(_table));
                     });
@@ -640,6 +618,43 @@ public:
         {
             std::vector<BfsTuple> empty;
             BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
+        }
+
+        commitBlock(_number);
+        return result2;
+    };
+
+    ExecutionMessage::UniquePtr initBfs(protocol::BlockNumber _number, int _errorCode = 0)
+    {
+        bytes in = codec->encodeWithSig("initBfs()");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(1000);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+        nextBlock(_number, m_blockVersion);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->dmcExecuteTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);

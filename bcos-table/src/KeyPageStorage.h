@@ -1139,7 +1139,7 @@ public:
         }
         return std::nullopt;
     }
-    auto count(const std::string_view& table) -> std::pair<size_t, Error::Ptr>;
+    virtual std::pair<size_t, Error::Ptr> count(const std::string_view& table) override;
 
 private:
     auto getPrev() -> std::shared_ptr<StorageInterface>

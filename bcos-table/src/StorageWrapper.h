@@ -142,6 +142,11 @@ public:
         return std::get<1>(ret);
     }
 
+    std::pair<size_t, Error::Ptr> count(const std::string_view& _table)
+    {
+        return m_storage->count(_table);
+    }
+
     std::tuple<Error::UniquePtr, std::optional<storage::Table>> openTableWithoutException(
         std::string_view tableName)
     {
