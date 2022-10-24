@@ -31,6 +31,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <exception>
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
@@ -429,6 +430,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     auto txpoolStorage = txpool->txpoolStorage();
     // case1: the node is not in the consensus/observerList
     auto tx = fakeTransaction(_cryptoSuite, utcTime());
+
     checkTxSubmit(txpool, txpoolStorage, tx, HashType(),
         (uint32_t)TransactionStatus::RequestNotBelongToTheGroup, 0);
 
@@ -475,7 +477,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     {
         importedTxNum++;
         checkTxSubmit(txpool, txpoolStorage, pbTx, pbTx->hash(), (uint32_t)TransactionStatus::None,
-            importedTxNum, false, false, true);
+            importedTxNum, false, true, true);
     }
     else
     {
@@ -488,7 +490,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     tx = fakeTransaction(_cryptoSuite, utcTime() + 2000000, ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None,
-        importedTxNum, false, false, true);
+        importedTxNum, false, true, true);
     // case8: submit duplicated tx
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
         (uint32_t)TransactionStatus::AlreadyInTxPool, importedTxNum);
@@ -548,13 +550,21 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         (*txData)[i] += 100;
     }
     bool verifyFinish = false;
-    txpool->asyncSubmit(txData, [&](Error::Ptr _error, TransactionSubmitResult::Ptr _result) {
-        BOOST_CHECK(_error->errorCode() == _result->status());
-        std::cout << "#### error info:" << _error->errorMessage() << std::endl;
-        BOOST_CHECK(_result->txHash() == HashType());
-        BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malform));
-        verifyFinish = true;
-    });
+    try
+    {
+        auto _result = ~txpool->submitTransaction(tx);
+    }
+    catch (bcos::Error& e)
+    {
+        // TODO: Put TransactionStatus::Malform into bcos::Error
+        // BOOST_CHECK(e.errorCode() == _result->status());
+        std::cout << "#### error info:" << e.errorMessage() << std::endl;
+        // BOOST_CHECK(_result->txHash() == HashType());
+        // BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malform));
+    }
+
+    verifyFinish = true;
+
     while (!verifyFinish)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));

@@ -75,7 +75,7 @@ public:
 private:
     Error::Ptr checkStatus(rocksdb::Status const& status);
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
-    tbb::spin_mutex m_writeBatchMutex;
+    std::mutex m_writeBatchMutex;
     std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>> m_db;
 
     // Security Storage
