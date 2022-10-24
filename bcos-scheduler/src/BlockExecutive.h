@@ -187,7 +187,7 @@ protected:
     bool m_staticCall = false;
     bool m_syncBlock = false;
     bool m_hasPrepared = false;
-    std::atomic_bool m_hasDAG = false;
+    bool m_hasDAG = false;
     mutable SharedMutex x_prepareLock;
     mutable SharedMutex x_dmcExecutorLock;
 

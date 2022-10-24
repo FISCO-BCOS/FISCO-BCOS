@@ -327,7 +327,8 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     try
     {
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                << "NextBlockHeader request: "
+                                << "NextBlockH"
+                                   "eader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId);
         m_blockVersion = blockHeader->version();

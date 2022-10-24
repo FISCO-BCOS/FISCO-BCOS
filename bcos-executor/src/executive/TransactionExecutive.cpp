@@ -766,7 +766,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             EXECUTOR_LOG(DEBUG) << "Revert by dead lock, sender: " << callResults->senderAddress
                                 << " receiver: " << callResults->receiveAddress;
         }
-        else if (StorageError::UnknownError <= e.errorCode() &&
+        /*else if (StorageError::UnknownError <= e.errorCode() &&
                  StorageError::TimestampMismatch <= e.errorCode())
         {
             // is storage error
@@ -776,6 +776,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto blockContext = m_blockContext.lock();
             blockContext->triggerSwitch();
         }
+         */
         else
         {
             EXECUTIVE_LOG(ERROR) << "BCOS Error: " << diagnostic_information(e);

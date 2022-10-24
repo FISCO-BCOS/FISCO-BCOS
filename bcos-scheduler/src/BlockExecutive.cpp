@@ -151,9 +151,6 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         message->setABI(std::string(tx->abi()));
     }
 
-    bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
-
-    m_hasDAG = enableDAG;
     return message;
 }
 
@@ -186,9 +183,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
                     bool enableDAG =
                         metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
-                    m_hasDAG = m_hasDAG || enableDAG;
-
                     std::unique_lock lock(saveMutex);
+                    m_hasDAG = m_hasDAG || enableDAG;
                     saveMessage(std::move(to), std::move(message), enableDAG);
                 }
             });
@@ -253,9 +249,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
                     std::string to = {message->to().data(), message->to().size()};
 
-                    m_hasDAG = m_hasDAG || enableDAG;
-
                     std::unique_lock lock(saveMutex);
+                    m_hasDAG = m_hasDAG || enableDAG;
                     saveMessage(to, std::move(message), enableDAG);
                 }
             });
@@ -286,9 +281,8 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
                 std::string to = {message->to().data(), message->to().size()};
                 bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
-                m_hasDAG = m_hasDAG || enableDAG;
-
                 std::unique_lock lock(saveMutex);
+                m_hasDAG = m_hasDAG || enableDAG;
                 saveMessage(to, std::move(message), enableDAG);
             }
         });

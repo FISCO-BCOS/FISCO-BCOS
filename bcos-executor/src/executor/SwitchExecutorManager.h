@@ -59,6 +59,8 @@ public:
         m_pool.enqueue([this]() { refreshExecutor(m_schedulerTermId + 1); });
     }
 
+    void triggerSwitch() { selfAsyncRefreshExecutor(); }
+
     bool hasStopped()
     {
         ReadGuard l(m_mutex);

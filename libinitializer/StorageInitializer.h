@@ -80,7 +80,8 @@ public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(
         const std::vector<std::string>& _pdAddrs, const std::string& _logPath,
         const std::string& caPath = std::string(""), const std::string& certPath = std::string(""),
-        const std::string& keyPath = std::string(""))
+        const std::string& keyPath = std::string(""),
+        std::function<void()> onNeedSwitchEvent = nullptr)
     {
         boost::filesystem::create_directories(_logPath);
         std::shared_ptr<tikv_client::TransactionClient> cluster = nullptr;
@@ -92,7 +93,7 @@ public:
         {
             cluster = storage::newTiKVClient(_pdAddrs, _logPath);
         }
-        return std::make_shared<bcos::storage::TiKVStorage>(cluster);
+        return std::make_shared<bcos::storage::TiKVStorage>(cluster, onNeedSwitchEvent);
     }
 #endif
 };
