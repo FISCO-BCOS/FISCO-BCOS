@@ -32,9 +32,7 @@
 #include <unordered_map>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
-namespace bcos
-{
-namespace tool
+namespace bcos::tool
 {
 class NodeConfig
 {
@@ -47,7 +45,7 @@ public:
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
 
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
-    virtual ~NodeConfig() {}
+    virtual ~NodeConfig() = default;
 
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true)
     {
@@ -213,7 +211,6 @@ public:
     {
         m_withoutTarsFramework = _withoutTarsFramework;
     }
-    //
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
@@ -254,7 +251,6 @@ private:
 
     bool isValidPort(int port);
 
-private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
     size_t m_txpoolLimit;
@@ -293,9 +289,9 @@ private:
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 8192;
     std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath = "";
-    std::string m_pdCertPath = "";
-    std::string m_pdKeyPath = "";
+    std::string m_pdCaPath;
+    std::string m_pdCertPath;
+    std::string m_pdKeyPath;
 
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
@@ -363,5 +359,4 @@ private:
     // others config
     int m_sendTxTimeout = -1;
 };
-}  // namespace tool
-}  // namespace bcos
+}  // namespace bcos::tool
