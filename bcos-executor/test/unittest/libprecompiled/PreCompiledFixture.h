@@ -114,7 +114,9 @@ public:
         createSysTable(version);
         if (_isCheckAuth)
         {
+            boost::log::core::get()->set_logging_enabled(false);
             deployAuthSolidity(1);
+            boost::log::core::get()->set_logging_enabled(true);
         }
     }
 

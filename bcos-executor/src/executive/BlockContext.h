@@ -56,7 +56,8 @@ public:
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
-        const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+        const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+        std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
         const protocol::Transaction::ConstPtr& _tx)>;
@@ -122,6 +123,8 @@ public:
         }
     }
 
+    auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
+
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
@@ -140,6 +143,7 @@ private:
     std::shared_ptr<storage::StateStorageInterface> m_storage;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
+    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
 };
 
 }  // namespace executor

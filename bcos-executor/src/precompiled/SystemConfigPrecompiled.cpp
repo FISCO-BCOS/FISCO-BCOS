@@ -243,8 +243,8 @@ void SystemConfigPrecompiled::upgradeChain(
         toVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
     {
         // rebuild Bfs
-        auto input =
-            codec.encodeWithSig("rebuildBfs(uint,uint)", blockContext->blockVersion(), toVersion);
+        auto input = codec.encodeWithSig(
+            "rebuildBfs(uint256,uint256)", blockContext->blockVersion(), toVersion);
         std::string sender =
             blockContext->isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
         std::string toAddress =

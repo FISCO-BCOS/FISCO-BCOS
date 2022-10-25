@@ -199,7 +199,7 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
 
         auto [bucket, lock] = getMutBucket(tableView, keyView);
         boost::ignore_unused(lock);
-        entry.setStatus(Entry::Status::MODIFIED);
+        // entry.setStatus(Entry::Status::MODIFIED);
         auto it =
             bucket->container.find(std::make_pair(std::string(tableView), std::string(keyView)));
         if (it != bucket->container.end())

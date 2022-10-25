@@ -355,7 +355,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 else
                 {
                     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare empty storage")
-                                           << LOG_KV("blockNumber", params.number);
+                                            << LOG_KV("blockNumber", params.number);
                     callback(nullptr, 0);
                 }
                 return;

@@ -364,15 +364,23 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                          << LOG_KV("internalCreate", callParameters->internalCreate);
 
     // check permission first
-    if (callParameters->internalCreate)
-    {
-        return {nullptr, internalCreate(std::move(callParameters))};
-    }
-
     if (blockContext->isAuthCheck() && !checkAuth(callParameters))
     {
         revert();
         return {nullptr, std::move(callParameters)};
+    }
+    if (callParameters->internalCreate)
+    {
+        callParameters->abi = std::move(extraData->abi);
+        auto sender = callParameters->senderAddress;
+        auto response = internalCreate(std::move(callParameters));
+        if (blockContext->isAuthCheck() &&
+            blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+        {
+            // Create auth table
+            creatAuthTable(tableName, response->origin, std::move(sender));
+        }
+        return {nullptr, std::move(response)};
     }
     // Create table
     try
@@ -511,6 +519,12 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         Entry entry = {};
         entry.importFields({codeString});
         m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
+        if (!callParameters->abi.empty())
+        {
+            Entry abiEntry = {};
+            abiEntry.importFields({std::move(callParameters->abi)});
+            m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
+        }
 
         /// set link data
         tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
