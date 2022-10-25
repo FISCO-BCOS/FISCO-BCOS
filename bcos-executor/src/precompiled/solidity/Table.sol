@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity >=0.6.10 <0.8.20;
 pragma experimental ABIEncoderV2;
-import "./EntryWapper.sol";
+import "./EntryWrapper.sol";
 
 // KeyOrder指定Key的排序规则，字典序和数字序，如果指定为数字序，key只能为数字
 // enum KeyOrder {Lexicographic, Numerical}
