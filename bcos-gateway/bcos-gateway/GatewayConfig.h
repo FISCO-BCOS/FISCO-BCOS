@@ -63,11 +63,15 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
-        bool groupRateLimitOn = false;
-        bool conRateLimitOn = false;
+        bool enableGroupRateLimit = false;
+        bool enableConRateLimit = false;
 
         // if turn on distributed ratelimit
-        bool distributedRateLimitOn = false;
+        bool enableDistributedRatelimit = false;
+        //
+        bool enableDistributedRateLimitCache = true;
+        //
+        int32_t distributedRateLimitCachePercent = 20;
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
 
@@ -86,11 +90,6 @@ public:
 
         // the message of modules that do not limit bandwidth
         std::set<uint16_t> modulesWithoutLimit;
-
-        bool isDistributedRateLimitOn() const
-        {
-            return distributedRateLimitOn && hasRateLimiterConfigEffect();
-        }
 
         // whether any configuration takes effect
         bool hasRateLimiterConfigEffect() const
@@ -149,7 +148,7 @@ public:
 
     std::string listenIP() const { return m_listenIP; }
     uint16_t listenPort() const { return m_listenPort; }
-    uint32_t threadPoolSize() { return m_threadPoolSize; }
+    uint32_t threadPoolSize() const { return m_threadPoolSize; }
     bool smSSL() const { return m_smSSL; }
 
     CertConfig certConfig() const { return m_certConfig; }

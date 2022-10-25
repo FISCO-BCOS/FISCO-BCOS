@@ -22,15 +22,14 @@
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
 #include <bcos-utilities/Common.h>
-#include <exception>
-#include <string>
+#include <mutex>
 
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimiter;
 
 // lua script for redis distributed rate limit
-const std::string DistributedRateLimiter::luaScript = R"(
+const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
         -- 限流key
         local key = KEYS[1]
         -- 限流大小, 初始token数目
@@ -85,40 +84,55 @@ void DistributedRateLimiter::acquire(int64_t _requiredPermits)
  */
 bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
-    try
+    // try local cache acquire first
+    if (m_enableLocalCache && tryAcquireLocalCache(_requiredPermits, true))
     {
-        auto start = utcTime();
-
-        auto keys = {m_rateLimitKey};
-        std::vector<std::string> args = {
-            std::to_string(m_maxPermits), std::to_string(_requiredPermits), "1"};
-
-        auto result =
-            m_redis->eval<long long>(luaScript, keys.begin(), keys.end(), args.begin(), args.end());
-
-        auto end = utcTime();
-
-        // TODO: statistics request cost information
-        if (1)
-        {
-            GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("tryAcquire")
-                               << LOG_KV("elapsedTime", (end - start))
-                               << LOG_KV("maxPermits", m_maxPermits)
-                               << LOG_KV("requiredPermits", _requiredPermits)
-                               << LOG_KV("result", result);
-        }
-
-        return result >= 0;
-    }
-    catch (const std::exception& e)
-    {
-        // TODO: statistics failure information
-        GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("tryAcquire")
-                           << LOG_KV("rateLimitKey", m_rateLimitKey) << LOG_KV("error", e.what());
-
-        // exception throw, allow this acquire
         return true;
     }
+
+    if (!m_enableLocalCache)
+    {
+        // local cache not enable,  request redis directly
+        return requestRedis(_requiredPermits) >= 0;
+    }
+
+    std::lock_guard<std::mutex> lock(x_localCache);
+    // another thread update local cache again
+    if (tryAcquireLocalCache(_requiredPermits, false))
+    {
+        return true;
+    }
+
+    // the request acquire bigger than _requiredPermits has been failed
+    if (m_lastFailedPermit > 0 && _requiredPermits >= m_lastFailedPermit)
+    {
+        return false;
+    }
+
+    // request redis to update local cache
+    // TODO: make m_localCachePermits param
+    int64_t permits = m_maxPermits / 100 * m_localCachePermits;
+    if (requestRedis(permits > _requiredPermits ? permits : _requiredPermits) >= 0)
+    {
+        // update local cache
+        m_localCachePermits += (permits - _requiredPermits);
+        return true;
+    }
+
+    // update failed info
+    m_lastFailedPermit = permits;
+    if (permits == _requiredPermits)
+    {
+        return false;
+    }
+
+    auto result = requestRedis(_requiredPermits);
+    if (result < 0)
+    {
+        m_lastFailedPermit = _requiredPermits;
+    }
+
+    return result >= 0;
 }
 
 /**
@@ -130,4 +144,110 @@ void DistributedRateLimiter::rollback(int64_t _requiredPermits)
 {
     // Note: This operation is not supported
     std::ignore = _requiredPermits;
+}
+
+/**
+ * @brief
+ *
+ * @param _requiredPermits
+ * @param _withLock
+ * @return true
+ * @return false
+ */
+bool DistributedRateLimiter::tryAcquireLocalCache(int64_t _requiredPermits, bool _withLock)
+{
+    // enable local cache and local cache is not enough
+    if (m_localCachePermits < _requiredPermits)
+    {
+        return false;
+    }
+
+    bool result = false;
+    if (_withLock)
+    {
+        x_localCache.lock();
+    }
+
+    if (m_localCachePermits >= _requiredPermits)
+    {
+        m_localCachePermits -= _requiredPermits;
+        result = true;
+    }
+
+    if (_withLock)
+    {
+        x_localCache.unlock();
+    }
+
+    return result;
+}
+
+/**
+ * @brief
+ *
+ * @param _requiredPermits
+ * @return true
+ * @return false
+ */
+int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
+{
+    try
+    {
+        auto start = utcTimeUs();
+
+        auto keys = {m_rateLimiterKey};
+        std::vector<std::string> args = {std::to_string(m_maxPermits),
+            std::to_string(_requiredPermits), std::to_string(m_interval)};
+
+        auto result = m_redis->eval<long long>(
+            LUA_SCRIPT, keys.begin(), keys.end(), args.begin(), args.end());
+
+        auto end = utcTimeUs();
+
+        // update stat
+        result >= 0 ? m_stat.updateOk() : m_stat.updateFailed();
+
+        if ((end - start) > 1000)
+        {
+            m_stat.updateMore1MS();
+        }
+
+        return result;
+    }
+    catch (const std::exception& e)
+    {
+        m_stat.updateExp();
+        // TODO: statistics failure information
+        GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
+                           << LOG_KV("rateLimitKey", m_rateLimiterKey)
+                           << LOG_KV("enableLocalCache", m_enableLocalCache)
+                           << LOG_KV("error", e.what());
+
+        // exception throw, allow this acquire
+        return _requiredPermits;
+    }
+}
+
+void DistributedRateLimiter::refreshLocalCache()
+{
+    {
+        GATEWAY_LOG(INFO) << LOG_BADGE("DistributedRateLimiter") << LOG_BADGE(m_rateLimiterKey)
+                          << LOG_KV("totalC", m_stat.totalRequestRedis)
+                          << LOG_KV("totalExpC", m_stat.totalRequestRedisExp)
+                          << LOG_KV("totalFailedC", m_stat.totalRequestRedisFailed)
+                          << LOG_KV("totalMore1MSC", m_stat.totalRequestRedisMore1MS)
+                          << LOG_KV("lastC", m_stat.lastRequestRedis)
+                          << LOG_KV("lastExpC", m_stat.lastRequestRedisExp)
+                          << LOG_KV("lastFailedC", m_stat.lastRequestRedisFailed)
+                          << LOG_KV("lastMore1MSC", m_stat.lastRequestRedisMore1MS);
+
+        std::lock_guard<std::mutex> lock(x_localCache);
+        m_localCachePermits = 0;
+        m_localCachePercent = 0;
+        m_lastFailedPermit = 0;
+
+        m_stat.resetLast();
+    }
+
+    m_clearCacheTimer->restart();
 }

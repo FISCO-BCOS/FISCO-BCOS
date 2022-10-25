@@ -63,7 +63,7 @@ bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
 
 RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
 {
-    if (!m_rateLimiterConfig.groupRateLimitOn)
+    if (!m_rateLimiterConfig.enableGroupRateLimit)
     {
         return nullptr;
     }
@@ -95,14 +95,16 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
                                 << LOG_DESC("group rate limiter not exist")
                                 << LOG_KV("rateLimiterKey", rateLimiterKey)
                                 << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
-                                << LOG_KV("isDistributedRateLimitOn",
-                                       m_rateLimiterConfig.isDistributedRateLimitOn());
+                                << LOG_KV("enableDistributedRatelimit",
+                                       m_rateLimiterConfig.enableDistributedRatelimit);
 
-        if (m_rateLimiterConfig.isDistributedRateLimitOn())
+        if (m_rateLimiterConfig.enableDistributedRatelimit)
         {
             // create ratelimiter
             rateLimiter = m_rateLimiterFactory->buildRedisDistributedRateLimiter(
-                groupOutgoingBwLimit, m_rateLimiterFactory->toTokenKey(_group));
+                m_rateLimiterFactory->toTokenKey(_group), groupOutgoingBwLimit, 1,
+                m_rateLimiterConfig.enableDistributedRateLimitCache,
+                m_rateLimiterConfig.distributedRateLimitCachePercent);
         }
         else
         {
@@ -118,7 +120,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
 
 RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
 {
-    if (!m_rateLimiterConfig.conRateLimitOn)
+    if (!m_rateLimiterConfig.enableConRateLimit)
     {
         return nullptr;
     }
