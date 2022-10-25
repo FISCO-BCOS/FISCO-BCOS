@@ -121,6 +121,17 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         // get codeHash in contract table
         auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        if (!codeHashEntry || codeHashEntry->get().empty())
+        {
+            auto& output = input;
+            EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            output->status = (int32_t)TransactionStatus::RevertInstruction;
+            output->evmStatus = EVMC_REVERT;
+            return std::move(output);
+        }
+
         auto codeHash =
             h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
 
@@ -146,13 +157,21 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         auto tableName = getContractTableName(input->codeAddress, false);
 
+        auto& output = input;
         // get codeHash in contract table
         auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        if (!codeHashEntry || codeHashEntry->get().empty())
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not get external code hash from local storage"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            return std::move(output);
+        }
+
         auto codeHash =
             h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
 
         // get code in code binary table
-        auto& output = input;
         auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
         if (!entry || entry->get().empty())
         {
