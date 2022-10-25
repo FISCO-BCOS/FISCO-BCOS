@@ -288,8 +288,8 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(
-        storage, m_hashImpl, currentHeader, m_schedule, m_isWasm, m_isAuthCheck);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, currentHeader,
+        m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
 
     if (f_onNeedSwitchEvent)
     {
@@ -2512,10 +2512,14 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
-        if (m_blockVersion <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
-            !m_keyPageIgnoreTables->contains(tool::FS_ROOT))
+        if (m_blockVersion >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+            m_keyPageIgnoreTables->contains(tool::FS_ROOT))
         {
-            m_keyPageIgnoreTables->insert(tool::FS_ROOT_SUBS.begin(), tool::FS_ROOT_SUBS.end());
+            for (const auto& _sub : tool::FS_ROOT_SUBS)
+            {
+                std::string sub(_sub);
+                m_keyPageIgnoreTables->erase(sub);
+            }
         }
         return std::make_shared<bcos::storage::KeyPageStorage>(
             storage, m_keyPageSize, m_blockVersion, m_keyPageIgnoreTables, ignoreNotExist);

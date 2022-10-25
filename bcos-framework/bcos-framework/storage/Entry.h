@@ -181,6 +181,7 @@ public:
         m_status = status;
         if (m_status == DELETED)
         {
+            m_size = 0;
             m_value = std::string();
         }
         // m_dirty = true;

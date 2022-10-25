@@ -434,7 +434,7 @@ public:
     ExecutionMessage::UniquePtr rebuildBfs(
         protocol::BlockNumber _number, uint32_t from, uint32_t to, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("rebuildBfs(uint,uint)", from, to);
+        bytes in = codec->encodeWithSig("rebuildBfs(uint256,uint256)", from, to);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
                                              std::string(precompiled::SYS_CONFIG_ADDRESS));
@@ -539,7 +539,7 @@ public:
     ExecutionMessage::UniquePtr listPage(protocol::BlockNumber _number, std::string const& path,
         uint32_t offset, uint32_t count, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("list(string,uint,uint)", path, offset, count);
+        bytes in = codec->encodeWithSig("list(string,uint256,uint256)", path, offset, count);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -1454,10 +1454,10 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     }
 
     // upgrade to v3.1.0
-    boost::log::core::get()->set_logging_enabled(false);
+    //    boost::log::core::get()->set_logging_enabled(false);
     auto updateNumber = _number++;
     rebuildBfsBySysConfig(_number++, V3_1_VERSION_STR);
-    boost::log::core::get()->set_logging_enabled(true);
+    //    boost::log::core::get()->set_logging_enabled(true);
 
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> p;
     storage->asyncOpenTable(tool::FS_ROOT, [&](Error::UniquePtr _e, std::optional<Table> _t) {

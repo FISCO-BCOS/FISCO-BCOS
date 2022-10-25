@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "PrecompiledAbi.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Exceptions.h"

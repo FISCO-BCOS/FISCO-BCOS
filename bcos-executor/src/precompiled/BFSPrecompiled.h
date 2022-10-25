@@ -60,5 +60,6 @@ private:
     bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
+    void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
 };
 }  // namespace bcos::precompiled

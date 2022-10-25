@@ -43,8 +43,20 @@ public:
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
         std::string name = "executor-" + std::to_string(utcTime()))
     {  // only for test
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            std::initializer_list<std::set<std::string, std::less<>>::value_type>{
+                std::string(ledger::SYS_CONFIG),
+                std::string(ledger::SYS_CONSENSUS),
+                ledger::FS_ROOT,
+                ledger::FS_APPS,
+                ledger::FS_USER,
+                ledger::FS_SYS_BIN,
+                ledger::FS_USER_TABLE,
+                storage::StorageInterface::SYS_TABLES,
+            });
         return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
-            executionMessageFactory, hashImpl, isWasm, isAuthCheck, keyPageSize, nullptr, name);
+            executionMessageFactory, hashImpl, isWasm, isAuthCheck, keyPageSize,
+            keyPageIgnoreTables, name);
     }
 
     TransactionExecutorFactory(bcos::ledger::LedgerInterface::Ptr ledger,
@@ -68,6 +80,11 @@ public:
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
                 std::string(ledger::SYS_CONFIG),
                 std::string(ledger::SYS_CONSENSUS),
+                ledger::FS_ROOT,
+                ledger::FS_APPS,
+                ledger::FS_USER,
+                ledger::FS_SYS_BIN,
+                ledger::FS_USER_TABLE,
                 storage::StorageInterface::SYS_TABLES,
             });
     }

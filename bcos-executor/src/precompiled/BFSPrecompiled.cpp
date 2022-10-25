@@ -38,14 +38,14 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
 constexpr const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
-constexpr const char* const FILE_SYSTEM_METHOD_LIST_PAGE = "list(string,uint,uint)";
+constexpr const char* const FILE_SYSTEM_METHOD_LIST_PAGE = "list(string,uint256,uint256)";
 constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LINK_CNS = "link(string,string,string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
-constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint,uint)";
+constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint256,uint256)";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -370,11 +370,16 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
 
     // check parent dir to get type
     auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
+    if (baseName == tool::FS_ROOT)
+    {
+        baseNameEntry = std::make_optional<Entry>();
+        tool::BfsFileFactory::buildDirEntry(baseNameEntry.value(), tool::FileType::DIRECTOR);
+    }
     if (!baseNameEntry) [[unlikely]]
     {
         // maybe hidden table
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
-                               << LOG_KV("absolutePath", absolutePath);
+                               << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
         return;
     }
@@ -734,21 +739,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
         std::string(tool::FS_SYS_BIN), std::string(tool::FS_DIR_FIELDS));
 
     // build /sys/
-    for (const auto& sysSub : precompiled::BFS_SYS_SUBS)
-    {
-        Entry entry;
-        // type, status, acl_type, acl_white, acl_black, extra
-        tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::LINK);
-        _executive->storage().setRow(
-            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
-    }
-    // build sys contract
-    for (const auto& nameAddress : precompiled::SYS_NAME_ADDRESS_MAP)
-    {
-        auto linkTable =
-            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
-        tool::BfsFileFactory::buildLink(linkTable.value(), nameAddress.second, "");
-    }
+    buildSysSubs(_executive);
 }
 
 void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -782,12 +773,15 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
 void BFSPrecompiled::rebuildBfs310(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
+    auto blockContext = _executive->blockContext().lock();
+    auto keyPageIgnoreTables = blockContext->keyPageIgnoreTables();
     // child, parent, all absolute path
     std::queue<std::pair<std::string, std::string>> rebuildQ;
     rebuildQ.push({std::string(tool::FS_ROOT), ""});
     bool rebuildSys = true;
     while (!rebuildQ.empty())
     {
+        keyPageIgnoreTables->insert(tool::FS_ROOT_SUBS.begin(), tool::FS_ROOT_SUBS.end());
         auto [rebuildPath, parentPath] = rebuildQ.front();
         rebuildQ.pop();
         auto subEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_SUB);
@@ -800,28 +794,22 @@ void BFSPrecompiled::rebuildBfs310(
             continue;
         }
 
-        // root has no parent
-
         // rewrite type, acl_type, acl_white, acl_black, extra to parent
         auto typeEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_TYPE);
         auto aclTypeEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_TYPE);
         auto aclWhiteEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_WHITE);
         auto aclBlackEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_BLACK);
         auto extraEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_EXTRA);
-        if (!parentPath.empty())
-        {
-            Entry newFormEntry;
-            newFormEntry.setObject(std::vector<std::string>{
-                std::string(typeEntry->get()),
-                std::string("0"),
-                std::string(aclTypeEntry->get()),
-                std::string(aclWhiteEntry->get()),
-                std::string(aclBlackEntry->get()),
-                std::string(extraEntry->get()),
-            });
-            _executive->storage().setRow(
-                parentPath, getPathBaseName(rebuildPath), std::move(newFormEntry));
-        }
+        // root has no parent
+        Entry newFormEntry;
+        newFormEntry.setObject(std::vector<std::string>{
+            std::string(typeEntry->get()),
+            std::string("0"),
+            std::string(aclTypeEntry->get()),
+            std::string(aclWhiteEntry->get()),
+            std::string(aclBlackEntry->get()),
+            std::string(extraEntry->get()),
+        });
         typeEntry->setStatus(Entry::Status::DELETED);
         aclTypeEntry->setStatus(Entry::Status::DELETED);
         aclWhiteEntry->setStatus(Entry::Status::DELETED);
@@ -840,6 +828,23 @@ void BFSPrecompiled::rebuildBfs310(
         std::map<std::string, std::string> bfsInfo;
         auto&& out = asBytes(std::string(subEntry->get()));
         codec::scale::decode(bfsInfo, gsl::make_span(out));
+
+        // delete sub
+        subEntry->setStatus(Entry::Status::DELETED);
+        _executive->storage().setRow(rebuildPath, tool::FS_KEY_SUB, std::move(subEntry.value()));
+
+        // use keyPage to rewrite info
+        for (const auto& _sub : tool::FS_ROOT_SUBS)
+        {
+            std::string sub(_sub);
+            keyPageIgnoreTables->erase(sub);
+        }
+        if (!parentPath.empty())
+        {
+            _executive->storage().setRow(
+                parentPath, getPathBaseName(rebuildPath), std::move(newFormEntry));
+        }
+
         // rewrite sub info
         for (const auto& [name, type] : bfsInfo)
         {
@@ -853,28 +858,11 @@ void BFSPrecompiled::rebuildBfs310(
                         rebuildPath});
             }
         }
-        // delete sub
-        subEntry->setStatus(Entry::Status::DELETED);
-        _executive->storage().setRow(rebuildPath, tool::FS_KEY_SUB, std::move(subEntry.value()));
     }
     if (rebuildSys)
     {
         // build /sys/
-        for (const auto& sysSub : precompiled::BFS_SYS_SUBS)
-        {
-            Entry entry;
-            // type, status, acl_type, acl_white, acl_black, extra
-            tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::LINK);
-            _executive->storage().setRow(
-                tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
-        }
-        // build sys contract
-        for (const auto& nameAddress : precompiled::SYS_NAME_ADDRESS_MAP)
-        {
-            auto linkTable =
-                _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
-            tool::BfsFileFactory::buildLink(linkTable.value(), nameAddress.second, "");
-        }
+        buildSysSubs(_executive);
     }
 }
 
@@ -1010,4 +998,24 @@ bool BFSPrecompiled::recursiveBuildDir(
         }
     }
     return true;
+}
+
+void BFSPrecompiled::buildSysSubs(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive) const
+{
+    for (const auto& sysSub : BFS_SYS_SUBS)
+    {
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::LINK);
+        _executive->storage().setRow(
+            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
+    }
+    // build sys contract
+    for (const auto& nameAddress : SYS_NAME_ADDRESS_MAP)
+    {
+        auto linkTable =
+            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
+        tool::BfsFileFactory::buildLink(linkTable.value(), std::string(nameAddress.second), "");
+    }
 }
