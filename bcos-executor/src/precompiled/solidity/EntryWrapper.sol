@@ -9,7 +9,7 @@ struct Entry {
     string[] fields; // 考虑2.0的Entry接口，临时Precompiled的问题，考虑加工具类接口
 }
 
-contract EntryWapper {   
+contract EntryWrapper {   
     Cast constant cast =  Cast(address(0x100f));  
     Entry entry;
     constructor(Entry memory _entry) public {
