@@ -27,7 +27,6 @@
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/spin_mutex.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
 #include <exception>
@@ -323,6 +322,10 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         std::atomic_uint64_t putCount{0};
         std::atomic_uint64_t deleteCount{0};
         atomic_bool isTableValid = true;
+
+        tbb::concurrent_vector<
+            std::tuple<Entry::Status, std::string, std::variant<std::string_view, std::string>>>
+            dataChanges;
         storage.parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
                 if (!isValid(table, key))
@@ -340,8 +343,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                                                    << LOG_KV("key", toHex(key));
                     }
                     ++deleteCount;
-                    std::unique_lock lock(m_writeBatchMutex);
-                    m_writeBatch->Delete(dbKey);
+                    dataChanges.emplace_back(
+                        std::tuple{entry.status(), std::move(dbKey), std::string_view{}});
                 }
                 else
                 {
@@ -353,18 +356,38 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                     }
                     ++putCount;
 
-                    std::string value(entry.get().data(), entry.get().size());
+                    auto value = entry.get();
                     // Storage security
                     if (!value.empty() && m_dataEncryption)
                     {
-                        value = m_dataEncryption->encrypt(value);
+                        std::string encryptValue(value);
+                        encryptValue = m_dataEncryption->encrypt(encryptValue);
+                        dataChanges.emplace_back(
+                            std::tuple{entry.status(), std::move(dbKey), std::move(encryptValue)});
                     }
-
-                    std::unique_lock lock(m_writeBatchMutex);
-                    auto status = m_writeBatch->Put(dbKey, std::move(value));
+                    else
+                    {
+                        dataChanges.emplace_back(
+                            std::tuple{entry.status(), std::move(dbKey), std::move(value)});
+                    }
                 }
                 return true;
             });
+
+        for (auto& [status, key, value] : dataChanges)
+        {
+            if (status == Entry::DELETED)
+            {
+                m_writeBatch->Delete(key);
+            }
+            else
+            {
+                auto& localKey = key;
+                std::visit(
+                    [this, &localKey](auto& valueStr) { m_writeBatch->Put(localKey, valueStr); },
+                    value);
+            }
+        }
 
         if (!isTableValid)
         {
@@ -446,8 +469,8 @@ void RocksDBStorage::asyncRollback(
                               << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
-bcos::Error::Ptr RocksDBStorage::setRows(
-    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table, std::vector<std::string_view> keys,
+    std::vector<std::string_view> values) noexcept
 {
     if (table.empty())
     {
@@ -468,16 +491,21 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         return nullptr;
     }
     std::vector<std::string> realKeys(keys.size());
+
     std::vector<std::string> encryptedValues;
-    encryptedValues.resize(values.size());
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+    if (m_dataEncryption)
+    {
+        encryptedValues.resize(values.size());
+    }
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
+        [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i != range.end(); ++i)
             {
                 realKeys[i] = toDBKey(table, keys[i]);
                 if (m_dataEncryption)
                 {
-                    encryptedValues[i] = m_dataEncryption->encrypt(values[i]);
+                    encryptedValues[i] = m_dataEncryption->encrypt(std::string(values[i]));
                 }
             }
         });
@@ -487,11 +515,11 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         // Storage Security
         if (m_dataEncryption)
         {
-            writeBatch.Put(std::move(realKeys[i]), std::move(encryptedValues[i]));
+            writeBatch.Put(realKeys[i], encryptedValues[i]);
         }
         else
         {
-            writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+            writeBatch.Put(realKeys[i], values[i]);
         }
     }
     WriteOptions options;

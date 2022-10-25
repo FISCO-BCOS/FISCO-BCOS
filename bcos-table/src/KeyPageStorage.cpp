@@ -237,7 +237,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
         const std::string_view& table, const std::string_view& key, const Entry& entry)>
         callback) const
 {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size(), 32),
         [this, &onlyDirty, &callback](const tbb::blocked_range<size_t>& range) {
             for (auto i = range.begin(); i != range.end(); ++i)
             {
@@ -355,8 +355,8 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> cryp
 {
     bcos::crypto::HashType pagesHash(0);
     bcos::crypto::HashType entriesHash(0);
-    int64_t pageCount = 0;
-    int64_t entrycount = 0;
+    std::atomic_int64_t pageCount = 0;
+    std::atomic_int64_t entrycount = 0;
     std::vector<const Data*> allData;
     for (size_t i = 0; i < m_buckets.size(); ++i)
     {
@@ -369,6 +369,8 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> cryp
     std::mutex mutex;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, allData.size()),
         [&](const tbb::blocked_range<size_t>& range) {
+            bcos::crypto::HashType localPagesHash;
+            bcos::crypto::HashType localEntriesHash;
             for (size_t i = range.begin(); i != range.end(); ++i)
             {
                 const auto* data = allData[i];
@@ -379,8 +381,7 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> cryp
                     {
                         const auto* page = &std::get<0>(data->data);
                         auto pageHash = page->hash(data->table, hashImpl, m_blockVersion);
-                        std::lock_guard<std::mutex> lock(mutex);
-                        pagesHash ^= pageHash;
+                        localPagesHash ^= pageHash;
                         ++pageCount;
                     }
                     else
@@ -388,12 +389,14 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> cryp
                         auto hash = hashImpl->hash(data->table);
                         hash ^= hashImpl->hash(data->key);
                         hash ^= entry.hash(data->table, data->key, hashImpl, m_blockVersion);
-                        std::lock_guard<std::mutex> lock(mutex);
-                        entriesHash ^= hash;
+                        localEntriesHash ^= hash;
                         ++entrycount;
                     }
                 }
             }
+            std::lock_guard<std::mutex> lock(mutex);
+            pagesHash ^= localPagesHash;
+            entriesHash ^= localEntriesHash;
         });
     bcos::crypto::HashType totalHash(0);
     totalHash ^= pagesHash;

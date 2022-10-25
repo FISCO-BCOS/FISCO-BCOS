@@ -522,8 +522,8 @@ void TiKVStorage::asyncRollback(
     }
 }
 
-bcos::Error::Ptr TiKVStorage::setRows(
-    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::string_view> keys,
+    std::vector<std::string_view> values) noexcept
 {
     try
     {

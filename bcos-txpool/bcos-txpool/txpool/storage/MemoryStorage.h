@@ -23,6 +23,7 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <tbb/task_group.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
 namespace bcos
@@ -115,7 +116,7 @@ protected:
         bcos::protocol::TransactionStatus _status,
         bcos::protocol::TxSubmitCallback _txSubmitCallback);
 
-    virtual void notifyTxResult(bcos::protocol::Transaction::ConstPtr _tx,
+    virtual void notifyTxResult(bcos::protocol::Transaction const& _tx,
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult);
 
     virtual void removeInvalidTxs();

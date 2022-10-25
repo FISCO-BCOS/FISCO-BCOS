@@ -236,12 +236,15 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // hash 2 receipts
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
+
+    std::vector<std::tuple<bcos::crypto::HashType, Entry>> receiptDatas(block->receiptsSize());
     tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
-        [&storage, &transactionsBlock, &block, &failedCount, &totalCount, &setRowCallback](
+        [&transactionsBlock, &block, &failedCount, &totalCount, &receiptDatas](
             const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto hash = transactionsBlock->transactionHash(i);
+                auto& [hash, entry] = receiptDatas[i];
+                hash = transactionsBlock->transactionHash(i);
 
                 auto receipt = block->receipt(i);
                 if (receipt->status() != 0)
@@ -253,14 +256,17 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 bytes receiptBuffer;
                 receipt->encode(receiptBuffer);
 
-                Entry receiptEntry;
-                receiptEntry.importFields({std::move(receiptBuffer)});
-                storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash),
-                    std::move(receiptEntry), [setRowCallback](auto&& error) {
-                        setRowCallback(std::forward<decltype(error)>(error));
-                    });
+                entry.importFields({std::move(receiptBuffer)});
             }
         });
+
+    for (auto& [hash, entry] : receiptDatas)
+    {
+        storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash),
+            std::move(entry), [setRowCallback](auto&& error) {
+                setRowCallback(std::forward<decltype(error)>(error));
+            });
+    }
 
     LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
@@ -353,16 +359,14 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
     }
 
     auto total = _txToStore->size();
-    std::vector<std::string> keys(total);
-    std::vector<std::string> values(total);
+    std::vector<std::string_view> keys(total);
+    std::vector<std::string_view> values(total);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto& binHash = _txHashList->at(i);
-                keys[i].assign(binHash.begin(), binHash.end());
-                values[i] =
-                    std::string((char*)(_txToStore->at(i)->data()), _txToStore->at(i)->size());
+                keys[i] = bcos::concepts::bytebuffer::toView((*_txHashList)[i]);
+                values[i] = bcos::concepts::bytebuffer::toView((*(*_txToStore)[i]));
             }
         });
     // Note: transactions must be submitted serially, because transaction submissions are

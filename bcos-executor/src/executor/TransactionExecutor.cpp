@@ -73,7 +73,6 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
-#include <tbb/spin_mutex.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -825,47 +824,48 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
     bool isStaticCall = true;
 
     std::mutex writeMutex;
-    tbb::parallel_for(tbb::blocked_range<size_t>(0U, inputs.size()), [&, this](auto const& range) {
-        for (auto i = range.begin(); i < range.end(); ++i)
-        {
-            auto& params = inputs[i];
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0U, inputs.size(), 32), [&, this](auto const& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                auto& params = inputs[i];
 
-            if (!params->staticCall())
-            {
-                isStaticCall = false;
-            }
+                if (!params->staticCall())
+                {
+                    isStaticCall = false;
+                }
 
-            switch (params->type())
-            {
-            case ExecutionMessage::TXHASH:
-            {
-                std::unique_lock lock(writeMutex);
-                txHashes->emplace_back(params->transactionHash());
-                indexes.emplace_back(i);
-                fillInputs->emplace_back(std::move(params));
+                switch (params->type())
+                {
+                case ExecutionMessage::TXHASH:
+                {
+                    std::unique_lock lock(writeMutex);
+                    txHashes->emplace_back(params->transactionHash());
+                    indexes.emplace_back(i);
+                    fillInputs->emplace_back(std::move(params));
 
-                break;
+                    break;
+                }
+                case ExecutionMessage::MESSAGE:
+                case bcos::protocol::ExecutionMessage::REVERT:
+                case bcos::protocol::ExecutionMessage::FINISHED:
+                case bcos::protocol::ExecutionMessage::KEY_LOCK:
+                {
+                    callParametersList->at(i) = createCallParameters(*params, params->staticCall());
+                    break;
+                }
+                default:
+                {
+                    auto message =
+                        (boost::format("Unsupported message type: %d") % params->type()).str();
+                    EXECUTOR_NAME_LOG(ERROR)
+                        << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
+                    // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
+                    break;
+                }
+                }
             }
-            case ExecutionMessage::MESSAGE:
-            case bcos::protocol::ExecutionMessage::REVERT:
-            case bcos::protocol::ExecutionMessage::FINISHED:
-            case bcos::protocol::ExecutionMessage::KEY_LOCK:
-            {
-                callParametersList->at(i) = createCallParameters(*params, params->staticCall());
-                break;
-            }
-            default:
-            {
-                auto message =
-                    (boost::format("Unsupported message type: %d") % params->type()).str();
-                EXECUTOR_NAME_LOG(ERROR)
-                    << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
-                // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
-                break;
-            }
-            }
-        }
-    });
+        });
 
     if (isStaticCall)
     {

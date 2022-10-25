@@ -41,9 +41,6 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <iterator>
 #include <stdexcept>
 #include <string>

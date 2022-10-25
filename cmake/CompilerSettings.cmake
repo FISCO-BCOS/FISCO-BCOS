@@ -77,8 +77,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
     if(USE_LD_GOLD)
         execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
