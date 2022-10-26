@@ -75,10 +75,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -97,14 +94,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -280,6 +271,10 @@ inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
 inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
 {
     bcostars::LedgerConfig ledgerConfig;
+    if (!_ledgerConfig)
+    {
+        return ledgerConfig;
+    }
     auto hash = _ledgerConfig->hash().asBytes();
     ledgerConfig.hash.assign(hash.begin(), hash.end());
     ledgerConfig.blockNumber = _ledgerConfig->blockNumber();
