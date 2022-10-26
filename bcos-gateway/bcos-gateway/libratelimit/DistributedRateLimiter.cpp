@@ -110,7 +110,6 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
     }
 
     // request redis to update local cache
-    // TODO: make m_localCachePermits param
     int64_t permits = m_maxPermits / 100 * m_localCachePermits;
     if (requestRedis(permits > _requiredPermits ? permits : _requiredPermits) >= 0)
     {
@@ -212,6 +211,8 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
             m_stat.updateMore1MS();
         }
 
+        m_stat.lastRequestTotalCostMS += (end - start);
+
         return result;
     }
     catch (const std::exception& e)
@@ -228,25 +229,34 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
     }
 }
 
+/**
+ * @brief
+ *
+ */
+void DistributedRateLimiter::stat()
+{
+    GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_BADGE("stat")
+                       << LOG_BADGE(m_rateLimiterKey) << LOG_KV("totalC", m_stat.totalRequestRedis)
+                       << LOG_KV("totalExpC", m_stat.totalRequestRedisExp)
+                       << LOG_KV("totalFailedC", m_stat.totalRequestRedisFailed)
+                       << LOG_KV("totalMore1MSC", m_stat.totalRequestRedisMore1MS)
+                       << LOG_KV("lastC", m_stat.lastRequestRedis)
+                       << LOG_KV("lastExpC", m_stat.lastRequestRedisExp)
+                       << LOG_KV("lastFailedC", m_stat.lastRequestRedisFailed)
+                       << LOG_KV("lastMore1MSC", m_stat.lastRequestRedisMore1MS)
+                       << LOG_KV("lastTotalCostMS", m_stat.lastRequestTotalCostMS);
+
+    m_stat.resetLast();
+    m_statTimer->restart();
+}
+
 void DistributedRateLimiter::refreshLocalCache()
 {
     {
-        GATEWAY_LOG(INFO) << LOG_BADGE("DistributedRateLimiter") << LOG_BADGE(m_rateLimiterKey)
-                          << LOG_KV("totalC", m_stat.totalRequestRedis)
-                          << LOG_KV("totalExpC", m_stat.totalRequestRedisExp)
-                          << LOG_KV("totalFailedC", m_stat.totalRequestRedisFailed)
-                          << LOG_KV("totalMore1MSC", m_stat.totalRequestRedisMore1MS)
-                          << LOG_KV("lastC", m_stat.lastRequestRedis)
-                          << LOG_KV("lastExpC", m_stat.lastRequestRedisExp)
-                          << LOG_KV("lastFailedC", m_stat.lastRequestRedisFailed)
-                          << LOG_KV("lastMore1MSC", m_stat.lastRequestRedisMore1MS);
-
         std::lock_guard<std::mutex> lock(x_localCache);
         m_localCachePermits = 0;
         m_localCachePercent = 0;
         m_lastFailedPermit = 0;
-
-        m_stat.resetLast();
     }
 
     m_clearCacheTimer->restart();

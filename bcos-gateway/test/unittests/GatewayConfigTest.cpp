@@ -192,7 +192,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-        BOOST_CHECK(!rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
     }
 
     {
@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
         BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
 
@@ -257,14 +257,14 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
 
         BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
         BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
 

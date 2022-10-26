@@ -181,9 +181,17 @@ void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dat
 void RateLimiterStat::updateInComing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize)
 {
-    std::ignore = _moduleID;
     if (_groupID.empty())
-    {
+    {  // amop
+        if (_moduleID != 0)
+        {
+            std::string moduleKey = toModuleKey(_moduleID);
+            std::lock_guard<std::mutex> lock(m_inLock);
+
+            auto& moduleInStat = m_inStat[moduleKey];
+            moduleInStat.update(_dataSize);
+        }
+
         return;
     }
 
@@ -195,60 +203,47 @@ void RateLimiterStat::updateInComing(
 
     auto& groupInStat = m_inStat[groupKey];
     groupInStat.update(_dataSize);
-
-    /*
-    if (_moduleID != 0)
-    {
-        std::string moduleKey = toModuleKey(_moduleID);
-        std::lock_guard<std::mutex> l(m_inLock);
-
-        auto& moduleInStat = m_inStat[moduleKey];
-        moduleInStat.update(_dataSize);
-    }
-    */
 }
 
 void RateLimiterStat::updateOutGoing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
-    std::ignore = _moduleID;
-    if (!_groupID.empty())
+    if (_groupID.empty())
     {
-        std::string groupKey = toGroupKey(_groupID);
-        std::lock_guard<std::mutex> lock(m_outLock);
-
-        auto& groupOutStat = m_outStat[groupKey];
-        if (suc)
+        if (_moduleID != 0)
         {
-            // update total outgoing
-            groupOutStat.update(_dataSize);
-        }
-        else
-        {
-            groupOutStat.updateFailed();
-        }
-    }
+            std::string moduleKey = toModuleKey(_moduleID);
+            std::lock_guard<std::mutex> lock(m_outLock);
 
-    /*
-    if (_moduleID != 0)
-    {
-        std::string moduleKey = toModuleKey(_moduleID);
-        std::lock_guard<std::mutex> l(m_outLock);
-
-        auto& moduleOutStat = m_outStat[moduleKey];
-        moduleOutStat.update(_dataSize);
-
-        if (suc)
-        {
-            // update total outgoing
+            auto& moduleOutStat = m_outStat[moduleKey];
             moduleOutStat.update(_dataSize);
+
+            if (suc)
+            {
+                // update total outgoing
+                moduleOutStat.update(_dataSize);
+            }
+            else
+            {
+                moduleOutStat.updateFailed();
+            }
         }
-        else
-        {
-            moduleOutStat.updateFailed();
-        }
+        return;
     }
-    */
+
+    std::string groupKey = toGroupKey(_groupID);
+    std::lock_guard<std::mutex> lock(m_outLock);
+
+    auto& groupOutStat = m_outStat[groupKey];
+    if (suc)
+    {
+        // update total outgoing
+        groupOutStat.update(_dataSize);
+    }
+    else
+    {
+        groupOutStat.updateFailed();
+    }
 }
 
 void RateLimiterStat::flushStat()

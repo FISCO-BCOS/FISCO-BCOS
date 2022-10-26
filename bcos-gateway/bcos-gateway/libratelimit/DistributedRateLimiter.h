@@ -72,6 +72,10 @@ public:
             m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
             m_clearCacheTimer->start();
         }
+
+        m_statTimer = std::make_shared<Timer>(60000);
+        m_statTimer->registerTimeoutHandler([this]() { stat(); });
+        m_statTimer->start();
     }
 
     DistributedRateLimiter(DistributedRateLimiter&&) = delete;
@@ -84,6 +88,11 @@ public:
         if (m_clearCacheTimer)
         {
             m_clearCacheTimer->stop();
+        }
+
+        if (m_statTimer)
+        {
+            m_statTimer->stop();
         }
     }
 
@@ -102,12 +111,15 @@ public:
         std::atomic<int64_t> totalRequestRedisMore1MS = 0;
         std::atomic<int64_t> lastRequestRedisMore1MS = 0;
 
+        std::atomic<int64_t> lastRequestTotalCostMS = 0;
+
         void resetLast()
         {
             lastRequestRedis = 0;
             lastRequestRedisFailed = 0;
             lastRequestRedisExp = 0;
             lastRequestRedisMore1MS = 0;
+            lastRequestTotalCostMS = 0;
         }
 
         void updateOk()
@@ -186,6 +198,12 @@ public:
      */
     void refreshLocalCache();
 
+    /**
+     * @brief
+     *
+     */
+    void stat();
+
 public:
     int64_t maxPermits() const { return m_maxPermits; }
     int64_t interval() const { return m_interval; }
@@ -219,6 +237,8 @@ private:
     int64_t m_lastFailedPermit = 0;
     // clear local cache info periodically
     std::shared_ptr<bcos::Timer> m_clearCacheTimer = nullptr;
+    // stat info periodically
+    std::shared_ptr<bcos::Timer> m_statTimer = nullptr;
 };
 
 }  // namespace ratelimiter
