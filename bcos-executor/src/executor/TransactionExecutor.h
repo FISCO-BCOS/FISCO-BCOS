@@ -39,6 +39,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>
@@ -319,6 +320,8 @@ protected:
     void initWasmEnvironment();
 
     std::function<void()> f_onNeedSwitchEvent;
+
+    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
 };
 
 }  // namespace executor

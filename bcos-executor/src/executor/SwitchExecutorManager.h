@@ -56,7 +56,8 @@ public:
 
     void selfAsyncRefreshExecutor()
     {
-        m_pool.enqueue([this]() { refreshExecutor(m_schedulerTermId + 1); });
+        auto toTermId = m_schedulerTermId + 1;
+        m_pool.enqueue([toTermId, this]() { refreshExecutor(toTermId); });
     }
 
     void triggerSwitch() { selfAsyncRefreshExecutor(); }
