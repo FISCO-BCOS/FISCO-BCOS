@@ -20,7 +20,6 @@
  * @author: ancelmo
  * @date 2021-09-06
  */
-
 #include "Ledger.h"
 #include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
@@ -31,6 +30,7 @@
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/ledger/genesisConfig.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
@@ -1448,7 +1448,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             // GetBlockDataByNumber success but not consistent with initialGenesisData
             if (m_genesisBlockHeader)
             {
-                std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. Initial Genesis Data is :" << std::endl << initialGenesisData << std::endl;
+                std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
+                             "Initial Genesis Data is :"
+                          << std::endl
+                          << initialGenesisData << std::endl;
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "The Genesis Data is inconsistent with the initial Genesis Data"));
