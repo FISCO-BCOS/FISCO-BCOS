@@ -378,6 +378,31 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
                         << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
     if (setCode(std::move(code)))
     {
+        // new logic
+        if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+        {
+            // set abi in abi table
+            auto codeHash =
+                m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH)->getField(0);
+            auto abiTable = m_executive->storage().openTable(bcos::ledger::SYS_CONTRACT_ABI);
+            if (!abiTable)
+            {
+                m_executive->storage().createTable(
+                    std::string(bcos::ledger::SYS_CONTRACT_ABI), std::string(STORAGE_VALUE));
+            }
+            auto hasAbiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
+            if (!hasAbiEntry || hasAbiEntry->get().empty())
+            {
+                Entry abiEntry;
+                abiEntry.importFields({std::move(abi)});
+                m_executive->storage().setRow(
+                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+                return;
+            }
+            else
+                return;
+        }
+        // old logic
         Entry abiEntry;
         abiEntry.importFields({std::move(abi)});
         m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);

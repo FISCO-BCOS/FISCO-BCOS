@@ -1490,8 +1490,48 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                     continue;
                                 }
                                 // get abi json
-                                auto entry = table->getRow(ACCOUNT_ABI);
-                                auto abiStr = entry->getField(0);
+                                // new logic
+                                std::string_view abiStr;
+                                if (m_blockContext->blockVersion() >=
+                                    uint32_t(bcos::protocol::Version::V3_1_VERSION))
+                                {
+                                    // get codehash
+                                    auto entry = table->getRow(ACCOUNT_CODE_HASH);
+                                    if (!entry || entry->get().empty())
+                                    {
+                                        EXECUTOR_NAME_LOG(ERROR)
+                                            << "No codeHash found, please deploy first ";
+                                        continue;
+                                    }
+                                    std::string_view codeHashStr = entry->getField(0);
+                                    // get abi according to codeHash
+                                    auto abiTable =
+                                        storage->openTable(bcos::ledger::SYS_CONTRACT_ABI);
+                                    auto abiEntry = abiTable->getRow(codeHashStr);
+                                    if (!abiEntry || abiEntry->get().empty())
+                                    {
+                                        abiEntry = table->getRow(ACCOUNT_ABI);
+                                        if (!abiEntry || abiEntry->get().empty())
+                                        {
+                                            EXECUTOR_NAME_LOG(ERROR)
+                                                << "No ABI found, please deploy first ";
+                                            continue;
+                                        }
+                                    }
+                                    abiStr = abiEntry->getField(0);
+                                }
+                                else
+                                {
+                                    // old logic
+                                    auto entry = table->getRow(ACCOUNT_ABI);
+                                    if (!entry || entry->get().empty())
+                                    {
+                                        EXECUTOR_NAME_LOG(ERROR)
+                                            << "No ABI found, please deploy first ";
+                                        continue;
+                                    }
+                                    abiStr = entry->getField(0);
+                                }
                                 bool isSmCrypto =
                                     m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash;
 
@@ -1862,9 +1902,7 @@ void TransactionExecutor::getCode(
     std::string codeKey = "code";
     if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
-        std::string codeHash;
-        getCodeHash(contractTableName, stateStorage, codeHash);
-        codeKey = codeHash;
+        getCodeHash(contractTableName, stateStorage, codeKey);
         tableName = bcos::ledger::SYS_CODE_BINARY;
         stateStorage->asyncGetRow(tableName, codeKey,
             [this, contractTableName, callback = std::move(callback)](
@@ -1980,37 +2018,92 @@ void TransactionExecutor::getABI(
         stateStorage = createStateStorage(m_backendStorage, true);
     }
 
-    auto tableName = getContractTableName(contract);
-    stateStorage->asyncGetRow(tableName, ACCOUNT_ABI,
-        [this, callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
-            if (!m_isRunning)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(
-                             ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                    {});
-                return;
-            }
+    std::string contractTableName = getContractTableName(contract);
+    std::string tableName = contractTableName;
 
-            if (error)
-            {
-                EXECUTOR_NAME_LOG(INFO) << "Get ABI error: " << error->errorMessage();
+    std::string abiKey = "abi";
+    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        getCodeHash(contractTableName, stateStorage, abiKey);
+        tableName = bcos::ledger::SYS_CONTRACT_ABI;
+        stateStorage->asyncGetRow(tableName, abiKey,
+            [this, contractTableName, callback = std::move(callback)](
+                Error::UniquePtr error, std::optional<Entry> entry) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
+                        {});
+                    return;
+                }
 
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
-                return;
-            }
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get ABI error: " << error->errorMessage();
 
-            if (!entry)
-            {
-                EXECUTOR_NAME_LOG(DEBUG) << "Get ABI success, empty ABI";
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
+                    return;
+                }
 
-                callback(nullptr, std::string());
-                return;
-            }
+                if (!entry)
+                {
+                    EXECUTOR_NAME_LOG(DEBUG)
+                        << "Get ABI success, empty abi, try to search in the ABI table";
+                    auto codeEntry = m_blockContext->storage()
+                                         ->openTable(contractTableName)
+                                         ->getRow(ACCOUNT_ABI);
+                    if (!codeEntry || codeEntry->get().empty())
+                    {
+                        callback(nullptr, std::string());
+                        return;
+                    }
+                    else
+                    {
+                        auto abi = entry->getField(0);
+                        EXECUTOR_NAME_LOG(INFO)
+                            << "Get ABI success" << LOG_KV("ABI size", abi.size());
+                        callback(nullptr, std::string(abi));
+                    }
+                }
 
-            auto abi = entry->getField(0);
-            EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
-            callback(nullptr, std::string(abi));
-        });
+                auto abi = entry->getField(0);
+                EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
+                callback(nullptr, std::string(abi));
+            });
+    }
+    else
+    {
+        stateStorage->asyncGetRow(tableName, abiKey,
+            [this, callback = std::move(callback)](
+                Error::UniquePtr error, std::optional<Entry> entry) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
+                        {});
+                    return;
+                }
+
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get ABI error: " << error->errorMessage();
+
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
+                    return;
+                }
+
+                if (!entry)
+                {
+                    EXECUTOR_NAME_LOG(DEBUG) << "Get ABI success, empty ABI";
+
+                    callback(nullptr, std::string());
+                    return;
+                }
+                auto abi = entry->getField(0);
+                EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
+                callback(nullptr, std::string(abi));
+            });
+    }
 }
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
