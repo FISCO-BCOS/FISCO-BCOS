@@ -1430,7 +1430,18 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         // check genesisData whether inconsistent with initialGenesisData
         if (initialGenesisData == _genesisData)
         {
-            return true;
+            auto version = bcos::tool::toVersionNumber(_compatibilityVersion);
+            if (version > (uint32_t)protocol::Version::MAX_VERSION ||
+                version < (uint32_t)protocol::Version::MIN_VERSION)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                          "Current genesis compatibilityVersion is " +
+                                          _compatibilityVersion + ", No support this version"));
+            }
+            else
+            {
+                return true;
+            }
         }
         else
         {

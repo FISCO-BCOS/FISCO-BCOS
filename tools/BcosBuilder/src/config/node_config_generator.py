@@ -116,15 +116,15 @@ class NodeConfigGenerator:
         self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
 
-    def __update_chain_info(self, ini_config, node_config):
-        """
-        update chain info
-        """
-        chain_section = "chain"
-        ini_config[chain_section]["sm_crypto"] = utilities.convert_bool_to_str(
-            node_config.sm_crypto)
-        ini_config[chain_section]["group_id"] = node_config.group_id
-        ini_config[chain_section]["chain_id"] = node_config.chain_id
+    # def __update_chain_info(self, ini_config, node_config):
+    #     """
+    #     update chain info
+    #     """
+    #     chain_section = "chain"
+    #     ini_config[chain_section]["sm_crypto"] = utilities.convert_bool_to_str(
+    #         node_config.sm_crypto)
+    #     ini_config[chain_section]["group_id"] = node_config.group_id
+    #     ini_config[chain_section]["chain_id"] = node_config.chain_id
 
     def __update_service_info(self, ini_config, node_config, node_name, is_build_opr):
         """
