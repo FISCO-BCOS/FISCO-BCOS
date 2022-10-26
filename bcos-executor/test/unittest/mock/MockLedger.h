@@ -104,7 +104,7 @@ public:
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override
     {
-        if (bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION.compare(_key))
+        if (std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION) == std::string(_key))
         {
             std::stringstream ss;
             ss << bcos::protocol::Version::MAX_VERSION;
