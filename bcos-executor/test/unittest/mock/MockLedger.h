@@ -110,6 +110,7 @@ public:
             ss << bcos::protocol::Version::MAX_VERSION;
 
             _onGetConfig(nullptr, ss.str(), m_blockNumber);
+            return;
         }
 
 
