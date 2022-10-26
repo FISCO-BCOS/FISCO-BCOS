@@ -117,7 +117,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
   : m_name(std::move(name)),
-    m_ledger(std::move(ledger)),
+    m_ledger(ledger),
     m_txpool(std::move(txpool)),
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
@@ -126,11 +126,13 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
     m_keyPageSize(keyPageSize),
-    m_keyPageIgnoreTables(std::move(keyPageIgnoreTables))
+    m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
+    m_ledgerFetcher(std::make_shared<bcos::tool::LedgerConfigFetcher>(ledger))
 {
     assert(m_backendStorage);
 
-    m_blockVersion = m_lastCommittedBlockHeader->version();
+    m_ledgerFetcher->fetchCompatibilityVersion();
+    m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -473,7 +475,6 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     case protocol::ExecutionMessage::MESSAGE:
     {
         auto blockHeader = m_lastCommittedBlockHeader;
-
         if (!blockHeader)
         {
             auto message = "dmcCall could not get current block header, contextID: " +
@@ -499,8 +500,8 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(blockHeader->number(), blockHeader->hash(),
-            blockHeader->timestamp(), blockHeader->version(), std::move(storage));
+        blockContext = createBlockContextForCall(
+            blockHeader->number() + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -677,8 +678,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto storage = createStateStorage(std::move(prev), true);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(blockHeader->number(), blockHeader->hash(),
-            blockHeader->timestamp(), blockHeader->version(), std::move(storage));
+        blockContext = createBlockContextForCall(
+            blockHeader->number() + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1716,6 +1717,8 @@ void TransactionExecutor::commit(
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
+        m_ledgerFetcher->fetchCompatibilityVersion();
+        m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
 
         removeCommittedState();
 

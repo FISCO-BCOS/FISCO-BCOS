@@ -308,7 +308,6 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
             std::make_shared<std::promise<bcos::protocol::TransactionsPtr>>();
         txPool->asyncFillBlock(
             txHashes, [txsPromise](Error::Ptr error, bcos::protocol::TransactionsPtr txs) {
-                boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
                 if (!txsPromise)
                 {
                     return;
