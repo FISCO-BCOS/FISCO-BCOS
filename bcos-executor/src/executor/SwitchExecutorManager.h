@@ -13,6 +13,8 @@ namespace bcos::executor
 class SwitchExecutorManager : public executor::ParallelTransactionExecutorInterface
 {
 public:
+    using Ptr = std::shared_ptr<SwitchExecutorManager>;
+
     const int64_t INIT_SCHEDULER_TERM_ID = 0;
     const int64_t STOPPED_TERM_ID = -1;
 

@@ -48,8 +48,8 @@ class TiKVStorage : public TransactionalStorageInterface
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
     explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster,
-        std::function<void()> onNeedSwitchEvent, int32_t _commitTimeout = 3000)
-      : m_cluster(_cluster), f_onNeedSwitchEvent(onNeedSwitchEvent), m_commitTimeout(_commitTimeout)
+        int32_t _commitTimeout = 3000)
+      : m_cluster(_cluster), m_commitTimeout(_commitTimeout)
     {}
 
     virtual ~TiKVStorage() {}
@@ -83,6 +83,11 @@ public:
 
     Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
         std::vector<std::string> values) noexcept override;
+
+    void setSwitchHandler(std::function<void()> _onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = _onNeedSwitchEvent;
+    }
 
 private:
     void triggerSwitch();

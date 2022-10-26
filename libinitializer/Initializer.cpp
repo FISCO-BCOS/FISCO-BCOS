@@ -144,6 +144,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
+
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
@@ -156,20 +158,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-
-        auto onSwitchHandler = [switchExecutorManager = m_switchExecutorManager]() {
-            if (switchExecutorManager.lock())
-            {
-                switchExecutorManager.lock()->triggerSwitch();
-            }
-        };
-
-        storage =
-            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath, m_nodeConfig->pdCaPath(),
-                m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath(), onSwitchHandler);
-        schedulerStorage =
-            StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath, m_nodeConfig->pdCaPath(),
-                m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath(), onSwitchHandler);
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
         consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
 #endif
@@ -219,6 +211,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_scheduler =
         std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
 
+    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    {
+#ifdef WITH_TIKV
+        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr = m_scheduler;
+        auto switchHandler = [scheduler = schedulerWeakPtr]() {
+            if (scheduler.lock())
+            {
+                scheduler.lock()->triggerSwitch();
+            }
+        };
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
+            ->setSwitchHandler(switchHandler);
+#endif
+    }
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
@@ -338,9 +345,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto transactionPool =
                 std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
                     m_protocolInitializer->cryptoSuite(), txpool);
-            auto scheduler =
-                std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
-                    m_scheduler, m_protocolInitializer->cryptoSuite());
+            auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<
+                std::shared_ptr<bcos::scheduler::SchedulerInterface>>>(
+                m_scheduler, m_protocolInitializer->cryptoSuite());
 
             m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
             m_lightNodeInitializer->initLedgerServer(
