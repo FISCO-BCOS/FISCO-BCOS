@@ -13,6 +13,7 @@ import sys
 from common.utilities import execute_command_and_getoutput
 from common.utilities import mkdir
 
+
 class NodeConfigGenerator:
     """
     the common node config generator
@@ -39,6 +40,13 @@ class NodeConfigGenerator:
         config_content = configparser.ConfigParser(
             comment_prefixes='/', allow_no_value=True)
         config_content.read(self.genesis_tpl_config)
+        chain_section = "chain"
+        config_content[chain_section]["sm_crypto"] = utilities.convert_bool_to_str(
+            group_config.genesis_config.sm_crypto)
+        config_content[chain_section]["group_id"] = str(
+            group_config.genesis_config.group_id)
+        config_content[chain_section]["chain_id"] = str(
+            group_config.genesis_config.chain_id)
         consensus_section = "consensus"
         config_content[consensus_section]["consensus_type"] = group_config.genesis_config.consensus_type
         config_content[consensus_section]["block_tx_count_limit"] = str(
@@ -65,6 +73,10 @@ class NodeConfigGenerator:
             group_config.genesis_config.auth_check)
         config_content[executor_section]["auth_admin_account"] = group_config.genesis_config.init_auth_address
 
+        utilities.log_info("* chain_id: %s" %
+                           config_content[chain_section]["group_id"])
+        utilities.log_info("* group_id: %s" %
+                           config_content[chain_section]["chain_id"])
         utilities.log_info("* consensus_type: %s" %
                            config_content[consensus_section]["consensus_type"])
         utilities.log_info("* block_tx_count_limit: %s" %
@@ -413,9 +425,11 @@ class NodeConfigGenerator:
         index = self.__get_tars_proxy_conf_section_index("pbft", tars_proxy_config)
         tars_proxy_config["pbft"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 2)
         
-        index = self.__get_tars_proxy_conf_section_index("ledger", tars_proxy_config)
-        tars_proxy_config["ledger"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3)
-        
+        index = self.__get_tars_proxy_conf_section_index(
+            "ledger", tars_proxy_config)
+        tars_proxy_config["ledger"]["proxy." + str(
+            index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 3)
+
         index = self.__get_tars_proxy_conf_section_index("front", tars_proxy_config)
         tars_proxy_config["front"]["proxy." + str(index)] = service_config.deploy_ip + ":" + str(service_config.tars_listen_port + 4)
         
