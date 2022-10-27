@@ -654,7 +654,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto blockHeader = m_lastCommittedBlockHeader;
         if (!blockHeader)
         {
-            auto message = "dmcCall could not get current block header, contextID: " +
+            auto message = "call could not get current block header, contextID: " +
                            boost::lexical_cast<std::string>(input->contextID()) +
                            " seq: " + boost::lexical_cast<std::string>(input->seq());
             EXECUTOR_NAME_LOG(ERROR) << message;
