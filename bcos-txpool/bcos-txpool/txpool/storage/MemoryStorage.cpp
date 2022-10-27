@@ -518,50 +518,6 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         lockT = utcTime() - startT;
     }
 
-    // {
-    //     // batch remove
-    //     WriteGuard lock(x_txpoolMutex);
-
-    //     auto it = txsResult.begin();
-    //     tbb::parallel_pipeline(txsResult.size(),
-    //         tbb::make_filter<void, std::tuple<Transaction::ConstPtr,
-    //         TransactionSubmitResult::Ptr>>(
-    //             tbb::filter::serial,
-    //             [this, &txsResult, &it, &nonceList, &succCount](tbb::flow_control& control)
-    //                 -> std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr> {
-    //                 if (it == txsResult.end())
-    //                 {
-    //                     control.stop();
-    //                     return {};
-    //                 }
-    //                 auto const& txResult = *it;
-    //                 auto tx = removeWithoutLock(txResult->txHash());
-
-    //                 if (!tx && txResult->nonce() != NonceType(-1))
-    //                 {
-    //                     nonceList->emplace_back(txResult->nonce());
-    //                 }
-    //                 else if (tx)
-    //                 {
-    //                     ++succCount;
-    //                     nonceList->emplace_back(tx->nonce());
-    //                 }
-
-    //                 ++it;
-    //                 return {std::move(tx), txResult};
-    //             }) &
-    //             tbb::make_filter<std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr>,
-    //                 void>(tbb::filter::parallel,
-    //                 [this](std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr> input)
-    //                 {
-    //                     auto& [tx, txResult] = input;
-    //                     if (tx)
-    //                     {
-    //                         notifyTxResult(*tx, std::move(txResult));
-    //                     }
-    //                 }));
-    // }
-
     m_onChainTxsCount += txsResult.size();
     // stop stat the tps when there has no pending txs
     if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
