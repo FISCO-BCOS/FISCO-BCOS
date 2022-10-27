@@ -879,6 +879,7 @@ void BlockExecutive::DMCExecute(
             if (error || status == DmcExecutor::Status::ERROR)
             {
                 batchStatus->error++;
+                batchStatus->errorMessage = error.get()->errorMessage();
                 SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("DmcExecutor")
                                      << "dmcExecutor->go() with error"
                                      << LOG_KV("code", error ? error->errorCode() : -1)
@@ -934,9 +935,10 @@ void BlockExecutive::DMCExecute(
 
             if (batchStatus->error != 0)
             {
-                DMC_LOG(ERROR) << BLOCK_NUMBER(number()) << "DMCExecute with errors: "
-                               << (error ? error->errorMessage() : "null");
-                callback(std::move(error), nullptr, m_isSysBlock);
+                DMC_LOG(ERROR) << BLOCK_NUMBER(number())
+                               << "DMCExecute with errors: " << batchStatus->errorMessage;
+                callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::DMCError, batchStatus->errorMessage),
+                    nullptr, m_isSysBlock);
             }
             else if (batchStatus->paused != 0)  // new contract
             {
