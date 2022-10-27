@@ -1835,32 +1835,6 @@ void TransactionExecutor::reset(std::function<void(bcos::Error::Ptr)> callback)
     callback(nullptr);
 }
 
-void TransactionExecutor::getCodeHash(std::string_view tableName,
-    storage::StateStorageInterface::Ptr stateStorage, std::string& codeHash)
-{
-    GetRowResponse value;
-    stateStorage->asyncGetRow(
-        tableName, ACCOUNT_CODE_HASH, [&value](auto&& error, auto&& entry) mutable {
-            value = {std::move(error), std::move(entry)};
-        });
-
-    auto& [error, entry] = value;
-
-    if (error)
-    {
-        BOOST_THROW_EXCEPTION(*error);
-    }
-    if (!entry)
-    {
-        EXECUTOR_NAME_LOG(DEBUG) << "Get codeHashs success, empty codeHash";
-    }
-    else
-    {
-        auto codeHashStr = entry->getField(0);
-        codeHash = h256(std::string(codeHashStr), FixedBytes<32>::StringDataType::FromBinary).hex();
-    }
-}
-
 void TransactionExecutor::getCode(
     std::string_view contract, std::function<void(bcos::Error::Ptr, bcos::bytes)> callback)
 {
@@ -1897,68 +1871,11 @@ void TransactionExecutor::getCode(
     }
 
     std::string contractTableName = getContractTableName(contract);
-    std::string tableName = contractTableName;
 
-    std::string codeKey = "code";
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
-    {
-        getCodeHash(contractTableName, stateStorage, codeKey);
-        tableName = bcos::ledger::SYS_CODE_BINARY;
-        stateStorage->asyncGetRow(tableName, codeKey,
-            [this, contractTableName, callback = std::move(callback)](
-                Error::UniquePtr error, std::optional<Entry> entry) {
-                if (!m_isRunning)
-                {
-                    callback(BCOS_ERROR_UNIQUE_PTR(
-                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                        {});
-                    return;
-                }
-
-                if (error)
-                {
-                    EXECUTOR_NAME_LOG(INFO) << "Get code error: " << error->errorMessage();
-
-                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
-                    return;
-                }
-
-                if (!entry)
-                {
-                    EXECUTOR_NAME_LOG(DEBUG)
-                        << "Get code success, empty code, try to search in the contract table";
-
-                    auto codeEntry = m_blockContext->storage()
-                                         ->openTable(contractTableName)
-                                         ->getRow(ACCOUNT_CODE);
-                    if (!codeEntry || codeEntry->get().empty())
-                    {
-                        callback(nullptr, bcos::bytes());
-                        return;
-                    }
-                    else
-                    {
-                        auto code = codeEntry->getField(0);
-                        EXECUTOR_NAME_LOG(INFO)
-                            << "Get code success" << LOG_KV("code size", code.size());
-
-                        auto codeBytes = bcos::bytes(code.begin(), code.end());
-                        callback(nullptr, std::move(codeBytes));
-                        return;
-                    }
-                }
-
-                auto code = entry->getField(0);
-                EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
-
-                auto codeBytes = bcos::bytes(code.begin(), code.end());
-                callback(nullptr, std::move(codeBytes));
-            });
-    }
-    else
-    {
-        stateStorage->asyncGetRow(tableName, codeKey,
-            [this, callback = std::move(callback)](
+    auto getCodeFromContractTable = [stateStorage, this](std::string_view contractTableName,
+                                        decltype(callback) _callback) {
+        stateStorage->asyncGetRow(contractTableName, ACCOUNT_CODE,
+            [this, callback = std::move(_callback)](
                 Error::UniquePtr error, std::optional<Entry> entry) {
                 if (!m_isRunning)
                 {
@@ -1990,7 +1907,50 @@ void TransactionExecutor::getCode(
                 auto codeBytes = bcos::bytes(code.begin(), code.end());
                 callback(nullptr, std::move(codeBytes));
             });
+    };
+    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        auto codeHash = getCodeHash(contractTableName, stateStorage);
+        // asyncGetRow key should not be empty
+        auto codeKey = codeHash.empty() ? ACCOUNT_CODE : codeHash;
+        // try to get abi from SYS_CODE_BINARY first
+        stateStorage->asyncGetRow(bcos::ledger::SYS_CODE_BINARY, codeKey,
+            [this, contractTableName, callback = std::move(callback),
+                getCodeFromContractTable = std::move(getCodeFromContractTable)](
+                Error::UniquePtr error, std::optional<Entry> entry) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
+                        {});
+                    return;
+                }
+
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get code error: " << error->errorMessage();
+
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get code error", *error), {});
+                    return;
+                }
+
+                if (!entry)
+                {
+                    EXECUTOR_NAME_LOG(DEBUG)
+                        << "Get code success, empty code, try to search in the contract table";
+                    getCodeFromContractTable(contractTableName, std::move(callback));
+                    return;
+                }
+
+                auto code = entry->getField(0);
+                EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
+
+                auto codeBytes = bcos::bytes(code.begin(), code.end());
+                callback(nullptr, std::move(codeBytes));
+            });
+        return;
     }
+    getCodeFromContractTable(contractTableName, std::move(callback));
 }
 
 void TransactionExecutor::getABI(
@@ -2019,62 +1979,10 @@ void TransactionExecutor::getABI(
     }
 
     std::string contractTableName = getContractTableName(contract);
-    std::string tableName = contractTableName;
-
-    std::string abiKey = "abi";
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
-    {
-        getCodeHash(contractTableName, stateStorage, abiKey);
-        tableName = bcos::ledger::SYS_CONTRACT_ABI;
-        stateStorage->asyncGetRow(tableName, abiKey,
-            [this, contractTableName, callback = std::move(callback)](
-                Error::UniquePtr error, std::optional<Entry> entry) {
-                if (!m_isRunning)
-                {
-                    callback(BCOS_ERROR_UNIQUE_PTR(
-                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
-                        {});
-                    return;
-                }
-
-                if (error)
-                {
-                    EXECUTOR_NAME_LOG(INFO) << "Get ABI error: " << error->errorMessage();
-
-                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
-                    return;
-                }
-
-                if (!entry)
-                {
-                    EXECUTOR_NAME_LOG(DEBUG)
-                        << "Get ABI success, empty abi, try to search in the ABI table";
-                    auto codeEntry = m_blockContext->storage()
-                                         ->openTable(contractTableName)
-                                         ->getRow(ACCOUNT_ABI);
-                    if (!codeEntry || codeEntry->get().empty())
-                    {
-                        callback(nullptr, std::string());
-                        return;
-                    }
-                    else
-                    {
-                        auto abi = entry->getField(0);
-                        EXECUTOR_NAME_LOG(INFO)
-                            << "Get ABI success" << LOG_KV("ABI size", abi.size());
-                        callback(nullptr, std::string(abi));
-                    }
-                }
-
-                auto abi = entry->getField(0);
-                EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
-                callback(nullptr, std::string(abi));
-            });
-    }
-    else
-    {
-        stateStorage->asyncGetRow(tableName, abiKey,
-            [this, callback = std::move(callback)](
+    auto getAbiFromContractTable = [stateStorage, this](std::string_view contractTableName,
+                                       decltype(callback) _callback) {
+        stateStorage->asyncGetRow(contractTableName, ACCOUNT_ABI,
+            [this, callback = std::move(_callback)](
                 Error::UniquePtr error, std::optional<Entry> entry) {
                 if (!m_isRunning)
                 {
@@ -2103,7 +2011,49 @@ void TransactionExecutor::getABI(
                 EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
                 callback(nullptr, std::string(abi));
             });
+    };
+    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        auto codeHash = getCodeHash(contractTableName, stateStorage);
+        // asyncGetRow key should not be empty
+        std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
+        // try to get abi from SYS_CONTRACT_ABI first
+        stateStorage->asyncGetRow(bcos::ledger::SYS_CONTRACT_ABI, abiKey,
+            [this, contractTableName, callback = std::move(callback),
+                getAbiFromContractTable = std::move(getAbiFromContractTable)](
+                Error::UniquePtr error, std::optional<Entry> entry) {
+                if (!m_isRunning)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 ExecuteError::STOPPED, "TransactionExecutor is not running"),
+                        {});
+                    return;
+                }
+
+                if (error)
+                {
+                    EXECUTOR_NAME_LOG(INFO) << "Get ABI error: " << error->errorMessage();
+
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
+                    return;
+                }
+
+                // when get abi from SYS_CONTRACT_ABI failed, try to get abi from contract table
+                if (!entry)
+                {
+                    EXECUTOR_NAME_LOG(DEBUG)
+                        << "Get ABI failed, empty entry, try to search in the contract table";
+                    getAbiFromContractTable(contractTableName, callback);
+                    return;
+                }
+
+                auto abi = entry->getField(0);
+                EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
+                callback(nullptr, std::string(abi));
+            });
+        return;
     }
+    getAbiFromContractTable(contractTableName, std::move(callback));
 }
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
@@ -2608,14 +2558,18 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
-        if (m_blockVersion >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
-            m_keyPageIgnoreTables->contains(tool::FS_ROOT))
+        if (m_blockVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
         {
-            for (const auto& _sub : tool::FS_ROOT_SUBS)
+            if (m_keyPageIgnoreTables->contains(tool::FS_ROOT))
             {
-                std::string sub(_sub);
-                m_keyPageIgnoreTables->erase(sub);
+                for (const auto& _sub : tool::FS_ROOT_SUBS)
+                {
+                    std::string sub(_sub);
+                    m_keyPageIgnoreTables->erase(sub);
+                }
             }
+            m_keyPageIgnoreTables->insert(
+                {std::string(ledger::SYS_CODE_BINARY), std::string(ledger::SYS_CONTRACT_ABI)});
         }
         return std::make_shared<bcos::storage::KeyPageStorage>(
             storage, m_keyPageSize, m_blockVersion, m_keyPageIgnoreTables, ignoreNotExist);
@@ -2662,6 +2616,26 @@ protocol::BlockHeader::Ptr TransactionExecutor::getBlockHeaderInStorage(
 
 
     return blockHeaderFuture.get_future().get();
+}
+
+std::string TransactionExecutor::getCodeHash(
+    std::string_view tableName, storage::StateStorageInterface::Ptr const& stateStorage)
+{
+    std::promise<std::string> codeHashPromise;
+    stateStorage->asyncGetRow(
+        tableName, ACCOUNT_CODE_HASH, [&codeHashPromise, this](auto&& error, auto&& entry) mutable {
+            if (error || !entry)
+            {
+                EXECUTOR_NAME_LOG(DEBUG) << "Get codeHashes success, empty codeHash";
+                codeHashPromise.set_value(std::string());
+                return;
+            }
+            auto codeHash =
+                h256(std::string(entry->getField(0)), FixedBytes<32>::StringDataType::FromBinary)
+                    .hex();
+            codeHashPromise.set_value(std::move(codeHash));
+        });
+    return codeHashPromise.get_future().get();
 }
 
 

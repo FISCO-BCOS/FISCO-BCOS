@@ -1380,6 +1380,10 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == mkdirCount);
     }
+
+    // rebuild again
+    rebuildBfs(_number++, (uint32_t)protocol::Version::V3_0_VERSION,
+        (uint32_t)protocol::Version::V3_1_VERSION);
 }
 
 BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
