@@ -42,7 +42,6 @@
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
-#include <tbb/spin_mutex.h>
 #include <boost/function.hpp>
 #include <algorithm>
 #include <cstdint>

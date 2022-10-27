@@ -81,8 +81,8 @@ public:
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) noexcept override;
 
-    Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
-        std::vector<std::string> values) noexcept override;
+    Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
+        std::vector<std::string_view> values) noexcept override;
 
     void setSwitchHandler(std::function<void()> _onNeedSwitchEvent)
     {

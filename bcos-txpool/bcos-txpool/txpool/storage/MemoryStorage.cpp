@@ -19,9 +19,9 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
-#include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
+#include <tbb/pipeline.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <tuple>
@@ -375,16 +375,17 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
 
 Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
 {
-    if (!m_txsTable.count(_txHash))
+    auto it = m_txsTable.find(_txHash);
+    if (it == m_txsTable.end())
     {
         return nullptr;
     }
-    auto tx = m_txsTable.at(_txHash);
+    auto tx = std::move(it->second);
     if (tx && tx->sealed())
     {
-        m_sealedTxsSize--;
+        --m_sealedTxsSize;
     }
-    m_txsTable.unsafe_erase(_txHash);
+    m_txsTable.unsafe_erase(it);
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
     TXPOOL_LOG(DEBUG) << LOG_DESC("remove tx: ") << tx->hash().abridged()
@@ -403,65 +404,51 @@ Transaction::ConstPtr MemoryStorage::remove(HashType const& _txHash)
 }
 
 Transaction::ConstPtr MemoryStorage::removeSubmittedTxWithoutLock(
-    TransactionSubmitResult::Ptr _txSubmitResult, bool _notify)
+    TransactionSubmitResult::Ptr txSubmitResult, bool _notify)
 {
-    auto tx = removeWithoutLock(_txSubmitResult->txHash());
+    auto tx = removeWithoutLock(txSubmitResult->txHash());
     if (!tx)
     {
         return nullptr;
     }
     if (_notify)
     {
-        notifyTxResult(tx, _txSubmitResult);
+        notifyTxResult(*tx, std::move(txSubmitResult));
     }
     return tx;
 }
 
-Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr _txSubmitResult)
+Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr txSubmitResult)
 {
-    auto tx = remove(_txSubmitResult->txHash());
+    auto tx = remove(txSubmitResult->txHash());
     if (!tx)
     {
         return nullptr;
     }
-    notifyTxResult(tx, _txSubmitResult);
+    notifyTxResult(*tx, std::move(txSubmitResult));
     return tx;
 }
 void MemoryStorage::notifyTxResult(
-    Transaction::ConstPtr _tx, TransactionSubmitResult::Ptr _txSubmitResult)
+    Transaction const& transaction, TransactionSubmitResult::Ptr txSubmitResult)
 {
-    if (!_txSubmitResult)
+    const auto& txSubmitCallback = transaction.submitCallback();
+    if (!txSubmitCallback)
     {
         return;
     }
-    if (!_tx->submitCallback())
+
+    auto txHash = transaction.hash();
+    txSubmitResult->setSender(std::string(transaction.sender()));
+    txSubmitResult->setTo(std::string(transaction.to()));
+    try
     {
-        return;
+        txSubmitCallback(nullptr, std::move(txSubmitResult));
     }
-    auto txSubmitCallback = _tx->submitCallback();
-    // notify the transaction result to RPC
-    auto txHash = _tx->hash();
-    _txSubmitResult->setSender(std::string(_tx->sender()));
-    _txSubmitResult->setTo(std::string(_tx->to()));
-    // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
-    // avoid shared_ptr circular reference
-    auto self = weak_from_this();
-    m_notifier->enqueue([self, txHash, _txSubmitResult, txSubmitCallback]() {
-        try
-        {
-            if (!self.lock())
-            {
-                return;
-            }
-            txSubmitCallback(nullptr, _txSubmitResult);
-        }
-        catch (std::exception const& e)
-        {
-            TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed")
-                                << LOG_KV("tx", txHash.abridged())
-                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
+    catch (std::exception const& e)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed") << LOG_KV("tx", txHash.abridged())
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+    }
 }
 
 // TODO: remove this, now just for bug tracing
@@ -495,65 +482,79 @@ void MemoryStorage::printPendingTxs()
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
     m_printed = true;
 }
-void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
+void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults const& txsResult)
 {
     auto startT = utcTime();
-    auto recordT = utcTime();
+    auto recordT = startT;
     int64_t lockT = 0;
-    m_blockNumberUpdatedTime = utcTime();
+    m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
     NonceListPtr nonceList = std::make_shared<NonceList>();
-    {
-        // batch remove
-        WriteGuard l(x_txpoolMutex);
-        lockT = utcTime() - startT;
-        for (auto txResult : _txsResult)
-        {
-            auto tx = removeSubmittedTxWithoutLock(txResult);
 
+    std::vector<std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr>> results;
+    results.reserve(txsResult.size());
+    {
+        WriteGuard lock(x_txpoolMutex);
+        for (const auto& it : txsResult)
+        {
+            auto const& txResult = it;
+            auto tx = removeWithoutLock(txResult->txHash());
             if (!tx && txResult->nonce() != NonceType(-1))
             {
                 nonceList->emplace_back(txResult->nonce());
             }
             else if (tx)
             {
-                succCount++;
+                ++succCount;
                 nonceList->emplace_back(tx->nonce());
             }
+            results.emplace_back(std::tuple{std::move(tx), txResult});
         }
-        // Note: must update the blockNumber after the txs removed
-        if (_batchId > m_blockNumber)
+
+        if (batchId > m_blockNumber)
         {
-            m_blockNumber = _batchId;
+            m_blockNumber = batchId;
         }
-        m_onChainTxsCount += _txsResult.size();
-        // stop stat the tps when there has no pending txs
-        if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
-        {
-            auto totalTime = (utcTime() - m_tpsStatstartTime);
-            if (totalTime > 0)
-            {
-                auto tps = (m_onChainTxsCount * 1000) / totalTime;
-                TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
-                                 << LOG_KV("totalTime", totalTime);
-            }
-            m_tpsStatstartTime.store(0);
-            m_onChainTxsCount.store(0);
-        }
+        lockT = utcTime() - startT;
     }
+
+    m_onChainTxsCount += txsResult.size();
+    // stop stat the tps when there has no pending txs
+    if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
+    {
+        auto totalTime = (utcTime() - m_tpsStatstartTime);
+        if (totalTime > 0)
+        {
+            auto tps = (m_onChainTxsCount * 1000) / totalTime;
+            TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
+                             << LOG_KV("totalTime", totalTime);
+        }
+        m_tpsStatstartTime.store(0);
+        m_onChainTxsCount.store(0);
+    }
+
     auto removeT = utcTime() - startT;
     startT = utcTime();
     notifyUnsealedTxsSize();
     // update the ledger nonce
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceList);
     auto updateLedgerNonceT = utcTime() - startT;
     startT = utcTime();
     // update the txpool nonce
     m_config->txPoolNonceChecker()->batchRemove(*nonceList);
     auto updateTxPoolNonceT = utcTime() - startT;
+
+    for (auto& [tx, txResult] : results)
+    {
+        if (tx)
+        {
+            notifyTxResult(*tx, std::move(txResult));
+        }
+    }
+
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
-                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
-                     << LOG_KV("batchId", _batchId) << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("expectedSize", txsResult.size()) << LOG_KV("succCount", succCount)
+                     << LOG_KV("batchId", batchId) << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);

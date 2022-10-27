@@ -161,14 +161,14 @@ void BlockExecutive::buildExecutivesFromMetaData()
                          << LOG_KV("tx meta count", m_block->transactionsMetaDataSize());
 
     m_blockTxs = fetchBlockTxsFromTxPool(m_block, m_txPool);  // no need to async
-
     m_executiveResults.resize(m_block->transactionsMetaDataSize());
+    std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
+        m_block->transactionsMetaDataSize());
+
     if (m_blockTxs)
     {
-        std::mutex saveMutex;
-        // can fetch tx from txpool, build message which type is MESSAGE
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
-            [this, &saveMutex](auto const& range) {
+            [&](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
                     auto metaData = m_block->transactionMetaData(i);
@@ -178,23 +178,18 @@ void BlockExecutive::buildExecutivesFromMetaData()
                         m_executiveResults[i].source = metaData->source();
                     }
                     auto contextID = i + m_startContextID;
-                    auto message = buildMessage(contextID, (*m_blockTxs)[i]);
-                    std::string to = {message->to().data(), message->to().size()};
-                    bool enableDAG =
-                        metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
-                    std::unique_lock lock(saveMutex);
-                    m_hasDAG = m_hasDAG || enableDAG;
-                    saveMessage(std::move(to), std::move(message), enableDAG);
+                    auto& [toAddress, message, enableDAG] = results[i];
+                    message = buildMessage(contextID, (*m_blockTxs)[i]);
+                    toAddress = {message->to().data(), message->to().size()};
+                    enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
                 }
             });
     }
     else
     {
-        std::mutex saveMutex;
-        // only has txHash, build message which type is TXHASH
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
-            [this, &saveMutex](auto const& range) {
+            [&](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
                     auto metaData = m_block->transactionMetaData(i);
@@ -204,9 +199,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
                         m_executiveResults[i].source = metaData->source();
                     }
 
-                    auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
                     auto contextID = i + m_startContextID;
 
+                    auto& [to, message, enableDAG] = results[i];
+                    message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
                     message->setContextID(contextID);
                     message->setType(protocol::ExecutionMessage::TXHASH);
                     // Note: set here for fetching txs when send_back
@@ -244,19 +240,22 @@ void BlockExecutive::buildExecutivesFromMetaData()
                         message->setGasAvailable(TRANSACTION_GAS);
                     }
                     message->setStaticCall(false);
-                    bool enableDAG =
-                        metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
-
-                    std::string to = {message->to().data(), message->to().size()};
-
-                    std::unique_lock lock(saveMutex);
-                    m_hasDAG = m_hasDAG || enableDAG;
-                    saveMessage(to, std::move(message), enableDAG);
+                    enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+                    to = {message->to().data(), message->to().size()};
                 }
             });
     }
-}
 
+    for (auto& it : results)
+    {
+        auto& [to, message, enableDAG] = it;
+        if (message)
+        {
+            m_hasDAG = m_hasDAG || enableDAG;
+            saveMessage(std::move(to), std::move(message), enableDAG);
+        }
+    }
+}
 
 void BlockExecutive::buildExecutivesFromNormalTransaction()
 {
@@ -266,10 +265,11 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
                         << LOG_KV("tx count", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
+    std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
+        m_block->transactionsSize());
 
-    std::mutex saveMutex;
-    tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsSize()),
-        [this, &saveMutex](auto const& range) {
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0U, m_block->transactionsSize()), [&](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
                 auto tx = m_block->transaction(i);
@@ -277,15 +277,22 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
                 m_executiveResults[i].source = tx->source();
 
                 auto contextID = i + m_startContextID;
-                auto message = buildMessage(contextID, tx);
-                std::string to = {message->to().data(), message->to().size()};
-                bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
-
-                std::unique_lock lock(saveMutex);
-                m_hasDAG = m_hasDAG || enableDAG;
-                saveMessage(to, std::move(message), enableDAG);
+                auto& [to, message, enableDAG] = results[i];
+                message = buildMessage(contextID, tx);
+                to = {message->to().data(), message->to().size()};
+                enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
             }
         });
+
+    for (auto& it : results)
+    {
+        auto& [to, message, enableDAG] = it;
+        if (message)
+        {
+            m_hasDAG = m_hasDAG || enableDAG;
+            saveMessage(std::move(to), std::move(message), enableDAG);
+        }
+    }
 }
 
 bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
