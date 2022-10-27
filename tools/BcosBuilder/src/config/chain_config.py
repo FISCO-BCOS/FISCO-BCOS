@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
+from ctypes import util
 import json
 import sys
 import os
@@ -36,6 +37,12 @@ class GenesisConfig:
     def __init__(self, config):
         self.config = config
         self.desc = "[[group]]"
+        self.sm_crypto = utilities.get_item_value(
+            self.config, "sm_crypto", False, False, self.desc)
+        self.chain_id = utilities.get_item_value(
+            self.config, "chain_id", "chain0", False, self.desc)
+        self.group_id = utilities.get_item_value(
+            self.config, "group_id", "group0", False, self.desc)
         self.leader_period = utilities.get_item_value(
             self.config, "leader_period", 1, False, self.desc)
         self.block_tx_count_limit = utilities.get_item_value(

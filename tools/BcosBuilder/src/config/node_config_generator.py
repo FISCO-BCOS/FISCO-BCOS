@@ -72,9 +72,10 @@ class NodeConfigGenerator:
         config_content[executor_section]["is_auth_check"] = utilities.convert_bool_to_str(
             group_config.genesis_config.auth_check)
         config_content[executor_section]["auth_admin_account"] = group_config.genesis_config.init_auth_address
-        
-        utilities.log_info("* chain_id: %s" % config_content[chain_section]["group_id"])
-        utilities.log_info("* group_id: %s" % config_content[chain_section]["chain_id"])
+        utilities.log_info("* chain_id: %s" %
+                           config_content[chain_section]["group_id"])
+        utilities.log_info("* group_id: %s" %
+                           config_content[chain_section]["chain_id"])
         utilities.log_info("* consensus_type: %s" %
                            config_content[consensus_section]["consensus_type"])
         utilities.log_info("* block_tx_count_limit: %s" %
@@ -95,6 +96,8 @@ class NodeConfigGenerator:
         executor_ini_config = configparser.ConfigParser(
             comment_prefixes='/', allow_no_value=True)
         executor_ini_config.read(self.executor_tpl_config)
+        # chain config
+        self.__update_chain_info(executor_ini_config, node_config)
         # service config
         service_section = "service"
         executor_ini_config[service_section]["node_name"] = node_name
@@ -123,6 +126,16 @@ class NodeConfigGenerator:
         # access key_center to encrypt the certificates and the private keys
         self.__update_storage_security_info(ini_config, node_config, node_type)
         return ini_config
+
+    def __update_chain_info(self, ini_config, node_config):
+        """
+        update chain info
+        """
+        chain_section = "chain"
+        ini_config[chain_section]["sm_crypto"] = utilities.convert_bool_to_str(
+            node_config.sm_crypto)
+        ini_config[chain_section]["group_id"] = node_config.group_id
+        ini_config[chain_section]["chain_id"] = node_config.chain_id
 
     def __update_service_info(self, ini_config, node_config, node_name, is_build_opr):
         """

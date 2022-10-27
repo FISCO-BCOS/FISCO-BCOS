@@ -86,7 +86,8 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     {
         loadChainConfig(_genesisConfig);
     }
-    loadLedgerConfig(_genesisConfig) loadExecutorConfig(_genesisConfig);
+    loadLedgerConfig(_genesisConfig);
+    loadExecutorConfig(_genesisConfig);
     generateGenesisData();
 }
 
