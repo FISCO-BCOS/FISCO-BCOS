@@ -24,6 +24,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-utilities/ThreadPool.h>
 
+#include <utility>
 namespace bcos
 {
 namespace consensus
@@ -33,7 +34,7 @@ class StateMachine : public StateMachineInterface, public std::enable_shared_fro
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_scheduler(_scheduler), m_blockFactory(_blockFactory)
+      : m_scheduler(std::move(_scheduler)), m_blockFactory(_blockFactory)
     {
         // since execute block is serial, only use one thread to decrease the timecost
         m_worker = std::make_shared<ThreadPool>("stateMachine", 1);

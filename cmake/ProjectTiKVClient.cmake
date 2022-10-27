@@ -11,7 +11,7 @@ endif()
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
-  GIT_TAG        8573ea4813283bd03c212d2dcea128cf47aaf9a3
+  GIT_TAG        a02474d744779d504a998ca52e890acc108cf36f
   BUILD_IN_SOURCE true
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   CONFIGURE_COMMAND cargo install cxxbridge-cmd@1.0.75

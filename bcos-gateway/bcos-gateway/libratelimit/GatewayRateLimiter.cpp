@@ -75,7 +75,7 @@ std::pair<bool, std::string> GatewayRateLimiter::checkOutGoing(const std::string
         // There are two scenarios:
         //  1. ulimit module message rate or
         //  2. limit module message rate
-        else if (modulesWithoutLimit.count(moduleID))
+        else if (modulesWithoutLimit.contains(moduleID))
         {  // case 1: ulimit module message rate or, just for statistic
 
             if (totalOutGoingBWLimit)
@@ -137,25 +137,25 @@ std::pair<bool, std::string> GatewayRateLimiter::checkOutGoing(const std::string
         m_rateLimiterStat->updateOutGoing(endpoint, msgLength, true);
         m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, true);
 
-        return std::pair<bool, std::string>(true, "");
-    } while (0);
+        return {true, ""};
+    } while (false);
 
     m_rateLimiterStat->updateOutGoing(endpoint, msgLength, false);
     m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
 
-    return std::pair<bool, std::string>(false, errorMsg);
+    return {false, errorMsg};
 }
 
 std::pair<bool, std::string> GatewayRateLimiter::checkInComing(
     const std::string& _endpoint, uint64_t _msgLength)
 {
     m_rateLimiterStat->updateInComing(_endpoint, _msgLength);
-    return std::pair<bool, std::string>(true, "");
+    return {true, ""};
 }
 
 std::pair<bool, std::string> GatewayRateLimiter::checkInComing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength)
 {
     m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength);
-    return std::pair<bool, std::string>(true, "");
+    return {true, ""};
 }

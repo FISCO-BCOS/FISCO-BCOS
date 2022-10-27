@@ -29,6 +29,8 @@
 #include "tbb/enumerable_thread_specific.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -38,6 +40,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
+#include <mutex>
 
 namespace bcos::storage
 {
@@ -48,16 +51,14 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 private:
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }
+    {}
     // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
     //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
 
 
 #define STORAGE_REPORT_SET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }                                               \
+    {}                                              \
     // log("SET", (table), (key), (entry), (desc))
 
     // for debug
@@ -99,7 +100,10 @@ public:
     BaseStorage(BaseStorage&&) = delete;
     BaseStorage& operator=(BaseStorage&&) = delete;
 
-    ~BaseStorage() override { m_recoder.clear(); }
+    ~BaseStorage() override
+    {
+        m_recoder.clear();
+    }
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,
@@ -109,24 +113,27 @@ public:
 
         if (m_enableTraverse)
         {
-#pragma omp parallel for
-            for (size_t i = 0; i < m_buckets.size(); ++i)
-            {
-                auto& bucket = m_buckets[i];
-                std::unique_lock<std::mutex> lock(bucket.mutex);
-
-                decltype(localKeys) bucketKeys;
-                for (auto& it : bucket.container)
-                {
-                    if (it.table == table && (!_condition || _condition->isValid(it.key)))
+            std::mutex mergeMutex;
+            tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()),
+                [this, &mergeMutex, &localKeys, &table, &_condition](auto const& range) {
+                    for (auto i = range.begin(); i < range.end(); ++i)
                     {
-                        bucketKeys.emplace(it.key, it.entry.status());
-                    }
-                }
+                        auto& bucket = m_buckets[i];
+                        std::unique_lock<std::mutex> lock(bucket.mutex);
 
-#pragma omp critical
-                localKeys.merge(std::move(bucketKeys));
-            }
+                        decltype(localKeys) bucketKeys;
+                        for (auto& it : bucket.container)
+                        {
+                            if (it.table == table && (!_condition || _condition->isValid(it.key)))
+                            {
+                                bucketKeys.emplace(it.key, it.entry.status());
+                            }
+                        }
+
+                        std::unique_lock mergeLock(mergeMutex);
+                        localKeys.merge(std::move(bucketKeys));
+                    }
+                });
         }
 
         auto prev = getPrev();
@@ -410,20 +417,22 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override
     {
-#pragma omp parallel for
-        for (size_t i = 0; i < m_buckets.size(); ++i)
-        {
-            auto& bucket = m_buckets[i];
-
-            for (auto& it : bucket.container)
-            {
-                auto& entry = it.entry;
-                if (!onlyDirty || entry.dirty())
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
+            [this, &onlyDirty, &callback](auto const& range) {
+                for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    callback(it.table, it.key, entry);
+                    auto& bucket = m_buckets[i];
+
+                    for (auto& it : bucket.container)
+                    {
+                        auto& entry = it.entry;
+                        if (!onlyDirty || entry.dirty())
+                        {
+                            callback(it.table, it.key, entry);
+                        }
+                    }
                 }
-            }
-        }
+            });
     }
 
     void merge(bool onlyDirty, const TraverseStorageInterface& source) override
@@ -450,25 +459,30 @@ public:
     {
         bcos::crypto::HashType totalHash(0);
 
-#pragma omp parallel for
-        for (size_t i = 0; i < m_buckets.size(); ++i)
-        {
-            auto& bucket = m_buckets[i];
-            bcos::crypto::HashType bucketHash(0);
-
-            for (auto& it : bucket.container)
-            {
-                auto& entry = it.entry;
-                if (entry.dirty())
+        std::mutex totalMutex;
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()),
+            [this, &hashImpl, &totalHash, &totalMutex](auto const& range) {
+                for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                     entry.hash(it.table, it.key, hashImpl, m_blockVersion);
-                    bucketHash ^= entryHash;
+                    auto& bucket = m_buckets[i];
+
+                    bcos::crypto::HashType bucketHash(0);
+                    for (auto& it : bucket.container)
+                    {
+                        auto& entry = it.entry;
+                        if (entry.dirty())
+                        {
+                            auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                             entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                            bucketHash ^= entryHash;
+                        }
+                    }
+
+                    std::unique_lock lock(totalMutex);
+                    totalHash ^= bucketHash;
                 }
-            }
-#pragma omp critical
-            totalHash ^= bucketHash;
-        }
+            });
+
 
         return totalHash;
     }
@@ -546,9 +560,15 @@ public:
         }
     }
 
-    void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
+    void setEnableTraverse(bool enableTraverse)
+    {
+        m_enableTraverse = enableTraverse;
+    }
 
-    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
+    void setMaxCapacity(ssize_t capacity)
+    {
+        m_maxCapacity = capacity;
+    }
 
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry)

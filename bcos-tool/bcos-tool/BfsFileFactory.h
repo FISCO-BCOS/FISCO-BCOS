@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include <bcos-framework/Common.h>
 #include <bcos-framework/storage/Common.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
@@ -98,8 +99,8 @@ public:
         bcos::storage::StorageInterface::Ptr const& _storage, std::string _table);
     static void buildDirEntry(
         storage::Entry& _mutableEntry, std::variant<FileType, std::string> fileType);
-    static bool buildLink(storage::Table& _table, std::string_view _address,
-        const std::string& _abi, std::string name = "");
+    static bool buildLink(storage::Table& _table, const std::string& _address,
+        const std::string& _abi, const std::string& name = "");
     static bool buildAuth(storage::Table& _table, const std::string& _admin);
     static bool buildContract(storage::Table& _table);
 };

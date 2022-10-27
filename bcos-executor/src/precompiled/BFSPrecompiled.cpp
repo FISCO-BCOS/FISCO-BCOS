@@ -38,20 +38,29 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
 constexpr const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
+constexpr const char* const FILE_SYSTEM_METHOD_LIST_PAGE = "list(string,uint256,uint256)";
 constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
-constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
+constexpr const char* const FILE_SYSTEM_METHOD_LINK_CNS = "link(string,string,string,string)";
+constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
+constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint256,uint256)";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
     name2Selector[FILE_SYSTEM_METHOD_LIST] = getFuncSelector(FILE_SYSTEM_METHOD_LIST, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_LIST_PAGE] =
+        getFuncSelector(FILE_SYSTEM_METHOD_LIST_PAGE, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_MKDIR] = getFuncSelector(FILE_SYSTEM_METHOD_MKDIR, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_LINK] = getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_LINK_CNS] =
+        getFuncSelector(FILE_SYSTEM_METHOD_LINK_CNS, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_TOUCH] = getFuncSelector(FILE_SYSTEM_METHOD_TOUCH, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_RLINK] = getFuncSelector(FILE_SYSTEM_METHOD_RLINK, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_INIT] = getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_REBUILD] =
+        getFuncSelector(FILE_SYSTEM_METHOD_REBUILD, _hashImpl);
     BfsTypeSet = {FS_TYPE_DIR, FS_TYPE_CONTRACT, FS_TYPE_LINK};
 }
 
@@ -60,20 +69,33 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     uint32_t func = getParamFunc(_callParameters->input());
+    uint32_t version = _executive->blockContext().lock()->blockVersion();
 
     if (func == name2Selector[FILE_SYSTEM_METHOD_LIST])
     {
         // list(string) => (int32,fileList)
         listDir(_executive, _callParameters);
     }
+    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+             func == name2Selector[FILE_SYSTEM_METHOD_LIST_PAGE])
+    {
+        // list(string,uint,uint) => (int32,fileList)
+        listDirPage(_executive, _callParameters);
+    }
     else if (func == name2Selector[FILE_SYSTEM_METHOD_MKDIR])
     {
         // mkdir(string) => int32
         makeDir(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_LINK])
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_LINK_CNS])
     {
         // link(string name, string version, address, abi) => int32
+        linkAdaptCNS(_executive, _callParameters);
+    }
+    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+             func == name2Selector[FILE_SYSTEM_METHOD_LINK])
+    {
+        // link(absolutePath, address, abi) => int32
         link(_executive, _callParameters);
     }
     else if (func == name2Selector[FILE_SYSTEM_METHOD_RLINK])
@@ -85,10 +107,16 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
         // touch(string absolute,string type) => int32
         touch(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_INIT])
+    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+             func == name2Selector[FILE_SYSTEM_METHOD_INIT])
     {
         // initBfs for the first time
         initBfs(_executive, _callParameters);
+    }
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_REBUILD])
+    {
+        // initBfs for the first time
+        rebuildBfs(_executive, _callParameters);
     }
     else
     {
@@ -207,6 +235,13 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
         {
             // check parent dir to get type
             auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
+            if (baseName == tool::FS_ROOT)
+            {
+                // root special logic
+                Entry entry;
+                tool::BfsFileFactory::buildDirEntry(entry, FS_TYPE_DIR);
+                baseNameEntry = std::make_optional<Entry>(entry);
+            }
             if (!baseNameEntry) [[unlikely]]
             {
                 // maybe hidden table
@@ -301,7 +336,169 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
     }
 }
 
+void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+
+{
+    // list(string,uint,uint)
+    std::string absolutePath;
+    uint32_t offset = 0;
+    uint32_t count = 0;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), absolutePath, offset, count);
+    std::vector<BfsTuple> files = {};
+    if (!checkPathValid(absolutePath))
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("invalid path name")
+                               << LOG_KV("path", absolutePath);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH), files));
+        return;
+    }
+    auto table = _executive->storage().openTable(absolutePath);
+
+    if (!table)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
+                               << LOG_KV("absolutePath", absolutePath);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
+        return;
+    }
+
+    // exist
+    auto [parentDir, baseName] = getParentDirAndBaseName(absolutePath);
+
+    // check parent dir to get type
+    auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
+    if (baseName == tool::FS_ROOT)
+    {
+        baseNameEntry = std::make_optional<Entry>();
+        tool::BfsFileFactory::buildDirEntry(baseNameEntry.value(), tool::FileType::DIRECTOR);
+    }
+    if (!baseNameEntry) [[unlikely]]
+    {
+        // maybe hidden table
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
+                               << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
+        return;
+    }
+    auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
+    if (baseFields[0] == tool::FS_TYPE_DIR)
+    {
+        // if type is dir, then return sub resource
+        auto keyCondition = std::make_optional<storage::Condition>();
+        keyCondition->limit(offset, count);
+        auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
+
+        for (const auto& key : keys | RANGES::views::all)
+        {
+            auto entry = _executive->storage().getRow(absolutePath, key);
+            auto fields = entry->getObject<std::vector<std::string>>();
+            files.emplace_back(
+                key, fields[0], std::vector<std::string>{fields.begin() + 1, fields.end()});
+        }
+        if (count == keys.size())
+        {
+            // count is full, maybe still left elements
+            auto [total, error] = _executive->storage().count(absolutePath);
+            if (error)
+            {
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
+                    << LOG_KV("absolutePath", absolutePath);
+                _callParameters->setExecResult(
+                    codec.encode(int32_t(CODE_FILE_COUNT_ERROR), std::vector<BfsTuple>{}));
+                return;
+            }
+            _callParameters->setExecResult(codec.encode(int64_t(total - offset - count), files));
+            return;
+        }
+    }
+    else if (baseFields[0] == tool::FS_TYPE_LINK)
+    {
+        // if type is link, then return link address
+        auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
+        auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
+        std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
+            abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
+        BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
+        files.emplace_back(std::move(link));
+    }
+    else if (baseFields[0] == tool::FS_TYPE_CONTRACT)
+    {
+        // if type is contract, then return contract name
+        files.emplace_back(baseName, tool::FS_TYPE_CONTRACT,
+            std::vector<std::string>{baseFields.begin() + 1, baseFields.end()});
+    }
+    _callParameters->setExecResult(codec.encode(int64_t(CODE_SUCCESS), files));
+}
+
 void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    std::string absolutePath, contractAddress, contractAbi;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), absolutePath, contractAddress, contractAbi);
+    if (!blockContext->isWasm())
+    {
+        contractAddress = trimHexPrefix(contractAddress);
+    }
+
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
+                          << LOG_DESC("link") << LOG_KV("absolutePath", absolutePath)
+                          << LOG_KV("contractAddress", contractAddress)
+                          << LOG_KV("contractAbiSize", contractAbi.size());
+    auto linkTableName = getContractTableName(absolutePath);
+
+    if (!checkPathValid(linkTableName))
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
+                               << LOG_DESC("check link params failed, invalid path name")
+                               << LOG_KV("absolutePath", absolutePath)
+                               << LOG_KV("contractAddress", contractAddress);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+        return;
+    }
+
+    auto linkTable = _executive->storage().openTable(linkTableName);
+    if (linkTable)
+    {
+        // table exist, check this resource is a link
+        auto typeEntry = _executive->storage().getRow(linkTableName, FS_KEY_TYPE);
+        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        {
+            // contract name and version exist, overwrite address and abi
+            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+            return;
+        }
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("File already exists.")
+                               << LOG_KV("absolutePath", absolutePath);
+        _callParameters->setExecResult(codec.encode((int32_t)CODE_FILE_ALREADY_EXIST));
+        return;
+    }
+    // table not exist, mkdir -p /apps/contractName first
+    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+
+    auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
+        linkTableName, FS_TYPE_LINK, _callParameters->m_gas);
+    if (response != 0)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("external build link file metadata failed")
+                              << LOG_KV("absolutePath", absolutePath);
+        _callParameters->setExecResult(codec.encode((int32_t)CODE_FILE_BUILD_DIR_FAILED));
+        return;
+    }
+    auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
+    // set link info to link table
+    tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, contractAbi);
+    _callParameters->setExecResult(codec.encode((int32_t)CODE_SUCCESS));
+}
+
+void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     std::string contractName, contractVersion, contractAddress, contractAbi;
@@ -525,7 +722,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     // create / dir
     _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
     // build root subs metadata
-    for (const auto& subName : tool::FS_ROOT_SUBS)
+    for (const auto& subName : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
     {
         Entry entry;
         // type, status, acl_type, acl_white, acl_black, extra
@@ -542,20 +739,130 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
         std::string(tool::FS_SYS_BIN), std::string(tool::FS_DIR_FIELDS));
 
     // build /sys/
-    for (const auto& sysSub : precompiled::BFS_SYS_SUBS)
+    buildSysSubs(_executive);
+}
+
+void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    if (_callParameters->m_sender != precompiled::SYS_CONFIG_ADDRESS &&
+        _callParameters->m_sender != precompiled::SYS_CONFIG_NAME)
     {
-        Entry entry;
-        // type, status, acl_type, acl_white, acl_black, extra
-        tool::BfsFileFactory::buildDirEntry(entry, tool::FileType::LINK);
-        _executive->storage().setRow(
-            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("rebuildBfs not called by sys config")
+                              << LOG_KV("sender", _callParameters->m_sender);
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
+        return;
     }
-    // build sys contract
-    for (const auto& nameAddress : precompiled::SYS_NAME_ADDRESS_MAP)
+    uint32_t fromVersion = 0;
+    uint32_t toVersion = 0;
+    codec.decode(_callParameters->params(), fromVersion, toVersion);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
+                          << LOG_KV("fromVersion", fromVersion) << LOG_KV("toVersion", toVersion);
+    // TODO: add from and to version check
+    if (fromVersion <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
+        toVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
     {
-        auto linkTable =
-            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
-        tool::BfsFileFactory::buildLink(linkTable.value(), nameAddress.second, "");
+        rebuildBfs310(_executive);
+    }
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+}
+
+void BFSPrecompiled::rebuildBfs310(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto keyPageIgnoreTables = blockContext->keyPageIgnoreTables();
+    // child, parent, all absolute path
+    std::queue<std::pair<std::string, std::string>> rebuildQ;
+    rebuildQ.push({std::string(tool::FS_ROOT), ""});
+    bool rebuildSys = true;
+    while (!rebuildQ.empty())
+    {
+        keyPageIgnoreTables->insert(tool::FS_ROOT_SUBS.begin(), tool::FS_ROOT_SUBS.end());
+        auto [rebuildPath, parentPath] = rebuildQ.front();
+        rebuildQ.pop();
+        auto subEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_SUB);
+        auto table = _executive->storage().openTable(rebuildPath);
+        if (!subEntry.has_value() || table->tableInfo()->fields().size() > 1)
+        {
+            // not old data structure
+            // root is new data structure
+            rebuildSys = (rebuildPath != tool::FS_ROOT);
+            continue;
+        }
+
+        // rewrite type, acl_type, acl_white, acl_black, extra to parent
+        auto typeEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_TYPE);
+        auto aclTypeEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_TYPE);
+        auto aclWhiteEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_WHITE);
+        auto aclBlackEntry = _executive->storage().getRow(rebuildPath, tool::FS_ACL_BLACK);
+        auto extraEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_EXTRA);
+        // root has no parent
+        Entry newFormEntry;
+        newFormEntry.setObject(std::vector<std::string>{
+            std::string(typeEntry->get()),
+            std::string("0"),
+            std::string(aclTypeEntry->get()),
+            std::string(aclWhiteEntry->get()),
+            std::string(aclBlackEntry->get()),
+            std::string(extraEntry->get()),
+        });
+        typeEntry->setStatus(Entry::Status::DELETED);
+        aclTypeEntry->setStatus(Entry::Status::DELETED);
+        aclWhiteEntry->setStatus(Entry::Status::DELETED);
+        aclBlackEntry->setStatus(Entry::Status::DELETED);
+        extraEntry->setStatus(Entry::Status::DELETED);
+        _executive->storage().setRow(rebuildPath, tool::FS_KEY_TYPE, std::move(typeEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_ACL_TYPE, std::move(aclTypeEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_ACL_WHITE, std::move(aclWhiteEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_ACL_BLACK, std::move(aclBlackEntry.value()));
+        _executive->storage().setRow(
+            rebuildPath, tool::FS_KEY_EXTRA, std::move(extraEntry.value()));
+
+        std::map<std::string, std::string> bfsInfo;
+        auto&& out = asBytes(std::string(subEntry->get()));
+        codec::scale::decode(bfsInfo, gsl::make_span(out));
+
+        // delete sub
+        subEntry->setStatus(Entry::Status::DELETED);
+        _executive->storage().setRow(rebuildPath, tool::FS_KEY_SUB, std::move(subEntry.value()));
+
+        // use keyPage to rewrite info
+        for (const auto& _sub : tool::FS_ROOT_SUBS)
+        {
+            std::string sub(_sub);
+            keyPageIgnoreTables->erase(sub);
+        }
+        if (!parentPath.empty())
+        {
+            _executive->storage().setRow(
+                parentPath, getPathBaseName(rebuildPath), std::move(newFormEntry));
+        }
+
+        // rewrite sub info
+        for (const auto& [name, type] : bfsInfo)
+        {
+            Entry entry;
+            tool::BfsFileFactory::buildDirEntry(entry, type);
+            _executive->storage().setRow(rebuildPath, name, std::move(entry));
+            if (type == tool::FS_TYPE_DIR)
+            {
+                rebuildQ.push(
+                    {(rebuildPath == tool::FS_ROOT ? rebuildPath : rebuildPath + "/") + name,
+                        rebuildPath});
+            }
+        }
+    }
+    if (rebuildSys)
+    {
+        // build /sys/
+        buildSysSubs(_executive);
     }
 }
 
@@ -691,4 +998,24 @@ bool BFSPrecompiled::recursiveBuildDir(
         }
     }
     return true;
+}
+
+void BFSPrecompiled::buildSysSubs(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive) const
+{
+    for (const auto& sysSub : BFS_SYS_SUBS)
+    {
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::LINK);
+        _executive->storage().setRow(
+            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
+    }
+    // build sys contract
+    for (const auto& nameAddress : SYS_NAME_ADDRESS_MAP)
+    {
+        auto linkTable =
+            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
+        tool::BfsFileFactory::buildLink(linkTable.value(), std::string(nameAddress.second), "");
+    }
 }

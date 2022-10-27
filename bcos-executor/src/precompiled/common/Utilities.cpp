@@ -349,7 +349,7 @@ std::pair<std::string, std::string> precompiled::getParentDirAndBaseName(
 executor::CallParameters::UniquePtr precompiled::externalRequest(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
     std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft, bool _isInternalCall)
+    bool _isCreate, int64_t gasLeft, bool _isInternalCall, std::string const& _abi)
 {
     auto request = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
 
@@ -364,6 +364,10 @@ executor::CallParameters::UniquePtr precompiled::externalRequest(
     request->internalCreate = _isCreate;
     request->internalCall = _isInternalCall;
     request->gas = gasLeft;
+    if (_isCreate && !_abi.empty())
+    {
+        request->abi = _abi;
+    }
     return _executive->externalCall(std::move(request));
 }
 

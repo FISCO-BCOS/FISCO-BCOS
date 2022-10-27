@@ -1475,6 +1475,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+        SYS_CODE_BINARY, SYS_VALUE,
+        SYS_CONTRACT_ABI, SYS_VALUE,
     };
     // clang-format on
     size_t total = sizeof(tables) / sizeof(std::string_view);
@@ -1663,49 +1665,50 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
         tool::FS_APPS, tool::FS_USER, tool::FS_USER_TABLE, tool::FS_SYS_BIN};
 
     /// blockVersion >= 3.1.0, use executor build
-    if (blockVersion <= (uint32_t)Version::V3_0_VERSION)
+    if (blockVersion >= (uint32_t)Version::V3_1_VERSION)
     {
-        buildDir(tool::FS_ROOT, blockVersion);
-        // root table must exist
-
-        Entry rootSubEntry;
-        std::map<std::string, std::string> rootSubMap;
-        for (const auto& sub :
-            rootSubNames |
-                RANGES::views::transform(
-                    [](std::string_view const& sub) -> std::string_view { return sub.substr(1); }))
-        {
-            rootSubMap.insert(std::make_pair(sub, FS_TYPE_DIR));
-        }
-        rootSubEntry.importFields({asString(codec::scale::encode(rootSubMap))});
-        std::promise<Error::UniquePtr> setPromise;
-        m_storage->asyncSetRow(
-            FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
-                setPromise.set_value(std::forward<decltype(error)>(error));
-            });
-        auto setError = setPromise.get_future().get();
-        if (setError)
-        {
-            BOOST_THROW_EXCEPTION(*setError);
-        }
-
-        buildDir(tool::FS_USER, blockVersion);
-        buildDir(tool::FS_APPS, blockVersion);
-        buildDir(tool::FS_USER_TABLE, blockVersion);
-        auto sysTable = buildDir(tool::FS_SYS_BIN, blockVersion);
-        Entry sysSubEntry;
-        std::map<std::string, std::string> sysSubMap;
-        for (const auto& contract :
-            precompiled::BFS_SYS_SUBS |
-                RANGES::views::transform([](std::string_view const& sub) -> std::string_view {
-                    return sub.substr(tool::FS_SYS_BIN.length() + 1);
-                }))
-        {
-            sysSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
-        }
-        sysSubEntry.importFields({asString(codec::scale::encode(sysSubMap))});
-        sysTable->setRow(FS_KEY_SUB, std::move(sysSubEntry));
+        return;
     }
+    buildDir(tool::FS_ROOT, blockVersion);
+    // root table must exist
+
+    Entry rootSubEntry;
+    std::map<std::string, std::string> rootSubMap;
+    for (const auto& sub : rootSubNames | RANGES::views::transform(
+                                              [](std::string_view const& sub) -> std::string_view {
+                                                  return sub.substr(1);
+                                              }))
+    {
+        rootSubMap.insert(std::make_pair(sub, FS_TYPE_DIR));
+    }
+    rootSubEntry.importFields({asString(codec::scale::encode(rootSubMap))});
+    std::promise<Error::UniquePtr> setPromise;
+    m_storage->asyncSetRow(
+        FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
+            setPromise.set_value(std::forward<decltype(error)>(error));
+        });
+    auto setError = setPromise.get_future().get();
+    if (setError)
+    {
+        BOOST_THROW_EXCEPTION(*setError);
+    }
+
+    buildDir(tool::FS_USER, blockVersion);
+    buildDir(tool::FS_APPS, blockVersion);
+    buildDir(tool::FS_USER_TABLE, blockVersion);
+    auto sysTable = buildDir(tool::FS_SYS_BIN, blockVersion);
+    Entry sysSubEntry;
+    std::map<std::string, std::string> sysSubMap;
+    for (const auto& contract :
+        precompiled::BFS_SYS_SUBS |
+            RANGES::views::transform([](std::string_view const& sub) -> std::string_view {
+                return sub.substr(tool::FS_SYS_BIN.length() + 1);
+            }))
+    {
+        sysSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
+    }
+    sysSubEntry.importFields({asString(codec::scale::encode(sysSubMap))});
+    sysTable->setRow(FS_KEY_SUB, std::move(sysSubEntry));
 }
 
 std::optional<storage::Table> Ledger::buildDir(

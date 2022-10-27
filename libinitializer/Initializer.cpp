@@ -144,6 +144,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
+
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
@@ -209,6 +211,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_scheduler =
         std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
 
+    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    {
+#ifdef WITH_TIKV
+        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr = m_scheduler;
+        auto switchHandler = [scheduler = schedulerWeakPtr]() {
+            if (scheduler.lock())
+            {
+                scheduler.lock()->triggerSwitch();
+            }
+        };
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
+            ->setSwitchHandler(switchHandler);
+#endif
+    }
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
@@ -244,9 +261,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, storage, executionMessageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
-        auto parallelExecutor =
+        auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
-        executorManager->addExecutor(executorName, parallelExecutor);
+        executorManager->addExecutor(executorName, switchExecutorManager);
+        m_switchExecutorManager = switchExecutorManager;
     }
 
     // build node time synchronization tool
@@ -326,10 +344,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
                 std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
-                    txpool);
-            auto scheduler =
-                std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
-                    m_scheduler, m_protocolInitializer->cryptoSuite());
+                    m_protocolInitializer->cryptoSuite(), txpool);
+            auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<
+                std::shared_ptr<bcos::scheduler::SchedulerInterface>>>(
+                m_scheduler, m_protocolInitializer->cryptoSuite());
 
             m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
             m_lightNodeInitializer->initLedgerServer(

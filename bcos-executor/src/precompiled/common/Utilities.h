@@ -26,6 +26,7 @@
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -115,6 +116,19 @@ bool checkPathValid(std::string const& _absolutePath);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 
+inline std::string_view getPathBaseName(std::string_view _absolutePath)
+{
+    if (_absolutePath == tool::FS_ROOT)
+    {
+        return _absolutePath;
+    }
+    if (_absolutePath.ends_with('/'))
+    {
+        return {};
+    }
+    return _absolutePath.substr(_absolutePath.find_last_of('/') + 1);
+}
+
 inline bool checkSenderFromAuth(std::string_view _sender)
 {
     return _sender == precompiled::AUTH_COMMITTEE_ADDRESS;
@@ -123,7 +137,7 @@ inline bool checkSenderFromAuth(std::string_view _sender)
 executor::CallParameters::UniquePtr externalRequest(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
     std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft, bool _isInternalCall = false);
+    bool _isCreate, int64_t gasLeft, bool _isInternalCall = false, std::string const& _abi = "");
 
 s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _origin, std::string_view _sender, std::string_view _filePath,

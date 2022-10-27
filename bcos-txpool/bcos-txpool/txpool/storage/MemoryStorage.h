@@ -36,10 +36,10 @@ public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
         int64_t _txsExpirationTime = 10 * 60 * 1000, bool _preStoreTxs = false);
-    ~MemoryStorage() override {}
+    ~MemoryStorage() override = default;
 
-    bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) override;
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;

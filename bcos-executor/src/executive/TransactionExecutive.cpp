@@ -32,6 +32,7 @@
 #include "../vm/VMInstance.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
+#include "ExecutiveFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -118,7 +119,24 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         assert(!m_blockContext.lock()->isWasm());
         auto tableName = getContractTableName(input->codeAddress, false);
 
-        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        // get codeHash in contract table
+        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        if (!codeHashEntry || codeHashEntry->get().empty())
+        {
+            auto& output = input;
+            EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            output->status = (int32_t)TransactionStatus::RevertInstruction;
+            output->evmStatus = EVMC_REVERT;
+            return std::move(output);
+        }
+
+        auto codeHash =
+            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+
+        // get code in code binary table
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
         if (!entry || entry->get().empty())
         {
             auto& output = input;
@@ -138,8 +156,23 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
                              << LOG_KV("codeAddress", input->codeAddress);
 
         auto tableName = getContractTableName(input->codeAddress, false);
+
         auto& output = input;
-        auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+        // get codeHash in contract table
+        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        if (!codeHashEntry || codeHashEntry->get().empty())
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not get external code hash from local storage"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            return std::move(output);
+        }
+
+        auto codeHash =
+            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+
+        // get code in code binary table
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
         if (!entry || entry->get().empty())
         {
             EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
@@ -151,12 +184,9 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         return std::move(output);
     }
 
-    auto executive = std::make_shared<TransactionExecutive>(
-        m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
-
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_evmPrecompiled);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
+    auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
+        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+    auto executive = executiveFactory->build(input->codeAddress, m_contextID, newSeq, false);
 
     auto output = executive->start(std::move(input));
 
@@ -334,15 +364,23 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                          << LOG_KV("internalCreate", callParameters->internalCreate);
 
     // check permission first
-    if (callParameters->internalCreate)
-    {
-        return {nullptr, internalCreate(std::move(callParameters))};
-    }
-
     if (blockContext->isAuthCheck() && !checkAuth(callParameters))
     {
         revert();
         return {nullptr, std::move(callParameters)};
+    }
+    if (callParameters->internalCreate)
+    {
+        callParameters->abi = std::move(extraData->abi);
+        auto sender = callParameters->senderAddress;
+        auto response = internalCreate(std::move(callParameters));
+        if (blockContext->isAuthCheck() &&
+            blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+        {
+            // Create auth table
+            creatAuthTable(tableName, response->origin, std::move(sender));
+        }
+        return {nullptr, std::move(response)};
     }
     // Create table
     try
@@ -481,6 +519,12 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         Entry entry = {};
         entry.importFields({codeString});
         m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
+        if (!callParameters->abi.empty())
+        {
+            Entry abiEntry = {};
+            abiEntry.importFields({std::move(callParameters->abi)});
+            m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
+        }
 
         /// set link data
         tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
@@ -755,7 +799,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             EXECUTOR_LOG(DEBUG) << "Revert by dead lock, sender: " << callResults->senderAddress
                                 << " receiver: " << callResults->receiveAddress;
         }
-        else if (StorageError::UnknownError <= e.errorCode() &&
+        /*else if (StorageError::UnknownError <= e.errorCode() &&
                  StorageError::TimestampMismatch <= e.errorCode())
         {
             // is storage error
@@ -765,6 +809,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto blockContext = m_blockContext.lock();
             blockContext->triggerSwitch();
         }
+         */
         else
         {
             EXECUTIVE_LOG(ERROR) << "BCOS Error: " << diagnostic_information(e);

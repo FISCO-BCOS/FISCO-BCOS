@@ -109,19 +109,24 @@ void BfsFileFactory::buildDirEntry(
 }
 
 bool BfsFileFactory::buildLink(
-    Table& _table, std::string_view _address, const std::string& _abi, std::string name)
+    Table& _table, const std::string& _address, const std::string& _abi, const std::string& name)
 {
     Entry tEntry;
     tEntry.importFields({std::string(FS_TYPE_LINK)});
     _table.setRow(FS_KEY_TYPE, std::move(tEntry));
 
     Entry linkEntry;
-    linkEntry.importFields({std::string(_address)});
+    linkEntry.importFields({_address});
     _table.setRow(FS_LINK_ADDRESS, std::move(linkEntry));
 
-    Entry abiEntry;
-    abiEntry.importFields({_abi});
-    _table.setRow(FS_LINK_ABI, std::move(abiEntry));
+    if (!_abi.empty())
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("BFS") << "buildLink with abi"
+                        << LOG_KV("abiSize", _abi.size());
+        Entry abiEntry;
+        abiEntry.importFields({_abi});
+        _table.setRow(FS_LINK_ABI, std::move(abiEntry));
+    }
 
     if (!name.empty())
     {

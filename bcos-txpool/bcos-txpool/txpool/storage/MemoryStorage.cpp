@@ -19,9 +19,13 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
+#include <boost/throw_exception.hpp>
 #include <memory>
 #include <tuple>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -69,27 +73,72 @@ void MemoryStorage::stop()
     }
 }
 
-TransactionStatus MemoryStorage::submitTransaction(
-    bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
+task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
+    protocol::Transaction::Ptr transaction)
 {
-    try
+    transaction->setImportTime(utcTime());
+    struct Awaitable
     {
-        auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
-        tx->setImportTime(utcTime());
-        auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true, true);
-        if (result != TransactionStatus::None)
+        constexpr bool await_ready() { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
         {
-            notifyInvalidReceipt(tx->hash(), result, _txSubmitCallback);
+            try
+            {
+                auto result = m_self->verifyAndSubmitTransaction(
+                    std::move(m_transaction),
+                    [this, m_handle = handle](Error::Ptr error,
+                        bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                        if (error)
+                        {
+                            m_submitResult.emplace<Error::Ptr>(std::move(error));
+                        }
+                        else
+                        {
+                            m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
+                                std::move(result));
+                        }
+                        if (m_handle)
+                        {
+                            m_handle.resume();
+                        }
+                    },
+                    true, true);
+
+                if (result != TransactionStatus::None)
+                {
+                    TXPOOL_LOG(ERROR) << "Submit transaction error! " << result;
+                    m_submitResult.emplace<Error::Ptr>(
+                        BCOS_ERROR_PTR((int32_t)result, "Invalid transaction"));
+                    handle.resume();
+                }
+            }
+            catch (std::exception& e)
+            {
+                m_submitResult.emplace<Error::Ptr>(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Invalid transaction"));
+                handle.resume();
+            }
         }
-        return result;
-    }
-    catch (std::exception const& e)
-    {
-        TXPOOL_LOG(WARNING) << LOG_DESC("Invalid transaction for decode exception")
-                            << LOG_KV("error", boost::diagnostic_information(e));
-        notifyInvalidReceipt(HashType(), TransactionStatus::Malform, _txSubmitCallback);
-        return TransactionStatus::Malform;
-    }
+        bcos::protocol::TransactionSubmitResult::Ptr await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+            }
+
+            return std::move(
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+        }
+
+        protocol::Transaction::Ptr m_transaction;
+        std::shared_ptr<MemoryStorage> m_self;
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
+
+    Awaitable awaitable{
+        .m_transaction = transaction, .m_self = shared_from_this(), .m_submitResult = {}};
+    co_return co_await awaitable;
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)
@@ -208,6 +257,10 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         {
             result = insertWithoutLock(_tx);
         }
+    }
+    else
+    {
+        return result;
     }
     return result;
 }
@@ -528,16 +581,14 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
+    fetchedTxs->reserve(_txsLimit);
+
     for (auto const& it : m_txsTable)
     {
-        auto tx = it.second;
+        auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
-        if (!tx)
-        {
-            continue;
-        }
-        if (tx->synced())
+        if (!tx || tx->synced())
         {
             continue;
         }

@@ -1229,7 +1229,7 @@ generate_common_ini() {
 
 [flow_control]
     ; the switch for distributed rate limit
-    ; distributed_ratelimit_on=false
+    ; enable_distributed_ratelimit=false
 
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000

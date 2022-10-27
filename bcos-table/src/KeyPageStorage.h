@@ -119,11 +119,7 @@ public:
     ~KeyPageStorage() override
     {
         m_recoder.clear();
-        // #pragma omp parallel for
-        for (size_t i = 0; i < m_buckets.size(); ++i)
-        {
-            m_buckets[i].container.clear();
-        }
+        m_buckets.clear();
     }
 
     void asyncGetPrimaryKeys(std::string_view table,
@@ -1143,7 +1139,7 @@ public:
         }
         return std::nullopt;
     }
-    auto count(const std::string_view& table) -> std::pair<size_t, Error::Ptr>;
+    virtual std::pair<size_t, Error::Ptr> count(const std::string_view& table) override;
 
 private:
     auto getPrev() -> std::shared_ptr<StorageInterface>

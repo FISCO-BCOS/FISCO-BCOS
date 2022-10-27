@@ -36,10 +36,14 @@ public:
 private:
     void listDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
+    void listDirPage(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void makeDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void linkAdaptCNS(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void readLink(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
@@ -47,11 +51,15 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters);
     void initBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
+    void rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void rebuildBfs310(const std::shared_ptr<executor::TransactionExecutive>& _executive);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);
     bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
+    void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
 };
 }  // namespace bcos::precompiled
