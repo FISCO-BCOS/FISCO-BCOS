@@ -556,7 +556,7 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::s
         auto txn = m_cluster->begin();
         for (size_t i = 0; i < values.size(); ++i)
         {
-            txn.put(std::move(realKeys[i]), std::move(values[i]));
+            txn.put(std::string(realKeys[i]), std::string(values[i]));
         }
         txn.commit();
     }
