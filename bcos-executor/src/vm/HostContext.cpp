@@ -330,30 +330,16 @@ bool HostContext::setCode(bytes code)
         if (contractTable)
         {
             codeHashEntry.importFields({codeHash.asBytes()});
-            bytes codeHashBytes = codeHash.asBytes();
             m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-        }
-        // set code in code binary table
-        auto codeTable = m_executive->storage().openTable(bcos::ledger::SYS_CODE_BINARY);
-        if (!codeTable)
-        {
-            m_executive->storage().createTable(
-                std::string(bcos::ledger::SYS_CODE_BINARY), std::string(STORAGE_VALUE));
-        }
-        auto hasCodeEntry =
-            m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
-        if (!hasCodeEntry || hasCodeEntry->get().empty())
-        {
+            // set code in code binary table
+
             Entry codeEntry;
             codeEntry.importFields({std::move(code)});
             m_executive->storage().setRow(
                 bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
             return true;
         }
-        else
-        {
-            return true;
-        }
+        return false;
     }
     // old logic
     auto contractTable = m_executive->storage().openTable(m_tableName);
@@ -382,25 +368,14 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
         if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
         {
             // set abi in abi table
-            auto codeHash =
-                m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH)->getField(0);
-            auto abiTable = m_executive->storage().openTable(bcos::ledger::SYS_CONTRACT_ABI);
-            if (!abiTable)
-            {
-                m_executive->storage().createTable(
-                    std::string(bcos::ledger::SYS_CONTRACT_ABI), std::string(STORAGE_VALUE));
-            }
-            auto hasAbiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
-            if (!hasAbiEntry || hasAbiEntry->get().empty())
-            {
-                Entry abiEntry;
-                abiEntry.importFields({std::move(abi)});
-                m_executive->storage().setRow(
-                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
-                return;
-            }
-            else
-                return;
+            auto codeHashBin = std::string(
+                m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH)->getField(0));
+            auto codeHash = h256(codeHashBin, FixedBytes<32>::StringDataType::FromBinary).hex();
+            Entry abiEntry;
+            abiEntry.importFields({std::move(abi)});
+            m_executive->storage().setRow(
+                bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+            return;
         }
         // old logic
         Entry abiEntry;
