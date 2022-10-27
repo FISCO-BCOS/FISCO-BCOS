@@ -59,7 +59,23 @@ public:
     void selfAsyncRefreshExecutor()
     {
         auto toTermId = m_schedulerTermId + 1;
-        m_pool.enqueue([toTermId, this]() { refreshExecutor(toTermId); });
+        auto toSeq = m_seq + 1;
+        m_pool.enqueue([toTermId, toSeq, this]() {
+            if (toTermId == m_schedulerTermId)
+            {
+                // already switch
+                return;
+            }
+            refreshExecutor(toTermId);
+            if (toTermId == m_schedulerTermId)
+            {
+                // if switch success, set seq to trigger scheduler switch
+                m_seq = toSeq;
+                EXECUTOR_LOG(DEBUG)
+                    << LOG_BADGE("Switch") << "ExecutorSwitch: selfAsyncRefreshExecutor success"
+                    << LOG_KV("schedulerTermId", m_schedulerTermId) << LOG_KV("seq", m_seq);
+            }
+        });
     }
 
     void triggerSwitch() { selfAsyncRefreshExecutor(); }
