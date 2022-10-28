@@ -58,7 +58,8 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
     // if version < 3.1.0, config.ini include chianConfig
-    if (m_compatibilityVersion < (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    if (m_compatibilityVersion < (uint32_t)bcos::protocol::Version::V3_1_VERSION &&
+        m_compatibilityVersion >= (uint32_t)bcos::protocol::Version::MIN_VERSION)
     {
         loadChainConfig(_pt);
     }
@@ -506,22 +507,6 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
     m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
     m_groupId = _pt.get<std::string>("chain.group_id", "group");
     m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
-    // check chainConfig is correct
-    if (_pt.count("chain.sm_crypto") == 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "The chain sm_mode is necessary, Currently sm_crypto is null."));
-    }
-    if (_pt.count("chain.group_id") == 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "The chain groupId is necessary, Currently groupId is null."));
-    }
-    if (_pt.count("chain.chain_id") == 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "The chainId  is necessary, Currently groupId is null."));
-    }
     if (!isalNumStr(m_chainId))
     {
         BOOST_THROW_EXCEPTION(
