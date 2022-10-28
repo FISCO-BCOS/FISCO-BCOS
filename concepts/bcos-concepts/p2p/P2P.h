@@ -9,7 +9,7 @@ namespace bcos::concepts::p2p
 {
 
 template <class Impl>
-class P2P
+class P2PBase
 {
 public:
     using NodeType = uint16_t;
@@ -38,4 +38,8 @@ private:
     friend Impl;
     auto& impl() { return static_cast<Impl&>(*this); }
 };
+
+template <class Impl>
+concept P2P = std::derived_from<Impl, P2PBase<Impl>> ||
+    std::derived_from<typename Impl::element_type, P2PBase<typename Impl::element_type>>;
 }  // namespace bcos::concepts::p2p
