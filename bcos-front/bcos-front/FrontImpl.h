@@ -2,7 +2,7 @@
 
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include <bcos-concepts/Serialize.h>
-#include <bcos-concepts/p2p/P2P.h>
+#include <bcos-concepts/front/Front.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -19,10 +19,10 @@ namespace bcos::p2p
 struct NoNodeAvailable: public bcos::error::Exception {};
 // clang-format on
 
-class P2PImpl : public bcos::concepts::p2p::P2PBase<P2PImpl>
+class FrontImpl : public bcos::concepts::p2p::FrontBase<FrontImpl>
 {
 public:
-    P2PImpl(bcos::front::FrontServiceInterface::Ptr front,
+    FrontImpl(bcos::front::FrontServiceInterface::Ptr front,
         bcos::gateway::GatewayInterface::Ptr gateway, bcos::crypto::KeyFactory::Ptr keyFactory,
         std::string groupID)
       : m_front(std::move(front)),

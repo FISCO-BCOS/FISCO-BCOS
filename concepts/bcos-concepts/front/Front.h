@@ -9,7 +9,7 @@ namespace bcos::concepts::p2p
 {
 
 template <class Impl>
-class P2PBase
+class FrontBase
 {
 public:
     using NodeType = uint16_t;
@@ -40,6 +40,6 @@ private:
 };
 
 template <class Impl>
-concept P2P = std::derived_from<Impl, P2PBase<Impl>> ||
-    std::derived_from<typename Impl::element_type, P2PBase<typename Impl::element_type>>;
+concept Front = std::derived_from<Impl, FrontBase<Impl>> ||
+    std::derived_from<typename Impl::element_type, FrontBase<typename Impl::element_type>>;
 }  // namespace bcos::concepts::p2p
