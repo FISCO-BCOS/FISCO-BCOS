@@ -36,6 +36,8 @@
 #include <bcos-utilities/Base64.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
@@ -223,14 +225,29 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     jResp["version"] = transactionReceipt.version();
 
     std::string contractAddress = string(transactionReceipt.contractAddress());
-    jResp["contractAddress"] = contractAddress;
-    jResp["checksumContractAddress"] = contractAddress;
 
     if (!contractAddress.empty() && !_isWasm)
     {
         std::string checksumContractAddr = contractAddress;
         toChecksumAddress(checksumContractAddr, hashImpl.hash(contractAddress).hex());
+
+        if (!contractAddress.starts_with("0x") && !contractAddress.starts_with("0X"))
+        {
+            contractAddress = "0x" + contractAddress;
+        }
+
+        if (!checksumContractAddr.starts_with("0x") && !checksumContractAddr.starts_with("0X"))
+        {
+            checksumContractAddr = "0x" + checksumContractAddr;
+        }
+
+        jResp["contractAddress"] = contractAddress;
         jResp["checksumContractAddress"] = checksumContractAddr;
+    }
+    else
+    {
+        jResp["contractAddress"] = contractAddress;
+        jResp["checksumContractAddress"] = contractAddress;
     }
 
     jResp["gasUsed"] = transactionReceipt.gasUsed().str(16);
@@ -750,10 +767,25 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getCode");
 
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    auto isWasm = groupInfo->wasm();
+    // trim 0x prefix for solidity contract
+    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    {
+        _contractAddress = _contractAddress.substr(2);
+    }
+
+    auto lowerAddress = boost::to_lower_copy(std::string(_contractAddress));
+
     auto scheduler = nodeService->scheduler();
-    scheduler->getCode(std::string_view(_contractAddress),
-        [m_contractAddress = std::string(_contractAddress), callback = std::move(_callback)](
-            Error::Ptr _error, bcos::bytes _codeData) {
+    scheduler->getCode(std::string_view(lowerAddress),
+        [lowerAddress, callback = std::move(_callback)](Error::Ptr _error, bcos::bytes _codeData) {
             std::string code;
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
@@ -768,7 +800,7 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("getCode") << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
-                    << LOG_KV("contractAddress", m_contractAddress);
+                    << LOG_KV("contractAddress", lowerAddress);
             }
 
             Json::Value jResp = std::move(code);
@@ -784,16 +816,32 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getABI");
 
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    auto isWasm = groupInfo->wasm();
+    // trim 0x prefix for solidity contract address
+    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    {
+        _contractAddress = _contractAddress.substr(2);
+    }
+
+
+    auto lowerAddress = boost::to_lower_copy(std::string(_contractAddress));
+
     auto scheduler = nodeService->scheduler();
-    scheduler->getABI(std::string_view(_contractAddress),
-        [m_contractAddress = std::string(_contractAddress), callback = std::move(_callback)](
-            Error::Ptr _error, std::string _abi) {
+    scheduler->getABI(std::string_view(lowerAddress),
+        [lowerAddress, callback = std::move(_callback)](Error::Ptr _error, std::string _abi) {
             if (_error)
             {
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("getABI") << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
-                    << LOG_KV("contractAddress", m_contractAddress);
+                    << LOG_KV("contractAddress", lowerAddress);
             }
             Json::Value jResp = std::move(_abi);
             callback(_error, jResp);
