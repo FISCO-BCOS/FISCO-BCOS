@@ -10,16 +10,16 @@
 #include <boost/throw_exception.hpp>
 #include <variant>
 
-namespace bcos::p2p
+namespace bcos::front
 {
 
-#define P2P_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("P2P")
+#define FRONT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("Front")
 
 // clang-format off
 struct NoNodeAvailable: public bcos::error::Exception {};
 // clang-format on
 
-class FrontImpl : public bcos::concepts::p2p::FrontBase<FrontImpl>
+class FrontImpl : public bcos::concepts::front::FrontBase<FrontImpl>
 {
 public:
     FrontImpl(bcos::front::FrontServiceInterface::Ptr front,
@@ -125,17 +125,17 @@ public:
 
             void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
             {
-                P2P_LOG(DEBUG) << "P2P client send message: " << m_moduleID << " | "
-                               << m_nodeID->hex() << " | " << m_requestBuffer.size();
+                FRONT_LOG(DEBUG) << "P2P client send message: " << m_moduleID << " | "
+                                 << m_nodeID->hex() << " | " << m_requestBuffer.size();
                 bcos::concepts::getRef(m_front).asyncSendMessageByNodeID(m_moduleID, m_nodeID,
                     bcos::ref(m_requestBuffer), DEFAULT_TIMEOUT,
                     [m_handle = handle, this](Error::Ptr error, const bcos::crypto::NodeIDPtr&,
                         bytesConstRef data, const std::string&,
                         const front::ResponseFunc&) mutable {
-                        P2P_LOG(DEBUG) << "P2P client receive message: " << m_moduleID << " | "
-                                       << m_nodeID->hex() << " | " << data.size() << " | "
-                                       << (error ? error->errorCode() : 0) << " | "
-                                       << (error ? error->errorMessage() : "");
+                        FRONT_LOG(DEBUG) << "P2P client receive message: " << m_moduleID << " | "
+                                         << m_nodeID->hex() << " | " << data.size() << " | "
+                                         << (error ? error->errorCode() : 0) << " | "
+                                         << (error ? error->errorMessage() : "");
                         if (!error)
                         {
                             bcos::concepts::serialize::decode(data, m_response);
@@ -188,4 +188,4 @@ private:
 
     constexpr static uint32_t DEFAULT_TIMEOUT = 3000;
 };
-}  // namespace bcos::p2p
+}  // namespace bcos::front

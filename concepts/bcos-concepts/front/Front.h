@@ -5,7 +5,7 @@
 #include <set>
 #include <string>
 
-namespace bcos::concepts::p2p
+namespace bcos::concepts::front
 {
 
 template <class Impl>
@@ -42,4 +42,4 @@ private:
 template <class Impl>
 concept Front = std::derived_from<Impl, FrontBase<Impl>> ||
     std::derived_from<typename Impl::element_type, FrontBase<typename Impl::element_type>>;
-}  // namespace bcos::concepts::p2p
+}  // namespace bcos::concepts::front
