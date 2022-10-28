@@ -33,6 +33,7 @@
 #include <future>
 #include <mutex>
 #include <optional>
+#include <variant>
 
 using namespace bcos::storage;
 using namespace bcos::protocol;
@@ -323,56 +324,54 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         std::atomic_uint64_t deleteCount{0};
         atomic_bool isTableValid = true;
 
-        tbb::concurrent_vector<
-            std::tuple<Entry::Status, std::string, std::variant<std::string_view, std::string>>>
+        tbb::concurrent_vector<std::tuple<Entry::Status, std::string,
+            std::variant<std::monostate, std::string, Entry>>>
             dataChanges;
-        storage.parallelTraverse(true,
-            [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
-                if (!isValid(table, key))
-                {
-                    isTableValid = false;
-                    return false;
-                }
-                auto dbKey = toDBKey(table, key);
+        storage.parallelTraverse(true, [&](const std::string_view& table,
+                                           const std::string_view& key, Entry const& entry) {
+            if (!isValid(table, key))
+            {
+                isTableValid = false;
+                return false;
+            }
+            auto dbKey = toDBKey(table, key);
 
-                if (entry.status() == Entry::DELETED)
+            if (entry.status() == Entry::DELETED)
+            {
+                if (c_fileLogLevel >= TRACE)
                 {
-                    if (c_fileLogLevel >= TRACE)
-                    {
-                        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
-                                                   << LOG_KV("key", toHex(key));
-                    }
-                    ++deleteCount;
+                    STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
+                                               << LOG_KV("key", toHex(key));
+                }
+                ++deleteCount;
+                dataChanges.emplace_back(
+                    std::tuple{entry.status(), std::move(dbKey), std::monostate{}});
+            }
+            else
+            {
+                if (c_fileLogLevel >= TRACE)
+                {
+                    STORAGE_ROCKSDB_LOG(TRACE)
+                        << LOG_DESC("write") << LOG_KV("table", table) << LOG_KV("key", toHex(key))
+                        << LOG_KV("size", entry.size());
+                }
+                ++putCount;
+
+                // Storage security
+                if (auto value = entry.get(); !value.empty() && m_dataEncryption)
+                {
+                    std::string encryptValue(value);
+                    encryptValue = m_dataEncryption->encrypt(encryptValue);
                     dataChanges.emplace_back(
-                        std::tuple{entry.status(), std::move(dbKey), std::string_view{}});
+                        std::tuple{entry.status(), std::move(dbKey), std::move(encryptValue)});
                 }
                 else
                 {
-                    if (c_fileLogLevel >= TRACE)
-                    {
-                        STORAGE_ROCKSDB_LOG(TRACE)
-                            << LOG_DESC("write") << LOG_KV("table", table)
-                            << LOG_KV("key", toHex(key)) << LOG_KV("size", entry.size());
-                    }
-                    ++putCount;
-
-                    auto value = entry.get();
-                    // Storage security
-                    if (!value.empty() && m_dataEncryption)
-                    {
-                        std::string encryptValue(value);
-                        encryptValue = m_dataEncryption->encrypt(encryptValue);
-                        dataChanges.emplace_back(
-                            std::tuple{entry.status(), std::move(dbKey), std::move(encryptValue)});
-                    }
-                    else
-                    {
-                        dataChanges.emplace_back(
-                            std::tuple{entry.status(), std::move(dbKey), std::move(value)});
-                    }
+                    dataChanges.emplace_back(std::tuple{entry.status(), std::move(dbKey), entry});
                 }
-                return true;
-            });
+            }
+            return true;
+        });
 
         for (auto& [status, key, value] : dataChanges)
         {
@@ -384,7 +383,21 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             {
                 auto& localKey = key;
                 std::visit(
-                    [this, &localKey](auto& valueStr) { m_writeBatch->Put(localKey, valueStr); },
+                    [this, &localKey](auto&& valueStr) {
+                        using ValueType = std::decay_t<decltype(valueStr)>;
+                        if constexpr (std::same_as<ValueType, std::string>)
+                        {
+                            m_writeBatch->Put(localKey, valueStr);
+                        }
+                        else if constexpr (std::same_as<ValueType, Entry>)
+                        {
+                            m_writeBatch->Put(localKey, valueStr.get());
+                        }
+                        else
+                        {
+                            STORAGE_ROCKSDB_LOG(FATAL) << "Unexcepted monostate!";
+                        }
+                    },
                     value);
             }
         }
