@@ -150,8 +150,8 @@ boost::shared_ptr<sink_t> LogInitializer::initLogSink(boost::property_tree::ptre
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= _logLevel);
 
-    logging::core::get()->set_exception_handler(
-        logging::make_exception_handler<std::runtime_error, std::logic_error>(LogExpHandler()));
+    boost::log::core::get()->set_exception_handler(
+        boost::log::make_exception_handler<std::runtime_error, std::logic_error>(LogExpHandler()));
 
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);
