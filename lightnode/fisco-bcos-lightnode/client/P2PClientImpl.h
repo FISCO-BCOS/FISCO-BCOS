@@ -10,7 +10,6 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Task.h>
-#include <future>
 #include <random>
 
 namespace bcos::p2p
