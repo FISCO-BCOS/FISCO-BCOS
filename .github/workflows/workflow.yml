@@ -149,7 +149,7 @@ jobs:
           source /github/home/.profile
           tiup update --self && tiup update playground
           tiup clean --all
-          tiup playground v5.4.2 --mode tikv-slim &
+          tiup playground v5.4.2 --mode tikv-slim --without-monitor &
           sleep 15
           export OMP_NUM_THREADS=1
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
