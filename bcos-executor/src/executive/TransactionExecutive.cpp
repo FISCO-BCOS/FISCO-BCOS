@@ -562,14 +562,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto ret = vm.exec(hostContext, mode, &evmcMessage, code.data(), code.size());
 
             auto callResults = hostContext.takeCallParameters();
-            // clear unnecessary logs
-            if (callResults->origin != callResults->senderAddress)
-            {
-                EXECUTIVE_LOG(TRACE)
-                    << "clear logEntries"
-                    << LOG_KV("beforeClearLogSize", callResults->logEntries.size());
-                callResults->logEntries.clear();
-            }
             callResults = parseEVMCResult(std::move(callResults), ret);
 
             if (callResults->status != (int32_t)TransactionStatus::None)
@@ -706,14 +698,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 
-            // clear unnecessary logs
-            if (callResults->origin != callResults->senderAddress)
-            {
-                EXECUTIVE_LOG(TRACE)
-                    << "clear logEntries"
-                    << LOG_KV("beforeClearLogSize", callResults->logEntries.size());
-                callResults->logEntries.clear();
-            }
             return callResults;
         }
     }
