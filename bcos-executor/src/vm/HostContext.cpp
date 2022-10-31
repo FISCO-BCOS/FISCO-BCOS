@@ -200,6 +200,10 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->create = true;
         break;
     }
+    if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+    {
+        request->logEntries = std::move(m_callParameters->logEntries);
+    }
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
 

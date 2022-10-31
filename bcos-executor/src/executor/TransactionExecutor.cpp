@@ -130,8 +130,17 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
 
-    m_ledgerFetcher->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+    try
+    {
+        m_ledgerFetcher->fetchCompatibilityVersion();
+        m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+    }
+    catch (...)
+    {
+        EXECUTOR_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion with exception, use " +
+                                       bcos::protocol::V3_1_VERSION_STR + " as default version.");
+        m_blockVersion = static_cast<uint32_t>(bcos::protocol::DEFAULT_VERSION);
+    }
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -1647,7 +1656,7 @@ void TransactionExecutor::prepare(
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())
     {
-        auto errorMessage = "Prepare error: empty stateStorages";
+        const auto *errorMessage = "Prepare error: empty stateStorages";
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
         callback(BCOS_ERROR_PTR(-1, errorMessage));
 
@@ -1907,7 +1916,7 @@ void TransactionExecutor::getCode(
                 callback(nullptr, std::move(codeBytes));
             });
     };
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (m_blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
@@ -2011,7 +2020,7 @@ void TransactionExecutor::getABI(
                 callback(nullptr, std::string(abi));
             });
     };
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (m_blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
@@ -2465,6 +2474,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->keyLocks = input.takeKeyLocks();
+    callParameters->logEntries = input.takeLogEntries();
     if (input.create())
     {
         callParameters->abi = input.abi();
@@ -2500,6 +2510,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->message = input.message();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
+    callParameters->logEntries = input.takeLogEntries();
     callParameters->abi = tx.abi();
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();

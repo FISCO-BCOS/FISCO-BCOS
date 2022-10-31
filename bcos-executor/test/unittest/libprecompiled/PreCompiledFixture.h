@@ -111,7 +111,9 @@ public:
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
             64);
+        boost::log::core::get()->set_logging_enabled(false);
         createSysTable(version);
+        boost::log::core::get()->set_logging_enabled(true);
         if (_isCheckAuth)
         {
             boost::log::core::get()->set_logging_enabled(false);
@@ -252,6 +254,7 @@ public:
 
     void nextBlock(int64_t blockNumber, protocol::Version version = protocol::Version::V3_1_VERSION)
     {
+        std::cout << "next block: " << blockNumber << std::endl;
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
@@ -265,6 +268,7 @@ public:
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
+        std::cout << "commit block: " << blockNumber << std::endl;
         TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
