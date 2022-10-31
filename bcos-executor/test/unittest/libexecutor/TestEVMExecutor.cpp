@@ -509,7 +509,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), addressString2);
     BOOST_CHECK_EQUAL(result3->create(), false);
     BOOST_CHECK_EQUAL(result3->status(), 0);
-    BOOST_CHECK(result3->logEntries().size() == 0);
+    BOOST_CHECK(result3->logEntries().size() == 1);
     BOOST_CHECK(result3->keyLocks().empty());
 
     // --------------------------------
@@ -595,7 +595,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result6->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result6->status(), 0);
     BOOST_CHECK(result6->message().empty());
-    BOOST_CHECK(result6->logEntries().size() == 1);
+    BOOST_CHECK(result6->logEntries().size() == 2);
     BOOST_CHECK_EQUAL(result6->keyLocks().size(), 0);
 
     executor->getHash(1, [&](bcos::Error::UniquePtr&& error, crypto::HashType&& hash) {

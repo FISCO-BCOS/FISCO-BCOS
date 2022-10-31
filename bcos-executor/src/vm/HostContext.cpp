@@ -165,6 +165,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->create = true;
         break;
     }
+    request->logEntries = std::move(m_callParameters->logEntries);
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
     auto blockContext = m_executive->blockContext().lock();
