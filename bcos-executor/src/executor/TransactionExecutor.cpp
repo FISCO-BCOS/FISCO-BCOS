@@ -2289,6 +2289,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->status = input.status();
     callParameters->keyLocks = input.takeKeyLocks();
+    callParameters->logEntries = input.takeLogEntries();
     if (input.create())
     {
         callParameters->abi = input.abi();
@@ -2317,6 +2318,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();
+    callParameters->logEntries = input.takeLogEntries();
     return callParameters;
 }
 
