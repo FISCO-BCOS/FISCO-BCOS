@@ -110,8 +110,11 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     }
     else
     {
-        std::string logPath = _pt.get<std::string>("log.log_path", "log");
-        boost::shared_ptr<sink_t> sink = initLogSink(_pt, logLevel, logPath, _logPrefix, _logger);
+        if (m_logPath.size() == 0)
+        {
+            m_logPath = _pt.get<std::string>("log.log_path", "log");
+        }
+        boost::shared_ptr<sink_t> sink = initLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
         setLogFormatter(sink);
     }
 }
