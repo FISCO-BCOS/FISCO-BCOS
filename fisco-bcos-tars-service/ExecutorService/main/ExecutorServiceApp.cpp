@@ -155,10 +155,16 @@ void ExecutorServiceApp::createAndInitExecutor()
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 
     std::weak_ptr<bcos::executor::SwitchExecutorManager> executorWeakPtr = m_executor;
-    auto switchHandler = [executor = executorWeakPtr]() {
+    std::weak_ptr<bcos::storage::TiKVStorage> storageWeakPtr = dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage);
+    auto switchHandler = [executor = executorWeakPtr, storageWeakPtr]() {
         if (executor.lock())
         {
             executor.lock()->triggerSwitch();
+        }
+        auto storage = storageWeakPtr.lock();
+        if(storage)
+        {
+            storage->reset();
         }
     };
     dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);

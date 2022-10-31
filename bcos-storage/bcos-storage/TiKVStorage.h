@@ -23,16 +23,17 @@
 
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-utilities/Common.h>
+#include <atomic>
+#include <utility>
 
 namespace tikv_client
 {
 struct TransactionClient;
 struct Transaction;
+struct Snapshot;
 }  // namespace tikv_client
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 constexpr int scan_batch_size = 64;
 
@@ -47,12 +48,8 @@ class TiKVStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
-    explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster,
-        int32_t _commitTimeout = 3000)
-      : m_cluster(_cluster), m_commitTimeout(_commitTimeout)
-    {}
-
-    virtual ~TiKVStorage() {}
+    explicit TiKVStorage(
+        std::shared_ptr<tikv_client::TransactionClient> _cluster, int32_t _commitTimeout = 3000);
 
     void asyncGetPrimaryKeys(std::string_view _table,
         const std::optional<Condition const>& _condition,
@@ -86,20 +83,21 @@ public:
 
     void setSwitchHandler(std::function<void()> _onNeedSwitchEvent)
     {
-        f_onNeedSwitchEvent = _onNeedSwitchEvent;
+        f_onNeedSwitchEvent = std::move(_onNeedSwitchEvent);
     }
+
+    void reset();
 
 private:
     void triggerSwitch();
 
-private:
     std::shared_ptr<tikv_client::TransactionClient> m_cluster;
-    std::shared_ptr<tikv_client::Transaction> m_committer;
+    std::shared_ptr<tikv_client::Transaction> m_committer = nullptr;
     uint64_t m_currentStartTS = 0;
+    std::atomic_uint64_t m_lastCommitTimestamp;
     std::function<void()> f_onNeedSwitchEvent;
     int32_t m_commitTimeout = 3000;
     std::chrono::time_point<std::chrono::system_clock> m_committerCreateTime;
     mutable RecursiveMutex x_committer;
 };
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

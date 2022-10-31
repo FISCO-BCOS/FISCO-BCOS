@@ -683,6 +683,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
         storage3->asyncSetRow(table2Name, key2, entry2,
             [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     }
+    dynamic_pointer_cast<storage::TiKVStorage>(storage)->reset();
     // check if the data is deleted
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [](Error::UniquePtr error, std::vector<std::string> keys) {
@@ -980,6 +981,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     // this_thread::sleep_for(chrono::seconds(3));
 
     // check commit failed
+    dynamic_pointer_cast<storage::TiKVStorage>(storage)->reset();
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
@@ -1019,6 +1021,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     // this_thread::sleep_for(chrono::seconds(3));
 
     // check commit success
+    dynamic_pointer_cast<storage::TiKVStorage>(storage)->reset();
     storage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
         std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
@@ -1107,6 +1110,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
             [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     }
     // check if the data is deleted
+    dynamic_pointer_cast<storage::TiKVStorage>(storage)->reset();
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
@@ -1322,6 +1326,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
             [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     }
     // check if the data is deleted
+    dynamic_pointer_cast<storage::TiKVStorage>(storage)->reset();
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);

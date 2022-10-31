@@ -160,10 +160,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 #ifdef WITH_TIKV
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        schedulerStorage = storage;
+        consensusStorage = storage;
+        // schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+        //     m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        // consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+        //     m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
 #endif
     }
     else
