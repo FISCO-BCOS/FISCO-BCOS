@@ -18,7 +18,8 @@ enum ExecuteError : int32_t
     DEAD_LOCK,
     TABLE_NOT_FOUND,
     STOPPED,
-    SCHEDULER_TERM_ID_ERROR  // to notify switch
+    SCHEDULER_TERM_ID_ERROR,  // to notify switch
+    INTERNAL_ERROR
 };
 }
 }  // namespace bcos
