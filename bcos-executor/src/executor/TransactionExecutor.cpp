@@ -1498,17 +1498,22 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                     {
                                         executionResults[i] =
                                             toExecutionResult(std::move(inputs[i]));
-                                        executionResults[i]->setType(ExecutionMessage::REVERT);
+                                        executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                                         EXECUTOR_NAME_LOG(INFO)
                                             << "No codeHash found, please deploy first "
                                             << LOG_KV("tableName", tableName);
                                         continue;
                                     }
-                                    std::string_view codeHashStr = entry->getField(0);
+
+                                    auto codeHashBin = std::string(entry->getField(0));
+                                    auto codeHash = h256(
+                                        codeHashBin, FixedBytes<32>::StringDataType::FromBinary)
+                                                        .hex();
+
                                     // get abi according to codeHash
                                     auto abiTable =
                                         storage->openTable(bcos::ledger::SYS_CONTRACT_ABI);
-                                    auto abiEntry = abiTable->getRow(codeHashStr);
+                                    auto abiEntry = abiTable->getRow(codeHash);
                                     if (!abiEntry || abiEntry->get().empty())
                                     {
                                         abiEntry = table->getRow(ACCOUNT_ABI);
@@ -1516,7 +1521,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                         {
                                             executionResults[i] =
                                                 toExecutionResult(std::move(inputs[i]));
-                                            executionResults[i]->setType(ExecutionMessage::REVERT);
+                                            executionResults[i]->setType(
+                                                ExecutionMessage::SEND_BACK);
                                             EXECUTOR_NAME_LOG(INFO)
                                                 << "No ABI found, please deploy first "
                                                 << LOG_KV("tableName", tableName);
