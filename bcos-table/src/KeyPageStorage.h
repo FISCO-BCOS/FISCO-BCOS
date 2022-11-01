@@ -161,7 +161,7 @@ public:
             m_pageData(p)
         {}
         PageInfo(PageInfo&&) = default;
-        auto operator=(PageInfo&&) -> PageInfo& = default;
+        auto operator=(PageInfo &&) -> PageInfo& = default;
         PageInfo(const PageInfo& page) = default;
         auto operator=(const PageInfo& page) -> PageInfo& = default;
 
@@ -368,7 +368,7 @@ public:
                         p->setPageData(nullptr);
                     }
                 }
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("updatePageInfo")
@@ -594,7 +594,7 @@ public:
             auto it = entries.find(key);
             if (it != entries.end())
             {
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry") << LOG_KV("pageKey",
@@ -611,7 +611,7 @@ public:
             }
             else
             {
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry not found")
@@ -664,7 +664,7 @@ public:
                 }
                 ret = std::move(it->second);
                 it->second = std::move(entry);
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("setEntry update")
@@ -698,7 +698,7 @@ public:
                     }
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                 // {  // FIXME: this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
                 //                        << LOG_KV("pageKey", toHex(entries.rbegin()->first))
@@ -878,7 +878,7 @@ public:
                         entryHash = hash ^ hashImpl->hash(entry.first) ^
                                     entry.second.hash(table, entry.first, hashImpl, blockVersion);
                     }
-                    // if (c_fileLogLevel >= TRACE)
+                    // if (c_fileLogLevel <= TRACE)
                     // {
                     //     KeyPage_LOG(TRACE)
                     //         << "Storage hash: " << LOG_KV("table", table)
@@ -899,7 +899,7 @@ public:
             {
                 if (it != entries.end())
                 {  // update
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert update: " << change.table << " | " << toHex(change.key)
@@ -921,7 +921,7 @@ public:
                 }
                 else
                 {  // delete, should not happen?
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert delete: " << change.table << " | " << toHex(change.key)
@@ -939,7 +939,7 @@ public:
             {  // rollback insert
                 if (it != entries.end())
                 {  // insert or update
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert insert: " << change.table << " | " << toHex(change.key);
@@ -1043,7 +1043,7 @@ public:
             if (type == Type::TableMeta)
             {
                 auto meta = KeyPageStorage::TableMeta(entry.get());
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE) << LOG_DESC("Data TableMeta") << LOG_KV("table", table)
                                        << LOG_KV("len", entry.size()) << LOG_KV("size", meta.size())
@@ -1054,7 +1054,7 @@ public:
             else if (type == Type::Page)
             {
                 auto page = KeyPageStorage::Page(entry.get(), key);
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("Data Page") << LOG_KV("table", table)
@@ -1125,7 +1125,7 @@ public:
                                << LOG_KV("error", error->errorMessage());
             return std::nullopt;
         }
-        if (c_fileLogLevel >= TRACE)
+        if (c_fileLogLevel <= TRACE)
         {
             KeyPage_LOG(TRACE) << LOG_DESC("get data from storage") << LOG_KV("table", table)
                                << LOG_KV("key", toHex(key))

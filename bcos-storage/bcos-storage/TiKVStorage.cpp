@@ -138,7 +138,7 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto end = utcTime();
         if (!value.has_value())
         {
-            if (c_fileLogLevel >= TRACE)
+            if (c_fileLogLevel <= TRACE)
             {
                 STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetRow empty") << LOG_KV("table", _table)
                                         << LOG_KV("key", toHex(_key)) << LOG_KV("dbKey", dbKey);
@@ -149,7 +149,7 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 
         auto entry = std::make_optional<Entry>();
         entry->set(value.value());
-        if (c_fileLogLevel >= TRACE)
+        if (c_fileLogLevel <= TRACE)
         {
             STORAGE_TIKV_LOG(TRACE)
                 << LOG_DESC("asyncGetRow") << LOG_KV("table", _table) << LOG_KV("key", toHex(_key))
@@ -257,7 +257,7 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
         }
         else
         {
-            if (c_fileLogLevel >= TRACE)
+            if (c_fileLogLevel <= TRACE)
             {
                 STORAGE_TIKV_LOG(TRACE)
                     << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);

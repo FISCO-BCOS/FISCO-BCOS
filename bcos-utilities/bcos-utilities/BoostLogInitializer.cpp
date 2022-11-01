@@ -117,6 +117,7 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         boost::shared_ptr<sink_t> sink = initLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
         setLogFormatter(sink);
     }
+    setFileLogLevel((LogLevel)logLevel);
 }
 
 boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLogSink(
