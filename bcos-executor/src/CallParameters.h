@@ -110,6 +110,14 @@ struct CallParameters
            << "delegateCall:" << delegateCall << "|"
            << "delegateCallSender" << delegateCallSender ;
         // clang-format on
+        ss << "|logEntries: ";
+        for (const auto& logEntry : logEntries)
+        {
+            ss << "[" << logEntry.address() << "|"
+               << toHexStringWithPrefix(
+                      h256((byte*)logEntry.topics().data(), logEntry.topics().size()))
+               << "|" << toHexStringWithPrefix(logEntry.data()) << "]";
+        }
         return ss.str();
     }
 };

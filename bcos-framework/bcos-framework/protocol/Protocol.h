@@ -25,6 +25,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <variant>
 
 namespace bcos
 {
@@ -112,10 +113,23 @@ const std::string V3_1_VERSION_STR = "3.1.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const Version DEFAULT_VERSION = bcos::protocol::Version::RC4_VERSION;
+const Version DEFAULT_VERSION = bcos::protocol::Version::V3_1_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
+inline int versionCompareTo(std::variant<uint32_t, Version> _v1, Version const& _v2)
+{
+    int flag = 0;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = ver1 > ver2 ? 1 : -1;
+            flag = (ver1 == ver2) ? 0 : flag;
+        },
+        _v1);
+    return flag;
+}
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version const& _version)
 {
     switch (_version)
