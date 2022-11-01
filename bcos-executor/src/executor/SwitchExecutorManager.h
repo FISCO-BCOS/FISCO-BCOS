@@ -40,13 +40,13 @@ public:
                 {
                     oldExecutor = m_executor;
 
-                    // TODO: check cycle reference in executor to avoid memory leak
+                    m_executor = m_factory->build();  // may throw exception
+
+                    m_schedulerTermId = schedulerTermId;
+
                     EXECUTOR_LOG(DEBUG) << LOG_BADGE("Switch")
                                         << "ExecutorSwitch: Build new executor instance with "
                                         << LOG_KV("schedulerTermId", schedulerTermId);
-                    m_executor = m_factory->build();
-
-                    m_schedulerTermId = schedulerTermId;
                 }
             }
             if (oldExecutor)
@@ -66,7 +66,23 @@ public:
                 // already switch
                 return;
             }
-            refreshExecutor(toTermId);
+
+            try
+            {
+                refreshExecutor(toTermId);
+            }
+            catch (Exception const& _e)
+            {
+                EXECUTOR_LOG(ERROR)
+                    << LOG_DESC("selfAsyncRefreshExecutor exception. Re-push to task pool")
+                    << LOG_KV("toTermId", toTermId) << LOG_KV("currentTermId", m_schedulerTermId)
+                    << diagnostic_information(_e);
+
+                selfAsyncRefreshExecutor();
+                return;
+            }
+
+
             if (toTermId == m_schedulerTermId)
             {
                 // if switch success, set seq to trigger scheduler switch
@@ -117,7 +133,20 @@ public:
             return;
         }
 
-        refreshExecutor(schedulerTermId);
+        try
+        {
+            refreshExecutor(schedulerTermId);
+        }
+        catch (Exception const& _e)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_DESC("nextBlockHeader: not refreshExecutor for exception")
+                                << LOG_KV("toTermId", schedulerTermId)
+                                << LOG_KV("currentTermId", m_schedulerTermId)
+                                << diagnostic_information(_e);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::INTERNAL_ERROR, "refreshExecutor exception"));
+            return;
+        }
 
         m_pool.enqueue([executor = m_executor, schedulerTermId,
                            blockHeader = std::move(blockHeader), callback = std::move(callback)]() {

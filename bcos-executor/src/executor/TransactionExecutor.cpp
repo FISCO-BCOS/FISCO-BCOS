@@ -129,18 +129,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_ledgerFetcher(std::make_shared<bcos::tool::LedgerConfigFetcher>(ledger))
 {
     assert(m_backendStorage);
-
-    try
-    {
-        m_ledgerFetcher->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
-    }
-    catch (...)
-    {
-        EXECUTOR_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion with exception, use " +
-                                       bcos::protocol::V3_1_VERSION_STR + " as default version.");
-        m_blockVersion = static_cast<uint32_t>(bcos::protocol::DEFAULT_VERSION);
-    }
+    m_ledgerFetcher->fetchCompatibilityVersion();
+    m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -337,8 +327,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     try
     {
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                << "NextBlockH"
-                                   "eader request: "
+                                << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId);
         m_blockVersion = blockHeader->version();
@@ -1656,7 +1645,7 @@ void TransactionExecutor::prepare(
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())
     {
-        const auto *errorMessage = "Prepare error: empty stateStorages";
+        const auto* errorMessage = "Prepare error: empty stateStorages";
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
         callback(BCOS_ERROR_PTR(-1, errorMessage));
 
