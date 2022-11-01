@@ -111,7 +111,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         {
             if (status.IsNotFound())
             {
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("not found") << LOG_KV("table", _table)
                                                << LOG_KV("key", toHex(_key));
@@ -338,7 +338,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
 
             if (entry.status() == Entry::DELETED)
             {
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
                                                << LOG_KV("key", toHex(key));
@@ -349,7 +349,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             }
             else
             {
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_ROCKSDB_LOG(TRACE)
                         << LOG_DESC("write") << LOG_KV("table", table) << LOG_KV("key", toHex(key))

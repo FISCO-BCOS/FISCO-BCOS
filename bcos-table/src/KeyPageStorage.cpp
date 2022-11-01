@@ -429,7 +429,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
             {
                 if (it != bucket->container.end())
                 {
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert exists: " << change.table << " | " << toHex(change.key)
@@ -440,7 +440,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                 }
                 else
                 {
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert deleted: " << change.table << " | " << toHex(change.key)
@@ -456,7 +456,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
             {  // nullopt means the key is not exist in m_cache
                 if (it != bucket->container.end())
                 {
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert insert: " << change.table << " | " << toHex(change.key);
@@ -512,7 +512,7 @@ void KeyPageStorage::rollback(const Recoder& recoder)
                         << LOG_DESC("revert page to empty") << LOG_KV("table", change.table)
                         << LOG_KV("key", toHex(change.key));
                 }
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("revert page entry") << LOG_KV("table", change.table)
@@ -568,7 +568,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
         if (prevKeyPage)
         {
             auto dataOption = prevKeyPage->copyData(tableView, key);
-            if (c_fileLogLevel >= TRACE)
+            if (c_fileLogLevel <= TRACE)
             {
                 KeyPage_LOG(TRACE)
                     << LOG_DESC("get data from KeyPageStorage") << LOG_KV("table", tableView)
@@ -581,7 +581,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
                 {  // set entry to clean
                     auto* page = &std::get<0>(d->data);
                     page->clean(d->key);
-                    if (c_fileLogLevel >= TRACE)
+                    if (c_fileLogLevel <= TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("import page") << LOG_KV("table", tableView)
@@ -593,7 +593,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
                 {
                     auto* meta = &std::get<1>(d->data);
                     meta->clean();
-                    if (c_fileLogLevel >= TRACE)
+                    if (c_fileLogLevel <= TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << LOG_DESC("import TableMeta") << LOG_KV("table", tableView)
@@ -614,7 +614,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
                     << LOG_KV("key", toHex(key)) << LOG_KV("error", error->errorMessage());
                 return std::make_tuple(std::move(error), std::nullopt);
             }
-            if (c_fileLogLevel >= TRACE)
+            if (c_fileLogLevel <= TRACE)
             {
                 KeyPage_LOG(TRACE)
                     << LOG_DESC("get data from storage") << LOG_KV("table", tableView)
@@ -638,7 +638,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
             KeyPage_LOG(INFO) << LOG_DESC("data should exist but ignore not exist")
                               << LOG_KV("table", tableView) << LOG_KV("key", toHex(key));
         }
-        if (c_fileLogLevel >= TRACE)
+        if (c_fileLogLevel <= TRACE)
         {
             KeyPage_LOG(TRACE) << LOG_DESC("create empty data") << LOG_KV("table", tableView)
                                << LOG_KV("key", toHex(key));
@@ -680,7 +680,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
     {  // table meta
         if (meta->size() > 0)
         {
-            if (c_fileLogLevel >= TRACE)
+            if (c_fileLogLevel <= TRACE)
             {
                 KeyPage_LOG(TRACE) << LOG_DESC("return meta entry") << LOG_KV("table", table)
                                    << LOG_KV("size", meta->size())
@@ -751,7 +751,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
             if (page->size() > 0)
             {
                 auto pageReadLock = page->rLock();
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("return page entry") << LOG_KV("table", table)
@@ -769,7 +769,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
             return std::make_pair(nullptr, std::nullopt);
         }
         auto entry = page->getEntry(key);
-        // if (c_fileLogLevel >= TRACE)
+        // if (c_fileLogLevel <= TRACE)
         // {  // FIXME: this log is only for debug, comment it when release
         //     KeyPage_LOG(TRACE) << LOG_DESC("getEntry from page") << LOG_KV("table", table)
         //                        << LOG_KV("pageKey", toHex(pageKey.value()))
@@ -866,7 +866,7 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     pageKey = page->endKey();
     if (page->size() > m_pageSize && page->validCount() > 1)
     {  // split page, TODO: if dag trigger split, it maybe split to different page?
-        if (c_fileLogLevel >= TRACE)
+        if (c_fileLogLevel <= TRACE)
         {
             KeyPage_LOG(TRACE) << LOG_DESC("trigger split page") << LOG_KV("table", table)
                                << LOG_KV("pageKey", toHex(pageKey)) << LOG_KV("size", page->size())

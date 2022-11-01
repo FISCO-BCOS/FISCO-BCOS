@@ -246,7 +246,7 @@ public:
                         auto data = get();
                         hasher.update(data);
                         hasher.final(entryHash);
-                        if (c_fileLogLevel >= TRACE)
+                        if (c_fileLogLevel <= TRACE)
                         {
                             STORAGE_LOG(TRACE)
                                 << "Entry hash, dirty entry: " << table << " | " << toHex(key)
@@ -258,7 +258,7 @@ public:
                     case DELETED:
                     {
                         hasher.final(entryHash);
-                        if (c_fileLogLevel >= TRACE)
+                        if (c_fileLogLevel <= TRACE)
                         {
                             STORAGE_LOG(TRACE)
                                 << "Entry hash, deleted entry: " << table << " | " << toHex(key)
@@ -283,7 +283,7 @@ public:
                 auto value = get();
                 bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
                 entryHash = hashImpl->hash(ref);
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_LOG(TRACE)
                         << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
@@ -293,7 +293,7 @@ public:
             else if (m_status == Entry::DELETED)
             {
                 entryHash = bcos::crypto::HashType(0x1);
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
                                        << toHex(key) << LOG_KV("hash", entryHash.abridged());

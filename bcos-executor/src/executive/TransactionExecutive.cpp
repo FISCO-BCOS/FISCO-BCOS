@@ -200,7 +200,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE)
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
                              << LOG_KV("callParameters", callParameters->toFullString())
@@ -227,7 +227,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE)
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute finished")
                              << LOG_KV("callResults", callResults->toFullString())

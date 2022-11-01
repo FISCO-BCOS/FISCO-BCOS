@@ -310,7 +310,14 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         {
             txHashes->emplace_back(block->transactionMetaData(i)->hash());
         }
-
+        if (c_fileLogLevel <= TRACE)
+            [[unlikely]]
+            {
+                for (auto const& tx : *txHashes)
+                {
+                    SCHEDULER_LOG(TRACE) << "fetch: " << tx.abridged();
+                }
+            }
         std::shared_ptr<std::promise<bcos::protocol::TransactionsPtr>> txsPromise =
             std::make_shared<std::promise<bcos::protocol::TransactionsPtr>>();
         txPool->asyncFillBlock(
