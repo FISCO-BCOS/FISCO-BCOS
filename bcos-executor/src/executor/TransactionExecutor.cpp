@@ -1496,8 +1496,12 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                     auto entry = table->getRow(ACCOUNT_CODE_HASH);
                                     if (!entry || entry->get().empty())
                                     {
-                                        EXECUTOR_NAME_LOG(ERROR)
-                                            << "No codeHash found, please deploy first ";
+                                        executionResults[i] =
+                                            toExecutionResult(std::move(inputs[i]));
+                                        executionResults[i]->setType(ExecutionMessage::REVERT);
+                                        EXECUTOR_NAME_LOG(INFO)
+                                            << "No codeHash found, please deploy first "
+                                            << LOG_KV("tableName", tableName);
                                         continue;
                                     }
                                     std::string_view codeHashStr = entry->getField(0);
@@ -1510,8 +1514,12 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                         abiEntry = table->getRow(ACCOUNT_ABI);
                                         if (!abiEntry || abiEntry->get().empty())
                                         {
-                                            EXECUTOR_NAME_LOG(ERROR)
-                                                << "No ABI found, please deploy first ";
+                                            executionResults[i] =
+                                                toExecutionResult(std::move(inputs[i]));
+                                            executionResults[i]->setType(ExecutionMessage::REVERT);
+                                            EXECUTOR_NAME_LOG(INFO)
+                                                << "No ABI found, please deploy first "
+                                                << LOG_KV("tableName", tableName);
                                             continue;
                                         }
                                     }
@@ -1521,12 +1529,6 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
-                                    if (!entry || entry->get().empty())
-                                    {
-                                        EXECUTOR_NAME_LOG(ERROR)
-                                            << "No ABI found, please deploy first ";
-                                        continue;
-                                    }
                                     abiStr = entry->getField(0);
                                 }
                                 bool isSmCrypto =
