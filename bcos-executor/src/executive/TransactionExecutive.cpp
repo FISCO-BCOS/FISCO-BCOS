@@ -292,7 +292,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         execPrecompiled(precompiledCallParams);
 
-        if (precompiledCallParams->m_gas < 0)
+        if (precompiledCallParams->m_gasLeft < 0)
         {
             revert();
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";

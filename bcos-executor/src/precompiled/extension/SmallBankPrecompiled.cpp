@@ -128,7 +128,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
                               << LOG_KV("func", func);
     }
 
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     _callParameters->setExecResult(bytes());
     // std::cout << "SmallBank Precompiled call done." << std::endl;
     return _callParameters;

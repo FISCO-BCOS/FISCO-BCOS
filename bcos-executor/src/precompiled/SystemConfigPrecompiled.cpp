@@ -263,7 +263,7 @@ void SystemConfigPrecompiled::upgradeChain(
         std::string toAddress =
             blockContext->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
         auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
-            toAddress, false, false, _callParameters->m_gas);
+            toAddress, false, false, _callParameters->m_gasLeft);
 
         if (response->status != (int32_t)TransactionStatus::None)
         {
