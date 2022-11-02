@@ -134,6 +134,12 @@ void ZkpPrecompiled::verifyEitherEqualityProof(
             _paramData, c1Point, c2Point, c3Point, equalityProof, basePoint, blindingBasePoint);
         verifyResult = m_zkpImpl->verifyEitherEqualityProof(
             c1Point, c2Point, c3Point, equalityProof, basePoint, blindingBasePoint);
+        PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEitherEqualityProof")
+                               << LOG_KV("c1", toHex(c1Point)) << LOG_KV("c2", toHex(c2Point))
+                               << LOG_KV("c3", toHex(c3Point))
+                               << LOG_KV("proof", toHex(equalityProof))
+                               << LOG_KV("basePoint", toHex(basePoint))
+                               << LOG_KV("blindingBasePoint", toHex(blindingBasePoint));
     }
     catch (std::exception const& e)
     {
@@ -183,6 +189,12 @@ void ZkpPrecompiled::verifyFormatProof(
             _paramData, c1Point, c2Point, formatProof, c1BasePoint, c2BasePoint, blindingBasePoint);
         verifyResult = m_zkpImpl->verifyFormatProof(
             c1Point, c2Point, formatProof, c1BasePoint, c2BasePoint, blindingBasePoint);
+        PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyFormatProof") << LOG_KV("c1", toHex(c1Point))
+                               << LOG_KV("c2", toHex(c2Point))
+                               << LOG_KV("proof", toHex(formatProof))
+                               << LOG_KV("c1BasePoint", toHex(c1BasePoint))
+                               << LOG_KV("c2BasePoint", toHex(c2BasePoint))
+                               << LOG_KV("blindingBasePoint", toHex(c2BasePoint));
     }
     catch (std::exception const& e)
     {

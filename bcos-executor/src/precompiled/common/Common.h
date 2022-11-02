@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "PrecompiledAbi.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Exceptions.h"
@@ -80,6 +81,7 @@ enum PrecompiledErrorCode : int
 {
     // BFSPrecompiled -53099 ~ -53000
     CODE_ADDRESS_OR_VERSION_ERROR = -51202,
+    CODE_FILE_COUNT_ERROR = -53007,
     CODE_FILE_INVALID_TYPE = -53006,
     CODE_FILE_INVALID_PATH = -53005,
     CODE_FILE_BUILD_DIR_FAILED = -53003,

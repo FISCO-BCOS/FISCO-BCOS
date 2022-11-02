@@ -13,6 +13,8 @@ namespace bcos::executor
 class SwitchExecutorManager : public executor::ParallelTransactionExecutorInterface
 {
 public:
+    using Ptr = std::shared_ptr<SwitchExecutorManager>;
+
     const int64_t INIT_SCHEDULER_TERM_ID = 0;
     const int64_t STOPPED_TERM_ID = -1;
 
@@ -38,13 +40,13 @@ public:
                 {
                     oldExecutor = m_executor;
 
-                    // TODO: check cycle reference in executor to avoid memory leak
+                    m_executor = m_factory->build();  // may throw exception
+
+                    m_schedulerTermId = schedulerTermId;
+
                     EXECUTOR_LOG(DEBUG) << LOG_BADGE("Switch")
                                         << "ExecutorSwitch: Build new executor instance with "
                                         << LOG_KV("schedulerTermId", schedulerTermId);
-                    m_executor = m_factory->build();
-
-                    m_schedulerTermId = schedulerTermId;
                 }
             }
             if (oldExecutor)
@@ -56,8 +58,43 @@ public:
 
     void selfAsyncRefreshExecutor()
     {
-        m_pool.enqueue([this]() { refreshExecutor(m_schedulerTermId + 1); });
+        auto toTermId = m_schedulerTermId + 1;
+        auto toSeq = m_seq + 1;
+        m_pool.enqueue([toTermId, toSeq, this]() {
+            if (toTermId == m_schedulerTermId)
+            {
+                // already switch
+                return;
+            }
+
+            try
+            {
+                refreshExecutor(toTermId);
+            }
+            catch (Exception const& _e)
+            {
+                EXECUTOR_LOG(ERROR)
+                    << LOG_DESC("selfAsyncRefreshExecutor exception. Re-push to task pool")
+                    << LOG_KV("toTermId", toTermId) << LOG_KV("currentTermId", m_schedulerTermId)
+                    << diagnostic_information(_e);
+
+                selfAsyncRefreshExecutor();
+                return;
+            }
+
+
+            if (toTermId == m_schedulerTermId)
+            {
+                // if switch success, set seq to trigger scheduler switch
+                m_seq = toSeq;
+                EXECUTOR_LOG(DEBUG)
+                    << LOG_BADGE("Switch") << "ExecutorSwitch: selfAsyncRefreshExecutor success"
+                    << LOG_KV("schedulerTermId", m_schedulerTermId) << LOG_KV("seq", m_seq);
+            }
+        });
     }
+
+    void triggerSwitch() { selfAsyncRefreshExecutor(); }
 
     bool hasStopped()
     {
@@ -96,7 +133,20 @@ public:
             return;
         }
 
-        refreshExecutor(schedulerTermId);
+        try
+        {
+            refreshExecutor(schedulerTermId);
+        }
+        catch (Exception const& _e)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_DESC("nextBlockHeader: not refreshExecutor for exception")
+                                << LOG_KV("toTermId", schedulerTermId)
+                                << LOG_KV("currentTermId", m_schedulerTermId)
+                                << diagnostic_information(_e);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::INTERNAL_ERROR, "refreshExecutor exception"));
+            return;
+        }
 
         m_pool.enqueue([executor = m_executor, schedulerTermId,
                            blockHeader = std::move(blockHeader), callback = std::move(callback)]() {

@@ -244,18 +244,24 @@ void SchedulerManager::asyncSwitchTerm(
 
 void SchedulerManager::initSchedulerIfNotExist()
 {
-    if (!m_scheduler || m_status == INITIALING)
+    try
     {
-        static bcos::SharedMutex mutex;
-        bcos::WriteGuard lock(mutex);
         if (!m_scheduler || m_status == INITIALING)
         {
-            updateScheduler(m_schedulerTerm.getSchedulerTermID());
-            m_status.store(RUNNING);
+            static bcos::SharedMutex mutex;
+            bcos::WriteGuard lock(mutex);
+            if (!m_scheduler || m_status == INITIALING)
+            {
+                updateScheduler(m_schedulerTerm.getSchedulerTermID());
+                m_status.store(RUNNING);
+            }
         }
     }
-
-    // testTriggerSwitch();  // Just a test code, TODO: remove me
+    catch (Exception const& _e)
+    {
+        SCHEDULER_LOG(FATAL) << "initSchedulerIfNotExist failed" << diagnostic_information(_e);
+        exit(-1);
+    }
 }
 
 void SchedulerManager::registerOnSwitchTermHandler(
@@ -276,7 +282,7 @@ void SchedulerManager::handleNeedSwitchEvent(int64_t oldSchedulerTermID)
                              << LOG_KV("oldSchedulerTermID", oldSchedulerTermID);
         return;
     }
-    else if (currentSchedulerTermID > oldSchedulerTermID)
+    else if (currentSchedulerTermID >= oldSchedulerTermID)
     {
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
                              << "handleNeedSwitchEvent: Ignore outdated oldSchedulerTermID"
@@ -341,13 +347,18 @@ void SchedulerManager::updateScheduler(int64_t schedulerTermId)
                                  << m_scheduler->getSchedulerTermId() << " == " << schedulerTermId;
             return;
         }
+    }
+    auto newScheduler = m_factory->build(schedulerTermId);
 
+    if (m_scheduler)
+    {
         m_scheduler->stop();
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "SchedulerSwitch: scheduler term switch "
                              << m_scheduler->getSchedulerTermId() << "->" << schedulerTermId;
     }
 
-    m_scheduler = m_factory->build(schedulerTermId);
+
+    m_scheduler = newScheduler;
     m_scheduler->setOnNeedSwitchEventHandler(
         [this](int64_t oldSchedulerTermID) { handleNeedSwitchEvent(oldSchedulerTermID); });
 }
@@ -360,11 +371,22 @@ void SchedulerManager::switchTerm(int64_t schedulerSeq)
     }
 
     m_status.store(SWITCHING);
-    m_schedulerTerm = SchedulerTerm(schedulerSeq);
-    updateScheduler(m_schedulerTerm.getSchedulerTermID());
+    try
+    {
+        auto newTerm = SchedulerTerm(schedulerSeq);
+        updateScheduler(newTerm.getSchedulerTermID());  // may throw exception
+        m_schedulerTerm = newTerm;
 
-    m_status.store(RUNNING);
-    onSwitchTermNotify();
+        m_status.store(RUNNING);
+        onSwitchTermNotify();
+    }
+    catch (Exception const& _e)
+    {
+        m_status.store(RUNNING);
+        SCHEDULER_LOG(ERROR) << "switchTerm failed. Re-push to task pool"
+                             << diagnostic_information(_e);
+        asyncSwitchTerm(schedulerSeq, {});
+    }
 }
 
 void SchedulerManager::selfSwitchTerm()
@@ -381,11 +403,23 @@ void SchedulerManager::selfSwitchTerm()
     }
 
     m_status.store(SWITCHING);
-    m_schedulerTerm = m_schedulerTerm.next();
-    updateScheduler(m_schedulerTerm.getSchedulerTermID());
+    try
+    {
+        auto newTerm = m_schedulerTerm.next();
+        updateScheduler(newTerm.getSchedulerTermID());  // may throw exception
+        m_schedulerTerm = newTerm;
 
-    m_status.store(RUNNING);
-    onSwitchTermNotify();
+
+        m_status.store(RUNNING);
+        onSwitchTermNotify();
+    }
+    catch (Exception const& _e)
+    {
+        m_status.store(RUNNING);
+        SCHEDULER_LOG(ERROR) << "selfSwitchTerm failed. Re-push to task pool"
+                             << diagnostic_information(_e);
+        asyncSelfSwitchTerm();
+    }
 }
 
 void SchedulerManager::asyncSelfSwitchTerm()

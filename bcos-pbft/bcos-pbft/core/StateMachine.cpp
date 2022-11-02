@@ -153,7 +153,6 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             // need to use m_worker to re-synchronize it here.
             _onExecuteFinished(0);
         });
-    return;
 }
 
 void StateMachine::preApply(

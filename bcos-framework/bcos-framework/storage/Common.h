@@ -22,8 +22,6 @@
 
 #include "../protocol/ProtocolTypeDef.h"
 #include "boost/algorithm/string.hpp"
-#include "tbb/spin_mutex.h"
-#include "tbb/spin_rw_mutex.h"
 #include <bcos-utilities/Error.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>

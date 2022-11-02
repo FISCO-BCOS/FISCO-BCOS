@@ -24,6 +24,8 @@
 #include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include <bcos-executor/src/executor/SwitchExecutorManager.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <memory>
 #ifdef WITH_LIGHTNODE
@@ -94,7 +96,8 @@ private:
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    std::shared_ptr<bcos::scheduler::SchedulerManager> m_scheduler;
+    std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
 };

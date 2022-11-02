@@ -124,6 +124,7 @@ void FrontService::start()
         {
             try
             {
+                boost::asio::io_service::work work(*m_ioService);
                 m_ioService->run();
             }
             catch (std::exception& e)
@@ -131,8 +132,6 @@ void FrontService::start()
                 FRONT_LOG(WARNING)
                     << LOG_DESC("IOService") << LOG_KV("error", boost::diagnostic_information(e));
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             if (m_run && m_ioService->stopped())
             {

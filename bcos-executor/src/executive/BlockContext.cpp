@@ -57,10 +57,13 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
-    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
+    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+    std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
   : BlockContext(storage, _hashImpl, _current->number(), _current->hash(), _current->timestamp(),
         _current->version(), _schedule, _isWasm, _isAuthCheck)
-{}
+{
+    m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
+}
 
 
 ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)

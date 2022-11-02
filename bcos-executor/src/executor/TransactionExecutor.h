@@ -39,9 +39,9 @@
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
-#include <tbb/spin_mutex.h>
 #include <boost/function.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -96,8 +96,7 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
-        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables,
-        std::string name);
+        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;
 
@@ -159,7 +158,6 @@ public:
 
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override;
-
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
     void getABI(std::string_view contract,
@@ -192,10 +190,6 @@ protected:
     virtual std::shared_ptr<BlockContext> createBlockContextForCall(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
         int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
-
-    std::shared_ptr<TransactionExecutive> createExecutive(
-        const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
-        int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
         bcos::protocol::ExecutionMessage::UniquePtr input, bool useCoroutine,
@@ -241,6 +235,8 @@ protected:
 
     protocol::BlockNumber getBlockNumberInStorage();
     protocol::BlockHeader::Ptr getBlockHeaderInStorage(protocol::BlockNumber number);
+    std::string getCodeHash(
+        std::string_view tableName, storage::StateStorageInterface::Ptr const& stateStorage);
 
     std::string m_name;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -313,7 +309,7 @@ protected:
     uint32_t m_blockVersion = 0;
     size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
-    std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
+    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
 
@@ -322,6 +318,8 @@ protected:
     void initWasmEnvironment();
 
     std::function<void()> f_onNeedSwitchEvent;
+
+    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
 };
 
 }  // namespace executor

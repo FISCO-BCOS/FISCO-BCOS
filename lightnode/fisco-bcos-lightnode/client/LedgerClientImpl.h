@@ -52,7 +52,7 @@ private:
         bcostars::ResponseBlock response;
         auto nodeID = co_await p2p().randomSelectNode();
         co_await p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_GETBLOCK, nodeID, request, response);
+            bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
 
         if (response.error.errorCode)
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
@@ -68,8 +68,8 @@ private:
         using ResponseType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
             bcostars::ResponseTransactions, bcostars::ResponseReceipts>;
         auto moduleID = bcos::concepts::transaction::Transaction<DataType> ?
-                            protocol::LIGHTNODE_GETTRANSACTIONS :
-                            protocol::LIGHTNODE_GETRECEIPTS;
+                            protocol::LIGHTNODE_GET_TRANSACTIONS :
+                            protocol::LIGHTNODE_GET_RECEIPTS;
 
         RequestType request;
         request.hashes.reserve(RANGES::size(hashes));
@@ -108,7 +108,7 @@ private:
         auto nodeID = co_await p2p().randomSelectNode();
 
         co_await p2p().sendMessageByNodeID(
-            protocol::LIGHTNODE_GETSTATUS, std::move(nodeID), request, response);
+            protocol::LIGHTNODE_GET_STATUS, std::move(nodeID), request, response);
 
         if (response.error.errorCode)
         {

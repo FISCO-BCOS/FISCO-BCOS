@@ -233,12 +233,6 @@ protected:
     mutable RecursiveMutex m_mutex;
 
     const unsigned c_PopWaitSeconds = 5;
-
-    // Message packets allowed to be processed in timeout mode
-    const std::set<PacketType> c_timeoutAllowedPacket = {ViewChangePacket, NewViewPacket,
-        CommittedProposalRequest, CommittedProposalResponse, PreparedProposalRequest,
-        PreparedProposalResponse, CheckPoint, RecoverRequest, RecoverResponse};
-
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
     std::atomic_bool m_stopped = {false};

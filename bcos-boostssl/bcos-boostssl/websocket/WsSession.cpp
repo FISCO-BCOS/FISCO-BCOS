@@ -309,12 +309,12 @@ void WsSession::asyncWrite(std::shared_ptr<bcos::bytes> _buffer)
     }
 }
 
-void WsSession::send(std::shared_ptr<bytes> _buffer)
+void WsSession::send(std::shared_ptr<bytes> buffer)
 {
     auto msg = std::make_shared<Message>();
-    msg->buffer = _buffer;
+    msg->buffer = std::move(buffer);
     {
-        WriteGuard l(x_writeQueue);
+        WriteGuard lock(x_writeQueue);
         // data to be sent is always enqueue first
         m_writeQueue.push(msg);
     }

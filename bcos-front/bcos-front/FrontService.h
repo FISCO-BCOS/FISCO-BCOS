@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/asio.hpp>
+#include <utility>
 
 namespace bcos
 {
@@ -160,7 +161,7 @@ public:
 
     void setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     bcos::crypto::NodeIDPtr nodeID() const { return m_nodeID; }
