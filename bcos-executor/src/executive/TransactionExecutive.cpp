@@ -132,11 +132,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             return std::move(output);
         }
 
-        auto codeHash =
-            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+        auto codeHash = codeHashEntry->getField(0);
 
         // get code in code binary table
-        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
         if (!entry || entry->get().empty())
         {
             auto& output = input;
@@ -168,11 +167,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             return std::move(output);
         }
 
-        auto codeHash =
-            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+        auto codeHash = codeHashEntry->getField(0);
 
         // get code in code binary table
-        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
         if (!entry || entry->get().empty())
         {
             EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"

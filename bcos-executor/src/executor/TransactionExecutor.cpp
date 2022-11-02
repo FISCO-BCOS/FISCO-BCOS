@@ -1505,10 +1505,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                         continue;
                                     }
 
-                                    auto codeHashBin = std::string(entry->getField(0));
-                                    auto codeHash = h256(
-                                        codeHashBin, FixedBytes<32>::StringDataType::FromBinary)
-                                                        .hex();
+                                    auto codeHash = entry->getField(0);
 
                                     // get abi according to codeHash
                                     auto abiTable =
@@ -1973,15 +1970,26 @@ void TransactionExecutor::getABI(
 
     storage::StateStorageInterface::Ptr stateStorage;
 
+    {
+        std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
+        if (!m_stateStorages.empty())
+        {
+            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+        }
+    }
     // create temp state storage
-    if (m_cachedStorage)
+    if (!stateStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage, true);
+        if (m_cachedStorage)
+        {
+            stateStorage = createStateStorage(m_cachedStorage, true);
+        }
+        else
+        {
+            stateStorage = createStateStorage(m_backendStorage, true);
+        }
     }
-    else
-    {
-        stateStorage = createStateStorage(m_backendStorage, true);
-    }
+
 
     std::string contractTableName = getContractTableName(contract);
     auto getAbiFromContractTable = [stateStorage, this](std::string_view contractTableName,
@@ -2023,6 +2031,8 @@ void TransactionExecutor::getABI(
         // asyncGetRow key should not be empty
         std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
         // try to get abi from SYS_CONTRACT_ABI first
+        EXECUTOR_LOG(TRACE) << LOG_DESC("get abi") << LOG_KV("abiKey", abiKey);
+
         stateStorage->asyncGetRow(bcos::ledger::SYS_CONTRACT_ABI, abiKey,
             [this, contractTableName, callback = std::move(callback),
                 getAbiFromContractTable = std::move(getAbiFromContractTable)](
@@ -2637,9 +2647,7 @@ std::string TransactionExecutor::getCodeHash(
                 codeHashPromise.set_value(std::string());
                 return;
             }
-            auto codeHash =
-                h256(std::string(entry->getField(0)), FixedBytes<32>::StringDataType::FromBinary)
-                    .hex();
+            auto codeHash = std::string(entry->getField(0));
             codeHashPromise.set_value(std::move(codeHash));
         });
     return codeHashPromise.get_future().get();
