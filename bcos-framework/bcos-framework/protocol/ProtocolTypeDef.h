@@ -104,8 +104,7 @@ struct Session
 struct TwoPCParams
 {
     BlockNumber number = 0;
-    std::string primaryTableName;
-    std::string primaryTableKey;
+    std::string primaryKey;
     uint64_t timestamp = 0;
 };
 }  // namespace protocol

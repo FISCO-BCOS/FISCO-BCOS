@@ -1671,12 +1671,11 @@ void TransactionExecutor::prepare(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    bcos::protocol::TwoPCParams storageParams{params.number, params.primaryKey, params.timestamp};
 
     m_backendStorage->asyncPrepare(storageParams, *(first->storage),
         [this, callback = std::move(callback), blockNumber = params.number](
-            auto&& error, uint64_t) {
+            auto&& error, uint64_t, const std::string&) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1735,8 +1734,7 @@ void TransactionExecutor::commit(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    bcos::protocol::TwoPCParams storageParams{params.number, params.primaryKey, params.timestamp};
     m_backendStorage->asyncCommit(storageParams, [this, callback = std::move(callback),
                                                      blockNumber = params.number](
                                                      Error::Ptr&& error, uint64_t) {
@@ -1805,8 +1803,7 @@ void TransactionExecutor::rollback(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    bcos::protocol::TwoPCParams storageParams{params.number, params.primaryKey, params.timestamp};
     m_backendStorage->asyncRollback(storageParams,
         [this, callback = std::move(callback), blockNumber = params.number](auto&& error) {
             if (!m_isRunning)

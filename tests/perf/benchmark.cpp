@@ -181,7 +181,7 @@ int main(int argc, const char* argv[])
         TraverseStorageInterface::Ptr t =
             std::dynamic_pointer_cast<bcos::storage::TraverseStorageInterface>(s);
         bcos::protocol::TwoPCParams p;
-        rocksDBStorage->asyncPrepare(p, *t, [](bcos::Error::Ptr, uint64_t) {
+        rocksDBStorage->asyncPrepare(p, *t, [](bcos::Error::Ptr, uint64_t, const std::string&) {
             // std::cout << "asyncPrepare finished" << std::endl;
         });
         rocksDBStorage->asyncCommit(p, [](bcos::Error::Ptr, uint64_t) {

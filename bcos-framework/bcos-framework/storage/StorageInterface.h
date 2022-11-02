@@ -112,11 +112,11 @@ public:
     using Ptr = std::shared_ptr<TransactionalStorageInterface>;
     using ConstPtr = std::shared_ptr<const TransactionalStorageInterface>;
 
-    virtual ~TransactionalStorageInterface() = default;
+    ~TransactionalStorageInterface() override = default;
 
     virtual void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) = 0;
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) = 0;
 
     virtual void asyncCommit(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;
