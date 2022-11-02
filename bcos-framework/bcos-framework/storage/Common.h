@@ -63,6 +63,7 @@ struct Condition
 {
     Condition() = default;
     ~Condition() = default;
+    void EQ(const std::string& value) { m_conditions.emplace_back(Comparator::EQ, value); }
     void NE(const std::string& value) { m_conditions.emplace_back(Comparator::NE, value); }
     // string compare, "2" > "12"
     void GT(const std::string& value) { m_conditions.emplace_back(Comparator::GT, value); }
@@ -74,12 +75,33 @@ struct Condition
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
 
+    bool isRangeSelect() const
+    {
+        if(m_conditions.empty())
+            return false;
+        for(auto& cond : m_conditions)
+        {
+            if(cond.cmp != Comparator::GT && cond.cmp != Comparator::GE && 
+               cond.cmp != Comparator::LT && cond.cmp != Comparator::LE)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     bool isValid(const std::string_view& key) const
     {  // all conditions must be satisfied
         for (auto& cond : m_conditions)
         {  // conditions should few, so not parallel check for now
             switch (cond.cmp)
             {
+            case Comparator::EQ:
+                if (key != cond.value)
+                {
+                    return false;
+                }
+                break;
             case Comparator::NE:
                 if (key == cond.value)
                 {
