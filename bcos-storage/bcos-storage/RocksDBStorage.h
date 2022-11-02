@@ -62,7 +62,7 @@ public:
 
     void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) override;
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) override;
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr, uint64_t)> callback) override;

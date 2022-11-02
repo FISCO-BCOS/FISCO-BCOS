@@ -79,7 +79,7 @@ public:
 
     void asyncPrepare(const TwoPCParams& params,
         const bcos::storage::TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
 
@@ -104,7 +104,7 @@ public:
                 return true;
             });
 
-        callback(nullptr, 0);
+        callback(nullptr, 0, "");
     }
 
     void asyncCommit(const TwoPCParams& params,

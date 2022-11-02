@@ -7,6 +7,8 @@ else()
     set(TIKV_BUILD_MODE "release")
 endif()
 
+find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
+
 # FIXME: when release 3.1.0 modify tikv-client log level to info
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -14,8 +16,8 @@ ExternalProject_Add(tikv_client_project
   GIT_TAG        fe65f267e6d9ee78bbee5eab8651b4f6f3607e48
   BUILD_IN_SOURCE true
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
-  CONFIGURE_COMMAND cargo install cxxbridge-cmd@1.0.75
-  BUILD_COMMAND cargo build && cargo build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
+  CONFIGURE_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75
+  BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
   INSTALL_COMMAND ""
   BUILD_BYPRODUCTS <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a
   # LOG_BUILD true
