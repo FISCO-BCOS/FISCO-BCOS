@@ -61,13 +61,18 @@ jobs:
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
-
       - name: Test
-        run:
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
-
+        run: |
+          export PATH=/home/ci/.tiup/bin/:$PATH
+          cat /home/ci/.bashrc
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/ci/.bashrc
+          tiup update --self && tiup update playground
+          tiup install playground tikv:v5.4.2 pd:v5.4.2
+          nohup tiup playground v5.4.2 --mode tikv-slim --without-monitor &
+          sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh
       - name: Integration test - Pro

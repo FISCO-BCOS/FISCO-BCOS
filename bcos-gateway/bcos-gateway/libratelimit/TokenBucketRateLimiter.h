@@ -47,7 +47,7 @@ public:
     TokenBucketRateLimiter& operator=(const TokenBucketRateLimiter&) = delete;
     TokenBucketRateLimiter& operator=(TokenBucketRateLimiter&&) = delete;
 
-    ~TokenBucketRateLimiter() override {}
+    ~TokenBucketRateLimiter() override = default;
 
 public:
     /**

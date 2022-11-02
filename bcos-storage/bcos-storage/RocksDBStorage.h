@@ -69,13 +69,13 @@ public:
 
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) override;
-    Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
-        std::vector<std::string> values) noexcept override;
+    Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
+        std::vector<std::string_view> values) noexcept override;
 
 private:
     Error::Ptr checkStatus(rocksdb::Status const& status);
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
-    tbb::spin_mutex m_writeBatchMutex;
+    std::mutex m_writeBatchMutex;
     std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>> m_db;
 
     // Security Storage

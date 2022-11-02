@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2019, macos-12]
+        os: [macos-12]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -68,7 +68,7 @@ jobs:
       - name: Build for macos
         if: runner.os == 'macOS'
         run: |
-          brew install ccache gmp lcov
+          brew install ccache gmp lcov libomp
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 3
       - name: Test
@@ -116,6 +116,8 @@ jobs:
           yum install -y devtoolset-10 devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
+          yum remove  -y cmake
+          alias cmake='cmake3'
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
@@ -134,6 +136,8 @@ jobs:
           mkdir -p build
           cd build
           alias cmake='cmake3'
+          ln -s /usr/bin/cmake3 /usr/bin/cmake
+          echo "alias cmake=cmake3" >> ~/.bashrc
           cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -D${{ matrix.tikv }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake3 --build . --parallel 3
       - name: Test with tikv
@@ -145,7 +149,7 @@ jobs:
           source /github/home/.profile
           tiup update --self && tiup update playground
           tiup clean --all
-          tiup playground v5.4.2 --mode tikv-slim &
+          tiup playground v5.4.2 --mode tikv-slim --without-monitor &
           sleep 15
           export OMP_NUM_THREADS=1
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test

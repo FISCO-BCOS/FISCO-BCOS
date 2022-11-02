@@ -116,7 +116,7 @@ public:
     virtual void setAttribute(uint32_t attribute) = 0;
 
     TxSubmitCallback takeSubmitCallback() { return std::move(m_submitCallback); }
-    TxSubmitCallback submitCallback() const { return m_submitCallback; }
+    TxSubmitCallback const& submitCallback() const { return m_submitCallback; }
     void setSubmitCallback(TxSubmitCallback _submitCallback) { m_submitCallback = _submitCallback; }
     bool synced() const { return m_synced; }
     void setSynced(bool _synced) const { m_synced = _synced; }

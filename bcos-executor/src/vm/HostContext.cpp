@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
@@ -199,6 +200,10 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->create = true;
         break;
     }
+    if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+    {
+        request->logEntries = std::move(m_callParameters->logEntries);
+    }
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
 
@@ -319,8 +324,30 @@ evmc_result HostContext::callBuiltInPrecompiled(
 bool HostContext::setCode(bytes code)
 {
     // set code will cause exception when exec revert
-    auto table = m_executive->storage().openTable(m_tableName);
-    if (table)
+    // new logic
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        auto contractTable = m_executive->storage().openTable(m_tableName);
+        // set code hash in contract table
+        Entry codeHashEntry;
+        auto codeHash = hashImpl()->hash(code);
+        if (contractTable)
+        {
+            codeHashEntry.importFields({codeHash.asBytes()});
+            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+            // set code in code binary table
+
+            Entry codeEntry;
+            codeEntry.importFields({std::move(code)});
+            m_executive->storage().setRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
+            return true;
+        }
+        return false;
+    }
+    // old logic
+    auto contractTable = m_executive->storage().openTable(m_tableName);
+    if (contractTable)
     {
         Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
@@ -341,6 +368,20 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
                         << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
     if (setCode(std::move(code)))
     {
+        // new logic
+        if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+        {
+            // set abi in abi table
+            auto codeHashBin = std::string(
+                m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH)->getField(0));
+            auto codeHash = h256(codeHashBin, FixedBytes<32>::StringDataType::FromBinary).hex();
+            Entry abiEntry;
+            abiEntry.importFields({std::move(abi)});
+            m_executive->storage().setRow(
+                bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+            return;
+        }
+        // old logic
         Entry abiEntry;
         abiEntry.importFields({std::move(abi)});
         m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);
@@ -410,7 +451,7 @@ u256 HostContext::store(const u256& _n)
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
     {
-        // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+        // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
         // {  // FIXME: this log is only for debug, comment it when release
         //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
         //                         << LOG_KV("value", toHex(entry->get()));
@@ -436,7 +477,7 @@ void HostContext::setStore(u256 const& _n, u256 const& _v)
     auto value = toEvmC(_v);
     bytes valueBytes(value.bytes, value.bytes + sizeof(value.bytes));
 
-    // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+    // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
     // {  // FIXME: this log is only for debug, comment it when release
     //     EXECUTOR_LOG(TRACE) << LOG_DESC("setStore") << LOG_KV("key", toHex(keyView))
     //                         << LOG_KV("value", toHex(valueBytes));
@@ -478,6 +519,10 @@ int64_t HostContext::blockNumber() const
 {
     return m_executive->blockContext().lock()->number();
 }
+uint32_t HostContext::blockVersion() const
+{
+    return m_executive->blockContext().lock()->blockVersion();
+}
 int64_t HostContext::timestamp() const
 {
     return m_executive->blockContext().lock()->timestamp();
@@ -491,6 +536,19 @@ std::string_view HostContext::myAddress() const
 std::optional<storage::Entry> HostContext::code()
 {
     auto start = utcTimeUs();
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        auto codehash = codeHash();
+        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codehash.hex());
+        if (!entry || entry->get().empty())
+        {
+            auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+            m_getTimeUsed.fetch_add(utcTimeUs() - start);
+            return codeEntry;
+        }
+        m_getTimeUsed.fetch_add(utcTimeUs() - start);
+        return entry;
+    }
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
     m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return entry;
@@ -503,7 +561,8 @@ h256 HostContext::codeHash()
     {
         auto code = entry->getField(0);
 
-        return h256(std::string(code));  // TODO: h256 support decode from string_view
+        return h256(code, FixedBytes<32>::StringDataType::FromBinary);  // TODO: h256 support decode
+                                                                        // from string_view
     }
 
     return h256();

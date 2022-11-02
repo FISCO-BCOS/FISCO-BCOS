@@ -188,7 +188,7 @@ void PBFTConfig::reNotifySealer(bcos::protocol::BlockNumber _index)
 
 bool PBFTConfig::canHandleNewProposal()
 {
-    ReadGuard l(x_committedProposal);
+    ReadGuard lock(x_committedProposal);
     bcos::protocol::BlockNumber committedIndex = 0;
     if (m_committedProposal)
     {
@@ -211,7 +211,7 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     {
         return true;
     }
-    ReadGuard l(x_committedProposal);
+    ReadGuard lock(x_committedProposal);
     auto committedIndex = m_committedProposal->index();
     return _msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
            _msg->index() <= m_waitResealUntil;
@@ -245,7 +245,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
         return false;
     }
     // Note: must register m_faultyDiscriminator before start the PBFTEngine
-    if (nodeList.count(leaderNodeInfo->nodeID()) &&
+    if (nodeList.contains(leaderNodeInfo->nodeID()) &&
         !m_faultyDiscriminator(leaderNodeInfo->nodeID()))
     {
         return false;
@@ -261,7 +261,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
-    RecursiveGuard l(m_mutex);
+    RecursiveGuard lock(m_mutex);
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -394,8 +394,8 @@ uint64_t PBFTConfig::minRequiredQuorum() const
 void PBFTConfig::updateQuorum()
 {
     m_totalQuorum.store(0);
-    ReadGuard l(x_consensusNodeList);
-    for (auto consensusNode : *m_consensusNodeList)
+    ReadGuard lock(x_consensusNodeList);
+    for (const auto& consensusNode : *m_consensusNodeList)
     {
         m_totalQuorum += consensusNode->weight();
     }
@@ -428,7 +428,7 @@ IndexType PBFTConfig::leaderIndexInNewViewPeriod(
 
 PBFTProposalInterface::Ptr PBFTConfig::populateCommittedProposal()
 {
-    ReadGuard l(x_committedProposal);
+    ReadGuard lock(x_committedProposal);
     if (!m_committedProposal)
     {
         return nullptr;

@@ -133,6 +133,8 @@ public:
         m_scheduler = nullptr;
     }
 
+    void triggerSwitch() { asyncSelfSwitchTerm(); };
+
 private:
     void updateScheduler(int64_t schedulerTermId);
     void switchTerm(int64_t schedulerSeq);

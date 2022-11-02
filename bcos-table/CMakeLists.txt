@@ -25,10 +25,9 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 
 find_package(Boost REQUIRED serialization)
 find_package(TBB CONFIG REQUIRED)
-find_package(OpenMP 2.0 REQUIRED)
 
 add_library(${TABLE_TARGET} ${SRCS})
-target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb OpenMP::OpenMP_CXX)
+target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb)
 
 if (TESTS)
     enable_testing()

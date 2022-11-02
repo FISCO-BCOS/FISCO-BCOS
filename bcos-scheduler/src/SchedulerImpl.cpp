@@ -373,7 +373,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                     << LOG_KV("txsRoot", header->txsRoot().abridged())
                     << LOG_KV("gasUsed", header->gasUsed())
                     << LOG_KV("signatureSize", signature.size())
-                    << LOG_KV("timeCost", utcTime() - startTime);
+                    << LOG_KV("timeCost", utcTime() - startTime)
+                    << LOG_KV("blockVersion", header->version());
 
                 m_lastExecuteFinishTime = utcTime();
                 executeLock->unlock();

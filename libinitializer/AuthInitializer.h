@@ -43,12 +43,8 @@ class AuthInitializer
 public:
     static void init(protocol::BlockNumber _number,
         const std::shared_ptr<ProtocolInitializer>& _protocol,
-        const std::shared_ptr<NodeConfig>& _nodeConfig,
-        const bcos::scheduler::SchedulerInterface::Ptr& _scheduler)
+        const std::shared_ptr<NodeConfig>& _nodeConfig, const protocol::Block::Ptr& block)
     {
-        auto block = _protocol->blockFactory()->createBlock();
-        block->blockHeader()->setNumber(_number);
-
         // hex bin code to bytes
         bytes code;
         boost::algorithm::unhex(
@@ -75,45 +71,6 @@ public:
             _nodeConfig->groupId(), utcTime());
         tx->forceSender(authAdmin.asBytes());
         block->appendTransaction(tx);
-
-        std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-        _scheduler->executeBlock(block, false,
-            [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool) {
-                if (_error)
-                {
-                    INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer")
-                                           << LOG_KV("errorMsg", _error->errorMessage());
-                    BOOST_THROW_EXCEPTION(
-                        BCOS_ERROR(-1, "AuthInitializer: scheduler executeBlock error"));
-                }
-                INITIALIZER_LOG(INFO)
-                    << LOG_BADGE("AuthInitializer") << LOG_DESC("scheduler execute block success!")
-                    << LOG_KV("blockHash", block->blockHeader()->hash().hex());
-                executedHeader.set_value(std::move(_header));
-            });
-        auto header = executedHeader.get_future().get();
-
-        std::promise<std::tuple<Error::Ptr, bcos::ledger::LedgerConfig::Ptr>> committedConfig;
-        _scheduler->commitBlock(
-            header, [&](Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _config) {
-                if (_error)
-                {
-                    INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer")
-                                           << LOG_KV("errorMsg", _error->errorMessage());
-                    committedConfig.set_value(std::make_tuple(std::move(_error), nullptr));
-                    return;
-                }
-                committedConfig.set_value(std::make_tuple(nullptr, std::move(_config)));
-            });
-        auto [error, newConfig] = committedConfig.get_future().get();
-        if (error != nullptr && newConfig->blockNumber() != _number)
-        {
-            INITIALIZER_LOG(ERROR)
-                << LOG_BADGE("AuthInitializer") << LOG_DESC("Error in commitBlock")
-                << (error ? "errorMsg" + error->errorMessage() : "")
-                << LOG_KV("configNumber", newConfig->blockNumber());
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "AuthInitializer commitBlock error"));
-        }
     }
 };
 }  // namespace bcos::initializer
