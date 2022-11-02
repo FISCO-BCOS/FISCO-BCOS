@@ -26,8 +26,12 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
 #include <bcos-tars-protocol/testutil/FakeTransaction.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <tbb/blocked_range.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <exception>
 
 using namespace bcos::txpool;
 using namespace bcos::sync;
@@ -39,21 +43,61 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(txsSyncTest, TestPromptFixture)
 
-void importTransactions(size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, TxPoolFixture::Ptr _faker)
+void importTransactions(
+    size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, const TxPoolFixture::Ptr& _faker)
 {
     auto txpool = _faker->txpool();
     auto ledger = _faker->ledger();
     Transactions transactions;
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto tx = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i, ledger->blockNumber() + 1,
-            _faker->chainId(), _faker->groupId());
-        transactions.push_back(tx);
-        bcos::bytes encodedData;
-        tx->encode(encodedData);
-        auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-        txpool->asyncSubmit(txData, [&](Error::Ptr, TransactionSubmitResult::Ptr) {});
+        auto transaction = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i,
+            ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
+        transactions.push_back(transaction);
+        task::wait(txpool->submitTransaction(transaction));
     }
+    auto startT = utcTime();
+    while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
+
+void importTransactionsNew(
+    size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, const TxPoolFixture::Ptr& _faker)
+{
+    auto txpool = _faker->txpool();
+    auto ledger = _faker->ledger();
+    Transactions transactions;
+    for (size_t i = 0; i < _txsNum; i++)
+    {
+        auto transaction = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i,
+            ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
+        transactions.push_back(transaction);
+    }
+
+    // Test parallel submit
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, transactions.size()), [&txpool, &transactions](auto& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                auto& transaction = transactions[i];
+                task::wait(txpool->submitTransaction(transaction), [](auto&& result) {
+                    using ResultType = std::decay_t<decltype(result)>;
+                    if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+                    {
+                        std::rethrow_exception(result);
+                    }
+                    else
+                    {
+                        BOOST_CHECK_EQUAL(result->status(), 0);
+                    }
+
+                    TXPOOL_LOG(DEBUG) << "Submit transaction successed";
+                });
+            }
+        });
+
     auto startT = utcTime();
     while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))
     {
@@ -189,8 +233,9 @@ void testTransactionSync(bool _onlyTxsStatus = false)
 
     // import new transaction to the syncPeer, but not broadcast the imported transaction
     std::cout << "###### test fetch and verify block" << std::endl;
-    auto newTxsSize = 10;
-    importTransactions(newTxsSize, cryptoSuite, syncPeer);
+    auto newTxsSize = 1000;
+    importTransactionsNew(newTxsSize, cryptoSuite, syncPeer);  // Use new method to import
+                                                               // transaction
     // the syncPeer sealTxs
     HashListPtr txsHash = std::make_shared<HashList>();
     bool finish = false;
@@ -244,6 +289,7 @@ BOOST_AUTO_TEST_CASE(testOnPeerTxsStatus)
 {
     testTransactionSync(true);
 }
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

@@ -27,12 +27,13 @@
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/spin_mutex.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
 #include <exception>
 #include <future>
+#include <mutex>
 #include <optional>
+#include <variant>
 
 using namespace bcos::storage;
 using namespace bcos::protocol;
@@ -101,14 +102,16 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
-        if (false == value.empty() && nullptr != m_dataEncryption)
+        if (!value.empty() && nullptr != m_dataEncryption)
+        {
             value = m_dataEncryption->decrypt(value);
+        }
 
         if (!status.ok())
         {
             if (status.IsNotFound())
             {
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("not found") << LOG_KV("table", _table)
                                                << LOG_KV("key", toHex(_key));
@@ -311,7 +314,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
         auto start = utcTime();
         {
-            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+            std::unique_lock lock(m_writeBatchMutex);
             if (!m_writeBatch)
             {
                 m_writeBatch = std::make_shared<WriteBatch>();
@@ -320,52 +323,89 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         std::atomic_uint64_t putCount{0};
         std::atomic_uint64_t deleteCount{0};
         atomic_bool isTableValid = true;
-        storage.parallelTraverse(true,
-            [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
-                if (!isValid(table, key))
-                {
-                    isTableValid = false;
-                    return false;
-                }
-                auto dbKey = toDBKey(table, key);
 
-                if (entry.status() == Entry::DELETED)
+        tbb::concurrent_vector<std::tuple<Entry::Status, std::string,
+            std::variant<std::monostate, std::string, Entry>>>
+            dataChanges;
+        storage.parallelTraverse(true, [&](const std::string_view& table,
+                                           const std::string_view& key, Entry const& entry) {
+            if (!isValid(table, key))
+            {
+                isTableValid = false;
+                return false;
+            }
+            auto dbKey = toDBKey(table, key);
+
+            if (entry.status() == Entry::DELETED)
+            {
+                if (c_fileLogLevel <= TRACE)
                 {
-                    if (c_fileLogLevel >= TRACE)
-                    {
-                        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
-                                                   << LOG_KV("key", toHex(key));
-                    }
-                    ++deleteCount;
-                    tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-                    m_writeBatch->Delete(dbKey);
+                    STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("delete") << LOG_KV("table", table)
+                                               << LOG_KV("key", toHex(key));
+                }
+                ++deleteCount;
+                dataChanges.emplace_back(
+                    std::tuple{entry.status(), std::move(dbKey), std::monostate{}});
+            }
+            else
+            {
+                if (c_fileLogLevel <= TRACE)
+                {
+                    STORAGE_ROCKSDB_LOG(TRACE)
+                        << LOG_DESC("write") << LOG_KV("table", table) << LOG_KV("key", toHex(key))
+                        << LOG_KV("size", entry.size());
+                }
+                ++putCount;
+
+                // Storage security
+                if (auto value = entry.get(); !value.empty() && m_dataEncryption)
+                {
+                    std::string encryptValue(value);
+                    encryptValue = m_dataEncryption->encrypt(encryptValue);
+                    dataChanges.emplace_back(
+                        std::tuple{entry.status(), std::move(dbKey), std::move(encryptValue)});
                 }
                 else
                 {
-                    if (c_fileLogLevel >= TRACE)
-                    {
-                        STORAGE_ROCKSDB_LOG(TRACE)
-                            << LOG_DESC("write") << LOG_KV("table", table)
-                            << LOG_KV("key", toHex(key)) << LOG_KV("size", entry.size());
-                    }
-                    ++putCount;
-                    tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-
-                    std::string value(entry.get().data(), entry.get().size());
-
-                    // Storage security
-                    if (false == value.empty() && nullptr != m_dataEncryption)
-                        value = m_dataEncryption->encrypt(value);
-
-                    auto status = m_writeBatch->Put(dbKey, std::move(value));
+                    dataChanges.emplace_back(std::tuple{entry.status(), std::move(dbKey), entry});
                 }
-                return true;
-            });
+            }
+            return true;
+        });
+
+        for (auto& [status, key, value] : dataChanges)
+        {
+            if (status == Entry::DELETED)
+            {
+                m_writeBatch->Delete(key);
+            }
+            else
+            {
+                auto& localKey = key;
+                std::visit(
+                    [this, &localKey](auto&& valueStr) {
+                        using ValueType = std::decay_t<decltype(valueStr)>;
+                        if constexpr (std::same_as<ValueType, std::string>)
+                        {
+                            m_writeBatch->Put(localKey, valueStr);
+                        }
+                        else if constexpr (std::same_as<ValueType, Entry>)
+                        {
+                            m_writeBatch->Put(localKey, valueStr.get());
+                        }
+                        else
+                        {
+                            STORAGE_ROCKSDB_LOG(FATAL) << "Unexcepted monostate!";
+                        }
+                    },
+                    value);
+            }
+        }
 
         if (!isTableValid)
         {
             {
-                tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                std::unique_lock lock(m_writeBatchMutex);
                 m_writeBatch = nullptr;
             }
             STORAGE_ROCKSDB_LOG(ERROR)
@@ -394,7 +434,7 @@ void RocksDBStorage::asyncCommit(
     auto start = utcTime();
     std::ignore = params;
     {
-        tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+        std::unique_lock lock(m_writeBatchMutex);
         if (m_writeBatch)
         {
             WriteOptions options;
@@ -431,7 +471,7 @@ void RocksDBStorage::asyncRollback(
 
     std::ignore = params;
     {
-        tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+        std::unique_lock lock(m_writeBatchMutex);
         m_writeBatch = nullptr;
     }
     auto end = utcTime();
@@ -442,8 +482,8 @@ void RocksDBStorage::asyncRollback(
                               << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
-bcos::Error::Ptr RocksDBStorage::setRows(
-    std::string_view table, std::vector<std::string> keys, std::vector<std::string> values) noexcept
+bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table, std::vector<std::string_view> keys,
+    std::vector<std::string_view> values) noexcept
 {
     if (table.empty())
     {
@@ -464,16 +504,21 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         return nullptr;
     }
     std::vector<std::string> realKeys(keys.size());
+
     std::vector<std::string> encryptedValues;
-    encryptedValues.resize(values.size());
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+    if (m_dataEncryption)
+    {
+        encryptedValues.resize(values.size());
+    }
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
+        [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i != range.end(); ++i)
             {
                 realKeys[i] = toDBKey(table, keys[i]);
                 if (m_dataEncryption)
                 {
-                    encryptedValues[i] = m_dataEncryption->encrypt(values[i]);
+                    encryptedValues[i] = m_dataEncryption->encrypt(std::string(values[i]));
                 }
             }
         });
@@ -483,11 +528,11 @@ bcos::Error::Ptr RocksDBStorage::setRows(
         // Storage Security
         if (m_dataEncryption)
         {
-            writeBatch.Put(std::move(realKeys[i]), std::move(encryptedValues[i]));
+            writeBatch.Put(realKeys[i], encryptedValues[i]);
         }
         else
         {
-            writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+            writeBatch.Put(realKeys[i], values[i]);
         }
     }
     WriteOptions options;

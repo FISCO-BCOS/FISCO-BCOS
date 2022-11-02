@@ -136,8 +136,8 @@ protected:
     static void toJsonResp(
         Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
     static void toJsonResp(Json::Value& jResp, std::string_view _txHash,
-        bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr, bool _isWasm,
-        crypto::Hash::Ptr _hashImpl);
+        bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
+        crypto::Hash& hashImpl);
     static void addProofToResponse(
         Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
 
@@ -149,12 +149,13 @@ protected:
         std::string_view _groupID, std::string_view _nodeName, std::string_view _command);
 
     template <typename T>
-    void checkService(T _service, std::string _serviceName)
+    void checkService(T _service, std::string_view _serviceName)
     {
         if (!_service)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::ServiceNotInitCompleted,
-                "The service " + _serviceName + " has not been initted completed yet!"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                JsonRpcError::ServiceNotInitCompleted, "The service " + std::string(_serviceName) +
+                                                           " has not been initted completed yet!"));
         }
     }
 

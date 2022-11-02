@@ -28,6 +28,7 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+
 using namespace bcos::node;
 using namespace bcos::initializer;
 using namespace bcos::gateway;

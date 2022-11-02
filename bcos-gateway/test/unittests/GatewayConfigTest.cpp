@@ -22,6 +22,7 @@
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -162,11 +163,36 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
     }
 }
 
+BOOST_AUTO_TEST_CASE(test_initSMConfig)
+{
+    {
+        // std::string
+        // configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
+        std::string configIni("data/config/config_ipv6.ini");
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initConfig(configIni);
+        config->loadP2pConnectedNodes();
+
+        BOOST_CHECK_EQUAL(config->listenIP(), "0.0.0.0");
+        BOOST_CHECK_EQUAL(config->listenPort(), 54321);
+        BOOST_CHECK_EQUAL(config->smSSL(), true);
+        BOOST_CHECK_EQUAL(config->connectedNodes().size(), 1);
+
+        auto smCertConfig = config->smCertConfig();
+        BOOST_CHECK(!smCertConfig.caCert.empty());
+        BOOST_CHECK(!smCertConfig.nodeCert.empty());
+        BOOST_CHECK(!smCertConfig.nodeKey.empty());
+        BOOST_CHECK(!smCertConfig.enNodeCert.empty());
+        BOOST_CHECK(!smCertConfig.enNodeKey.empty());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-        BOOST_CHECK(!rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
     }
 
     {
@@ -180,13 +206,28 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
+
+        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
+        BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::TxsSync) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::AMOP) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
@@ -216,41 +257,32 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
+
+        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
+
+        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
+        BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(
+            rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::ConsTxsSync) !=
+            rateLimiterConfig.modulesWithoutLimit.end());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 0);
         BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 0);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(test_initSMConfig)
-{
-    {
-        // std::string
-        // configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
-        std::string configIni("data/config/config_ipv6.ini");
-
-        auto config = std::make_shared<GatewayConfig>();
-        config->initConfig(configIni);
-        config->loadP2pConnectedNodes();
-
-        BOOST_CHECK_EQUAL(config->listenIP(), "0.0.0.0");
-        BOOST_CHECK_EQUAL(config->listenPort(), 54321);
-        BOOST_CHECK_EQUAL(config->smSSL(), true);
-        BOOST_CHECK_EQUAL(config->connectedNodes().size(), 1);
-
-        auto smCertConfig = config->smCertConfig();
-        BOOST_CHECK(!smCertConfig.caCert.empty());
-        BOOST_CHECK(!smCertConfig.nodeCert.empty());
-        BOOST_CHECK(!smCertConfig.nodeKey.empty());
-        BOOST_CHECK(!smCertConfig.enNodeCert.empty());
-        BOOST_CHECK(!smCertConfig.enNodeKey.empty());
     }
 }
 

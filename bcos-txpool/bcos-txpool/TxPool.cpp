@@ -64,31 +64,11 @@ void TxPool::stop()
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");
 }
 
-void TxPool::asyncSubmit(bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
+
+task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
+    protocol::Transaction::Ptr transaction)
 {
-    // verify and try to submit the valid transaction
-    auto self = weak_from_this();
-    m_worker->enqueue([self, _txData, _txSubmitCallback]() {
-        try
-        {
-            auto txpool = self.lock();
-            if (!txpool)
-            {
-                return;
-            }
-            auto txpoolStorage = txpool->m_txpoolStorage;
-            if (!txpool->checkExistsInGroup(_txSubmitCallback))
-            {
-                return;
-            }
-            txpoolStorage->submitTransaction(_txData, _txSubmitCallback);
-        }
-        catch (std::exception const& e)
-        {
-            TXPOOL_LOG(WARNING) << LOG_DESC("asyncSubmit exception")
-                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
+    co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
@@ -126,22 +106,17 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
     });
 }
 
-void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
-    TransactionSubmitResultsPtr _txsResult, std::function<void(Error::Ptr)> _onNotifyFinished)
+void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
+    std::function<void(Error::Ptr)> _onNotifyFinished)
 {
+    m_worker->enqueue([this, txsResult = std::move(txsResult), _blockNumber]() {
+        m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
+    });
+
     if (_onNotifyFinished)
     {
         _onNotifyFinished(nullptr);
     }
-    auto self = weak_from_this();
-    m_txsResultNotifier->enqueue([self, _blockNumber, _txsResult]() {
-        auto txpool = self.lock();
-        if (!txpool)
-        {
-            return;
-        }
-        txpool->m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
-    });
 }
 
 void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _block,

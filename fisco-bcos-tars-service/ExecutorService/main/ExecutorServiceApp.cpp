@@ -154,6 +154,16 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 
+    std::weak_ptr<bcos::executor::SwitchExecutorManager> executorWeakPtr = m_executor;
+    auto switchHandler = [executor = executorWeakPtr]() {
+        if (executor.lock())
+        {
+            executor.lock()->triggerSwitch();
+        }
+    };
+    dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);
+
+
     ExecutorServiceParam param;
     param.executor = m_executor;
     param.cryptoSuite = m_protocolInitializer->cryptoSuite();

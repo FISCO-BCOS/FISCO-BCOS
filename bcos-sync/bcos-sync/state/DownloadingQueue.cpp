@@ -217,7 +217,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 
     sealerListStr << "size: " << _header->sealerList().size();
     signatureListStr << "size: " << _header->signatureList().size();
-    if (c_fileLogLevel >= TRACE)
+    if (c_fileLogLevel <= TRACE)
     {
         auto sealerList = _header->sealerList();
         sealerListStr << ", sealer list: ";

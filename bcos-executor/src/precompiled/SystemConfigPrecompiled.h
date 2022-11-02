@@ -28,13 +28,6 @@ namespace bcos
 {
 namespace precompiled
 {
-#if 0
-contract SystemConfigTable
-{
-    // Return 1 means successful setting, and 0 means cannot find the config key.
-    function setValueByKey(string key, string value) public returns(int256);
-}
-#endif
 
 class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 {
@@ -51,7 +44,16 @@ public:
         const std::string& _key) const;
 
 private:
-    void checkValueValid(std::string_view key, std::string_view value);
+    int64_t checkValueValid(std::string_view key, std::string_view value);
+    inline bool shouldUpgradeChain(
+        std::string_view key, uint32_t fromVersion, uint32_t toVersion) const noexcept
+    {
+        return key == bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION && toVersion > fromVersion;
+    }
+    void upgradeChain(std::shared_ptr<executor::TransactionExecutive> _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
+        uint32_t toVersion) const;
+
     std::map<std::string, std::function<int64_t(std::string)>> m_valueConverter;
     std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
     const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,

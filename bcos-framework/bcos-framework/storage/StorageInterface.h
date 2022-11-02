@@ -74,7 +74,8 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
-    virtual Error::Ptr setRows(std::string_view, std::vector<std::string>, std::vector<std::string>)
+    virtual Error::Ptr setRows(
+        std::string_view, std::vector<std::string_view>, std::vector<std::string_view>)
     {
         throw std::invalid_argument("unimplement method");
         return nullptr;

@@ -334,27 +334,22 @@ std::pair<std::string, std::string> precompiled::getParentDirAndBaseName(
     // transfer /usr/local/bin => ["usr", "local", "bin"]
     if (_absolutePath == "/")
         return {"/", "/"};
-    std::vector<std::string> dirList;
+
     std::string absoluteDir = _absolutePath;
-    if (absoluteDir[0] == '/')
+
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(1);
+        absoluteDir.pop_back();
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
-    {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
-    }
-    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
-    std::string baseName = dirList.at(dirList.size() - 1);
-    dirList.pop_back();
-    std::string parentDir = "/" + boost::join(dirList, "/");
-    return {parentDir, baseName};
+    size_t index = absoluteDir.find_last_of('/');
+    auto parent = absoluteDir.substr(0, index);
+    return {parent.empty() ? "/" : parent, absoluteDir.substr(index + 1)};
 }
 
 executor::CallParameters::UniquePtr precompiled::externalRequest(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
     std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft, bool _isInternalCall)
+    bool _isCreate, int64_t gasLeft, bool _isInternalCall, std::string const& _abi)
 {
     auto request = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
 
@@ -369,6 +364,10 @@ executor::CallParameters::UniquePtr precompiled::externalRequest(
     request->internalCreate = _isCreate;
     request->internalCall = _isInternalCall;
     request->gas = gasLeft;
+    if (_isCreate && !_abi.empty())
+    {
+        request->abi = _abi;
+    }
     return _executive->externalCall(std::move(request));
 }
 
