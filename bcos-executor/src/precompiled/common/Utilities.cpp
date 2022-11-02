@@ -249,7 +249,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
         // this may happen when register link in contract constructor
         return ContractStatus::Available;
     }
-    auto codeHashStr = std::string(codeHashEntry->getField(0));
+    auto codeHashStr = codeHashEntry->getField(0);
     auto codeHash = HashType(codeHashStr, FixedBytes<32>::FromBinary);
 
     if (codeHash == HashType())

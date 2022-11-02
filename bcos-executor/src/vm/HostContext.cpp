@@ -340,7 +340,7 @@ bool HostContext::setCode(bytes code)
             Entry codeEntry;
             codeEntry.importFields({std::move(code)});
             m_executive->storage().setRow(
-                bcos::ledger::SYS_CODE_BINARY, codeHash.hex(), std::move(codeEntry));
+                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0), std::move(codeEntry));
             return true;
         }
         return false;
@@ -372,11 +372,15 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
         if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
         {
             // set abi in abi table
-            auto codeHashBin = std::string(
-                m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH)->getField(0));
-            auto codeHash = h256(codeHashBin, FixedBytes<32>::StringDataType::FromBinary).hex();
+            auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
+            auto codeHash = codeEntry->getField(0);
+
+            EXECUTOR_LOG(TRACE) << LOG_DESC("set abi") << LOG_KV("codeHash", codeHash)
+                                << LOG_KV("abiSize", abi.size());
+
             Entry abiEntry;
             abiEntry.importFields({std::move(abi)});
+
             m_executive->storage().setRow(
                 bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
             return;
@@ -539,7 +543,10 @@ std::optional<storage::Entry> HostContext::code()
     if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
     {
         auto codehash = codeHash();
-        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codehash.hex());
+        Entry codeHashEntry;
+        codeHashEntry.importFields({codehash.asBytes()});
+        auto entry =
+            m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0));
         if (!entry || entry->get().empty())
         {
             auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);

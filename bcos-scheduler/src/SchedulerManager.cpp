@@ -282,7 +282,7 @@ void SchedulerManager::handleNeedSwitchEvent(int64_t oldSchedulerTermID)
                              << LOG_KV("oldSchedulerTermID", oldSchedulerTermID);
         return;
     }
-    else if (currentSchedulerTermID >= oldSchedulerTermID)
+    else if (currentSchedulerTermID > oldSchedulerTermID)
     {
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
                              << "handleNeedSwitchEvent: Ignore outdated oldSchedulerTermID"
