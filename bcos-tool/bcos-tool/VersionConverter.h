@@ -34,11 +34,9 @@ inline uint32_t toVersionNumber(const std::string& _version)
     auto version = _version;
     boost::to_lower(version);
     // 3.0.0-rc{x} version
-    if (_version.find(bcos::protocol::RC_VERSION_PREFIX) == 0)
+    if (_version.starts_with(bcos::protocol::RC_VERSION_PREFIX))
     {
-        auto versionLen = _version.length() - bcos::protocol::RC_VERSION_PREFIX.length();
-        std::string versionNumber =
-            _version.substr(bcos::protocol::RC_VERSION_PREFIX.length(), versionLen);
+        std::string versionNumber = _version.substr(bcos::protocol::RC_VERSION_PREFIX.length());
         return boost::lexical_cast<uint32_t>(versionNumber);
     }
     std::vector<std::string> versionFields;

@@ -20,9 +20,7 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 using BlockNumber = int64_t;
 using NonceType = u256;
@@ -62,15 +60,15 @@ struct Signature
     bytes signature;
 
     template <class Stream, typename = std::enable_if_t<Stream::is_decoder_stream>>
-    friend Stream& operator>>(Stream& _stream, Signature& signature)
+    friend Stream& operator>>(Stream& _stream, Signature& _signature)
     {
-        return _stream >> signature.index >> signature.signature;
+        return _stream >> _signature.index >> _signature.signature;
     }
 
     template <class Stream, typename = std::enable_if_t<Stream::is_encoder_stream>>
-    friend Stream& operator<<(Stream& _stream, Signature const& signature)
+    friend Stream& operator<<(Stream& _stream, Signature const& _signature)
     {
-        return _stream << signature.index << signature.signature;
+        return _stream << _signature.index << _signature.signature;
     }
 };
 using SignatureList = std::vector<Signature>;
@@ -107,5 +105,4 @@ struct TwoPCParams
     std::string primaryKey;
     uint64_t timestamp = 0;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol
