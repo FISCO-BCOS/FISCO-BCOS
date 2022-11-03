@@ -255,12 +255,19 @@ bool TablePrecompiled::buildConditions(std::optional<storage::Condition>& keyCon
     }          
     
     bool useValueCond = false;
+    bool useKeyCond = false;
+    bool isRangeSelect = true;
     for (const auto& condition : conditions.cond_v320)
     {
         auto& cmp = std::get<0>(condition);
         auto& field_idx = std::get<1>(condition);
         auto& value = std::get<2>(condition);
         useValueCond = useValueCond || (field_idx != 0);
+        if(field_idx == 0)
+        {
+            isRangeSelect = isRangeSelect && !(cmp < 2 || cmp > 5);
+            useKeyCond = true;
+        }
         switch (cmp)
         {
         case 0:
@@ -307,7 +314,7 @@ bool TablePrecompiled::buildConditions(std::optional<storage::Condition>& keyCon
     if(useValueCond) 
     {
         valueCondition->limit(offset, count);
-        if(keyCondition->isRangeSelect())
+        if(isRangeSelect && useKeyCond)
             keyCondition->limit(0, std::max(count, (uint32_t)USER_TABLE_MIN_LIMIT_COUNT));
         else
             keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
