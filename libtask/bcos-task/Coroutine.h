@@ -7,8 +7,3 @@ namespace CO_STD = std::experimental;
 #include <coroutine>
 namespace CO_STD = std;
 #endif
-
-namespace bcos::coroutine
-{
-
-}  // namespace bcos::coroutine
