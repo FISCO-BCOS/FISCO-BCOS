@@ -253,7 +253,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
             }
         }
     }
-    heartBeat();
+    // heartBeat();
 }
 
 void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
