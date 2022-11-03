@@ -453,16 +453,14 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
                     jResp["errorMessage"] = errorMsg.str();
                 }
-                else
-                {
-                    toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
-                        *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
-                    jResp["to"] = string(submitResult->to());
-                    jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
-                    // TODO: check if needed
-                    // jResp["input"] = toHexStringWithPrefix(transaction->input());
-                }
+                toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
+                    *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
+                jResp["to"] = string(submitResult->to());
+                jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+
+                // TODO: check if needed
+                // jResp["input"] = toHexStringWithPrefix(transaction->input());
 
                 respFunc(nullptr, jResp);
             }
