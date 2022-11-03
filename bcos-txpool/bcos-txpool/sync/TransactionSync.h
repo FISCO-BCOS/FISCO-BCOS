@@ -20,6 +20,8 @@
  */
 #pragma once
 
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
+#include "bcos-crypto/interfaces/crypto/Signature.h"
 #include "bcos-txpool/sync/TransactionSyncConfig.h"
 #include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
 #include <bcos-framework/protocol/Protocol.h>
@@ -44,6 +46,8 @@ public:
         m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
     {
         m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { noteNewTransactions(); });
+        m_hashImpl = m_config->blockFactory()->cryptoSuite()->hashImpl();
+        m_signatureImpl = m_config->blockFactory()->cryptoSuite()->signatureImpl();
     }
     TransactionSync(const TransactionSync&) = delete;
     TransactionSync(TransactionSync&&) = delete;
@@ -153,5 +157,8 @@ private:
     boost::condition_variable m_signalled;
     // mutex to access m_signalled
     boost::mutex x_signalled;
+
+    bcos::crypto::Hash::Ptr m_hashImpl;
+    bcos::crypto::SignatureCrypto::Ptr m_signatureImpl;
 };
 }  // namespace bcos::sync

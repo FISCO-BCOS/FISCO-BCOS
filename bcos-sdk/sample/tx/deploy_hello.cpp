@@ -214,7 +214,7 @@ int main(int argc, char** argv)
     //     transactionBuilderService->createSignedTransaction(*keyPair, "", *binBytes.get(), "", 0);
 
     std::cout << LOG_DESC(" [DeployHello] create signed transaction success")
-              << LOG_KV("tx hash", tx->hash(false)) << std::endl;
+              << LOG_KV("tx hash", tx->hash()) << std::endl;
 
     std::promise<bool> p;
     auto f = p.get_future();

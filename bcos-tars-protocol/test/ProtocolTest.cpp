@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(transaction)
     auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
         cryptoSuite->signatureImpl()->generateKeyPair());
 
-    tx->verify();
+    tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());
     bcos::bytes buffer;
     tx->encode(buffer);

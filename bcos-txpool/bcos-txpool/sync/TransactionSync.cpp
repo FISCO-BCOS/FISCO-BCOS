@@ -540,7 +540,7 @@ bool TransactionSync::importDownloadedTxs(
                 }
                 try
                 {
-                    tx->verify();
+                    tx->verify(*m_hashImpl, *m_signatureImpl);
                 }
                 catch (std::exception const& e)
                 {
