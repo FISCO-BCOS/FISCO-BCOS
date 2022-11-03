@@ -212,8 +212,9 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
-        callResults->gas =
+        auto gasUsed =
             m_executive->costOfPrecompiled(_request->receiveAddress, ref(_request->data));
+        callResults->gas = _request->gas - gasUsed;
         auto [success, output] =
             m_executive->executeOriginPrecompiled(_request->receiveAddress, ref(_request->data));
         resultCode =

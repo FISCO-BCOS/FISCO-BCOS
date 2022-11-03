@@ -193,6 +193,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("tableName", tableName)
                                 << LOG_KV("origin", callParameters->origin);
+            writeErrInfoToOutput("Contract is frozen.", *callParameters);
             return {nullptr, std::move(callParameters)};
         }
         if (!checkAuth(callParameters, false))
@@ -201,7 +202,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Call permission denied";
-            callParameters->data.clear();
+            writeErrInfoToOutput("Call permission denied.", *callParameters);
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("tableName", tableName)
                                 << LOG_KV("origin", callParameters->origin);
@@ -237,6 +238,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
+            writeErrInfoToOutput("Call precompiled out of gas.", *callParameters);
             return callParameters;
         }
         precompiledCallParams->takeDataToCallParameter(callParameters);
@@ -317,6 +319,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("newAddress", newAddress)
                                 << LOG_KV("origin", callParameters->origin);
+            writeErrInfoToOutput("Create permission denied.", *callParameters);
             return {nullptr, std::move(callParameters)};
         }
     }
@@ -342,6 +345,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         callParameters->message = e.what();
         EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("createTable failed")
                             << callParameters->message << LOG_KV("tableName", tableName);
+        writeErrInfoToOutput("Contract address already used.", *callParameters);
         return {nullptr, std::move(callParameters)};
     }
 
@@ -362,6 +366,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "the code is not wasm bytecode";
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callResults->message;
+            writeErrInfoToOutput(
+                "WASM bytecode invalid or use unsupported opcode.", *callResults);
             return {nullptr, std::move(callResults)};
         }
 
@@ -422,6 +428,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->message = "Error occurs in build BFS dir";
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
                                 << LOG_KV("newAddress", newAddress);
+            writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
             return buildCallResults;
         }
         /// create contract table
@@ -444,6 +451,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->message = "Error occurs in build BFS dir";
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
                                 << LOG_KV("newAddress", newAddress);
+            writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
             return buildCallResults;
         }
 
@@ -591,6 +599,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 EXECUTIVE_LOG(DEBUG)
                     << "Revert transaction: " << LOG_DESC("deploy failed code too large")
                     << LOG_KV("message", callResults->message);
+                writeErrInfoToOutput("Deploy code is too large.", *callResults);
                 return callResults;
             }
 
@@ -606,6 +615,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     EXECUTIVE_LOG(INFO)
                         << "Revert transaction: " << LOG_DESC("deploy failed OutOfGas")
                         << LOG_KV("message", callResults->message);
+                    writeErrInfoToOutput("Exceptional Failed Code Deposit", *callResults);
                     return callResults;
                 }
             }
@@ -624,6 +634,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     buildCallResults->message = "Error occurs in build BFS dir";
                     EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << buildCallResults->message
                                          << LOG_KV("tableName", tableName);
+                    writeErrInfoToOutput(
+                        "Error occurs in building BFS dir.", *buildCallResults);
                     return buildCallResults;
                 }
             }
@@ -642,8 +654,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         << LOG_KV("message", callResults->message);
                     // Clear the creation flag
                     callResults->create = false;
-                    // Clear the data
-                    callResults->data.clear();
+                    writeErrInfoToOutput(
+                        "Create contract with empty code, invalid code input.", *callResults);
                     revert();
                     return callResults;
                 }
@@ -675,6 +687,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                                     << LOG_DESC("call address error, maybe address not exist")
                                     << LOG_KV("address", callResult->codeAddress)
                                     << LOG_KV("sender", callResult->senderAddress);
+                writeErrInfoToOutput("Call address error.", *callResult);
                 return callResult;
             }
             auto code = codeEntry->get();
@@ -711,6 +724,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
+        writeErrInfoToOutput(e.errorMessage(), *callResults);
 
         revert();
 
@@ -907,6 +921,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
+        writeErrInfoToOutput("Execution out of gas.", *callResults);
         break;
     }
     case EVMC_FAILURE:
@@ -916,6 +931,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
+        writeErrInfoToOutput("Execution failure.", *callResults);
         break;
     }
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
@@ -925,6 +941,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0; //TODO: why set remainGas to 0?
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
+        writeErrInfoToOutput("Execution invalid/undefined opcode.", *callResults);
         revert();
         break;
     }
@@ -934,6 +951,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
+        writeErrInfoToOutput(
+            "Execution has violated the jump destination restrictions.", *callResults);
         revert();
         break;
     }
@@ -943,6 +962,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
+        writeErrInfoToOutput("Execution stack overflow.", *callResults);
         revert();
         break;
     }
@@ -952,6 +972,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
+        writeErrInfoToOutput("Execution needs more items on EVM stack.", *callResults);
         revert();
         break;
     }
@@ -961,6 +982,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
+        writeErrInfoToOutput("Execution tried to read outside memory bounds.", *callResults);
         revert();
         break;
     }
@@ -970,6 +992,9 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::Unknown;
+        writeErrInfoToOutput(
+            "Execution tried to execute an operation which is restricted in static mode.",
+            *callResults);
         revert();
         break;
     }
@@ -979,6 +1004,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.")
             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
+        writeErrInfoToOutput("Contract validation has failed.", *callResults);
         revert();
         break;
     }
@@ -987,6 +1013,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Argument Out Of Range")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
+        writeErrInfoToOutput(
+            "An argument to a state accessing method has a value outside of the accepted range "
+            "of values.",
+            *callResults);
         revert();
         break;
     }
@@ -997,6 +1027,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
+        writeErrInfoToOutput("A WebAssembly trap has been hit during execution.", *callResults);
         revert();
         break;
     }

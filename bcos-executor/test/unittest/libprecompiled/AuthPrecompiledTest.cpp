@@ -1563,14 +1563,6 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
                         codec->encode(Address("0x1234567890123456789012345678901234567890")));
         }
 
-        // open black list, permission denied, new admin effect
-        {
-            auto result = modifyMethodAuth(_number++, 1000,
-                "openMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
-                Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256((int)CODE_NO_AUTHORIZED)));
-        }
-
         // use address 0x1234567890123456789012345678901234567890, still permission denied
         {
             auto result =

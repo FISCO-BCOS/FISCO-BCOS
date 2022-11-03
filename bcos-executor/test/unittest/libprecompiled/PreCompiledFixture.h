@@ -276,7 +276,7 @@ protected:
     KeyPairInterface::Ptr keyPair;
 
     CodecWrapper::Ptr codec;
-    int64_t gas = 300000000;
+    int64_t gas = 3000000000;
     bool isWasm = false;
 };
 }  // namespace bcos::test
