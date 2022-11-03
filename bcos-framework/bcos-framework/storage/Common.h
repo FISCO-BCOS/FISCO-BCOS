@@ -73,21 +73,6 @@ struct Condition
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
 
-    bool isRangeSelect() const
-    {
-        if(m_conditions.empty())
-            return false;
-        for(auto& cond : m_conditions)
-        {
-            if(cond.cmp != Comparator::GT && cond.cmp != Comparator::GE && 
-               cond.cmp != Comparator::LT && cond.cmp != Comparator::LE)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
     bool isValid(const std::string_view& key) const
     {  // all conditions must be satisfied
         for (auto& cond : m_conditions)
