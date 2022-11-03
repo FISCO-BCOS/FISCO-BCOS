@@ -46,6 +46,7 @@ enum class TransactionStatus : int32_t
     GasOverflow = 20,
     ContractFrozen = 21,
     AccountFrozen = 22,
+    AccountAbolished = 23,
     WASMValidationFailure = 32,
     WASMArgumentOutOfRange = 33,
     WASMUnreachableInstruction = 34,
