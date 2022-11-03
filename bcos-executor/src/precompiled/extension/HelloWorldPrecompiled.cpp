@@ -123,6 +123,6 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         _callParameters->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }

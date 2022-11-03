@@ -128,7 +128,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         BOOST_THROW_EXCEPTION(PrecompiledError("TablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -148,7 +148,7 @@ void TablePrecompiled::desc(TableInfoTuple& _tableInfo, const std::string& _tabl
     // external call to get desc
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         _callParameters->m_codeAddress, tableManagerAddress, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
+        _callParameters->m_create, _callParameters->m_gasLeft);
 
     codec.decode(ref(response->data), _tableInfo);
 }

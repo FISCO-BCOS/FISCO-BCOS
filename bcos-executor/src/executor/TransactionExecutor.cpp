@@ -189,7 +189,7 @@ void TransactionExecutor::initEvmEnvironment()
             PrecompiledRegistrar::executor("blake2_compression"))});
     assert(m_precompiledContract);
 
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>();
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
@@ -242,7 +242,7 @@ void TransactionExecutor::initWasmEnvironment()
     m_constantPrecompiled =
         std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
 
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>();
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);

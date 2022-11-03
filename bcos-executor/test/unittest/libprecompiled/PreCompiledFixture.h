@@ -681,7 +681,7 @@ protected:
     KeyPairInterface::Ptr keyPair;
 
     CodecWrapper::Ptr codec;
-    int64_t gas = 300000000;
+    int64_t gas = 3000000000;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
     protocol::Version m_blockVersion = protocol::Version::V3_1_VERSION;

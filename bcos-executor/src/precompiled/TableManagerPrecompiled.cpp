@@ -91,7 +91,7 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
         BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -134,7 +134,7 @@ void TableManagerPrecompiled::createTable(
                           "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gas - gasPricer->calTotalGas(), false, std::move(abi));
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
@@ -183,7 +183,7 @@ void TableManagerPrecompiled::createKVTable(
                           "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gas - gasPricer->calTotalGas(), false, std::move(abi));
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
