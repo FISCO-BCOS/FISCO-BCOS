@@ -37,12 +37,18 @@ namespace precompiled
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
+using ConditionTupleV320 = std::tuple<uint8_t, uint32_t, std::string>;
 using LimitTuple = std::tuple<uint32_t, uint32_t>;
 using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
-/// Precompiled reserved code field
+struct Conditions
+{
+    std::vector<ConditionTuple>     cond;
+    std::vector<ConditionTupleV320> cond_v320;
+};
+/// Precompiled reserved code field 
 static constexpr const char* const PRECOMPILED_CODE_FIELD = "[PRECOMPILED]";
 static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
 
@@ -63,6 +69,7 @@ const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 const int USER_TABLE_MAX_LIMIT_COUNT = 500;
+const int USER_TABLE_MIN_LIMIT_COUNT = 50;  
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
