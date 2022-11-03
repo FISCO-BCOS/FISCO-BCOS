@@ -43,6 +43,7 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <exception>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -421,44 +422,62 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             auto start = utcTime();
             auto sendTxTimeout = self->m_sendTxTimeout;
 
-            auto submitResult = co_await txpool->submitTransaction(transaction);
-
-            auto txHash = submitResult->txHash();
-            auto hexPreTxHash = txHash.hexPrefixed();
-
-            auto end = utcTime();
-            auto totalTime = end - start;  // ms
-            if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
-            {
-                RPC_IMPL_LOG(WARNING)
-                    << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
-                    << LOG_KV("hexPreTxHash", hexPreTxHash) << LOG_KV("requireProof", requireProof)
-                    << LOG_KV("txCostTime", totalTime);
-            }
-            else
-            {
-                RPC_IMPL_LOG(TRACE)
-                    << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
-                    << LOG_KV("hexPreTxHash", hexPreTxHash) << LOG_KV("requireProof", requireProof)
-                    << LOG_KV("txCostTime", totalTime);
-            }
-
             Json::Value jResp;
-            if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
+            try
             {
-                std::stringstream errorMsg;
-                errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
-                jResp["errorMessage"] = errorMsg.str();
+                auto submitResult = co_await txpool->submitTransaction(transaction);
+
+                auto txHash = submitResult->txHash();
+                auto hexPreTxHash = txHash.hexPrefixed();
+
+                auto end = utcTime();
+                auto totalTime = end - start;  // ms
+                if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
+                {
+                    RPC_IMPL_LOG(WARNING)
+                        << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
+                        << LOG_KV("hexPreTxHash", hexPreTxHash)
+                        << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
+                }
+                else
+                {
+                    RPC_IMPL_LOG(TRACE)
+                        << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
+                        << LOG_KV("hexPreTxHash", hexPreTxHash)
+                        << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
+                }
+
+                if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
+                {
+                    std::stringstream errorMsg;
+                    errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
+                    jResp["errorMessage"] = errorMsg.str();
+                }
+                else
+                {
+                    toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
+                        *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
+                    jResp["to"] = string(submitResult->to());
+                    jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+
+                    // TODO: check if needed
+                    // jResp["input"] = toHexStringWithPrefix(transaction->input());
+                }
+
+                respFunc(nullptr, jResp);
             }
-            else
+            catch (bcos::Error& e)
             {
-                toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
-                    *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
-                jResp["to"] = string(submitResult->to());
-                jResp["from"] = toHexStringWithPrefix(submitResult->sender());
-                // jResp["input"] = toHexStringWithPrefix(transaction->input());
+                auto info = boost::diagnostic_information(e);
+                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << info;
+                respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
             }
-            respFunc(nullptr, jResp);
+            catch (std::exception& e)
+            {
+                auto info = boost::diagnostic_information(e);
+                RPC_IMPL_LOG(WARNING) << "RPC common error: " << info;
+                respFunc(std::make_shared<bcos::Error>(-1, std::move(info)), jResp);
+            }
         }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));
 }
 
