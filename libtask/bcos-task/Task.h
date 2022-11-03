@@ -117,10 +117,10 @@ public:
     {
         Awaitable(Task const& task) : m_handle(task.m_handle){};
         Awaitable(const Awaitable&) = delete;
-        Awaitable(Awaitable&&) = default;
+        Awaitable(Awaitable&&) noexcept = default;
         Awaitable& operator=(const Awaitable&) = delete;
-        Awaitable& operator=(Awaitable&&) = default;
-        ~Awaitable() {}
+        Awaitable& operator=(Awaitable&&) noexcept = default;
+        ~Awaitable() = default;
 
         constexpr bool await_ready() const noexcept
         {
