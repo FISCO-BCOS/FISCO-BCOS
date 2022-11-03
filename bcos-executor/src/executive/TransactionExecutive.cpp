@@ -1273,10 +1273,22 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
     // check account first
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
     {
-        if (!checkAccountAvailable(callParameters))
+        uint8_t accountStatus = checkAccountAvailable(callParameters);
+        if (accountStatus == AccountStatus::freeze)
         {
             writeErrInfoToOutput("Account is frozen.", *callParameters);
             callParameters->status = (int32_t)TransactionStatus::AccountFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Account's status is abnormal";
+            callParameters->create = false;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+        else if (accountStatus == AccountStatus::abolish)
+        {
+            writeErrInfoToOutput("Account is abolished.", *callParameters);
+            callParameters->status = (int32_t)TransactionStatus::AccountAbolished;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Account's status is abnormal";
             callParameters->create = false;
@@ -1406,19 +1418,19 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }
 
-bool TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
+uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
 {
     if (callParameters->staticCall || callParameters->origin != callParameters->senderAddress ||
         callParameters->internalCall)
     {
         // static call sender and origin will be empty
         // contract calls, pass through
-        return true;
+        return 0;
     }
     auto blockContext = m_blockContext.lock();
     AccountPrecompiled::Ptr accountPrecompiled =
         dynamic_pointer_cast<precompiled::AccountPrecompiled>(
             m_constantPrecompiled->at(ACCOUNT_ADDRESS));
 
-    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this()) == 0;
+    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

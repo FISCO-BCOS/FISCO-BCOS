@@ -79,6 +79,12 @@ static const char* const METHOD_AUTH_BLACK = "method_auth_black";
 /// account
 static constexpr const std::string_view ACCOUNT_STATUS = "status";
 static constexpr const std::string_view ACCOUNT_LAST_UPDATE = "last_update";
+enum AccountStatus : uint8_t
+{
+    normal = 0,
+    freeze = 1,
+    abolish = 2,
+};
 
 /// contract status
 static const char* const CONTRACT_FROZEN = "frozen";
