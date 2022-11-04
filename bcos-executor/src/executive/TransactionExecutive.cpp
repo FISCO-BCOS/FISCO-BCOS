@@ -132,11 +132,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             return std::move(output);
         }
 
-        auto codeHash =
-            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+        auto codeHash = codeHashEntry->getField(0);
 
         // get code in code binary table
-        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
         if (!entry || entry->get().empty())
         {
             auto& output = input;
@@ -168,11 +167,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             return std::move(output);
         }
 
-        auto codeHash =
-            h256(codeHashEntry->getField(0), FixedBytes<32>::StringDataType::FromBinary);
+        auto codeHash = codeHashEntry->getField(0);
 
         // get code in code binary table
-        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.hex());
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
         if (!entry || entry->get().empty())
         {
             EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
@@ -294,7 +292,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         execPrecompiled(precompiledCallParams);
 
-        if (precompiledCallParams->m_gas < 0)
+        if (precompiledCallParams->m_gasLeft < 0)
         {
             revert();
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
@@ -1275,10 +1273,22 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
     // check account first
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
     {
-        if (!checkAccountAvailable(callParameters))
+        uint8_t accountStatus = checkAccountAvailable(callParameters);
+        if (accountStatus == AccountStatus::freeze)
         {
             writeErrInfoToOutput("Account is frozen.", *callParameters);
             callParameters->status = (int32_t)TransactionStatus::AccountFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Account's status is abnormal";
+            callParameters->create = false;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+        else if (accountStatus == AccountStatus::abolish)
+        {
+            writeErrInfoToOutput("Account is abolished.", *callParameters);
+            callParameters->status = (int32_t)TransactionStatus::AccountAbolished;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Account's status is abnormal";
             callParameters->create = false;
@@ -1408,19 +1418,19 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
 }
 
-bool TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
+uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
 {
     if (callParameters->staticCall || callParameters->origin != callParameters->senderAddress ||
         callParameters->internalCall)
     {
         // static call sender and origin will be empty
         // contract calls, pass through
-        return true;
+        return 0;
     }
     auto blockContext = m_blockContext.lock();
     AccountPrecompiled::Ptr accountPrecompiled =
         dynamic_pointer_cast<precompiled::AccountPrecompiled>(
             m_constantPrecompiled->at(ACCOUNT_ADDRESS));
 
-    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this()) == 0;
+    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

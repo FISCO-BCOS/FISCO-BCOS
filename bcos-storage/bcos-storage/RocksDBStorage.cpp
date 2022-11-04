@@ -306,7 +306,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
 }
 
 void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageInterface& storage,
-    std::function<void(Error::Ptr, uint64_t startTS)> callback)
+    std::function<void(Error::Ptr, uint64_t startTS, const std::string&)> callback)
 {
     std::ignore = param;
     try
@@ -410,11 +410,11 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             }
             STORAGE_ROCKSDB_LOG(ERROR)
                 << LOG_DESC("asyncPrepare invalidTable") << LOG_KV("number", param.number);
-            callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
+            callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0, "");
             return;
         }
         auto end = utcTime();
-        callback(nullptr, 0);
+        callback(nullptr, 0, "");
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
                                   << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
@@ -423,7 +423,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
     }
     catch (const std::exception& e)
     {
-        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Prepare failed! ", e), 0);
+        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Prepare failed! ", e), 0, "");
     }
 }
 

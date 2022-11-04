@@ -99,6 +99,24 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountPrecompiled")
                           << LOG_DESC("setAccountStatus") << LOG_KV("account", accountTableName)
                           << LOG_KV("status", status);
+    auto existEntry = _executive->storage().getRow(accountTableName, ACCOUNT_STATUS);
+    if (existEntry.has_value())
+    {
+        auto statusStr = std::string(existEntry->get());
+        auto existStatus = boost::lexical_cast<uint8_t>(statusStr);
+        // account already abolish, should not set any status to it
+        if (existStatus == AccountStatus::abolish && status != AccountStatus::abolish)
+        {
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                                  << LOG_BADGE("AccountPrecompiled")
+                                  << LOG_DESC("account already abolish, should not set any status")
+                                  << LOG_KV("account", accountTableName)
+                                  << LOG_KV("status", status);
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError("Account already abolish, should not set any status."));
+        }
+    }
+
     Entry statusEntry;
     statusEntry.importFields({boost::lexical_cast<std::string>(status)});
     _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));

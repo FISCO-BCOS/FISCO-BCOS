@@ -205,7 +205,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
     const auto* bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        absolutePath, FS_TYPE_DIR, _callParameters->m_gas);
+        absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
     _callParameters->setExecResult(codec.encode(response));
 }
 
@@ -483,7 +483,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gas);
+        linkTableName, FS_TYPE_LINK, _callParameters->m_gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
@@ -553,7 +553,7 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gas);
+        linkTableName, FS_TYPE_LINK, _callParameters->m_gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")

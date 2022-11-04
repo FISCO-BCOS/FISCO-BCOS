@@ -34,6 +34,8 @@
 #include <optional>
 #include <stdexcept>
 
+constexpr uint32_t MAX_RETRY_LIMIT = 32;
+
 using namespace bcos::storage;
 using namespace bcos::protocol;
 using namespace std;
@@ -58,6 +60,13 @@ std::shared_ptr<tikv_client::TransactionClient> newTiKVClientWithSSL(
 }
 }  // namespace bcos::storage
 
+TiKVStorage::TiKVStorage(
+    std::shared_ptr<tikv_client::TransactionClient> _cluster, int32_t _commitTimeout)
+  : m_cluster(std::move(_cluster)),
+    m_lastCommitTimestamp(m_cluster->current_timestamp()),
+    m_commitTimeout(_commitTimeout)
+{}
+
 void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
     const std::optional<Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
@@ -69,15 +78,15 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
 
         std::string keyPrefix;
         keyPrefix = string(_table) + TABLE_KEY_SPLIT;
+        // snapshot is not threadsafe so create it every time
         auto snap = m_cluster->snapshot();
-
         // TODO: check performance and add limit of primary keys
         bool finished = false;
         auto lastKey = keyPrefix;
         int i = 0;
         while (!finished)
         {
-            auto keys = snap.scan_keys(
+            auto keys = snap->scan_keys(
                 lastKey, Bound::Excluded, string(), Bound::Unbounded, scan_batch_size);
             if (keys.empty())
             {
@@ -134,7 +143,7 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto start = utcTime();
         auto dbKey = toDBKey(_table, _key);
         auto snap = m_cluster->snapshot();
-        auto value = snap.get(dbKey);
+        auto value = snap->get(dbKey);
         auto end = utcTime();
         if (!value.has_value())
         {
@@ -196,13 +205,13 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                         }
                     });
                 auto snap = m_cluster->snapshot();
-                auto result = snap.batch_get(realKeys);
+                auto result = snap->batch_get(realKeys);
                 auto end = utcTime();
                 size_t validCount = 0;
                 for (size_t i = 0; i < realKeys.size(); ++i)
                 {
-                    auto nh = result.extract(realKeys[i]);
-                    if (nh.empty() || nh.mapped().empty())
+                    auto node = result.extract(realKeys[i]);
+                    if (node.empty() || node.mapped().empty())
                     {
                         entries[i] = std::nullopt;
                         STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
@@ -211,7 +220,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                     {
                         ++validCount;
                         entries[i] = std::make_optional(Entry());
-                        entries[i]->set(std::move(nh.mapped()));
+                        entries[i]->set(std::move(node.mapped()));
                     }
                 }
                 auto decode = utcTime();
@@ -274,10 +283,11 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
                                   << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncSetRow failed! ", e));
     }
+    m_lastCommitTimestamp = m_cluster->current_timestamp();
 }
 
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
-    std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
+    std::function<void(Error::Ptr, uint64_t startTS, const std::string&)> callback) noexcept
 {
     try
     {
@@ -309,7 +319,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 m_committer = nullptr;
             }
             m_committerCreateTime = std::chrono::system_clock::now();
-            m_committer = m_cluster->new_optimistic_transaction();
+            m_committer = m_cluster->new_optimistic_transaction(MAX_RETRY_LIMIT);
             storage.parallelTraverse(true, [&](const std::string_view& table,
                                                const std::string_view& key, Entry const& entry) {
                 if (!isValid(table, key))
@@ -337,7 +347,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
             {
                 m_committer->rollback();
                 m_committer = nullptr;
-                callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
+                callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0, "");
                 return;
             }
             auto encode = utcTime();
@@ -350,37 +360,32 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 {
                     STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare empty storage")
                                             << LOG_KV("blockNumber", params.number);
-                    callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
+                    callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0, "");
                 }
                 else
                 {
                     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare empty storage")
                                             << LOG_KV("blockNumber", params.number);
-                    callback(nullptr, 0);
+                    callback(nullptr, 0, "");
                 }
                 return;
             }
-            auto primaryLock = toDBKey(params.primaryTableName, params.primaryTableKey);
-            if (primaryLock == TABLE_KEY_SPLIT)
-            {
-                primaryLock.clear();
-            }
+            auto primaryLock = params.primaryKey;
 
             if (params.timestamp == 0)
             {
                 STORAGE_TIKV_LOG(INFO)
                     << LOG_DESC("asyncPrepare primary") << LOG_KV("blockNumber", params.number);
                 auto result = m_committer->prewrite_primary(primaryLock);
-                // m_committer->prewrite_secondary(result.first, result.second);
                 auto write = utcTime();
                 m_currentStartTS = result.second;
                 lock.unlock();
-                callback(nullptr, result.second);
+                callback(nullptr, result.second, result.first);
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare primary finished" << LOG_KV("blockNumber", params.number)
                     << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                    << LOG_KV("primary", result.first) << LOG_KV("startTS", result.second)
+                    << LOG_KV("size", size) << LOG_KV("primaryLock", toHex(primaryLock))
+                    << LOG_KV("primary", toHex(result.first)) << LOG_KV("startTS", result.second)
                     << LOG_KV("encode time(ms)", encode - start)
                     << LOG_KV("prewrite time(ms)", write - encode)
                     << LOG_KV("callback time(ms)", utcTime() - write);
@@ -400,14 +405,14 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare secondary finished" << LOG_KV("blockNumber", params.number)
                     << LOG_KV("prewrite time(ms)", write - encode);
-                callback(nullptr, 0);
+                callback(nullptr, 0, primaryLock);
             }
         }
         else
         {
             STORAGE_TIKV_LOG(INFO)
                 << "asyncPrepare try_lock failed" << LOG_KV("blockNumber", params.number);
-            callback(BCOS_ERROR_UNIQUE_PTR(TryLockFailed, "asyncPrepare try_lock failed"), 0);
+            callback(BCOS_ERROR_UNIQUE_PTR(TryLockFailed, "asyncPrepare try_lock failed"), 0, "");
         }
     }
     catch (const std::exception& e)
@@ -415,7 +420,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncPrepare failed")
                                   << LOG_KV("blockNumber", params.number)
                                   << LOG_KV("message", e.what());
-        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncPrepare failed! ", e), 0);
+        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncPrepare failed! ", e), 0, "");
     }
 }
 
@@ -452,6 +457,7 @@ void TiKVStorage::asyncCommit(
                 << LOG_KV("commitTS", params.timestamp) << LOG_KV("primaryCommitTS", ts)
                 << LOG_KV("time(ms)", end - start);
             lock.unlock();
+            m_lastCommitTimestamp = m_cluster->current_timestamp();
             callback(nullptr, ts);
         }
         else
@@ -491,7 +497,7 @@ void TiKVStorage::asyncRollback(
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number)
                 << LOG_KV("timestamp", params.timestamp);
-            RecursiveGuard l(x_committer);
+            RecursiveGuard guard(x_committer);
             auto start = utcTime();
             if (m_committer)
             {
@@ -563,8 +569,10 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::s
     catch (std::exception& e)
     {
         STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows failed") << LOG_KV("what", e.what());
+        m_lastCommitTimestamp = m_cluster->current_timestamp();
         return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
     }
+    m_lastCommitTimestamp = m_cluster->current_timestamp();
     return nullptr;
 }
 
@@ -575,4 +583,9 @@ void TiKVStorage::triggerSwitch()
         STORAGE_TIKV_LOG(WARNING) << LOG_DESC("Trigger switch");
         f_onNeedSwitchEvent();
     }
+}
+
+void TiKVStorage::reset()
+{
+    m_lastCommitTimestamp = m_cluster->current_timestamp();
 }

@@ -26,6 +26,7 @@
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-executor/src/Common.h"
 #include <memory>
 #include <string>
 

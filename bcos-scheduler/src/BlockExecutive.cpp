@@ -310,14 +310,13 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         {
             txHashes->emplace_back(block->transactionMetaData(i)->hash());
         }
-        if (c_fileLogLevel <= TRACE)
-            [[unlikely]]
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            for (auto const& tx : *txHashes)
             {
-                for (auto const& tx : *txHashes)
-                {
-                    SCHEDULER_LOG(TRACE) << "fetch: " << tx.abridged();
-                }
+                SCHEDULER_LOG(TRACE) << "fetch: " << tx.abridged();
             }
+        }
         std::shared_ptr<std::promise<bcos::protocol::TransactionsPtr>> txsPromise =
             std::make_shared<std::promise<bcos::protocol::TransactionsPtr>>();
         txPool->asyncFillBlock(
@@ -567,10 +566,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
             bcos::protocol::TwoPCParams params;
             params.number = number();
-            params.primaryTableName = SYS_CURRENT_STATE;
-            params.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
+            params.primaryKey = "";
             m_scheduler->m_storage->asyncPrepare(params, *stateStorage,
-                [status, this, callback](Error::Ptr&& error, uint64_t startTimeStamp) {
+                [status, this, callback](
+                    Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
                     if (error)
                     {
                         ++status->failed;
@@ -581,10 +580,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             "asyncPrepare block error: " + error->errorMessage()));
                         return;
                     }
-                    else
-                    {
-                        ++status->success;
-                    }
+                    ++status->success;
+
                     SCHEDULER_LOG(INFO)
                         << BLOCK_NUMBER(number())
                         << "primary prepare finished, call executor prepare"
@@ -593,11 +590,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         << LOG_KV("success", status->success) << LOG_KV("failed", status->failed);
                     bcos::protocol::TwoPCParams executorParams;
                     executorParams.number = number();
-                    executorParams.primaryTableName = SYS_CURRENT_STATE;
-                    executorParams.primaryTableKey = SYS_KEY_CURRENT_NUMBER;
+                    executorParams.primaryKey = primaryKey;
                     executorParams.timestamp = startTimeStamp;
                     status->startTS = startTimeStamp;
-                    for (auto& executorIt : *(m_scheduler->m_executorManager))
+                    for (const auto& executorIt : *(m_scheduler->m_executorManager))
                     {
                         executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
                             {
