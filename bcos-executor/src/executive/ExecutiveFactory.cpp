@@ -24,6 +24,7 @@
 #include "TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
+#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 
@@ -55,6 +56,15 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
     auto blockContext = m_blockContext.lock();
+    if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_2_VERSION)
+    {
+        if (!executive->isPrecompiled(CAST_ADDRESS) && !executive->isPrecompiled(CAST_NAME))
+        {
+            executive->setConstantPrecompiled(
+                blockContext->isWasm() ? CAST_NAME : CAST_ADDRESS,
+                std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl));
+        }
+    }
     if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_1_VERSION)
     {
         if (!executive->isPrecompiled(ACCOUNT_MGR_ADDRESS) &&

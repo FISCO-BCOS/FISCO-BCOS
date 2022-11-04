@@ -92,7 +92,7 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     wasm_interface = getWasmHostInterface();
 
     hash_fn = evm_hash_fn;
-    version = 0x03000000;
+    version = m_executive->blockContext().lock()->blockVersion();
     isSMCrypto = false;
 
     if (hashImpl() && hashImpl()->getHashImplType() == crypto::HashImplType::Sm3Hash)
@@ -211,7 +211,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         return callBuiltInPrecompiled(request, false);
     }
-    if (m_executive->isEthereumPrecompiled(request->receiveAddress) && !blockContext->isWasm())
+    if (!blockContext->isWasm() && m_executive->isEthereumPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, true);
     }
@@ -264,8 +264,15 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
-        callResults->gas =
+        auto gasUsed =
             m_executive->costOfPrecompiled(_request->receiveAddress, ref(_request->data));
+        /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled
+        /// before 3.1.0
+        callResults->gas = gasUsed;
+        if (versionCompareTo(version, Version::V3_1_VERSION) >= 0)
+        {
+            callResults->gas = _request->gas - gasUsed;
+        }
         auto [success, output] =
             m_executive->executeOriginPrecompiled(_request->receiveAddress, ref(_request->data));
         resultCode =
@@ -279,7 +286,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
             auto precompiledCallParams =
                 std::make_shared<precompiled::PrecompiledExecResult>(_request);
             precompiledCallParams = m_executive->execPrecompiled(precompiledCallParams);
-            callResults->gas = precompiledCallParams->m_gas;
+            callResults->gas = precompiledCallParams->m_gasLeft;
             resultCode = (int32_t)TransactionStatus::None;
             resultData = std::move(precompiledCallParams->m_execResult);
         }

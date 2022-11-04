@@ -24,18 +24,15 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <set>
-namespace bcos
+namespace bcos::precompiled
 {
-namespace precompiled
-{
-
 class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<SystemConfigPrecompiled>;
 
-    SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~SystemConfigPrecompiled(){};
+    SystemConfigPrecompiled();
+    ~SystemConfigPrecompiled() override = default;
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
@@ -44,22 +41,21 @@ public:
         const std::string& _key) const;
 
 private:
-    int64_t checkValueValid(std::string_view key, std::string_view value);
+    int64_t checkValueValid(std::string_view key, std::string_view value, uint32_t blockVersion);
     inline bool shouldUpgradeChain(
         std::string_view key, uint32_t fromVersion, uint32_t toVersion) const noexcept
     {
         return key == bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION && toVersion > fromVersion;
     }
-    void upgradeChain(std::shared_ptr<executor::TransactionExecutive> _executive,
+    void upgradeChain(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
         uint32_t toVersion) const;
 
-    std::map<std::string, std::function<int64_t(std::string)>> m_valueConverter;
+    std::map<std::string, std::function<int64_t(std::string, uint32_t)>> m_valueConverter;
     std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
     const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
         bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
         bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION};
 };
 
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

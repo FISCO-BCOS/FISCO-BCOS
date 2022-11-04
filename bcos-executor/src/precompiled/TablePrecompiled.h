@@ -22,6 +22,7 @@
 
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Condition.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/storage/Table.h>
 
@@ -66,6 +67,10 @@ private:
     void buildKeyCondition(std::optional<storage::Condition>& keyCondition,
         const std::vector<precompiled::ConditionTuple>& conditions,
         const precompiled::LimitTuple& limit) const;
+    bool buildConditions(std::optional<storage::Condition>& keyCondition,
+        std::optional<precompiled::Condition>& valueCondition,
+        const precompiled::Conditions& conditions, 
+        const precompiled::LimitTuple& limit, uint32_t version) const;
     void desc(TableInfoTuple& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters) const;
