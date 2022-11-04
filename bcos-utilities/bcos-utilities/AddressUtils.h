@@ -14,12 +14,14 @@
  *  limitations under the License.
  *
  * @brief Address utils
- * @file Address.h
+ * @file AddressUtils.h
  * @author: jimmyshi
  * @date: 2022-11-04
  */
 
 #pragma once
+#include <iomanip>
+#include <sstream>
 #include <string>
 
 namespace bcos
@@ -31,12 +33,15 @@ public:
     {
         if (addr.length() > 40)
         {
+            // remove starting chars, left 40 chars.
             return addr.substr(addr.length() - 40, 40);
         }
         else
         {
-            // start with 0000
-            return std::string(40 - addr.length(), '0') + addr;
+            // add 0 at staring making to 40 chars
+            std::stringstream stream;
+            stream << std::setfill('0') << std::setw(40) << addr;
+            return stream.str();
         }
     }
 };

@@ -128,10 +128,10 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    std::string myAddress() const;
-    virtual std::string caller() const { return addrPadding(m_callParameters->senderAddress); }
-    std::string origin() const { return addrPadding(m_callParameters->origin); }
-    std::string codeAddress() const { return addrPadding(m_callParameters->codeAddress); }
+    std::string_view myAddress() const;
+    virtual std::string_view caller() const { return m_callerPadded; }
+    std::string_view origin() const { return m_originPadded; }
+    std::string_view codeAddress() const { return m_codeAddressPadded; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
     virtual std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
@@ -167,7 +167,6 @@ public:
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
     virtual bcos::bytes externalCodeRequest(const std::string_view& _a);
-    std::string addrPadding(const std::string& addr) const;
 
 private:
     void depositFungibleAsset(
@@ -186,6 +185,12 @@ private:
     std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
     std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
     std::atomic_uint64_t m_startTime = {0};    // microsecond
+
+    // just for padding
+    std::string m_myAddressPadded;
+    std::string m_callerPadded;
+    std::string m_originPadded;
+    std::string m_codeAddressPadded;
 };
 
 }  // namespace executor

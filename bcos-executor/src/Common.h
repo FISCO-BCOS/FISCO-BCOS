@@ -330,10 +330,7 @@ bool hasPrecompiledPrefix(const std::string_view& _code);
 inline evmc_address toEvmC(const std::string_view& _addr)
 {  // TODO: add another interfaces for wasm
     evmc_address ret;
-
-    auto start = _addr.size() > 20 ? 0 : (20 - _addr.size());
-    memset(ret.bytes, 0, start);
-    memcpy(ret.bytes + start, _addr.data(), _addr.size());
+    memcpy(ret.bytes, _addr.data(), 20);
     return ret;
 }
 

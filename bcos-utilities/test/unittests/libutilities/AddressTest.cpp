@@ -16,7 +16,7 @@
  * @brief Unit tests for Address
  * @file AddressTest.cpp
  */
-#include "bcos-utilities/Address.h"
+#include "bcos-utilities/AddressUtils.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 

@@ -1,4 +1,5 @@
 #include "DelegateHostContext.h"
+#include <bcos-utilities/AddressUtils.h>
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -13,6 +14,7 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
         exit(1);
     }
     setCode(getCallParameters()->delegateCallCode);
+    m_delegateCallSender = bcos::AddressUtils::padding(getCallParameters()->delegateCallSender);
 }
 
 std::optional<storage::Entry> DelegateHostContext::code()
@@ -28,7 +30,7 @@ bool DelegateHostContext::setCode(bytes code)
     return true;
 }
 
-std::string DelegateHostContext::caller() const
+std::string_view DelegateHostContext::caller() const
 {
-    return addrPadding(getCallParameters()->delegateCallSender);
+    return m_delegateCallSender;
 }

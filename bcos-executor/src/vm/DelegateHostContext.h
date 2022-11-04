@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "HostContext.h"
+#include <string>
 
 namespace bcos
 {
@@ -34,10 +35,11 @@ public:
     virtual ~DelegateHostContext() = default;
     std::optional<storage::Entry> code() override;
     bool setCode(bytes code) override;
-    std::string caller() const override;
+    std::string_view caller() const override;
 
 private:
     storage::Entry m_code;
+    std::string m_delegateCallSender;
 };
 
 }  // namespace executor
