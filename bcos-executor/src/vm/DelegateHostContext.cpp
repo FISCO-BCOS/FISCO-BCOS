@@ -28,7 +28,7 @@ bool DelegateHostContext::setCode(bytes code)
     return true;
 }
 
-std::string_view DelegateHostContext::caller() const
+std::string DelegateHostContext::caller() const
 {
-    return getCallParameters()->delegateCallSender;
+    return addrPadding(getCallParameters()->delegateCallSender);
 }

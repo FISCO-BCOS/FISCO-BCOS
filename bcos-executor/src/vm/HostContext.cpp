@@ -29,6 +29,7 @@
 #include "evmc/evmc.hpp"
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/Address.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -539,9 +540,9 @@ int64_t HostContext::timestamp() const
     return m_executive->blockContext().lock()->timestamp();
 }
 
-std::string_view HostContext::myAddress() const
+std::string HostContext::myAddress() const
 {
-    return m_executive->contractAddress();
+    return addrPadding(std::string(m_executive->contractAddress()));
 }
 
 std::optional<storage::Entry> HostContext::code()
@@ -668,6 +669,16 @@ std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
 bool HostContext::isWasm()
 {
     return m_executive->isWasm();
+}
+
+std::string HostContext::addrPadding(const std::string& addr) const
+{
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        return bcos::AddressUtils::padding(addr);
+    }
+
+    return addr;
 }
 
 }  // namespace executor

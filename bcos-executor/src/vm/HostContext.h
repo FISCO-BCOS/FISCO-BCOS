@@ -128,10 +128,10 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    std::string_view myAddress() const;
-    virtual std::string_view caller() const { return m_callParameters->senderAddress; }
-    std::string_view origin() const { return m_callParameters->origin; }
-    std::string_view codeAddress() const { return m_callParameters->codeAddress; }
+    std::string myAddress() const;
+    virtual std::string caller() const { return addrPadding(m_callParameters->senderAddress); }
+    std::string origin() const { return addrPadding(m_callParameters->origin); }
+    std::string codeAddress() const { return addrPadding(m_callParameters->codeAddress); }
     bytesConstRef data() const { return ref(m_callParameters->data); }
     virtual std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
@@ -167,6 +167,7 @@ public:
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
     virtual bcos::bytes externalCodeRequest(const std::string_view& _a);
+    std::string addrPadding(const std::string& addr) const;
 
 private:
     void depositFungibleAsset(
