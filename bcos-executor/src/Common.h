@@ -350,9 +350,12 @@ inline evmc_address toEvmC(const std::string_view& addr)
  * @param _h : hash value
  * @return evmc_bytes32 : transformed hash
  */
-inline evmc_bytes32 toEvmC(h256 const& _h)
+inline evmc_bytes32 toEvmC(h256 const& hash)
 {
-    return reinterpret_cast<evmc_bytes32 const&>(_h);
+    evmc_bytes32 evmBytes;
+    static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
+    std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
+    return evmBytes;
 }
 /**
  * @brief : trans uint256 number of evm-represented to u256
