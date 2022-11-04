@@ -61,6 +61,7 @@ struct Condition
 {
     Condition() = default;
     ~Condition() = default;
+    void EQ(const std::string& value) { m_conditions.emplace_back(Comparator::EQ, value); }
     void NE(const std::string& value) { m_conditions.emplace_back(Comparator::NE, value); }
     // string compare, "2" > "12"
     void GT(const std::string& value) { m_conditions.emplace_back(Comparator::GT, value); }
@@ -78,6 +79,12 @@ struct Condition
         {  // conditions should few, so not parallel check for now
             switch (cond.cmp)
             {
+            case Comparator::EQ:
+                if (key != cond.value)
+                {
+                    return false;
+                }
+                break;
             case Comparator::NE:
                 if (key == cond.value)
                 {

@@ -1,18 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity >=0.6.10 <0.8.20;
 pragma experimental ABIEncoderV2;
+import "./EntryWrapper.sol";
 
 // KeyOrder指定Key的排序规则，字典序和数字序，如果指定为数字序，key只能为数字
 // enum KeyOrder {Lexicographic, Numerical}
 struct TableInfo {
     string keyColumn;
     string[] valueColumns;
-}
-
-// 记录，用于select和insert
-struct Entry {
-    string key;
-    string[] fields; // 考虑2.0的Entry接口，临时Precompiled的问题，考虑加工具类接口
 }
 
 // 更新字段，用于update
@@ -23,10 +18,10 @@ struct UpdateField {
 }
 
 // 筛选条件，大于、大于等于、小于、小于等于
-enum ConditionOP {GT, GE, LT, LE}
+enum ConditionOP {EQ, NE, GT, GE, LT, LE}
 struct Condition {
     ConditionOP op;
-    // string field;
+    uint32 field;
     string value;
 }
 
