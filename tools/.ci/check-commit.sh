@@ -84,10 +84,10 @@ function check_PR_limit() {
     fi
 
     local new_files=$(git diff HEAD^ $(echo "${need_check_files}") | grep "new file" | wc -l | xargs )
-    local empty_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -P '^+\s*$' | wc -l | xargs)
-    local block_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -P '^+\s*[\{\}]\s*$' | wc -l | xargs)
-    local include_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -P '^+\#include' | wc -l | xargs)
-    local comment_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -P "^+\s*\/\/" | wc -l | xargs)
+    local empty_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\s*$' | wc -l | xargs)
+    local block_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\s*[\{\}]\s*$' | wc -l | xargs)
+    local include_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\#include' | wc -l | xargs)
+    local comment_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e "^+\s*\/\/" | wc -l | xargs)
     local insertions=$(git diff --shortstat HEAD^ $(echo "${need_check_files}")| awk -F ' ' '{print $4}')
     local valid_insertions=$((insertions - new_files * license_line - comment_lines - empty_lines - block_lines - include_lines))
     echo "valid_insertions: ${valid_insertions}, insertions(${insertions}) - new_files(${new_files}) * license_line(${license_line}) - comment_lines(${comment_lines}) - empty_lines(${empty_lines}) - block_lines(${block_lines}) - include_lines(${include_lines})"
