@@ -54,7 +54,7 @@ public:
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
     // auto operator<=>(const Entry&) const = default;
 
-    ~Entry() noexcept {}
+    ~Entry() noexcept = default;
 
     template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
         int flag = ARCHIVE_FLAG>

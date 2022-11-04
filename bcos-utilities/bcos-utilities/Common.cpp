@@ -40,13 +40,7 @@ bytes const NullBytes;
 /// get utc time(ms)
 uint64_t utcTime()
 {
-#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
     return std::chrono::steady_clock::now().time_since_epoch().count() / 1000000;
-#else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-#endif
 }
 
 // getSteadyTime(ms)

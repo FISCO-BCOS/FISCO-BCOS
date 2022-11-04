@@ -72,8 +72,6 @@ public:
     virtual void maintainDownloadingTransactions();
     void onEmptyTxs() override;
 
-    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
-
 protected:
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
     void executeWorker() override;

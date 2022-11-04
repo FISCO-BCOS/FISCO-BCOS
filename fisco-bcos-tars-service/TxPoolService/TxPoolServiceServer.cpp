@@ -135,11 +135,10 @@ bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
 {
     current->setResponse(false);
 
-    auto transaction =
-        std::make_shared<protocol::TransactionImpl>(m_txpoolInitializer->cryptoSuite(),
-            [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
-                return &m_transaction;
-            });
+    auto transaction = std::make_shared<protocol::TransactionImpl>(
+        [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
+            return &m_transaction;
+        });
     bcos::task::wait([](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool,
                          protocol::TransactionImpl::Ptr transaction,
                          tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
@@ -155,7 +154,7 @@ bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
         {
             async_response_submit(current, toTarsError(e), {});
         }
-    }(m_txpoolInitializer->txpool(), std::move(transaction), std::move(current)));
+    }(m_txpoolInitializer->txpool(), std::move(transaction), current));
 
     return {};
 }
