@@ -173,8 +173,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
-    nodeConfig->loadConfig(configFile);
     nodeConfig->loadGenesisConfig(genesisFile);
+    nodeConfig->loadConfig(configFile);
 
     auto protocolInitializer = bcos::initializer::ProtocolInitializer();
     protocolInitializer.init(nodeConfig);
