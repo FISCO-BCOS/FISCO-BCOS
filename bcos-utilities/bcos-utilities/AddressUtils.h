@@ -13,34 +13,38 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief host context for delegateCall
- * @file DelegateHostContext.h
- * @author: xingqiangbai
- * @date: 2022-09-30
+ * @brief Address utils
+ * @file AddressUtils.h
+ * @author: jimmyshi
+ * @date: 2022-11-04
  */
+
 #pragma once
-#include "HostContext.h"
+#include <iomanip>
+#include <sstream>
 #include <string>
 
 namespace bcos
 {
-namespace executor
-{
-class DelegateHostContext : public HostContext
+class AddressUtils
 {
 public:
-    DelegateHostContext(CallParameters::UniquePtr callParameters,
-        std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-
-    virtual ~DelegateHostContext() = default;
-    std::optional<storage::Entry> code() override;
-    bool setCode(bytes code) override;
-    std::string_view caller() const override;
-
-private:
-    storage::Entry m_code;
-    std::string m_delegateCallSender;
+    static std::string padding(const std::string& addr)
+    {
+        if (addr.length() > 40)
+        {
+            // remove starting chars, left 40 chars.
+            return addr.substr(addr.length() - 40, 40);
+        }
+        else
+        {
+            // add 0 at staring making to 40 chars
+            std::stringstream stream;
+            stream << std::setfill('0') << std::setw(40) << addr;
+            return stream.str();
+        }
+    }
 };
 
-}  // namespace executor
+
 }  // namespace bcos

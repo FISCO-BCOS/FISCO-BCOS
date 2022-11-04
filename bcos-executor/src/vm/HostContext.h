@@ -129,9 +129,9 @@ public:
 
     /// ------ get interfaces related to HostContext------
     std::string_view myAddress() const;
-    virtual std::string_view caller() const { return m_callParameters->senderAddress; }
-    std::string_view origin() const { return m_callParameters->origin; }
-    std::string_view codeAddress() const { return m_callParameters->codeAddress; }
+    virtual std::string_view caller() const { return m_callerPadded; }
+    std::string_view origin() const { return m_originPadded; }
+    std::string_view codeAddress() const { return m_codeAddressPadded; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
     virtual std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
@@ -185,6 +185,12 @@ private:
     std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
     std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
     std::atomic_uint64_t m_startTime = {0};    // microsecond
+
+    // just for padding
+    std::string m_myAddressPadded;
+    std::string m_callerPadded;
+    std::string m_originPadded;
+    std::string m_codeAddressPadded;
 };
 
 }  // namespace executor

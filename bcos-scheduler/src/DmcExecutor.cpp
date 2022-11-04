@@ -370,7 +370,6 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                 message->setType(protocol::ExecutionMessage::REVERT);
                 message->setCreate(false);
                 message->setKeyLocks({});
-                message->setDelegateCall(false);
                 return MessageHint::NEED_PREPARE;
             }
             else

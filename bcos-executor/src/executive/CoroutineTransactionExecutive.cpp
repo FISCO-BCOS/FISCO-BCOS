@@ -86,6 +86,15 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     // When resume, exchangeMessage set to output
     auto output = std::move(m_exchangeMessage);
 
+    if (output->delegateCall && output->type != CallParameters::FINISHED)
+    {
+        EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
+                             << LOG_KV("codeAddress", output->codeAddress);
+        output->data = bytes();
+        output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
+        output->evmStatus = EVMC_REVERT;
+    }
+
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);
 

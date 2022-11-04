@@ -29,6 +29,7 @@
 #include "evmc/evmc.hpp"
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/AddressUtils.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -88,6 +89,24 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     m_executive(std::move(executive)),
     m_tableName(tableName)
 {
+    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    {
+        m_myAddressPadded =
+            bcos::AddressUtils::padding(std::string(m_executive->contractAddress()));
+        m_callerPadded = bcos::AddressUtils::padding(std::string(m_callParameters->senderAddress));
+        m_originPadded = bcos::AddressUtils::padding(std::string(m_callParameters->origin));
+        m_codeAddressPadded =
+            bcos::AddressUtils::padding(std::string(m_callParameters->codeAddress));
+    }
+    else
+    {
+        m_myAddressPadded = std::string(m_executive->contractAddress());
+        m_callerPadded = std::string(m_callParameters->senderAddress);
+        m_originPadded = std::string(m_callParameters->origin);
+        m_codeAddressPadded = std::string(m_callParameters->codeAddress);
+    };
+
+
     interface = getHostInterface();
     wasm_interface = getWasmHostInterface();
 
@@ -541,7 +560,7 @@ int64_t HostContext::timestamp() const
 
 std::string_view HostContext::myAddress() const
 {
-    return m_executive->contractAddress();
+    return std::string_view(m_myAddressPadded.c_str());
 }
 
 std::optional<storage::Entry> HostContext::code()
@@ -669,6 +688,7 @@ bool HostContext::isWasm()
 {
     return m_executive->isWasm();
 }
+
 
 }  // namespace executor
 }  // namespace bcos
