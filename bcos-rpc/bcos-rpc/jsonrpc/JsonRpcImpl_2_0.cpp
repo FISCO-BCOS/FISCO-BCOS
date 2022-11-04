@@ -366,8 +366,8 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
 
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
-    auto transaction =
-        transactionFactory->createTransaction(0, _to, decodeData(_data), u256(0), 0, "", "", 0);
+    auto transaction = transactionFactory->createTransaction(
+        0, std::string(_to), decodeData(_data), u256(0), 0, std::string(), std::string(), 0);
     nodeService->scheduler()->call(std::move(transaction),
         [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
             Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {

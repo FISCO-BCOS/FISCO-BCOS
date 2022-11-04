@@ -23,12 +23,18 @@
 #include "../impl/TarsSerializable.h"
 
 #include "TransactionImpl.h"
+#include "bcos-concepts/Exception.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 #include <boost/endian/conversion.hpp>
+#include <boost/throw_exception.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
+
+struct EmptyHash : public bcos::error::Exception
+{
+};
 
 void TransactionImpl::decode(bcos::bytesConstRef _txData)
 {
@@ -40,26 +46,16 @@ void TransactionImpl::encode(bcos::bytes& txData) const
     bcos::concepts::serialize::encode(*m_inner(), txData);
 }
 
-bcos::crypto::HashType TransactionImpl::hash(bool _useCache) const
+bcos::crypto::HashType TransactionImpl::hash() const
 {
-    bcos::UpgradableGuard l(x_hash);
-    if (!m_inner()->dataHash.empty() && _useCache)
+    if (m_inner()->dataHash.empty())
     {
-        return *(reinterpret_cast<bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+        BOOST_THROW_EXCEPTION(EmptyHash{});
     }
-    auto hashImpl = m_cryptoSuite->hashImpl();
-    auto anyHasher = hashImpl->hasher();
 
-    bcos::crypto::HashType hashResult;
-    std::visit(
-        [this, &hashResult, &l](auto& hasher) {
-            using Hasher = std::remove_cvref_t<decltype(hasher)>;
-            bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
+    bcos::crypto::HashType hashResult(
+        (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
 
-            bcos::UpgradeGuard ul(l);
-            m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
-        },
-        anyHasher);
     return hashResult;
 }
 

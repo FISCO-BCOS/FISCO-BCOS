@@ -237,7 +237,7 @@ public:
                 for (auto&& it : *mutableFilled)
                 {
                     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                        m_cryptoSuite, [m_tx = std::move(it)]() mutable { return &m_tx; });
+                        [m_tx = std::move(it)]() mutable { return &m_tx; });
                     txs->push_back(tx);
                 }
                 m_callback(toBcosError(ret), txs);

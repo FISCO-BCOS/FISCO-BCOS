@@ -43,7 +43,13 @@ public:
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) = 0;
 
     virtual void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, std::function<void(bytesConstRef _response)> _sendResponse) = 0;
+        bytesConstRef _data, std::function<void(bytesConstRef response)> _sendResponse) = 0;
+
+    virtual task::Task<void> broadcastTransaction(
+        [[maybe_unused]] const protocol::Transaction& transaction)
+    {
+        co_return;
+    }
 
     virtual TransactionSyncConfig::Ptr config() { return m_config; }
     virtual void onEmptyTxs() = 0;

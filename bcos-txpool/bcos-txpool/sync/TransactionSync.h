@@ -20,15 +20,15 @@
  */
 #pragma once
 
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
+#include "bcos-crypto/interfaces/crypto/Signature.h"
 #include "bcos-txpool/sync/TransactionSyncConfig.h"
 #include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Worker.h>
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class TransactionSync : public TransactionSyncInterface,
                         public Worker,
@@ -36,8 +36,8 @@ class TransactionSync : public TransactionSyncInterface,
 {
 public:
     using Ptr = std::shared_ptr<TransactionSync>;
-    explicit TransactionSync(TransactionSyncConfig::Ptr _config)
-      : TransactionSyncInterface(_config),
+    explicit TransactionSync(TransactionSyncConfig::Ptr config)
+      : TransactionSyncInterface(std::move(config)),
         Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
         m_worker(
@@ -46,14 +46,20 @@ public:
         m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
     {
         m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { noteNewTransactions(); });
+        m_hashImpl = m_config->blockFactory()->cryptoSuite()->hashImpl();
+        m_signatureImpl = m_config->blockFactory()->cryptoSuite()->signatureImpl();
     }
+    TransactionSync(const TransactionSync&) = delete;
+    TransactionSync(TransactionSync&&) = delete;
+    TransactionSync& operator=(const TransactionSync&) = delete;
+    TransactionSync& operator=(TransactionSync&&) = delete;
 
     ~TransactionSync() override = default;
 
     void start() override;
     void stop() override;
 
-    using SendResponseCallback = std::function<void(bytesConstRef _respData)>;
+    using SendResponseCallback = std::function<void(bytesConstRef respData)>;
     void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse) override;
 
@@ -66,11 +72,13 @@ public:
     virtual void maintainDownloadingTransactions();
     void onEmptyTxs() override;
 
+    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
+
 protected:
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
     void executeWorker() override;
 
-    virtual void broadcastTxsFromRpc(bcos::crypto::NodeIDSet const& _connectedPeers,
+    void broadcastTxsFromRpc(bcos::crypto::NodeIDSet const& _connectedPeers,
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::protocol::ConstTransactionsPtr _txs);
     virtual void forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connectedPeers,
@@ -100,21 +108,21 @@ protected:
 
     virtual bool downloadTxsBufferEmpty()
     {
-        ReadGuard l(x_downloadTxsBuffer);
-        return (m_downloadTxsBuffer->size() == 0);
+        ReadGuard lock(x_downloadTxsBuffer);
+        return (m_downloadTxsBuffer->empty());
     }
 
     virtual void appendDownloadTxsBuffer(TxsSyncMsgInterface::Ptr _txsBuffer)
     {
-        WriteGuard l(x_downloadTxsBuffer);
+        WriteGuard lock(x_downloadTxsBuffer);
         m_downloadTxsBuffer->emplace_back(_txsBuffer);
     }
 
     virtual TxsSyncMsgListPtr swapDownloadTxsBuffer()
     {
-        UpgradableGuard l(x_downloadTxsBuffer);
+        UpgradableGuard lock(x_downloadTxsBuffer);
         auto localBuffer = m_downloadTxsBuffer;
-        UpgradeGuard ul(l);
+        UpgradeGuard uLock(lock);
         m_downloadTxsBuffer = std::make_shared<TxsSyncMsgList>();
         return localBuffer;
     }
@@ -149,6 +157,8 @@ private:
     boost::condition_variable m_signalled;
     // mutex to access m_signalled
     boost::mutex x_signalled;
+
+    bcos::crypto::Hash::Ptr m_hashImpl;
+    bcos::crypto::SignatureCrypto::Ptr m_signatureImpl;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

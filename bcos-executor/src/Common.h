@@ -33,7 +33,9 @@
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <algorithm>
 #include <functional>
+#include <memory>
 #include <set>
 
 namespace bcos
@@ -327,10 +329,19 @@ bool hasPrecompiledPrefix(const std::string_view& _code);
  * @param _addr : the string address
  * @return evmc_address : the transformed evm address
  */
-inline evmc_address toEvmC(const std::string_view& _addr)
+inline evmc_address toEvmC(const std::string_view& addr)
 {  // TODO: add another interfaces for wasm
     evmc_address ret;
-    memcpy(ret.bytes, _addr.data(), 20);
+    constexpr static auto evmAddressLength = sizeof(ret);
+
+    if (addr.size() < evmAddressLength)
+    {
+        std::uninitialized_fill_n(ret.bytes, evmAddressLength, 0);
+    }
+    else
+    {
+        std::uninitialized_copy_n(addr.begin(), evmAddressLength, ret.bytes);
+    }
     return ret;
 }
 
@@ -339,9 +350,12 @@ inline evmc_address toEvmC(const std::string_view& _addr)
  * @param _h : hash value
  * @return evmc_bytes32 : transformed hash
  */
-inline evmc_bytes32 toEvmC(h256 const& _h)
+inline evmc_bytes32 toEvmC(h256 const& hash)
 {
-    return reinterpret_cast<evmc_bytes32 const&>(_h);
+    evmc_bytes32 evmBytes;
+    static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
+    std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
+    return evmBytes;
 }
 /**
  * @brief : trans uint256 number of evm-represented to u256
