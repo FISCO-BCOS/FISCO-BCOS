@@ -64,7 +64,6 @@ void TxPool::stop()
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");
 }
 
-
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {

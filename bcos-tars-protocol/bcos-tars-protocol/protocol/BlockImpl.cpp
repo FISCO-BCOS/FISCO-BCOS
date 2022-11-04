@@ -56,7 +56,6 @@ bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 

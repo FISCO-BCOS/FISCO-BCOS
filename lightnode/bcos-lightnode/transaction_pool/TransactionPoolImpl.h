@@ -38,7 +38,7 @@ private:
     {
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction request";
 
-        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
             [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
 
         auto submitResult = co_await concepts::getRef(m_transactionPool)

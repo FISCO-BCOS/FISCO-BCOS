@@ -26,7 +26,7 @@ private:
     task::Task<void> impl_call(bcos::concepts::transaction::Transaction auto const& transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
             [&transaction]() { return const_cast<bcostars::Transaction*>(&transaction); });
 
         struct Awaitable : public CO_STD::suspend_always

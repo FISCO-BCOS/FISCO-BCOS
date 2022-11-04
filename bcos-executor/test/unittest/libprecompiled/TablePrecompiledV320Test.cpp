@@ -50,7 +50,7 @@ public:
         const std::string& tableName, const std::string& key, const std::vector<std::string>& value,
         const std::string& callAddress, int _errorCode = 0, bool errorInTableManager = false)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         TableInfoTuple tableInfoTuple = std::make_tuple(key, value);
         bytes in = codec->encodeWithSig(
             "createTable(string,(string,string[]))", tableName, tableInfoTuple);
@@ -146,7 +146,7 @@ public:
     ExecutionMessage::UniquePtr appendColumns(protocol::BlockNumber _number,
         const std::string& tableName, const std::vector<std::string>& values, int _errorCode = 0)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("appendColumns(string,string[])", tableName, values);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -202,7 +202,7 @@ public:
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
         params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
@@ -241,7 +241,7 @@ public:
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
         params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
@@ -261,7 +261,7 @@ public:
 
     ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, std::string const& tableName)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("desc(string)", tableName);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -296,7 +296,7 @@ public:
     ExecutionMessage::UniquePtr insert(protocol::BlockNumber _number, const std::string& key,
         const std::vector<std::string>& values, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         EntryTuple entryTuple = {key, values};
         bytes in = codec->encodeWithSig("insert((string,string[]))", entryTuple);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -351,7 +351,7 @@ public:
     ExecutionMessage::UniquePtr selectByKey(
         protocol::BlockNumber _number, const std::string& key, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("select(string)", key);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -387,7 +387,7 @@ public:
         const std::vector<ConditionTupleV320>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("select((uint8,uint32,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -422,7 +422,7 @@ public:
     ExecutionMessage::UniquePtr count(protocol::BlockNumber _number,
         const std::vector<ConditionTupleV320>& keyCond, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("count((uint8,uint32,string)[])", keyCond);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -458,7 +458,7 @@ public:
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
         const std::string& callAddress, bool _isErrorInTable = false)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("update(string,(string,string)[])", key, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -522,7 +522,7 @@ public:
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in =
             codec->encodeWithSig("update((uint8,uint32,string)[],(uint32,uint32),(string,string)[])",
                 conditions, _limit, _updateFields);
@@ -585,7 +585,7 @@ public:
     ExecutionMessage::UniquePtr removeByKey(
         protocol::BlockNumber _number, const std::string& key, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("remove(string)", key);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -621,7 +621,7 @@ public:
         const std::vector<ConditionTupleV320>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::Version::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
         bytes in = codec->encodeWithSig("remove((uint8,uint32,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -670,7 +670,7 @@ static void generateRandomVector(uint32_t count, uint32_t _min, uint32_t _max, s
     if(_min > _max || count > _max - _min + 1)
     {
         return;
-    }	
+    }
     std::vector<uint32_t> temp;
     temp.reserve(_max - _min + 1);
     for(uint32_t i = _min; i <= _max; i++)
@@ -691,9 +691,9 @@ BOOST_FIXTURE_TEST_SUITE(precompiledTableTestV320, TableFactoryPrecompiledFixtur
 
 BOOST_AUTO_TEST_CASE(countTest)
 {
-    
+
     const int INSERT_COUNT = 100000;
-    
+
     auto callAddress = tableTestAddress;
     BlockNumber number = 1;
     {
@@ -701,7 +701,7 @@ BOOST_AUTO_TEST_CASE(countTest)
     }
 
     std::map<std::string, uint32_t> randomSet;
-    int start = 0; 
+    int start = 0;
     int end = 499;
     for(int i = 0; i < INSERT_COUNT / 500; i++)
     {
@@ -709,7 +709,7 @@ BOOST_AUTO_TEST_CASE(countTest)
         start += 500;
         end += 500;
     }
-    
+
     for (int j = 0; j < INSERT_COUNT; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
@@ -721,10 +721,10 @@ BOOST_AUTO_TEST_CASE(countTest)
         insert(number++, _fillZeros(j), {value}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
     }
-    
-    // (<= && <= && ==) or (<= && <= && !=) 
+
+    // (<= && <= && ==) or (<= && <= && !=)
     {
-        std::random_device rd; 
+        std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2);
         std::uniform_int_distribution<uint32_t> distribution2(randomSet.size() / 2, randomSet.size());
@@ -769,9 +769,9 @@ BOOST_AUTO_TEST_CASE(countTest)
         BOOST_CHECK(countRes == total - validCount);
     }
 
-    // (< && < && ==) or (< && < && !=) 
+    // (< && < && ==) or (< && < && !=)
     {
-        std::random_device rd; 
+        std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2 - 1);
         std::uniform_int_distribution<uint32_t> distribution2(randomSet.size() / 2 + 1, randomSet.size());
@@ -878,7 +878,7 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
 {
     init(true);
     const int INSERT_COUNT = 100000;
-    
+
     auto callAddress = tableTestAddress;
     BlockNumber number = 1;
     {
@@ -886,7 +886,7 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
     }
 
     std::map<std::string, uint32_t> randomSet;
-    int start = 0; 
+    int start = 0;
     int end = 499;
     for(int i = 0; i < INSERT_COUNT / 500; i++)
     {
@@ -894,7 +894,7 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
         start += 500;
         end += 500;
     }
-    
+
     for (int j = 0; j < INSERT_COUNT; ++j)
     {
         boost::log::core::get()->set_logging_enabled(false);
@@ -906,10 +906,10 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
         insert(number++, _fillZeros(j), {value}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
     }
-    
-    // (<= && <= && ==) or (<= && <= && !=) 
+
+    // (<= && <= && ==) or (<= && <= && !=)
     {
-        std::random_device rd; 
+        std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2);
         std::uniform_int_distribution<uint32_t> distribution2(randomSet.size() / 2, randomSet.size());
@@ -954,9 +954,9 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
         BOOST_CHECK(countRes == total - validCount);
     }
 
-    // (< && < && ==) or (< && < && !=) 
+    // (< && < && ==) or (< && < && !=)
     {
-        std::random_device rd; 
+        std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2 - 1);
         std::uniform_int_distribution<uint32_t> distribution2(randomSet.size() / 2 + 1, randomSet.size());

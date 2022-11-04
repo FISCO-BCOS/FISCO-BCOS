@@ -19,30 +19,34 @@
  * @date 2021-04-20
  */
 #pragma once
+#include "../impl/TarsHashable.h"
+
 #include "TransactionImpl.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
 
-namespace bcostars
-{
-namespace protocol
+#include <utility>
+
+namespace bcostars::protocol
 {
 class TransactionFactoryImpl : public bcos::protocol::TransactionFactory
 {
 public:
-    TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite) : m_cryptoSuite(cryptoSuite)
+    TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
+      : m_cryptoSuite(std::move(cryptoSuite))
     {}
-    ~TransactionFactoryImpl() override {}
+    ~TransactionFactoryImpl() override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(
         bcos::bytesConstRef _txData, bool _checkSig = true) override
     {
-        auto transaction = std::make_shared<TransactionImpl>(m_cryptoSuite,
+        auto transaction = std::make_shared<TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
 
         transaction->decode(_txData);
         if (_checkSig)
         {
-            transaction->verify();
+            transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
         }
         return transaction;
     }
@@ -53,33 +57,41 @@ public:
         return createTransaction(bcos::ref(_txData), _checkSig);
     }
 
-    bcos::protocol::Transaction::Ptr createTransaction(int32_t _version,
-        const std::string_view& _to, bcos::bytes const& _input, bcos::u256 const& _nonce,
-        int64_t _blockLimit, std::string const& _chainId, std::string const& _groupId,
-        int64_t _importTime) override
+    bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
+        bcos::bytes const& _input, bcos::u256 const& _nonce, int64_t _blockLimit,
+        std::string _chainId, std::string _groupId, int64_t _importTime) override
     {
-        auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+        auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
         auto const& inner = transaction->innerGetter();
         inner()->data.version = _version;
-        inner()->data.to.assign(_to.begin(), _to.end());
+        inner()->data.to = std::move(_to);
         inner()->data.input.assign(_input.begin(), _input.end());
         inner()->data.blockLimit = _blockLimit;
-        inner()->data.chainID = _chainId;
-        inner()->data.groupID = _groupId;
+        inner()->data.chainID = std::move(_chainId);
+        inner()->data.groupID = std::move(_groupId);
         inner()->data.nonce = boost::lexical_cast<std::string>(_nonce);
         inner()->importTime = _importTime;
+
+        // Update the hash field
+        std::visit(
+            [&inner](auto&& hasher) {
+                using HasherType = std::decay_t<decltype(hasher)>;
+                bcos::concepts::hash::calculate<HasherType>(*inner(), inner()->dataHash);
+            },
+            m_cryptoSuite->hashImpl()->hasher());
+
 
         return transaction;
     }
 
-    bcos::protocol::Transaction::Ptr createTransaction(int32_t _version,
-        const std::string_view& _to, bcos::bytes const& _input, bcos::u256 const& _nonce,
-        int64_t _blockLimit, std::string const& _chainId, std::string const& _groupId,
-        int64_t _importTime, bcos::crypto::KeyPairInterface::Ptr keyPair) override
+    bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
+        bcos::bytes const& _input, bcos::u256 const& _nonce, int64_t _blockLimit,
+        std::string _chainId, std::string _groupId, int64_t _importTime,
+        bcos::crypto::KeyPairInterface::Ptr keyPair) override
     {
-        auto tx = createTransaction(
-            _version, _to, _input, _nonce, _blockLimit, _chainId, _groupId, _importTime);
+        auto tx = createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
+            std::move(_chainId), std::move(_groupId), _importTime);
         auto sign = m_cryptoSuite->signatureImpl()->sign(*keyPair, tx->hash(), true);
 
         auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
@@ -96,5 +108,4 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
 
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

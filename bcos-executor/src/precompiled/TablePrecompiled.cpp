@@ -105,7 +105,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
 
     std::string tableMethodCount = TABLE_METHOD_COUNT;
     auto version = blockContext->blockVersion();
-    if (version >= (uint32_t)bcos::protocol::Version::V3_2_VERSION)
+    if (version >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         tableMethodCount = TABLE_METHOD_COUNT_V320;
     }
@@ -234,7 +234,7 @@ bool TablePrecompiled::buildConditions(std::optional<storage::Condition>& keyCon
     std::optional<precompiled::Condition>& valueCondition,
     const precompiled::Conditions& conditions, const LimitTuple& limit, uint32_t version) const
 {
-    if (version < (uint32_t)bcos::protocol::Version::V3_2_VERSION)
+    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         buildKeyCondition(keyCondition, conditions.cond, limit);
         return false;
@@ -434,13 +434,13 @@ void TablePrecompiled::count(const std::string& tableName,
         {
             // will throw exception when wrong condition cmp or limit count overflow
             buildKeyCondition(
-                keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
+                keyCondition, conditions.cond, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
         }
         else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
         {
             /// NOTE: if version <= 3.0, here will use empty limit, which means count always return
             /// 0
-            buildKeyCondition(keyCondition, conditions, {});
+            buildKeyCondition(keyCondition, conditions.cond, {});
         }
 
         singleCount = _executive->storage().getPrimaryKeys(tableName, keyCondition).size();
