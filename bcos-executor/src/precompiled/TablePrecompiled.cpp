@@ -285,8 +285,18 @@ void TablePrecompiled::count(const std::string& tableName,
     do
     {
         auto keyCondition = std::make_optional<storage::Condition>();
-        // will throw exception when wrong condition cmp or limit count overflow
-        buildKeyCondition(keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            // will throw exception when wrong condition cmp or limit count overflow
+            buildKeyCondition(
+                keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
+        }
+        else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+        {
+            /// NOTE: if version <= 3.0, here will use empty limit, which means count always return
+            /// 0
+            buildKeyCondition(keyCondition, conditions, {});
+        }
 
         singleCount = _executive->storage().getPrimaryKeys(tableName, keyCondition).size();
         if (totalCount > totalCount + singleCount)
