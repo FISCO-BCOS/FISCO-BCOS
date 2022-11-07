@@ -230,7 +230,7 @@ public:
         const bcos::crypto::Hash::Ptr& hashImpl, uint32_t blockVersion) const
     {
         bcos::crypto::HashType entryHash(0);
-        if (blockVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+        if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             auto anyHasher = hashImpl->hasher();
 

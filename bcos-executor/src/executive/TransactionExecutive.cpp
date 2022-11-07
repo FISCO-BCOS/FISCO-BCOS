@@ -298,7 +298,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
-            if (versionCompareTo(blockContext().lock()->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call precompiled out of gas.", *callParameters);
             }
@@ -377,7 +377,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         auto sender = callParameters->senderAddress;
         auto response = internalCreate(std::move(callParameters));
         if (blockContext->isAuthCheck() &&
-            blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+            blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
         {
             // Create auth table
             creatAuthTable(tableName, response->origin, std::move(sender));
@@ -403,7 +403,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         callParameters->status = (int32_t)TransactionStatus::ContractAddressAlreadyUsed;
         callParameters->type = CallParameters::REVERT;
         callParameters->message = e.what();
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Contract address already used.", *callParameters);
         }
@@ -429,7 +429,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "the code is not wasm bytecode";
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callResults->message;
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput(
                     "WASM bytecode invalid or use unsupported opcode.", *callResults);
@@ -450,7 +450,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->type = CallParameters::REVERT;
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "wasm bytecode invalid or use unsupported opcode";
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput(
                     "WASM bytecode invalid or use unsupported opcode.", *callResults);
@@ -497,7 +497,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
             }
@@ -523,7 +523,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
             }
@@ -649,7 +649,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
-            if (blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+            if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
             {
                 EXECUTIVE_LOG(TRACE)
                     << "logEntries" << LOG_KV("LogSize", callResults->logEntries.size());
@@ -690,7 +690,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
                     " limit: " +
                     boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
-                if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+                if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                 {
                     writeErrInfoToOutput("Deploy code is too large.", *callResults);
                 }
@@ -709,7 +709,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
                     callResults->message = "exceptionalFailedCodeDeposit";
-                    if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+                    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                     {
                         writeErrInfoToOutput("Exceptional Failed Code Deposit", *callResults);
                     }
@@ -732,7 +732,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     buildCallResults->type = CallParameters::REVERT;
                     buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
                     buildCallResults->message = "Error occurs in build BFS dir";
-                    if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+                    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                     {
                         writeErrInfoToOutput(
                             "Error occurs in building BFS dir.", *buildCallResults);
@@ -758,7 +758,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     // Clear the creation flag
                     callResults->create = false;
                     // Clear the data
-                    if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+                    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                     {
                         writeErrInfoToOutput(
                             "Create contract with empty code, invalid code input.", *callResults);
@@ -790,7 +790,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 callResult->type = CallParameters::REVERT;
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
                 callResult->message = "Error contract address.";
-                if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+                if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                 {
                     writeErrInfoToOutput("Call address error.", *callResult);
                 }
@@ -821,7 +821,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 
-            if (blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+            if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
             {
                 EXECUTIVE_LOG(TRACE)
                     << "logEntries" << LOG_KV("LogSize", callResults->logEntries.size());
@@ -847,7 +847,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
-        if (versionCompareTo(blockContext().lock()->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(e.errorMessage(), *callResults);
         }
@@ -1059,7 +1059,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution out of gas.", *callResults);
         }
@@ -1072,7 +1072,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution failure.", *callResults);
         }
@@ -1085,7 +1085,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution invalid/undefined opcode.", *callResults);
         }
@@ -1097,7 +1097,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(
                 "Execution has violated the jump destination restrictions.", *callResults);
@@ -1111,7 +1111,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution stack overflow.", *callResults);
         }
@@ -1123,7 +1123,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_UNDERFLOW")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution needs more items on EVM stack.", *callResults);
         }
@@ -1136,7 +1136,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution tried to read outside memory bounds.", *callResults);
         }
@@ -1148,7 +1148,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         // m_remainGas = 0;
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
                             << LOG_KV("to", callResults->receiveAddress);
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(
                 "Execution tried to execute an operation which is restricted in static mode.",
@@ -1164,7 +1164,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.")
             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Contract validation has failed.", *callResults);
         }
@@ -1176,7 +1176,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Argument Out Of Range")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(
                 "An argument to a state accessing method has a value outside of the accepted range "
@@ -1193,7 +1193,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
-        if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("A WebAssembly trap has been hit during execution.", *callResults);
         }
@@ -1271,7 +1271,7 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
 {
     auto blockContext = m_blockContext.lock();
     // check account first
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         uint8_t accountStatus = checkAccountAvailable(callParameters);
         if (accountStatus == AccountStatus::freeze)
@@ -1308,7 +1308,7 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Create permission denied";
             callParameters->create = false;
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Create permission denied.", *callParameters);
             }
@@ -1335,7 +1335,7 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Contract is frozen";
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Contract is frozen.", *callParameters);
             }
@@ -1349,7 +1349,7 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Call permission denied";
-            if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call permission denied.", *callParameters);
             }

@@ -107,7 +107,7 @@ public:
         if (std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION) == std::string(_key))
         {
             std::stringstream ss;
-            ss << bcos::protocol::Version::MAX_VERSION;
+            ss << bcos::protocol::BlockVersion::MAX_VERSION;
 
             _onGetConfig(nullptr, ss.str(), m_blockNumber);
             return;

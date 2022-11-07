@@ -531,7 +531,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
 {
     std::string typeStr = "";
     if (_executive->blockContext().lock()->blockVersion() >=
-        static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+        static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist
@@ -600,7 +600,7 @@ void AuthManagerPrecompiled::setDeployType(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
     }
-    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist
@@ -655,7 +655,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     bool access = _isClose ? (type == (int)AuthType::BLACK_LIST_MODE) :
                              (type == (int)AuthType::WHITE_LIST_MODE);
 
-    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist
@@ -735,7 +735,7 @@ bool AuthManagerPrecompiled::checkDeployAuth(
     std::string aclMapStr = "";
 
     if (_executive->blockContext().lock()->blockVersion() >=
-        static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+        static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist

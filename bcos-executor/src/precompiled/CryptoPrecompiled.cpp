@@ -97,7 +97,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     }
     // curve25519VRFVerify
     else if (funcSelector == name2Selector[CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR] &&
-             (version >= (uint32_t)(bcos::protocol::Version::V3_0_VERSION)))
+             (version >= (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION)))
     {
         curve25519VRFVerify(_executive, paramData, _callParameters);
     }

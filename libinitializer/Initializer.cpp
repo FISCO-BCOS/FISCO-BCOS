@@ -404,7 +404,7 @@ void Initializer::initSysContract()
     block->blockHeader()->setNumber(SYS_CONTRACT_DEPLOY_NUMBER);
     block->blockHeader()->setVersion(m_nodeConfig->compatibilityVersion());
 
-    if (m_nodeConfig->compatibilityVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION))
+    if (m_nodeConfig->compatibilityVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         BfsInitializer::init(
             SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);

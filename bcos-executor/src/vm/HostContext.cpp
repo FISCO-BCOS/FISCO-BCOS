@@ -89,7 +89,7 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     m_executive(std::move(executive)),
     m_tableName(tableName)
 {
-    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         m_myAddressPadded =
             bcos::AddressUtils::padding(std::string(m_executive->contractAddress()));
@@ -196,7 +196,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         if (!m_executive->blockContext().lock()->isWasm())
         {
-            if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+            if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
             {
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->destination);
@@ -219,7 +219,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->create = true;
         break;
     }
-    if (versionCompareTo(blockContext->blockVersion(), Version::V3_1_VERSION) >= 0)
+    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
     {
         request->logEntries = std::move(m_callParameters->logEntries);
     }
@@ -261,7 +261,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 evmc_status_code HostContext::toEVMStatus(std::unique_ptr<CallParameters> const& _response,
     evmc_result _result, std::shared_ptr<bcos::executor::BlockContext> _blockContext)
 {
-    if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION))
+    if (_blockContext->blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         _result.status_code = evmc_status_code(_response->evmStatus);
         return _result.status_code;
@@ -288,7 +288,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled
         /// before 3.1.0
         callResults->gas = gasUsed;
-        if (versionCompareTo(version, Version::V3_1_VERSION) >= 0)
+        if (versionCompareTo(version, BlockVersion::V3_1_VERSION) >= 0)
         {
             callResults->gas = _request->gas - gasUsed;
         }
@@ -351,7 +351,7 @@ bool HostContext::setCode(bytes code)
 {
     // set code will cause exception when exec revert
     // new logic
-    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto contractTable = m_executive->storage().openTable(m_tableName);
         // set code hash in contract table
@@ -395,7 +395,7 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
     if (setCode(std::move(code)))
     {
         // new logic
-        if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+        if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
             // set abi in abi table
             auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
@@ -436,7 +436,7 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& _a)
 size_t HostContext::codeSizeAt(const std::string_view& _a)
 {
     auto blockContext = m_executive->blockContext().lock();
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         // precompiled return 1;
         if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
@@ -452,7 +452,7 @@ size_t HostContext::codeSizeAt(const std::string_view& _a)
 h256 HostContext::codeHashAt(const std::string_view& _a)
 {
     auto blockContext = m_executive->blockContext().lock();
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         // precompiled return 0 hash;
         if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
@@ -566,7 +566,7 @@ std::string_view HostContext::myAddress() const
 std::optional<storage::Entry> HostContext::code()
 {
     auto start = utcTimeUs();
-    if (blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto codehash = codeHash();
         Entry codeHashEntry;

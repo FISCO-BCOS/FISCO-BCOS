@@ -90,7 +90,7 @@ public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
     explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 10240,
-        uint32_t _blockVersion = (uint32_t)bcos::protocol::Version::V3_0_VERSION,
+        uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION,
         std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr,
         bool _ignoreNotExist = false)
       : storage::StateStorageInterface(std::move(_prev)),
@@ -869,7 +869,7 @@ public:
                 if (entry.second.dirty())
                 {
                     bcos::crypto::HashType entryHash(0);
-                    if (blockVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+                    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
                     {
                         entryHash = entry.second.hash(table, entry.first, hashImpl, blockVersion);
                     }

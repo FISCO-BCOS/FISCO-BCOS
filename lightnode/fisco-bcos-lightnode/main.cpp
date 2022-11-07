@@ -133,7 +133,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     bcostars::Block genesisBlock;
     genesisBlock.blockHeader.data.blockNumber = 0;
     if (nodeConfig->compatibilityVersion() >=
-        static_cast<uint32_t>(bcos::protocol::Version::V3_1_VERSION))
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         genesisBlock.blockHeader.data.version =
             static_cast<decltype(genesisBlock.blockHeader.data.version)>(
