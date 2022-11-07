@@ -775,3 +775,22 @@ void TransactionSync::onEmptyTxs()
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
 }
+
+task::Task<void> TransactionSync::broadcastTransaction(const protocol::Transaction& transaction)
+{
+    auto consensusNodeList = m_config->consensusNodeList();
+    auto connectedNodeList = m_config->connectedNodeList();
+
+    bcos::bytes buffer;
+    transaction.encode(buffer);
+
+    // auto txsPacket = m_config->msgFactory()->createTxsSyncMsg(
+    //     TxsSyncPacketType::TxsPacket, std::move(*encodedData));
+    // auto packetData = txsPacket->encode();
+    // m_config->frontService()->asyncSendBroadcastMessage(
+    //     bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
+    // SYNC_LOG(DEBUG) << LOG_DESC("broadcastTxsFromRpc")
+    //                 << LOG_KV("txsNum", block->transactionsSize())
+    //                 << LOG_KV("messageSize(B)", packetData->size());
+    co_return;
+}
