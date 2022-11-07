@@ -118,6 +118,9 @@ public:
     std::string const& pdKeyPath() const { return m_pdKeyPath; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
+    bool enableArchive() const { return m_enableArchive; }
+    std::string const& archiveListenIP() const { return m_archiveListenIP; }
+    uint16_t archiveListenPort() const { return m_archiveListenPort; }
 
     bcos::crypto::KeyFactory::Ptr keyFactory() { return m_keyFactory; }
 
@@ -292,6 +295,9 @@ private:
     std::string m_pdCaPath;
     std::string m_pdCertPath;
     std::string m_pdKeyPath;
+    bool m_enableArchive = false;
+    std::string m_archiveListenIP;
+    uint16_t m_archiveListenPort = 0;
 
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";

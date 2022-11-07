@@ -25,6 +25,7 @@
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
 #include "bcos-storage/bcos-storage/TiKVStorage.h"
+#include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
 #include "libinitializer/ProtocolInitializer.h"
@@ -46,6 +47,11 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/asio/connect.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/program_options.hpp>
@@ -66,28 +72,38 @@ using namespace rocksdb;
 using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::initializer;
+namespace beast = boost::beast;  // from <boost/beast.hpp>
+namespace http = beast::http;    // from <boost/beast/http.hpp>
+namespace net = boost::asio;     // from <boost/asio.hpp>
+using tcp = net::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
+
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 
-po::options_description main_options("storage tool used to read/write the data of storage");
+po::options_description main_options(
+    "archive tool used to archive/reimport the data of FISCO BCOS v3");
 
 po::variables_map initCommandLine(int argc, const char* argv[])
 {
-    main_options.add_options()("help,h", "help of storage tool")("start,s",
-        po::value<uint64_t>()->default_value(1),
-        "start block number to be archived")("end,e", po::value<uint64_t>()->default_value(0),
-        "end block number to be archived, which is not included, default is current block number - "
-        "1000")("config,c",
-        boost::program_options::value<std::string>()->default_value("./config.ini"),
+    main_options.add_options()("help,h", "help of storage tool")("archive,a",
+        po::value<vector<string>>()->multitoken(),
+        "[startBlock] [endBlock] the range is [start,end) which means the end is not archived")(
+        "reimport,r", po::value<vector<string>>()->multitoken(),
+        "[startBlock] [endBlock] the range is [start,end) which means the end is not reimported")(
+        "config,c", boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path")("genesis,g",
         boost::program_options::value<std::string>()->default_value("./config.genesis"),
         "genesis config file path")("path,p",
         boost::program_options::value<std::string>()->default_value("./archive"),
-        "the path to store the archived data, require if type is rocksDB")("type,t",
-        boost::program_options::value<std::string>()->default_value("rocksDB"),
-        "default archive data to rocksDB, support rocksDB and TiKV")(
-        "pd_addr,pd", po::value<vector<string>>()->multitoken(), "pd address of TiKV");
+        "the path to store the archived data or read archived data if reimport, if set path then "
+        "use rocksDB")("endpoint,e", boost::program_options::value<std::string>(),
+        "the ip and port of node archive service in format of IP:Port, ipv6 is not supported")(
+        "pd_addr,pd", boost::program_options::value<std::string>()->default_value("127.0.0.1:2379"),
+        "pd address of TiKV, if set use TiKV to archive data of reimport from TiKV, multi address "
+        "is split by comma");
+    // ("type,t", boost::program_options::value<std::string>()->default_value("rocksDB"),
+    //     "default archive data to rocksDB, support rocksDB and TiKV")
     po::variables_map varMap;
     try
     {
@@ -169,13 +185,86 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     return storage;
 }
 
+void deleteArchivedData(const std::string& endpoint, int64_t startBlock, int64_t endBlock)
+{
+    try
+    {
+        std::vector<std::string> ipPort;
+        boost::split(ipPort, endpoint, boost::is_any_of(":"));
+        auto const host = ipPort[0];
+        auto const port = ipPort[1];
+
+        // The io_context is required for all I/O
+        net::io_context ioc;
+
+        // These objects perform our I/O
+        tcp::resolver resolver(ioc);
+        beast::tcp_stream stream(ioc);
+
+        // Look up the domain name
+        auto const results = resolver.resolve(host, port);
+
+        // Make the connection on the IP address we get from a lookup
+        stream.connect(results);
+
+        Json::Value request;
+        request["id"] = 1;
+        request["jsonrpc"] = "2.0";
+        request["method"] = "deleteArchivedData";
+        Json::Value params(Json::arrayValue);
+        params.append(startBlock);
+        params.append(endBlock);
+        request["params"] = params;
+
+        http::request<http::string_body> req{http::verb::post, "/", 11};
+        req.set(http::field::host, endpoint);
+        req.set(http::field::accept, "*/*");
+        req.set(http::field::content_type, "application/json");
+        req.set(http::field::accept_charset, "utf-8");
+
+        req.body() = request.toStyledString();
+        req.prepare_payload();
+
+        // Send the HTTP request to the remote host
+        http::write(stream, req);
+        std::cout << "---------------request send:\n" << request.toStyledString() << std::endl;
+        // This buffer is used for reading and must be persisted
+        beast::flat_buffer buffer;
+
+        // Declare a container to hold the response
+        http::response<http::dynamic_body> res;
+
+        // Receive the HTTP response
+        http::read(stream, buffer, res);
+
+        // Write the message to standard out
+        std::cout << "---------------response:\n" << res << std::endl;
+
+        // Gracefully close the socket
+        beast::error_code ec;
+        stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+
+        // not_connected happens sometimes
+        // so don't bother reporting it.
+        //
+        if (ec && ec != beast::errc::not_connected)
+        {
+            throw beast::system_error{ec};
+        }
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+}
+
 int main(int argc, const char* argv[])
 {
     boost::property_tree::ptree propertyTree;
     auto params = initCommandLine(argc, argv);
-    // TODO: parse config file
+    // parse config file
     std::string configPath("./config.ini");
-    if (params.count("config"))
+    if (params.count("config") != 0U)
     {
         configPath = params["config"].as<std::string>();
     }
@@ -186,20 +275,94 @@ int main(int argc, const char* argv[])
     }
 
     std::string genesisFilePath("./config.genesis");
-    if (params.count("genesis"))
+    if (params.count("genesis") != 0U)
     {
         genesisFilePath = params["genesis"].as<std::string>();
     }
+    cout << "config file: " << configPath << " | genesis file: " << genesisFilePath << endl;
+    std::string archivePath = params["path"].as<std::string>();
+    std::string pdAddresses;
+    if (params.count("pd") != 0U)
+    {
+        pdAddresses = params["pd"].as<std::string>();
+    }
+    std::string endpoint;
+    if (params.count("endpoint") != 0U)
+    {
+        endpoint = params["endpoint"].as<std::string>();
+    }
+    if (params.count("archive") != 0U && endpoint.empty())
+    {
+        cout << "the IP::Port of node's archive service is empty" << endl;
+        return 1;
+    }
+    std::vector<std::string> pdAddrs;
 
-    auto startBlockNumber = params["start"].as<uint64_t>();
-    auto endBlockNumber = params["end"].as<uint64_t>();
-    auto archivePath = params["path"].as<std::string>();
-    auto archiveType = params["type"].as<std::string>();
+    std::string archiveType = "RocksDB";
+    if (!archivePath.empty() && pdAddresses.empty())
+    {
+        cout << "use rocksDB as archive DB, path: " << archivePath << endl;
+    }
+    else if (archivePath.empty() && !pdAddresses.empty())
+    {
+        archiveType = "TiKV";
+        boost::split(pdAddrs, pdAddresses, boost::is_any_of(","));
+        cout << "use TiKV as archive DB, pd address: " << pdAddresses << endl;
+    }
+    else
+    {
+        cerr << "please set archive path or pd address, not both." << endl;
+        return 1;
+    }
 
+    std::vector<std::string> archiveParameters;
+    if (params.count("archive") != 0U)
+    {
+        archiveParameters = params["archive"].as<vector<string>>();
+    }
+    std::vector<std::string> reimportParameters;
+    if (params.count("reimport") != 0U)
+    {
+        reimportParameters = params["reimport"].as<vector<string>>();
+    }
+    bool isArchive = false;
+    int64_t startBlockNumber = 0;
+    int64_t endBlockNumber = 0;
+    if (!archiveParameters.empty() && reimportParameters.empty())
+    {
+        isArchive = true;
+        if (archiveParameters.size() != 2)
+        {
+            cerr << "archive parameters error, should set [start block number] [end block number]"
+                 << endl;
+            return 1;
+        }
+        startBlockNumber = std::stoi(archiveParameters[0]);
+        endBlockNumber = std::stoi(archiveParameters[1]);
+        cout << "archive the blocks of range [" << startBlockNumber << "," << endBlockNumber
+             << ") into " << archiveType << endl;
+    }
+    else if (archiveParameters.empty() && !reimportParameters.empty())
+    {
+        isArchive = false;
+        if (reimportParameters.size() != 2)
+        {
+            cerr << "reimport parameters error, should set [start block number] [end block number]"
+                 << endl;
+            return 1;
+        }
+        startBlockNumber = std::stoi(reimportParameters[0]);
+        endBlockNumber = std::stoi(reimportParameters[1]);
+        cout << "reimport the blocks of range [" << startBlockNumber << "," << endBlockNumber
+             << ") from " << archiveType << endl;
+    }
+    else
+    {
+        cerr << "please set archive or reimport, not both." << endl;
+        return 1;
+    }
     std::string secondaryPath = "./rocksdb_secondary/";
 
-    cout << "config file     : " << configPath << endl;
-    cout << "genesis file    : " << genesisFilePath << endl;
     boost::property_tree::read_ini(configPath, propertyTree);
     auto logInitializer = std::make_shared<BoostLogInitializer>();
     logInitializer->initLog(propertyTree);
@@ -214,21 +377,22 @@ int main(int argc, const char* argv[])
     }
 
     // create ledger to get block data
-    auto readerStorage = createBackendStorage(nodeConfig, logInitializer->logPath());
+    auto localStorage = createBackendStorage(nodeConfig, logInitializer->logPath(), !isArchive);
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
     auto ledger =
-        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), readerStorage);
-    std::promise<uint64_t> promise;
-    ledger->asyncGetBlockNumber([&promise](Error::Ptr error, bcos::protocol::BlockNumber number) {
-        if (error)
-        {
-            cout << "get block number failed: " << error->errorMessage() << endl;
-            exit(1);
-        }
-        promise.set_value(number);
-        cout << "block number is " << number << endl;
-    });
+        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), localStorage);
+    std::promise<int64_t> promise;
+    ledger->asyncGetBlockNumber(
+        [&promise](const Error::Ptr& error, bcos::protocol::BlockNumber number) {
+            if (error)
+            {
+                cout << "get block number failed: " << error->errorMessage() << endl;
+                exit(1);
+            }
+            promise.set_value(number);
+            cout << "current block number is " << number << endl;
+        });
     auto currentBlockNumber = promise.get_future().get();
     if (endBlockNumber == 0)
     {
@@ -244,116 +408,302 @@ int main(int argc, const char* argv[])
              << ", current: " << currentBlockNumber << endl;
         return 1;
     }
-    StorageInterface::Ptr storage = nullptr;
-    std::function<void(std::vector<std::string> keys, std::vector<std::string> values)> writeFunc =
-        nullptr;
-    // create archive storage
-    if (boost::iequals(archiveType, "RocksDB"))
-    {
-        std::shared_ptr<rocksdb::DB> rocksdb =
-            bcos::initializer::StorageInitializer::createRocksDB(archivePath);
-        std::cout << "write to archive rocksdb: " << archivePath << std::endl;
-        writeFunc = [rocksdb](std::vector<std::string> keys, std::vector<std::string> values) {
-            auto writeBatch = WriteBatch();
-            for (size_t i = 0; i < keys.size(); i++)
-            {
-                writeBatch.Put(keys[i], values[i]);
-            }
-            WriteOptions options;
-            auto status = rocksdb->Write(options, &writeBatch);
-            if (!status.ok())
-            {
-                std::cerr << "write failed: " << status.ToString() << endl;
-                exit(1);
-            }
-        };
-    }
-    else if (boost::iequals(archiveType, "TiKV"))
-    {
-#ifdef WITH_TIKV
-        std::shared_ptr<tikv_client::TransactionClient> cluster =
-            storage::newTiKVClient(nodeConfig->pdAddrs(), logInitializer->logPath(),
-                nodeConfig->pdCaPath(), nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
-        std::cout << "write to archive TiKV: " << nodeConfig->pdAddrs() << std::endl;
-        writeFunc = [cluster](std::vector<std::string> keys, std::vector<std::string> values) {
-            try
-            {
-                auto txn = cluster->begin();
-                for (size_t i = 0; i < keys.size(); ++i)
-                {
-                    txn.put(keys[i], values[i]);
-                }
-                txn.commit();
-            }
-            catch (std::exception& e)
-            {
-                std::cerr << "write failed: " << e.what() << endl;
-                exit(1);
-            }
-        };
-#endif
-    }
-    else
-    {
-        std::cerr << "archive storage type not support, only support RocksDB and TiKV, type: "
-                  << archiveType << std::endl;
-        return 1;
-    }
-    // auto transactionFlag = bcos::ledger::TRANSACTIONS;
-    auto receiptFlag = bcos::ledger::RECEIPTS;
-    auto blockFlag = bcos::ledger::FULL_BLOCK;
-    // get transaction list of block
-    bool isWasm = nodeConfig->isWasm();
-    bcos::crypto::Hash::Ptr hashImpl = nullptr;
-    if (nodeConfig->smCryptoType())
-    {
-        hashImpl = std::make_shared<bcos::crypto::SM3>();
-    }
-    else
-    {
-        hashImpl = std::make_shared<::bcos::crypto::Keccak256>();
-    }
-    for (uint64_t i = startBlockNumber; i < endBlockNumber; ++i)
-    {
-        // getBlockByNumber
-        std::promise<bcos::protocol::Block::Ptr> promise;
-        ledger->asyncGetBlockDataByNumber(
-            i, blockFlag, [&promise](Error::Ptr error, bcos::protocol::Block::Ptr block) {
-                if (error)
-                {
-                    std::cerr << "get block failed: " << error->errorMessage() << endl;
-                    exit(1);
-                }
-                promise.set_value(block);
-            });
-        auto block = promise.get_future().get();
-        auto size = block->receiptsSize();
-        std::vector<std::string> keys(size, "");
-        std::vector<std::string> transactions(size, "");
-        std::vector<std::string> receipts(size, "");
-        // read the transaction and store to archive database use json format
-        for (uint64_t j = 0; j < size; ++j)
-        {
-            auto receipt = block->receipt(j);
-            auto transaction = block->transaction(j);
-            auto transactionHash = transaction->hash();
-            // auto receiptHash = receipt->hash();
-            keys[j] = std::string((char*)transactionHash.data(), transactionHash.size());
-            // write transactions and receipts to archive database
-            Json::Value transactionJson;
-            bcos::rpc::toJsonResp(transactionJson, transaction);
-            transactions[j] = transactionJson.toStyledString();
 
-            // read the receipt and store to archive database use json format
-            Json::Value receiptJson;
-            bcos::rpc::toJsonResp(receiptJson, keys[j], *receipt, isWasm, *hashImpl);
-            receipts[j] = receiptJson.toStyledString();
+    if (isArchive)
+    {
+        StorageInterface::Ptr archiveStorage = nullptr;
+
+        if (boost::iequals(archiveType, "RocksDB"))
+        {  // create archive rocksDB storage
+            archiveStorage =
+                StorageInitializer::build(archivePath, nullptr, nodeConfig->keyPageSize());
         }
-        std::cout << "write to archive database, block " << i << "\r" << std::flush;
-        writeFunc(keys, transactions);
-        writeFunc(std::move(keys), receipts);
+        else if (boost::iequals(archiveType, "TiKV"))
+        {  // create archive TiKV storage
+#ifdef WITH_TIKV
+            archiveStorage =
+                StorageInitializer::build(pdAddrs, logInitializer->logPath(), "", "", "");
+#endif
+        }
+        else
+        {
+            std::cerr << "archive storage type not support, only support RocksDB and TiKV, type: "
+                      << archiveType << std::endl;
+            return 1;
+        }
+        // auto transactionFlag = bcos::ledger::TRANSACTIONS;
+        auto receiptFlag = bcos::ledger::RECEIPTS;
+        auto blockFlag = bcos::ledger::FULL_BLOCK;
+        // get transaction list of block
+        bool isWasm = nodeConfig->isWasm();
+        bcos::crypto::Hash::Ptr hashImpl = nullptr;
+        if (nodeConfig->smCryptoType())
+        {
+            hashImpl = std::make_shared<bcos::crypto::SM3>();
+        }
+        else
+        {
+            hashImpl = std::make_shared<::bcos::crypto::Keccak256>();
+        }
+        for (int64_t i = startBlockNumber; i < endBlockNumber; ++i)
+        {
+            // getBlockByNumber
+            std::promise<bcos::protocol::Block::Ptr> promise;
+            ledger->asyncGetBlockDataByNumber(i, blockFlag,
+                [&promise](const Error::Ptr& error, bcos::protocol::Block::Ptr block) {
+                    if (error)
+                    {
+                        std::cerr << "get block failed: " << error->errorMessage() << endl;
+                        exit(1);
+                    }
+                    promise.set_value(std::move(block));
+                });
+            auto block = promise.get_future().get();
+            auto size = block->receiptsSize();
+            std::vector<std::string> keys(size, "");
+            std::vector<std::string> transactionValues(size, "");
+            std::vector<std::string> receiptValues(size, "");
+            // read the transaction and store to archive database use json format
+            tbb::parallel_for(
+                tbb::blocked_range<size_t>(0, size), [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t j = range.begin(); j < range.end(); ++j)
+                    {
+                        Json::Value value;
+                        auto receipt = block->receipt(j);
+                        auto transaction = block->transaction(j);
+                        auto transactionHash = transaction->hash();
+                        // auto receiptHash = receipt->hash();
+                        keys[j] =
+                            std::string((char*)transactionHash.data(), transactionHash.size());
+                        // write transactions and receipts to archive database
+                        Json::Value transactionJson;
+                        bcos::rpc::toJsonResp(transactionJson, transaction);
+                        transactionValues[j] = transactionJson.toStyledString();
+                        // read the receipt and store to archive database use json format
+                        Json::Value receiptJson;
+                        bcos::rpc::toJsonResp(receiptJson, keys[j], *receipt, isWasm, *hashImpl);
+                        receiptValues[j] = receiptJson.toStyledString();
+                    }
+                });
+            archiveStorage->setRows(ledger::SYS_HASH_2_TX, keys, std::move(transactionValues));
+            archiveStorage->setRows(
+                ledger::SYS_HASH_2_RECEIPT, std::move(keys), std::move(receiptValues));
+            std::cout << "\r"
+                      << "write block " << i << " size: " << size << std::flush;
+        }
+        std::cout << std::endl
+                  << "write to archive database, block range [" << startBlockNumber << ","
+                  << endBlockNumber << ")" << std::endl;
+        // delete the archived data in node
+        std::cout << "delete archived data from " << startBlockNumber << " to " << endBlockNumber
+                  << endl;
+        deleteArchivedData(endpoint, startBlockNumber, endBlockNumber);
     }
-    std::cout << "write to archive database, block range [" << startBlockNumber << ","
-              << endBlockNumber << "]" << std::endl;
+    else
+    {  // reimport
+        StorageInterface::Ptr storage = nullptr;
+        // create archive storage
+        if (boost::iequals(archiveType, "RocksDB"))
+        {
+            storage = StorageInitializer::build(archivePath, nullptr, nodeConfig->keyPageSize());
+        }
+        else if (boost::iequals(archiveType, "TiKV"))
+        {
+#ifdef WITH_TIKV
+            storage = StorageInitializer::build(pdAddrs, logInitializer->logPath(), "", "", "");
+#endif
+        }
+        else
+        {
+            std::cerr << "reimport storage type not support, only support RocksDB and TiKV, type: "
+                      << archiveType << std::endl;
+            return 1;
+        }
+        // create factory
+        auto protocolInitializer = std::make_shared<ProtocolInitializer>();
+        protocolInitializer->init(nodeConfig);
+        auto blockFactory = protocolInitializer->blockFactory();
+        auto transactionFactory = blockFactory->transactionFactory();
+        auto receiptFactory = blockFactory->receiptFactory();
+
+        // get transaction list of block
+        // tbb::parallel_for(tbb::blocked_range<size_t>(startBlockNumber, endBlockNumber),
+        //     [&](const tbb::blocked_range<size_t>& range) {
+        //         for (size_t blockNumber = range.begin(); blockNumber < range.end();
+        //         ++blockNumber)
+        for (int64_t blockNumber = startBlockNumber; blockNumber < endBlockNumber; ++blockNumber)
+        {
+            // getBlockByNumber
+            std::promise<std::vector<std::string>> promiseHashes;
+            ledger->asyncGetBlockTransactionHashes(
+                blockNumber, [&](Error::Ptr&& error, std::vector<std::string>&& txHashes) {
+                    if (error)
+                    {
+                        std::cerr << "get block transaction hash list failed: "
+                                  << error->errorMessage();
+                        exit(1);
+                    }
+                    promiseHashes.set_value(std::move(txHashes));
+                });
+            auto txHashes = promiseHashes.get_future().get();
+
+            // get transactions from archive database
+            std::promise<std::vector<std::optional<Entry>>> promiseTxs;
+            storage->asyncGetRows(ledger::SYS_HASH_2_TX, txHashes,
+                [&](Error::UniquePtr err, std::vector<std::optional<Entry>> values) {
+                    if (err)
+                    {
+                        std::cerr << "get transactions failed: " << err->errorMessage();
+                        exit(1);
+                    }
+                    promiseTxs.set_value(std::move(values));
+                });
+            auto values = promiseTxs.get_future().get();
+            std::vector<bytes> txs(txHashes.size(), bytes());
+            std::vector<std::string_view> txsView(txHashes.size(), std::string_view());
+
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, txHashes.size()),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = range.begin(); i < range.end(); ++i)
+                    {
+                        Json::Value jsonValue;
+                        // if value option is none, the data is broken, fatal error
+                        if (!values[i])
+                        {
+                            std::cerr << "get transaction failed, blockNumber: " << blockNumber
+                                      << ", txHash: " << toHex(txHashes[i]) << std::endl;
+                            exit(1);
+                        }
+                        auto view = values[i]->get();
+                        if (view.empty())
+                        {
+                            std::cerr << "get transaction empty, blockNumber: " << blockNumber
+                                      << ", txHash: " << toHex(txHashes[i]) << std::endl;
+                            exit(1);
+                        }
+                        Json::Reader reader;
+                        if (!reader.parse(view.data(), view.data() + view.size(), jsonValue))
+                        {
+                            std::cerr << "parse json failed: "
+                                      << reader.getFormattedErrorMessages();
+                            exit(1);
+                        }
+                        // convert json to transaction
+                        int32_t version = jsonValue["version"].asInt();
+                        auto nonce = u256(jsonValue["nonce"].asString());
+                        auto input = fromHexWithPrefix(jsonValue["input"].asString());
+                        auto signature = fromHexWithPrefix(jsonValue["signature"].asString());
+                        auto tx = transactionFactory->createTransaction(version,
+                            jsonValue["to"].asString(), input, nonce,
+                            jsonValue["blockLimit"].asInt64(), jsonValue["chainID"].asString(),
+                            jsonValue["groupID"].asString(), jsonValue["importTime"].asInt64());
+                        dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)
+                            ->setSignatureData(signature);
+                        tx->encode(txs[i]);
+                        txsView[i] = std::string_view((char*)txs[i].data(), txs[i].size());
+                    }
+                });
+
+            // write transactions to local storage
+            localStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, std::move(txsView));
+
+            // get receipts from archive database
+            std::promise<std::vector<std::optional<Entry>>> promiseReceipts;
+            storage->asyncGetRows(ledger::SYS_HASH_2_RECEIPT, txHashes,
+                [&](Error::UniquePtr err, std::vector<std::optional<Entry>> values) {
+                    if (err)
+                    {
+                        std::cerr << "get receipts failed: " << err->errorMessage();
+                        exit(1);
+                    }
+                    promiseReceipts.set_value(std::move(values));
+                });
+            values = promiseReceipts.get_future().get();
+            std::vector<bytes> receipts(txHashes.size(), bytes());
+            std::vector<std::string_view> receiptsView(txHashes.size(), std::string_view());
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, txHashes.size()),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = range.begin(); i < range.end(); ++i)
+                    {
+                        Json::Value jsonValue;
+                        Json::Reader reader;
+                        // if value option is none, the data is broken, fatal error
+                        if (!values[i])
+                        {
+                            std::cerr << "get receipt failed, blockNumber: " << blockNumber
+                                      << ", txHash: " << toHex(txHashes[i]) << std::endl;
+                            exit(1);
+                        }
+                        auto view = values[i]->get();
+                        if (view.empty())
+                        {
+                            std::cerr << "get receipt empty, blockNumber: " << blockNumber
+                                      << ", txHash: " << toHex(txHashes[i]) << std::endl;
+                            exit(1);
+                        }
+                        if (!reader.parse(view.data(), view.data() + view.size(), jsonValue))
+                        {
+                            std::cerr << "parse json failed: "
+                                      << reader.getFormattedErrorMessages();
+                            exit(1);
+                        }
+                        // convert json to receipt
+                        auto gasUsed = u256(jsonValue["gasUsed"].asString());
+                        auto status = jsonValue["status"].asInt();
+                        bytes output;
+                        auto outString = jsonValue["output"].asString();
+                        if (outString.size() > 2)
+                        {
+                            output = fromHexWithPrefix(outString);
+                        }
+                        std::string contractAddress;
+                        if (!nodeConfig->isWasm() &&
+                            jsonValue["contractAddress"].asString().size() > 2)
+                        {
+                            auto addressBytes =
+                                fromHexWithPrefix(jsonValue["contractAddress"].asString());
+                            contractAddress =
+                                std::string((char*)addressBytes.data(), addressBytes.size());
+                        }
+                        std::shared_ptr<std::vector<bcos::protocol::LogEntry>> logEntries =
+                            std::make_shared<std::vector<bcos::protocol::LogEntry>>();
+
+                        for (uint j = 0; j < jsonValue["logEntries"].size(); ++j)
+                        {
+                            auto logEntryJson = jsonValue["logEntries"][j];
+                            bcos::protocol::LogEntry logEntry;
+                            auto data = fromHexWithPrefix(logEntryJson["data"].asString());
+                            h256s topics;
+                            for (const auto& k : logEntryJson["topics"])
+                            {
+                                topics.push_back(h256(k.asString()));
+                            }
+                            auto addr = bytes(logEntryJson["address"].asString().data(),
+                                logEntryJson["address"].asString().data() +
+                                    logEntryJson["address"].asString().size());
+                            logEntries->emplace_back(addr, topics, data);
+                        }
+                        auto receipt = receiptFactory->createReceipt(gasUsed, contractAddress,
+                            *logEntries, status, ref(output), jsonValue["blockNumber"].asInt64());
+                        receipt->encode(receipts[i]);
+                        receiptsView[i] =
+                            std::string_view((char*)receipts[i].data(), receipts[i].size());
+                    }
+                });
+            // write receipt to local storage
+            localStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, std::move(receiptsView));
+            std::cout << "\r"
+                      << "reimport block " << blockNumber << " size: " << txHashes.size()
+                      << std::flush;
+        }
+        // });
+        std::cout << std::endl
+                  << "reimport from archive database success, block range [" << startBlockNumber
+                  << "," << endBlockNumber << ")" << std::endl;
+    }
+    if (fs::exists(secondaryPath))
+    {
+        fs::remove_all(secondaryPath);
+    }
     return 0;
 }

@@ -1209,6 +1209,9 @@ generate_common_ini() {
     pd_ssl_ca_path=
     pd_ssl_cert_path=
     pd_ssl_key_path=
+    enable_archive=false
+    archive_ip=127.0.0.1
+    archive_port=
 
 [txpool]
     ; size of the txpool, default is 15000

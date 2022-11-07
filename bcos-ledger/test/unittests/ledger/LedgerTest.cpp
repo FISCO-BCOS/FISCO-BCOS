@@ -81,15 +81,21 @@ public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev)
     {}
-    bcos::Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
-        std::vector<std::string_view> values) override
+    bcos::Error::Ptr setRows(std::string_view table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& keys,
+        std::variant<gsl::span<std::string_view const >, gsl::span<std::string const>> values)
     {
-        for (size_t i = 0; i < keys.size(); ++i)
-        {
-            Entry e;
-            e.set(std::string(values[i]));
-            asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
-        }
+        std::visit(
+            [&](auto&& keys, auto&& values) {
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    Entry e;
+                    e.set(std::string(values[i]));
+                    asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
+                }
+            },
+            keys, values);
         return nullptr;
     }
 };
