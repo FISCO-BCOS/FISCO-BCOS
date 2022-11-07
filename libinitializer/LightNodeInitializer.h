@@ -10,10 +10,9 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-ledger/src/libledger/LedgerImpl.h>
 #include <bcos-lightnode/Log.h>
-#include <bcos-lightnode/ledger/LedgerImpl.h>
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
-#include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
@@ -120,9 +119,9 @@ public:
                         bcos::ref(responseBuffer), {});
                 }(ledger, weakFront, id, std::move(nodeID), data));
             });
-        front->registerModuleMessageDispatcher(
-            bcos::protocol::LIGHTNODE_GET_STATUS, [ledger, weakFront](bcos::crypto::NodeIDPtr nodeID,
-                                                     const std::string& id, bytesConstRef data) {
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_STATUS,
+            [ledger, weakFront](
+                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
                 // task::wait([](auto weakFront, auto ledger, auto nodeID, std::string id,
                 //                bytesConstRef data) -> task::Task<void> {
                 auto front = weakFront.lock();
