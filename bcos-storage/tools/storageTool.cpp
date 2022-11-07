@@ -24,6 +24,7 @@
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
+#include "libinitializer/StorageInitializer.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
@@ -47,6 +48,7 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -54,6 +56,7 @@ using namespace std;
 using namespace rocksdb;
 using namespace bcos;
 using namespace bcos::storage;
+using namespace bcos::initializer;
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
@@ -74,11 +77,11 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         "config file path")("genesis,g",
         boost::program_options::value<std::string>()->default_value("./config.genesis"),
         "genesis config file path");
-    po::variables_map vm;
+    po::variables_map varMap;
     try
     {
-        po::store(po::parse_command_line(argc, argv, main_options), vm);
-        po::notify(vm);
+        po::store(po::parse_command_line(argc, argv, main_options), varMap);
+        po::notify(varMap);
     }
     catch (...)
     {
@@ -86,17 +89,17 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         std::cout << main_options << std::endl;
         exit(0);
     }
-    if (vm.count("help") || vm.count("h"))
+    if ((varMap.count("help") != 0U) || (varMap.count("h") != 0U))
     {
         std::cout << main_options << std::endl;
         exit(0);
     }
-    return vm;
+    return varMap;
 }
 
-std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables()
+std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(uint32_t version)
 {
-    return std::make_shared<std::set<std::string, std::less<>>>(
+    auto ignoreTables = std::make_shared<std::set<std::string, std::less<>>>(
         std::initializer_list<std::set<std::string, std::less<>>::value_type>{
             std::string(ledger::SYS_CONFIG),
             std::string(ledger::SYS_CONSENSUS),
@@ -115,6 +118,11 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables()
             std::string(ledger::FS_USER_TABLE),
             storage::StorageInterface::SYS_TABLES,
         });
+        if (version >= (uint32_t)protocol::Version::V3_1_VERSION)
+        {
+
+        }
+        return ignoreTables;
 }
 
 StateStorageInterface::Ptr createKeyPageStorage(
@@ -144,16 +152,16 @@ DB* createSecondaryRocksDB(
     options.create_if_missing = false;
     options.max_open_files = -1;
     DB* db_secondary = nullptr;
-    Status s = DB::OpenAsSecondary(options, path, secondaryPath, &db_secondary);
-    if (!s.ok())
+    Status status = DB::OpenAsSecondary(options, path, secondaryPath, &db_secondary);
+    if (!status.ok())
     {
-        std::cout << "open rocksDB failed: " << s.ToString() << std::endl;
+        std::cout << "open rocksDB failed: " << status.ToString() << std::endl;
         exit(1);
     }
-    s = db_secondary->TryCatchUpWithPrimary();
-    if (!s.ok())
+    status = db_secondary->TryCatchUpWithPrimary();
+    if (!status.ok())
     {
-        std::cout << "TryCatchUpWithPrimary failed: " << s.ToString() << std::endl;
+        std::cout << "TryCatchUpWithPrimary failed: " << status.ToString() << std::endl;
         exit(1);
     }
     return db_secondary;
@@ -201,6 +209,45 @@ void getTableSize(DB* db, const string_view& table)
     }
 }
 
+StateStorageInterface::Ptr createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig,
+    const std::string& logPath, bool write = false,
+    const std::string& secondaryPath = "./rocksdb_secondary/")
+{
+    bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
+    if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
+    {
+        bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
+        if (nodeConfig->storageSecurityEnable())
+        {
+            dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+            dataEncryption->init();
+        }
+        if (write)
+        {
+            storage = StorageInitializer::build(
+                nodeConfig->storagePath(), dataEncryption, nodeConfig->keyPageSize());
+        }
+        else
+        {
+            auto* rocksdb = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+            storage = std::make_shared<RocksDBStorage>(
+                std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
+        }
+    }
+    else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+    {
+#ifdef WITH_TIKV
+        storage = StorageInitializer::build(nodeConfig->pdAddrs(), logPath, nodeConfig->pdCaPath(),
+            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+#endif
+    }
+    else
+    {
+        throw std::runtime_error("storage type not support");
+    }
+    return dynamic_pointer_cast<StateStorageInterface>(storage);
+}
+
 int main(int argc, const char* argv[])
 {
     boost::property_tree::ptree pt;
@@ -230,6 +277,7 @@ int main(int argc, const char* argv[])
     boost::property_tree::read_ini(configPath, pt);
     auto logInitializer = std::make_shared<BoostLogInitializer>();
     logInitializer->initLog(pt);
+
     // load node config
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
@@ -237,12 +285,6 @@ int main(int argc, const char* argv[])
     if (fs::exists(genesisFilePath))
     {
         nodeConfig->loadGenesisConfig(genesisFilePath);
-    }
-    bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
-    if (nodeConfig->storageSecurityEnable())
-    {
-        dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-        dataEncryption->init();
     }
 
     auto keyPageSize = nodeConfig->keyPageSize();
@@ -257,7 +299,7 @@ int main(int argc, const char* argv[])
             return -1;
         }
         auto tableName = readParameters[0];
-        string key = "";
+        string key;
         if (readParameters.size() >= 2)
         {
             key = readParameters[1];
@@ -269,20 +311,17 @@ int main(int argc, const char* argv[])
             key = std::string((char*)keyBytes->data(), keyBytes->size());
         }
         // create secondary instance
-        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-        auto rocksdbStorage =
-            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
-        StorageInterface::Ptr storage = rocksdbStorage;
+        StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            auto keyPageStorage = createKeyPageStorage(
-                rocksdbStorage, keyPageSize, nodeConfig->compatibilityVersion());
+            auto keyPageStorage =
+                createKeyPageStorage(storage, keyPageSize, nodeConfig->compatibilityVersion());
             keyPageStorage->setReadOnly(true);
             storage = keyPageStorage;
         }
         std::promise<std::pair<Error::UniquePtr, std::optional<Entry>>> getPromise;
         storage->asyncGetRow(
-            tableName, key, [&](Error::UniquePtr err, std::optional<Entry> opEntry) {
+            tableName, key, [&](Error::UniquePtr err, const std::optional<Entry>& opEntry) {
                 getPromise.set_value(std::make_pair(std::move(err), opEntry));
             });
         auto ret = getPromise.get_future().get();
@@ -332,21 +371,22 @@ int main(int argc, const char* argv[])
         rocksdb::DB* db;
         rocksdb::Options options;
         options.create_if_missing = false;
-        options.enable_blob_files = keyPageSize > 1 ? true : false;
+        options.enable_blob_files = keyPageSize > 1;
         options.compression = rocksdb::kZSTD;
-        rocksdb::Status s = rocksdb::DB::Open(options, nodeConfig->storagePath(), &db);
-        if (!s.ok())
+        rocksdb::Status status = rocksdb::DB::Open(options, nodeConfig->storagePath(), &db);
+        if (!status.ok())
         {
-            cerr << "open rocksDB to write failed, err:" << s.ToString() << endl;
+            cerr << "open rocksDB to write failed, err:" << status.ToString() << endl;
             return -1;
         }
-        auto rocksdbStorage =
-            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
+        TransactionalStorageInterface::Ptr rocksdbStorage =
+            dynamic_pointer_cast<TransactionalStorageInterface>(
+                createBackendStorage(nodeConfig, logInitializer->logPath(), true));
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage = createKeyPageStorage(
-                rocksdbStorage, keyPageSize, nodeConfig->compatibilityVersion());
+            storage =
+                createKeyPageStorage(storage, keyPageSize, nodeConfig->compatibilityVersion());
         }
         // std::promise<std::pair<Error::UniquePtr, std::optional<Entry>>> getPromise;
         // storage->asyncGetRow(
@@ -382,7 +422,7 @@ int main(int argc, const char* argv[])
         // if use key page need commit use rocksDB
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            auto keyPageStorage = dynamic_cast<TraverseStorageInterface*>(storage.get());
+            auto* keyPageStorage = dynamic_cast<TraverseStorageInterface*>(storage.get());
             bcos::protocol::TwoPCParams param;
             rocksdbStorage->asyncPrepare(
                 param, *keyPageStorage, [&](Error::Ptr err, uint64_t, const std::string&) {
@@ -410,14 +450,11 @@ int main(int argc, const char* argv[])
             cerr << "empty table name" << endl;
             return -1;
         }
-        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-        auto rocksdbStorage =
-            std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
-        StorageInterface::Ptr storage = rocksdbStorage;
+        StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage = createKeyPageStorage(
-                rocksdbStorage, keyPageSize, nodeConfig->compatibilityVersion());
+            storage =
+                createKeyPageStorage(storage, keyPageSize, nodeConfig->compatibilityVersion());
         }
         auto outputFileName = tableName + ".txt";
         boost::replace_all(outputFileName, "/", "_");
@@ -459,6 +496,7 @@ int main(int argc, const char* argv[])
                     });
             }
         }
+#if 0
         else
         {  // rocksdb
             rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
@@ -479,40 +517,50 @@ int main(int argc, const char* argv[])
             }
             delete it;
         }
+#endif
         cout << "result in ./" << outputFileName << endl;
         outfile.close();
     }
-    else if (params.count("statistic") || params.count("s"))
-    {  // statistics
-        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-        // auto rocksdbStorage =
-        //     std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
-        // StorageInterface::Ptr storage = rocksdbStorage;
-        // if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
-        // {
-        //     auto keyPageStorage = createKeyPageStorage(rocksdbStorage, keyPageSize);
-        //     keyPageStorage->setReadOnly(true);
-        //     storage = keyPageStorage;
-        // }
-        getTableSize(db, storage::StorageInterface::SYS_TABLES);
-        getTableSize(db, ledger::SYS_CONSENSUS);
-        getTableSize(db, ledger::SYS_CONFIG);
-        getTableSize(db, ledger::SYS_CURRENT_STATE);
-        getTableSize(db, ledger::SYS_HASH_2_NUMBER);
-        getTableSize(db, ledger::SYS_NUMBER_2_HASH);
-        getTableSize(db, ledger::SYS_BLOCK_NUMBER_2_NONCES);
-        getTableSize(db, ledger::SYS_NUMBER_2_TXS);
-        getTableSize(db, ledger::SYS_NUMBER_2_BLOCK_HEADER);
-        // calculate transactions data size
-        getTableSize(db, ledger::SYS_HASH_2_TX);
-
-        // calculate receipts data size
-        getTableSize(db, ledger::SYS_HASH_2_RECEIPT);
+    else if (params.count("stateSize") || params.count("S") || params.count("statistic") ||
+             params.count("s"))
+    {
+        if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
+        {
+            if (params.count("statistic") || params.count("s"))
+            {  // statistics
+                auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                getTableSize(db, storage::StorageInterface::SYS_TABLES);
+                getTableSize(db, ledger::SYS_CONSENSUS);
+                getTableSize(db, ledger::SYS_CONFIG);
+                getTableSize(db, ledger::SYS_CURRENT_STATE);
+                getTableSize(db, ledger::SYS_HASH_2_NUMBER);
+                getTableSize(db, ledger::SYS_NUMBER_2_HASH);
+                getTableSize(db, ledger::SYS_BLOCK_NUMBER_2_NONCES);
+                getTableSize(db, ledger::SYS_NUMBER_2_BLOCK_HEADER);
+                getTableSize(db, ledger::SYS_NUMBER_2_TXS);
+                // calculate transactions data size
+                getTableSize(db, ledger::SYS_HASH_2_TX);
+                // calculate receipts data size
+                getTableSize(db, ledger::SYS_HASH_2_RECEIPT);
+                getTableSize(db, ledger::SYS_CODE_BINARY);
+                getTableSize(db, ledger::SYS_CONTRACT_ABI);
+            }
+            if (params.count("stateSize") || params.count("S"))
+            {  // calculate contract data size
+                auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                getTableSize(db, ledger::FS_APPS);
+            }
+        }
+        else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+        {
+#ifdef WITH_TIKV
+            // TODO: add TiKV support
+#endif
+        }
     }
-    else if (params.count("stateSize") || params.count("S"))
-    {  // calculate contract data size
-        auto db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-        getTableSize(db, ledger::FS_APPS);
+    else if (params.count("compare"))
+    {
+        // TODO: compare data from two databases
     }
     else
     {
@@ -520,6 +568,7 @@ int main(int argc, const char* argv[])
         std::cout << main_options << std::endl;
         return 1;
     }
+
     if (fs::exists(secondaryPath))
     {
         fs::remove_all(secondaryPath);
