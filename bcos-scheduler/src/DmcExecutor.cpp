@@ -346,6 +346,9 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
             DMC_LOG(DEBUG) << "Get external code in scheduler"
                            << LOG_KV("codeAddress", executiveState->message->delegateCallAddress());
             bytes code = f_onGetCodeEvent(executiveState->message->delegateCallAddress());
+            DMC_LOG(TRACE) << "Get external code success in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress())
+                           << LOG_KV("codeSize", code.size());
             executiveState->message->setData(code);
             executiveState->message->setType(protocol::ExecutionMessage::FINISHED);
             return MessageHint::NEED_PREPARE;
