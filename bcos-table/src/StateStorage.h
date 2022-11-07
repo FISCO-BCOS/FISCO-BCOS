@@ -90,7 +90,7 @@ public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
     explicit BaseStorage(std::shared_ptr<StorageInterface> prev,
-        uint32_t _blockVersion = (uint32_t)bcos::protocol::Version::V3_0_VERSION)
+        uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION)
       : storage::StateStorageInterface(prev),
         m_blockVersion(_blockVersion),
         m_buckets(std::thread::hardware_concurrency())

@@ -39,7 +39,7 @@ public:
 
     ~FileSystemPrecompiledFixture() override = default;
 
-    void init(bool _isWasm, protocol::Version version = Version::V3_1_VERSION)
+    void init(bool _isWasm, protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
     {
         setIsWasm(_isWasm, false, true, version);
         bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
@@ -679,8 +679,8 @@ BOOST_AUTO_TEST_CASE(lsTest)
 
 BOOST_AUTO_TEST_CASE(lsTest_3_0)
 {
-    init(false, Version::V3_0_VERSION);
-    m_blockVersion = Version::V3_0_VERSION;
+    init(false, BlockVersion::V3_0_VERSION);
+    m_blockVersion = BlockVersion::V3_0_VERSION;
     BlockNumber _number = 3;
 
     // ls dir
@@ -797,7 +797,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
 
 BOOST_AUTO_TEST_CASE(lsTestWasm_3_0)
 {
-    init(true, Version::V3_0_VERSION);
+    init(true, BlockVersion::V3_0_VERSION);
     BlockNumber _number = 3;
     // ls dir
     {
@@ -915,7 +915,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 
 BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 {
-    init(false, protocol::Version::V3_0_VERSION);
+    init(false, protocol::BlockVersion::V3_0_VERSION);
     BlockNumber _number = 3;
     // simple mkdir
     {
@@ -1112,7 +1112,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
 
 BOOST_AUTO_TEST_CASE(linkTest_3_0)
 {
-    init(false, protocol::Version::V3_0_VERSION);
+    init(false, protocol::BlockVersion::V3_0_VERSION);
     BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
@@ -1229,7 +1229,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
 
 BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 {
-    init(false, protocol::Version::V3_0_VERSION);
+    init(false, protocol::BlockVersion::V3_0_VERSION);
     BlockNumber _number = 3;
 
     // ls dir
@@ -1300,11 +1300,11 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 
 
     // upgrade to v3.1.0
-    m_blockVersion = protocol::Version::V3_1_VERSION;
+    m_blockVersion = protocol::BlockVersion::V3_1_VERSION;
 
     boost::log::core::get()->set_logging_enabled(false);
-    rebuildBfs(_number++, (uint32_t)protocol::Version::V3_0_VERSION,
-        (uint32_t)protocol::Version::V3_1_VERSION);
+    rebuildBfs(_number++, (uint32_t)protocol::BlockVersion::V3_0_VERSION,
+        (uint32_t)protocol::BlockVersion::V3_1_VERSION);
     boost::log::core::get()->set_logging_enabled(true);
 
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> p;
@@ -1382,13 +1382,13 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
     }
 
     // rebuild again
-    rebuildBfs(_number++, (uint32_t)protocol::Version::V3_0_VERSION,
-        (uint32_t)protocol::Version::V3_1_VERSION);
+    rebuildBfs(_number++, (uint32_t)protocol::BlockVersion::V3_0_VERSION,
+        (uint32_t)protocol::BlockVersion::V3_1_VERSION);
 }
 
 BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
 {
-    init(false, protocol::Version::V3_0_VERSION);
+    init(false, protocol::BlockVersion::V3_0_VERSION);
     BlockNumber _number = 3;
 
     // ls dir
@@ -1473,7 +1473,7 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     BOOST_CHECK(t->getRow(tool::FS_SYS_BIN.substr(1)).has_value());
     BOOST_CHECK(!t->getRow(tool::FS_KEY_SUB).has_value());
 
-    m_blockVersion = Version::V3_1_VERSION;
+    m_blockVersion = BlockVersion::V3_1_VERSION;
 
     // ls dir
     {

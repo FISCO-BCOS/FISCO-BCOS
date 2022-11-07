@@ -155,12 +155,12 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
 
 BOOST_AUTO_TEST_CASE(testCurve25519VRFVerify)
 {
-    VRFPrecompiledFixture fixture(false, (uint32_t)(bcos::protocol::Version::V3_0_VERSION));
+    VRFPrecompiledFixture fixture(false, (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION));
     testVRFVerify(fixture);
 }
 BOOST_AUTO_TEST_CASE(testSMCurve25519VRFVerify)
 {
-    VRFPrecompiledFixture fixture(true, (uint32_t)(bcos::protocol::Version::V3_0_VERSION));
+    VRFPrecompiledFixture fixture(true, (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION));
     testVRFVerify(fixture);
 }
 BOOST_AUTO_TEST_SUITE_END()

@@ -129,7 +129,7 @@ void TableManagerPrecompiled::createTable(
     valueField = keyField + "," + valueField;
     std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
     auto input = codec.encode(newTableName, codeString);
-    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION) ?
+    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
                           std::string(TABLE_ABI) :
                           "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
@@ -178,7 +178,7 @@ void TableManagerPrecompiled::createKVTable(
     std::string codeString = getDynamicPrecompiledCodeString(kvTableAddress, newTableName);
 
     auto input = codec.encode(newTableName, codeString);
-    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(Version::V3_1_VERSION) ?
+    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
                           std::string(KV_TABLE_ABI) :
                           "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,

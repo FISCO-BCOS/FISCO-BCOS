@@ -145,7 +145,7 @@ public:
     CallParameters::UniquePtr&& takeCallParameters()
     {
         if (m_executive->blockContext().lock()->blockVersion() >=
-            (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             for (const auto& response : m_responseStore)
             {

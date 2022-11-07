@@ -697,7 +697,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                          << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
                          << LOG_KV("minSealTime", m_minSealTime)
                          << LOG_KV("compatibilityVersion",
-                                (bcos::protocol::Version)m_compatibilityVersion);
+                                (bcos::protocol::BlockVersion)m_compatibilityVersion);
 }
 
 ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
@@ -782,7 +782,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
     if (m_isWasm && !m_isSerialExecute)
     {
-        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "loadExecutorConfig wasm only support serial executing, "
@@ -794,7 +794,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     if (m_isWasm && m_isAuthCheck)
     {
-        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "loadExecutorConfig auth only support solidity, "

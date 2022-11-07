@@ -1490,7 +1490,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 // new logic
                                 std::string_view abiStr;
                                 if (m_blockContext->blockVersion() >=
-                                    uint32_t(bcos::protocol::Version::V3_1_VERSION))
+                                    uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
                                 {
                                     // get codehash
                                     auto entry = table->getRow(ACCOUNT_CODE_HASH);
@@ -1907,7 +1907,7 @@ void TransactionExecutor::getCode(
                 callback(nullptr, std::move(codeBytes));
             });
     };
-    if (m_blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
@@ -2022,7 +2022,7 @@ void TransactionExecutor::getABI(
                 callback(nullptr, std::string(abi));
             });
     };
-    if (m_blockVersion >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
@@ -2572,7 +2572,7 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
-        if (m_blockVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
+        if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
         {
             if (m_keyPageIgnoreTables->contains(tool::FS_ROOT))
             {

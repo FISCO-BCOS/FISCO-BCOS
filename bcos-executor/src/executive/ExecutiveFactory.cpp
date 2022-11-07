@@ -55,7 +55,7 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
     auto blockContext = m_blockContext.lock();
-    if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_1_VERSION)
+    if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
     {
         if (!executive->isPrecompiled(ACCOUNT_MGR_ADDRESS) &&
             !executive->isPrecompiled(ACCOUNT_MANAGER_NAME))

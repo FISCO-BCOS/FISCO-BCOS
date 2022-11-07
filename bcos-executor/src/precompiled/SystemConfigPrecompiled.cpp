@@ -79,7 +79,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
     m_valueConverter.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION,
         [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
             auto version = bcos::tool::toVersionNumber(_value);
-            if (versionCompareTo(blockVersion, Version::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockVersion, BlockVersion::V3_1_VERSION) >= 0)
             {
                 if (version < blockVersion)
                 {
@@ -252,8 +252,8 @@ void SystemConfigPrecompiled::upgradeChain(
 {
     auto blockContext = _executive->blockContext().lock();
 
-    if (blockContext->blockVersion() <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
-        toVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
+    if (blockContext->blockVersion() <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
+        toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         // rebuild Bfs
         auto input = codec.encodeWithSig(

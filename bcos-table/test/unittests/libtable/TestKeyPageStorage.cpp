@@ -621,9 +621,9 @@ BOOST_AUTO_TEST_CASE(hash_V3_1_0)
     auto hashImpl2 = make_shared<Header256Hash>();
     auto memoryStorage2 = make_shared<StateStorage>(nullptr);
     auto tableFactory2 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     auto tableFactory1 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_0_VERSION);
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
 
     for (int i = 10; i < 20; ++i)
     {
@@ -685,9 +685,9 @@ BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
     auto memoryStorage2 = make_shared<StateStorage>(nullptr);
 
     auto tableFactory1 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_0_VERSION);
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
     auto tableFactory2 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_0_VERSION);
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
     BOOST_REQUIRE(tableFactory1 != nullptr);
     BOOST_REQUIRE(tableFactory2 != nullptr);
 
@@ -730,9 +730,9 @@ BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
     BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
 
     auto tableFactory3 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     auto tableFactory4 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::Version::V3_1_VERSION);
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
     setData1(tableFactory3);
     setData2(tableFactory4);

@@ -289,7 +289,7 @@ public:
             std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
         m_blockContext = std::make_shared<BlockContext>(nullptr, m_cryptoSuite->hashImpl(), 0,
-            h256(), utcTime(), (uint32_t)(bcos::protocol::Version::V3_0_VERSION),
+            h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
             FiscoBcosScheduleV4, false, false);
         std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
