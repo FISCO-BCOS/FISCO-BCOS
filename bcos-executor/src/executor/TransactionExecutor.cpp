@@ -126,11 +126,11 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isWasm(isWasm),
     m_keyPageSize(keyPageSize),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
-    m_ledgerFetcher(std::make_shared<bcos::tool::LedgerConfigFetcher>(ledger))
+    m_ledgerCache(std::make_shared<LedgerCache>(ledger))
 {
     assert(m_backendStorage);
-    m_ledgerFetcher->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+    m_ledgerCache->fetchCompatibilityVersion();
+    m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -288,8 +288,8 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, currentHeader,
-        m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
+        currentHeader, m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
 
     if (f_onNeedSwitchEvent)
     {
@@ -303,8 +303,8 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
+        blockNumber, blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -329,7 +329,11 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
-                                << LOG_KV("schedulerTermId", schedulerTermId);
+                                << LOG_KV("schedulerTermId", schedulerTermId)
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo()[0].blockHash.abridged() :
+                                           "null");
         m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -398,8 +402,19 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
+        // cache parentHash
+        if (blockHeader->number() > 0)
+        {
+            m_ledgerCache->setBlockNumber2Hash(
+                blockHeader->number() - 1, blockHeader->parentInfo()[0].blockHash);
+        }
+
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
-                                << LOG_KV("number", blockHeader->number());
+                                << LOG_KV("number", blockHeader->number())
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo()[0].blockHash.abridged() :
+                                           "null");
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -1757,8 +1772,8 @@ void TransactionExecutor::commit(
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
-        m_ledgerFetcher->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+        m_ledgerCache->fetchCompatibilityVersion();
+        m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
 
         removeCommittedState();
 
@@ -2425,6 +2440,8 @@ void TransactionExecutor::removeCommittedState()
             it->storage->setPrev(m_backendStorage);
         }
     }
+
+    m_ledgerCache->clearCacheByNumber(number);
 }
 
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(

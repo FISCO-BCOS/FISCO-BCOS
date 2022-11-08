@@ -196,7 +196,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         if (!m_executive->blockContext().lock()->isWasm())
         {
-            if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+            if (blockContext->blockVersion() >=
+                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
             {
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->destination);
@@ -541,9 +542,24 @@ void HostContext::log(h256s&& _topics, bytesConstRef _data)
         _data.toBytes());
 }
 
-h256 HostContext::blockHash() const
+h256 HostContext::blockHash(int64_t _number) const
 {
-    return m_executive->blockContext().lock()->hash();
+    if (m_executive->blockContext().lock()->blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        if (_number >= blockNumber())
+        {
+            return h256("");
+        }
+        else
+        {
+            return m_executive->blockContext().lock()->blockHash(_number);
+        }
+    }
+    else
+    {
+        return m_executive->blockContext().lock()->hash();
+    }
 }
 int64_t HostContext::blockNumber() const
 {
