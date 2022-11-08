@@ -15,9 +15,9 @@ class StorageImpl : public bcos::concepts::storage::StorageBase<StorageImpl<Stor
 public:
     StorageImpl(StorageType storage) : m_storage(std::move(storage)) {}
     StorageImpl(const StorageImpl&) = default;
-    StorageImpl(StorageImpl&&) = default;
+    StorageImpl(StorageImpl&&) noexcept = default;
     StorageImpl& operator=(const StorageImpl&) = default;
-    StorageImpl& operator=(StorageImpl&&) = default;
+    StorageImpl& operator=(StorageImpl&&) noexcept = default;
     ~StorageImpl() = default;
 
     std::optional<Entry> impl_getRow(std::string_view table, std::string_view key)
@@ -32,7 +32,9 @@ public:
             });
 
         if (error)
+        {
             BOOST_THROW_EXCEPTION(*error);
+        }
 
         return entry;
     }
@@ -59,7 +61,9 @@ public:
         storage().asyncGetRows(table, viewArray, std::move(callback));
 
         if (error)
+        {
             BOOST_THROW_EXCEPTION(*error);
+        }
 
         return entries;
     }
@@ -72,7 +76,9 @@ public:
             [&error](Error::UniquePtr errorOut) { error = std::move(errorOut); });
 
         if (error)
+        {
             BOOST_THROW_EXCEPTION(*error);
+        }
     }
 
     void impl_createTable(std::string tableName)
@@ -84,7 +90,9 @@ public:
                 error = std::move(errorOut);
             });
         if (error)
+        {
             BOOST_THROW_EXCEPTION(*error);
+        }
     };
 
 private:
