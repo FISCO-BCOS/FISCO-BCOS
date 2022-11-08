@@ -19,11 +19,14 @@
  * @date 2021-05-10
  */
 #include "TxPool.h"
+#include "bcos-utilities/Error.h"
 #include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <tbb/parallel_for.h>
+#include <boost/exception/diagnostic_information.hpp>
+#include <exception>
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
@@ -38,7 +41,9 @@ void TxPool::start()
         TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been started!");
         return;
     }
-    m_transactionSync->start();
+
+    // m_transactionSync->start();
+
     m_txpoolStorage->start();
     m_running = true;
     TXPOOL_LOG(INFO) << LOG_DESC("Start the txpool.");
@@ -59,7 +64,9 @@ void TxPool::stop()
     {
         m_txpoolStorage->stop();
     }
-    m_transactionSync->stop();
+
+    // m_transactionSync->stop();
+
     m_running = false;
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");
 }
@@ -68,6 +75,38 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
+}
+
+task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& transaction)
+{
+    bcos::bytes buffer;
+    transaction.encode(buffer);
+
+    m_frontService->asyncSendBroadcastMessage(
+        protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, bcos::ref(buffer));
+
+    co_return;
+}
+
+task::Task<void> TxPool::onReceivePushTransaction(
+    bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
+{
+    auto transaction = m_transactionFactory->createTransaction(data, false);
+    try
+    {
+        auto submitResult = co_await submitTransaction(std::move(transaction));
+    }
+    catch (std::exception& e)
+    {
+        TXPOOL_LOG(INFO) << "Submit transaction failed from p2p. "
+                         << boost::diagnostic_information(e);
+    }
+}
+
+task::Task<std::vector<protocol::Transaction::Ptr>> TxPool::getMissedTransactions(
+    std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
+{
+    co_return std::vector<protocol::Transaction::Ptr>{};
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)

@@ -57,17 +57,12 @@ void TransactionSync::stop()
     }
     finishWorker();
     stopWorking();
-    // will not restart worker, so terminate it
     terminate();
     SYNC_LOG(DEBUG) << LOG_DESC("stop SyncTransaction");
 }
 
 void TransactionSync::executeWorker()
 {
-#if FISCO_DEBUG
-    // TODO: remove this, now just for bug tracing
-    m_config->txpoolStorage()->printPendingTxs();
-#endif
     if (!downloadTxsBufferEmpty())
     {
         maintainDownloadingTransactions();
