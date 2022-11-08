@@ -41,6 +41,7 @@
 #include <exception>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <vector>
 
@@ -471,51 +472,34 @@ VMSchedule const& HostContext::vmSchedule() const
     return m_executive->vmSchedule();
 }
 
-u256 HostContext::store(const u256& _n)
+// u256 HostContext::store(const u256& _n)
+evmc_bytes32 HostContext::store(const evmc_bytes32* key)
 {
-    auto start = utcTimeUs();
-
-    auto key = toEvmC(_n);
-    auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
+    evmc_bytes32 result;
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
 
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
     {
-        // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-        // {  // FIXME: this log is only for debug, comment it when release
-        //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
-        //                         << LOG_KV("value", toHex(entry->get()));
-        // }
-        m_getTimeUsed.fetch_add(utcTimeUs() - start);
-        return fromBigEndian<u256>(entry->getField(0));
+        auto field = entry->getField(0);
+        std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
     }
-    // else
-    // {// FIXME: this log is only for debug, comment it when release
-    //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
-    //                         << LOG_KV("value", "not found");
-    // }
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
-    return u256();
+    else
+    {
+        std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
+    }
+    return result;
 }
 
-void HostContext::setStore(u256 const& _n, u256 const& _v)
+void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    auto start = utcTimeUs();
-    auto key = toEvmC(_n);
-    auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
 
-    auto value = toEvmC(_v);
-    bytes valueBytes(value.bytes, value.bytes + sizeof(value.bytes));
+    bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
-    // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-    // {  // FIXME: this log is only for debug, comment it when release
-    //     EXECUTOR_LOG(TRACE) << LOG_DESC("setStore") << LOG_KV("key", toHex(keyView))
-    //                         << LOG_KV("value", toHex(valueBytes));
-    // }
     Entry entry;
     entry.importFields({std::move(valueBytes)});
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
-    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)

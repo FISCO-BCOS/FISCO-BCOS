@@ -54,27 +54,22 @@ bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexc
 }
 
 evmc_bytes32 getStorage(
-    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+    evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
-    boost::ignore_unused(_addr);
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = static_cast<HostContext&>(*context);
 
     // programming assert for debug
-    assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
-    return toEvmC(hostContext.store(fromEvmC(*_key)));
+    return hostContext.store(key);
 }
 
-evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* _addr,
-    const evmc_bytes32* _key, const evmc_bytes32* _value)
+evmc_storage_status setStorage(evmc_host_context* context,
+    [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    boost::ignore_unused(_addr);
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = static_cast<HostContext&>(*context);
 
-    assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-
-    u256 index = fromEvmC(*_key);
-    u256 value = fromEvmC(*_value);
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
     auto status = EVMC_STORAGE_MODIFIED;
     if (value == 0)
@@ -82,7 +77,7 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
         status = EVMC_STORAGE_DELETED;
         hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
-    hostContext.setStore(index, value);  // Interface uses native endianness
+    hostContext.setStore(key, value);  // Interface uses native endianness
     return status;
 }
 

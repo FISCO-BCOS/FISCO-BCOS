@@ -84,10 +84,11 @@ public:
         const std::string_view& _account, const std::string& _assetName);
 
     /// Read storage location.
-    u256 store(const u256& _n);
+    evmc_bytes32 store(const evmc_bytes32* key);
 
     /// Write a value in storage.
-    void setStore(const u256& _n, const u256& _v);
+    // void setStore(const u256& _n, const u256& _v);
+    void setStore(const evmc_bytes32* key, const evmc_bytes32* value);
 
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
