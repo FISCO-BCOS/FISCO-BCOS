@@ -26,6 +26,7 @@
 #include "../executive/TransactionExecutive.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/storage/Table.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
@@ -113,13 +114,22 @@ public:
     VMSchedule const& vmSchedule() const;
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    h256 blockHash() const;
+    h256 blockHash(int64_t _number) const;
     int64_t blockNumber() const;
     uint32_t blockVersion() const;
     int64_t timestamp() const;
     int64_t blockGasLimit() const
     {
-        return 3000000000;  // TODO: add config
+        if (m_executive->blockContext().lock()->blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            // FISCO BCOS only has tx Gas limit. We use it as block gas limit
+            return m_executive->blockContext().lock()->txGasLimit();
+        }
+        else
+        {
+            return 3000000000;  // TODO: add config
+        }
     }
 
     bool isPermitted();

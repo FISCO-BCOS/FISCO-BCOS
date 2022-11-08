@@ -22,6 +22,7 @@
 #include "../../../src/executive/ExecutiveStackFlow.h"
 #include "../../../src/executive/ExecutiveState.h"
 #include "../mock/MockExecutiveFactory.h"
+#include "../mock/MockLedger.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -72,8 +73,10 @@ struct ExecutiveStackFlowFixture
             }
         }
 
+        LedgerCache::Ptr ledgerCache =
+            std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
-            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
             blockContext, nullptr, nullptr, nullptr, nullptr);

@@ -203,11 +203,8 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 
 evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 {
-    (void)_number;
-
     auto& hostContext = static_cast<HostContext&>(*_txContextPtr);
-    // return toEvmC(hostContext.blockHash(_number));
-    return toEvmC(hostContext.blockHash());
+    return toEvmC(hostContext.blockHash(_number));
 }
 
 // evmc_result create(HostContext& _txContext, evmc_message const* _msg) noexcept
