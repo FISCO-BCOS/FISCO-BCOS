@@ -223,39 +223,39 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 }
 
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
-    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit, bool _lock)
+    Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
     // start stat the tps when receive first new tx from the sdk
-    if (m_tpsStatstartTime.load() == 0 && m_txsTable.size() == 0)
+    if (m_tpsStatstartTime.load() == 0 && m_txsTable.empty())
     {
         m_tpsStatstartTime = utcTime();
     }
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
-    if (_checkPoolLimit && m_txsTable.size() >= m_config->poolLimit())
+    if (checkPoolLimit && m_txsTable.size() >= m_config->poolLimit())
     {
         return TransactionStatus::TxPoolIsFull;
     }
-    auto result = txpoolStorageCheck(_tx);
+    auto result = txpoolStorageCheck(transaction);
     if (result != TransactionStatus::None)
     {
         return result;
     }
     // verify the transaction
-    result = m_config->txValidator()->verify(_tx);
+    result = m_config->txValidator()->verify(transaction);
     if (result == TransactionStatus::None)
     {
-        if (_txSubmitCallback)
+        if (txSubmitCallback)
         {
-            _tx->setSubmitCallback(_txSubmitCallback);
+            transaction->setSubmitCallback(std::move(txSubmitCallback));
         }
-        if (_lock)
+        if (lock)
         {
-            result = insert(_tx);
+            result = insert(transaction);
         }
         else
         {
-            result = insertWithoutLock(_tx);
+            result = insertWithoutLock(transaction);
         }
     }
     else
@@ -575,14 +575,13 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
         auto tx = m_txsTable[hash];
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
-    if (c_fileLogLevel <= TRACE)
-        [[unlikely]]
+    if (c_fileLogLevel <= TRACE) [[unlikely]]
+    {
+        for (auto const& tx : _missedTxs)
         {
-            for (auto const& tx : _missedTxs)
-            {
-                TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
-            }
+            TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
         }
+    }
     return fetchedTxs;
 }
 

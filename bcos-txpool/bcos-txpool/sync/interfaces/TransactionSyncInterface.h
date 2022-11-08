@@ -21,6 +21,7 @@
 #pragma once
 #include "../TransactionSyncConfig.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/protocol/Block.h>
 
 namespace bcos::sync
@@ -47,6 +48,12 @@ public:
 
     virtual task::Task<void> broadcastTransaction(
         [[maybe_unused]] const protocol::Transaction& transaction)
+    {
+        co_return;
+    }
+
+    virtual task::Task<void> onTransaction(
+        bcos::crypto::NodeIDPtr _nodeID, const std::string& _id, bytesConstRef _data)
     {
         co_return;
     }
