@@ -141,10 +141,11 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     co_return co_await awaitable;
 }
 
-TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)
+TransactionStatus MemoryStorage::txpoolStorageCheck(const Transaction& transaction)
 {
-    auto txHash = _tx->hash();
-    if (m_txsTable.count(txHash))
+    auto txHash = transaction.hash();
+    auto it = m_txsTable.find(txHash);
+    if (it != m_txsTable.end())
     {
         return TransactionStatus::AlreadyInTxPool;
     }
@@ -225,24 +226,36 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
+    size_t txsSize = 0;
+    {
+        std::optional<ReadGuard> lockMutex;
+        if (lock)
+        {
+            lockMutex.emplace(x_txpoolMutex);
+        }
+        txsSize = m_txsTable.size();
+
+        auto result = txpoolStorageCheck(*transaction);
+        if (result != TransactionStatus::None)
+        {
+            return result;
+        }
+    }
+
     // start stat the tps when receive first new tx from the sdk
-    if (m_tpsStatstartTime.load() == 0 && m_txsTable.empty())
+    if (m_tpsStatstartTime == 0 && txsSize == 0)
     {
         m_tpsStatstartTime = utcTime();
     }
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
-    if (checkPoolLimit && m_txsTable.size() >= m_config->poolLimit())
+    if (checkPoolLimit && txsSize >= m_config->poolLimit())
     {
         return TransactionStatus::TxPoolIsFull;
     }
-    auto result = txpoolStorageCheck(transaction);
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
+
     // verify the transaction
-    result = m_config->txValidator()->verify(transaction);
+    auto result = m_config->txValidator()->verify(transaction);
     if (result == TransactionStatus::None)
     {
         if (txSubmitCallback)
@@ -251,11 +264,11 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
         if (lock)
         {
-            result = insert(transaction);
+            result = insert(std::move(transaction));
         }
         else
         {
-            result = insertWithoutLock(transaction);
+            result = insertWithoutLock(std::move(transaction));
         }
     }
     else
