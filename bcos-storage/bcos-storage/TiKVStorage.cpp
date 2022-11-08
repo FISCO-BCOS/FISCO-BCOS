@@ -43,20 +43,19 @@ using namespace std;
 #define STORAGE_TIKV_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-TiKV]"
 namespace bcos::storage
 {
+
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath, uint32_t grpcTimeout)
+    const std::vector<std::string>& pdAddrs, const std::string& logPath, const std::string& caPath,
+    const std::string& certPath, const std::string& keyPath, uint32_t grpcTimeout)
 {
+    if (!caPath.empty() && !certPath.empty() && !keyPath.empty())
+    {
+        STORAGE_TIKV_LOG(INFO) << LOG_DESC("newTiKVClientWithSSL") << LOG_KV("logPath", logPath);
+        return std::make_shared<tikv_client::TransactionClient>(
+            pdAddrs, logPath, caPath, certPath, keyPath);
+    }
     STORAGE_TIKV_LOG(INFO) << LOG_DESC("newTiKVClient") << LOG_KV("logPath", logPath);
     return std::make_shared<tikv_client::TransactionClient>(pdAddrs, logPath, grpcTimeout);
-}
-
-std::shared_ptr<tikv_client::TransactionClient> newTiKVClientWithSSL(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath, const std::string& caPath,
-    const std::string& certPath, const std::string& keyPath)
-{
-    STORAGE_TIKV_LOG(INFO) << LOG_DESC("newTiKVClientWithSSL") << LOG_KV("logPath", logPath);
-    return std::make_shared<tikv_client::TransactionClient>(
-        pdAddrs, logPath, caPath, certPath, keyPath);
 }
 }  // namespace bcos::storage
 

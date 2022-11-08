@@ -160,12 +160,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 #ifdef WITH_TIKV
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        schedulerStorage = storage;
-        consensusStorage = storage;
-        // schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-        //     m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        // consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-        //     m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+        {
+            schedulerStorage = storage;
+            consensusStorage = storage;
+        }
+        else
+        {  // in AIR node, scheduler and executor in one process so need different storage
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        }
 #endif
     }
     else
