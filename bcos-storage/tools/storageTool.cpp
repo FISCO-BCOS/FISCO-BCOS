@@ -22,12 +22,14 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-tool/bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
 #include "libinitializer/StorageInitializer.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "tikv_client.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
@@ -45,6 +47,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <iterator>
 #include <memory>
 #include <ostream>
@@ -97,7 +100,8 @@ po::variables_map initCommandLine(int argc, const char* argv[])
     return varMap;
 }
 
-std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(uint32_t version)
+std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(
+    uint32_t version = (uint32_t)protocol::BlockVersion::V3_1_VERSION)
 {
     auto ignoreTables = std::make_shared<std::set<std::string, std::less<>>>(
         std::initializer_list<std::set<std::string, std::less<>>::value_type>{
@@ -118,17 +122,21 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(uint3
             std::string(ledger::FS_USER_TABLE),
             storage::StorageInterface::SYS_TABLES,
         });
-        if (version >= (uint32_t)protocol::Version::V3_1_VERSION)
+    if (version >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        for (const auto& _sub : tool::FS_ROOT_SUBS)
         {
-
+            std::string sub(_sub);
+            ignoreTables->erase(sub);
         }
-        return ignoreTables;
+    }
+    return ignoreTables;
 }
 
 StateStorageInterface::Ptr createKeyPageStorage(
     StorageInterface::Ptr backend, size_t keyPageSize, uint32_t blockVersion)
 {
-    auto keyPageIgnoreTables = getKeyPageIgnoreTables();
+    auto keyPageIgnoreTables = getKeyPageIgnoreTables(blockVersion);
     return std::make_shared<bcos::storage::KeyPageStorage>(
         backend, keyPageSize, blockVersion, keyPageIgnoreTables);
 }
@@ -209,9 +217,9 @@ void getTableSize(DB* db, const string_view& table)
     }
 }
 
-StateStorageInterface::Ptr createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig,
-    const std::string& logPath, bool write = false,
-    const std::string& secondaryPath = "./rocksdb_secondary/")
+TransactionalStorageInterface::Ptr createBackendStorage(
+    std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const std::string& logPath,
+    bool write = false, const std::string& secondaryPath = "./rocksdb_secondary/")
 {
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
@@ -245,7 +253,7 @@ StateStorageInterface::Ptr createBackendStorage(std::shared_ptr<bcos::tool::Node
     {
         throw std::runtime_error("storage type not support");
     }
-    return dynamic_pointer_cast<StateStorageInterface>(storage);
+    return storage;
 }
 
 int main(int argc, const char* argv[])
@@ -288,7 +296,7 @@ int main(int argc, const char* argv[])
     }
 
     auto keyPageSize = nodeConfig->keyPageSize();
-    auto keyPageIgnoreTables = getKeyPageIgnoreTables();
+    auto keyPageIgnoreTables = getKeyPageIgnoreTables(nodeConfig->compatibilityVersion());
     std::string secondaryPath = "./rocksdb_secondary/";
     if (params.count("read"))
     {  // read
@@ -496,28 +504,73 @@ int main(int argc, const char* argv[])
                     });
             }
         }
-#if 0
         else
-        {  // rocksdb
-            rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
-            it->Seek(tableName);
-            while (it->Valid())
+        {
+            if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
             {
-                if (it->key().starts_with(tableName))
+                // rocksdb
+                auto* rocksdb = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                rocksdb::Iterator* it = rocksdb->NewIterator(rocksdb::ReadOptions());
+                it->Seek(tableName);
+                while (it->Valid())
                 {
-                    // outfile << "[" << it->key().ToString() << "][" << it->value().ToString() <<
-                    // "]" << endl;
-                    writeKV(outfile, it->key().ToString(), it->value().ToString(), hexEncoded);
+                    if (it->key().starts_with(tableName))
+                    {
+                        // outfile << "[" << it->key().ToString() << "][" << it->value().ToString()
+                        // <<
+                        // "]" << endl;
+                        writeKV(outfile, it->key().ToString(), it->value().ToString(), hexEncoded);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                    it->Next();
                 }
-                else
-                {
-                    break;
-                }
-                it->Next();
+                delete it;
             }
-            delete it;
-        }
+            else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+            {
+#ifdef WITH_TIKV
+                std::shared_ptr<tikv_client::TransactionClient> cluster = nullptr;
+                cluster = storage::newTiKVClient(nodeConfig->pdAddrs(), logInitializer->logPath(),
+                    nodeConfig->pdCaPath(), nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+                auto snapshot = cluster->snapshot();
+                bool finished = false;
+                uint32_t batch = 256;
+                uint32_t count = 0;
+                auto lastKey = tableName;
+                while (!finished)
+                {
+                    auto kvPairs =
+                        snapshot->scan(lastKey, Bound::Excluded, "", Bound::Unbounded, batch);
+                    for (auto& kv : kvPairs)
+                    {
+                        if (kv.key.rfind(tableName, 0) == 0)
+                        {
+                            writeKV(outfile, kv.key, kv.value, hexEncoded);
+                        }
+                        else
+                        {
+                            finished = true;
+                            break;
+                        }
+                    }
+                    lastKey = kvPairs.back().key;
+                    count += kvPairs.size();
+                    std::cout << "scan count: " << count << "\r";
+                    if (kvPairs.size() < batch)
+                    {
+                        finished = true;
+                    }
+                }
 #endif
+            }
+            else
+            {
+                throw std::runtime_error("storage type not support");
+            }
+        }
         cout << "result in ./" << outputFileName << endl;
         outfile.close();
     }
