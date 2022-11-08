@@ -160,9 +160,6 @@ public:
 
     static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
-    uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
-    uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
-
     bool isWasm();
 
 protected:
@@ -183,15 +180,6 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
-    std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
-    std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
-    std::atomic_uint64_t m_startTime = {0};    // microsecond
-
-    // just for padding
-    std::string m_myAddressPadded;
-    std::string m_callerPadded;
-    std::string m_originPadded;
-    std::string m_codeAddressPadded;
 };
 
 }  // namespace executor

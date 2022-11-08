@@ -792,7 +792,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         else
         {
             auto codeEntry = hostContext.code();
-            if (!codeEntry.has_value())
+            if (!codeEntry)
             {
                 revert();
                 auto callResult = hostContext.takeCallParameters();

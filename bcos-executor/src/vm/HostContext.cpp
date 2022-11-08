@@ -82,13 +82,12 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 }
 }  // namespace
 
-// crypto::Hash::Ptr g_hashImpl = nullptr;
-
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
     std::shared_ptr<TransactionExecutive> executive, std::string tableName)
-  : m_callParameters(std::move(callParameters)),
+  : evmc_host_context(),
+    m_callParameters(std::move(callParameters)),
     m_executive(std::move(executive)),
-    m_tableName(tableName)
+    m_tableName(std::move(tableName))
 {
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
@@ -120,7 +119,6 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
         isSMCrypto = true;
     }
     metrics = &ethMetrics;
-    m_startTime = utcTimeUs();
 }
 
 std::string HostContext::get(const std::string_view& _key)
@@ -129,10 +127,8 @@ std::string HostContext::get(const std::string_view& _key)
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        m_getTimeUsed.fetch_add(utcTimeUs() - start);
         return std::string(entry->getField(0));
     }
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
     return std::string();
 }
 
@@ -143,7 +139,6 @@ void HostContext::set(const std::string_view& _key, std::string _value)
     entry.importFields({std::move(_value)});
 
     m_executive->storage().setRow(m_tableName, _key, std::move(entry));
-    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 
@@ -197,7 +192,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         if (!m_executive->blockContext().lock()->isWasm())
         {
-            if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+            if (blockContext->blockVersion() >=
+                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
             {
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->destination);
@@ -279,7 +275,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
 {
     auto callResults = std::make_unique<CallParameters>(CallParameters::FINISHED);
     evmc_result preResult{};
-    int32_t resultCode;
+    int32_t resultCode = 0;
     bytes resultData;
 
     if (_isEvmPrecompiled)
@@ -472,7 +468,6 @@ VMSchedule const& HostContext::vmSchedule() const
     return m_executive->vmSchedule();
 }
 
-// u256 HostContext::store(const u256& _n)
 evmc_bytes32 HostContext::store(const evmc_bytes32* key)
 {
     evmc_bytes32 result;
@@ -494,7 +489,6 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
 void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
-
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
     Entry entry;
@@ -549,26 +543,19 @@ std::string_view HostContext::myAddress() const
 
 std::optional<storage::Entry> HostContext::code()
 {
-    auto start = utcTimeUs();
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto codehash = codeHash();
-        Entry codeHashEntry;
-        codeHashEntry.importFields({codehash.asBytes()});
-        auto entry =
-            m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0));
-        if (!entry || entry->get().empty())
+
+        auto key = std::string_view((char*)codehash.data(), codehash.size());
+        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, key);
+        if (entry && !entry->get().empty())
         {
-            auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-            m_getTimeUsed.fetch_add(utcTimeUs() - start);
-            return codeEntry;
+            return entry;
         }
-        m_getTimeUsed.fetch_add(utcTimeUs() - start);
-        return entry;
     }
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
-    return entry;
+
+    return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
 }
 
 h256 HostContext::codeHash()
@@ -578,11 +565,10 @@ h256 HostContext::codeHash()
     {
         auto code = entry->getField(0);
 
-        return h256(code, FixedBytes<32>::StringDataType::FromBinary);  // TODO: h256 support decode
-                                                                        // from string_view
+        return h256(code, h256::StringDataType::FromBinary);
     }
 
-    return h256();
+    return {};
 }
 
 bool HostContext::registerAsset(const std::string& _assetName, const std::string_view& _addr,

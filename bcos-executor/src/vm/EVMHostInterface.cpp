@@ -274,7 +274,7 @@ int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressL
 
     // programming assert for debug
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
-    auto value = hostContext.get(string((char*)_key, _keyLength));
+    auto value = hostContext.get(std::string_view((char*)_key, _keyLength));
     if (value.size() > (size_t)_valueLength)
     {
         return -1;

@@ -59,7 +59,7 @@ public:
     {
         GetRowResponse value;
         m_storage->asyncGetRow(table, _key, [&value](auto&& error, auto&& entry) mutable {
-            value = {std::move(error), std::move(entry)};
+            value = {std::forward<decltype(error)>(error), std::forward<decltype(entry)>(entry)};
         });
 
         auto& [error, entry] = value;
