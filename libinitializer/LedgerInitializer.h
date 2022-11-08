@@ -35,7 +35,7 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storage, bcos::tool::NodeConfig::Ptr nodeConfig)
     {
-        bcos::storage::StorageImpl storageWrapper(std::move(storage));
+        bcos::storage::StorageImpl storageWrapper(storage);
 
         if (nodeConfig->smCryptoType())
         {
