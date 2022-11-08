@@ -74,4 +74,4 @@ inline uint32_t toVersionNumber(const std::string& _version)
         BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(_version));
     }
 }
-}  // namespace bcos
+}  // namespace bcos::tool

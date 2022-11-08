@@ -298,7 +298,8 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
-            if (versionCompareTo(blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            if (versionCompareTo(
+                    blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call precompiled out of gas.", *callParameters);
             }
@@ -709,7 +710,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
                     callResults->message = "exceptionalFailedCodeDeposit";
-                    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                    if (versionCompareTo(
+                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                     {
                         writeErrInfoToOutput("Exceptional Failed Code Deposit", *callResults);
                     }
@@ -732,7 +734,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     buildCallResults->type = CallParameters::REVERT;
                     buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
                     buildCallResults->message = "Error occurs in build BFS dir";
-                    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                    if (versionCompareTo(
+                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                     {
                         writeErrInfoToOutput(
                             "Error occurs in building BFS dir.", *buildCallResults);
@@ -758,10 +761,16 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     // Clear the creation flag
                     callResults->create = false;
                     // Clear the data
-                    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                    if (versionCompareTo(
+                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                     {
                         writeErrInfoToOutput(
                             "Create contract with empty code, invalid code input.", *callResults);
+                    }
+                    else if (versionCompareTo(
+                                 blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+                    {
+                        callResults->data.clear();
                     }
                     revert();
                     return callResults;
@@ -847,7 +856,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
-        if (versionCompareTo(blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >=
+            0)
         {
             writeErrInfoToOutput(e.errorMessage(), *callResults);
         }
@@ -1339,6 +1349,11 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             {
                 writeErrInfoToOutput("Contract is frozen.", *callParameters);
             }
+            else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <=
+                     0)
+            {
+                callParameters->data.clear();
+            }
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("tableName", tableName)
                                 << LOG_KV("origin", callParameters->origin);
@@ -1352,6 +1367,11 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
             if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call permission denied.", *callParameters);
+            }
+            else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <=
+                     0)
+            {
+                callParameters->data.clear();
             }
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("tableName", tableName)

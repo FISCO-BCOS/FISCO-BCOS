@@ -161,7 +161,7 @@ public:
             m_pageData(p)
         {}
         PageInfo(PageInfo&&) = default;
-        auto operator=(PageInfo &&) -> PageInfo& = default;
+        auto operator=(PageInfo&&) -> PageInfo& = default;
         PageInfo(const PageInfo& page) = default;
         auto operator=(const PageInfo& page) -> PageInfo& = default;
 
