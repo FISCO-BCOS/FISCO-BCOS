@@ -341,7 +341,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             using Hasher = std::remove_cvref_t<decltype(hasher)>;
             auto ledger =
                 std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
-                    std::move(storageWrapper));
+                    std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
 
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
