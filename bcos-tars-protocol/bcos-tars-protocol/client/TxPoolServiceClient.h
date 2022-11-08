@@ -122,7 +122,7 @@ public:
 
         struct Awaitable
         {
-            constexpr bool await_ready() { return false; }
+            constexpr bool await_ready() const { return false; }
             void await_suspend(CO_STD::coroutine_handle<> handle)
             {
                 m_callback->m_handle = handle;
@@ -130,7 +130,7 @@ public:
                     dynamic_cast<const bcostars::protocol::TransactionImpl&>(m_transaction)
                         .inner());  // tars take the m_callback ownership
             }
-            void await_resume()
+            void await_resume() const
             {
                 if (m_callback->m_error)
                 {
