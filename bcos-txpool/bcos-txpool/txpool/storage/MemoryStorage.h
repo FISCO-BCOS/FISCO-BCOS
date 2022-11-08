@@ -102,10 +102,11 @@ protected:
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback,
-        bool _checkPoolLimit, bool _lock);
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
-    bcos::protocol::TransactionStatus txpoolStorageCheck(bcos::protocol::Transaction::ConstPtr _tx);
+    bcos::protocol::TransactionStatus txpoolStorageCheck(
+        const bcos::protocol::Transaction& transaction);
 
     virtual bcos::protocol::Transaction::ConstPtr removeWithoutLock(
         bcos::crypto::HashType const& _txHash);
