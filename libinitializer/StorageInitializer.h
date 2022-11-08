@@ -83,15 +83,8 @@ public:
         const std::string& keyPath = std::string(""))
     {
         boost::filesystem::create_directories(_logPath);
-        std::shared_ptr<tikv_client::TransactionClient> cluster = nullptr;
-        if (!caPath.empty() && !certPath.empty() && !keyPath.empty())
-        {
-            cluster = storage::newTiKVClientWithSSL(_pdAddrs, _logPath, caPath, certPath, keyPath);
-        }
-        else
-        {
-            cluster = storage::newTiKVClient(_pdAddrs, _logPath);
-        }
+        std::shared_ptr<tikv_client::TransactionClient> cluster =
+            storage::newTiKVClient(_pdAddrs, _logPath, caPath, certPath, keyPath);
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
     }
 #endif
