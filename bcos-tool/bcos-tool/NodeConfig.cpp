@@ -20,6 +20,7 @@
  */
 #include "NodeConfig.h"
 #include "VersionConverter.h"
+#include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
@@ -696,7 +697,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                          << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
                          << LOG_KV("minSealTime", m_minSealTime)
                          << LOG_KV("compatibilityVersion",
-                                (bcos::protocol::Version)m_compatibilityVersion);
+                                (bcos::protocol::BlockVersion)m_compatibilityVersion);
 }
 
 ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
@@ -762,14 +763,14 @@ void NodeConfig::generateGenesisData()
     ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-" << m_isSerialExecute;
     executorConfig = ss.str();
 
-    std::stringstream s;
-    s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
-      << m_txGasLimit << "-" << versionData << executorConfig;
-    for (auto node : m_ledgerConfig->consensusNodeList())
+    ss.str("");
+    ss << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
+       << m_txGasLimit << "-" << versionData << executorConfig;
+    for (const auto& node : m_ledgerConfig->consensusNodeList())
     {
-        s << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
+        ss << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
     }
-    m_genesisData = s.str();
+    m_genesisData = ss.str();
     NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
                          << LOG_KV("genesisData", m_genesisData);
 }
@@ -779,6 +780,31 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
     m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
     m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
+    if (m_isWasm && !m_isSerialExecute)
+    {
+        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "loadExecutorConfig wasm only support serial executing, "
+                                      "please set is_serial_execute to true"));
+        }
+        NodeConfig_LOG(WARNING)
+            << METRIC
+            << LOG_DESC("loadExecutorConfig wasm with serial executing is not recommended");
+    }
+    if (m_isWasm && m_isAuthCheck)
+    {
+        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "loadExecutorConfig auth only support solidity, "
+                                      "please set is_auth_check to false or set is_wasm to false"));
+        }
+        NodeConfig_LOG(WARNING) << METRIC
+                                << LOG_DESC(
+                                       "loadExecutorConfig wasm auth is not supported for now");
+    }
+
     m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)

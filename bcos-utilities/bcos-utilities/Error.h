@@ -20,6 +20,7 @@
 #pragma once
 #include "Common.h"
 #include "Exceptions.h"
+#include <boost/assert/source_location.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/throw_exception.hpp>
@@ -27,11 +28,18 @@
 #include <memory>
 #include <string>
 
+#if 0
 #define BCOS_ERROR(errorCode, errorMessage) \
     ::bcos::Error::buildError(BOOST_CURRENT_FUNCTION, __FILE__, __LINE__, errorCode, errorMessage)
 #define BCOS_ERROR_WITH_PREV(errorCode, errorMessage, prev) \
     ::bcos::Error::buildError(                              \
         BOOST_CURRENT_FUNCTION, __FILE__, __LINE__, errorCode, errorMessage, prev)
+#endif
+
+#define BCOS_ERROR(errorCode, errorMessage) \
+    ::bcos::Error::buildError(BOOST_CURRENT_LOCATION.to_string(), errorCode, errorMessage)
+#define BCOS_ERROR_WITH_PREV(errorCode, errorMessage, prev) \
+    ::bcos::Error::buildError(BOOST_CURRENT_LOCATION.to_string(), errorCode, errorMessage, prev)
 
 #define BCOS_ERROR_PTR(code, message) std::make_shared<Error>(BCOS_ERROR(code, message))
 #define BCOS_ERROR_WITH_PREV_PTR(code, message, prev) \
@@ -81,14 +89,36 @@ public:
         return error;
     }
 
+    static Error buildError(
+        const std::string& context, int32_t errorCode, const std::string& errorMessage)
+    {
+        Error error(errorCode, errorMessage);
+        error << boost::error_info<struct error_context, std::string>(context);
+        return error;
+    }
+
+    static Error buildError(const std::string& context, int32_t errorCode,
+        const std::string& errorMessage, const Error& prev)
+    {
+        auto error = buildError(context, errorCode, errorMessage);
+        error << PrevStdError(boost::diagnostic_information(prev));
+        return error;
+    }
+
+    static Error buildError(const std::string& context, int32_t errorCode,
+        const std::string& errorMessage, const std::exception& prev)
+    {
+        auto error = buildError(context, errorCode, errorMessage);
+        error << PrevStdError(boost::diagnostic_information(prev));
+        return error;
+    }
+
     Error() = default;
     Error(int64_t _errorCode, std::string _errorMessage)
       : bcos::Exception(_errorMessage),
         m_errorCode(_errorCode),
         m_errorMessage(std::move(_errorMessage))
     {}
-
-    virtual ~Error() {}
 
     virtual int64_t errorCode() const { return m_errorCode; }
     virtual std::string const& errorMessage() const { return m_errorMessage; }

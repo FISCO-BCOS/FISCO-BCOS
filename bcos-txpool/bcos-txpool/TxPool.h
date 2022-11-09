@@ -20,41 +20,59 @@
  */
 #pragma once
 #include "TxPoolConfig.h"
+#include "bcos-framework/front/FrontServiceInterface.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionFactory.h"
 #include "sync/interfaces/TransactionSyncInterface.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <tbb/task_group.h>
 #include <thread>
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
 {
 public:
     using Ptr = std::shared_ptr<TxPool>;
-    TxPool(TxPoolConfig::Ptr _config, TxPoolStorageInterface::Ptr _txpoolStorage,
-        bcos::sync::TransactionSyncInterface::Ptr _transactionSync, size_t _verifierWorkerNum = 1)
-      : m_config(_config), m_txpoolStorage(_txpoolStorage), m_transactionSync(_transactionSync)
+    TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::Ptr txpoolStorage,
+        bcos::sync::TransactionSyncInterface::Ptr transactionSync, size_t verifierWorkerNum = 1)
+      : m_config(std::move(config)),
+        m_txpoolStorage(std::move(txpoolStorage)),
+        m_transactionSync(std::move(transactionSync)),
+        m_frontService(m_transactionSync->config()->frontService()),
+        m_transactionFactory(m_config->blockFactory()->transactionFactory()),
+        m_ledger(m_config->ledger())
     {
         // threadpool for submit txs
-        m_worker = std::make_shared<ThreadPool>("submitter", _verifierWorkerNum);
+        m_worker = std::make_shared<ThreadPool>("submitter", verifierWorkerNum);
         // threadpool for verify block
         m_verifier = std::make_shared<ThreadPool>("verifier", 4);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
-        m_txsResultNotifier = std::make_shared<ThreadPool>("txsResultNotify", 1);
         m_filler = std::make_shared<ThreadPool>("txsFiller", std::thread::hardware_concurrency());
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
-                         << LOG_KV("submitterWorkerNum", _verifierWorkerNum);
+                         << LOG_KV("submitterWorkerNum", verifierWorkerNum);
     }
 
-    ~TxPool() override { stop(); }
+    ~TxPool() noexcept override { stop(); }
 
     void start() override;
     void stop() override;
 
-    void asyncSubmit(
-        bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback) override;
+    // For transaction sync
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override;
+
+    task::Task<void> broadcastPushTransaction(const protocol::Transaction& transaction) override;
+
+    task::Task<void> onReceivePushTransaction(
+        bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data) override;
+
+    task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
+        std::vector<crypto::HashType> transactionHashes,
+        bcos::crypto::NodeIDPtr fromNodeID) override;
+    // ended
 
     void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
@@ -89,17 +107,17 @@ public:
     TxPoolConfig::Ptr txpoolConfig() { return m_config; }
     TxPoolStorageInterface::Ptr txpoolStorage() { return m_txpoolStorage; }
 
-    bcos::sync::TransactionSyncInterface::Ptr transactionSync() { return m_transactionSync; }
+    auto& transactionSync() { return m_transactionSync; }
     void setTransactionSync(bcos::sync::TransactionSyncInterface::Ptr _transactionSync)
     {
-        m_transactionSync = _transactionSync;
+        m_transactionSync = std::move(_transactionSync);
     }
 
     virtual void init();
     virtual void registerUnsealedTxsNotifier(
         std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
     {
-        m_txpoolStorage->registerUnsealedTxsNotifier(_unsealedTxsNotifier);
+        m_txpoolStorage->registerUnsealedTxsNotifier(std::move(_unsealedTxsNotifier));
     }
 
     void asyncGetPendingTransactionSize(
@@ -158,6 +176,9 @@ private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;
     bcos::sync::TransactionSyncInterface::Ptr m_transactionSync;
+    bcos::front::FrontServiceInterface::Ptr m_frontService;
+    bcos::protocol::TransactionFactory::Ptr m_transactionFactory;
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
 
     std::function<void(std::string const& _id, int _moduleID, bcos::crypto::NodeIDPtr _dstNode,
         bytesConstRef _data)>
@@ -167,8 +188,6 @@ private:
     ThreadPool::Ptr m_verifier;
     ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_filler;
-    ThreadPool::Ptr m_txsResultNotifier;
     std::atomic_bool m_running = {false};
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

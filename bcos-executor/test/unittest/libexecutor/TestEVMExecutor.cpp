@@ -1471,7 +1471,7 @@ contract DelegateCallTest {
 
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
-    blockHeader->setVersion((uint32_t)bcos::protocol::Version::MAX_VERSION);
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;

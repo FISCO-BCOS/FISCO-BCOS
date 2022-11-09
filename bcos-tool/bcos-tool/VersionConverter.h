@@ -25,20 +25,16 @@
 #include <string>
 #include <vector>
 
-namespace bcos
-{
-namespace tool
+namespace bcos::tool
 {
 inline uint32_t toVersionNumber(const std::string& _version)
 {
     auto version = _version;
     boost::to_lower(version);
     // 3.0.0-rc{x} version
-    if (_version.find(bcos::protocol::RC_VERSION_PREFIX) == 0)
+    if (_version.starts_with(bcos::protocol::RC_VERSION_PREFIX))
     {
-        auto versionLen = _version.length() - bcos::protocol::RC_VERSION_PREFIX.length();
-        std::string versionNumber =
-            _version.substr(bcos::protocol::RC_VERSION_PREFIX.length(), versionLen);
+        std::string versionNumber = _version.substr(bcos::protocol::RC_VERSION_PREFIX.length());
         return boost::lexical_cast<uint32_t>(versionNumber);
     }
     std::vector<std::string> versionFields;
@@ -46,17 +42,21 @@ inline uint32_t toVersionNumber(const std::string& _version)
     if (versionFields.size() < 2)
     {
         BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
-                                  "The version must be in format of major_version.middle_version, "
-                                  "and the minimum version is optional, current version is " +
+                                  "The version must be in format of MAJOR.MINOR.PATCH, "
+                                  "and the PATCH version is optional, current version is " +
                                   _version));
     }
     try
     {
-        // major_version.middle_version
-        // major_version:  1 bytes
-        // middle_version: 3 bytes
+        // MAJOR.MINOR.PATCH 0xMMmmpp00 every field is uint8_t, last byte is reserved
+        // v3.1.1 => 0x03010100
         auto majorVersion = boost::lexical_cast<uint32_t>(versionFields[0]);
-        auto middleVersion = boost::lexical_cast<uint32_t>(versionFields[1]);
+        auto minorVersion = boost::lexical_cast<uint32_t>(versionFields[1]);
+        auto patchVersion = 0;
+        if (versionFields.size() == 3)
+        {
+            patchVersion = boost::lexical_cast<uint32_t>(versionFields[2]);
+        }
         // check the major version
         if (majorVersion > bcos::protocol::MAX_MAJOR_VERSION ||
             majorVersion < bcos::protocol::MIN_MAJOR_VERSION)
@@ -67,12 +67,11 @@ inline uint32_t toVersionNumber(const std::string& _version)
                     std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
                     std::to_string(bcos::protocol::MAX_MAJOR_VERSION) + ", version:" + _version));
         }
-        return ((majorVersion << 24) + middleVersion);
+        return (majorVersion << 24) + (minorVersion << 16) + (patchVersion << 8);
     }
     catch (const boost::bad_lexical_cast& e)
     {
         BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(_version));
     }
 }
-}  // namespace tool
-}  // namespace bcos
+}  // namespace bcos::tool

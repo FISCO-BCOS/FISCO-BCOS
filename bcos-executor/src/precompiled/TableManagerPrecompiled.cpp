@@ -91,7 +91,7 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
         BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -129,9 +129,12 @@ void TableManagerPrecompiled::createTable(
     valueField = keyField + "," + valueField;
     std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
     auto input = codec.encode(newTableName, codeString);
+    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
+                          std::string(TABLE_ABI) :
+                          "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gas - gasPricer->calTotalGas());
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
@@ -175,9 +178,12 @@ void TableManagerPrecompiled::createKVTable(
     std::string codeString = getDynamicPrecompiledCodeString(kvTableAddress, newTableName);
 
     auto input = codec.encode(newTableName, codeString);
+    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
+                          std::string(KV_TABLE_ABI) :
+                          "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gas - gasPricer->calTotalGas());
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {

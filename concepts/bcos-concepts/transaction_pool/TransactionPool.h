@@ -10,11 +10,17 @@ template <class Impl>
 class TransactionPoolBase
 {
 public:
-    auto submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
-        bcos::concepts::receipt::TransactionReceipt auto& receipt)
+    auto submitTransaction(auto transaction, auto& receipt)
     {
         return impl().impl_submitTransaction(transaction, receipt);
     }
+
+    auto broadcastTransaction(concepts::transaction::Transaction auto const& transaction)
+    {
+        return impl().impl_broadcastTransaction(transaction);
+    }
+
+    // auto onTransaction(auto nodeID, auto const& messageID, auto const& data) {}
 
 private:
     friend Impl;

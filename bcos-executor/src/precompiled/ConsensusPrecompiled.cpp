@@ -161,7 +161,7 @@ int ConsensusPrecompiled::addSealer(
     else
     {
         // no exist
-        if (blockContext->blockVersion() >= (uint32_t)protocol::Version::V3_1_VERSION)
+        if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
         {
             // version >= 3.1.0, only allow adding sealer in observer list
             return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;

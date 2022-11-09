@@ -2,7 +2,9 @@
 
 #include "MockBlock.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <boost/test/unit_test.hpp>
+#include <sstream>
 
 namespace bcos::test
 {
@@ -102,6 +104,16 @@ public:
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override
     {
+        if (std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION) == std::string(_key))
+        {
+            std::stringstream ss;
+            ss << bcos::protocol::BlockVersion::MAX_VERSION;
+
+            _onGetConfig(nullptr, ss.str(), m_blockNumber);
+            return;
+        }
+
+
         BOOST_CHECK(false);  // Need implementations
     };
 

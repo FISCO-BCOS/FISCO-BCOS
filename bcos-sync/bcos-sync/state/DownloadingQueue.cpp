@@ -217,7 +217,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 
     sealerListStr << "size: " << _header->sealerList().size();
     signatureListStr << "size: " << _header->signatureList().size();
-    if (c_fileLogLevel >= TRACE)
+    if (c_fileLogLevel <= TRACE)
     {
         auto sealerList = _header->sealerList();
         sealerListStr << ", sealer list: ";
@@ -528,11 +528,13 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
                 // store transaction failed
                 if (_error)
                 {
-                    downloadingQueue->onCommitFailed(_error, _block);
                     BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock: store transactions failed")
                                          << LOG_KV("number", blockHeader->number())
                                          << LOG_KV("hash", blockHeader->hash().abridged())
-                                         << LOG_KV("txsSize", _block->transactionsSize());
+                                         << LOG_KV("txsSize", _block->transactionsSize())
+                                         << LOG_KV("code", _error->errorCode())
+                                         << LOG_KV("message", _error->errorMessage());
+                    downloadingQueue->onCommitFailed(_error, _block);
                     return;
                 }
                 BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlock: store transactions success")

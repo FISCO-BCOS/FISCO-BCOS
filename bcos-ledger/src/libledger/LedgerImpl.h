@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Log.h"
+#include "Ledger.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -35,12 +35,16 @@ struct NotFoundBlockHeader: public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
-class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>
+class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>,
+                   public Ledger
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
 
 public:
-    LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
+    LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::storage::StorageInterface::Ptr storageInterface)
+      : Ledger(std::move(blockFactory), std::move(storageInterface)), m_storage{std::move(storage)}
+    {}
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>

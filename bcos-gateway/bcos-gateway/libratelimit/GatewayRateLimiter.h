@@ -42,8 +42,8 @@ public:
     using UniquePtr = std::unique_ptr<const GatewayRateLimiter>;
 
 public:
-    GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr _rateLimiterManager,
-        ratelimiter::RateLimiterStat::Ptr _rateLimiterStat)
+    GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr& _rateLimiterManager,
+        ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat)
       : m_rateLimiterManager(_rateLimiterManager), m_rateLimiterStat(_rateLimiterStat)
     {}
 
@@ -64,7 +64,8 @@ public:
             return;
         }
         m_running = true;
-        if (m_rateLimiterStat)
+        if (m_rateLimiterManager->rateLimiterConfig().enableRateLimit() &&
+            m_rateLimiterStat)
         {
             m_rateLimiterStat->start();
         }

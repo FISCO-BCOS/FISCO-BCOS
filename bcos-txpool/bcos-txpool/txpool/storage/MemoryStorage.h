@@ -23,6 +23,7 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <tbb/task_group.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
 namespace bcos
@@ -36,10 +37,10 @@ public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
         int64_t _txsExpirationTime = 10 * 60 * 1000, bool _preStoreTxs = false);
-    ~MemoryStorage() override {}
+    ~MemoryStorage() override = default;
 
-    bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) override;
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -101,10 +102,11 @@ protected:
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback,
-        bool _checkPoolLimit, bool _lock);
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
-    bcos::protocol::TransactionStatus txpoolStorageCheck(bcos::protocol::Transaction::ConstPtr _tx);
+    bcos::protocol::TransactionStatus txpoolStorageCheck(
+        const bcos::protocol::Transaction& transaction);
 
     virtual bcos::protocol::Transaction::ConstPtr removeWithoutLock(
         bcos::crypto::HashType const& _txHash);
@@ -115,7 +117,7 @@ protected:
         bcos::protocol::TransactionStatus _status,
         bcos::protocol::TxSubmitCallback _txSubmitCallback);
 
-    virtual void notifyTxResult(bcos::protocol::Transaction::ConstPtr _tx,
+    virtual void notifyTxResult(bcos::protocol::Transaction const& _tx,
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult);
 
     virtual void removeInvalidTxs();
@@ -162,8 +164,8 @@ protected:
     uint64_t c_maxTraverseTxsNum = 10000;
 
     // for tps stat
-    std::atomic<int64_t> m_tpsStatstartTime = {0};
-    std::atomic<int64_t> m_onChainTxsCount = {0};
+    std::atomic_uint64_t m_tpsStatstartTime = {0};
+    std::atomic_uint64_t m_onChainTxsCount = {0};
 
     bool m_preStoreTxs = {true};
 };

@@ -23,6 +23,8 @@
 #include <bcos-txpool/TxPoolFactory.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
+#include <utility>
+
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::initializer;
@@ -31,10 +33,10 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     ProtocolInitializer::Ptr _protocolInitializer,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger, bool _preStoreTxs)
-  : m_nodeConfig(_nodeConfig),
-    m_protocolInitializer(_protocolInitializer),
-    m_frontService(_frontService),
-    m_ledger(_ledger)
+  : m_nodeConfig(std::move(_nodeConfig)),
+    m_protocolInitializer(std::move(_protocolInitializer)),
+    m_frontService(std::move(_frontService)),
+    m_ledger(std::move(_ledger))
 {
     auto keyPair = m_protocolInitializer->keyPair();
     auto cryptoSuite = m_protocolInitializer->cryptoSuite();
@@ -42,7 +44,7 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->blockFactory(),
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
         m_nodeConfig->blockLimit());
-    // init the txpool
+
     m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime(), _preStoreTxs);
     auto txpoolConfig = m_txpool->txpoolConfig();

@@ -23,9 +23,10 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
 #include "RPCInitializer.h"
-#include "bcos-lightnode/ledger/LedgerImpl.h"
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-storage/StorageImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -70,7 +71,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
         {
             try
             {
-                auto ledger = bcos::concepts::getRef(toLedger);
+                auto& ledger = bcos::concepts::getRef(toLedger);
 
                 auto beforeStatus = ~ledger.getStatus();
                 ~ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
@@ -132,7 +133,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     bcostars::Block genesisBlock;
     genesisBlock.blockHeader.data.blockNumber = 0;
     if (nodeConfig->compatibilityVersion() >=
-        static_cast<uint32_t>(bcos::protocol::Version::V3_1_VERSION))
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         genesisBlock.blockHeader.data.version =
             static_cast<decltype(genesisBlock.blockHeader.data.version)>(
@@ -211,7 +212,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
-            std::move(storageWrapper));
+            std::move(storageWrapper), protocolInitializer.blockFactory(), storage);
 
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
     }
@@ -219,7 +220,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
-            std::move(storageWrapper));
+            std::move(storageWrapper), protocolInitializer.blockFactory(), storage);
 
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
     }

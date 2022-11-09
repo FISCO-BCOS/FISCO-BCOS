@@ -192,7 +192,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize())
-                        << LOG_KV("version", (bcos::protocol::Version)(block->version()))
+                        << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
                         << LOG_KV("waitT", waitT);
 
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
@@ -373,7 +373,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                     << LOG_KV("txsRoot", header->txsRoot().abridged())
                     << LOG_KV("gasUsed", header->gasUsed())
                     << LOG_KV("signatureSize", signature.size())
-                    << LOG_KV("timeCost", utcTime() - startTime);
+                    << LOG_KV("timeCost", utcTime() - startTime)
+                    << LOG_KV("blockVersion", header->version());
 
                 m_lastExecuteFinishTime = utcTime();
                 executeLock->unlock();
@@ -462,6 +463,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                             requestBlockNumber % currentBlockNumber)
                                .str();
             SCHEDULER_LOG(ERROR) << message;
+            commitLock->unlock();
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr);
             return;
         }
@@ -523,6 +525,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 removeAllOldPreparedBlock(number);
             }
 
+
             asyncGetLedgerConfig([this, startTime, commitLock = std::move(commitLock),
                                      blockExecutive, callback = std::move(callback)](
                                      Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
@@ -559,10 +562,12 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     removeAllPreparedBlock();  // must clear prepared cacche
                 }
 
-
                 SCHEDULER_LOG(INFO)
                     << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace") << "CommitBlock success"
                     << LOG_KV("gas limit", m_gasLimit) << LOG_KV("timeCost", utcTime() - startTime);
+
+                commitLock->unlock();  // just unlock here
+
 
                 // Note: blockNumber = 0, means system deploy, and tx is not existed in txpool.
                 // So it should not exec tx notifier
@@ -571,8 +576,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
                     blockExecutive->asyncNotify(m_txNotifier,
                         [this, blockNumber, callback = std::move(callback),
-                            ledgerConfig = std::move(ledgerConfig),
-                            commitLock = std::move(commitLock)](Error::Ptr _error) mutable {
+                            ledgerConfig = std::move(ledgerConfig)](Error::Ptr _error) mutable {
                             if (!m_isRunning)
                             {
                                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -587,16 +591,12 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                             }
 
                             SCHEDULER_LOG(INFO) << "End notify block result: " << blockNumber;
-
-
-                            commitLock->unlock();
                             // Note: only after the block notify finished can call the callback
                             callback(std::move(_error), std::move(ledgerConfig));
                         });
                 }
                 else
                 {
-                    commitLock->unlock();
                     callback(nullptr, std::move(ledgerConfig));
                 }
             });

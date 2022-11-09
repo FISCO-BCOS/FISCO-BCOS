@@ -134,7 +134,7 @@ public:
 
     virtual void stop(){};
 
-private:
+protected:
     int64_t m_seq = utcTime();
 };
 }  // namespace executor

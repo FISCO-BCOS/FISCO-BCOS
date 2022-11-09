@@ -54,7 +54,7 @@ public:
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
     // auto operator<=>(const Entry&) const = default;
 
-    ~Entry() noexcept {}
+    ~Entry() noexcept = default;
 
     template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
         int flag = ARCHIVE_FLAG>
@@ -181,6 +181,7 @@ public:
         m_status = status;
         if (m_status == DELETED)
         {
+            m_size = 0;
             m_value = std::string();
         }
         // m_dirty = true;
@@ -229,7 +230,7 @@ public:
         const bcos::crypto::Hash::Ptr& hashImpl, uint32_t blockVersion) const
     {
         bcos::crypto::HashType entryHash(0);
-        if (blockVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+        if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             auto anyHasher = hashImpl->hasher();
 
@@ -245,7 +246,7 @@ public:
                         auto data = get();
                         hasher.update(data);
                         hasher.final(entryHash);
-                        if (c_fileLogLevel >= TRACE)
+                        if (c_fileLogLevel <= TRACE)
                         {
                             STORAGE_LOG(TRACE)
                                 << "Entry hash, dirty entry: " << table << " | " << toHex(key)
@@ -257,7 +258,7 @@ public:
                     case DELETED:
                     {
                         hasher.final(entryHash);
-                        if (c_fileLogLevel >= TRACE)
+                        if (c_fileLogLevel <= TRACE)
                         {
                             STORAGE_LOG(TRACE)
                                 << "Entry hash, deleted entry: " << table << " | " << toHex(key)
@@ -282,7 +283,7 @@ public:
                 auto value = get();
                 bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
                 entryHash = hashImpl->hash(ref);
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_LOG(TRACE)
                         << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
@@ -292,7 +293,7 @@ public:
             else if (m_status == Entry::DELETED)
             {
                 entryHash = bcos::crypto::HashType(0x1);
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
                                        << toHex(key) << LOG_KV("hash", entryHash.abridged());

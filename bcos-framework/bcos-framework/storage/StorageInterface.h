@@ -74,7 +74,8 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
-    virtual Error::Ptr setRows(std::string_view, std::vector<std::string>, std::vector<std::string>)
+    virtual Error::Ptr setRows(
+        std::string_view, std::vector<std::string_view>, std::vector<std::string_view>)
     {
         throw std::invalid_argument("unimplement method");
         return nullptr;
@@ -111,11 +112,11 @@ public:
     using Ptr = std::shared_ptr<TransactionalStorageInterface>;
     using ConstPtr = std::shared_ptr<const TransactionalStorageInterface>;
 
-    virtual ~TransactionalStorageInterface() = default;
+    ~TransactionalStorageInterface() override = default;
 
     virtual void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) = 0;
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) = 0;
 
     virtual void asyncCommit(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;

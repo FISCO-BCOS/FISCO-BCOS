@@ -82,7 +82,8 @@ void AccountManagerPrecompiled::createAccountWithStatus(
     auto input = codec.encode(accountTableName, codeString);
 
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
-        _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gas);
+        _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gasLeft, false,
+        std::string(ACCOUNT_ABI));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
@@ -96,7 +97,7 @@ void AccountManagerPrecompiled::createAccountWithStatus(
     auto newParams = codec.encodeWithSig("setAccountStatus(uint8)", status);
     auto setStatusRes = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountHex, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
+        _callParameters->m_create, _callParameters->m_gasLeft);
 
     if (setStatusRes->status != (int32_t)TransactionStatus::None)
     {
@@ -151,6 +152,17 @@ void AccountManagerPrecompiled::setAccountStatus(
     auto table = _executive->storage().openTable(accountTableName);
     if (!table)
     {
+        auto appsAccountTableName = getContractTableName(account.hex());
+        auto appsTable = _executive->storage().openTable(appsAccountTableName);
+        if (appsTable)
+        {
+            PRECOMPILED_LOG(INFO)
+                << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountManagerPrecompiled")
+                << LOG_DESC("account table already exist in /apps, maybe this is a contract.")
+                << LOG_KV("account", accountStr) << LOG_KV("status", status);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_ALREADY_EXIST)));
+            return;
+        }
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                               << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("setAccountStatus table not exist, create first")
@@ -164,7 +176,7 @@ void AccountManagerPrecompiled::setAccountStatus(
     auto newParams = codec.encodeWithSig("setAccountStatus(uint8)", status);
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
+        _callParameters->m_create, _callParameters->m_gasLeft);
     _callParameters->setExternalResult(std::move(response));
 }
 
@@ -184,7 +196,7 @@ void AccountManagerPrecompiled::getAccountStatus(
     auto newParams = codec.encodeWithSig("getAccountStatus()");
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
+        _callParameters->m_create, _callParameters->m_gasLeft);
     if (response->status != (int32_t)TransactionStatus::None)
     {
         // maybe this address not exist in chain, return normal by default
@@ -201,9 +213,9 @@ std::vector<Address> AccountManagerPrecompiled::getGovernorList(
     auto blockContext = _executive->blockContext().lock();
     auto sender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
     auto getCommittee = codec.encodeWithSig("_committee()");
-    auto getCommitteeResponse =
-        externalRequest(_executive, ref(getCommittee), _callParameters->m_origin, sender,
-            AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall, false, _callParameters->m_gas);
+    auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
+        _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,
+        false, _callParameters->m_gasLeft);
     if (getCommitteeResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
@@ -217,7 +229,7 @@ std::vector<Address> AccountManagerPrecompiled::getGovernorList(
 
     auto getInfo = codec.encodeWithSig("getCommitteeInfo()");
     auto getInfoResponse = externalRequest(_executive, ref(getInfo), _callParameters->m_origin,
-        sender, committee.hex(), _callParameters->m_staticCall, false, _callParameters->m_gas);
+        sender, committee.hex(), _callParameters->m_staticCall, false, _callParameters->m_gasLeft);
 
     if (getInfoResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
     {

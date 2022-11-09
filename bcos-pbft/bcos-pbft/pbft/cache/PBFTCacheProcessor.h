@@ -149,7 +149,7 @@ public:
 
     virtual void eraseExecutedProposal(bcos::crypto::HashType const& _hash)
     {
-        if (!m_executingProposals.count(_hash))
+        if (!m_executingProposals.contains(_hash))
         {
             return;
         }
@@ -175,7 +175,7 @@ public:
 
     bool proposalCommitted(bcos::protocol::BlockNumber _index)
     {
-        return m_committedProposalList.count(_index);
+        return m_committedProposalList.contains(_index);
     }
 
     void clearCacheAfterRecoverStateFailed()

@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "../executive/BlockContext.h"
+#include "../executive/TransactionExecutive.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/storage/Table.h"
 #include <evmc/evmc.h>
@@ -114,6 +115,7 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash() const;
     int64_t blockNumber() const;
+    uint32_t blockVersion() const;
     int64_t timestamp() const;
     int64_t blockGasLimit() const
     {
@@ -127,9 +129,9 @@ public:
 
     /// ------ get interfaces related to HostContext------
     std::string_view myAddress() const;
-    virtual std::string_view caller() const { return m_callParameters->senderAddress; }
-    std::string_view origin() const { return m_callParameters->origin; }
-    std::string_view codeAddress() const { return m_callParameters->codeAddress; }
+    virtual std::string_view caller() const { return m_callerPadded; }
+    std::string_view origin() const { return m_originPadded; }
+    std::string_view codeAddress() const { return m_codeAddressPadded; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
     virtual std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
@@ -140,7 +142,20 @@ public:
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
 
-    CallParameters::UniquePtr&& takeCallParameters() { return std::move(m_callParameters); }
+    CallParameters::UniquePtr&& takeCallParameters()
+    {
+        if (m_executive->blockContext().lock()->blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            for (const auto& response : m_responseStore)
+            {
+                m_callParameters->logEntries.insert(m_callParameters->logEntries.end(),
+                    std::make_move_iterator(response->logEntries.begin()),
+                    std::make_move_iterator(response->logEntries.end()));
+            }
+        }
+        return std::move(m_callParameters);
+    }
 
     static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
@@ -170,6 +185,12 @@ private:
     std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
     std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
     std::atomic_uint64_t m_startTime = {0};    // microsecond
+
+    // just for padding
+    std::string m_myAddressPadded;
+    std::string m_callerPadded;
+    std::string m_originPadded;
+    std::string m_codeAddressPadded;
 };
 
 }  // namespace executor

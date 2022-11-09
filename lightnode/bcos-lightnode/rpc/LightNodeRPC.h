@@ -63,7 +63,7 @@ public:
         }
         catch (std::exception& e)
         {
-            toErrorResp(error, std::move(respFunc));
+            toErrorResp(e, std::move(respFunc));
         }
     }
 
@@ -77,9 +77,8 @@ public:
         catch ([[maybe_unused]] std::bad_cast&)
         {
             // no bcos error
-            auto bcosError =
-                std::make_shared<bcos::Error>(-1, boost::diagnostic_information(error));
-            toErrorResp(std::move(bcosError), std::move(respFunc));
+            auto bcosError = bcos::Error(-1, boost::diagnostic_information(error));
+            toErrorResp(bcosError, std::move(respFunc));
         }
     }
 
@@ -526,8 +525,10 @@ private:
         auto end = RANGES::end(input);
         auto length = RANGES::size(input);
 
-        if ((length == 0) || (length % 2 != 0))
-            [[unlikely]] { BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"}); }
+        if ((length == 0) || (length % 2 != 0)) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
+        }
 
         if (*begin == '0' && *(begin + 1) == 'x')
         {

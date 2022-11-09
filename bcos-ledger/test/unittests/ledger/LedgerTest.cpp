@@ -81,13 +81,13 @@ public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev)
     {}
-    bcos::Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
-        std::vector<std::string> values) override
+    bcos::Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
+        std::vector<std::string_view> values) override
     {
         for (size_t i = 0; i < keys.size(); ++i)
         {
             Entry e;
-            e.set(values[i]);
+            e.set(std::string(values[i]));
             asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
         }
         return nullptr;
@@ -370,33 +370,6 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
                 m_param->observerNodeList().at(0)->nodeID()->hex());
             p6.set_value(true);
         });
-
-    std::vector<std::string> v = {"apps", "usr", "sys", "tables"};
-
-#if 0
-// FIXME: not support now
-    for (const auto& item : v)
-    {
-        std::promise<bool> p;
-
-        m_storage->asyncGetRow(
-            tool::FS_ROOT, item, [&](Error::UniquePtr _error, std::optional<Entry> _entry) {
-                BOOST_CHECK(!_error);
-                BOOST_CHECK(_entry.has_value());
-                p.set_value(true);
-            });
-        p.get_future().get();
-
-        std::promise<bool> p_1;
-        m_storage->asyncOpenTable(
-            "/" + item, [&](Error::UniquePtr _error, std::optional<Table> _table) {
-                BOOST_CHECK(!_error);
-                BOOST_CHECK(_table.has_value());
-                p_1.set_value(true);
-            });
-        p_1.get_future().get();
-    }
-#endif
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);

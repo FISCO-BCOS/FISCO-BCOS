@@ -13,9 +13,8 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-lightnode/ledger/LedgerImpl.h>
+#include <bcos-ledger/src/libledger/LedgerImpl.h>
 #include <bcos-lightnode/rpc/LightNodeRPC.h>
-#include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-storage/RocksDBStorage.h>

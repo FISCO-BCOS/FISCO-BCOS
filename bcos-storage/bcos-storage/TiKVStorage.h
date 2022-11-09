@@ -23,36 +23,31 @@
 
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-utilities/Common.h>
+#include <atomic>
+#include <utility>
 
 namespace tikv_client
 {
 struct TransactionClient;
 struct Transaction;
+struct Snapshot;
 }  // namespace tikv_client
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 constexpr int scan_batch_size = 64;
 
 std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath);
-
-std::shared_ptr<tikv_client::TransactionClient> newTiKVClientWithSSL(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath, const std::string& caPath,
-    const std::string& certPath, const std::string& keyPath);
+    const std::vector<std::string>& pdAddrs, const std::string& logPath,
+    const std::string& caPath = "", const std::string& certPath = "",
+    const std::string& keyPath = "", uint32_t grpcTimeout = 3);
 
 class TiKVStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
-    explicit TiKVStorage(const std::shared_ptr<tikv_client::TransactionClient>& _cluster,
-        int32_t _commitTimeout = 3000)
-      : m_cluster(_cluster), m_commitTimeout(_commitTimeout)
-    {}
-
-    virtual ~TiKVStorage() {}
+    explicit TiKVStorage(
+        std::shared_ptr<tikv_client::TransactionClient> _cluster, int32_t _commitTimeout = 3000);
 
     void asyncGetPrimaryKeys(std::string_view _table,
         const std::optional<Condition const>& _condition,
@@ -73,7 +68,7 @@ public:
 
     void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override;
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
@@ -81,16 +76,26 @@ public:
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) noexcept override;
 
-    Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
-        std::vector<std::string> values) noexcept override;
+    Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
+        std::vector<std::string_view> values) noexcept override;
+
+    void setSwitchHandler(std::function<void()> _onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = std::move(_onNeedSwitchEvent);
+    }
+
+    void reset();
 
 private:
+    void triggerSwitch();
+
     std::shared_ptr<tikv_client::TransactionClient> m_cluster;
-    std::shared_ptr<tikv_client::Transaction> m_committer;
+    std::shared_ptr<tikv_client::Transaction> m_committer = nullptr;
     uint64_t m_currentStartTS = 0;
+    std::atomic_uint64_t m_lastCommitTimestamp;
+    std::function<void()> f_onNeedSwitchEvent;
     int32_t m_commitTimeout = 3000;
     std::chrono::time_point<std::chrono::system_clock> m_committerCreateTime;
     mutable RecursiveMutex x_committer;
 };
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

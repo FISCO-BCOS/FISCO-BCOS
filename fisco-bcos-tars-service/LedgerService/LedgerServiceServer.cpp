@@ -150,8 +150,14 @@ bcostars::Error LedgerServiceServer::asyncGetNodeListByType(
     current->setResponse(false);
     m_ledger->asyncGetNodeListByType(
         _type, [current](bcos::Error::Ptr _error, bcos::consensus::ConsensusNodeListPtr _nodeList) {
+            if (_nodeList)
+            {
+                async_response_asyncGetNodeListByType(
+                    current, toTarsError(_error), toTarsConsensusNodeList(*_nodeList));
+                return;
+            }
             async_response_asyncGetNodeListByType(
-                current, toTarsError(_error), toTarsConsensusNodeList(*_nodeList));
+                current, toTarsError(_error), std::vector<bcostars::ConsensusNode>());
         });
     return bcostars::Error();
 }

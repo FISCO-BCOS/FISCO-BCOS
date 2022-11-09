@@ -124,6 +124,7 @@ void FrontService::start()
         {
             try
             {
+                boost::asio::io_service::work work(*m_ioService);
                 m_ioService->run();
             }
             catch (std::exception& e)
@@ -131,8 +132,6 @@ void FrontService::start()
                 FRONT_LOG(WARNING)
                     << LOG_DESC("IOService") << LOG_KV("error", boost::diagnostic_information(e));
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             if (m_run && m_ioService->stopped())
             {
@@ -358,7 +357,7 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     message->setPayload(_data);
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
 
     m_gatewayInterface->asyncSendBroadcastMessage(
         _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));

@@ -44,8 +44,12 @@ public:
     void stop() override {}
 
     // useless for PBFT, maybe needed by RPC
-    void asyncSubmit(bytesPointer, TxSubmitCallback) override {}
-    void asyncResetTxPool(std::function<void(Error::Ptr)> _callback) override 
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override
+    {
+        co_return nullptr;
+    }
+    void asyncResetTxPool(std::function<void(Error::Ptr)> _callback) override
     {
         _callback(nullptr);
     }

@@ -20,6 +20,8 @@
 
 #include "BfsFileFactory.h"
 #include <bcos-framework/storage/Table.h>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/serialization/vector.hpp>
 #include <future>
 
 using namespace bcos::tool;
@@ -80,20 +82,51 @@ bool BfsFileFactory::buildDir(Table& _table)
 {
     return false;
 }
+
+void BfsFileFactory::buildDirEntry(
+    storage::Entry& _mutableEntry, std::variant<FileType, std::string> fileType)
+{
+    std::string_view type;
+    std::visit(
+        [&type](const auto& _type) {
+            using T = std::decay_t<decltype(_type)>;
+            if constexpr (std::is_same_v<T, std::string>)
+            {
+                type = _type;
+            }
+            else if constexpr (std::is_same_v<T, FileType>)
+            {
+                if (_type == FileType::DIRECTOR)
+                    type = FS_TYPE_DIR;
+                else if (_type == FileType::LINK)
+                    type = FS_TYPE_LINK;
+                else
+                    type = FS_TYPE_CONTRACT;
+            }
+        },
+        fileType);
+    _mutableEntry.setObject<std::vector<std::string>>({type.data(), "0", "0", "", "", ""});
+}
+
 bool BfsFileFactory::buildLink(
-    Table& _table, std::string_view _address, const std::string& _abi, std::string name)
+    Table& _table, const std::string& _address, const std::string& _abi, const std::string& name)
 {
     Entry tEntry;
     tEntry.importFields({std::string(FS_TYPE_LINK)});
     _table.setRow(FS_KEY_TYPE, std::move(tEntry));
 
     Entry linkEntry;
-    linkEntry.importFields({std::string(_address)});
+    linkEntry.importFields({_address});
     _table.setRow(FS_LINK_ADDRESS, std::move(linkEntry));
 
-    Entry abiEntry;
-    abiEntry.importFields({_abi});
-    _table.setRow(FS_LINK_ABI, std::move(abiEntry));
+    if (!_abi.empty())
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("BFS") << "buildLink with abi"
+                        << LOG_KV("abiSize", _abi.size());
+        Entry abiEntry;
+        abiEntry.importFields({_abi});
+        _table.setRow(FS_LINK_ABI, std::move(abiEntry));
+    }
 
     if (!name.empty())
     {

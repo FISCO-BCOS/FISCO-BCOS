@@ -27,6 +27,7 @@
 #include <shared_mutex>
 #include <span>
 #include <type_traits>
+#include <utility>
 
 namespace bcos::protocol
 {
@@ -52,16 +53,13 @@ public:
 
     using Ptr = std::shared_ptr<Transaction>;
     using ConstPtr = std::shared_ptr<const Transaction>;
-    explicit Transaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite) : m_cryptoSuite(_cryptoSuite)
-    {}
-
-    virtual ~Transaction() {}
+    virtual ~Transaction() = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
     virtual void encode(bcos::bytes& txData) const = 0;
-    virtual bcos::crypto::HashType hash(bool _useCache = true) const = 0;
+    virtual bcos::crypto::HashType hash() const = 0;
 
-    virtual void verify() const
+    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
     {
         // The tx has already been verified
         if (!sender().empty())
@@ -69,18 +67,12 @@ public:
             return;
         }
 
-        // check the hash when verify
-        auto hashResult = hash(false);
-        if (hashResult != this->hash())
-        {
-            throw bcos::Exception("Hash mismatch!");
-        }
-
+        auto hashResult = hash();
         // check the signatures
         auto signature = signatureData();
-        auto publicKey = m_cryptoSuite->signatureImpl()->recover(this->hash(), signature);
+        auto publicKey = signatureImpl.recover(hashResult, signature);
         // recover the sender
-        forceSender(m_cryptoSuite->calculateAddress(publicKey).asBytes());
+        forceSender(bcos::right160(hashImpl.hash(publicKey)).asBytes());
     }
 
     virtual int32_t version() const = 0;
@@ -93,17 +85,14 @@ public:
     virtual std::string_view source() const = 0;
     virtual void setSource(std::string const& _source) = 0;
 
-    virtual std::string_view sender() const
-    {
-        return std::string_view((char*)m_sender.data(), m_sender.size());
-    }
+    virtual std::string_view sender() const { return {(char*)m_sender.data(), m_sender.size()}; }
 
     virtual bytesConstRef input() const = 0;
     virtual int64_t importTime() const = 0;
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual TransactionType type() const
     {
-        if (to().size() > 0)
+        if (!to().empty())
         {
             return TransactionType::MessageCall;
         }
@@ -112,12 +101,15 @@ public:
     virtual void forceSender(bytes _sender) const { m_sender = std::move(_sender); }
     virtual bytesConstRef signatureData() const = 0;
 
-    virtual uint32_t attribute() const = 0;
-    virtual void setAttribute(uint32_t attribute) = 0;
+    virtual int32_t attribute() const = 0;
+    virtual void setAttribute(int32_t attribute) = 0;
 
     TxSubmitCallback takeSubmitCallback() { return std::move(m_submitCallback); }
-    TxSubmitCallback submitCallback() const { return m_submitCallback; }
-    void setSubmitCallback(TxSubmitCallback _submitCallback) { m_submitCallback = _submitCallback; }
+    TxSubmitCallback const& submitCallback() const { return m_submitCallback; }
+    void setSubmitCallback(TxSubmitCallback _submitCallback)
+    {
+        m_submitCallback = std::move(_submitCallback);
+    }
     bool synced() const { return m_synced; }
     void setSynced(bool _synced) const { m_synced = _synced; }
 
@@ -126,8 +118,6 @@ public:
 
     bool invalid() const { return m_invalid; }
     void setInvalid(bool _invalid) const { m_invalid = _invalid; }
-
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
 
     void appendKnownNode(bcos::crypto::NodeIDPtr _node) const
     {
@@ -155,8 +145,6 @@ public:
 
 protected:
     mutable bcos::bytes m_sender;
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
 

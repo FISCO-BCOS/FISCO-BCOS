@@ -75,14 +75,14 @@ public:
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
-    Version minSupportedVersion() const { return m_minSupportedVersion; }
-    Version maxSupportedVersion() const { return m_maxSupportedVersion; }
+    BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
+    BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
     // the minimum supported version
-    Version m_minSupportedVersion = Version::MIN_VERSION;
-    Version m_maxSupportedVersion = Version::MAX_VERSION;
+    BlockVersion m_minSupportedVersion = BlockVersion::MIN_VERSION;
+    BlockVersion m_maxSupportedVersion = BlockVersion::MAX_VERSION;
 
     ProtocolInfoCodec::Ptr m_codec;
     mutable bcos::SharedMutex x_version;

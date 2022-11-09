@@ -75,10 +75,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -97,14 +94,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -280,6 +271,10 @@ inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
 inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
 {
     bcostars::LedgerConfig ledgerConfig;
+    if (!_ledgerConfig)
+    {
+        return ledgerConfig;
+    }
     auto hash = _ledgerConfig->hash().asBytes();
     ledgerConfig.hash.assign(hash.begin(), hash.end());
     ledgerConfig.blockNumber = _ledgerConfig->blockNumber();
@@ -387,9 +382,8 @@ inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const
 {
     bcos::protocol::TwoPCParams bcosTwoPCParams;
     bcosTwoPCParams.number = _param.blockNumber;
-    bcosTwoPCParams.primaryTableName = _param.primaryTableName;
-    bcosTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    bcosTwoPCParams.timestamp = _param.startTS;
+    bcosTwoPCParams.primaryKey = _param.primaryKey;
+    bcosTwoPCParams.timestamp = _param.timePoint;
     return bcosTwoPCParams;
 }
 
@@ -397,9 +391,8 @@ inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _para
 {
     bcostars::TwoPCParams tarsTwoPCParams;
     tarsTwoPCParams.blockNumber = _param.number;
-    tarsTwoPCParams.primaryTableName = _param.primaryTableName;
-    tarsTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    tarsTwoPCParams.startTS = _param.timestamp;
+    tarsTwoPCParams.primaryKey = _param.primaryKey;
+    tarsTwoPCParams.timePoint = _param.timestamp;
     return tarsTwoPCParams;
 }
 }  // namespace bcostars

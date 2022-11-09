@@ -5,8 +5,10 @@
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
+#include <bcos-task/Task.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
 #include <exception>
 #include <thread>
 #include <variant>
@@ -15,38 +17,34 @@ template <bool withError>
 class MockTransactionPoolMT
 {
 public:
-    void asyncSubmit(bcos::bytesPointer, bcos::protocol::TxSubmitCallback callback)
+    bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        bcos::protocol::Transaction::Ptr transaction)
     {
-        // run in a new thread to simulate async call
-        std::thread t([m_callback = std::move(callback)]() {
-            std::cout << "start resume at " << std::this_thread::get_id() << std::endl;
-            if constexpr (withError)
-            {
-                auto error = std::make_shared<bcos::Error>(-1, "mock error!");
-                m_callback(std::move(error), nullptr);
-            }
-            else
-            {
-                auto result =
-                    std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(nullptr);
-                bcostars::TransactionReceipt receipt;
-                receipt.data.status = 100;
-                receipt.data.blockNumber = 10086;
-                auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                    nullptr, [receipt = std::move(receipt)]() mutable { return &receipt; });
-                result->setTransactionReceipt(receiptObj);
-                m_callback(nullptr, result);
-            }
-            std::cout << "resume ended " << std::this_thread::get_id() << std::endl;
-        });
-        t.join();
+        if constexpr (withError)
+        {
+            auto error = std::make_shared<bcos::Error>(-1, "mock error!");
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        else
+        {
+            auto result =
+                std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(nullptr);
+            bcostars::TransactionReceipt receipt;
+            receipt.data.status = 100;
+            receipt.data.blockNumber = 10086;
+            auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
+                nullptr, [receipt = std::move(receipt)]() mutable { return &receipt; });
+            result->setTransactionReceipt(receiptObj);
+            co_return result;
+        }
     }
 };
 
 class MockTransactionPoolST
 {
 public:
-    void asyncSubmit(bcos::bytesPointer, bcos::protocol::TxSubmitCallback callback)
+    bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        bcos::protocol::Transaction::Ptr transaction)
     {
         std::cout << "start resume at " << std::this_thread::get_id() << std::endl;
 
@@ -56,8 +54,9 @@ public:
         auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
             nullptr, [receipt = std::move(receipt)]() mutable { return &receipt; });
         result->setTransactionReceipt(receiptObj);
-        callback(nullptr, result);
         std::cout << "resume ended " << std::this_thread::get_id() << std::endl;
+
+        co_return result;
     }
 };
 
@@ -70,7 +69,7 @@ BOOST_FIXTURE_TEST_SUITE(TransactionPoolTest, TransactionPoolFixture)
 BOOST_AUTO_TEST_CASE(mtTxPool)
 {
     MockTransactionPoolMT<false> mock1;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool(mock1);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool(nullptr, mock1);
 
     bcostars::Transaction transaction;
     bcostars::TransactionReceipt receipt;
@@ -82,7 +81,7 @@ BOOST_AUTO_TEST_CASE(mtTxPool)
     BOOST_CHECK_EQUAL(receipt.data.status, 100);
 
     MockTransactionPoolMT<true> mock2;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool2(nullptr, mock2);
     BOOST_CHECK_THROW(
         bcos::task::syncWait(transactionPool2.submitTransaction(transaction, receipt)),
         bcos::Error);
@@ -94,7 +93,7 @@ BOOST_AUTO_TEST_CASE(stTxPool)
     bcostars::TransactionReceipt receipt;
 
     MockTransactionPoolST mock3;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool3(mock3);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool3(nullptr, mock3);
     bcos::task::syncWait(transactionPool3.submitTransaction(transaction, receipt));
 
     BOOST_CHECK_EQUAL(receipt.data.status, 79);
@@ -106,7 +105,7 @@ bcos::task::Task<void> mainTask()
     bcostars::TransactionReceipt receipt;
 
     MockTransactionPoolMT<true> mock2;
-    bcos::transaction_pool::TransactionPoolImpl transactionPool2(mock2);
+    bcos::transaction_pool::TransactionPoolImpl transactionPool2(nullptr, mock2);
     BOOST_CHECK_THROW(co_await transactionPool2.submitTransaction(transaction, receipt),
         boost::wrapexcept<bcos::Error>);
 }
