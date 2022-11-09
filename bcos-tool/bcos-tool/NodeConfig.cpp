@@ -27,6 +27,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <json/forwards.h>
 #include <json/reader.h>
@@ -56,7 +57,12 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
-    loadChainConfig(_pt);
+    // if version < 3.1.0, config.ini include chianConfig
+    if (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
+        m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION)
+    {
+        loadChainConfig(_pt);
+    }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadGatewayConfig(_pt);
@@ -73,6 +79,14 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
+    // if version > 3.1.0, genesisBlock include chianConfig
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
+    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        loadChainConfig(_genesisConfig);
+    }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
     generateGenesisData();
@@ -757,6 +771,27 @@ void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
     std::string executorConfig = "";
+    std::string genesisdata = "";
+    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
+            m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
+            m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
+            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
+        genesisdata = genesisData->genesisDataOutPut();
+        size_t j = 0;
+        for (const auto& node : m_ledgerConfig->consensusNodeList())
+        {
+            genesisdata = genesisdata + "node." + boost::lexical_cast<std::string>(j) + ":" +
+                          *toHexString(node->nodeID()->data()) + "," +
+                          std::to_string(node->weight()) + "\n";
+            ++j;
+        }
+        NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
+                             << LOG_KV("genesisData", genesisdata);
+        m_genesisData = genesisdata;
+        return;
+    }
 
     versionData = m_compatibilityVersionStr + "-";
     std::stringstream ss;

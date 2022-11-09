@@ -95,8 +95,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     std::string const& _privateKeyPath, bool _airVersion)
 {
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    m_nodeConfig->loadConfig(_configFilePath);
     m_nodeConfig->loadGenesisConfig(_genesisFile);
+    m_nodeConfig->loadConfig(_configFilePath);
 
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();

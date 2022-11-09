@@ -233,11 +233,11 @@ int main(int argc, const char* argv[])
     // load node config
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
-    nodeConfig->loadConfig(configPath);
     if (fs::exists(genesisFilePath))
     {
         nodeConfig->loadGenesisConfig(genesisFilePath);
     }
+    nodeConfig->loadConfig(configPath);
     bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
     if (nodeConfig->storageSecurityEnable())
     {
