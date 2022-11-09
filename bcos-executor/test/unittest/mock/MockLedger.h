@@ -11,6 +11,9 @@ namespace bcos::test
 class MockLedger : public bcos::ledger::LedgerInterface
 {
 public:
+    using Ptr = std::shared_ptr<MockLedger>;
+    static const uint32_t TX_GAS_LIMIT = 3000000666;
+
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback) override
@@ -66,7 +69,7 @@ public:
     void asyncGetBlockHashByNumber(protocol::BlockNumber _blockNumber,
         std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override
     {
-        BOOST_CHECK(false);  // Need implemz'xentations
+        _onGetBlock(nullptr, crypto::HashType(_blockNumber));
     };
 
     void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
@@ -107,9 +110,14 @@ public:
         if (std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION) == std::string(_key))
         {
             std::stringstream ss;
-            ss << bcos::protocol::Version::MAX_VERSION;
+            ss << bcos::protocol::BlockVersion::MAX_VERSION;
 
             _onGetConfig(nullptr, ss.str(), m_blockNumber);
+            return;
+        }
+        else if (std::string(bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT) == std::string(_key))
+        {
+            _onGetConfig(nullptr, std::to_string(MockLedger::TX_GAS_LIMIT), m_blockNumber);
             return;
         }
 

@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "HostContext.h"
+#include <string>
 
 namespace bcos
 {
@@ -38,6 +39,7 @@ public:
 
 private:
     storage::Entry m_code;
+    std::string m_delegateCallSender;
 };
 
 }  // namespace executor

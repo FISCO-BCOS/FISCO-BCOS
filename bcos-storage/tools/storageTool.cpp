@@ -384,13 +384,14 @@ int main(int argc, const char* argv[])
         {
             auto keyPageStorage = dynamic_cast<TraverseStorageInterface*>(storage.get());
             bcos::protocol::TwoPCParams param;
-            rocksdbStorage->asyncPrepare(param, *keyPageStorage, [&](Error::Ptr err, uint64_t) {
-                if (err)
-                {
-                    cerr << "asyncPrepare failed, err:" << err->errorMessage() << endl;
-                    exit(1);
-                }
-            });
+            rocksdbStorage->asyncPrepare(
+                param, *keyPageStorage, [&](Error::Ptr err, uint64_t, const std::string&) {
+                    if (err)
+                    {
+                        cerr << "asyncPrepare failed, err:" << err->errorMessage() << endl;
+                        exit(1);
+                    }
+                });
             rocksdbStorage->asyncCommit(param, [](Error::Ptr err, uint64_t) {
                 if (err)
                 {

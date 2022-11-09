@@ -258,9 +258,9 @@ void AuthManagerPrecompiled::resetAdmin(
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
-    auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
-            _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+        authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
+        _callParameters->m_gasLeft, true);
     _callParameters->setExternalResult(std::move(response));
 }
 
@@ -298,9 +298,9 @@ void AuthManagerPrecompiled::setMethodAuthType(
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-    auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
-            _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+        authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
+        _callParameters->m_gasLeft, true);
     auto finishedET = utcTime() - beginT;
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << "setMethodAuthType finished"
                            << LOG_KV("setPath", path) << LOG_KV("finishedET", finishedET);
@@ -333,9 +333,9 @@ void AuthManagerPrecompiled::checkMethodAuth(
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
-    auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
-            _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+        authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
+        _callParameters->m_gasLeft, true);
 
     _callParameters->setExternalResult(std::move(response));
 }
@@ -364,9 +364,9 @@ void AuthManagerPrecompiled::getMethodAuth(
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
 
-    auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
-            _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+        authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
+        _callParameters->m_gasLeft, true);
 
     _callParameters->setExternalResult(std::move(response));
 }
@@ -408,9 +408,9 @@ void AuthManagerPrecompiled::setMethodAuth(
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
     std::string authMgrAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-    auto response =
-        externalRequest(_executive, ref(newParams), _callParameters->m_origin, authMgrAddress, path,
-            _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gas, true);
+    auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
+        authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
+        _callParameters->m_gasLeft, true);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << "setMethodAuth finished"
                            << LOG_KV("setPath", path) << LOG_KV("execT", (utcTime() - recordT));
     _callParameters->setExternalResult(std::move(response));
@@ -457,7 +457,7 @@ void AuthManagerPrecompiled::setContractStatus(
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
-        _callParameters->m_gas, true);
+        _callParameters->m_gasLeft, true);
 
     _callParameters->setExternalResult(std::move(response));
 }
@@ -490,7 +490,7 @@ void AuthManagerPrecompiled::contractAvailable(
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
-        _callParameters->m_gas, true);
+        _callParameters->m_gasLeft, true);
 
     _callParameters->setExternalResult(std::move(response));
 }
@@ -508,8 +508,9 @@ std::string AuthManagerPrecompiled::getContractAdmin(
                          codec.encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
                          codec.encodeWithSig(AUTH_METHOD_GET_ADMIN_ADD, Address(_to));
     auto data = codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), selector);
-    auto response = externalRequest(_executive, ref(data), _callParameters->m_origin,
-        authMgrAddress, _to, _callParameters->m_staticCall, false, _callParameters->m_gas, true);
+    auto response =
+        externalRequest(_executive, ref(data), _callParameters->m_origin, authMgrAddress, _to,
+            _callParameters->m_staticCall, false, _callParameters->m_gasLeft, true);
 
     if (response->status != (int32_t)protocol::TransactionStatus::None)
     {
@@ -530,7 +531,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
 {
     std::string typeStr = "";
     if (_executive->blockContext().lock()->blockVersion() >=
-        static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+        static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist
@@ -599,7 +600,7 @@ void AuthManagerPrecompiled::setDeployType(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
     }
-    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist
@@ -654,7 +655,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     bool access = _isClose ? (type == (int)AuthType::BLACK_LIST_MODE) :
                              (type == (int)AuthType::WHITE_LIST_MODE);
 
-    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+    if (blockContext->blockVersion() >= static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist
@@ -734,7 +735,7 @@ bool AuthManagerPrecompiled::checkDeployAuth(
     std::string aclMapStr = "";
 
     if (_executive->blockContext().lock()->blockVersion() >=
-        static_cast<uint32_t>(protocol::Version::V3_1_VERSION))
+        static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
         // apps must exist

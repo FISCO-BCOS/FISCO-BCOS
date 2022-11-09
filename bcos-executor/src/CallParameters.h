@@ -36,6 +36,7 @@ struct CallParameters
     std::string receiveAddress;  // common field, readable format
     std::string origin;          // common field, readable format
 
+    /// WARNING: gasLeft, be cautious to assign value
     int64_t gas = 0;   // common field
     bcos::bytes data;  // common field, transaction data, binary format
     std::string abi;   // common field, contract abi, json format
@@ -110,6 +111,14 @@ struct CallParameters
            << "delegateCall:" << delegateCall << "|"
            << "delegateCallSender" << delegateCallSender ;
         // clang-format on
+        ss << "|logEntries: ";
+        for (const auto& logEntry : logEntries)
+        {
+            ss << "[" << logEntry.address() << "|"
+               << toHexStringWithPrefix(
+                      h256((byte*)logEntry.topics().data(), logEntry.topics().size()))
+               << "|" << toHexStringWithPrefix(logEntry.data()) << "]";
+        }
         return ss.str();
     }
 };

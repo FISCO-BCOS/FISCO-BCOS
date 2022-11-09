@@ -4,7 +4,8 @@ pragma experimental ABIEncoderV2;
 
 enum AccountStatus{
     normal,
-    freeze
+    freeze,
+    abolish
 }
 
 abstract contract AccountManager {

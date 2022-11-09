@@ -77,7 +77,7 @@ public:
 
     /// must set isWasm
     void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
-        protocol::Version version = Version::V3_1_VERSION)
+        protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
     {
         isWasm = _isWasm;
         if (_isKeyPage)
@@ -111,7 +111,9 @@ public:
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
             64);
+        boost::log::core::get()->set_logging_enabled(false);
         createSysTable(version);
+        boost::log::core::get()->set_logging_enabled(true);
         if (_isCheckAuth)
         {
             boost::log::core::get()->set_logging_enabled(false);
@@ -120,7 +122,7 @@ public:
         }
     }
 
-    void createSysTable(protocol::Version version)
+    void createSysTable(protocol::BlockVersion version)
     {
         // create sys table
         {
@@ -139,7 +141,7 @@ public:
         }
 
         m_blockVersion = version;
-        if (m_blockVersion >= protocol::Version::V3_1_VERSION)
+        if (m_blockVersion >= protocol::BlockVersion::V3_1_VERSION)
         {
             initBfs(1);
         }
@@ -250,11 +252,14 @@ public:
         }
     }
 
-    void nextBlock(int64_t blockNumber, protocol::Version version = protocol::Version::V3_1_VERSION)
+    void nextBlock(
+        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_1_VERSION)
     {
+        std::cout << "next block: " << blockNumber << std::endl;
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
+        blockHeader->setParentInfo({{blockNumber - 1, h256(blockNumber - 1)}});
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
         std::promise<void> nextPromise;
@@ -265,6 +270,7 @@ public:
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
+        std::cout << "commit block: " << blockNumber << std::endl;
         TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
@@ -677,9 +683,9 @@ protected:
     KeyPairInterface::Ptr keyPair;
 
     CodecWrapper::Ptr codec;
-    int64_t gas = 300000000;
+    int64_t gas = MockLedger::TX_GAS_LIMIT;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
-    protocol::Version m_blockVersion = protocol::Version::V3_1_VERSION;
+    protocol::BlockVersion m_blockVersion = protocol::BlockVersion::V3_1_VERSION;
 };
 }  // namespace bcos::test

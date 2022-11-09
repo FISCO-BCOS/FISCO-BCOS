@@ -126,12 +126,11 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isWasm(isWasm),
     m_keyPageSize(keyPageSize),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
-    m_ledgerFetcher(std::make_shared<bcos::tool::LedgerConfigFetcher>(ledger))
+    m_ledgerCache(std::make_shared<LedgerCache>(ledger))
 {
     assert(m_backendStorage);
-
-    m_ledgerFetcher->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+    m_ledgerCache->fetchCompatibilityVersion();
+    m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
@@ -190,7 +189,7 @@ void TransactionExecutor::initEvmEnvironment()
             PrecompiledRegistrar::executor("blake2_compression"))});
     assert(m_precompiledContract);
 
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>();
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
@@ -243,7 +242,7 @@ void TransactionExecutor::initWasmEnvironment()
     m_constantPrecompiled =
         std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
 
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>();
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
@@ -289,8 +288,8 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, currentHeader,
-        m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
+        currentHeader, m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
 
     if (f_onNeedSwitchEvent)
     {
@@ -304,8 +303,8 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
+        blockNumber, blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -328,10 +327,13 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     try
     {
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                << "NextBlockH"
-                                   "eader request: "
+                                << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
-                                << LOG_KV("schedulerTermId", schedulerTermId);
+                                << LOG_KV("schedulerTermId", schedulerTermId)
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo()[0].blockHash.abridged() :
+                                           "null");
         m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -400,8 +402,19 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
         }
 
+        // cache parentHash
+        if (blockHeader->number() > 0)
+        {
+            m_ledgerCache->setBlockNumber2Hash(
+                blockHeader->number() - 1, blockHeader->parentInfo()[0].blockHash);
+        }
+
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
-                                << LOG_KV("number", blockHeader->number());
+                                << LOG_KV("number", blockHeader->number())
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo()[0].blockHash.abridged() :
+                                           "null");
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -1492,28 +1505,39 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 // new logic
                                 std::string_view abiStr;
                                 if (m_blockContext->blockVersion() >=
-                                    uint32_t(bcos::protocol::Version::V3_1_VERSION))
+                                    uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
                                 {
                                     // get codehash
                                     auto entry = table->getRow(ACCOUNT_CODE_HASH);
                                     if (!entry || entry->get().empty())
                                     {
-                                        EXECUTOR_NAME_LOG(ERROR)
-                                            << "No codeHash found, please deploy first ";
+                                        executionResults[i] =
+                                            toExecutionResult(std::move(inputs[i]));
+                                        executionResults[i]->setType(ExecutionMessage::SEND_BACK);
+                                        EXECUTOR_NAME_LOG(INFO)
+                                            << "No codeHash found, please deploy first "
+                                            << LOG_KV("tableName", tableName);
                                         continue;
                                     }
-                                    std::string_view codeHashStr = entry->getField(0);
+
+                                    auto codeHash = entry->getField(0);
+
                                     // get abi according to codeHash
                                     auto abiTable =
                                         storage->openTable(bcos::ledger::SYS_CONTRACT_ABI);
-                                    auto abiEntry = abiTable->getRow(codeHashStr);
+                                    auto abiEntry = abiTable->getRow(codeHash);
                                     if (!abiEntry || abiEntry->get().empty())
                                     {
                                         abiEntry = table->getRow(ACCOUNT_ABI);
                                         if (!abiEntry || abiEntry->get().empty())
                                         {
-                                            EXECUTOR_NAME_LOG(ERROR)
-                                                << "No ABI found, please deploy first ";
+                                            executionResults[i] =
+                                                toExecutionResult(std::move(inputs[i]));
+                                            executionResults[i]->setType(
+                                                ExecutionMessage::SEND_BACK);
+                                            EXECUTOR_NAME_LOG(INFO)
+                                                << "No ABI found, please deploy first "
+                                                << LOG_KV("tableName", tableName);
                                             continue;
                                         }
                                     }
@@ -1523,12 +1547,6 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
-                                    if (!entry || entry->get().empty())
-                                    {
-                                        EXECUTOR_NAME_LOG(ERROR)
-                                            << "No ABI found, please deploy first ";
-                                        continue;
-                                    }
                                     abiStr = entry->getField(0);
                                 }
                                 bool isSmCrypto =
@@ -1647,7 +1665,7 @@ void TransactionExecutor::prepare(
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())
     {
-        auto errorMessage = "Prepare error: empty stateStorages";
+        const auto* errorMessage = "Prepare error: empty stateStorages";
         EXECUTOR_NAME_LOG(ERROR) << errorMessage;
         callback(BCOS_ERROR_PTR(-1, errorMessage));
 
@@ -1668,12 +1686,11 @@ void TransactionExecutor::prepare(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    bcos::protocol::TwoPCParams storageParams{params.number, params.primaryKey, params.timestamp};
 
     m_backendStorage->asyncPrepare(storageParams, *(first->storage),
         [this, callback = std::move(callback), blockNumber = params.number](
-            auto&& error, uint64_t) {
+            auto&& error, uint64_t, const std::string&) {
             if (!m_isRunning)
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(
@@ -1732,8 +1749,7 @@ void TransactionExecutor::commit(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    bcos::protocol::TwoPCParams storageParams{params.number, params.primaryKey, params.timestamp};
     m_backendStorage->asyncCommit(storageParams, [this, callback = std::move(callback),
                                                      blockNumber = params.number](
                                                      Error::Ptr&& error, uint64_t) {
@@ -1756,8 +1772,8 @@ void TransactionExecutor::commit(
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
-        m_ledgerFetcher->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+        m_ledgerCache->fetchCompatibilityVersion();
+        m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
 
         removeCommittedState();
 
@@ -1802,8 +1818,7 @@ void TransactionExecutor::rollback(
         return;
     }
 
-    bcos::protocol::TwoPCParams storageParams{
-        params.number, params.primaryTableName, params.primaryTableKey, params.timestamp};
+    bcos::protocol::TwoPCParams storageParams{params.number, params.primaryKey, params.timestamp};
     m_backendStorage->asyncRollback(storageParams,
         [this, callback = std::move(callback), blockNumber = params.number](auto&& error) {
             if (!m_isRunning)
@@ -1907,7 +1922,7 @@ void TransactionExecutor::getCode(
                 callback(nullptr, std::move(codeBytes));
             });
     };
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
@@ -1967,15 +1982,26 @@ void TransactionExecutor::getABI(
 
     storage::StateStorageInterface::Ptr stateStorage;
 
+    {
+        std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
+        if (!m_stateStorages.empty())
+        {
+            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+        }
+    }
     // create temp state storage
-    if (m_cachedStorage)
+    if (!stateStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage, true);
+        if (m_cachedStorage)
+        {
+            stateStorage = createStateStorage(m_cachedStorage, true);
+        }
+        else
+        {
+            stateStorage = createStateStorage(m_backendStorage, true);
+        }
     }
-    else
-    {
-        stateStorage = createStateStorage(m_backendStorage, true);
-    }
+
 
     std::string contractTableName = getContractTableName(contract);
     auto getAbiFromContractTable = [stateStorage, this](std::string_view contractTableName,
@@ -2011,12 +2037,14 @@ void TransactionExecutor::getABI(
                 callback(nullptr, std::string(abi));
             });
     };
-    if (m_blockContext->blockVersion() >= uint32_t(bcos::protocol::Version::V3_1_VERSION))
+    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
         std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
         // try to get abi from SYS_CONTRACT_ABI first
+        EXECUTOR_LOG(TRACE) << LOG_DESC("get abi") << LOG_KV("abiKey", abiKey);
+
         stateStorage->asyncGetRow(bcos::ledger::SYS_CONTRACT_ABI, abiKey,
             [this, contractTableName, callback = std::move(callback),
                 getAbiFromContractTable = std::move(getAbiFromContractTable)](
@@ -2412,6 +2440,8 @@ void TransactionExecutor::removeCommittedState()
             it->storage->setPrev(m_backendStorage);
         }
     }
+
+    m_ledgerCache->clearCacheByNumber(number);
 }
 
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
@@ -2465,6 +2495,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->keyLocks = input.takeKeyLocks();
+    callParameters->logEntries = input.takeLogEntries();
     if (input.create())
     {
         callParameters->abi = input.abi();
@@ -2500,6 +2531,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->message = input.message();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
+    callParameters->logEntries = input.takeLogEntries();
     callParameters->abi = tx.abi();
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
@@ -2557,7 +2589,7 @@ bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorag
 {
     if (m_keyPageSize > 0)
     {
-        if (m_blockVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
+        if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
         {
             if (m_keyPageIgnoreTables->contains(tool::FS_ROOT))
             {
@@ -2629,9 +2661,7 @@ std::string TransactionExecutor::getCodeHash(
                 codeHashPromise.set_value(std::string());
                 return;
             }
-            auto codeHash =
-                h256(std::string(entry->getField(0)), FixedBytes<32>::StringDataType::FromBinary)
-                    .hex();
+            auto codeHash = std::string(entry->getField(0));
             codeHashPromise.set_value(std::move(codeHash));
         });
     return codeHashPromise.get_future().get();

@@ -18,7 +18,9 @@
  * @date 2021-07-05
  */
 #include "precompiled/CryptoPrecompiled.h"
+#include "../mock/MockLedger.h"
 #include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
+#include "bcos-executor/src/executive/LedgerCache.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/sm2.h>
@@ -288,9 +290,10 @@ public:
         m_cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
-        m_blockContext = std::make_shared<BlockContext>(nullptr, m_cryptoSuite->hashImpl(), 0,
-            h256(), utcTime(), (uint32_t)(bcos::protocol::Version::V3_0_VERSION),
-            FiscoBcosScheduleV4, false, false);
+        m_blockContext =
+            std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
+                h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
+                FiscoBcosScheduleV4, false, false);
         std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
             std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
@@ -304,6 +307,7 @@ public:
     CryptoPrecompiled::Ptr m_cryptoPrecompiled;
     std::string m_sm2VerifyFunction = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
     std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
+    LedgerCache::Ptr m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
 };
 
 BOOST_AUTO_TEST_CASE(testSM2Verify)

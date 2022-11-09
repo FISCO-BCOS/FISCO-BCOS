@@ -1501,7 +1501,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     createFileSystemTables(versionNumber);
-    if (versionNumber > (uint32_t)protocol::Version::MAX_VERSION)
+    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
     {
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
                                   "The genesis compatibilityVersion is " + _compatibilityVersion +
@@ -1519,7 +1519,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
-    if (versionNumber >= (uint32_t)protocol::Version::V3_1_VERSION)
+    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
     {
         header->setVersion(versionNumber);
     }
@@ -1669,7 +1669,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
         tool::FS_APPS, tool::FS_USER, tool::FS_USER_TABLE, tool::FS_SYS_BIN};
 
     /// blockVersion >= 3.1.0, use executor build
-    if (blockVersion >= (uint32_t)Version::V3_1_VERSION)
+    if (blockVersion >= (uint32_t)BlockVersion::V3_1_VERSION)
     {
         return;
     }
@@ -1728,7 +1728,7 @@ std::optional<storage::Table> Ledger::buildDir(
     {
         BOOST_THROW_EXCEPTION(*createError);
     }
-    if (blockVersion >= (uint32_t)Version::V3_1_VERSION)
+    if (blockVersion >= (uint32_t)BlockVersion::V3_1_VERSION)
     {
         // >= 3.1.0 logic
         return table;

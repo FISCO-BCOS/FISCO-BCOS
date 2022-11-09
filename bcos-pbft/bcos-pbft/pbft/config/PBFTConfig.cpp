@@ -73,9 +73,9 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
     {
         PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
-                       << LOG_KV("version", (bcos::protocol::Version)m_compatibilityVersion)
+                       << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
                        << LOG_KV("updatedVersion",
-                              (bcos::protocol::Version)(_ledgerConfig->compatibilityVersion()));
+                              (bcos::protocol::BlockVersion)(_ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {

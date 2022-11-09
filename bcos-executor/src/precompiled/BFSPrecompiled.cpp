@@ -76,7 +76,7 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
         // list(string) => (int32,fileList)
         listDir(_executive, _callParameters);
     }
-    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+    else if (version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) &&
              func == name2Selector[FILE_SYSTEM_METHOD_LIST_PAGE])
     {
         // list(string,uint,uint) => (int32,fileList)
@@ -92,7 +92,7 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
         // link(string name, string version, address, abi) => int32
         linkAdaptCNS(_executive, _callParameters);
     }
-    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+    else if (version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) &&
              func == name2Selector[FILE_SYSTEM_METHOD_LINK])
     {
         // link(absolutePath, address, abi) => int32
@@ -107,7 +107,7 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
         // touch(string absolute,string type) => int32
         touch(_executive, _callParameters);
     }
-    else if (version >= static_cast<uint32_t>(Version::V3_1_VERSION) &&
+    else if (version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) &&
              func == name2Selector[FILE_SYSTEM_METHOD_INIT])
     {
         // initBfs for the first time
@@ -205,7 +205,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
     const auto* bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        absolutePath, FS_TYPE_DIR, _callParameters->m_gas);
+        absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
     _callParameters->setExecResult(codec.encode(response));
 }
 
@@ -231,7 +231,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
     {
         // exist
         auto [parentDir, baseName] = getParentDirAndBaseName(absolutePath);
-        if (blockContext->blockVersion() >= (uint32_t)Version::V3_1_VERSION)
+        if (blockContext->blockVersion() >= (uint32_t)BlockVersion::V3_1_VERSION)
         {
             // check parent dir to get type
             auto baseNameEntry = _executive->storage().getRow(parentDir, baseName);
@@ -483,7 +483,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gas);
+        linkTableName, FS_TYPE_LINK, _callParameters->m_gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
@@ -553,7 +553,7 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
     std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gas);
+        linkTableName, FS_TYPE_LINK, _callParameters->m_gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
@@ -643,7 +643,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     }
     if (!absolutePath.starts_with(USER_APPS_PREFIX) && !absolutePath.starts_with(USER_TABLE_PREFIX))
     {
-        if (blockContext->blockVersion() >= (uint32_t)(bcos::protocol::Version::V3_1_VERSION) &&
+        if (blockContext->blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION) &&
             absolutePath.starts_with(USER_USR_PREFIX))
         {
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("touch /usr/ file")
@@ -686,7 +686,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     }
 
     // set meta data in parent table
-    if (blockContext->blockVersion() >= (uint32_t)Version::V3_1_VERSION)
+    if (blockContext->blockVersion() >= (uint32_t)BlockVersion::V3_1_VERSION)
     {
         Entry subEntry;
         tool::BfsFileFactory::buildDirEntry(subEntry, type);
@@ -762,8 +762,8 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
                           << LOG_KV("fromVersion", fromVersion) << LOG_KV("toVersion", toVersion);
     // TODO: add from and to version check
-    if (fromVersion <= static_cast<uint32_t>(Version::V3_0_VERSION) &&
-        toVersion >= static_cast<uint32_t>(Version::V3_1_VERSION))
+    if (fromVersion <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
+        toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         rebuildBfs310(_executive);
     }
@@ -901,7 +901,7 @@ bool BFSPrecompiled::recursiveBuildDir(
         }
         auto newTableName = ((root == "/") ? root : (root + "/")).append(dir);
 
-        if (version >= (uint32_t)Version::V3_1_VERSION)
+        if (version >= (uint32_t)BlockVersion::V3_1_VERSION)
         {
             auto dirEntry = _executive->storage().getRow(root, dir);
             if (!dirEntry)

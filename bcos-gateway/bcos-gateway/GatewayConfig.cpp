@@ -563,21 +563,22 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                                   "than flow_control.total_outgoing_bw_limit"));
     }
 
-    GATEWAY_CONFIG_LOG(INFO)
-        << LOG_BADGE("initRateLimiterConfig")
-        << LOG_KV("rateLimiterConfigEffect", m_rateLimiterConfig.hasRateLimiterConfigEffect())
-        << LOG_KV("statInterval", statInterval)
-        << LOG_KV("enableDistributedRatelimit", enableDistributedRatelimit)
-        << LOG_KV("enableDistributedRateLimitCache", enableDistributedRateLimitCache)
-        << LOG_KV("distributedRateLimitCachePercent", distributedRateLimitCachePercent)
-        << LOG_KV("enableGroupRateLimit", enableGroupRateLimit)
-        << LOG_KV("enableConRateLimit", enableConRateLimit)
-        << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
-        << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
-        << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
-        << LOG_KV("moduleIDs", boost::join(modules, ","))
-        << LOG_KV("ips size", m_rateLimiterConfig.ip2BwLimit.size())
-        << LOG_KV("groups size", m_rateLimiterConfig.group2BwLimit.size());
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimiterConfig")
+                             << LOG_KV("enableRateLimit", m_rateLimiterConfig.enableRateLimit())
+                             << LOG_KV("statInterval", statInterval)
+                             << LOG_KV("enableDistributedRatelimit", enableDistributedRatelimit)
+                             << LOG_KV("enableDistributedRateLimitCache",
+                                    enableDistributedRateLimitCache)
+                             << LOG_KV("distributedRateLimitCachePercent",
+                                    distributedRateLimitCachePercent)
+                             << LOG_KV("enableGroupRateLimit", enableGroupRateLimit)
+                             << LOG_KV("enableConRateLimit", enableConRateLimit)
+                             << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
+                             << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
+                             << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
+                             << LOG_KV("moduleIDs", boost::join(modules, ","))
+                             << LOG_KV("ips size", m_rateLimiterConfig.ip2BwLimit.size())
+                             << LOG_KV("groups size", m_rateLimiterConfig.group2BwLimit.size());
 
     if (m_rateLimiterConfig.enableDistributedRatelimit)
     {

@@ -67,9 +67,9 @@ public:
 
     void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const storage::TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override
     {
-        callback(nullptr, 0);
+        callback(nullptr, 0, "");
     }
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,

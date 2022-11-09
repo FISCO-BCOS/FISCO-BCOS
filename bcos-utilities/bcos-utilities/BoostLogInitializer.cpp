@@ -19,6 +19,7 @@
  * @author: yujiechen
  */
 #include "BoostLogInitializer.h"
+#include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
 #include <boost/log/support/date_time.hpp>
@@ -68,6 +69,26 @@ void BoostLogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
                                "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
                         << "|" << boost::log::expressions::smessage);
 }
+
+boost::shared_ptr<bcos::BoostLogInitializer::console_sink_t>
+BoostLogInitializer::initConsoleLogSink(
+    boost::property_tree::ptree const& _pt, unsigned const& _logLevel, std::string const& channel)
+{
+    boost::log::add_common_attributes();
+    boost::shared_ptr<console_sink_t> consoleSink(new console_sink_t());
+    consoleSink->locked_backend()->add_stream(
+        boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
+
+    bool need_flush = _pt.get<bool>("log.flush", true);
+    consoleSink->locked_backend()->auto_flush(need_flush);
+    consoleSink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
+                            boost::log::trivial::severity >= _logLevel);
+    boost::log::core::get()->add_sink(consoleSink);
+    m_consoleSinks.push_back(consoleSink);
+    bool enable_log = _pt.get<bool>("log.enable", true);
+    boost::log::core::get()->set_logging_enabled(enable_log);
+    return consoleSink;
+}
 /**
  * @brief: set log for specified channel
  *
@@ -79,26 +100,24 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     std::string const& _logger, std::string const& _logPrefix)
 {
     m_running.store(true);
-    // not set the log path before init
-    if (m_logPath.size() == 0)
-    {
-        m_logPath = _pt.get<std::string>("log.log_path", "log");
-    }
-    /// set log level
+    // get log level
     unsigned logLevel = getLogLevel(_pt.get<std::string>("log.level", "info"));
-    auto sink = initLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
-
+    bool consoleLog = _pt.get<bool>("log.enable_console_output", false);
+    if (consoleLog)
+    {
+        boost::shared_ptr<console_sink_t> sink = initConsoleLogSink(_pt, logLevel, _logger);
+        setLogFormatter(sink);
+    }
+    else
+    {
+        if (m_logPath.size() == 0)
+        {
+            m_logPath = _pt.get<std::string>("log.log_path", "log");
+        }
+        boost::shared_ptr<sink_t> sink = initLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
+        setLogFormatter(sink);
+    }
     setFileLogLevel((LogLevel)logLevel);
-
-    /// set file format
-    /// log-level|timestamp |[g:groupId] message
-    sink->set_formatter(expr::stream
-                        << boost::log::expressions::attr<boost::log::trivial::severity_level>(
-                               "Severity")
-                        << "|"
-                        << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
-                               "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-                        << "|" << boost::log::expressions::smessage);
 }
 
 boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLogSink(
@@ -171,6 +190,12 @@ void BoostLogInitializer::stopLogging()
         stopLogging(sink);
     }
     m_sinks.clear();
+
+    for (auto const& sink : m_consoleSinks)
+    {
+        stopLogging(sink);
+    }
+    m_consoleSinks.clear();
 }
 
 /// stop a single sink

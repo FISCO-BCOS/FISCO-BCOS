@@ -38,7 +38,6 @@ function(create_build_info)
         -DFISCO_BCOS_BUILD_NUMBER="${FISCO_BCOS_BUILD_NUMBER}"
         -DFISCO_BCOS_VERSION_SUFFIX="${VERSION_SUFFIX}"
         -DPROJECT_VERSION="${PROJECT_VERSION}"
-        -P "${FISCO_BCOS_SCRIPTS_DIR}/buildinfo.cmake"
-        )
+        -P "${FISCO_BCOS_SCRIPTS_DIR}/buildinfo.cmake")
     include_directories(BEFORE ${PROJECT_BINARY_DIR})
 endfunction()

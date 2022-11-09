@@ -737,5 +737,81 @@ BOOST_AUTO_TEST_CASE(setAccountStatusErrorTest)
     }
 }
 
+BOOST_AUTO_TEST_CASE(abolishTest)
+{
+    Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
+    Address h1 = Address("12305f128bd4d00c2698441b1f54ef843b837123");
+    BlockNumber number = 2;
+
+    // setAccountStatus account not exist
+    {
+        auto response = setAccountStatus(number++, newAccount, 0);
+        BOOST_CHECK(response->status() == 0);
+        int32_t result = -1;
+        codec->decode(response->data(), result);
+        BOOST_CHECK(result == 0);
+    }
+
+    // use account to deploy
+    {
+        auto response1 = deployHelloInAuthCheck(helloAddress, number++, newAccount);
+        BOOST_CHECK(response1->status() == 0);
+        auto response2 = helloSet(number++, "test1", 0, newAccount);
+        BOOST_CHECK(response2->status() == 0);
+        auto response3 = helloGet(number++, 0, newAccount);
+        std::string hello;
+        codec->decode(response3->data(), hello);
+        BOOST_CHECK(hello == "test1");
+    }
+
+    // setAccountStatus account exist, abolish account
+    {
+        auto response = setAccountStatus(number++, newAccount, 2, 0, true);
+        BOOST_CHECK(response->status() == 0);
+        int32_t result = -1;
+        codec->decode(response->data(), result);
+        BOOST_CHECK(result == 0);
+
+        auto rsp2 = getAccountStatus(number++, newAccount);
+        BOOST_CHECK(rsp2->status() == 0);
+        uint8_t status = UINT8_MAX;
+        codec->decode(rsp2->data(), status);
+        BOOST_CHECK(status == 2);
+    }
+
+    // use abolish account to use
+    {
+        auto response1 = deployHelloInAuthCheck(h1.hex(), number++, newAccount, true);
+        BOOST_CHECK(response1->status() == (uint32_t)TransactionStatus::AccountAbolished);
+        auto response2 = helloSet(number++, "test2", 0, newAccount);
+        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::AccountAbolished);
+    }
+
+    // freeze/unfreeze abolish account status
+    {
+        auto response = setAccountStatus(number++, newAccount, 1, 0, true);
+        BOOST_CHECK(response->status() == (uint32_t)TransactionStatus::PrecompiledError);
+
+        auto response2 = setAccountStatus(number++, newAccount, 0, 0, true);
+        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // abolish account again, success
+    {
+        auto response = setAccountStatus(number++, newAccount, 2, 0, true);
+        BOOST_CHECK(response->status() == 0);
+        int32_t result = -1;
+        codec->decode(response->data(), result);
+        BOOST_CHECK(result == 0);
+
+        auto rsp2 = getAccountStatus(number++, newAccount);
+        BOOST_CHECK(rsp2->status() == 0);
+        uint8_t status = UINT8_MAX;
+        codec->decode(rsp2->data(), status);
+        BOOST_CHECK(status == 2);
+    }
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

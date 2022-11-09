@@ -39,6 +39,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-executor/src/executive/LedgerCache.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
@@ -319,7 +320,7 @@ protected:
 
     std::function<void()> f_onNeedSwitchEvent;
 
-    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
+    LedgerCache::Ptr m_ledgerCache;
 };
 
 }  // namespace executor

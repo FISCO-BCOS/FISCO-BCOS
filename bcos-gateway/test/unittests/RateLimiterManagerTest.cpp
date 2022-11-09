@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
-    BOOST_CHECK(!rateLimiterConfig.hasRateLimiterConfigEffect());
+    BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
     BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
 
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerDefaultConfig)
     bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-    BOOST_CHECK(!rateLimiterConfig.hasRateLimiterConfigEffect());
+    BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
     BOOST_CHECK(!rateLimiterConfig.enableConRateLimit);
     BOOST_CHECK(!rateLimiterConfig.enableGroupRateLimit);
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
     auto config = std::make_shared<GatewayConfig>();
     config->initRateLimitConfig(pt);
 
-    BOOST_CHECK(config->rateLimiterConfig().hasRateLimiterConfigEffect());
+    BOOST_CHECK(config->rateLimiterConfig().enableRateLimit());
     BOOST_CHECK(config->rateLimiterConfig().enableConRateLimit);
     BOOST_CHECK(config->rateLimiterConfig().enableGroupRateLimit);
     BOOST_CHECK(config->rateLimiterConfig().enableDistributedRatelimit);
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
     BOOST_CHECK(rateLimiterConfig.connOutgoingBwLimit > 0);
     BOOST_CHECK(rateLimiterConfig.groupOutgoingBwLimit > 0);
 
-    BOOST_CHECK(rateLimiterConfig.hasRateLimiterConfigEffect());
+    BOOST_CHECK(rateLimiterConfig.enableRateLimit());
     BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
     BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);

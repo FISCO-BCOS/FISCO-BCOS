@@ -1263,6 +1263,8 @@ generate_common_ini() {
 
 [log]
     enable=true
+    ; print the log to std::cout or not, default print to the log files
+    enable_console_output = false
     log_path=./log
     ; info debug trace
     level=info

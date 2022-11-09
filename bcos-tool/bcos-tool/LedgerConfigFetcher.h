@@ -57,8 +57,9 @@ public:
 
     virtual void fetchCompatibilityVersion();
 
-protected:
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
+
+protected:
     virtual std::string fetchSystemConfig(std::string_view _key);
     virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string_view _type);
 

@@ -92,7 +92,7 @@ public:
         std::set<uint16_t> modulesWithoutLimit;
 
         // whether any configuration takes effect
-        bool hasRateLimiterConfigEffect() const
+        bool enableRateLimit() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
