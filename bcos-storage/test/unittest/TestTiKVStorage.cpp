@@ -45,7 +45,7 @@ struct TestTiKVStorageFixture
 {
     TestTiKVStorageFixture()
     {
-        // boost::log::core::get()->set_logging_enabled(false);
+        boost::log::core::get()->set_logging_enabled(false);
         std::vector<std::string> pd_addrs{"127.0.0.1:2379"};
         m_cluster = newTiKVClient(pd_addrs, "./");
 

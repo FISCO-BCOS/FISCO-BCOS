@@ -23,9 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <wedpr-crypto/WedprCrypto.h>
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 
 inline HashType keccak256Hash(bytesConstRef _data)
@@ -51,5 +49,4 @@ public:
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}};
     }
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

@@ -190,7 +190,7 @@ void JsonRpcImpl_2_0::parseRpcResponseJson(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Response object."));
 }
 
-void JsonRpcImpl_2_0::toJsonResp(
+void bcos::rpc::toJsonResp(
     Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr)
 {
     // transaction version
@@ -219,7 +219,7 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
 }
 
-void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
+void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
     crypto::Hash& hashImpl)
 {
@@ -274,8 +274,7 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
 }
 
 
-void JsonRpcImpl_2_0::toJsonResp(
-    Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr)
 {
     if (!_blockHeaderPtr)
     {
@@ -326,7 +325,7 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["signatureList"] = jSignList;
 }
 
-void JsonRpcImpl_2_0::toJsonResp(
+void bcos::rpc::toJsonResp(
     Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash)
 {
     if (!_blockPtr)
