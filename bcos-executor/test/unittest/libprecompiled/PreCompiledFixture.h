@@ -252,12 +252,14 @@ public:
         }
     }
 
-    void nextBlock(int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_1_VERSION)
+    void nextBlock(
+        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_1_VERSION)
     {
-        std::cout << "next block: " << blockNumber << std::endl;
+        // std::cout << "next block: " << blockNumber << std::endl;
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
+        blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
         std::promise<void> nextPromise;
@@ -268,7 +270,7 @@ public:
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
-        std::cout << "commit block: " << blockNumber << std::endl;
+        // std::cout << "commit block: " << blockNumber << std::endl;
         TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
