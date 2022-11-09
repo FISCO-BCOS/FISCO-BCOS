@@ -774,7 +774,7 @@ void NodeConfig::generateGenesisData()
     std::string genesisdata = "";
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        auto genesisData = std::make_shared<bcos::ledger::genesisConfig>(m_smCryptoType, m_chainId,
+        auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
             m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
             m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
             m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
