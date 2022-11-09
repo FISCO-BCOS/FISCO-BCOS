@@ -78,6 +78,10 @@ if(WITH_CPPSDK)
     add_subdirectory(bcos-sdk)
 endif()
 
+if(TOOLS)
+  add_subdirectory(tools)
+endif()
+
 # for code coverage
 if(COVERAGE)
     include(Coverage)

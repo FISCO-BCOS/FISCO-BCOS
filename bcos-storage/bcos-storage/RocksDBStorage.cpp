@@ -168,7 +168,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
         if (!isValid(_table))
         {
             STORAGE_ROCKSDB_LOG(WARNING)
-                << LOG_DESC("asyncGetRow empty tableName") << LOG_KV("table", _table);
+                << LOG_DESC("asyncGetRows empty tableName") << LOG_KV("table", _table);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
             return;
         }
@@ -255,7 +255,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
     {
         if (!isValid(_table, _key))
         {
-            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncSetRow empty tableName or key")
                                          << LOG_KV("table", _table) << LOG_KV("key", _key);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"));
             return;

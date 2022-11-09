@@ -429,7 +429,8 @@ void TablePrecompiled::count(const std::string& tableName,
     uint32_t singleCountByKeyMax = keyCondition->getLimit().second;
     do
     {
-        auto keyCondition = std::make_optional<storage::Condition>();
+        // FIXME: the below logic is from v3.1.0 will make the ut precompiledTableTestV320/countTest
+        // and countWasmTest failed
         if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             // will throw exception when wrong condition cmp or limit count overflow

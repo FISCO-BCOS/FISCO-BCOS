@@ -89,6 +89,7 @@ BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
 
 BOOST_AUTO_TEST_CASE(RunTest)
 {
+#if 0
     EXECUTOR_LOG(DEBUG) << "RunTest begin";
     std::shared_ptr<std::vector<int64_t>> sequence = make_shared<std::vector<int64_t>>();
     ExecutiveStackFlow::Ptr executiveStackFlow =
@@ -175,6 +176,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
         }
     }
     // BOOST_CHECK(flag);
+#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()
