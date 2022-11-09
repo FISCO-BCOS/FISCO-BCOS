@@ -72,7 +72,7 @@ evmc_storage_status setStorage(evmc_host_context* context,
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (value == 0)
+    if (value == 0)  // TODO: Should use 32 bytes 0
     {
         status = EVMC_STORAGE_DELETED;
         hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
@@ -83,9 +83,6 @@ evmc_storage_status setStorage(evmc_host_context* context,
 
 evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   return toEvmC(hostContext.balance(fromEvmC(*_addr)));
-
     // always return 0
     (void)_context;
     (void)_addr;
@@ -124,26 +121,9 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
 
     hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
     return _bufferSize;
-    // auto addr = fromEvmC(*_addr);
-    //   auto code = hostContext.codeAt(addr);
-
-    //   // Handle "big offset" edge case.
-    //   if (_codeOffset >= code->size())
-    //     return 0;
-
-    //   size_t maxToCopy = code->size() - _codeOffset;
-    //   size_t numToCopy = std::min(maxToCopy, _bufferSize);
-    //   std::copy_n(code->data() + _codeOffset, numToCopy, _bufferData);
-    //   return numToCopy;
 }
 
-void selfdestruct(evmc_host_context*, const evmc_address*, const evmc_address*) noexcept
-{
-    //   (void)_addr;
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   assert(fromEvmC(*_addr) == hostContext.myAddress());
-    //   hostContext.suicide(fromEvmC(*_beneficiary));
-}
+void selfdestruct(evmc_host_context*, const evmc_address*, const evmc_address*) noexcept {}
 
 void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* _data,
     size_t _dataSize, const evmc_bytes32 _topics[], size_t _numTopics) noexcept
@@ -298,7 +278,7 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
     string value((char*)_value, _valueLength);
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (value.size() == 0)
+    if (value.empty())  // TODO: should use 32 bytes 0?
     {
         status = EVMC_STORAGE_DELETED;
         hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
@@ -354,78 +334,6 @@ void wasmLog(evmc_host_context* _context, const uint8_t* _addr, int32_t _address
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
 
-bool registerAsset(evmc_host_context* _context, const char* _assetName, int32_t _nameLength,
-    const evmc_address* _issuer, bool _fungible, uint64_t _total, const char* _desc,
-    int32_t _descLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.registerAsset(string(_assetName, _nameLength), fromEvmC(*_issuer), _fungible,
-        _total, string(_desc, _descLength));
-}
-
-bool issueFungibleAsset(evmc_host_context* _context, const uint8_t* _to, int32_t _toLength,
-    const char* _assetName, int32_t _nameLength, uint64_t _amount)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.issueFungibleAsset(
-        string_view((char*)_to, _toLength), string(_assetName, _nameLength), _amount);
-}
-
-uint64_t issueNotFungibleAsset(evmc_host_context* _context, const uint8_t* _to, int32_t _toLength,
-    const char* _assetName, int32_t _nameLength, const char* _uri, int32_t _uriLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.issueNotFungibleAsset(string_view((char*)_to, _toLength),
-        string(_assetName, _nameLength), string(_uri, _uriLength));
-}
-
-bool transferAsset(evmc_host_context* _context, const uint8_t* _to, int32_t _toLength,
-    const char* _assetName, int32_t _nameLength, uint64_t _amountOrID, bool _fromSelf)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.transferAsset(string_view((char*)_to, _toLength),
-        string(_assetName, _nameLength), _amountOrID, _fromSelf);
-}
-
-uint64_t getAssetBanlance(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
-    const char* _assetName, int32_t _nameLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.getAssetBanlance(
-        string_view((char*)_addr, _addressLength), string(_assetName, _nameLength));
-}
-
-int32_t getNotFungibleAssetIDs(evmc_host_context* _context, const uint8_t* _addr,
-    int32_t _addressLength, const char* _assetName, int32_t _nameLength, char* _value,
-    int32_t _valueLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    auto tokenIDs = hostContext.getNotFungibleAssetIDs(
-        string_view((char*)_addr, _addressLength), string(_assetName, _nameLength));
-    if (tokenIDs.size() > (size_t)_valueLength / sizeof(uint64_t))
-    {
-        return -1;
-    }
-    int32_t length = tokenIDs.size() * sizeof(uint64_t);
-    memcpy(_value, tokenIDs.data(), length);
-    return length;
-}
-
-int32_t getNotFungibleAssetInfo(evmc_host_context* _context, const uint8_t* _addr,
-    int32_t _addressLength, const char* _assetName, int32_t _nameLength, uint64_t _assetId,
-    char* _value, int32_t _valueLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    auto info = hostContext.getNotFungibleAssetInfo(
-        string_view((char*)_addr, _addressLength), string(_assetName, _nameLength), _assetId);
-    if (info.size() > (size_t)_valueLength)
-    {
-        return -1;
-    }
-    memcpy(_value, info.data(), info.size());
-    return info.size();
-}
-
 wasm_host_interface const wasmFnTable = {
     wasmAccountExists,
     get,
@@ -434,13 +342,13 @@ wasm_host_interface const wasmFnTable = {
     wasmGetCodeHash,
     wasmCopyCode,
     wasmLog,
-    registerAsset,
-    issueFungibleAsset,
-    issueNotFungibleAsset,
-    transferAsset,
-    getAssetBanlance,
-    getNotFungibleAssetInfo,
-    getNotFungibleAssetIDs,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
 };
 
 }  // namespace
