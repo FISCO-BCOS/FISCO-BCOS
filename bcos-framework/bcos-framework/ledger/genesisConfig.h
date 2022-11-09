@@ -31,11 +31,11 @@ namespace bcos
 {
 namespace ledger
 {
-class genesisConfig
+class GenesisConfig
 {
 public:
-    using Ptr = std::shared_ptr<genesisConfig>;
-    genesisConfig(bool smcrypto, std::string chainID, std::string groupID,
+    using Ptr = std::shared_ptr<GenesisConfig>;
+    GenesisConfig(bool smcrypto, std::string chainID, std::string groupID,
         std::string consensusType, uint64_t blockLimit, uint64_t leaderSwitchPeriod,
         std::string compatibilityVersion, uint64_t txGasLimit, bool isWasm, bool isAuthCheck,
         std::string authAdminAccount, bool isSerialExecute)
@@ -51,7 +51,7 @@ public:
         m_isAuthCheck(isAuthCheck),
         m_authAdminAccount(authAdminAccount),
         m_isSerialExecute(isSerialExecute){};
-    virtual ~genesisConfig() {}
+    virtual ~GenesisConfig() {}
 
     std::string genesisDataOutPut()
     {

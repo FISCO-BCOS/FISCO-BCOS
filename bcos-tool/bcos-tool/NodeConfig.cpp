@@ -27,7 +27,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-framework/ledger/genesisConfig.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <json/forwards.h>
 #include <json/reader.h>
@@ -58,8 +58,8 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
     // if version < 3.1.0, config.ini include chianConfig
-    if (m_compatibilityVersion < (uint32_t)bcos::protocol::Version::V3_1_VERSION &&
-        m_compatibilityVersion >= (uint32_t)bcos::protocol::Version::MIN_VERSION)
+    if (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
+        m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION)
     {
         loadChainConfig(_pt);
     }
@@ -83,7 +83,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersionStr = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
-    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         loadChainConfig(_genesisConfig);
     }
@@ -772,7 +772,7 @@ void NodeConfig::generateGenesisData()
     std::string versionData = "";
     std::string executorConfig = "";
     std::string genesisdata = "";
-    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::Version::V3_1_VERSION)
+    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         auto genesisData = std::make_shared<bcos::ledger::genesisConfig>(m_smCryptoType, m_chainId,
             m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
