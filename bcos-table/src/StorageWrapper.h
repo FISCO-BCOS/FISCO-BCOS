@@ -7,6 +7,7 @@
 #include <boost/throw_exception.hpp>
 #include <optional>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace bcos::storage
@@ -22,7 +23,7 @@ class StorageWrapper
 {
 public:
     StorageWrapper(storage::StateStorageInterface::Ptr storage, bcos::storage::Recoder::Ptr recoder)
-      : m_storage(std::move(storage)), m_recoder(recoder)
+      : m_storage(std::move(storage)), m_recoder(std::move(recoder))
     {}
 
     StorageWrapper(const StorageWrapper&) = delete;
@@ -30,7 +31,7 @@ public:
     StorageWrapper& operator=(const StorageWrapper&) = delete;
     StorageWrapper& operator=(StorageWrapper&&) = delete;
 
-    virtual ~StorageWrapper() {}
+    virtual ~StorageWrapper() = default;
 
     std::vector<std::string> getPrimaryKeys(
         const std::string_view& table, const std::optional<storage::Condition const>& _condition)
