@@ -29,7 +29,7 @@ namespace bcos
 class AddressUtils
 {
 public:
-    static std::string padding(const std::string& addr)
+    static std::string padding(std::string_view addr)
     {
         if (addr.length() > 40)
         {
