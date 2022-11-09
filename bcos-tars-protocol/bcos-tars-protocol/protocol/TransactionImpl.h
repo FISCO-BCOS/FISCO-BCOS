@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "../impl/TarsHashable.h"
+
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-crypto/hasher/Hasher.h>
