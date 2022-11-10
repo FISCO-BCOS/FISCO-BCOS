@@ -64,6 +64,8 @@ public:
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes() { return m_staticNodes; }
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)
     {
+        RecursiveGuard l(x_nodes);
+        m_staticNodes.clear();
         for (const auto& endpoint : staticNodes)
         {
             m_staticNodes.insert(std::make_pair(endpoint, ""));

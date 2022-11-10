@@ -3,6 +3,8 @@
  *  @date 2021-05-17
  */
 
+#include "bcos-gateway/GatewayConfig.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
@@ -19,6 +21,7 @@
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
+#include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
 #include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
@@ -44,6 +47,42 @@ using namespace gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
 using namespace bcos::boostssl;
+
+struct GatewayP2PReloadHandler
+{
+    static GatewayConfig::Ptr config;
+    static Service::Ptr service;
+
+    static void handle(int sig)
+    {
+        BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal") << LOG_DESC("receive SIGUSER1 sig");
+
+        if (!config || !service)
+        {
+            return;
+        }
+
+        try
+        {
+            config->loadP2pConnectedNodes();
+            auto nodes = config->connectedNodes();
+            service->setStaticNodes(nodes);
+
+            BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal")
+                           << LOG_DESC("reload p2p connected nodes successfully")
+                           << LOG_KV("nodes count: ", nodes.size());
+        }
+        catch (const std::exception& e)
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("Gateway::Signal")
+                              << LOG_DESC("reload p2p connected nodes failed, e: " +
+                                          std::string(e.what()));
+        }
+    }
+};
+
+GatewayConfig::Ptr GatewayP2PReloadHandler::config = nullptr;
+Service::Ptr GatewayP2PReloadHandler::service = nullptr;
 
 // register the function fetch pub hex from the cert
 void GatewayFactory::initCert2PubHexHandler()
@@ -495,6 +534,13 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
         service->setHost(host);
         service->setStaticNodes(_config->connectedNodes());
+
+        GatewayP2PReloadHandler::config = _config;
+        GatewayP2PReloadHandler::service = service;
+        // register SIGUSR1 for reload connected p2p nodes config
+        signal(SIGUSR1, GatewayP2PReloadHandler::handle);
+
+        BCOS_LOG(INFO) << LOG_DESC("register SIGUSR1 sig for reload p2p connected nodes config");
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")
                                   << LOG_KV("myself pub id", pubHex)
