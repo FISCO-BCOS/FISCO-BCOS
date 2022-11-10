@@ -218,6 +218,8 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
     std::vector<BfsTuple> files = {};
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("ls path")
+                           << LOG_KV("path", absolutePath);
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("invalid path name")
@@ -342,17 +344,20 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
 {
     // list(string,uint,uint)
     std::string absolutePath;
-    uint32_t offset = 0;
-    uint32_t count = 0;
+    u256 offset = 0;
+    u256 count = 0;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath, offset, count);
     std::vector<BfsTuple> files = {};
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("ls path")
+                           << LOG_KV("path", absolutePath) << LOG_KV("offset", offset)
+                           << LOG_KV("count", count);
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("invalid path name")
                                << LOG_KV("path", absolutePath);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH), files));
+        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_INVALID_PATH), files));
         return;
     }
     auto table = _executive->storage().openTable(absolutePath);
@@ -361,7 +366,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
                                << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
+        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_NOT_EXIST), files));
         return;
     }
 
@@ -380,7 +385,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         // maybe hidden table
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
                                << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
+        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_NOT_EXIST), files));
         return;
     }
     auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
@@ -388,7 +393,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
     {
         // if type is dir, then return sub resource
         auto keyCondition = std::make_optional<storage::Condition>();
-        keyCondition->limit(offset, count);
+        keyCondition->limit((size_t)offset, (size_t)count);
         auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
 
         for (const auto& key : keys | RANGES::views::all)
@@ -408,10 +413,10 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
                     << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
                     << LOG_KV("absolutePath", absolutePath);
                 _callParameters->setExecResult(
-                    codec.encode(int32_t(CODE_FILE_COUNT_ERROR), std::vector<BfsTuple>{}));
+                    codec.encode(s256(CODE_FILE_COUNT_ERROR), std::vector<BfsTuple>{}));
                 return;
             }
-            _callParameters->setExecResult(codec.encode(int64_t(total - offset - count), files));
+            _callParameters->setExecResult(codec.encode(s256(total - offset - count), files));
             return;
         }
     }
@@ -431,7 +436,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         files.emplace_back(baseName, tool::FS_TYPE_CONTRACT,
             std::vector<std::string>{baseFields.begin() + 1, baseFields.end()});
     }
-    _callParameters->setExecResult(codec.encode(int64_t(CODE_SUCCESS), files));
+    _callParameters->setExecResult(codec.encode(s256(CODE_SUCCESS), files));
 }
 
 void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -458,7 +463,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
                                << LOG_DESC("check link params failed, invalid path name")
                                << LOG_KV("absolutePath", absolutePath)
                                << LOG_KV("contractAddress", contractAddress);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_INVALID_PATH)));
         return;
     }
 
@@ -471,12 +476,12 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         {
             // contract name and version exist, overwrite address and abi
             tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
-            _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+            _callParameters->setExecResult(codec.encode(s256(CODE_SUCCESS)));
             return;
         }
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("File already exists.")
                                << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode((int32_t)CODE_FILE_ALREADY_EXIST));
+        _callParameters->setExecResult(codec.encode((s256)CODE_FILE_ALREADY_EXIST));
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
@@ -489,13 +494,13 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
                               << LOG_DESC("external build link file metadata failed")
                               << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode((int32_t)CODE_FILE_BUILD_DIR_FAILED));
+        _callParameters->setExecResult(codec.encode((s256)CODE_FILE_BUILD_DIR_FAILED));
         return;
     }
     auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     // set link info to link table
     tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, contractAbi);
-    _callParameters->setExecResult(codec.encode((int32_t)CODE_SUCCESS));
+    _callParameters->setExecResult(codec.encode((s256)CODE_SUCCESS));
 }
 
 void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -539,7 +544,12 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
-            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
+            auto addressEntry = linkTable->newEntry();
+            addressEntry.importFields({contractAddress});
+            auto abiEntry = linkTable->newEntry();
+            abiEntry.importFields({contractAbi});
+            _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
+            _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
             return;
         }
@@ -578,6 +588,8 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("readLink path")
+                           << LOG_KV("path", absolutePath);
     bytes emptyResult =
         blockContext->isWasm() ? codec.encode(std::string("")) : codec.encode(Address());
     if (!checkPathValid(absolutePath))
@@ -643,7 +655,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     }
     if (!absolutePath.starts_with(USER_APPS_PREFIX) && !absolutePath.starts_with(USER_TABLE_PREFIX))
     {
-        if (blockContext->blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION) &&
+        if (blockContext->blockVersion() >=
+                (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION) &&
             absolutePath.starts_with(USER_USR_PREFIX))
         {
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("touch /usr/ file")

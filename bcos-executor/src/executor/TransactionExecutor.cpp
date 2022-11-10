@@ -2481,8 +2481,15 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
-    callParameters->origin = input.origin();
-    callParameters->senderAddress = input.from();
+    constexpr static auto addressSize = Address::SIZE * 2;
+    if (staticCall)
+    {
+        // padding zero
+        callParameters->origin = std::string(addressSize - input.origin().size(), '0');
+        callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
+    }
+    callParameters->origin += input.origin();
+    callParameters->senderAddress += input.from();
     callParameters->receiveAddress = input.to();
     callParameters->codeAddress = input.to();
     callParameters->create = input.create();
@@ -2506,6 +2513,20 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     if (input.delegateCall())
     {
         callParameters->codeAddress = input.delegateCallAddress();
+    }
+
+    if (!m_isWasm)
+    {
+        if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->codeAddress.insert(
+                0, callParameters->codeAddress.size() - addressSize, '0');
+        }
+        if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->receiveAddress.insert(
+                0, callParameters->receiveAddress.size() - addressSize, '0');
+        }
     }
 
     return callParameters;
@@ -2536,6 +2557,21 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
+
+    if (!m_isWasm)
+    {
+        constexpr static auto addressSize = Address::SIZE * 2;
+        if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->codeAddress.insert(
+                0, callParameters->codeAddress.size() - addressSize, '0');
+        }
+        if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->receiveAddress.insert(
+                0, callParameters->receiveAddress.size() - addressSize, '0');
+        }
+    }
     return callParameters;
 }
 
