@@ -157,11 +157,16 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     auto txHash = _tx->hash();
     // the transaction has already onChain, reject it
     auto result = m_config->txValidator()->submittedToChain(_tx);
+    auto it = m_txsTable.find(txHash);
+    Transaction::ConstPtr tx = nullptr;
+    if (it != m_txsTable.end())
+    {
+        tx = it->second;
+    }
     if (result == TransactionStatus::NonceCheckFail)
     {
-        if (m_txsTable.count(txHash))
+        if (tx)
         {
-            auto tx = m_txsTable.at(txHash);
             TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
                                 << tx->hash().abridged() << LOG_KV("batchId", tx->batchId())
                                 << LOG_KV("batchHash", tx->batchHash().abridged())
@@ -170,9 +175,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         }
         return TransactionStatus::NonceCheckFail;
     }
-    if (m_txsTable.count(txHash) && m_txsTable[txHash])
+    if (tx)
     {
-        auto tx = m_txsTable[txHash];
         if (!tx->sealed() || tx->batchHash() == HashType())
         {
             if (!tx->sealed())
@@ -567,12 +571,13 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
     _missedTxs.clear();
     for (auto const& hash : _txs)
     {
-        if (!m_txsTable.count(hash))
+        auto it = m_txsTable.find(hash);
+        if (it == m_txsTable.end())
         {
             _missedTxs.emplace_back(hash);
             continue;
         }
-        auto tx = m_txsTable[hash];
+        auto tx = it->second;
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
     if (c_fileLogLevel <= TRACE)
@@ -653,7 +658,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             // add to m_invalidTxs to be deleted
             m_invalidTxs.insert(txHash);
-            m_invalidTxs.insert(tx->nonce());
+            m_invalidNonces.insert(tx->nonce());
             continue;
         }
         /// check nonce again when obtain transactions
@@ -668,7 +673,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             transaction->takeSubmitCallback();
             // add to m_invalidTxs to be deleted
             m_invalidTxs.insert(txHash);
-            m_invalidTxs.insert(tx->nonce());
+            m_invalidNonces.insert(tx->nonce());
             continue;
         }
         // blockLimit expired
@@ -791,11 +796,12 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     ReadGuard l(x_txpoolMutex);
     for (auto txHash : _txsHashList)
     {
-        if (!m_txsTable.count(txHash))
+        auto it = m_txsTable.find(txHash);
+        if (it == m_txsTable.end())
         {
             continue;
         }
-        auto tx = m_txsTable[txHash];
+        auto tx = it->second;
         if (!tx)
         {
             continue;
@@ -849,13 +855,14 @@ void MemoryStorage::batchMarkTxsWithoutLock(
     ssize_t successCount = 0;
     for (auto txHash : _txsHashList)
     {
-        if (!m_txsTable.count(txHash))
+        auto it = m_txsTable.find(txHash);
+        if (it == m_txsTable.end())
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
                               << LOG_KV("tx", txHash.abridged()) << LOG_KV("sealFlag", _sealFlag);
             continue;
         }
-        auto tx = m_txsTable[txHash];
+        auto tx = it->second;
         if (!tx)
         {
             continue;
