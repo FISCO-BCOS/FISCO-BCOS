@@ -544,7 +544,12 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
-            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
+            auto addressEntry = linkTable->newEntry();
+            addressEntry.importFields({contractAddress});
+            auto abiEntry = linkTable->newEntry();
+            abiEntry.importFields({contractAbi});
+            _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
+            _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
             return;
         }
