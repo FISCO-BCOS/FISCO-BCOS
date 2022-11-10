@@ -1024,6 +1024,9 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
         return;
     }
 
+    // remove suicides beforehand
+    m_blockContext->killSuicides();
+
     auto hash = last.storage->hash(m_hashImpl);
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
                             << LOG_KV("hash", hash.hex());
