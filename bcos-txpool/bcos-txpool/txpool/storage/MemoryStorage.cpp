@@ -171,9 +171,11 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         }
         return TransactionStatus::NonceCheckFail;
     }
-    if (m_txsTable.count(txHash) && m_txsTable[txHash])
+
+    auto it = m_txsTable.find(txHash);
+    if (it != m_txsTable.end())
     {
-        auto tx = m_txsTable[txHash];
+        auto& tx = it->second;
         if (!tx->sealed() || tx->batchHash() == HashType())
         {
             if (!tx->sealed())
@@ -201,6 +203,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         // The transaction has already been sealed by another node
         return TransactionStatus::AlreadyInTxPool;
     }
+
     auto status = insertWithoutLock(_tx);
     if (status != TransactionStatus::None)
     {
@@ -566,12 +569,13 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
     _missedTxs.clear();
     for (auto const& hash : _txs)
     {
-        if (!m_txsTable.count(hash))
+        auto it = m_txsTable.find(hash);
+        if (it == m_txsTable.end())
         {
             _missedTxs.emplace_back(hash);
             continue;
         }
-        auto tx = m_txsTable[hash];
+        auto& tx = it->second;
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
     if (c_fileLogLevel <= TRACE) [[unlikely]]
@@ -592,7 +596,7 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 
     for (auto const& it : m_txsTable)
     {
-        auto& tx = it.second;
+        const auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
         if (!tx || tx->synced())
@@ -620,12 +624,12 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     ReadGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
-    int64_t currentTime = (int64_t)utcTime();
+    auto currentTime = (int64_t)utcTime();
     size_t traverseCount = 0;
     for (auto const& it : m_txsTable)
     {
         traverseCount++;
-        auto tx = it.second;
+        const auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
@@ -638,7 +642,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             continue;
         }
         auto txHash = tx->hash();
-        if (m_invalidTxs.count(txHash))
+        auto it2 = m_invalidTxs.find(txHash);
+        if (it2 != m_invalidTxs.end())
         {
             continue;
         }
@@ -666,7 +671,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             transaction->takeSubmitCallback();
             // add to m_invalidTxs to be deleted
             m_invalidTxs.insert(txHash);
-            m_invalidTxs.insert(tx->nonce());
+            m_invalidNonces.insert(tx->nonce());
             continue;
         }
         // blockLimit expired

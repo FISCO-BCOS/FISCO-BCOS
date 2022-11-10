@@ -23,12 +23,10 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_unordered_set.h>
 #include <tbb/task_group.h>
-#define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
-#include <tbb/concurrent_set.h>
-namespace bcos
-{
-namespace txpool
+
+namespace bcos::txpool
 {
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
@@ -61,8 +59,9 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        ReadGuard l(x_txpoolMutex);
-        return m_txsTable.count(_txHash);
+        ReadGuard lock(x_txpoolMutex);
+        auto it = m_txsTable.find(_txHash);
+        return it != m_txsTable.end();
     }
     size_t size() const override
     {
@@ -141,13 +140,14 @@ protected:
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr,
         std::hash<bcos::crypto::HashType>>
         m_txsTable;
-
     mutable SharedMutex x_txpoolMutex;
 
-    tbb::concurrent_set<bcos::crypto::HashType> m_invalidTxs;
-    tbb::concurrent_set<bcos::protocol::NonceType> m_invalidNonces;
-
-    tbb::concurrent_set<bcos::crypto::HashType> m_missedTxs;
+    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
+        m_invalidTxs;
+    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::crypto::HashType>>
+        m_invalidNonces;
+    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
+        m_missedTxs;
     mutable SharedMutex x_missedTxs;
     std::atomic<size_t> m_sealedTxsSize = {0};
 
@@ -171,5 +171,4 @@ protected:
 
     bool m_preStoreTxs = {true};
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool
