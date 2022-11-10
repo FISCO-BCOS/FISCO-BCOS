@@ -656,7 +656,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             // add to m_invalidTxs to be deleted
             m_invalidTxs.insert(txHash);
-            m_invalidTxs.insert(tx->nonce());
+            m_invalidNonces.insert(tx->nonce());
             continue;
         }
         /// check nonce again when obtain transactions
@@ -741,7 +741,7 @@ void MemoryStorage::removeInvalidTxs()
             {
                 return;
             }
-            if (memoryStorage->m_invalidTxs.size() == 0)
+            if (memoryStorage->m_invalidTxs.empty())
             {
                 return;
             }
@@ -781,7 +781,7 @@ void MemoryStorage::removeInvalidTxs()
 
 void MemoryStorage::clear()
 {
-    WriteGuard l(x_txpoolMutex);
+    WriteGuard lock(x_txpoolMutex);
     m_txsTable.clear();
     m_invalidTxs.clear();
     m_invalidNonces.clear();
@@ -791,14 +791,15 @@ void MemoryStorage::clear()
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
 {
-    ReadGuard l(x_txpoolMutex);
+    ReadGuard lock(x_txpoolMutex);
     for (auto txHash : _txsHashList)
     {
-        if (!m_txsTable.count(txHash))
+        auto it = m_txsTable.find(txHash);
+        if (it == m_txsTable.end())
         {
             continue;
         }
-        auto tx = m_txsTable[txHash];
+        auto& tx = it->second;
         if (!tx)
         {
             continue;
@@ -841,7 +842,6 @@ void MemoryStorage::batchMarkTxs(
     // been sealed twice
     WriteGuard l(x_txpoolMutex);
     batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
-    return;
 }
 
 void MemoryStorage::batchMarkTxsWithoutLock(
