@@ -42,7 +42,8 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
-    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus insert(
+        bcos::protocol::Transaction::ConstPtr transaction) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
 
     bcos::protocol::Transaction::ConstPtr remove(bcos::crypto::HashType const& _txHash) override;
@@ -98,7 +99,8 @@ public:
     bool preStoreTxs() const override { return m_preStoreTxs; }
 
 protected:
-    bcos::protocol::TransactionStatus insertWithoutLock(bcos::protocol::Transaction::ConstPtr _tx);
+    bcos::protocol::TransactionStatus insertWithoutLock(
+        bcos::protocol::Transaction::ConstPtr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
@@ -122,7 +124,7 @@ protected:
 
     virtual void removeInvalidTxs();
 
-    virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr _tx);
+    virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr transaction);
 
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();

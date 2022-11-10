@@ -296,42 +296,32 @@ void MemoryStorage::notifyInvalidReceipt(
                         << LOG_KV("tx", _txHash.abridged()) << LOG_KV("exception", _status);
 }
 
-TransactionStatus MemoryStorage::insert(Transaction::ConstPtr _tx)
+TransactionStatus MemoryStorage::insert(Transaction::ConstPtr transaction)
 {
-    ReadGuard l(x_txpoolMutex);
-    return insertWithoutLock(_tx);
+    ReadGuard lock(x_txpoolMutex);
+    return insertWithoutLock(std::move(transaction));
 }
 
-TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
+TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr transaction)
 {
-    // check again to ensure the same transaction not be imported many times
-    if (m_txsTable.count(_tx->hash()))
-    {
-        return TransactionStatus::AlreadyInTxPool;
-    }
-    auto result = m_txsTable.insert(std::make_pair(_tx->hash(), _tx));
-    if (!result.second)
+    auto [it, inserted] = m_txsTable.insert(std::make_pair(transaction->hash(), transaction));
+    if (!inserted)
     {
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
-    if (m_preStoreTxs)
+    if (m_preStoreTxs && !transaction->storeToBackend())
     {
-        preCommitTransaction(_tx);
+        preCommitTransaction(std::move(transaction));
     }
     notifyUnsealedTxsSize();
-#if FISCO_DEBUG
-    // TODO: remove this, now just for bug tracing
-    TXPOOL_LOG(DEBUG) << LOG_DESC("submit tx:") << _tx->hash().abridged()
-                      << LOG_KV("txPointer", _tx);
-#endif
     return TransactionStatus::None;
 }
 
-void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
+void MemoryStorage::preCommitTransaction(Transaction::ConstPtr transaction)
 {
     auto self = weak_from_this();
-    m_worker->enqueue([self, _tx]() {
+    m_worker->enqueue([self, transaction = std::move(transaction)]() {
         try
         {
             auto txpoolStorage = self.lock();
@@ -339,23 +329,19 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
             {
                 return;
             }
-            // the transaction has already been stored to backend
-            if (_tx->storeToBackend())
-            {
-                return;
-            }
+
             bcos::bytes encodeData;
-            _tx->encode(encodeData);
+            transaction->encode(encodeData);
             auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
             txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodeData)));
             auto txsHash = std::make_shared<HashList>();
-            auto txHash = _tx->hash();
+            auto txHash = transaction->hash();
             txsHash->emplace_back(txHash);
             txpoolStorage->m_config->ledger()->asyncStoreTransactions(
-                txsToStore, txsHash, [_tx, txHash](Error::Ptr _error) {
+                txsToStore, txsHash, [transaction, txHash](Error::Ptr _error) {
                     if (_error == nullptr)
                     {
-                        _tx->setStoreToBackend(true);
+                        transaction->setStoreToBackend(true);
                         return;
                     }
                     TXPOOL_LOG(WARNING) << LOG_DESC("asyncPreStoreTransaction failed")
@@ -368,7 +354,7 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("preCommitTransaction exception")
                                 << LOG_KV("error", boost::diagnostic_information(e))
-                                << LOG_KV("tx", _tx->hash().abridged());
+                                << LOG_KV("tx", transaction->hash().abridged());
         }
     });
 }

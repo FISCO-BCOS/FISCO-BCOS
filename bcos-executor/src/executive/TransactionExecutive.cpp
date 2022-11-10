@@ -615,11 +615,25 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 evmcMessage.input_data = hostContext.data().data();
                 evmcMessage.input_size = hostContext.data().size();
 
-                auto myAddressBytes = boost::algorithm::unhex(std::string(hostContext.myAddress()));
-                auto callerBytes = boost::algorithm::unhex(std::string(hostContext.caller()));
+                if (hostContext.myAddress().size() < sizeof(evmcMessage.destination) * 2)
+                {
+                    std::uninitialized_fill_n(
+                        evmcMessage.destination.bytes, sizeof(evmcMessage.destination), 0);
+                }
+                else
+                {
+                    boost::algorithm::unhex(hostContext.myAddress(), evmcMessage.destination.bytes);
+                }
 
-                evmcMessage.destination = toEvmC(myAddressBytes);
-                evmcMessage.sender = toEvmC(callerBytes);
+                if (hostContext.caller().size() < sizeof(evmcMessage.sender) * 2)
+                {
+                    std::uninitialized_fill_n(
+                        evmcMessage.sender.bytes, sizeof(evmcMessage.sender), 0);
+                }
+                else
+                {
+                    boost::algorithm::unhex(hostContext.caller(), evmcMessage.sender.bytes);
+                }
             }
 
             return evmcMessage;
