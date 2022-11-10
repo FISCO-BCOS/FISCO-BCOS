@@ -81,8 +81,8 @@ void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
     }
 }
 
-void TxPoolNonceChecker::batchRemove(
-    tbb::concurrent_set<bcos::protocol::NonceType> const& _nonceList)
+void TxPoolNonceChecker::batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
+    std::hash<bcos::crypto::HashType>> const& _nonceList)
 {
     WriteGuard l(x_nonceCache);
     for (auto const& nonce : _nonceList)

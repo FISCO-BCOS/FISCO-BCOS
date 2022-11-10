@@ -40,12 +40,8 @@ class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledge
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage)
-      : m_blockFactory(std::move(_blockFactory)),
-        m_storage(std::move(_storage)){
-            // Allow empty because new ledger impl
-            // assert(m_blockFactory);
-            // assert(m_storage);
-        };
+      : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
+    {}
 
     ~Ledger() override = default;
 

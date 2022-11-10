@@ -361,14 +361,11 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
     auto total = _txToStore->size();
     std::vector<std::string_view> keys(total);
     std::vector<std::string_view> values(total);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                keys[i] = bcos::concepts::bytebuffer::toView((*_txHashList)[i]);
-                values[i] = bcos::concepts::bytebuffer::toView((*(*_txToStore)[i]));
-            }
-        });
+    for (auto i = 0U; i < _txToStore->size(); ++i)
+    {
+        keys[i] = bcos::concepts::bytebuffer::toView((*_txHashList)[i]);
+        values[i] = bcos::concepts::bytebuffer::toView((*(*_txToStore)[i]));
+    }
     // Note: transactions must be submitted serially, because transaction submissions are
     // transactional, preventing write conflicts
     RecursiveGuard l(m_mutex);

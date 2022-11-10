@@ -860,7 +860,7 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
                     << LOG_KV("contractAddress", lowerAddress);
             }
-            Json::Value jResp = std::move(_abi);
+            Json::Value jResp = _abi;
             callback(_error, jResp);
         });
 }

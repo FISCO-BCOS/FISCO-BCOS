@@ -28,7 +28,7 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : m_proxy(_proxy), m_cryptoSuite(_cryptoSuite), m_blockFactory(_blockFactory)
     {}
-    ~TxPoolServiceClient() override {}
+    ~TxPoolServiceClient() override = default;
 
     bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
         bcos::protocol::Transaction::Ptr transaction) override

@@ -34,7 +34,8 @@ public:
     void batchInsert(
         bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr _nonceList) override;
     void batchRemove(bcos::protocol::NonceList const& _nonceList) override;
-    void batchRemove(tbb::concurrent_set<bcos::protocol::NonceType> const& _nonceList) override;
+    void batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
+        std::hash<bcos::crypto::HashType>> const& _nonceList) override;
     bool exists(bcos::protocol::NonceType const& _nonce) override;
 
     void insert(bcos::protocol::NonceType const& _nonce) override;
