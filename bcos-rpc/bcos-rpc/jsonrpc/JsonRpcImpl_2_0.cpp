@@ -73,28 +73,47 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto req = std::string_view((const char*)buffer->data(), buffer->size());
 
     auto start = std::chrono::high_resolution_clock::now();
+    auto endpoint = _session->endPoint();
+    auto seq = _msg->seq();
+    auto version = _msg->version();
+    auto ext = _msg->ext();
 
-    onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session, start](bcos::bytes resp) {
-        if (_session && _session->isConnected())
+    auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
+    auto messageFactory = m_wsService->messageFactory();
+
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp) {
+        auto session = weakptrSession.lock();
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+        if (!session)
+        {
+            BCOS_LOG(TRACE) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                            << LOG_DESC("unable to send response for session has been destroyed")
+                            << LOG_KV("seq", seq) << LOG_KV("totalTime", total);
+            return;
+        }
+
+        if (session->isConnected())
         {
             // TODO: no need to copy resp
             auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
-            _msg->setPayload(buffer);
-            _session->asyncSendMessage(_msg);
+
+            auto msg = messageFactory->buildMessage();
+            msg->setPayload(buffer);
+            msg->setVersion(version);
+            msg->setSeq(seq);
+            msg->setExt(ext);
+            session->asyncSendMessage(msg);
         }
         else
         {
-            auto end = std::chrono::high_resolution_clock::now();
-            auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-            // remove the callback
-            BCOS_LOG(WARNING)
-                << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                << LOG_DESC("unable to send response for session has been inactive")
-                << LOG_KV("req", std::string_view((const char*)m_buffer->data(), m_buffer->size()))
-                << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
-                << LOG_KV("seq", _msg->seq()) << LOG_KV("totalTime", total)
-                << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
+            BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                              << LOG_DESC("unable to send response for session has been inactive")
+                              << LOG_KV("seq", seq) << LOG_KV("totalTime", total)
+                              << LOG_KV("endpoint", session->endPoint())
+                              << LOG_KV("refCount", session.use_count());
         }
     });
 }
