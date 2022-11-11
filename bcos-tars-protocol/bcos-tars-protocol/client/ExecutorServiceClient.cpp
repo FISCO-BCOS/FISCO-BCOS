@@ -26,16 +26,42 @@
 
 using namespace bcostars;
 
+template <typename... Args>
+class AsyncCallback
+{
+public:
+    AsyncCallback(std::weak_ptr<bcos::ThreadPool> threadPool, std::function<void(Args...)> callback)
+      : m_pool(threadPool), m_callback(std::move(callback))
+    {}
+
+    void operator()(Args&&... args)
+    {
+        auto pool = m_pool.lock();
+        if (pool)
+        {
+            // m_callback(std::move(args)...);
+            pool->template enqueue(
+                [callback = std::move(m_callback),
+                    args = std::make_shared<std::tuple<Args...>>(std::make_tuple(std::forward<Args>(
+                        args)...))]() mutable { std::apply(callback, std::move(*args)); });
+        }
+    }
+
+private:
+    std::weak_ptr<bcos::ThreadPool> m_pool;
+    std::function<void(Args...)> m_callback;
+};
+
 void ExecutorServiceClient::status(
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)> callback)
 {
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
             std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>&&
                 _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -57,11 +83,10 @@ void ExecutorServiceClient::status(
         }
 
     private:
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>
-            m_callback;
+        AsyncCallback<bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr> m_callback;
     };
     // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_status(new Callback(std::move(callback)));
+    m_prx->tars_set_timeout(30000)->async_status(new Callback(m_callbackPool, std::move(callback)));
 }
 
 void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
@@ -71,8 +96,9 @@ void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::UniquePtr)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::UniquePtr)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -87,13 +113,14 @@ void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
         }
 
     private:
-        std::function<void(bcos::Error::UniquePtr)> m_callback;
+        AsyncCallback<bcos::Error::UniquePtr> m_callback;
     };
     auto blockHeaderImpl =
         std::dynamic_pointer_cast<const bcostars::protocol::BlockHeaderImpl>(blockHeader);
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_nextBlockHeader(
-        new Callback(std::move(callback)), schedulerTermId, blockHeaderImpl->inner());
+        new Callback(m_callbackPool, std::move(callback)), schedulerTermId,
+        blockHeaderImpl->inner());
 }
 
 void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -103,9 +130,10 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(
                 bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -123,14 +151,15 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
         }
 
     private:
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        AsyncCallback<bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr>
             m_callback;
     };
     auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
 
     // timeout is 2 min
     m_prx->tars_set_timeout(2 * 60 * 1000)
-        ->async_executeTransaction(new Callback(std::move(callback)), executionMsgImpl.inner());
+        ->async_executeTransaction(
+            new Callback(m_callbackPool, std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -140,9 +169,10 @@ void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr in
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(
                 bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -160,13 +190,13 @@ void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr in
         }
 
     private:
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        AsyncCallback<bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr>
             m_callback;
     };
     auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
     // timeout is 2min
     m_prx->tars_set_timeout(2 * 60 * 1000)
-        ->async_call(new Callback(std::move(callback)), executionMsgImpl.inner());
+        ->async_call(new Callback(m_callbackPool, std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient::executeTransactions(std::string contractAddress,
@@ -178,9 +208,10 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::UniquePtr,
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::UniquePtr,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -205,8 +236,8 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
         }
 
     private:
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        AsyncCallback<bcos::Error::UniquePtr,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>
             m_callback;
     };
     std::vector<bcostars::ExecutionMessage> tarsInputs;
@@ -217,7 +248,8 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
     }
     // timeout is 2min
     m_prx->tars_set_timeout(2 * 60 * 1000)
-        ->async_executeTransactions(new Callback(std::move(callback)), contractAddress, tarsInputs);
+        ->async_executeTransactions(
+            new Callback(m_callbackPool, std::move(callback)), contractAddress, tarsInputs);
 }
 
 void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
@@ -229,9 +261,10 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::UniquePtr,
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::UniquePtr,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -256,8 +289,8 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
         }
 
     private:
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        AsyncCallback<bcos::Error::UniquePtr,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>
             m_callback;
     };
     std::vector<bcostars::ExecutionMessage> tarsInputs;
@@ -269,7 +302,7 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
     // timeout is 2min
     m_prx->tars_set_timeout(2 * 60 * 1000)
         ->async_dmcExecuteTransactions(
-            new Callback(std::move(callback)), contractAddress, tarsInputs);
+            new Callback(m_callbackPool, std::move(callback)), contractAddress, tarsInputs);
 }
 
 void ExecutorServiceClient::dagExecuteTransactions(
@@ -281,9 +314,10 @@ void ExecutorServiceClient::dagExecuteTransactions(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::UniquePtr,
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::UniquePtr,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -308,8 +342,8 @@ void ExecutorServiceClient::dagExecuteTransactions(
         }
 
     private:
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        AsyncCallback<bcos::Error::UniquePtr,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>
             m_callback;
     };
     std::vector<bcostars::ExecutionMessage> tarsInput;
@@ -320,7 +354,8 @@ void ExecutorServiceClient::dagExecuteTransactions(
     }
     // timeout is 2min
     m_prx->tars_set_timeout(2 * 60 * 1000)
-        ->async_dagExecuteTransactions(new Callback(std::move(callback)), tarsInput);
+        ->async_dagExecuteTransactions(
+            new Callback(m_callbackPool, std::move(callback)), tarsInput);
 }
 
 void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -330,9 +365,10 @@ void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr 
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(
                 bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
-          : m_callback(std::move(_callback))
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -350,13 +386,14 @@ void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr 
         }
 
     private:
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        AsyncCallback<bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr>
             m_callback;
     };
     auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*input);
     // timeout is 2min
     m_prx->tars_set_timeout(2 * 60 * 1000)
-        ->async_dmcCall(new Callback(std::move(callback)), executionMsgImpl.inner());
+        ->async_dmcCall(
+            new Callback(m_callbackPool, std::move(callback)), executionMsgImpl.inner());
 }
 
 void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
@@ -365,8 +402,9 @@ void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -375,7 +413,7 @@ void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
         {
             auto hash = bcos::crypto::HashType(
                 reinterpret_cast<const bcos::byte*>(hashBytes.data()), hashBytes.size());
-            m_callback(toUniqueBcosError(ret), hash);
+            m_callback(toUniqueBcosError(ret), std::move(hash));
         }
 
         void callback_getHash_exception(tars::Int32 ret) override
@@ -384,10 +422,11 @@ void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
         }
 
     private:
-        std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)> m_callback;
+        AsyncCallback<bcos::Error::UniquePtr, bcos::crypto::HashType> m_callback;
     };
     // timeout is 30s
-    m_prx->tars_set_timeout(30000)->async_getHash(new Callback(std::move(callback)), number);
+    m_prx->tars_set_timeout(30000)->async_getHash(
+        new Callback(m_callbackPool, std::move(callback)), number);
 }
 
 void ExecutorServiceClient::prepare(
@@ -396,8 +435,9 @@ void ExecutorServiceClient::prepare(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::Ptr)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -406,12 +446,12 @@ void ExecutorServiceClient::prepare(
         void callback_prepare_exception(tars::Int32 ret) override { m_callback(toBcosError(ret)); }
 
     private:
-        std::function<void(bcos::Error::Ptr)> m_callback;
+        AsyncCallback<bcos::Error::Ptr> m_callback;
     };
 
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_prepare(
-        new Callback(std::move(callback)), toTarsTwoPCParams(params));
+        new Callback(m_callbackPool, std::move(callback)), toTarsTwoPCParams(params));
 }
 
 void ExecutorServiceClient::commit(
@@ -420,8 +460,9 @@ void ExecutorServiceClient::commit(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::Ptr)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -430,11 +471,11 @@ void ExecutorServiceClient::commit(
         void callback_commit_exception(tars::Int32 ret) override { m_callback(toBcosError(ret)); }
 
     private:
-        std::function<void(bcos::Error::Ptr)> m_callback;
+        AsyncCallback<bcos::Error::Ptr> m_callback;
     };
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_commit(
-        new Callback(std::move(callback)), toTarsTwoPCParams(params));
+        new Callback(m_callbackPool, std::move(callback)), toTarsTwoPCParams(params));
 }
 
 void ExecutorServiceClient::rollback(
@@ -443,8 +484,9 @@ void ExecutorServiceClient::rollback(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::Ptr)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -456,10 +498,10 @@ void ExecutorServiceClient::rollback(
         void callback_rollback_exception(tars::Int32 ret) override { m_callback(toBcosError(ret)); }
 
     private:
-        std::function<void(bcos::Error::Ptr)> m_callback;
+        AsyncCallback<bcos::Error::Ptr> m_callback;
     };
     m_prx->tars_set_timeout(30000)->async_rollback(
-        new Callback(std::move(callback)), toTarsTwoPCParams(params));
+        new Callback(m_callbackPool, std::move(callback)), toTarsTwoPCParams(params));
 }
 
 void ExecutorServiceClient::reset(std::function<void(bcos::Error::Ptr)> callback)
@@ -467,8 +509,9 @@ void ExecutorServiceClient::reset(std::function<void(bcos::Error::Ptr)> callback
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::Ptr)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -477,9 +520,9 @@ void ExecutorServiceClient::reset(std::function<void(bcos::Error::Ptr)> callback
         void callback_reset_exception(tars::Int32 ret) override { m_callback(toBcosError(ret)); }
 
     private:
-        std::function<void(bcos::Error::Ptr)> m_callback;
+        AsyncCallback<bcos::Error::Ptr> m_callback;
     };
-    m_prx->tars_set_timeout(30000)->async_reset(new Callback(std::move(callback)));
+    m_prx->tars_set_timeout(30000)->async_reset(new Callback(m_callbackPool, std::move(callback)));
 }
 
 void ExecutorServiceClient::getCode(
@@ -488,8 +531,9 @@ void ExecutorServiceClient::getCode(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr, bcos::bytes)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::Ptr, bcos::bytes)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -506,11 +550,11 @@ void ExecutorServiceClient::getCode(
         }
 
     private:
-        std::function<void(bcos::Error::Ptr, bcos::bytes)> m_callback;
+        AsyncCallback<bcos::Error::Ptr, bcos::bytes> m_callback;
     };
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_getCode(
-        new Callback(std::move(callback)), std::string(contract));
+        new Callback(m_callbackPool, std::move(callback)), std::string(contract));
 }
 
 void ExecutorServiceClient::getABI(
@@ -519,8 +563,9 @@ void ExecutorServiceClient::getABI(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr, std::string)>&& _callback)
-          : m_callback(std::move(_callback))
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::Ptr, std::string)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
         {}
         ~Callback() override {}
 
@@ -535,9 +580,9 @@ void ExecutorServiceClient::getABI(
         }
 
     private:
-        std::function<void(bcos::Error::Ptr, std::string)> m_callback;
+        AsyncCallback<bcos::Error::Ptr, const std::string&> m_callback;
     };
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_getABI(
-        new Callback(std::move(callback)), std::string(contract));
+        new Callback(m_callbackPool, std::move(callback)), std::string(contract));
 }

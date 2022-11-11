@@ -55,11 +55,13 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
+void NodeConfig::loadConfig(
+    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig)
 {
     // if version < 3.1.0, config.ini include chianConfig
-    if (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
-        m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION)
+    if (_enforceChainConfig ||
+        (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
+            m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
         loadChainConfig(_pt);
     }
