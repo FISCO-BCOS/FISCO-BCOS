@@ -64,14 +64,14 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
   : m_nodeArchType(_nodeArchType),
-    m_nodeConfig(_nodeConfig),
-    m_protocolInitializer(_protocolInitializer),
-    m_txpool(_txpool),
-    m_ledger(_ledger),
-    m_scheduler(_scheduler),
-    m_storage(_storage),
-    m_frontService(_frontService),
-    m_nodeTimeMaintenance(_nodeTimeMaintenance)
+    m_nodeConfig(std::move(_nodeConfig)),
+    m_protocolInitializer(std::move(_protocolInitializer)),
+    m_txpool(std::move(_txpool)),
+    m_ledger(std::move(_ledger)),
+    m_scheduler(std::move(_scheduler)),
+    m_storage(std::move(_storage)),
+    m_frontService(std::move(_frontService)),
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     createSealer();
