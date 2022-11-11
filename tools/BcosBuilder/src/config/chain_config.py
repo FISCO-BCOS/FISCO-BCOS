@@ -33,15 +33,12 @@ class TarsConfig:
 
 
 class GenesisConfig:
-    def __init__(self, config):
+    def __init__(self, config, sm_type, chain_id, group_id):
         self.config = config
         self.desc = "[[group]]"
-        self.sm_crypto = utilities.get_item_value(
-            self.config, "sm_crypto", False, False, self.desc)
-        self.chain_id = utilities.get_item_value(
-            self.config, "chain_id", "chain0", False, self.desc)
-        self.group_id = utilities.get_item_value(
-            self.config, "group_id", "group0", False, self.desc)
+        self.sm_crypto = sm_type
+        self.group_id = group_id
+        self.chain_id = chain_id
         self.leader_period = utilities.get_item_value(
             self.config, "leader_period", 1, False, self.desc)
         self.block_tx_count_limit = utilities.get_item_value(
@@ -51,7 +48,7 @@ class GenesisConfig:
         self.gas_limit = utilities.get_item_value(
             self.config, "gas_limit", "3000000000", False, self.desc)
         self.compatibility_version = utilities.get_item_value(
-            self.config, "compatibility_version", "3.0.0", False, self.desc)
+            self.config, "compatibility_version", "3.1.0", False, self.desc)
         self.vm_type = utilities.get_item_value(
             self.config, "vm_type", "evm", False, self.desc)
         self.auth_check = utilities.get_item_value(
@@ -268,7 +265,8 @@ class GroupConfig:
         #     self.config, "auth_check", False, False, self.desc)
         # self.init_auth_address = utilities.get_item_value(
         #     self.config, "init_auth_address", "", self.auth_check, self.desc)
-        self.genesis_config = GenesisConfig(self.config)
+        self.genesis_config = GenesisConfig(
+            self.config, self.sm_crypto, self.chain_id, self.group_id)
         self.node_list = []
 
     def append_node_list(self, node_list):
