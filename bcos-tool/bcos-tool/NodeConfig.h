@@ -47,11 +47,12 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() = default;
 
-    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true)
+    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
+        bool enforceChainConfig = false)
     {
         boost::property_tree::ptree iniConfig;
         boost::property_tree::read_ini(_configPath, iniConfig);
-        loadConfig(iniConfig, _enforceMemberID);
+        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig);
     }
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
@@ -90,7 +91,8 @@ public:
         loadGenesisConfig(genesisConfig);
     }
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
+    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
+        bool _enforceChainConfig = false);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
