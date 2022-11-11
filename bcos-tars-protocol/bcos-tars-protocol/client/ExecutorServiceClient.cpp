@@ -36,10 +36,11 @@ public:
 
     void operator()(Args&&... args)
     {
-        if (!m_pool.expired())
+        auto pool = m_pool.lock();
+        if (pool)
         {
             // m_callback(std::move(args)...);
-            m_pool.lock()->template enqueue(
+            pool->template enqueue(
                 [callback = std::move(m_callback),
                     args = std::make_shared<std::tuple<Args...>>(std::make_tuple(std::forward<Args>(
                         args)...))]() mutable { std::apply(callback, std::move(*args)); });
