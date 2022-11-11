@@ -19,6 +19,9 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
+#include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
+#include "bcos-txpool/sync/interfaces/TxsSyncMsgFactory.h"
+#include "bcos-txpool/sync/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -74,8 +77,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     {
         PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
                        << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
-                       << LOG_KV("updatedVersion",
-                              (bcos::protocol::BlockVersion)(_ledgerConfig->compatibilityVersion()));
+                       << LOG_KV("updatedVersion", (bcos::protocol::BlockVersion)(
+                                                       _ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {
@@ -456,4 +459,19 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
                  << LOG_KV("nodeId", nodeID()->shortHex());
     return stringstream.str();
+}
+
+void PBFTConfig::broadCastEmptyTxsReq()
+{
+    if (m_unsealedTxsSize > 0 || m_timer->running())
+    {
+        return;
+    }
+    std::unique_ptr<bcos::sync::TxsSyncMsgFactory> syncMsgFactory =
+        std::make_unique<bcos::sync::TxsSyncMsgFactoryImpl>();
+    auto emptyStat = syncMsgFactory->createTxsSyncMsg(
+        sync::TxsSyncPacketType::TxsStatusPacket, bcos::crypto::HashList({}));
+    auto reqData = emptyStat->encode();
+    m_frontService->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, protocol::ModuleID::TxsSync, ref(*reqData));
 }

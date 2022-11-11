@@ -534,10 +534,10 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
-    if (m_minSealTime <= 0)
+    if (m_minSealTime <= 0 || m_minSealTime > 3000)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set consensus.min_seal_time larger than 0!"));
+                                  "Please set consensus.min_seal_time between 1 and 3000!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
