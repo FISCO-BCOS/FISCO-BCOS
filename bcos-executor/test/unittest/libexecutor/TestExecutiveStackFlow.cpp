@@ -89,9 +89,9 @@ struct ExecutiveStackFlowFixture
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
-/*
 BOOST_AUTO_TEST_CASE(RunTest)
 {
+    /*
     EXECUTOR_LOG(DEBUG) << "RunTest begin";
     //    std::shared_ptr<std::vector<int64_t>> sequence = make_shared<std::vector<int64_t>>();
     auto sequence = std::make_shared<tbb::concurrent_vector<int64_t>>();
@@ -187,8 +187,8 @@ BOOST_AUTO_TEST_CASE(RunTest)
     }
     /// FIXME
     // BOOST_CHECK(flag);
+    */
 }
-*/
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
