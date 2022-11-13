@@ -148,7 +148,7 @@ void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     (void)_addr;
     (void)_beneficiary;
     auto& hostContext = static_cast<HostContext&>(*_context);
-    assert(fromEvmC(*_addr) == hostContext.myAddress());
+
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
 }
 
