@@ -364,12 +364,12 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr transaction)
 
 void MemoryStorage::batchInsert(Transactions const& _txs)
 {
-    for (auto tx : _txs)
+    for (const auto& tx : _txs)
     {
         insert(tx);
     }
     WriteGuard l(x_missedTxs);
-    for (auto tx : _txs)
+    for (const auto& tx : _txs)
     {
         m_missedTxs.unsafe_erase(tx->hash());
     }

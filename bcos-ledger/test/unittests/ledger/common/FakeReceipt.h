@@ -69,7 +69,7 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
     auto factory =
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
     auto receipt = factory->createReceipt(
-        gasUsed, contractAddress, logEntries, (int32_t)status, output, _blockNumber);
+        gasUsed, contractAddress, *logEntries, (int32_t)status, bcos::ref(output), _blockNumber);
     return receipt;
 }
 

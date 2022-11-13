@@ -26,6 +26,8 @@
 #include "TransactionReceiptImpl.h"
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 
+#include <utility>
+
 
 namespace bcostars
 {
@@ -35,9 +37,9 @@ class TransactionReceiptFactoryImpl : public bcos::protocol::TransactionReceiptF
 {
 public:
     TransactionReceiptFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-      : m_cryptoSuite(cryptoSuite)
+      : m_cryptoSuite(std::move(cryptoSuite))
     {}
-    ~TransactionReceiptFactoryImpl() override {}
+    ~TransactionReceiptFactoryImpl() override = default;
 
     TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) override
     {
@@ -54,40 +56,28 @@ public:
         return createReceipt(bcos::ref(_receiptData));
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& _gasUsed,
-        const std::string_view& _contractAddress,
-        std::shared_ptr<std::vector<bcos::protocol::LogEntry>> _logEntries, int32_t _status,
-        bcos::bytes const& _output, bcos::protocol::BlockNumber _blockNumber) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 gasUsed, std::string contractAddress,
+        const std::vector<bcos::protocol::LogEntry>& logEntries, int32_t status,
+        bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber) override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(m_cryptoSuite,
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
         auto const& inner = transactionReceipt->innerGetter();
-        // required: version
         inner()->data.version = 0;
-        // required: gasUsed
-        inner()->data.gasUsed = boost::lexical_cast<std::string>(_gasUsed);
-        // optional: contractAddress
-        inner()->data.contractAddress.assign(_contractAddress.begin(), _contractAddress.end());
-        // required: status
-        inner()->data.status = _status;
-        // optional: output
-        inner()->data.output.assign(_output.begin(), _output.end());
-        transactionReceipt->setLogEntries(*_logEntries);
+        inner()->data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
+        inner()->data.contractAddress = std::move(contractAddress);
+        inner()->data.status = status;
+        inner()->data.output.assign(output.begin(), output.end());
+        transactionReceipt->setLogEntries(logEntries);
 
-        inner()->data.blockNumber = _blockNumber;
+        inner()->data.blockNumber = blockNumber;
         return transactionReceipt;
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& _gasUsed,
-        const std::string_view& _contractAddress,
-        std::shared_ptr<std::vector<bcos::protocol::LogEntry>> _logEntries, int32_t _status,
-        bcos::bytes&& _output, bcos::protocol::BlockNumber _blockNumber) override
+    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
     {
-        return createReceipt(
-            _gasUsed, _contractAddress, _logEntries, _status, _output, _blockNumber);
+        m_cryptoSuite = std::move(cryptoSuite);
     }
-
-    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite) { m_cryptoSuite = cryptoSuite; }
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return m_cryptoSuite; }
 
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

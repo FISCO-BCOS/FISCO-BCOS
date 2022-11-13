@@ -19,12 +19,12 @@
  * @date 2021-05-07
  */
 #pragma once
+
 #include "bcos-txpool/TxPoolConfig.h"
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
-#include <tbb/task_group.h>
 
 namespace bcos::txpool
 {
