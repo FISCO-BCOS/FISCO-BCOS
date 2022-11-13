@@ -90,3 +90,48 @@ void BlockContext::setExecutiveFlow(
     bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
 }
+
+void BlockContext::suicide(std::string_view contract2Suicide)
+{
+    {
+        bcos::WriteGuard l(x_suicides);
+        m_suicides.emplace(contract2Suicide);
+    }
+
+    EXECUTOR_LOG(TRACE) << LOG_BADGE("SUICIDE")
+                        << "Add suicide: " << LOG_KV("table2Suicide", contract2Suicide)
+                        << LOG_KV("suicides.size", m_suicides.size())
+                        << LOG_KV("blockNumber", m_blockNumber);
+}
+
+void BlockContext::killSuicides()
+{
+    bcos::ReadGuard l(x_suicides);
+    if (m_suicides.empty())
+    {
+        return;
+    }
+
+    auto emptyCodeHash = m_hashImpl->hash("");
+    for (std::string_view table2Suicide : m_suicides)
+    {
+        auto contractTable = storage()->openTable(table2Suicide);
+
+        if (contractTable)
+        {
+            // set codeHash
+            bcos::storage::Entry emptyCodeHashEntry;
+            emptyCodeHashEntry.importFields({emptyCodeHash.asBytes()});
+            contractTable->setRow(ACCOUNT_CODE_HASH, std::move(emptyCodeHashEntry));
+
+            // delete binary
+            bcos::storage::Entry emptyCodeEntry;
+            emptyCodeEntry.importFields({std::move("")});
+            contractTable->setRow(ACCOUNT_CODE, std::move(emptyCodeEntry));
+        }
+
+        EXECUTOR_LOG(TRACE) << LOG_BADGE("SUICIDE")
+                            << "Kill contract: " << LOG_KV("contract2Suicide", table2Suicide)
+                            << LOG_KV("blockNumber", m_blockNumber);
+    }
+}

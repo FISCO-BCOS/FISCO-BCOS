@@ -149,6 +149,14 @@ public:
     bool isCreate() const { return m_callParameters->create; }
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
+    void suicide()
+    {
+        if (m_executive->blockContext().lock()->blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            m_executive->blockContext().lock()->suicide(m_tableName);
+        }
+    }
 
     CallParameters::UniquePtr&& takeCallParameters()
     {

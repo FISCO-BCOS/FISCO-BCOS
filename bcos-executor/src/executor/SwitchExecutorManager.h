@@ -23,7 +23,7 @@ public:
     {
         factory->registerNeedSwitchEvent([this]() { selfAsyncRefreshExecutor(); });
 
-        refreshExecutor(INIT_SCHEDULER_TERM_ID);
+        // refreshExecutor(INIT_SCHEDULER_TERM_ID + 1);
     }
 
     ~SwitchExecutorManager() noexcept override {}
@@ -662,11 +662,11 @@ public:
 
     bcos::executor::TransactionExecutor::Ptr getAndNewExecutorIfNotExists()
     {
-        WriteGuard l(m_mutex);
         if (!m_executor)
         {
-            m_executor = m_factory->build();
+            refreshExecutor(INIT_SCHEDULER_TERM_ID + 1);
         }
+
         auto executor = m_executor;
         return executor;
     }
@@ -674,7 +674,7 @@ public:
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
-    int64_t m_schedulerTermId = STOPPED_TERM_ID;
+    int64_t m_schedulerTermId = INIT_SCHEDULER_TERM_ID;
 
     mutable bcos::SharedMutex m_mutex;
 

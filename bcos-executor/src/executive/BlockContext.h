@@ -79,6 +79,8 @@ public:
     h256 blockHash(int64_t _number) const { return m_ledgerCache->fetchBlockHash(_number); }
     uint64_t timestamp() const { return m_timeStamp; }
     uint32_t blockVersion() const { return m_blockVersion; }
+    void suicide(std::string_view address);
+    void killSuicides();
 
     VMSchedule const& vmSchedule() const { return m_schedule; }
 
@@ -142,6 +144,8 @@ private:
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     LedgerCache::Ptr m_ledgerCache;
+    std::set<std::string> m_suicides;  // contract address need to selfdestruct
+    mutable bcos::SharedMutex x_suicides;
 };
 
 }  // namespace executor
