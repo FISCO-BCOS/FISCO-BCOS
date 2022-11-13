@@ -56,9 +56,10 @@ public:
         return createReceipt(bcos::ref(_receiptData));
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 gasUsed, std::string contractAddress,
-        const std::vector<bcos::protocol::LogEntry>& logEntries, int32_t status,
-        bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& gasUsed,
+        std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
+        int32_t status, bcos::bytesConstRef output,
+        bcos::protocol::BlockNumber blockNumber) override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(m_cryptoSuite,
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });

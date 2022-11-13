@@ -37,7 +37,7 @@ public:
     virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) = 0;
     virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) = 0;
 
-    virtual TransactionReceipt::Ptr createReceipt(u256 gasUsed, std::string contractAddress,
+    virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
         BlockNumber blockNumber) = 0;
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;

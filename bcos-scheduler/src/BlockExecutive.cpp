@@ -1480,8 +1480,9 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions
-        dmcExecutor->setSchedulerOutHandler(
-            [this](ExecutiveState::Ptr executiveState) { scheduleExecutive(executiveState); });
+        dmcExecutor->setSchedulerOutHandler([this](ExecutiveState::Ptr executiveState) {
+            scheduleExecutive(std::move(executiveState));
+        });
 
         dmcExecutor->setOnTxFinishedHandler(
             [this](bcos::protocol::ExecutionMessage::UniquePtr output) {
@@ -1489,6 +1490,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
+        // TODO: Slow wait!
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
             auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
@@ -1497,30 +1499,28 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
                                      << LOG_KV("address", address);
                 return bcos::bytes();
             }
-            else
-            {
-                // getCode from executor
-                std::promise<bcos::bytes> codeFuture;
-                executor->getCode(
-                    address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
-                        if (error)
-                        {
-                            SCHEDULER_LOG(ERROR)
-                                << "Could not getCode from correspond executor. Trigger switch."
-                                << LOG_KV("code", error->errorCode())
-                                << LOG_KV("message", error->errorMessage());
-                            triggerSwitch();
-                            codeFuture.set_value(bcos::bytes());
-                        }
-                        else
-                        {
-                            codeFuture.set_value(std::move(codes));
-                        }
-                    });
-                bcos::bytes codes = codeFuture.get_future().get();
 
-                return codes;
-            }
+            // getCode from executor
+            std::promise<bcos::bytes> codeFuture;
+            executor->getCode(
+                address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR)
+                            << "Could not getCode from correspond executor. Trigger switch."
+                            << LOG_KV("code", error->errorCode())
+                            << LOG_KV("message", error->errorMessage());
+                        triggerSwitch();
+                        codeFuture.set_value(bcos::bytes());
+                    }
+                    else
+                    {
+                        codeFuture.set_value(std::move(codes));
+                    }
+                });
+            bcos::bytes codes = codeFuture.get_future().get();
+
+            return codes;
         });
 
         return dmcExecutor;
@@ -1538,7 +1538,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
-    if (bcos::precompiled::c_systemTxsAddress.find(output->to()) !=
+    if (bcos::precompiled::c_systemTxsAddress.find(output->from()) !=
         bcos::precompiled::c_systemTxsAddress.end())
     {
         txGasUsed = 0;
@@ -1570,10 +1570,10 @@ void BlockExecutive::serialPrepareExecutor()
     {
         // dump current DmcExecutor (m_dmcExecutors may be modified during traversing)
         std::set<std::string, std::less<>> currentExecutors;
-        for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+        for (auto& it : m_dmcExecutors)
         {
-            it->second->releaseOutdatedLock();  // release last round's lock
-            currentExecutors.insert(it->first);
+            it.second->releaseOutdatedLock();  // release last round's lock
+            currentExecutors.insert(it.first);
         }
 
         // for each current DmcExecutor
