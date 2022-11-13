@@ -40,8 +40,8 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_schedulerTermId(scheduler->getSchedulerTermId()),
     m_startContextID(startContextID),
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-    m_blockFactory(_blockFactory),
-    m_txPool(_txPool),
+    m_blockFactory(std::move(_blockFactory)),
+    m_txPool(std::move(_txPool)),
     m_staticCall(staticCall)
 {
     start();
