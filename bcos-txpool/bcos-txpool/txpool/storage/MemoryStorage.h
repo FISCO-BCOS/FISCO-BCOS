@@ -155,7 +155,7 @@ protected:
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     std::atomic_bool m_printed = {false};
-    int64_t m_blockNumberUpdatedTime;
+    uint64_t m_blockNumberUpdatedTime;
 
     // the txs expiration time, default is 10 minutes
     int64_t m_txsExpirationTime = 10 * 60 * 1000;

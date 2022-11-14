@@ -488,7 +488,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 {
     auto startT = utcTime();
     auto recordT = startT;
-    int64_t lockT = 0;
+    uint64_t lockT = 0;
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
     NonceList nonceList;
@@ -539,16 +539,16 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     auto removeT = utcTime() - startT;
 
     startT = utcTime();
-    // update the txpool nonce
-    m_config->txPoolNonceChecker()->batchRemove(nonceList);
-    auto updateTxPoolNonceT = utcTime() - startT;
-
-    startT = utcTime();
     notifyUnsealedTxsSize();
     // update the ledger nonce
     auto nonceListPtr = std::make_shared<decltype(nonceList)>(std::move(nonceList));
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, std::move(nonceListPtr));
+    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
     auto updateLedgerNonceT = utcTime() - startT;
+
+    startT = utcTime();
+    // update the txpool nonce
+    m_config->txPoolNonceChecker()->batchRemove(*nonceListPtr);
+    auto updateTxPoolNonceT = utcTime() - startT;
 
     for (auto& [tx, txResult] : results)
     {
