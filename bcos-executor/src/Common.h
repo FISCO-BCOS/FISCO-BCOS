@@ -35,6 +35,7 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <set>
 
@@ -394,11 +395,22 @@ inline bytes toBytes(const std::string_view& _addr)
 
 inline std::string getContractTableName(const std::string_view& _address)
 {
-    std::string formatAddress(_address);
+    constexpr static std::string_view prefix("/apps/");
+    std::string out;
+    if (_address[0] == '/')
+    {
+        out.reserve(prefix.size() + _address.size() - 1);
+        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
+        std::copy(_address.begin() + 1, _address.end(), std::back_inserter(out));
+    }
+    else
+    {
+        out.reserve(prefix.size() + _address.size());
+        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
+        std::copy(_address.begin(), _address.end(), std::back_inserter(out));
+    }
 
-    std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
-
-    return std::string("/apps/").append(address);
+    return out;
 }
 
 }  // namespace bcos

@@ -106,9 +106,9 @@ public:
     virtual void fetchTransactions();
 
     template <class T>
-    bcos::Handler<> onReady(T const& _t)
+    bcos::Handler<> onReady(T _t)
     {
-        return m_onReady.add(_t);
+        return m_onReady.add(std::move(_t));
     }
     virtual void notifyResetProposal(bcos::protocol::Block::Ptr _block);
 

@@ -31,6 +31,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <utility>
 #include <variant>
 
 namespace bcostars
@@ -40,14 +41,12 @@ namespace protocol
 class TransactionReceiptImpl : public bcos::protocol::TransactionReceipt
 {
 public:
-    TransactionReceiptImpl() = delete;
-
     explicit TransactionReceiptImpl(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         std::function<bcostars::TransactionReceipt*()> inner)
-      : bcos::protocol::TransactionReceipt(_cryptoSuite), m_inner(inner)
+      : bcos::protocol::TransactionReceipt(std::move(_cryptoSuite)), m_inner(std::move(inner))
     {}
 
-    ~TransactionReceiptImpl() override {}
+    ~TransactionReceiptImpl() override = default;
     void decode(bcos::bytesConstRef _receiptData) override;
     void encode(bcos::bytes& _encodedData) const override;
     bcos::crypto::HashType hash() const override;
@@ -59,8 +58,7 @@ public:
     int32_t status() const override { return m_inner()->data.status; }
     bcos::bytesConstRef output() const override
     {
-        return bcos::bytesConstRef(
-            (const unsigned char*)m_inner()->data.output.data(), m_inner()->data.output.size());
+        return {(const unsigned char*)m_inner()->data.output.data(), m_inner()->data.output.size()};
     }
     gsl::span<const bcos::protocol::LogEntry> logEntries() const override
     {
@@ -74,7 +72,7 @@ public:
             }
         }
 
-        return gsl::span<const bcos::protocol::LogEntry>(m_logEntries.data(), m_logEntries.size());
+        return {m_logEntries.data(), m_logEntries.size()};
     }
     bcos::protocol::BlockNumber blockNumber() const override { return m_inner()->data.blockNumber; }
 
@@ -91,7 +89,7 @@ public:
         m_inner()->data.logEntries.clear();
         m_inner()->data.logEntries.reserve(_logEntries.size());
 
-        for (auto& it : _logEntries)
+        for (const auto& it : _logEntries)
         {
             auto tarsLogEntry = toTarsLogEntry(it);
             m_inner()->data.logEntries.emplace_back(std::move(tarsLogEntry));
@@ -100,9 +98,7 @@ public:
 
     std::string const& message() const override { return m_inner()->message; }
 
-    void setMessage(std::string const& _message) override { m_inner()->message = _message; }
-
-    void setMessage(std::string&& _message) override { m_inner()->message = std::move(_message); }
+    void setMessage(std::string message) override { m_inner()->message = std::move(message); }
 
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
