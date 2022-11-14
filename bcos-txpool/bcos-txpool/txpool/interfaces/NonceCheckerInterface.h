@@ -41,7 +41,7 @@ public:
         bcos::protocol::Transaction::ConstPtr _tx, bool _shouldUpdate = false) = 0;
     virtual bool exists(bcos::protocol::NonceType const& _nonce) = 0;
     virtual void batchInsert(
-        bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr _nonceList) = 0;
+        bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr const& _nonceList) = 0;
     virtual void batchRemove(bcos::protocol::NonceList const& _nonceList) = 0;
     virtual void batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
         std::hash<bcos::crypto::HashType>> const& _nonceList) = 0;

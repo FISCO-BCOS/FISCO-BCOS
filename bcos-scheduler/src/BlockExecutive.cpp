@@ -1568,6 +1568,7 @@ void BlockExecutive::serialPrepareExecutor()
     bool hasScheduleOutMessage = false;
     do
     {
+        hasScheduleOutMessage = false;
         // dump current DmcExecutor (m_dmcExecutors may be modified during traversing)
         std::set<std::string, std::less<>> currentExecutors;
         for (auto& it : m_dmcExecutors)

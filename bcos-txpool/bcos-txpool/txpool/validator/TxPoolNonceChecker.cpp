@@ -19,6 +19,8 @@
  * @date 2021-05-10
  */
 #include "TxPoolNonceChecker.h"
+#include <pmmintrin.h>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -26,55 +28,47 @@ using namespace bcos::txpool;
 
 bool TxPoolNonceChecker::exists(NonceType const& _nonce)
 {
-    ReadGuard l(x_nonceCache);
-    if (m_nonceCache.count(_nonce))
-    {
-        return true;
-    }
-    return false;
+    decltype(m_nonces)::const_accessor it;
+    return m_nonces.find(it, _nonce);
 }
 
 TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool _shouldUpdate)
 {
-    ReadGuard l(x_nonceCache);
     auto nonce = _tx->nonce();
-    if (m_nonceCache.count(nonce))
+
+    decltype(m_nonces)::const_accessor it;
+    if (m_nonces.find(it, nonce))
     {
         return TransactionStatus::NonceCheckFail;
     }
+
     if (_shouldUpdate)
     {
-        m_nonceCache.insert(nonce);
+        m_nonces.emplace(it, std::move(nonce), std::monostate{});
     }
     return TransactionStatus::None;
 }
 
 void TxPoolNonceChecker::insert(NonceType const& _nonce)
 {
-    ReadGuard l(x_nonceCache);
-    m_nonceCache.insert(_nonce);
+    m_nonces.emplace(_nonce, std::monostate{});
 }
 
-void TxPoolNonceChecker::batchInsert(BlockNumber, NonceListPtr _nonceList)
+void TxPoolNonceChecker::batchInsert(BlockNumber /*_batchId*/, NonceListPtr const& _nonceList)
 {
-    ReadGuard l(x_nonceCache);
     for (auto const& nonce : *_nonceList)
     {
-        m_nonceCache.insert(nonce);
+        m_nonces.emplace(nonce, std::monostate{});
     }
 }
 
 void TxPoolNonceChecker::remove(NonceType const& _nonce)
 {
-    if (m_nonceCache.count(_nonce))
-    {
-        m_nonceCache.unsafe_erase(_nonce);
-    }
+    m_nonces.erase(_nonce);
 }
 
 void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
 {
-    WriteGuard l(x_nonceCache);
     for (auto const& nonce : _nonceList)
     {
         remove(nonce);
@@ -84,7 +78,6 @@ void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
 void TxPoolNonceChecker::batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
     std::hash<bcos::crypto::HashType>> const& _nonceList)
 {
-    WriteGuard l(x_nonceCache);
     for (auto const& nonce : _nonceList)
     {
         remove(nonce);

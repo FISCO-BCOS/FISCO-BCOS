@@ -491,10 +491,11 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     int64_t lockT = 0;
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
-    NonceListPtr nonceList = std::make_shared<NonceList>();
+    NonceList nonceList;
 
     std::vector<std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr>> results;
     results.reserve(txsResult.size());
+    nonceList.reserve(txsResult.size());
     {
         WriteGuard lock(x_txpoolMutex);
         for (const auto& it : txsResult)
@@ -503,12 +504,12 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
             auto tx = removeWithoutLock(txResult->txHash());
             if (!tx && txResult->nonce() != NonceType(-1))
             {
-                nonceList->emplace_back(txResult->nonce());
+                nonceList.emplace_back(txResult->nonce());
             }
             else if (tx)
             {
                 ++succCount;
-                nonceList->emplace_back(tx->nonce());
+                nonceList.emplace_back(tx->nonce());
             }
             results.emplace_back(std::tuple{std::move(tx), txResult});
         }
@@ -536,15 +537,18 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     }
 
     auto removeT = utcTime() - startT;
+
+    startT = utcTime();
+    // update the txpool nonce
+    m_config->txPoolNonceChecker()->batchRemove(nonceList);
+    auto updateTxPoolNonceT = utcTime() - startT;
+
     startT = utcTime();
     notifyUnsealedTxsSize();
     // update the ledger nonce
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceList);
+    auto nonceListPtr = std::make_shared<decltype(nonceList)>(std::move(nonceList));
+    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, std::move(nonceListPtr));
     auto updateLedgerNonceT = utcTime() - startT;
-    startT = utcTime();
-    // update the txpool nonce
-    m_config->txPoolNonceChecker()->batchRemove(*nonceList);
-    auto updateTxPoolNonceT = utcTime() - startT;
 
     for (auto& [tx, txResult] : results)
     {
