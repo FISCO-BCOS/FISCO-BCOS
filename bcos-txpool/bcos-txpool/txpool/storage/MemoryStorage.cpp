@@ -22,6 +22,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/pipeline.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <tuple>
@@ -108,14 +109,15 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                 {
                     TXPOOL_LOG(ERROR) << "Submit transaction error! " << result;
                     m_submitResult.emplace<Error::Ptr>(
-                        BCOS_ERROR_PTR((int32_t)result, "Invalid transaction"));
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                     handle.resume();
                 }
             }
             catch (std::exception& e)
             {
+                TXPOOL_LOG(ERROR) << "Unexpected exception: " << boost::diagnostic_information(e);
                 m_submitResult.emplace<Error::Ptr>(
-                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Invalid transaction"));
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Unknown exception"));
                 handle.resume();
             }
         }
@@ -274,10 +276,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             result = insertWithoutLock(std::move(transaction));
         }
     }
-    else
-    {
-        return result;
-    }
+
     return result;
 }
 
@@ -492,8 +491,8 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
     NonceList nonceList;
-
     std::vector<std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr>> results;
+
     results.reserve(txsResult.size());
     nonceList.reserve(txsResult.size());
     {
@@ -1011,6 +1010,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
     ReadGuard l(x_txpoolMutex);
+
     for (auto const& txHash : *_txsHashList)
     {
         if (!(m_txsTable.count(txHash)))
@@ -1049,7 +1049,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
         return;
     }
     ReadGuard l(x_txpoolMutex);
-    if (m_txsTable.size() == 0)
+    if (m_txsTable.empty())
     {
         return;
     }

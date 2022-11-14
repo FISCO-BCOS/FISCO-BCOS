@@ -169,6 +169,7 @@ protected:
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
 
-    bool m_preStoreTxs = {true};
+    // bool m_preStoreTxs = {true};
+    bool m_preStoreTxs = false;
 };
 }  // namespace bcos::txpool
