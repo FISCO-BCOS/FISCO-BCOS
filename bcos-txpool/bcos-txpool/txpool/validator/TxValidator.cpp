@@ -76,5 +76,9 @@ TransactionStatus TxValidator::submittedToChain(bcos::protocol::Transaction::Con
     {
         return status;
     }
+    if (isSystemTransaction(_tx))
+    {
+        _tx->setSystemTx(true);
+    }
     return TransactionStatus::None;
 }

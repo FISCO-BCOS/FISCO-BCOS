@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "Common.h"
+#include "DataConvertUtility.h"
 
 namespace bcos
 {
