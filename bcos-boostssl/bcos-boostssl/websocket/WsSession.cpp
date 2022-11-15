@@ -283,25 +283,26 @@ void WsSession::asyncWrite(std::shared_ptr<bcos::bytes> _buffer)
         auto self = std::weak_ptr<WsSession>(shared_from_this());
         // Note: add one simple way to monitor message sending latency
         // Note: the lambda[] should not include session directly, this will cause memory leak
-        m_wsStreamDelegate->asyncWrite(*_buffer, [self](boost::beast::error_code _ec, std::size_t) {
-            auto session = self.lock();
-            if (!session)
-            {
-                return;
-            }
-            if (_ec)
-            {
-                BCOS_LOG(WARNING) << LOG_BADGE(session->moduleName()) << LOG_BADGE("Session")
-                                  << LOG_BADGE("asyncWrite") << LOG_KV("message", _ec.message())
-                                  << LOG_KV("endpoint", session->endPoint());
-                return session->drop(WsError::WriteError);
-            }
-            if (session->m_writing)
-            {
-                session->m_writing = false;
-            }
-            session->onWritePacket();
-        });
+        m_wsStreamDelegate->asyncWrite(
+            *_buffer, [self, _buffer](boost::beast::error_code _ec, std::size_t) {
+                auto session = self.lock();
+                if (!session)
+                {
+                    return;
+                }
+                if (_ec)
+                {
+                    BCOS_LOG(WARNING) << LOG_BADGE(session->moduleName()) << LOG_BADGE("Session")
+                                      << LOG_BADGE("asyncWrite") << LOG_KV("message", _ec.message())
+                                      << LOG_KV("endpoint", session->endPoint());
+                    return session->drop(WsError::WriteError);
+                }
+                if (session->m_writing)
+                {
+                    session->m_writing = false;
+                }
+                session->onWritePacket();
+            });
     }
     catch (const std::exception& _e)
     {
