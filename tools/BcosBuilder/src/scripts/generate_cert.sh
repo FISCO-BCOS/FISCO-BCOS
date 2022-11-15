@@ -237,7 +237,7 @@ basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 
 [ v4_req ]
-basicConstraints = CA:TRUE
+basicConstraints = CA:FALSE
 
 EOF
 }
@@ -292,6 +292,11 @@ gen_rsa_node_cert() {
     rm -f "$ndpath"/"${type}".key
 
     mv "$ndpath"/pkcs8_node.key "$ndpath"/"${type}".key
+
+    # extract p2p id
+    ${OPENSSL_CMD} rsa -in "$ndpath"/"$type".key -pubout -out public.pem
+    ${OPENSSL_CMD} rsa -pubin -in public.pem -text -noout 2> /dev/null | sed -n '3,20p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${ndpath}/${type}.nodeid"
+    rm -f public.pem
 
     LOG_INFO "Build node cert successful!"
 }
