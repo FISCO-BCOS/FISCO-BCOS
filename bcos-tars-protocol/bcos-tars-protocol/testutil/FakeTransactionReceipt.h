@@ -85,9 +85,8 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
     }
     auto factory =
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
-    auto receipt =
-        factory->createReceipt(gasUsed, std::string_view((char*)contractAddress.data(), 20),
-            logEntries, (int32_t)status, output, 0);
+    auto receipt = factory->createReceipt(gasUsed, std::string((char*)contractAddress.data(), 20),
+        *logEntries, (int32_t)status, bcos::ref(output), 0);
     if (!_check)
     {
         return receipt;

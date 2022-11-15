@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Common.h>
 
 namespace bcos
@@ -103,12 +104,12 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
 };
 // clang-format on
 
-const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
-    bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
-    bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME,
-    bcos::precompiled::AUTH_COMMITTEE_ADDRESS, bcos::precompiled::AUTH_MANAGER_ADDRESS,
-    bcos::precompiled::ACCOUNT_ADDRESS, bcos::precompiled::ACCOUNT_MGR_ADDRESS,
-    bcos::precompiled::ACCOUNT_MANAGER_NAME};
+const std::set<std::string, std::less<>> c_systemTxsAddress = {
+    bcos::precompiled::SYS_CONFIG_ADDRESS, bcos::precompiled::CONSENSUS_ADDRESS,
+    bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, bcos::precompiled::SYS_CONFIG_NAME,
+    bcos::precompiled::CONSENSUS_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,
+    bcos::precompiled::AUTH_MANAGER_ADDRESS, bcos::precompiled::ACCOUNT_ADDRESS,
+    bcos::precompiled::ACCOUNT_MGR_ADDRESS, bcos::precompiled::ACCOUNT_MANAGER_NAME};
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)

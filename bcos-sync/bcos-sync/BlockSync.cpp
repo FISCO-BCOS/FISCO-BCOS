@@ -333,19 +333,23 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
         auto syncMsg = m_config->msgFactory()->createBlockSyncMsg(_data);
         switch (syncMsg->packetType())
         {
-        case BlockSyncPacketType::BlockStatusPacket: {
+        case BlockSyncPacketType::BlockStatusPacket:
+        {
             onPeerStatus(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockRequestPacket: {
+        case BlockSyncPacketType::BlockRequestPacket:
+        {
             onPeerBlocksRequest(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockResponsePacket: {
+        case BlockSyncPacketType::BlockResponsePacket:
+        {
             onPeerBlocks(_nodeID, syncMsg);
             break;
         }
-        default: {
+        default:
+        {
             BLKSYNC_LOG(WARNING) << LOG_DESC(
                                         "asyncNotifyBlockSyncMessage: unknown block sync message")
                                  << LOG_KV("type", syncMsg->packetType())
@@ -686,9 +690,9 @@ void BlockSync::fetchAndSendBlock(
                 auto signature = blockHeader->signatureList();
                 auto config = sync->m_config;
                 auto blocksReq = config->msgFactory()->createBlocksMsg();
-                bytesPointer blockData = std::make_shared<bytes>();
-                _block->encode(*blockData);
-                blocksReq->appendBlockData(std::move(*blockData));
+                bytes blockData;
+                _block->encode(blockData);
+                blocksReq->appendBlockData(std::move(blockData));
                 blocksReq->setNumber(_number);
                 config->frontService()->asyncSendMessageByNodeID(
                     ModuleID::BlockSync, _peer, ref(*(blocksReq->encode())), 0, nullptr);

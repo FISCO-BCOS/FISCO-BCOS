@@ -29,9 +29,7 @@
 #include <boost/core/ignore_unused.hpp>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 class JsonRpcImpl_2_0 : public JsonRpcInterface,
                         public std::enable_shared_from_this<JsonRpcImpl_2_0>
@@ -129,15 +127,7 @@ protected:
 
     static void parseRpcResponseJson(std::string_view _responseBody, JsonResponse& _jsonResponse);
 
-    static void toJsonResp(
-        Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
 
-    static void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
-    static void toJsonResp(
-        Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
-    static void toJsonResp(Json::Value& jResp, std::string_view _txHash,
-        bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
-        crypto::Hash& hashImpl);
     static void addProofToResponse(
         Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
 
@@ -193,5 +183,11 @@ private:
     };
 };
 
-}  // namespace rpc
-}  // namespace bcos
+void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
+void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
+void toJsonResp(Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
+void toJsonResp(Json::Value& jResp, std::string_view _txHash,
+    bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
+    crypto::Hash& hashImpl);
+
+}  // namespace bcos::rpc

@@ -154,8 +154,8 @@ BOOST_AUTO_TEST_CASE(transactionReceipt)
     bcos::bytes output(bcos::asBytes("Output!"));
 
     bcostars::protocol::TransactionReceiptFactoryImpl factory(cryptoSuite);
-    auto receipt = factory.createReceipt(gasUsed, contractAddress,
-        std::make_shared<std::vector<bcos::protocol::LogEntry>>(*logEntries), 50, output, 888);
+    auto receipt =
+        factory.createReceipt(gasUsed, contractAddress, *logEntries, 50, bcos::ref(output), 888);
 
     bcos::bytes buffer;
     receipt->encode(buffer);
@@ -261,8 +261,8 @@ BOOST_AUTO_TEST_CASE(block)
             transaction->hash(), transaction->hash().abridged());
         block->appendTransactionMetaData(txMetaData);
 
-        auto receipt = transactionReceiptFactory->createReceipt(1000, contractAddress,
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(*logEntries), 50, output, i);
+        auto receipt = transactionReceiptFactory->createReceipt(
+            1000, contractAddress, *logEntries, 50, bcos::ref(output), i);
         block->appendReceipt(receipt);
     }
 
