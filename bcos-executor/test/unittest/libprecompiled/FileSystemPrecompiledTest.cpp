@@ -539,7 +539,7 @@ public:
     ExecutionMessage::UniquePtr listPage(protocol::BlockNumber _number, std::string const& path,
         uint32_t offset, uint32_t count, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("list(string,uint256,uint256)", path, offset, count);
+        bytes in = codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -568,7 +568,7 @@ public:
         if (_errorCode != 0)
         {
             std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
         }
 
         commitBlock(_number);
@@ -658,6 +658,208 @@ BOOST_AUTO_TEST_CASE(lsTest)
     {
         auto result = list(_number++, "/sys");
         int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        std::set<std::string> lsSet;
+        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+                 return std::get<0>(bfs);
+             }))
+        {
+            lsSet.insert(item);
+        }
+
+        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        {
+            BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(lsPageTest)
+{
+    init(false);
+    BlockNumber _number = 3;
+
+    // ls dir
+    {
+        auto result = listPage(_number++, "/tables", 0, 500);
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 2);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
+        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
+
+        result = listPage(_number++, "/tables", 1, 2);
+        ls.clear();
+        ls.shrink_to_fit();
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
+    }
+
+    // ls regular
+    {
+        auto result = listPage(_number++, "/tables/test2", 0, 500);
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
+    }
+
+    // ls not exist
+    {
+        auto result = listPage(_number++, "/tables/test3", 0, 500, CODE_FILE_NOT_EXIST);
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
+        BOOST_CHECK(ls.empty());
+    }
+
+    // ls invalid path
+    {
+        listPage(_number++, "", 0, 500, CODE_FILE_INVALID_PATH);
+        std::stringstream errorPath;
+        errorPath << std::setfill('0') << std::setw(56) << 1;
+        listPage(_number++, "/" + errorPath.str(), 0, 500, CODE_FILE_INVALID_PATH);
+        listPage(_number++, "/path/level/too/deep/not/over/six/", 0, 500, CODE_FILE_INVALID_PATH);
+    }
+
+    // ls /
+    {
+        auto result = listPage(_number++, "/", 0, 500);
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 4);
+        std::set<std::string> lsSet;
+        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+                 return std::get<0>(bfs);
+             }))
+        {
+            lsSet.insert(item);
+        }
+
+        for (auto const& rootSub : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+        {
+            BOOST_CHECK(lsSet.contains(std::string(rootSub.substr(1))));
+        }
+    }
+
+    // ls /sys
+    {
+        auto result = listPage(_number++, "/sys", 0, 500);
+        int32_t code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        std::set<std::string> lsSet;
+        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+                 return std::get<0>(bfs);
+             }))
+        {
+            lsSet.insert(item);
+        }
+
+        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        {
+            BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(lsPagWasmeTest)
+{
+    init(true);
+    BlockNumber _number = 3;
+
+    // ls dir
+    {
+        auto result = listPage(_number++, "/tables", 0, 500);
+        s256 code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 2);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
+        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
+
+        result = listPage(_number++, "/tables", 1, 2);
+        ls.clear();
+        ls.shrink_to_fit();
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
+    }
+
+    // ls regular
+    {
+        auto result = listPage(_number++, "/tables/test2", 0, 500);
+        s256 code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 1);
+        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
+        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_CONTRACT);
+    }
+
+    // ls not exist
+    {
+        auto result = listPage(_number++, "/tables/test3", 0, 500, CODE_FILE_NOT_EXIST);
+        s256 code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
+        BOOST_CHECK(ls.empty());
+    }
+
+    // ls invalid path
+    {
+        listPage(_number++, "", 0, 500, CODE_FILE_INVALID_PATH);
+        std::stringstream errorPath;
+        errorPath << std::setfill('0') << std::setw(56) << 1;
+        listPage(_number++, "/" + errorPath.str(), 0, 500, CODE_FILE_INVALID_PATH);
+        listPage(_number++, "/path/level/too/deep/not/over/six/", 0, 500, CODE_FILE_INVALID_PATH);
+    }
+
+    // ls /
+    {
+        auto result = listPage(_number++, "/", 0, 500);
+        s256 code;
+        std::vector<BfsTuple> ls;
+        codec->decode(result->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 4);
+        std::set<std::string> lsSet;
+        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+                 return std::get<0>(bfs);
+             }))
+        {
+            lsSet.insert(item);
+        }
+
+        for (auto const& rootSub : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+        {
+            BOOST_CHECK(lsSet.contains(std::string(rootSub.substr(1))));
+        }
+    }
+
+    // ls /sys
+    {
+        auto result = listPage(_number++, "/sys", 0, 500);
+        s256 code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);

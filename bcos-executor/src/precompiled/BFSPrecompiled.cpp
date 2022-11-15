@@ -357,7 +357,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("invalid path name")
                                << LOG_KV("path", absolutePath);
-        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_INVALID_PATH), files));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH), files));
         return;
     }
     auto table = _executive->storage().openTable(absolutePath);
@@ -366,7 +366,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
                                << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_NOT_EXIST), files));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_NOT_EXIST), files));
         return;
     }
 
@@ -385,7 +385,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         // maybe hidden table
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
                                << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName);
-        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_NOT_EXIST), files));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_NOT_EXIST), files));
         return;
     }
     auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
@@ -413,10 +413,17 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
                     << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list not exist file")
                     << LOG_KV("absolutePath", absolutePath);
                 _callParameters->setExecResult(
-                    codec.encode(s256(CODE_FILE_COUNT_ERROR), std::vector<BfsTuple>{}));
+                    codec.encode(s256((int)CODE_FILE_COUNT_ERROR), std::vector<BfsTuple>{}));
                 return;
             }
-            _callParameters->setExecResult(codec.encode(s256(total - offset - count), files));
+            auto result = codec.encode(s256(total - offset - count), files);
+            if (c_fileLogLevel == LogLevel::TRACE)
+            {
+                PRECOMPILED_LOG(TRACE)
+                    << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list trace")
+                    << LOG_KV("filesSize", files.size()) << LOG_KV("resultDataSize", result.size());
+            }
+            _callParameters->setExecResult(std::move(result));
             return;
         }
     }
@@ -436,7 +443,14 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         files.emplace_back(baseName, tool::FS_TYPE_CONTRACT,
             std::vector<std::string>{baseFields.begin() + 1, baseFields.end()});
     }
-    _callParameters->setExecResult(codec.encode(s256(CODE_SUCCESS), files));
+    auto result = codec.encode(s256((int)CODE_SUCCESS), files);
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("list trace")
+                               << LOG_KV("filesSize", files.size())
+                               << LOG_KV("resultDataSize", result.size());
+    }
+    _callParameters->setExecResult(std::move(result));
 }
 
 void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -463,7 +477,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
                                << LOG_DESC("check link params failed, invalid path name")
                                << LOG_KV("absolutePath", absolutePath)
                                << LOG_KV("contractAddress", contractAddress);
-        _callParameters->setExecResult(codec.encode(s256(CODE_FILE_INVALID_PATH)));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
         return;
     }
 
@@ -476,12 +490,12 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         {
             // contract name and version exist, overwrite address and abi
             tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
-            _callParameters->setExecResult(codec.encode(s256(CODE_SUCCESS)));
+            _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
             return;
         }
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("File already exists.")
                                << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode((s256)CODE_FILE_ALREADY_EXIST));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_ALREADY_EXIST)));
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
@@ -494,13 +508,13 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
                               << LOG_DESC("external build link file metadata failed")
                               << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode((s256)CODE_FILE_BUILD_DIR_FAILED));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_BUILD_DIR_FAILED)));
         return;
     }
     auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     // set link info to link table
     tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, contractAbi);
-    _callParameters->setExecResult(codec.encode((s256)CODE_SUCCESS));
+    _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
 }
 
 void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExecutive>& _executive,

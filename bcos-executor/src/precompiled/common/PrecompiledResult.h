@@ -22,9 +22,7 @@
 #include "PrecompiledGas.h"
 #include <bcos-utilities/Common.h>
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 struct PrecompiledExecResult
 {
@@ -54,7 +52,8 @@ struct PrecompiledExecResult
     /** for output **/
     bytes const& execResult() const { return m_execResult; }
     bytes& mutableExecResult() { return m_execResult; }
-    void setExecResult(bytes const& _execResult) { m_execResult = std::move(_execResult); }
+    void setExecResult(bytes const& _execResult) { m_execResult = _execResult; }
+    void setExecResult(bytes&& _execResult) { m_execResult = std::move(_execResult); }
     void setGasLeft(int64_t _gasLeft) { m_gasLeft = _gasLeft; }
     inline void setExternalResult(executor::CallParameters::UniquePtr _callParameter)
     {
@@ -86,5 +85,4 @@ struct PrecompiledExecResult
     bool m_staticCall = false;  // common field
     bool m_create = false;      // by request, is creation
 };
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled
