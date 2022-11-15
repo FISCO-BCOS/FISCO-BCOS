@@ -154,7 +154,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
         std::min((size_t)m_maxTxsPerBlock, (m_pendingTxs->size() + m_pendingSysTxs->size()));
     // prioritize seal from the system txs list
     auto systemTxsSize = std::min(txsSize, m_pendingSysTxs->size());
-    if (m_pendingSysTxs->size() > 0)
+    if (!m_pendingSysTxs->empty())
     {
         m_waitUntil.store(m_sealingNumber);
         SEAL_LOG(INFO) << LOG_DESC("seal the system transactions")
@@ -164,13 +164,13 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
     bool containSysTxs = false;
     for (size_t i = 0; i < systemTxsSize; i++)
     {
-        block->appendTransactionMetaData(m_pendingSysTxs->front());
+        block->appendTransactionMetaData(std::move(m_pendingSysTxs->front()));
         m_pendingSysTxs->pop_front();
         containSysTxs = true;
     }
     for (size_t i = systemTxsSize; i < txsSize; i++)
     {
-        block->appendTransactionMetaData(m_pendingTxs->front());
+        block->appendTransactionMetaData(std::move(m_pendingTxs->front()));
         m_pendingTxs->pop_front();
     }
     m_sealingNumber++;
@@ -187,6 +187,7 @@ size_t SealingManager::pendingTxsSize()
     ReadGuard l(x_pendingTxs);
     return m_pendingSysTxs->size() + m_pendingTxs->size();
 }
+
 bool SealingManager::reachMinSealTimeCondition()
 {
     auto txsSize = pendingTxsSize();
