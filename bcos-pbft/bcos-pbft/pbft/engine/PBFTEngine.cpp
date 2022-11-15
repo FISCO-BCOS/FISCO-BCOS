@@ -612,47 +612,56 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
     RecursiveGuard l(m_mutex);
     switch (_msg->packetType())
     {
-    case PacketType::PrePreparePacket: {
+    case PacketType::PrePreparePacket:
+    {
         auto prePrepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handlePrePrepareMsg(prePrepareMsg, true);
         break;
     }
-    case PacketType::PreparePacket: {
+    case PacketType::PreparePacket:
+    {
         auto prepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handlePrepareMsg(prepareMsg);
         break;
     }
-    case PacketType::CommitPacket: {
+    case PacketType::CommitPacket:
+    {
         auto commitMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handleCommitMsg(commitMsg);
         break;
     }
-    case PacketType::ViewChangePacket: {
+    case PacketType::ViewChangePacket:
+    {
         auto viewChangeMsg = std::dynamic_pointer_cast<ViewChangeMsgInterface>(_msg);
         handleViewChangeMsg(viewChangeMsg);
         break;
     }
-    case PacketType::NewViewPacket: {
+    case PacketType::NewViewPacket:
+    {
         auto newViewMsg = std::dynamic_pointer_cast<NewViewMsgInterface>(_msg);
         handleNewViewMsg(newViewMsg);
         break;
     }
-    case PacketType::CheckPoint: {
+    case PacketType::CheckPoint:
+    {
         auto checkPointMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-    case PacketType::RecoverRequest: {
+    case PacketType::RecoverRequest:
+    {
         auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handleRecoverRequest(request);
         break;
     }
-    case PacketType::RecoverResponse: {
+    case PacketType::RecoverResponse:
+    {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handleRecoverResponse(recoverResponse);
         break;
     }
-    default: {
+    default:
+    {
         PBFT_LOG(WARNING) << LOG_DESC("handleMsg: unknown PBFT message")
                           << LOG_KV("type", std::to_string(_msg->packetType()))
                           << LOG_KV("genIdx", _msg->generatedFrom())
@@ -1363,7 +1372,13 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     // tried to commit the stable checkpoint
     m_cacheProcessor->removeConsensusedCache(m_config->view(), _ledgerConfig->blockNumber());
     m_cacheProcessor->tryToCommitStableCheckPoint();
-    m_cacheProcessor->resetTimer();
+    // Note: only the consensus-triggered finalize should resetTimer
+    // resetTimer will try to trigger-fast-viewchange when the leader disconnected or
+    // falling-far-behind
+    if (!_syncedBlock)
+    {
+        m_cacheProcessor->resetTimer();
+    }
 }
 
 bool PBFTEngine::handleCheckPointMsg(std::shared_ptr<PBFTMessageInterface> _checkPointMsg)
