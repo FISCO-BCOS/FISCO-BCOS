@@ -22,7 +22,9 @@
 
 #include "VMFactory.h"
 #include "VMInstance.h"
+#ifdef WITH_WASM
 #include <BCOS_WASM.h>
+#endif
 #include <evmc/loader.h>
 #include <evmone/evmone.h>
 #include <boost/program_options.hpp>
@@ -100,8 +102,10 @@ VMInstance VMFactory::create(VMKind _kind)
 {
     switch (_kind)
     {
+#ifdef WITH_WASM
     case VMKind::BcosWasm:
         return VMInstance{evmc_create_bcoswasm()};
+#endif
     case VMKind::evmone:
         return VMInstance{evmc_create_evmone()};
     case VMKind::DLL:

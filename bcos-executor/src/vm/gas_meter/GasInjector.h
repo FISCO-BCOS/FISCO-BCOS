@@ -17,6 +17,8 @@
  *  @author xingqiangbai
  *  @date 20200921
  */
+#ifdef WITH_WASM 
+
 #pragma once
 #include "Metric.h"
 #include <exception>
@@ -84,3 +86,5 @@ private:
 };
 }  // namespace wasm
 }  // namespace bcos
+
+#endif

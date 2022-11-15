@@ -18,25 +18,25 @@
 #pragma once
 
 //#include <sys/time.h>
+#include "Log.h"
+#include "RefDataContainer.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/container/options.hpp>
+#include <boost/container/small_vector.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/thread.hpp>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <queue>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <boost/multiprecision/cpp_int.hpp>
-#include "Log.h"
-#include "RefDataContainer.h"
-#include <boost/container/small_vector.hpp>
-#include <boost/thread.hpp>
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
 
 namespace bcos
 {
@@ -49,8 +49,6 @@ using bytesPointer = std::shared_ptr<std::vector<byte>>;
 using bytesConstPtr = std::shared_ptr<const bytes>;
 using bytesRef = RefDataContainer<byte>;
 using bytesConstRef = RefDataContainer<byte const>;
-
-using smallBytes = boost::container::small_vector<byte, 40>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;

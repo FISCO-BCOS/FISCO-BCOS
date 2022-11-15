@@ -22,6 +22,8 @@
 // if wasm ut crash on aarch64 linux check https://github.com/bytecodealliance/wasmtime/issues/4972
 // #if !defined(__aarch64__) && !defined(__linux__)
 
+#ifdef WITH_WASM
+
 #include "../liquid/hello_world.h"
 #include "../liquid/hello_world_caller.h"
 #include "../liquid/transfer.h"
@@ -441,7 +443,6 @@ BOOST_AUTO_TEST_CASE(deployError)
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
     {
-
         auto params = std::make_unique<NativeExecutionMessage>();
         params->setType(bcos::protocol::ExecutionMessage::TXHASH);
         params->setContextID(100);
@@ -1270,3 +1271,5 @@ BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
 // #endif
+
+#endif

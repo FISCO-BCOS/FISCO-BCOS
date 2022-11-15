@@ -193,6 +193,7 @@ struct DagExecutorFixture
 };
 BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 
+#ifdef WITH_WASM
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
@@ -647,6 +648,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             BOOST_CHECK_EQUAL(name, "alice");
         });
 }
+#endif
 
 BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {

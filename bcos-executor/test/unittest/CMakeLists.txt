@@ -1,6 +1,8 @@
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h.in ${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h @ONLY)
-
+if(WITH_WASM)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h.in ${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h @ONLY)
+endif()
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
+
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-executor)
 

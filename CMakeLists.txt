@@ -36,8 +36,10 @@ if(WITH_LIGHTNODE)
 endif()
 
 if(FULLNODE)
-    include(ProjectWABT)
-    include(ProjectBCOSWASM)
+    if(WITH_WASM)
+        include(ProjectWABT)
+        include(ProjectBCOSWASM)
+    endif()
     include(ProjectGroupSig)
 
     add_subdirectory(bcos-codec)
