@@ -575,6 +575,12 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
+    m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
+    if(m_enableArchive)
+    {
+        m_archiveListenIP = _pt.get<std::string>("storage.archive_ip");
+        m_archiveListenPort = _pt.get<uint16_t>("storage.archive_port");
+    }
 
     if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
     {
@@ -587,7 +593,10 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
-                         << LOG_KV("pd_addrs", pd_addrs)
+                         << LOG_KV("pdAddrs", pd_addrs) << LOG_KV("pdCaPath", m_pdCaPath)
+                         << LOG_KV("enableArchive", m_enableArchive)
+                         << LOG_KV("archiveListenIP", m_archiveListenIP)
+                         << LOG_KV("archiveListenPort", m_archiveListenPort)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 

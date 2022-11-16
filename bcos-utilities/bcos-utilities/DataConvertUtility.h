@@ -74,6 +74,12 @@ Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
     return out;
 }
 
+template <class Hex, class Out = bytes>
+Out fromHexWithPrefix(const Hex& hex)
+{
+    return fromHex(hex, "0x");
+}
+
 /**
  * @brief convert the specified bytes data into hex string
  *
