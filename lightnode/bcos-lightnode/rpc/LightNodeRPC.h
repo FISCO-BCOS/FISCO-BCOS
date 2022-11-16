@@ -261,8 +261,8 @@ public:
         LIGHTNODE_LOG(INFO) << "RPC get block by number request: " << blockNumber << " "
                             << onlyHeader;
 
-        auto getBlockCoroutine = [this](bool onlyHeader,
-                                     int64_t blockNumber) -> task::Task<bcostars::Block> {
+        bcos::task::wait([](decltype(this) self, bool onlyHeader, int64_t blockNumber,
+                             RespFunc respFunc) -> task::Task<bcostars::Block> {
             bcostars::Block block;
             if (onlyHeader)
             {
@@ -320,26 +320,20 @@ public:
                 }
             }
 
-            co_return block;
-        };
+            using ResultType = std::remove_cvref_t<decltype(block)>;
+            if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
+            {
+                self->toErrorResp(block, respFunc);
+                co_return;
+            }
+            else
+            {
+                Json::Value resp;
+                toJsonResp<Hasher>(block, resp, onlyHeader);
 
-        bcos::task::wait(getBlockCoroutine(onlyHeader, blockNumber),
-            [this, m_respFunc = std::move(respFunc), m_onlyHeader = onlyHeader](
-                auto&& result) mutable {
-                using ResultType = std::remove_cvref_t<decltype(result)>;
-                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                {
-                    this->toErrorResp(result, m_respFunc);
-                    return;
-                }
-                else
-                {
-                    Json::Value resp;
-                    toJsonResp<Hasher>(result, resp, m_onlyHeader);
-
-                    m_respFunc(nullptr, resp);
-                }
-            });
+                respFunc(nullptr, resp);
+            }
+        }(this, onlyHeader, blockNumber, std::move(respFunc)));
     }
 
     void getBlockHashByNumber([[maybe_unused]] std::string_view _groupID,
