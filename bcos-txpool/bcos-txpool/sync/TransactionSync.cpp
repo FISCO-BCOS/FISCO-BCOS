@@ -69,7 +69,6 @@ void TransactionSync::executeWorker()
     }
     if (m_config->existsInGroup() && downloadTxsBufferEmpty() && m_newTransactions.load())
     {
-        // TODO: Disable maintain transactions
         maintainTransactions();
     }
     if (!m_config->existsInGroup() || (!m_newTransactions && downloadTxsBufferEmpty()))
