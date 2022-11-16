@@ -198,7 +198,6 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-
         ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);

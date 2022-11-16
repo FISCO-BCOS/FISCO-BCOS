@@ -137,7 +137,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
-#ifdef WASM
+#ifdef WITH_WASM
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 #endif
 
