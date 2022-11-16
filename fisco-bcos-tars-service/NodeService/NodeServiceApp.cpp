@@ -68,7 +68,7 @@ void NodeServiceApp::initialize()
     {
         std::cout << "init NodeService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 

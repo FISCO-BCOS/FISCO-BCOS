@@ -149,7 +149,8 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             if (c_fileLogLevel <= TRACE)
             {
                 STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetRow empty") << LOG_KV("table", _table)
-                                        << LOG_KV("key", toHex(_key)) << LOG_KV("dbKey", dbKey);
+                                        << LOG_KV("key", _key.length() == 0 ? "" : toHex(_key))
+                                        << LOG_KV("dbKey", dbKey);
             }
             _callback(nullptr, {});
             return;

@@ -50,7 +50,7 @@ void ExecutorServiceApp::initialize()
     {
         std::cout << "init ExecutorService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
