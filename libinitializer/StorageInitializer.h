@@ -23,6 +23,7 @@
  * @date 2021-10-14
  */
 #pragma once
+#include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
 #include "rocksdb/write_batch.h"
