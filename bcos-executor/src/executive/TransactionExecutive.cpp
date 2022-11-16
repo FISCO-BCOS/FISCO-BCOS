@@ -30,7 +30,11 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+
+#ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
+#endif
+
 #include "BlockContext.h"
 #include "ExecutiveFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
@@ -413,6 +417,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         return {nullptr, std::move(callParameters)};
     }
 
+#ifdef WITH_WASM
     if (blockContext->isWasm())
     {
         // Liquid
@@ -465,6 +470,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
         extraData->data = std::move(params);
     }
+#endif
 
     auto hostContext =
         std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);

@@ -129,10 +129,9 @@ private:
     {
         const char* begin = nullptr;
         const char* end = nullptr;
-        bool result = value.getString(&begin, &end);
-        if (!result)
+        if (!value.getString(&begin, &end))
         {
-            return std::string_view();
+            return {};
         }
         std::string_view view(begin, end - begin);
         return view;
