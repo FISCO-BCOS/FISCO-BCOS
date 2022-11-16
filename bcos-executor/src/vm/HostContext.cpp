@@ -421,11 +421,22 @@ size_t HostContext::codeSizeAt(const std::string_view& _a)
     auto blockContext = m_executive->blockContext().lock();
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        // precompiled return 1;
+        /*
+         Note:
+            evm precompiled(0x1 ~ 0x9): return 0 (Is the same as eth)
+            FISCO BCOS precompiled: return 1
+
+            Because evm precompiled is call by build-in opcode, no need to get code size before
+         called, but FISCO BCOS precompiled is call like contract, so it need to get code size.
+         */
+
         if (m_executive->isPrecompiled(addressBytesStr2String(_a)))
         {
+            // Only FISCO BCOS precompile: constant precompiled or build-in precompiled
+            // evm precompiled address will go down to externalCodeRequest() and get empty code
             return 1;
         }
+
         auto code = externalCodeRequest(_a);
         return code.size();  // OPCODE num is bytes.size
     }
@@ -529,7 +540,7 @@ h256 HostContext::blockHash(int64_t _number) const
     if (m_executive->blockContext().lock()->blockVersion() >=
         (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        if (_number >= blockNumber())
+        if (_number >= blockNumber() || _number < 0)
         {
             return h256("");
         }

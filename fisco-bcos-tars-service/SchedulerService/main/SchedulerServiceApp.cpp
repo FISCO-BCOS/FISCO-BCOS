@@ -53,7 +53,7 @@ void SchedulerServiceApp::initialize()
     {
         std::cout << "init SchedulerService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
