@@ -262,16 +262,16 @@ public:
                             << onlyHeader;
 
         bcos::task::wait([](decltype(this) self, bool onlyHeader, int64_t blockNumber,
-                             RespFunc respFunc) -> task::Task<bcostars::Block> {
+                             RespFunc respFunc) -> task::Task<void> {
             bcostars::Block block;
             if (onlyHeader)
             {
-                co_await localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
                     blockNumber, block);
             }
             else
             {
-                co_await remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
+                co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
                     blockNumber, block);
 
                 if (!RANGES::empty(block.transactionsMetaData))
@@ -302,7 +302,7 @@ public:
                 if (blockNumber > 0)
                 {
                     decltype(block) parentBlock;
-                    co_await localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                    co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
                         blockNumber - 1, parentBlock);
 
                     std::array<std::byte, Hasher::HASH_SIZE> parentHash;
