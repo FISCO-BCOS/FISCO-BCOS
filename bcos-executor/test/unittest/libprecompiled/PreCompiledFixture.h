@@ -255,6 +255,11 @@ public:
     void nextBlock(
         int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_1_VERSION)
     {
+        if (blockNumber < 0) [[unlikely]]
+        {
+            // for parallel test
+            return;
+        }
         std::cout << "next block: " << blockNumber << std::endl;
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
@@ -270,6 +275,11 @@ public:
 
     void commitBlock(protocol::BlockNumber blockNumber)
     {
+        if (blockNumber < 0) [[unlikely]]
+        {
+            // for parallel test
+            return;
+        }
         std::cout << "commit block: " << blockNumber << std::endl;
         TwoPCParams commitParams{};
         commitParams.number = blockNumber;

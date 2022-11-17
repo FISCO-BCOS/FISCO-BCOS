@@ -98,8 +98,9 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountPrecompiled")
                           << LOG_DESC("setAccountStatus") << LOG_KV("account", accountTableName)
-                          << LOG_KV("status", status);
+                          << LOG_KV("status", std::to_string(status));
     auto existEntry = _executive->storage().getRow(accountTableName, ACCOUNT_STATUS);
+    // already exist status, check and move it to last status
     if (existEntry.has_value())
     {
         auto statusStr = std::string(existEntry->get());
@@ -111,15 +112,28 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
                                   << LOG_BADGE("AccountPrecompiled")
                                   << LOG_DESC("account already abolish, should not set any status")
                                   << LOG_KV("account", accountTableName)
-                                  << LOG_KV("status", status);
+                                  << LOG_KV("status", std::to_string(status));
             BOOST_THROW_EXCEPTION(
                 PrecompiledError("Account already abolish, should not set any status."));
         }
+        _executive->storage().setRow(
+            accountTableName, ACCOUNT_LAST_STATUS, std::move(existEntry.value()));
     }
-
+    else
+    {
+        // first time
+        Entry lastStatusEntry;
+        lastStatusEntry.importFields({"0"});
+        _executive->storage().setRow(
+            accountTableName, ACCOUNT_LAST_STATUS, std::move(lastStatusEntry));
+    }
+    // set status and lastUpdateNumber
     Entry statusEntry;
     statusEntry.importFields({boost::lexical_cast<std::string>(status)});
     _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
+    Entry lastUpdateEntry;
+    lastUpdateEntry.importFields({boost::lexical_cast<std::string>(blockContext->number())});
+    _executive->storage().setRow(accountTableName, ACCOUNT_LAST_UPDATE, std::move(lastUpdateEntry));
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
 
@@ -138,14 +152,29 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
 {
     auto accountTable = getAccountTableName(account);
     auto entry = _executive->storage().getRow(accountTable, ACCOUNT_STATUS);
-    if (!entry.has_value())
+    auto lastUpdateEntry = _executive->storage().getRow(accountTable, ACCOUNT_LAST_UPDATE);
+    if (!lastUpdateEntry.has_value())
     {
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
                                << LOG_DESC(" Status row not exist, return 0 by default");
         return 0;
     }
-    auto statusStr = entry->get();
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << LOG_DESC("getAccountStatus")
+    auto lastUpdateNumber = boost::lexical_cast<BlockNumber>(std::string(lastUpdateEntry->get()));
+    auto blockContext = _executive->blockContext().lock();
+    std::string_view statusStr;
+    if (blockContext->number() > lastUpdateNumber) [[likely]]
+    {
+        statusStr = entry->get();
+    }
+    else [[unlikely]]
+    {
+        auto lastStatusEntry = _executive->storage().getRow(accountTable, ACCOUNT_LAST_STATUS);
+        statusStr = lastStatusEntry->get();
+    }
+
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled")
+                           << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("getAccountStatus")
+                           << LOG_KV("lastUpdateNumber", lastUpdateNumber)
                            << LOG_KV("status", statusStr);
     auto status = boost::lexical_cast<uint8_t>(statusStr);
     return status;
