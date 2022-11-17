@@ -47,10 +47,6 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
         bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(localLedger, remoteLedger,
         transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId());
 
-    auto jsonrpcWeakPtr = std::weak_ptr<bcos::rpc::LightNodeRPC<decltype(localLedger),
-        decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(jsonrpc);
-
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
         [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
@@ -139,7 +135,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             RPC_LOG(TRACE) << "LightNode amop topic request";
         });
     wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [jsonrpc = std::move(jsonrpc)](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [jsonrpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
             auto buffer = msg->payload();
             auto req = std::string_view((const char*)buffer->data(), buffer->size());
@@ -170,12 +166,8 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     if (httpServer)
     {
         httpServer->setHttpReqHandler(
-            [jsonrpcWeakPtr](const std::string_view req, std::function<void(bcos::bytes)> sender) {
-                auto jsonrpc = jsonrpcWeakPtr.lock();
-                if (jsonrpc)
-                {
-                    jsonrpc->onRPCRequest(req, std::move(sender));
-                }
+            [jsonrpc](const std::string_view req, std::function<void(bcos::bytes)> sender) {
+                jsonrpc->onRPCRequest(req, std::move(sender));
             });
     }
 

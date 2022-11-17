@@ -45,12 +45,9 @@ public:
         m_transactionFactory(m_config->blockFactory()->transactionFactory()),
         m_ledger(m_config->ledger())
     {
-        // threadpool for submit txs
         m_worker = std::make_shared<ThreadPool>("submitter", verifierWorkerNum);
-        // threadpool for verify block
         m_verifier = std::make_shared<ThreadPool>("verifier", 4);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
-        m_filler = std::make_shared<ThreadPool>("txsFiller", std::thread::hardware_concurrency());
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
                          << LOG_KV("submitterWorkerNum", verifierWorkerNum);
     }
@@ -187,7 +184,6 @@ private:
     ThreadPool::Ptr m_worker;
     ThreadPool::Ptr m_verifier;
     ThreadPool::Ptr m_sealer;
-    ThreadPool::Ptr m_filler;
     std::atomic_bool m_running = {false};
 };
 }  // namespace bcos::txpool

@@ -30,6 +30,7 @@
 
 namespace bcos::sync
 {
+
 class TransactionSync : public TransactionSyncInterface,
                         public Worker,
                         public std::enable_shared_from_this<TransactionSync>
@@ -68,13 +69,14 @@ public:
         bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
         VerifyResponseCallback _onVerifyFinished) override;
 
-    virtual void maintainTransactions();
-    virtual void maintainDownloadingTransactions();
+    [[deprecated("Use TxPool::broadcastPushTransaction")]] virtual void maintainTransactions();
+    [[deprecated("Use TxPool::broadcastPushTransaction")]] virtual void
+    maintainDownloadingTransactions();
     void onEmptyTxs() override;
 
 protected:
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
-    void executeWorker() override;
+    [[deprecated("Use TxPool::broadcastPushTransaction")]] void executeWorker() override;
 
     void broadcastTxsFromRpc(bcos::crypto::NodeIDSet const& _connectedPeers,
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,

@@ -47,16 +47,8 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
 void StateMachine::asyncPreApply(
     ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
 {
-    auto self = weak_from_this();
-    // Note: async here to increase performance, trigger preExecuteBlock
-    m_schedulerWorker->enqueue([self, _proposal, _onPreApplyFinished]() {
-        auto stateMachine = self.lock();
-        if (!stateMachine)
-        {
-            return;
-        }
-        stateMachine->preApply(_proposal, _onPreApplyFinished);
-    });
+    // TODO: deal with preexec and exec, fix txpool
+    preApply(std::move(_proposal), std::move(_onPreApplyFinished));
 }
 
 void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedProposal,
