@@ -338,18 +338,27 @@ bool HostContext::setCode(bytes code)
     {
         auto contractTable = m_executive->storage().openTable(m_tableName);
         // set code hash in contract table
-        Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
         if (contractTable)
         {
+            Entry codeHashEntry;
             codeHashEntry.importFields({codeHash.asBytes()});
-            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-            // set code in code binary table
 
-            Entry codeEntry;
-            codeEntry.importFields({std::move(code)});
-            m_executive->storage().setRow(
-                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0), std::move(codeEntry));
+            auto codeEntry = m_executive->storage().getRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0));
+
+            if (!codeEntry)
+            {
+                codeEntry = std::make_optional<Entry>();
+                codeEntry->importFields({std::move(code)});
+
+                // set code in code binary table
+                m_executive->storage().setRow(bcos::ledger::SYS_CODE_BINARY,
+                    codeHashEntry.getField(0), std::move(codeEntry.value()));
+            }
+
+            // dry code hash in account table
+            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
             return true;
         }
         return false;
