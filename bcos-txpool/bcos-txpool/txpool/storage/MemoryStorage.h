@@ -25,6 +25,7 @@
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
+#include <boost/thread/pthread/shared_mutex.hpp>
 
 namespace bcos::txpool
 {
@@ -121,7 +122,7 @@ protected:
     virtual void notifyTxResult(bcos::protocol::Transaction const& _tx,
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult);
 
-    virtual void removeInvalidTxs();
+    virtual void removeInvalidTxs(bool lock);
 
     virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr transaction);
 
@@ -134,7 +135,6 @@ protected:
 
 protected:
     TxPoolConfig::Ptr m_config;
-    ThreadPool::Ptr m_notifier;
     ThreadPool::Ptr m_worker;
 
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr,

@@ -19,6 +19,7 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-utilities/Common.h"
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/pipeline.h>
@@ -37,7 +38,6 @@ MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
     int64_t _txsExpirationTime, bool _preStoreTxs)
   : m_config(_config), m_txsExpirationTime(_txsExpirationTime), m_preStoreTxs(_preStoreTxs)
 {
-    m_notifier = std::make_shared<ThreadPool>("txNotifier", _notifyWorkerNum);
     m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
     m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
@@ -60,10 +60,6 @@ void MemoryStorage::start()
 
 void MemoryStorage::stop()
 {
-    if (m_notifier)
-    {
-        m_notifier->stop();
-    }
     if (m_worker)
     {
         m_worker->stop();
@@ -429,6 +425,7 @@ Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::
     notifyTxResult(*tx, std::move(txSubmitResult));
     return tx;
 }
+
 void MemoryStorage::notifyTxResult(
     Transaction const& transaction, TransactionSubmitResult::Ptr txSubmitResult)
 {
@@ -624,7 +621,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     auto blockFactory = m_config->blockFactory();
     auto recordT = utcTime();
     auto startT = utcTime();
-    ReadGuard l(x_txpoolMutex);
+    UpgradableGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
     auto currentTime = (int64_t)utcTime();
@@ -723,7 +720,9 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     }
     auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
-    removeInvalidTxs();
+
+    UpgradeGuard writeLock(l);
+    removeInvalidTxs(false);
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
                      << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
@@ -733,53 +732,41 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                      << LOG_KV("traverseCount", traverseCount);
 }
 
-void MemoryStorage::removeInvalidTxs()
+void MemoryStorage::removeInvalidTxs(bool lock)
 {
-    auto self = weak_from_this();
-    m_notifier->enqueue([self]() {
-        try
+    try
+    {
+        if (m_invalidTxs.empty())
         {
-            auto memoryStorage = self.lock();
-            if (!memoryStorage)
-            {
-                return;
-            }
-            if (memoryStorage->m_invalidTxs.empty())
-            {
-                return;
-            }
-            WriteGuard l(memoryStorage->x_txpoolMutex);
-            tbb::parallel_invoke(
-                [memoryStorage]() {
-                    // remove invalid txs
-                    for (auto const& txHash : memoryStorage->m_invalidTxs)
-                    {
-                        auto txResult =
-                            memoryStorage->m_config->txResultFactory()->createTxSubmitResult();
-                        txResult->setTxHash(txHash);
-                        txResult->setStatus((uint32_t)TransactionStatus::BlockLimitCheckFail);
-                        // not notify receipt to the sdk when the txs has been removed by
-                        // removeInvalidTxs in the cases the txs-expired
-                        memoryStorage->removeSubmittedTxWithoutLock(txResult, false);
-                    }
-                    memoryStorage->notifyUnsealedTxsSize();
-                },
-                [memoryStorage]() {
-                    // remove invalid nonce
-                    memoryStorage->m_config->txPoolNonceChecker()->batchRemove(
-                        memoryStorage->m_invalidNonces);
-                });
-            TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs")
-                              << LOG_KV("size", memoryStorage->m_invalidTxs.size());
-            memoryStorage->m_invalidTxs.clear();
-            memoryStorage->m_invalidNonces.clear();
+            return;
         }
-        catch (std::exception const& e)
+
+        std::optional<WriteGuard> writeLock;
+        if (lock)
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC("removeInvalidTxs exception")
-                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
+            writeLock.emplace(x_txpoolMutex);
         }
-    });
+        // remove invalid txs
+        for (auto const& txHash : m_invalidTxs)
+        {
+            auto txResult = m_config->txResultFactory()->createTxSubmitResult();
+            txResult->setTxHash(txHash);
+            txResult->setStatus((uint32_t)TransactionStatus::BlockLimitCheckFail);
+
+            removeSubmittedTxWithoutLock(txResult, true);
+        }
+        notifyUnsealedTxsSize();
+        // remove invalid nonce
+        m_config->txPoolNonceChecker()->batchRemove(m_invalidNonces);
+        TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", m_invalidTxs.size());
+        m_invalidTxs.clear();
+        m_invalidNonces.clear();
+    }
+    catch (std::exception const& e)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("removeInvalidTxs exception")
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+    }
 }
 
 void MemoryStorage::clear()
@@ -1048,7 +1035,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     {
         return;
     }
-    ReadGuard l(x_txpoolMutex);
+    UpgradableGuard l(x_txpoolMutex);
     if (m_txsTable.empty())
     {
         return;
@@ -1079,7 +1066,9 @@ void MemoryStorage::cleanUpExpiredTransactions()
     }
     TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs);
-    removeInvalidTxs();
+
+    UpgradeGuard ul(l);
+    removeInvalidTxs(false);
 }
 
 
