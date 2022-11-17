@@ -1,11 +1,13 @@
 use core::panic;
+use std::collections::HashMap;
+use std::iter::zip;
 use std::sync::Arc;
-// use std::sync::Mutex;
 
 use env_logger::Env;
 use log::info;
 // use serde::Serialize;
 
+use log::trace;
 use rocksdb::{DBCompressionType, Options, DB};
 use structopt::StructOpt;
 use tide::log::debug;
@@ -46,7 +48,7 @@ struct JsonRequest {
     jsonrpc: String,
     method: String,
     id: u64,
-    params: Vec<String>,
+    params: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -60,15 +62,15 @@ struct JsonError {
 struct JsonResponse {
     jsonrpc: String,
     id: u64,
-    result: Vec<String>,
+    result: serde_json::Value,
     error: JsonError,
 }
 macro_rules! new_json_response {
-    ($id:expr, $error:expr) => {
+    ($id:expr, $error:expr, $result:expr) => {
         JsonResponse {
             jsonrpc: "2.0".to_string(),
             id: $id,
-            result: vec![],
+            result: $result,
             error: $error,
         }
     };
@@ -106,16 +108,17 @@ async fn main() -> tide::Result<()> {
     app.at("/")
         .post(|mut req: Request<Arc<Mutex<Storage>>>| async move {
             let request_json = req.body_json::<JsonRequest>().await?;
-            debug!("request: method{:?}", &request_json);
+            trace!("request_json.params: {:?}", request_json);
             let method = request_json.method;
-            if request_json.params.len() != 1 {
+            if request_json.params.is_null() {
                 let response = new_json_response!(
                     request_json.id,
                     JsonError {
-                        message: "parameters len is invalid".to_string(),
+                        message: "parameters is null".to_string(),
                         code: -1002,
                         data: "".to_string()
-                    }
+                    },
+                    "".to_string().into()
                 );
                 return Ok(Response::builder(200)
                     .body(Body::from_json(&response)?)
@@ -137,34 +140,39 @@ async fn main() -> tide::Result<()> {
                         message: "method not found".to_string(),
                         code: -1001,
                         data: "".to_string()
-                    }
+                    },
+                    "".to_string().into()
                 );
                 return Ok(Response::builder(200)
                     .body(Body::from_json(&response)?)
                     .content_type("application/json")
                     .build());
             };
-
             if method == "getTransaction" || method == "getTransactionReceipt" {
+                let hash = request_json.params.as_array().unwrap()[0].as_str().unwrap();
                 keys = vec![table
                     .to_vec()
                     .into_iter()
                     .chain(
-                        prefix_hex::decode::<Vec<u8>>(&request_json.params[0])
+                        prefix_hex::decode::<Vec<u8>>(hash)
                             .unwrap()
                             .to_owned()
                             .into_iter(),
                     )
                     .collect()];
             } else {
-                keys = request_json.params[0]
-                    .split(",")
+                let hex_keys = request_json.params.as_array().unwrap()[0]
+                    .as_array()
+                    .unwrap();
+                debug!("hex_keys: {:?}", hex_keys);
+                keys = hex_keys
+                    .into_iter()
                     .map(|s| {
                         table
                             .to_vec()
                             .into_iter()
                             .chain(
-                                prefix_hex::decode::<Vec<u8>>(s)
+                                prefix_hex::decode::<Vec<u8>>(s.as_str().unwrap())
                                     .unwrap()
                                     .to_owned()
                                     .into_iter(),
@@ -172,38 +180,53 @@ async fn main() -> tide::Result<()> {
                             .collect()
                     })
                     .collect();
+                debug!("keys: {:?}", keys);
             }
 
-            #[allow(unused_assignments)]
-            let mut values: Vec<String> = vec![];
+            // #[allow(unused_assignments)]
+            let result: HashMap<String, String>;
             let database = req.state().lock().await;
             match &*database {
                 Storage::RocksDB(db) => {
-                    values = db
+                    let hash_list = request_json.params.as_array().unwrap()[0]
+                        .as_array()
+                        .unwrap();
+                    let values: Vec<String> = db
                         .multi_get(keys)
                         .into_iter()
                         .filter_map(|x| x.ok())
-                        .map(|x| unsafe {
-                            std::str::from_utf8_unchecked(x.unwrap().as_ref()).to_string()
+                        .map(|x| match x {
+                            Some(v) => unsafe {
+                                std::str::from_utf8_unchecked(v.as_ref()).to_string()
+                            },
+                            None => "".to_string(),
                         })
                         .collect();
-                    debug!("values: {:?}", values);
+                    // debug!("values: {:?}", values);
+                    result = zip(hash_list, values)
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect();
                 }
                 Storage::TiKV(_client) => {
                     let client = _client.clone();
                     let timestamp = client.current_timestamp().await?;
                     let mut txn = client.snapshot(timestamp, TransactionOptions::new_optimistic());
-                    values = txn
+                    result = txn
                         .batch_get(keys)
                         .await?
-                        .map(|x| unsafe { std::str::from_utf8_unchecked(x.value()).to_string() })
+                        .map(|x| unsafe {
+                            let value = std::str::from_utf8_unchecked(x.value()).to_string();
+                            let key: Vec<u8> = x.key().clone().into();
+                            let key = prefix_hex::encode(key.strip_prefix(table).unwrap());
+                            (key, value)
+                        })
                         .collect();
                 }
             }
             let response = JsonResponse {
                 jsonrpc: "2.0".to_string(),
                 id: request_json.id,
-                result: values,
+                result: serde_json::to_value(result).unwrap(),
                 error: JsonError {
                     message: "".to_string(),
                     code: 0,
