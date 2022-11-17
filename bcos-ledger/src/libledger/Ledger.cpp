@@ -1466,10 +1466,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             }
         }
     }
-
+    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     // clang-format off
-    std::string_view tables[] = {
-        SYS_CONFIG, "value,enable_number",
+    std::vector<std::string_view> tables {
+        SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
         SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
         SYS_HASH_2_TX, SYS_VALUE,
@@ -1479,11 +1479,23 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
-        SYS_CODE_BINARY, SYS_VALUE,
-        SYS_CONTRACT_ABI, SYS_VALUE,
     };
+
+    if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        std::vector<std::string_view> moreTables{
+            SYS_CODE_BINARY, SYS_VALUE,
+            SYS_CONTRACT_ABI, SYS_VALUE
+        };
+
+        for (auto v : moreTables)
+        {
+            tables.push_back(v);
+        }
+    }
     // clang-format on
-    size_t total = sizeof(tables) / sizeof(std::string_view);
+
+    size_t total = tables.size();
 
     for (size_t i = 0; i < total; i += 2)
     {
@@ -1499,7 +1511,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         }
     }
 
-    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+
     createFileSystemTables(versionNumber);
     if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
     {
