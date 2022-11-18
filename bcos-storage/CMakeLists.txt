@@ -1,7 +1,4 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
-
-include(Version)
 
 project(bcos-storage VERSION ${VERSION})
 
