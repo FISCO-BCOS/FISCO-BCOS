@@ -1,4 +1,4 @@
-include(Version)
+
 project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
