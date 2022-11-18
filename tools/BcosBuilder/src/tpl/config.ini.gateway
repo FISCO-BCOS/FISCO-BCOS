@@ -6,6 +6,14 @@
     nodes_path=./
     nodes_file=nodes.json
 
+[certificate_blacklist]
+    ; crl.0 should be nodeid, nodeid's length is 512
+    ;crl.0=
+    
+[certificate_whitelist]
+    ; cal.0 should be nodeid, nodeid's length is 512
+    ;cal.0=
+
 [service]
     ;rpc=chain0
     
