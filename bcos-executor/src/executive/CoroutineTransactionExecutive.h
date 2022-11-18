@@ -25,11 +25,8 @@
 #include "TransactionExecutive.h"
 #include <boost/coroutine2/coroutine.hpp>
 
-namespace bcos
+namespace bcos::executor
 {
-namespace executor
-{
-
 
 class CoroutineTransactionExecutive : public TransactionExecutive
 {
@@ -119,5 +116,4 @@ private:
     std::optional<Coroutine::pull_type> m_pullMessage;
     std::optional<Coroutine::push_type> m_pushMessage;
 };
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

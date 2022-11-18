@@ -193,11 +193,11 @@ struct DagExecutorFixture
 };
 BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 
+#ifdef WITH_WASM
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-
         ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
@@ -647,6 +647,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             BOOST_CHECK_EQUAL(name, "alice");
         });
 }
+#endif
 
 BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {

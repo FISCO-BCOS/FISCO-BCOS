@@ -525,13 +525,14 @@ BOOST_AUTO_TEST_CASE(asyncPrepareTimeout)
             BOOST_CHECK_NE(ts, 0);
         });
     auto now = std::chrono::system_clock::now();
+    // re-prepare need wait for the previous prepare timeout
     storage->asyncPrepare(bcos::protocol::TwoPCParams(), *stateStorage,
         [&](Error::Ptr error, uint64_t ts, const std::string&) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
         });
     auto end = std::chrono::system_clock::now();
-    BOOST_CHECK_GE(std::chrono::duration_cast<std::chrono::milliseconds>(end - now).count(), 3000);
+    BOOST_CHECK_GE(std::chrono::duration_cast<std::chrono::milliseconds>(end - now).count(), 2900);
     cleanupTestTableData();
 }
 

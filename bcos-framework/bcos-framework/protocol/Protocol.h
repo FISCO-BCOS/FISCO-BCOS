@@ -64,13 +64,16 @@ enum MessageType
     EVENT_LOG_PUSH = 0x122,     // 290
 };
 
+// TODO: Allow add new module, exchange moduleid or version
 enum ModuleID
 {
     PBFT = 1000,
     Raft = 1001,
+
     BlockSync = 2000,
     TxsSync = 2001,
     ConsTxsSync = 2002,
+
     AMOP = 3000,
 
     LIGHTNODE_GET_BLOCK = 4000,
@@ -85,6 +88,7 @@ enum ModuleID
     SYNC_GET_TRANSACTIONS = 5001,
     SYNC_END = 5999
 };
+
 enum ProtocolModuleID : uint32_t
 {
     NodeService = 0x0,
@@ -102,7 +106,8 @@ enum ProtocolVersion : uint32_t
 
 // BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should
 // be compatible with the same major.minor version, the patch version should always be compatible,
-// the last byte is reserved, so 3.1.0 is 0x03010000 and is compatible with 3.1.1 which is 0x03010100
+// the last byte is reserved, so 3.1.0 is 0x03010000 and is compatible with 3.1.1 which is
+// 0x03010100
 
 enum class BlockVersion : uint32_t
 {

@@ -39,12 +39,10 @@ public:
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService);
-    ~JsonRpcImpl_2_0() override {}
-
+    ~JsonRpcImpl_2_0() override = default;
 
     void setClientID(std::string_view _clientID) { m_clientID = _clientID; }
 
-public:
     void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
         std::string_view _data, RespFunc _respFunc) override;
 
@@ -114,7 +112,6 @@ public:
 
     void getGroupBlockNumber(RespFunc _respFunc) override;
 
-public:
     void setNodeInfo(const NodeInfo& _nodeInfo) { m_nodeInfo = _nodeInfo; }
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }
@@ -157,7 +154,6 @@ private:
         bcos::gateway::GatewayInfo::Ptr _localP2pInfo, bcos::gateway::GatewayInfosPtr _peersInfo);
     void getGroupPeers(std::string_view _groupID, RespFunc _respFunc) override;
 
-private:
     // ms
     int m_sendTxTimeout = -1;
 

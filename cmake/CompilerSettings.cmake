@@ -38,7 +38,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     # Ignore warnings
     add_compile_options(-Wno-unused-parameter)
     add_compile_options(-Wno-unused-variable)
-    add_compile_options(-Wno-unknown-pragmas)
+    add_compile_options(-Wno-error=unknown-pragmas)
+    add_compile_options(-Wno-error=deprecated-declarations)
 
     add_compile_options(-fno-omit-frame-pointer)
     
@@ -75,7 +76,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
+    set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")

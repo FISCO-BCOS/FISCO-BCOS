@@ -456,7 +456,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
-                jResp["to"] = string(submitResult->to());
+                jResp["to"] = submitResult->to();
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
                 // TODO: check if needed
@@ -467,7 +467,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             catch (bcos::Error& e)
             {
                 auto info = boost::diagnostic_information(e);
-                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << info;
+                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << e.errorCode() << " " << info;
                 respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
             }
             catch (std::exception& e)

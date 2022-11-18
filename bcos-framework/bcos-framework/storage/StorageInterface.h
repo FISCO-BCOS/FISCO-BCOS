@@ -34,9 +34,7 @@
 #include <memory>
 #include <string>
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 class Table;
 class StorageInterface
@@ -74,10 +72,19 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
-    virtual Error::Ptr setRows(
-        std::string_view, std::vector<std::string_view>, std::vector<std::string_view>)
+    virtual Error::Ptr setRows(std::string_view,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>&,
+        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>>)
     {
-        throw std::invalid_argument("unimplement method");
+        throw std::invalid_argument("unimplemented method");
+        return nullptr;
+    };
+    virtual Error::Ptr deleteRows(
+        std::string_view, const std::variant<const gsl::span<std::string_view const>,
+                              const gsl::span<std::string const>>&)
+    {
+        throw std::invalid_argument("unimplemented method");
         return nullptr;
     };
 };
@@ -87,8 +94,6 @@ class TraverseStorageInterface : public virtual StorageInterface
 public:
     using Ptr = std::shared_ptr<TraverseStorageInterface>;
     using ConstPtr = std::shared_ptr<TraverseStorageInterface const>;
-
-    virtual ~TraverseStorageInterface() = default;
 
     virtual void parallelTraverse(bool onlyDirty,
         std::function<bool(
@@ -100,8 +105,6 @@ class MergeableStorageInterface : public virtual StorageInterface
 {
 public:
     using Ptr = std::shared_ptr<MergeableStorageInterface>;
-
-    virtual ~MergeableStorageInterface() = default;
 
     virtual void merge(bool onlyDirty, const TraverseStorageInterface& source) = 0;
 };
@@ -125,5 +128,4 @@ public:
         const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
 };
 
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

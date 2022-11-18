@@ -24,6 +24,7 @@
 #include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -100,6 +101,7 @@ private:
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
+    std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 };
 }  // namespace initializer
 }  // namespace bcos

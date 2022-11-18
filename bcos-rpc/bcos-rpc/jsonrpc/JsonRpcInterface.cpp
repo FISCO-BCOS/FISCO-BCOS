@@ -133,7 +133,7 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
     _sender(strResp);
 }
 
-void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)
+void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)
 {
     Json::Value root;
     Json::Reader jsonReader;
@@ -213,7 +213,7 @@ void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRe
 }
 
 
-bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
+bcos::bytes bcos::rpc::toStringResponse(JsonResponse _jsonResponse)
 {
     auto jResp = toJsonResponse(std::move(_jsonResponse));
     std::unique_ptr<Json::StreamWriter> writer(Json::StreamWriterBuilder().newStreamWriter());
@@ -242,7 +242,7 @@ bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
     return out;
 }
 
-Json::Value JsonRpcInterface::toJsonResponse(JsonResponse _jsonResponse)
+Json::Value bcos::rpc::toJsonResponse(JsonResponse _jsonResponse)
 {
     Json::Value jResp;
     jResp["jsonrpc"] = std::move(_jsonResponse.jsonrpc);
