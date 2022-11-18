@@ -392,9 +392,13 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
 
     auto finally = [_blockNumber, total, result, block, _onGetBlock](Error::Ptr&& error) {
         if (error)
+        {
             ++std::get<1>(*result);
+        }
         else
+        {
             ++std::get<0>(*result);
+        }
 
         if (std::get<0>(*result) + std::get<1>(*result) == *total)
         {
@@ -422,10 +426,14 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 block, _blockNumber, [finally](Error::Ptr&& error) { finally(std::move(error)); });
         });
     }
-    if (_blockFlag & TRANSACTIONS)
+    if ((_blockFlag & TRANSACTIONS) != 0)
+    {
         ++(*total);
-    if (_blockFlag & RECEIPTS)
+    }
+    if ((_blockFlag & RECEIPTS) != 0)
+    {
         ++(*total);
+    }
 
     if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
     {

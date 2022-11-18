@@ -121,18 +121,14 @@ private:
 
     std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>> m_methodToFunc;
 
-    static void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
-    static bcos::bytes toStringResponse(JsonResponse _jsonResponse);
-    static Json::Value toJsonResponse(JsonResponse _jsonResponse);
 
     std::string_view toView(const Json::Value& value)
     {
         const char* begin = nullptr;
         const char* end = nullptr;
-        bool result = value.getString(&begin, &end);
-        if (!result)
+        if (!value.getString(&begin, &end))
         {
-            return std::string_view();
+            return {};
         }
         std::string_view view(begin, end - begin);
         return view;
@@ -273,5 +269,9 @@ private:
         getGroupNodeInfo(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
     }
 };
+void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
+bcos::bytes toStringResponse(JsonResponse _jsonResponse);
+Json::Value toJsonResponse(JsonResponse _jsonResponse);
+
 
 }  // namespace bcos::rpc

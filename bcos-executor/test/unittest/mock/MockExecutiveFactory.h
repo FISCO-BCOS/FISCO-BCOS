@@ -37,7 +37,12 @@ public:
             std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
         return executive;
     }
+
+#ifdef WITH_WASM
     std::shared_ptr<wasm::GasInjector> instruction =
         std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+#else
+    std::shared_ptr<wasm::GasInjector> instruction;
+#endif
 };
 }  // namespace bcos::test

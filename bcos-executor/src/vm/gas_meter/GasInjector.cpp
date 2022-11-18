@@ -18,6 +18,7 @@
  *  @date 20200921
  */
 
+#ifdef WITH_WASM
 #include "GasInjector.h"
 #include "src/binary-reader-ir.h"
 #include "src/binary-reader.h"
@@ -562,3 +563,4 @@ GasInjector::Result GasInjector::InjectMeter(const std::vector<uint8_t>& byteCod
 
 }  // namespace wasm
 }  // namespace bcos
+#endif

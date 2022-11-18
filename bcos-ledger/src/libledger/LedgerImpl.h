@@ -122,13 +122,16 @@ private:
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
-        tbb::parallel_for(tbb::blocked_range<size_t>(0u, RANGES::size(entries)),
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, RANGES::size(entries)),
             [&entries, &out](const tbb::blocked_range<size_t>& range) {
                 for (auto index = range.begin(); index != range.end(); ++index)
                 {
-                    if (!entries[index]) [[unlikely]]
-                        BOOST_THROW_EXCEPTION(NotFoundTransaction{} << bcos::error::ErrorMessage{
-                                                  "Get transaction not found"});
+                    if (!entries[index])
+                    {
+                        [[unlikely]] BOOST_THROW_EXCEPTION(
+                            NotFoundTransaction{}
+                            << bcos::error::ErrorMessage{"Get transaction not found"});
+                    }
 
                     auto field = entries[index]->getField(0);
                     bcos::concepts::serialize::decode(field, out[index]);
@@ -146,13 +149,15 @@ private:
 
         bcos::concepts::ledger::Status status;
         auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
-        for (auto i = 0u; i < RANGES::size(entries); ++i)
+        for (auto i = 0U; i < RANGES::size(entries); ++i)
         {
             auto& entry = entries[i];
 
             int64_t value = 0;
-            if (entry) [[likely]]
-                value = boost::lexical_cast<int64_t>(entry->getField(0));
+            if (entry)
+            {
+                [[likely]] value = boost::lexical_cast<int64_t>(entry->getField(0));
+            }
 
             switch (i)
             {
