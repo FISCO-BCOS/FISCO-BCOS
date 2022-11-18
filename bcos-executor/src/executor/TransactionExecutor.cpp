@@ -1874,7 +1874,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
         }
     }
     // create temp state storage
@@ -1992,7 +1992,7 @@ void TransactionExecutor::getABI(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
         }
     }
     // create temp state storage
