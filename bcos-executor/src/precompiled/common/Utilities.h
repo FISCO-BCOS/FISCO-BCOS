@@ -33,9 +33,7 @@
 #include <boost/serialization/string.hpp>
 #include <boost/serialization/vector.hpp>
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _codec)
 {
@@ -142,5 +140,4 @@ executor::CallParameters::UniquePtr externalRequest(
 s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _origin, std::string_view _sender, std::string_view _filePath,
     std::string_view _fileType, int64_t gasLeft);
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled
