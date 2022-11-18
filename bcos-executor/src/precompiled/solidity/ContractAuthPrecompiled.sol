@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.6.0;
 
+enum Status{
+    normal,
+    freeze,
+    abolish
+}
+
 abstract contract ContractAuthPrecompiled {
     function getAdmin(address path) public view returns (address);
     function resetAdmin(address path, address admin) public returns (int256);
@@ -10,6 +16,7 @@ abstract contract ContractAuthPrecompiled {
     function checkMethodAuth(address path, bytes4 func, address account) public view returns (bool);
     function getMethodAuth(address path, bytes4 func) public view returns (uint8,string[] memory,string[] memory);
     function setContractStatus(address _address, bool isFreeze) public returns(int);
+    function setContractStatus(address _address, Status _status) public returns(int);
     function contractAvailable(address _address) public view returns (bool);
 
     function deployType() public view returns (uint256);
