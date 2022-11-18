@@ -221,11 +221,6 @@ void TransactionExecutor::initEvmEnvironment()
     m_constantPrecompiled->insert(
         {RING_SIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    storage::StorageInterface::Ptr storage = m_backendStorage;
-    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
-    DagTransferPrecompiled::createDagTable(storage);
-
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 
@@ -272,16 +267,19 @@ void TransactionExecutor::initWasmEnvironment()
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    storage::StorageInterface::Ptr storage = m_backendStorage;
-    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
-    DagTransferPrecompiled::createDagTable(storage);
 
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+}
+
+void TransactionExecutor::initTestPrecompiled(storage::StorageInterface::Ptr storage)
+{
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
+    DagTransferPrecompiled::createDagTable(storage);
 }
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
@@ -400,6 +398,11 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
+
+            if (blockHeader->number() == 0)
+            {
+                initTestPrecompiled(stateStorage);
+            }
         }
 
         // cache parentHash
@@ -1871,7 +1874,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
         }
     }
     // create temp state storage
@@ -1989,7 +1992,7 @@ void TransactionExecutor::getABI(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
         }
     }
     // create temp state storage

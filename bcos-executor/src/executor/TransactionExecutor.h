@@ -214,6 +214,7 @@ protected:
     createExternalFunctionCall(std::function<void(
             bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>& callback);
 
+
     void removeCommittedState();
 
     // execute transactions with criticals and return in executionResults
@@ -317,6 +318,7 @@ protected:
     bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
+    void initTestPrecompiled(storage::StorageInterface::Ptr storage);
 
     std::function<void()> f_onNeedSwitchEvent;
 

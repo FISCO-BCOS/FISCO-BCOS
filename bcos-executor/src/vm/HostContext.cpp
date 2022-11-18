@@ -396,11 +396,17 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
             EXECUTOR_LOG(TRACE) << LOG_DESC("set abi") << LOG_KV("codeHash", codeHash)
                                 << LOG_KV("abiSize", abi.size());
 
-            Entry abiEntry;
-            abiEntry.importFields({std::move(abi)});
+            auto abiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
 
-            m_executive->storage().setRow(
-                bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+            if (!abiEntry)
+            {
+                abiEntry = std::make_optional<Entry>();
+                abiEntry->importFields({std::move(abi)});
+
+                m_executive->storage().setRow(
+                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry.value()));
+            }
+
             return;
         }
         // old logic
