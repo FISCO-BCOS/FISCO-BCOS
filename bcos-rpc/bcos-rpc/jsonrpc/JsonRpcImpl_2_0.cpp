@@ -88,7 +88,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
             auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
             // remove the callback
-            BCOS_LOG(WARNING)
+            BCOS_LOG(TRACE)
                 << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
                 << LOG_DESC("unable to send response for session has been inactive")
                 << LOG_KV("req", std::string_view((const char*)m_buffer->data(), m_buffer->size()))

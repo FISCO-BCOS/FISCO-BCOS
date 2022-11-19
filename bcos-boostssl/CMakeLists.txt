@@ -1,4 +1,3 @@
-include(Version)
 project(bcos-boostssl VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS bcos-boostssl/*.cpp)

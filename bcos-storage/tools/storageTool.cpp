@@ -120,6 +120,8 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(
             std::string(ledger::FS_USER),
             std::string(ledger::FS_SYS_BIN),
             std::string(ledger::FS_USER_TABLE),
+            std::string(ledger::SYS_CONTRACT_ABI),
+            std::string(ledger::SYS_CODE_BINARY),
             storage::StorageInterface::SYS_TABLES,
         });
     if (version >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
@@ -150,7 +152,7 @@ void print(
 
 void writeKV(std::ofstream& output, std::string_view key, std::string_view value, bool hex = false)
 {
-    output << "[key=" << key << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
+    output << "[key=" << (hex ? toHex(key) : key) << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
 }
 
 DB* createSecondaryRocksDB(
