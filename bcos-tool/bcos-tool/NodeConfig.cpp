@@ -58,7 +58,7 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 void NodeConfig::loadConfig(
     boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig)
 {
-    // if version < 3.1.0, config.ini include chianConfig
+    // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig ||
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
@@ -81,7 +81,7 @@ void NodeConfig::loadConfig(
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
-    // if version > 3.1.0, genesisBlock include chianConfig
+    // if version >= 3.1.0, genesisBlock include chainConfig
     m_compatibilityVersionStr = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);

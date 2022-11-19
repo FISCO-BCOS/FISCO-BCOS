@@ -56,7 +56,7 @@ public:
     std::string genesisDataOutPut()
     {
         std::stringstream ss;
-        ss << "[chian]" << std::endl
+        ss << "[chain]" << std::endl
            << "sm_crypto:" << m_smCrypto << std::endl
            << "chainID: " << m_chainID << std::endl
            << "grouID: " << m_groupID << std::endl
