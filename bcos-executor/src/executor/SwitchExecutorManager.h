@@ -626,7 +626,7 @@ public:
         executorUseCount = executor.use_count();
 
         // waiting for stopped
-        while (executorUseCount > 1)
+        while (executorUseCount > 2)
         {
             if (executor != nullptr)
             {
