@@ -507,8 +507,8 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
 {
     m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
-    m_groupId = _pt.get<std::string>("chain.group_id", "group");
-    m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
+    m_groupId = _pt.get<std::string>("chain.group_id", "group0");
+    m_chainId = _pt.get<std::string>("chain.chain_id", "chain0");
     if (!isalNumStr(m_chainId))
     {
         BOOST_THROW_EXCEPTION(
