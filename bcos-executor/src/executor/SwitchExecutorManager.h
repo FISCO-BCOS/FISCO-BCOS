@@ -616,8 +616,11 @@ public:
     void stop() override
     {
         EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
+        m_schedulerTermId = STOPPED_TERM_ID;
+
         auto executorUseCount = 0;
         bcos::executor::TransactionExecutor::Ptr executor = getCurrentExecutor();
+        m_executor = nullptr;
 
         if (executor)
         {
@@ -626,7 +629,7 @@ public:
         executorUseCount = executor.use_count();
 
         // waiting for stopped
-        while (executorUseCount > 2)
+        while (executorUseCount > 1)
         {
             if (executor != nullptr)
             {
@@ -637,10 +640,6 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         EXECUTOR_LOG(INFO) << "Executor has stopped.";
-
-        m_executor = nullptr;
-
-        m_schedulerTermId = STOPPED_TERM_ID;
     }
 
     bcos::executor::TransactionExecutor::Ptr getCurrentExecutor() { return m_executor; }
