@@ -1462,7 +1462,6 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             return dmcExecutorIt->second;
         }
 
-
         std::string dispatchAddress;
         if (number() == 0)
         {
