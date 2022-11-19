@@ -1461,8 +1461,19 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         {
             return dmcExecutorIt->second;
         }
-        auto executor = m_scheduler->executorManager()->dispatchExecutor(contractAddress);
-        auto executorInfo = m_scheduler->executorManager()->getExecutorInfo(contractAddress);
+
+        std::string dispatchAddress;
+        if (number() == 0)
+        {
+            dispatchAddress = "genesis block use same executor to init";
+        }
+        else
+        {
+            dispatchAddress = contractAddress;
+        }
+
+        auto executor = m_scheduler->executorManager()->dispatchExecutor(dispatchAddress);
+        auto executorInfo = m_scheduler->executorManager()->getExecutorInfo(dispatchAddress);
 
         if (executor == nullptr || executorInfo == nullptr)
         {
