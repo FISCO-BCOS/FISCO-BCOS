@@ -24,6 +24,7 @@ ExternalProject_Add(tikv_client_project
 
 ExternalProject_Get_Property(tikv_client_project SOURCE_DIR)
 ExternalProject_Get_Property(tikv_client_project BINARY_DIR)
+
 set(KVCLIENT_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${KVCLIENT_INCLUDE_DIRS})  # Must exist.
 

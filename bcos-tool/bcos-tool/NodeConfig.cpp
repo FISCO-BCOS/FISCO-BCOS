@@ -529,8 +529,14 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
+    m_hsmEnable = _pt.get<bool>("security.enable_hsm", "false");
+    m_keyIndex = _pt.get<int>("security.key_index", -1);
+    m_password = _pt.get<std::string>("security.password", "");
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
-                         << LOG_KV("privateKeyPath", m_privateKeyPath);
+                         << LOG_KV("privateKeyPath", m_privateKeyPath)
+                         << LOG_KV("enable_hsm", m_hsmEnable)
+                         << LOG_KV("key_index", m_keyIndex)
+                         << LOG_KV("password", m_password);
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
