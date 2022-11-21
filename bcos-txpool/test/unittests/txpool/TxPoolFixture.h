@@ -262,7 +262,7 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
             {
                 BOOST_CHECK(
                     (submitResult->status() == _expectedStatus) ||
-                    (submitResult->status() == (int32_t)TransactionStatus::BlockLimitCheckFail));
+                    (submitResult->status() == (int32_t)TransactionStatus::TransactionPoolTimeout));
             }
         }
         catch (std::exception& e)
