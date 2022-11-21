@@ -23,7 +23,7 @@ public:
     {
         factory->registerNeedSwitchEvent([this]() { selfAsyncRefreshExecutor(); });
 
-        refreshExecutor(INIT_SCHEDULER_TERM_ID);
+        // refreshExecutor(INIT_SCHEDULER_TERM_ID + 1);
     }
 
     ~SwitchExecutorManager() noexcept override {}
@@ -96,17 +96,9 @@ public:
 
     void triggerSwitch() { selfAsyncRefreshExecutor(); }
 
-    bool hasStopped()
-    {
-        ReadGuard l(m_mutex);
-        return m_schedulerTermId == STOPPED_TERM_ID;
-    }
+    bool hasStopped() { return m_schedulerTermId == STOPPED_TERM_ID; }
 
-    bool hasNextBlockHeaderDone()
-    {
-        ReadGuard l(m_mutex);
-        return m_schedulerTermId != INIT_SCHEDULER_TERM_ID;
-    }
+    bool hasNextBlockHeaderDone() { return m_schedulerTermId != INIT_SCHEDULER_TERM_ID; }
 
     void nextBlockHeader(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
@@ -624,20 +616,21 @@ public:
     void stop() override
     {
         EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
+        m_schedulerTermId = STOPPED_TERM_ID;
+
         auto executorUseCount = 0;
+        bcos::executor::TransactionExecutor::Ptr executor = getCurrentExecutor();
+        m_executor = nullptr;
+
+        if (executor)
         {
-            WriteGuard l(m_mutex);
-            if (m_executor)
-            {
-                m_executor->stop();
-            }
-            executorUseCount = m_executor.use_count();
+            executor->stop();
         }
+        executorUseCount = executor.use_count();
 
         // waiting for stopped
         while (executorUseCount > 1)
         {
-            auto executor = getCurrentExecutor();
             if (executor != nullptr)
             {
                 executorUseCount = executor.use_count();
@@ -647,26 +640,17 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         EXECUTOR_LOG(INFO) << "Executor has stopped.";
-
-        m_executor = nullptr;
-
-        m_schedulerTermId = STOPPED_TERM_ID;
     }
 
-    bcos::executor::TransactionExecutor::Ptr getCurrentExecutor()
-    {
-        ReadGuard l(m_mutex);
-        auto executor = m_executor;
-        return executor;
-    }
+    bcos::executor::TransactionExecutor::Ptr getCurrentExecutor() { return m_executor; }
 
     bcos::executor::TransactionExecutor::Ptr getAndNewExecutorIfNotExists()
     {
-        WriteGuard l(m_mutex);
         if (!m_executor)
         {
-            m_executor = m_factory->build();
+            refreshExecutor(INIT_SCHEDULER_TERM_ID + 1);
         }
+
         auto executor = m_executor;
         return executor;
     }
@@ -674,7 +658,7 @@ public:
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
-    int64_t m_schedulerTermId = STOPPED_TERM_ID;
+    int64_t m_schedulerTermId = INIT_SCHEDULER_TERM_ID;
 
     mutable bcos::SharedMutex m_mutex;
 

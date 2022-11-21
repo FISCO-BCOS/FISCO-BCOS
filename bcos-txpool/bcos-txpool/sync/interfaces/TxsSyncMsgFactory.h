@@ -21,16 +21,14 @@
 #pragma once
 #include "TxsSyncMsgInterface.h"
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class TxsSyncMsgFactory
 {
 public:
     using Ptr = std::shared_ptr<TxsSyncMsgFactory>;
     TxsSyncMsgFactory() = default;
-    virtual ~TxsSyncMsgFactory() {}
+    virtual ~TxsSyncMsgFactory() = default;
 
     virtual TxsSyncMsgInterface::Ptr createTxsSyncMsg() = 0;
     virtual TxsSyncMsgInterface::Ptr createTxsSyncMsg(
@@ -55,5 +53,4 @@ public:
 
     virtual TxsSyncMsgInterface::Ptr createTxsSyncMsg(bytesConstRef _data) = 0;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

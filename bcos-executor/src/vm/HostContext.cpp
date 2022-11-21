@@ -42,6 +42,7 @@
 #include <limits>
 #include <memory>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 
@@ -306,18 +307,27 @@ bool HostContext::setCode(bytes code)
     {
         auto contractTable = m_executive->storage().openTable(m_tableName);
         // set code hash in contract table
-        Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
         if (contractTable)
         {
+            Entry codeHashEntry;
             codeHashEntry.importFields({codeHash.asBytes()});
-            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-            // set code in code binary table
 
-            Entry codeEntry;
-            codeEntry.importFields({std::move(code)});
-            m_executive->storage().setRow(
-                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0), std::move(codeEntry));
+            auto codeEntry = m_executive->storage().getRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0));
+
+            if (!codeEntry)
+            {
+                codeEntry = std::make_optional<Entry>();
+                codeEntry->importFields({std::move(code)});
+
+                // set code in code binary table
+                m_executive->storage().setRow(bcos::ledger::SYS_CODE_BINARY,
+                    codeHashEntry.getField(0), std::move(codeEntry.value()));
+            }
+
+            // dry code hash in account table
+            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
             return true;
         }
         return false;
@@ -355,11 +365,17 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
             EXECUTOR_LOG(TRACE) << LOG_DESC("set abi") << LOG_KV("codeHash", codeHash)
                                 << LOG_KV("abiSize", abi.size());
 
-            Entry abiEntry;
-            abiEntry.importFields({std::move(abi)});
+            auto abiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
 
-            m_executive->storage().setRow(
-                bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+            if (!abiEntry)
+            {
+                abiEntry = std::make_optional<Entry>();
+                abiEntry->importFields({std::move(abi)});
+
+                m_executive->storage().setRow(
+                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry.value()));
+            }
+
             return;
         }
         // old logic
@@ -389,9 +405,19 @@ size_t HostContext::codeSizeAt(const std::string_view& address)
     auto blockContext = m_executive->blockContext().lock();
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        // precompiled return 1;
+        /*
+         Note:
+            evm precompiled(0x1 ~ 0x9): return 0 (Is the same as eth)
+            FISCO BCOS precompiled: return 1
+
+            Because evm precompiled is call by build-in opcode, no need to get code size before
+         called, but FISCO BCOS precompiled is call like contract, so it need to get code size.
+         */
+
         if (m_executive->isPrecompiled(addressBytesStr2String(address)))
         {
+            // Only FISCO BCOS precompile: constant precompiled or build-in precompiled
+            // evm precompiled address will go down to externalCodeRequest() and get empty code
             return 1;
         }
         auto code = externalCodeRequest(address);
@@ -473,9 +499,24 @@ void HostContext::log(h256s&& _topics, bytesConstRef _data)
         _data.toBytes());
 }
 
-h256 HostContext::blockHash() const
+h256 HostContext::blockHash(int64_t _number) const
 {
-    return m_executive->blockContext().lock()->hash();
+    if (m_executive->blockContext().lock()->blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        if (_number >= blockNumber() || _number < 0)
+        {
+            return h256("");
+        }
+        else
+        {
+            return m_executive->blockContext().lock()->blockHash(_number);
+        }
+    }
+    else
+    {
+        return m_executive->blockContext().lock()->hash();
+    }
 }
 
 int64_t HostContext::blockNumber() const

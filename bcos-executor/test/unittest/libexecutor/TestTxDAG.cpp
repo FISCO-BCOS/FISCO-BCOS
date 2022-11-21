@@ -233,6 +233,13 @@ BOOST_AUTO_TEST_CASE(TestRun2)
     txDagTest(txDag);
 }
 
+BOOST_AUTO_TEST_CASE(TestRun4)
+{
+    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
+    // FIXME
+    // txDagDeepTreeTest(txDag);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

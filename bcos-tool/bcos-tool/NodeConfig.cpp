@@ -27,6 +27,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <json/forwards.h>
 #include <json/reader.h>
@@ -54,9 +55,16 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
+void NodeConfig::loadConfig(
+    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig)
 {
-    loadChainConfig(_pt);
+    // if version < 3.1.0, config.ini include chainConfig
+    if (_enforceChainConfig ||
+        (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
+            m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
+    {
+        loadChainConfig(_pt);
+    }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadGatewayConfig(_pt);
@@ -73,6 +81,14 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
+    // if version >= 3.1.0, genesisBlock include chainConfig
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
+    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        loadChainConfig(_genesisConfig);
+    }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
     generateGenesisData();
@@ -520,10 +536,10 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
-    if (m_minSealTime <= 0)
+    if (m_minSealTime <= 0 || m_minSealTime > 3000)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set consensus.min_seal_time larger than 0!"));
+                                  "Please set consensus.min_seal_time between 1 and 3000!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
@@ -766,6 +782,27 @@ void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
     std::string executorConfig = "";
+    std::string genesisdata = "";
+    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
+            m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
+            m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
+            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
+        genesisdata = genesisData->genesisDataOutPut();
+        size_t j = 0;
+        for (const auto& node : m_ledgerConfig->consensusNodeList())
+        {
+            genesisdata = genesisdata + "node." + boost::lexical_cast<std::string>(j) + ":" +
+                          *toHexString(node->nodeID()->data()) + "," +
+                          std::to_string(node->weight()) + "\n";
+            ++j;
+        }
+        NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
+                             << LOG_KV("genesisData", genesisdata);
+        m_genesisData = genesisdata;
+        return;
+    }
 
     versionData = m_compatibilityVersionStr + "-";
     std::stringstream ss;

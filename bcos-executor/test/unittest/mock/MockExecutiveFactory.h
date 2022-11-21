@@ -4,9 +4,9 @@
 #include "../../../src/executive/ExecutiveFactory.h"
 #include "../../../src/executive/TransactionExecutive.h"
 #include "../../../src/vm/gas_meter/GasInjector.h"
+#include "MockLedger.h"
 #include "MockTransactionExecutive.h"
 #include <boost/test/unit_test.hpp>
-
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -31,8 +31,9 @@ public:
 
     std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t, bool) override
     {
+        auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
-            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
         auto executive =
             std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
         return executive;
