@@ -26,11 +26,11 @@
 #include "sdf/SDFCryptoProvider.h"
 using namespace hsm;
 using namespace hsm::sdf;
-//using namespace bcos;
+using namespace bcos;
 using namespace bcos::crypto;
 
-bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t, const unsigned char* _ivData, size_t)
+bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData,
+    size_t _plainDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData, size_t)
 {
     // note: parm _ivDataSize and _keySize wasn't used
     // Add padding
@@ -39,8 +39,8 @@ bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData, 
     int inDataVLen = _plainDataSize + nSize;
     bytes inDataV(inDataVLen);
     memcpy(inDataV.data(), _plainData, _plainDataSize);
-    memset(inDataV.data() + _plainDataSize, nSize, nSize);
-   
+    memset(inDataV.data() + _plainDataSize, 0, nSize);
+
     // Encrypt
     Key key = Key();
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
@@ -48,19 +48,16 @@ bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData, 
     key.setSymmetricKey(pbKeyValue);
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
-    //bytes enData(inDataVLen/16);
     auto encryptedData = std::make_shared<bytes>();
     encryptedData->resize(inDataVLen);
-    bytes iv(16);
-    memcpy(iv.data(), _ivData, 16);
-    provider.Encrypt(key, SM4_CBC, (unsigned char*)iv.data(), (unsigned char*)inDataV.data(), inDataVLen,
-        (unsigned char*)encryptedData->data(), &size);
-    CRYPTO_LOG(INFO) << "[HsmSM4Crypto::Encrypt] Encrypt Success";
+    provider.Encrypt(key, SM4_CBC, (unsigned char*)_ivData, (unsigned char*)inDataV.data(),
+        inDataVLen, (unsigned char*)encryptedData->data(), &size);
+    CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::Encrypt] Encrypt Success";
     return encryptedData;
 }
 
-bcos::bytesPointer bcos::crypto::HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
-    const unsigned char* _key, size_t, const unsigned char* _ivData, size_t)
+bcos::bytesPointer bcos::crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
+    size_t _cipherDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData, size_t)
 {
     auto decryptedData = std::make_shared<bytes>();
     decryptedData->resize(_cipherDataSize);
@@ -71,10 +68,8 @@ bcos::bytesPointer bcos::crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
 
     unsigned int size;
-    bytes iv(16);
-    memcpy(iv.data(), _ivData, 16);
-    provider.Decrypt(key, SM4_CBC, (unsigned char*)iv.data(), _cipherData, _cipherDataSize,
+    provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cipherData, _cipherDataSize,
         (unsigned char*)decryptedData->data(), &size);
-    CRYPTO_LOG(INFO) << "[HsmSM4Crypto::Decrypt] Decrypt Success";
+    CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::Decrypt] Decrypt Success";
     return decryptedData;
 }

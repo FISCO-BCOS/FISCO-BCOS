@@ -50,7 +50,7 @@ public:
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
     bool hsmEnable() const { return m_hsmEnable; }
     int keyIndex() const { return m_keyIndex; }
-    std::string password() const { return m_password; }
+    const std::string& password() const { return m_password; }
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
     bcos::security::DataEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
 

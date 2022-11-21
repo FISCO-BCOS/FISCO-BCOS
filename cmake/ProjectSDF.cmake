@@ -15,25 +15,10 @@ if("${ARCHITECTURE}" MATCHES "x86_64")
     set(SDF_LIB_NAME "libsdf-crypto_x86.a")
 endif()
 
-#ExternalProject_Add(libsdf
-#    PREFIX ${CMAKE_SOURCE_DIR}/deps
-#    DOWNLOAD_NAME sdf.zip
-#    DOWNLOAD_NO_PROGRESS 1
-#    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/tags/GMT0018.tar.gz
-#    URL_HASH SHA256=f69484f4225c14be4eb85f507f6c699638e5fb43e46ccde31778a7df337c5fd2
-#    BUILD_IN_SOURCE 1
-#    LOG_CONFIGURE 0
-#    LOG_BUILD 0
-#    LOG_INSTALL 0
-#    CONFIGURE_COMMAND ""
-#    BUILD_COMMAND ""
-#    INSTALL_COMMAND bash -c "/bin/bash ${CMAKE_SOURCE_DIR}/deps/src/libsdf/install.sh"
-#)
-
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    GIT_REPOSITORY https://${URL_BASE}/LucasLi1024/hsm-crypto.git
-    GIT_TAG        a4cd80bc700561d348a180d6acca4a69f18184d5
+    GIT_REPOSITORY https://${URL_BASE}/WeBankBlockchain/hsm-crypto.git
+    GIT_TAG        e270f9cc577f3826432595375e480f59ba617592
     BUILD_IN_SOURCE true
     LOG_CONFIGURE 1
     LOG_BUILD 1

@@ -23,11 +23,9 @@
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
-#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
-#include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
@@ -36,6 +34,11 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultFactoryImpl.h>
+
+#ifdef WITH_HSM
+#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
+#include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
+#endif
 
 using namespace bcos;
 using namespace bcostars::protocol;
@@ -58,6 +61,8 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 #ifdef WITH_HSM
             createHsmSMCryptoSuite();
             INITIALIZER_LOG(INFO) << LOG_DESC("begin init hsm sm crypto suite");
+#else
+            INITIALIZER_LOG(FATAL) << LOG_DESC("This binary is not compiled with hsm");
 #endif
         }
         else
@@ -127,30 +132,36 @@ void ProtocolInitializer::createHsmSMCryptoSuite()
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
-    if (m_hsmEnable && m_keyIndex != -1)
+    if (m_hsmEnable && m_keyIndex > 0)
     {
+#ifdef WITH_HSM
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
-        m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())->createKeyPair(m_keyIndex, m_password);
+        m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
+                        ->createKeyPair(m_keyIndex, m_password);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from HSM")
-                          << LOG_KV("keyIndex", m_keyIndex)
-                          << LOG_KV("HSM password", m_password);
+                              << LOG_KV("keyIndex", m_keyIndex)
+                              << LOG_KV("HSM password", m_password);
+#else
+        INITIALIZER_LOG(FATAL) << LOG_DESC("This binary is not compiled with hsm");
+#endif
     }
     else
     {
-        auto privateKeyData = loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_dataEncryption);
+        auto privateKeyData =
+            loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_dataEncryption);
         if (!privateKeyData)
         {
             INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair failed")
-                                << LOG_KV("privateKeyPath", _privateKeyPath);
+                                  << LOG_KV("privateKeyPath", _privateKeyPath);
             throw std::runtime_error("loadKeyPair failed, keyPair path: " + _privateKeyPath);
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
-                            << LOG_KV("privateKeySize", privateKeyData->size())
-                            << LOG_KV("enableStorageSecurity", m_dataEncryption ? true : false);
+                              << LOG_KV("privateKeySize", privateKeyData->size())
+                              << LOG_KV("enableStorageSecurity", m_dataEncryption ? true : false);
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
-                          << LOG_KV("privateKeyPath", _privateKeyPath);
+                              << LOG_KV("privateKeyPath", _privateKeyPath);
     }
 
     INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair success")

@@ -42,19 +42,18 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     Key key = Key();
     if (hsmKeyPair.isInternalKey())
     {
-        const char* unsignedPwd = reinterpret_cast<const char*>(hsmKeyPair.password().c_str());
-        std::shared_ptr<const vector<byte>> pwd(
-                new const vector<byte>((byte*)unsignedPwd, (byte*)unsignedPwd + strlen(hsmKeyPair.password().c_str())));
-        key = Key(hsmKeyPair.keyIndex(), pwd);
-        std::string s(key.password()->begin(), key.password()->end());
+        auto pwdConstPtr =
+            std::make_shared<bytes>(hsmKeyPair.password().begin(), hsmKeyPair.password().end());
+        key = Key(hsmKeyPair.keyIndex(), pwdConstPtr);
         CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is internal key "
-                         << LOG_KV("keyIndex", key.identifier())
-                         << LOG_KV("password", s);
+                          << LOG_KV("keyIndex", key.identifier())
+                          << LOG_KV("password", hsmKeyPair.password());
     }
     else
     {
-        auto privKey = std::make_shared<const std::vector<byte>>(
-            (byte*)hsmKeyPair.secretKey()->constData(), (byte*)hsmKeyPair.secretKey()->constData() + 32);
+        auto privKey =
+            std::make_shared<const std::vector<byte>>((byte*)hsmKeyPair.secretKey()->constData(),
+                (byte*)hsmKeyPair.secretKey()->constData() + 32);
         key.setPrivateKey(privKey);
         CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is external key ";
     }
@@ -66,14 +65,15 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     // step 3 : signature = Sign(e)
     // get provider
 
-    auto pubKey = std::make_shared<const std::vector<byte>>(
-        (byte*)hsmKeyPair.publicKey()->constData(), (byte*)hsmKeyPair.publicKey()->constData() + 64);
+    auto pubKey =
+        std::make_shared<const std::vector<byte>>((byte*)hsmKeyPair.publicKey()->constData(),
+            (byte*)hsmKeyPair.publicKey()->constData() + 64);
     key.setPublicKey(pubKey);
     // step 2 : e = H(M')
     unsigned char hashResult[HSM_SM3_DIGEST_LENGTH];
     unsigned int uiHashResultLen;
-    unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(),
-         HSM_SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
+    unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
+        (unsigned char*)hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute H(M')"
@@ -123,8 +123,8 @@ bool HsmSM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRe
     // Get Z
     bytes hashResult(HSM_SM3_DIGEST_LENGTH);
     unsigned int uiHashResultLen;
-    unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(),
-         HSM_SM3_DIGEST_LENGTH, (unsigned char*)hashResult.data(), &uiHashResultLen);
+    unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
+        (unsigned char*)hashResult.data(), &uiHashResultLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::verify] ERROR of Hash"
@@ -196,7 +196,9 @@ KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(SecretPtr _secretKey)
     return m_keyPairFactory->createKeyPair(_secretKey);
 }
 
-KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(unsigned int _keyIndex, std::string _password)
+KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(
+    unsigned int _keyIndex, std::string _password)
 {
-    return dynamic_pointer_cast<HsmSM2KeyPairFactory>(m_keyPairFactory)->createKeyPair(_keyIndex, _password);
+    return dynamic_pointer_cast<HsmSM2KeyPairFactory>(m_keyPairFactory)
+        ->createKeyPair(_keyIndex, _password);
 }

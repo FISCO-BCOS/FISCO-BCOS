@@ -45,15 +45,15 @@ public:
 
     PublicPtr priToPub(SecretPtr _secretKey);
     bool isInternalKey() const { return m_isInternalKey; }
-    
+
     unsigned int keyIndex() const { return m_keyIndex; }
     void setKeyIndex(unsigned int _keyIndex)
     {
         m_keyIndex = _keyIndex;
         m_isInternalKey = true;
     }
-    
-    std::string password() const { return m_password; }
+
+    const std::string& password() const { return m_password; }
     void setPassword(std::string _password)
     {
         m_password = _password;
@@ -61,7 +61,7 @@ public:
     }
 
 private:
-    std::function<int8_t(const CInputBuffer* private_key, COutputBuffer* output_public_key)> 
+    std::function<int8_t(const CInputBuffer* private_key, COutputBuffer* output_public_key)>
         m_publicKeyDeriver;
     bool m_isInternalKey = false;
     unsigned int m_keyIndex;
