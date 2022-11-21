@@ -76,8 +76,7 @@ private:
     void asyncTo(F f)
     {
         // call super function
-        ExecutiveFlowInterface::asyncTo<ExecutiveSerialFlow::Ptr, F>(
-            shared_from_this(), std::move(f));
+        ExecutiveFlowInterface::asyncTo<F>(std::move(f));
     }
 
 

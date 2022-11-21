@@ -152,7 +152,8 @@ void print(
 
 void writeKV(std::ofstream& output, std::string_view key, std::string_view value, bool hex = false)
 {
-    output << "[key=" << (hex ? toHex(key) : key) << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
+    output << "[key=" << (hex ? toHex(key) : key) << "] [value=" << (hex ? toHex(value) : value)
+           << "]" << endl;
 }
 
 DB* createSecondaryRocksDB(
@@ -291,11 +292,19 @@ int main(int argc, const char* argv[])
     // load node config
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
-    nodeConfig->loadConfig(configPath);
     if (fs::exists(genesisFilePath))
     {
         nodeConfig->loadGenesisConfig(genesisFilePath);
     }
+
+    nodeConfig->loadConfig(configPath);
+    bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
+    if (nodeConfig->storageSecurityEnable())
+    {
+        dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+        dataEncryption->init();
+    }
+
 
     auto keyPageSize = nodeConfig->keyPageSize();
     auto keyPageIgnoreTables = getKeyPageIgnoreTables(nodeConfig->compatibilityVersion());

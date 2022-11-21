@@ -50,7 +50,7 @@ void ExecutorServiceApp::initialize()
     {
         std::cout << "init ExecutorService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
@@ -88,8 +88,8 @@ void ExecutorServiceApp::createAndInitExecutor()
     // load protocolInitializer
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("loadNodeConfig");
 
-    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadGenesisConfig(genesisPt);
+    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();

@@ -48,7 +48,7 @@ public:
         {
             std::cout << "init RpcService failed, error: " << boost::diagnostic_information(e)
                       << std::endl;
-            throw e;
+            exit(-1);
         }
     }
 
@@ -66,7 +66,7 @@ protected:
         // !!! Notice:
         auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
             std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        nodeConfig->loadConfig(m_iniConfigPath, false);
+        nodeConfig->loadConfig(m_iniConfigPath, false, true);
         if (nodeConfig->rpcSmSsl())
         {
             addConfig("sm_ca.crt");

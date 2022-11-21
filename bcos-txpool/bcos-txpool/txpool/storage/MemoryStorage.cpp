@@ -160,11 +160,16 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     auto txHash = _tx->hash();
     // the transaction has already onChain, reject it
     auto result = m_config->txValidator()->submittedToChain(_tx);
+    auto it = m_txsTable.find(txHash);
+    Transaction::ConstPtr tx = nullptr;
+    if (it != m_txsTable.end())
+    {
+        tx = it->second;
+    }
     if (result == TransactionStatus::NonceCheckFail)
     {
-        if (m_txsTable.count(txHash))
+        if (tx)
         {
-            auto tx = m_txsTable.at(txHash);
             TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
                                 << tx->hash().abridged() << LOG_KV("batchId", tx->batchId())
                                 << LOG_KV("batchHash", tx->batchHash().abridged())
@@ -174,10 +179,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         return TransactionStatus::NonceCheckFail;
     }
 
-    auto it = m_txsTable.find(txHash);
-    if (it != m_txsTable.end())
+    if (tx)
     {
-        auto& tx = it->second;
         if (!tx->sealed() || tx->batchHash() == HashType())
         {
             if (!tx->sealed())
@@ -579,6 +582,7 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
             continue;
         }
         auto& tx = it->second;
+
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
     if (c_fileLogLevel <= TRACE) [[unlikely]]
@@ -855,13 +859,14 @@ void MemoryStorage::batchMarkTxsWithoutLock(
     ssize_t successCount = 0;
     for (auto txHash : _txsHashList)
     {
-        if (!m_txsTable.count(txHash))
+        auto it = m_txsTable.find(txHash);
+        if (it == m_txsTable.end())
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
                               << LOG_KV("tx", txHash.abridged()) << LOG_KV("sealFlag", _sealFlag);
             continue;
         }
-        auto tx = m_txsTable[txHash];
+        auto tx = it->second;
         if (!tx)
         {
             continue;

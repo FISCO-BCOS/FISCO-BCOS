@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-boostssl/websocket/Common.h"
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
@@ -55,8 +56,21 @@ public:
     const static size_t MESSAGE_MIN_LENGTH;
 
     using Ptr = std::shared_ptr<WsMessage>;
-    WsMessage() { m_payload = std::make_shared<bcos::bytes>(); }
-    virtual ~WsMessage() {}
+    WsMessage()
+    {
+        m_payload = std::make_shared<bcos::bytes>();
+        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+        {
+            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][WsMessage]", this);
+        }
+    }
+    virtual ~WsMessage()
+    {
+        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+        {
+            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[DELOBJ][WsMessage]", this);
+        }
+    }
 
 
     virtual uint16_t version() const override { return m_version; }

@@ -249,7 +249,8 @@ private:
         front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
             bcos::ref(responseBuffer), [](Error::Ptr _error) {
                 if (_error)
-                {}
+                {
+                }
             });
     }
 
