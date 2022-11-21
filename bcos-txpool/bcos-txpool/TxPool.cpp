@@ -487,6 +487,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
                             << LOG_KV("hash", blockHeader->hash().abridged())
                             << LOG_KV("msg", _error->errorMessage())
                             << LOG_KV("code", _error->errorCode());
+                        return;
                     }
                     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock success")
                                      << LOG_KV("consNum", blockHeader->number())
