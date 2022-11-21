@@ -80,7 +80,7 @@ public:
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override;
 
-    void registerExecutor(std::string name,
+    [[deprecated("Use SchedulerImpl::registerExecutor")]] void registerExecutor(std::string name,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         std::function<void(Error::Ptr&&)> callback) override;
 
