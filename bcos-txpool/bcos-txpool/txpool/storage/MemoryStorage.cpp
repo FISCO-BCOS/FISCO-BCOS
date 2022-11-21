@@ -294,13 +294,13 @@ void MemoryStorage::notifyInvalidReceipt(
                         << LOG_KV("tx", _txHash.abridged()) << LOG_KV("exception", _status);
 }
 
-TransactionStatus MemoryStorage::insert(Transaction::ConstPtr transaction)
+TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 {
     ReadGuard lock(x_txpoolMutex);
     return insertWithoutLock(std::move(transaction));
 }
 
-TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr transaction)
+TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
 {
     auto [it, inserted] = m_txsTable.insert(std::make_pair(transaction->hash(), transaction));
     if (!inserted)
@@ -370,7 +370,7 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
     }
 }
 
-Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
+Transaction::Ptr MemoryStorage::removeWithoutLock(HashType const& _txHash)
 {
     auto it = m_txsTable.find(_txHash);
     if (it == m_txsTable.end())
@@ -392,7 +392,7 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
     return tx;
 }
 
-Transaction::ConstPtr MemoryStorage::remove(HashType const& _txHash)
+Transaction::Ptr MemoryStorage::remove(HashType const& _txHash)
 {
     WriteGuard l(x_txpoolMutex);
     auto tx = removeWithoutLock(_txHash);
@@ -400,7 +400,7 @@ Transaction::ConstPtr MemoryStorage::remove(HashType const& _txHash)
     return tx;
 }
 
-Transaction::ConstPtr MemoryStorage::removeSubmittedTxWithoutLock(
+Transaction::Ptr MemoryStorage::removeSubmittedTxWithoutLock(
     TransactionSubmitResult::Ptr txSubmitResult, bool _notify)
 {
     auto tx = removeWithoutLock(txSubmitResult->txHash());
@@ -415,7 +415,7 @@ Transaction::ConstPtr MemoryStorage::removeSubmittedTxWithoutLock(
     return tx;
 }
 
-Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr txSubmitResult)
+Transaction::Ptr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr txSubmitResult)
 {
     auto tx = remove(txSubmitResult->txHash());
     if (!tx)
@@ -427,9 +427,9 @@ Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::
 }
 
 void MemoryStorage::notifyTxResult(
-    Transaction const& transaction, TransactionSubmitResult::Ptr txSubmitResult)
+    Transaction& transaction, TransactionSubmitResult::Ptr txSubmitResult)
 {
-    const auto& txSubmitCallback = transaction.submitCallback();
+    auto txSubmitCallback = transaction.takeSubmitCallback();
     if (!txSubmitCallback)
     {
         return;
@@ -488,7 +488,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
     NonceList nonceList;
-    std::vector<std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr>> results;
+    std::vector<std::tuple<Transaction::Ptr, TransactionSubmitResult::Ptr>> results;
 
     results.reserve(txsResult.size());
     nonceList.reserve(txsResult.size());
