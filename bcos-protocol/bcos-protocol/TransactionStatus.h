@@ -61,6 +61,7 @@ enum class TransactionStatus : int32_t
     InvalidGroupId = 10007,
     InvalidSignature = 10008,
     RequestNotBelongToTheGroup = 10009,
+    TransactionPoolTimeout = 10010
 };
 
 inline std::string toString(protocol::TransactionStatus const& _i)
