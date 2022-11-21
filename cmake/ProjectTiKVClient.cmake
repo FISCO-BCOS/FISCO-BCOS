@@ -9,7 +9,6 @@ endif()
 
 find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
 
-# FIXME: when release 3.1.0 modify tikv-client log level to info
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git

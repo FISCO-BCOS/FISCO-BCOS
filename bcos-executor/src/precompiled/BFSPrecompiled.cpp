@@ -643,7 +643,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     }
     if (!absolutePath.starts_with(USER_APPS_PREFIX) && !absolutePath.starts_with(USER_TABLE_PREFIX))
     {
-        if (blockContext->blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION) &&
+        if (blockContext->blockVersion() >=
+                (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION) &&
             absolutePath.starts_with(USER_USR_PREFIX))
         {
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("touch /usr/ file")

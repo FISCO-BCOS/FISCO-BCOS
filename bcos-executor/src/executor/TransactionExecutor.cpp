@@ -220,7 +220,7 @@ void TransactionExecutor::initEvmEnvironment()
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
-            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
@@ -275,7 +275,7 @@ void TransactionExecutor::initWasmEnvironment()
         m_constantPrecompiled->insert(
             {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
-            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     storage::StorageInterface::Ptr storage = m_backendStorage;

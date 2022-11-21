@@ -194,7 +194,15 @@ void SerialBlockExecutive::serialExecute(
                 nullptr, m_syncBlock);
             return;
         }
-        m_executor->call(std::move(std::move(m_transactions[0])),
+
+        if (!m_executor)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CallError, "no executor found"), nullptr,
+                m_syncBlock);
+            return;
+        }
+
+        m_executor->call(std::move(m_transactions[0]),
             [this, callback = std::move(callback)](
                 bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
                 if (error)

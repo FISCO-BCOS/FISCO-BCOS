@@ -17,9 +17,9 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
+
 project(bcos-tool VERSION ${VERSION})
 
 find_package(Boost REQUIRED COMPONENTS serialization)
@@ -29,7 +29,7 @@ find_package(TBB REQUIRED)
 
 file(GLOB SRCS bcos-tool/*.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
-target_include_directories(${TOOL_TARGET} PUBLIC 
+target_include_directories(${TOOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-protocol>
 )
 target_link_libraries(${TOOL_TARGET} PUBLIC ${TABLE_TARGET} ${UTILITIES_TARGET} bcos-framework jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
