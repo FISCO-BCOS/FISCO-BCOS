@@ -122,6 +122,7 @@ public:
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_STATUS,
             [ledger, weakFront](
+
                 bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data) {
                 auto front = weakFront.lock();
                 if (!front)
@@ -249,7 +250,8 @@ private:
         front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
             bcos::ref(responseBuffer), [](Error::Ptr _error) {
                 if (_error)
-                {}
+                {
+                }
             });
     }
 

@@ -82,6 +82,7 @@ static constexpr const std::string_view METHOD_AUTH_BLACK = "method_auth_black";
 /// account
 static constexpr const std::string_view ACCOUNT_STATUS = "status";
 static constexpr const std::string_view ACCOUNT_LAST_UPDATE = "last_update";
+static constexpr const std::string_view ACCOUNT_LAST_STATUS = "last_status";
 enum AccountStatus : uint8_t
 {
     normal = 0,

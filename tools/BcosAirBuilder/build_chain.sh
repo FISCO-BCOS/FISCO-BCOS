@@ -1179,14 +1179,6 @@ generate_common_ini() {
     LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
-[chain]
-    ; use SM crypto or not, should nerver be changed
-    sm_crypto=${sm_mode}
-    ; the group id, should nerver be changed
-    group_id=${default_group}
-    ; the chain id, should nerver be changed
-    chain_id=${default_chainid}
-
 [security]
     private_key_path=conf/node.pem
 
@@ -1417,6 +1409,14 @@ generate_genesis_config() {
     local node_list=${2}
 
     cat <<EOF >"${output}"
+[chain]
+    ; use SM crypto or not, should nerver be changed
+    sm_crypto=${sm_mode}
+    ; the group id, should nerver be changed
+    group_id=${default_group}
+    ; the chain id, should nerver be changed
+    chain_id=${default_chainid}
+        
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft)
     consensus_type=pbft

@@ -89,9 +89,9 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 JsonRpcError::MethodNotFound, "The method does not exist/is not available."));
         }
-
-        it->second(request.params,
-            [_requestBody, response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
+        RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        it->second(
+            request.params, [response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
                 if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
                 {
                     // error
@@ -104,7 +104,7 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                 }
                 auto strResp = toStringResponse(std::move(response));
                 RPC_IMPL_LOG(TRACE)
-                    << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+                    << LOG_BADGE("onRPCRequest")
                     << LOG_KV("response",
                            std::string_view((const char*)strResp.data(), strResp.size()));
                 _sender(std::move(strResp));
@@ -127,7 +127,8 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
 
     auto strResp = toStringResponse(response);
 
-    RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+    RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
+                        << LOG_KV("request", _requestBody)
                         << LOG_KV("response",
                                std::string_view((const char*)strResp.data(), strResp.size()));
     _sender(strResp);

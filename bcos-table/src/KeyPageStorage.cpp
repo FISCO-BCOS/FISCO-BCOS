@@ -1012,7 +1012,7 @@ auto KeyPageStorage::importExistingEntry(std::string_view table, std::string_vie
     }
     else
     {
-        KeyPage_LOG(WARNING) << "Fail import existsing entry, " << table << " | " << toHex(key);
+        KeyPage_LOG(DEBUG) << "Fail import existsing entry, " << table << " | " << toHex(key);
     }
 
     return it->second->entry;

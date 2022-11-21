@@ -108,19 +108,16 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
     ID criticalNum = 6;
     vector<int> runnings(criticalNum, -1);
 
-    std::mutex testMutex;
     auto id2CriticalFun = [&](ID id) -> vector<bytes> {
         return {bytes{static_cast<uint8_t>(id % criticalNum)}};
     };
     auto beforeRunCheck = [&](ID id) {
-        std::unique_lock lock(testMutex);
         BOOST_CHECK_MESSAGE(runnings[id % criticalNum] == -1,
             "conflict at beginning: " << id << "-" << id % criticalNum << "-"
                                       << runnings[id % criticalNum]);
         runnings[id % criticalNum] = id;
     };
     auto afterRunCheck = [&](ID id) {
-        std::unique_lock lock(testMutex);
         BOOST_CHECK_MESSAGE(runnings[id % criticalNum] != -1,
             "conflict at ending: " << id << "-" << id % criticalNum << "-"
                                    << runnings[id % criticalNum]);
@@ -186,7 +183,6 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
             runnings[value] = id;  // update to my id
         }
     };
-    std::mutex testMutex;
     auto afterRunCheck = [&](ID id) {
         if (id == 0)
         {
@@ -202,7 +198,6 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
             {
                 ID conflictValue = i * slotNum + slot;
                 ID unfinishedId = runnings[conflictValue];
-                std::unique_lock lock(testMutex);
                 BOOST_CHECK_MESSAGE(unfinishedId == id,
                     "conflict at ending, id: " << id << " unfinishedId: " << unfinishedId);
                 runnings[conflictValue] = 0;  // update to 0
@@ -212,7 +207,6 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
         {
             ID slot = critical[0][0];
             ID unfinishedId = runnings[slot];
-            std::unique_lock lock(testMutex);
             BOOST_CHECK_MESSAGE(unfinishedId == 0,
                 "parent conflict at ending, id: " << id << " unfinishedId: " << unfinishedId);
 
@@ -226,13 +220,18 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
 
     runDagTest(txDag, total, id2CriticalFun, beforeRunCheck, afterRunCheck);
 }
-
 BOOST_AUTO_TEST_CASE(TestRun2)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
     txDagTest(txDag);
 }
 
+BOOST_AUTO_TEST_CASE(TestRun4)
+{
+    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
+    // FIXME
+    // txDagDeepTreeTest(txDag);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
