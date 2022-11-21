@@ -11,6 +11,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/throw_exception.hpp>
+#include <memory>
 
 #define RPCSERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPCSERVICE][INITIALIZER]"
 #define GATEWAYSERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYSERVICE][INITIALIZER]"
@@ -108,23 +109,25 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
     TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler())
 {
     auto prx = communicator->stringToProxy<S>(_serviceName);
-    BCOS_LOG(INFO) << LOG_DESC("createServantProxy ") << LOG_KV("serviceName", _serviceName)
-                   << LOG_KV("proxy addr", prx.get());
+
+    BCOS_LOG(INFO) << LOG_BADGE("createServantProxy") << LOG_DESC("create servant proxy")
+                   << LOG_KV("serviceName", _serviceName) << LOG_KV("proxy address", prx.get());
     if (!prx->tars_get_push_callback())
     {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName);
-
+        auto proxyCb = std::make_unique<bcostars::TarsServantProxyCallback>(
+            _serviceName, tars::TC_AutoPtr<tars::ServantProxy>::dynamicCast(prx));
         if (_connectHandler)
         {
-            proxyCallback->setOnConnectHandler(_connectHandler);
+            proxyCb->setOnConnectHandler(_connectHandler);
         }
 
         if (_closeHandler)
         {
-            proxyCallback->setOnCloseHandler(_closeHandler);
+            proxyCb->setOnCloseHandler(_closeHandler);
         }
 
-        prx->tars_set_push_callback(proxyCallback);
+        proxyCb->start();
+        prx->tars_set_push_callback(proxyCb.release());
     }
 
     prx->tars_async_ping();
