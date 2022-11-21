@@ -19,6 +19,7 @@ from controller.node_controller import NodeController
 from config.service_config_generator import ServiceConfigGenerator
 from config.node_config_generator import NodeConfigGenerator
 from config.tars_config_generator import TarsConfigGenerator
+from config.max_node_config_generator import MaxNodeConfigGenerator
 
 
 class _HelpAction(argparse._HelpAction):
@@ -51,7 +52,8 @@ def parse_command():
     subparser_name = CommandInfo.download_binary
     help_info = "Download binary, eg: python3 build_chain.py download_binary -t cdn"
     binary_parser = sub_parsers.add_parser(description=utilities.format_info(help_info),
-                                           name=subparser_name, help="download binary", formatter_class=RawTextHelpFormatter)
+                                           name=subparser_name, help="download binary",
+                                           formatter_class=RawTextHelpFormatter)
     help_info = "[Optional] Specify the source of the download, support %s now, default type is cdn" % (
         ','.join(CommandInfo.download_type))
     binary_parser.add_argument(
@@ -73,7 +75,8 @@ def parse_command():
     description = "e.g:\n%s\n%s\n%s" % (
         deploy_nodes_command, deploy_rpc_service_command, deploy_gateway_service_command)
     chain_parser = sub_parsers.add_parser(description=utilities.format_info(description),
-                                          name=subparser_name, help="chain operation", formatter_class=RawTextHelpFormatter)
+                                          name=subparser_name, help="chain operation",
+                                          formatter_class=RawTextHelpFormatter)
     # command option
     help_info = "[Required] specify the command: \n* command list: %s\n" % (
         CommandInfo.service_command_list_str)
@@ -92,7 +95,7 @@ def parse_command():
     chain_parser.add_argument(
         "-O", "--output", default="./generated", help=help_info, required=False)
 
-    #---------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------------
     subparser_name = CommandInfo.build_package_parser_name
     build_nodes_command = "python3 build_chain.py build -c conf/config-build-example.toml -O output_dir"
     build_expand_rpc_command = "python3 build_chain.py build -c conf/config-build-example.toml -t rpc  -O output_dir"
@@ -102,36 +105,38 @@ def parse_command():
     description = "e.g:\n%s\n%s\n%s\n%s" % (
         build_nodes_command, build_expand_node_command, build_expand_rpc_command, build_expand_gateway_command)
     build_parser = sub_parsers.add_parser(description=utilities.format_info(description),
-                                          name=subparser_name, help="build operation", formatter_class=RawTextHelpFormatter)
+                                          name=subparser_name, help="build operation",
+                                          formatter_class=RawTextHelpFormatter)
     # command option
     help_info = "[Optional] specify the type: \n* type list: %s\n" % (
         CommandInfo.build_command_type_list_str)
-    
+
     build_parser.add_argument(
-        "-t", '--type', help=help_info, required=False, default = "all")
+        "-t", '--type', help=help_info, required=False, default="all")
 
     # config option
     help_info = "[Required] the config file, default is config.toml:\n * config to build chain example: conf/config-build-example.toml"
     build_parser.add_argument(
         "-c", "--config", help=help_info, required=True)
-    
+
     help_info = "[Optional] specify the output dir, default is ./generated"
     build_parser.add_argument(
         "-O", "--output", default="./generated", help=help_info, required=False)
-    #---------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------------
 
-    #---------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------------
     subparser_name = CommandInfo.merge_config_parser_name
     merge_config_tars_command = "python3 build_chain.py merge-config -t tars -c tars0.conf tars1.conf -O output_dir"
     merge_config_p2p_command = "python3 build_chain.py merge-config -t p2p -c nodes0.json nodes1.json -O output_dir"
 
     description = "e.g:\n%s" % (merge_config_tars_command)
     merge_config_parser = sub_parsers.add_parser(description=utilities.format_info(description),
-                                          name=subparser_name, help="merge config operation", formatter_class=RawTextHelpFormatter)
+                                                 name=subparser_name, help="merge config operation",
+                                                 formatter_class=RawTextHelpFormatter)
     # command option
     help_info = "[Required] specify the type: \n* type list: %s\n" % (
         CommandInfo.merge_config_type_str)
-    
+
     merge_config_parser.add_argument(
         "-t", '--type', help=help_info, required=True)
 
@@ -139,17 +144,18 @@ def parse_command():
     help_info = "[Required] the config files to be\n"
     merge_config_parser.add_argument(
         "-c", "--config", nargs='+', help=help_info, required=True)
-    
+
     help_info = "[Required] specify the output dir"
     merge_config_parser.add_argument(
         "-O", "--output", help=help_info, required=True)
-    #---------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------------
 
     # create_subnet_parser parser
     description = "e.g: python3 %s create-subnet -n tars-network -s 172.25.0.0/16" % (
         sys.argv[0])
     create_subnet_parser = sub_parsers.add_parser(description=utilities.format_info(description),
-                                                  name=CommandInfo.network_create_subnet, help="create docker subnet", formatter_class=RawTextHelpFormatter)
+                                                  name=CommandInfo.network_create_subnet, help="create docker subnet",
+                                                  formatter_class=RawTextHelpFormatter)
     help_info = "[Optional] specified the network name, default is tars-network\n"
     create_subnet_parser.add_argument(
         "-n", "--name", help=help_info, default="tars-network")
@@ -164,16 +170,16 @@ def parse_command():
     # add_vxlan_parser = sub_parsers.add_parser(description=utilities.format_info(description),
     #                                          name=CommandInfo.network_add_vxlan, help="add vxlan for docker subnet", formatter_class=RawTextHelpFormatter)
     # subnet option
-    #help_info = "[Optional] specified the subnet, default is tars-network\n"
+    # help_info = "[Optional] specified the subnet, default is tars-network\n"
     # add_vxlan_parser.add_argument(
     #    "-n", "--network", help=help_info, default="tars-network")
     # remote ip
-    #help_info = "[Required] specified the dstip to create vxlan network"
+    # help_info = "[Required] specified the dstip to create vxlan network"
     # add_vxlan_parser.add_argument(
     #    "-d", "--dstip", help=help_info, default=None, required=True)
 
     # vxlan network name
-    #help_info = "[Required] specified the vxlan name to create vxlan network, e.g.: vxlan_docker"
+    # help_info = "[Required] specified the vxlan name to create vxlan network, e.g.: vxlan_docker"
     # add_vxlan_parser.add_argument(
     #    "-v", "--vxlan", help=help_info, default=None, required=True)
 
@@ -188,6 +194,7 @@ def is_chain_command(args):
 def is_build_package_command(args):
     return (args.command == CommandInfo.build_package_parser_name)
 
+
 def is_create_subnet_command(args):
     return (args.command == CommandInfo.network_create_subnet)
 
@@ -199,8 +206,10 @@ def is_add_vxlan_command(args):
 def is_download_binary_command(args):
     return (args.command == CommandInfo.download_binary)
 
+
 def is_merge_config_command(args):
     return (args.command == CommandInfo.merge_config_parser_name)
+
 
 def chain_operations(args, node_type):
     if is_chain_command(args) is False:
@@ -221,7 +230,7 @@ def chain_operations(args, node_type):
     #     sys.exit(-1)
 
     utilities.log_info("generator output dir is %s" % output_dir)
-        
+
     command = args.op
     if op_type == ServiceInfo.rpc_service_type or op_type == ServiceInfo.gateway_service_type:
         if command in CommandInfo.service_command_impl.keys():
@@ -316,10 +325,11 @@ def download_binary_operation(args, node_type):
     binary_controller.download_all_binary()
     utilities.print_split_info()
 
+
 def merge_config_operation(args):
     if is_merge_config_command(args) is False:
         return
-    
+
     utilities.print_split_info()
 
     utilities.log_info("* merge-config operation ")
@@ -358,15 +368,15 @@ def merge_config_operation(args):
     utilities.print_split_info()
     utilities.log_info("* merge config output dir is %s" % output_dir)
 
-def merge_tars_config(config, store_tars_conf_path):
 
+def merge_tars_config(config, store_tars_conf_path):
     merged_tars_conf_gen = TarsConfigGenerator(store_tars_conf_path)
     for c in config:
         utilities.log_info("* tars config: " + str(c))
         tars_conf = TarsConfigGenerator(c)
         tars_service_names = ["gateway", "rpc", "txpool", "scheduler", "pbft", "ledger", "front"]
         for service_name in tars_service_names:
-            conf_items = tars_conf.get_service_config_items(service_name)
+            conf_items = tars_conf.get_config_items(service_name)
             if conf_items is None:
                 continue
 
@@ -376,9 +386,11 @@ def merge_tars_config(config, store_tars_conf_path):
 
     merged_tars_conf_gen.restore_init_config(os.path.join(store_tars_conf_path))
 
+
 def merge_p2p_config(config, store_tars_conf_path):
     # TODO: impl p2p config merge
     return
+
 
 def build_package_operation(args, node_type):
     if is_build_package_command(args) is False:
@@ -386,69 +398,80 @@ def build_package_operation(args, node_type):
 
     utilities.print_split_info()
 
-    if node_type == "max":
-        utilities.log_info("build_chain.py doesn't support building install package on Max version, please use pro version instead")
-        sys.exit(-1)
- 
     args = parse_command()
     if os.path.exists(args.config) is False:
         utilities.log_error("the config file '%s' not found!" % args.config)
         sys.exit(-1)
-    
+
     output_dir = args.output
     utilities.log_info("* output dir: " + output_dir)
 
-    if os.path.exists(output_dir):
-        utilities.log_info( output_dir + " already exists, please switch directory or remove it after confirm the directory is no longer in use")
-        sys.exit(-1)
+    # if os.path.exists(output_dir): utilities.log_info( output_dir + " already exists, please switch directory or
+    # remove it after confirm the directory is no longer in use") sys.exit(-1)
 
     toml_config = toml.load(args.config)
     chain_config = ChainConfig(toml_config, node_type, output_dir, True, False)
 
     utilities.file_must_exist(chain_config.tars_config.tars_pkg_dir)
-    utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, "BcosNodeService"))
-    utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, "BcosRpcService"))
-    utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, "BcosGatewayService"))
+    utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.rpc_service))
+    utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.gateway_service))
 
     if node_type == "max":
-        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, "BcosExecutorService"))
-        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, "BcosMaxNodeService"))
+        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.executor_service))
+        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.max_node_service))
+    else:
+        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.single_node_service))
 
     # TODO: port conflict check
 
-    type = args.type
-    utilities.log_info("* type: " + type)
+    args_type = args.type
+    utilities.log_info("* args type: " + args_type)
 
-    is_rpc_build = False
-    if type in ["all", "rpc"]:
+    enable_build_rpc_tars_pkg = False
+    if args_type in ["all", "rpc"]:
         # gen rpc config
         rpc_config_gen = ServiceConfigGenerator(chain_config, "rpc", node_type, output_dir)
-        rpc_config_gen.generate_all_config(True)
-        is_rpc_build = True
-    
-    is_gateway_build = False
-    if type in ["all", "gateway"]:
+        rpc_config_gen.generate_all_tars_install_package()
+        enable_build_rpc_tars_pkg = True
+
+    enable_build_gateway_tars_pkg = False
+    if args_type in ["all", "gateway"]:
         # gen gateway config
         gateway_config_gen = ServiceConfigGenerator(chain_config, "gateway", node_type, output_dir)
-        gateway_config_gen.generate_all_config(True)
-        is_gateway_build = True
-    
-    is_node_build = False
-    if type in ["all", "node"]:
-        # gen node config
-        node_config_gen = NodeConfigGenerator(chain_config, node_type, output_dir)
-        node_config_gen.generate_all_config(False, True)
-        is_node_build = True
+        gateway_config_gen.generate_all_tars_install_package()
+        enable_build_gateway_tars_pkg = True
+
+    enable_build_node_tars_pkg = False
+    if args_type in ["all", "node"]:
+        enable_build_node_tars_pkg = True
+        if node_type == "max":
+            node_config_gen = MaxNodeConfigGenerator(chain_config, node_type, output_dir, True)
+            # gen max node config
+            node_config_gen.generate_all_max_node_tars_install_package()
+        else:
+            node_config_gen = NodeConfigGenerator(chain_config, node_type, output_dir, True)
+            # gen node config
+            node_config_gen.generate_all_tars_install_package()
+
+    enable_build_executor_tars_pkg = False
+    if args_type in ["all", "executor"]:
+        if node_type == "max":
+            executor_config_gen = MaxNodeConfigGenerator(chain_config, node_type, output_dir, True)
+            executor_config_gen.generate_all_executor_tars_install_package()
+            enable_build_executor_tars_pkg = True
 
     # copy tars proxy json file
-    if is_rpc_build:
+    if enable_build_rpc_tars_pkg:
         rpc_config_gen.copy_tars_proxy_conf()
-    if is_gateway_build:
+    if enable_build_gateway_tars_pkg:
         gateway_config_gen.copy_tars_proxy_conf()
-    if is_node_build:
-        node_config_gen.copy_tars_proxy_conf()
-
+    if enable_build_node_tars_pkg:
+        if node_type != "max":
+            node_config_gen.copy_tars_proxy_conf()
+        else:
+            node_config_gen.copy_max_node_tars_proxy_conf()
+    if enable_build_executor_tars_pkg:
+        executor_config_gen.copy_executor_tars_proxy_conf()
 
     utilities.print_split_info()
-    utilities.log_info("* build package output dir is %s" % output_dir)
-
+    utilities.log_info("* build tars install package output dir : %s" % output_dir)
