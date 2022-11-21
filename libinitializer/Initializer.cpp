@@ -34,6 +34,8 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-scheduler/src/TarsExecutorManager.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -47,7 +49,6 @@
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
-#include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
@@ -203,8 +204,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
     }
-    auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
-        m_nodeConfig->executorServiceName());
+    auto executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
+        m_nodeConfig->executorServiceName(), m_nodeConfig);
 
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
