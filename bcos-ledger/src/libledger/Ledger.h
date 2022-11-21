@@ -46,7 +46,7 @@ public:
         assert(m_storage);
     };
 
-    virtual ~Ledger() = default;
+    ~Ledger() override = default;
 
     void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
@@ -129,9 +129,10 @@ private:
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
 
-    void createFileSystemTables();
+    void createFileSystemTables(uint32_t blockVersion);
 
-    void buildDir(const std::string& _absoluteDir);
+    std::optional<storage::Table> buildDir(const std::string_view& _absoluteDir,
+        uint32_t blockVersion, std::string valueField = SYS_VALUE);
 
     // only for /sys/
     inline std::string getSysBaseName(const std::string& _s)

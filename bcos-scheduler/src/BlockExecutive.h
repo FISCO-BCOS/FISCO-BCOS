@@ -129,6 +129,7 @@ protected:
 
         std::atomic_bool callbackExecuted = false;
         mutable SharedMutex x_lock;
+        std::string errorMessage;
     };
 
     void DAGExecute(std::function<void(Error::UniquePtr)> callback);  // only used for DAG

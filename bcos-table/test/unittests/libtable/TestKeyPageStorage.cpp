@@ -18,6 +18,7 @@
  */
 
 #include "Hash.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
@@ -76,9 +77,7 @@ inline ostream& operator<<(ostream& os, const std::tuple<std::string, crypto::Ha
 }
 }  // namespace std
 
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 struct KeyPageStorageFixture
 {
@@ -139,6 +138,21 @@ BOOST_AUTO_TEST_CASE(create_Table)
     BOOST_REQUIRE_THROW(tableFactory->createTable(tableName, valueField), bcos::Error);
 }
 
+
+BOOST_AUTO_TEST_CASE(count_empty_Table)
+{
+    std::string tableName("t_test1");
+    auto countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+    auto table = tableFactory->openTable(tableName);
+
+    BOOST_REQUIRE(!table);
+    auto ret = tableFactory->createTable(tableName, valueField);
+    BOOST_REQUIRE(ret);
+    countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+}
+
 BOOST_AUTO_TEST_CASE(rollback)
 {
     auto ret = createDefaultTable();
@@ -150,6 +164,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     BOOST_REQUIRE_NO_THROW(table->setRow("name", deleteEntry));
 
     auto hash = tableFactory->hash(hashImpl);
+    auto countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
 
 #ifdef __APPLE__
 #undef __APPLE__
@@ -162,6 +178,9 @@ BOOST_AUTO_TEST_CASE(rollback)
     auto entry = std::make_optional(table->newEntry());
     BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
+
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
 
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
@@ -183,6 +202,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "12345");
     table->setRow("id", *entry);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -208,6 +229,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "500");
     table->setRow("balance", *entry);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -232,6 +255,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     auto deleteEntry2 = std::make_optional(table->newDeletedEntry());
     table->setRow("name", *deleteEntry2);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 
 // delete entry will cause hash mismatch
@@ -248,6 +273,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
     std::cout << "Try remove balance" << std::endl;
     tableFactory->rollback(*savePoint2);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -261,6 +288,8 @@ BOOST_AUTO_TEST_CASE(rollback)
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     tableFactory->rollback(*savePoint1);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -282,6 +311,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
 
     tableFactory->rollback(*savePoint);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
     hash = tableFactory->hash(hashImpl);
@@ -308,6 +339,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "new record");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -316,6 +349,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     entry = table->newDeletedEntry();
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     hash = tableFactory->hash(hashImpl);
     // delete entry will cause hash mismatch
 #if defined(__APPLE__)
@@ -444,7 +479,7 @@ BOOST_AUTO_TEST_CASE(rollback3)
     auto entry = table->newEntry();
     entry.set("value");
     table->setRow("name", entry);
-    auto hash = tableFactory->hash(hashImpl);
+    tableFactory->hash(hashImpl);
     // first rollback
     tableFactory->rollback(*savePoint0);
 
@@ -578,6 +613,132 @@ BOOST_AUTO_TEST_CASE(hash)
     entries = table->getRows(keys);
     BOOST_REQUIRE(entries.size() == 1);
     // tableFactory->asyncCommit([](Error::Ptr, size_t) {});
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_V3_1_0)
+{
+    auto hashImpl2 = make_shared<Header256Hash>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory1 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory1->createTable(tableName, "value");
+        auto table = tableFactory1->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory2 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory2->createTable(tableName, "value");
+        auto table = tableFactory2->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    auto dbHash1 = tableFactory1->hash(hashImpl);
+    auto dbHash2 = tableFactory2->hash(hashImpl);
+    BOOST_REQUIRE_NE(dbHash1.hex(), dbHash2.hex());
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
+{
+    auto hashImpl2 = std::make_shared<Keccak256>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+    BOOST_REQUIRE(tableFactory1 != nullptr);
+    BOOST_REQUIRE(tableFactory2 != nullptr);
+
+    auto setData1 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable1";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable2";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    auto setData2 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable2";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable1";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    setData1(tableFactory1);
+    setData2(tableFactory2);
+    auto dbHash1 = tableFactory1->hash(hashImpl2);
+    auto dbHash2 = tableFactory2->hash(hashImpl2);
+    BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
+
+    auto tableFactory3 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto tableFactory4 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+
+    setData1(tableFactory3);
+    setData2(tableFactory4);
+    auto dbHash3 = tableFactory3->hash(hashImpl2);
+    auto dbHash4 = tableFactory4->hash(hashImpl2);
+    BOOST_REQUIRE_NE(dbHash3.hex(), dbHash4.hex());
 }
 
 BOOST_AUTO_TEST_CASE(open_sysTables)
@@ -2707,5 +2868,4 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
 
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

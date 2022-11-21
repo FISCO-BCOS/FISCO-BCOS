@@ -21,16 +21,14 @@
 #pragma once
 #include "ProposalInterface.h"
 #include <bcos-framework/consensus/ConsensusNode.h>
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class StateMachineInterface
 {
 public:
     using Ptr = std::shared_ptr<StateMachineInterface>;
     StateMachineInterface() = default;
-    virtual ~StateMachineInterface() {}
+    virtual ~StateMachineInterface() = default;
 
     virtual void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
         ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
@@ -40,5 +38,4 @@ public:
     virtual void asyncPreApply(
         ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) = 0;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

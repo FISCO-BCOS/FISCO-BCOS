@@ -30,7 +30,8 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     bcos::ledger::LedgerInterface::Ptr _ledger, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-    bcos::consensus::ConsensusInterface::Ptr _consensus)
+    bcos::consensus::ConsensusInterface::Ptr _consensus,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
   : m_nodeId(_nodeId),
     m_blockFactory(_blockFactory),
     m_txResultFactory(_txResultFactory),
@@ -38,13 +39,14 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     m_txpool(_txpool),
     m_frontService(_frontService),
     m_scheduler(_scheduler),
-    m_consensus(_consensus)
+    m_consensus(_consensus),
+    m_nodeTimeMaintenance(_nodeTimeMaintenance)
 {}
 
 BlockSync::Ptr BlockSyncFactory::createBlockSync()
 {
     auto msgFactory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto syncConfig = std::make_shared<BlockSyncConfig>(m_nodeId, m_ledger, m_txpool,
-        m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory);
+        m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory, m_nodeTimeMaintenance);
     return std::make_shared<BlockSync>(syncConfig);
 }

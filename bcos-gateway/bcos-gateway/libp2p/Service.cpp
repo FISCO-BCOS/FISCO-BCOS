@@ -102,7 +102,7 @@ void Service::heartBeat()
         }
         if (!it.second.empty() && isConnected(it.second))
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore connected")
+            SERVICE_LOG(TRACE) << LOG_DESC("heartBeat ignore connected")
                                << LOG_KV("endpoint", it.first) << LOG_KV("nodeid", it.second);
             continue;
         }
@@ -253,7 +253,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
             }
         }
     }
-    heartBeat();
+    // heartBeat();
 }
 
 void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,

@@ -160,7 +160,7 @@ public:
     virtual void setSeq(uint32_t seq) { m_seq = seq; }
 
     uint16_t ext() const override { return m_ext; }
-    virtual void setExt(uint16_t _ext) { m_ext = _ext; }
+    virtual void setExt(uint16_t _ext) { m_ext |= _ext; }
 
     P2PMessageOptions::Ptr options() const { return m_options; }
     void setOptions(P2PMessageOptions::Ptr _options) { m_options = _options; }
@@ -175,6 +175,10 @@ public:
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
     }
+
+    // compress payload if payload need to be compressed
+    bool tryToCompressPayload(std::shared_ptr<bytes> compressData);
+
     bool hasOptions() const
     {
         return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
@@ -189,7 +193,6 @@ public:
     {
         m_dstP2PNodeID = _dstP2PNodeID;
     }
-
 
     std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }

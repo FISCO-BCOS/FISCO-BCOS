@@ -128,7 +128,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         BOOST_THROW_EXCEPTION(PrecompiledError("TablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -148,7 +148,7 @@ void TablePrecompiled::desc(TableInfoTuple& _tableInfo, const std::string& _tabl
     // external call to get desc
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         _callParameters->m_codeAddress, tableManagerAddress, _callParameters->m_staticCall,
-        _callParameters->m_create, _callParameters->m_gas);
+        _callParameters->m_create, _callParameters->m_gasLeft);
 
     codec.decode(ref(response->data), _tableInfo);
 }
@@ -156,8 +156,8 @@ void TablePrecompiled::desc(TableInfoTuple& _tableInfo, const std::string& _tabl
 void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyCondition,
     const std::vector<precompiled::ConditionTuple>& conditions, const LimitTuple& limit) const
 {
-    auto& offset = std::get<0>(limit);
-    auto& count = std::get<1>(limit);
+    const auto& offset = std::get<0>(limit);
+    const auto& count = std::get<1>(limit);
     if (count > USER_TABLE_MAX_LIMIT_COUNT || offset > offset + count)
     {
         PRECOMPILED_LOG(INFO) << LOG_DESC("build key condition limit overflow")
@@ -170,8 +170,8 @@ void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyC
     }
     for (const auto& condition : conditions)
     {
-        auto& cmp = std::get<0>(condition);
-        auto& value = std::get<1>(condition);
+        const auto& cmp = std::get<0>(condition);
+        const auto& value = std::get<1>(condition);
         switch (cmp)
         {
         case 0:
@@ -280,16 +280,38 @@ void TablePrecompiled::count(const std::string& tableName,
                            << LOG_KV("tableName", tableName)
                            << LOG_KV("ConditionSize", conditions.size());
 
-    auto keyCondition = std::make_optional<storage::Condition>();
-    // will throw exception when wrong condition cmp or limit count overflow
-    buildKeyCondition(keyCondition, std::move(conditions), {});
+    uint32_t totalCount = 0;
+    uint32_t singleCount = 0;
+    do
+    {
+        auto keyCondition = std::make_optional<storage::Condition>();
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            // will throw exception when wrong condition cmp or limit count overflow
+            buildKeyCondition(
+                keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
+        }
+        else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+        {
+            /// NOTE: if version <= 3.0, here will use empty limit, which means count always return
+            /// 0
+            buildKeyCondition(keyCondition, conditions, {});
+        }
 
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+        singleCount = _executive->storage().getPrimaryKeys(tableName, keyCondition).size();
+        if (totalCount > totalCount + singleCount)
+        {
+            // overflow
+            totalCount = UINT32_MAX;
+            break;
+        }
+        totalCount += singleCount;
+    } while (singleCount >= USER_TABLE_MAX_LIMIT_COUNT);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
-                           << LOG_KV("entries.size", tableKeyList.size());
+                           << LOG_KV("totalCount", totalCount);
     // update the memory gas and the computation gas
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    _callParameters->setExecResult(codec.encode(uint32_t(tableKeyList.size())));
+    _callParameters->setExecResult(codec.encode(uint32_t(totalCount)));
 }
 
 void TablePrecompiled::insert(const std::string& tableName,
@@ -430,7 +452,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE)
     {
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                                << LOG_DESC("keyCond trace ") << keyCondition->toString();
@@ -541,7 +563,7 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     // will throw exception when wrong condition cmp or limit count overflow
     buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE)
     {
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                                << LOG_DESC("keyCond trace ") << keyCondition->toString();

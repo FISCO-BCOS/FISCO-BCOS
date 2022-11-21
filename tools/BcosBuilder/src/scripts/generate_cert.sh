@@ -652,7 +652,7 @@ generate_cert_node_private_key()
 
 generate_multi_nodes_private_key() 
 {
-    LOG_INFO "generate multi nodes private key, ip param: ${ip_param}"
+    LOG_INFO "generate multi nodes private key, sm_mode: ${sm_mode}, ip param: ${ip_param}"
     generate_multi_nodes_private_key_impl "${output_dir}"
     LOG_INFO "generate multi nodes private key success"
 }

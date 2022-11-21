@@ -23,7 +23,7 @@
 
 #include "SyncStorageWrapper.h"
 #include "TransactionExecutive.h"
-
+#include <boost/coroutine2/coroutine.hpp>
 
 namespace bcos
 {
@@ -81,6 +81,19 @@ public:
     {
         m_exchangeMessage = std::move(callParameters);
     }
+
+    std::string getExchangeMessageStr()
+    {
+        if (m_exchangeMessage)
+        {
+            return m_exchangeMessage->toString();
+        }
+        else
+        {
+            return "[empty exchange message]";
+        }
+    }
+
 
     virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {

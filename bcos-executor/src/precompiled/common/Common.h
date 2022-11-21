@@ -20,11 +20,13 @@
 
 #pragma once
 
+#include "PrecompiledAbi.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-executor/src/Common.h"
 #include <memory>
 #include <string>
 
@@ -33,7 +35,6 @@ namespace bcos
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
-#define PRECOMPILED_BLK_LOG(LEVEL, BLK_NUMBER) PRECOMPILED_LOG(LEVEL) << BLOCK_NUMBER(BLK_NUMBER)
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
@@ -81,13 +82,14 @@ enum PrecompiledErrorCode : int
 {
     // BFSPrecompiled -53099 ~ -53000
     CODE_ADDRESS_OR_VERSION_ERROR = -51202,
+    CODE_FILE_COUNT_ERROR = -53007,
     CODE_FILE_INVALID_TYPE = -53006,
     CODE_FILE_INVALID_PATH = -53005,
     CODE_FILE_BUILD_DIR_FAILED = -53003,
     CODE_FILE_ALREADY_EXIST = -53002,
     CODE_FILE_NOT_EXIST = -53001,
 
-    // ContractLifeCyclePrecompiled -51999 ~ -51900
+    // AccountManagerPrecompiled -51999 ~ -51900
     CODE_INVALID_REVOKE_LAST_AUTHORIZATION = -51907,
     CODE_INVALID_NON_EXIST_AUTHORIZATION = -51906,
     CODE_INVALID_NO_AUTHORIZED = -51905,
@@ -95,7 +97,7 @@ enum PrecompiledErrorCode : int
     CODE_INVALID_CONTRACT_ADDRESS = -51903,
     CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51902,
     CODE_INVALID_CONTRACT_AVAILABLE = -51901,
-    CODE_INVALID_CONTRACT_FROZEN = -51900,
+    CODE_ACCOUNT_ALREADY_EXIST = -51900,
 
     // RingSigPrecompiled -51899 ~ -51800
     VERIFY_RING_SIG_FAILED = -51800,
@@ -128,10 +130,11 @@ enum PrecompiledErrorCode : int
     // SystemConfigPrecompiled -51399 ~ -51300
 
     // ConsensusPrecompiled -51199 ~ -51100
-    CODE_INVALID_NODE_ID = -51100,
-    CODE_LAST_SEALER = -51101,
-    CODE_INVALID_WEIGHT = -51102,
+    CODE_ADD_SEALER_SHOULD_IN_OBSERVER = -51104,
     CODE_NODE_NOT_EXIST = -51103,
+    CODE_INVALID_WEIGHT = -51102,
+    CODE_LAST_SEALER = -51101,
+    CODE_INVALID_NODE_ID = -51100,
 
     // AuthPrecompiledTest -51099 ~ -51000
     CODE_TABLE_AUTH_TYPE_DECODE_ERROR = -51004,

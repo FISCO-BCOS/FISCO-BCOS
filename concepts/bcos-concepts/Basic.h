@@ -1,4 +1,5 @@
 #pragma once
+#include "Exception.h"
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -7,6 +8,10 @@
 
 namespace bcos::concepts
 {
+
+// clang-format off
+struct NoEnoughSpace : public bcos::error::Exception {};
+// clang-format on
 
 template <class ByteBufferType>
 concept ByteBuffer = RANGES::contiguous_range<ByteBufferType> &&
@@ -51,8 +56,7 @@ void resizeTo(RANGES::range auto& out, std::integral auto size)
             out.resize(size);
             return;
         }
-        BOOST_THROW_EXCEPTION(std::runtime_error{"No enough output space!"});
+        BOOST_THROW_EXCEPTION(NoEnoughSpace{});
     }
 }
-
 }  // namespace bcos::concepts

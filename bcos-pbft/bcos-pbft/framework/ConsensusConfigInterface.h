@@ -22,16 +22,14 @@
 #include "ProposalInterface.h"
 #include <bcos-framework/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/consensus/ConsensusTypeDef.h>
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class ConsensusConfigInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusConfigInterface>;
     ConsensusConfigInterface() = default;
-    virtual ~ConsensusConfigInterface() {}
+    virtual ~ConsensusConfigInterface() = default;
 
     // the NodeID of the consensus node
     virtual bcos::crypto::PublicPtr nodeID() const = 0;
@@ -55,5 +53,4 @@ public:
     virtual void setCommittedProposal(ProposalInterface::Ptr _committedProposal) = 0;
     virtual ProposalInterface::ConstPtr committedProposal() = 0;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

@@ -164,7 +164,7 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     encodeMsg->setVersion(_version);
     uint32_t seq = 0x12345678;
     uint16_t packetType = 0x4321;
-    uint16_t ext = 0x1111;
+    uint16_t ext = 0x1101;
     auto payload = std::make_shared<bytes>(10000, 'a');
 
     auto version = encodeMsg->version();
@@ -182,8 +182,6 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     auto buffer = std::make_shared<bytes>();
     auto r = encodeMsg->encode(*buffer.get());
     BOOST_CHECK_EQUAL(r, true);
-
-    BOOST_CHECK_EQUAL(buffer->size(), headerLen + payload->size());
 
     // decode default
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
@@ -358,7 +356,7 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
     uint16_t version = 0x1234;
     uint32_t seq = 0x12345678;
     uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
-    uint16_t ext = 0x1111;
+    uint16_t ext = 0x1101;
     auto payload = std::make_shared<bytes>(10000, 'a');
 
     encodeMsg->setVersion(version);
@@ -394,7 +392,7 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
     BOOST_CHECK_EQUAL(decodeMsg->version(), version);
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), packetType);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), seq);
-    BOOST_CHECK_EQUAL(decodeMsg->ext(), ext);
+    BOOST_CHECK_EQUAL((decodeMsg->ext() & ext), ext);
     BOOST_CHECK_EQUAL(decodeMsg->payload()->size(), payload->size());
 
     auto decodeOptions = decodeMsg->options();
@@ -419,6 +417,60 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageV2_codec)
 {
     auto factory = std::make_shared<P2PMessageFactoryV2>();
     testP2PMessageCodec(factory, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
+{
+    auto factory = std::make_shared<P2PMessageFactoryV2>();
+    auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto encodeMsgWithoutCompress = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+
+    // only version >= V2 support p2p network compress
+    uint16_t version = 2;
+    uint32_t seq = 0x12345678;
+    uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
+    uint16_t ext = 0x1101;
+    auto payload = std::make_shared<bytes>(10000, 'a');
+    auto smallPayload = std::make_shared<bytes>(1, 'a');
+
+    encodeMsg->setVersion(version);
+    encodeMsg->setSeq(seq);
+    encodeMsg->setPacketType(packetType);
+    encodeMsg->setExt(ext);
+    encodeMsg->setPayload(payload);
+
+    auto options = std::make_shared<P2PMessageOptions>();
+    std::string groupID = "group";
+    std::string srcNodeID = "nodeID";
+    std::string dstNodeID = "nodeID";
+
+    auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
+    auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
+
+    options->setGroupID(groupID);
+    options->setSrcNodeID(srcNodeIDPtr);
+    auto& dstNodeIDS = options->dstNodeIDs();
+    dstNodeIDS.push_back(dstNodeIDPtr);
+    dstNodeIDS.push_back(dstNodeIDPtr);
+
+    encodeMsg->setOptions(options);
+
+    // compress payload
+    auto compressData = std::make_shared<bytes>();
+    auto r = encodeMsg->tryToCompressPayload(compressData);
+    BOOST_CHECK(r);
+    BOOST_CHECK_EQUAL((encodeMsg->ext() & bcos::protocol::MessageExtFieldFlag::Compress),
+        bcos::protocol::MessageExtFieldFlag::Compress);
+
+    // uncompress payload that don't compress
+    // size of payload smaller than 1kb, so payload don't be compressed
+    encodeMsg->setPayload(smallPayload);
+    auto buffer = std::make_shared<bytes>();
+    auto retWithoutCompress = encodeMsg->encode(*buffer.get());
+    BOOST_CHECK(retWithoutCompress);
+    auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
+    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_attr)

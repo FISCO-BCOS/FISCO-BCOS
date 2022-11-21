@@ -23,17 +23,17 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Block.h>
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class TransactionSyncInterface
 {
 public:
     using Ptr = std::shared_ptr<TransactionSyncInterface>;
-    explicit TransactionSyncInterface(TransactionSyncConfig::Ptr _config) : m_config(_config) {}
+    explicit TransactionSyncInterface(TransactionSyncConfig::Ptr _config)
+      : m_config(std::move(_config))
+    {}
 
-    virtual ~TransactionSyncInterface() {}
+    virtual ~TransactionSyncInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -51,5 +51,4 @@ public:
 protected:
     TransactionSyncConfig::Ptr m_config;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

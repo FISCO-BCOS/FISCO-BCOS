@@ -66,7 +66,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
                            << LOG_KV("end", m_maxCommittedProposalIndex) << LOG_KV("size", offset);
 
     m_stateFetched = false;
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     asyncGetCommittedProposals(
         _stabledIndex + 1, offset, [self](PBFTProposalListPtr _proposalList) {
             try
@@ -109,7 +109,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
         BOOST_THROW_EXCEPTION(InitPBFTException() << errinfo_comment(
                                   "loadState failed for fetch committedProposal failed"));
     }
-    if (!m_stateProposals || m_stateProposals->size() == 0)
+    if (!m_stateProposals || m_stateProposals->empty())
     {
         m_maxCommittedProposalIndex = _stabledIndex;
     }
@@ -135,7 +135,7 @@ void LedgerStorage::asyncGetCommittedProposals(
     {
         keys->push_back(boost::lexical_cast<std::string>(i));
     }
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_storage->asyncGetBatch(m_pbftCommitDB, keys,
         [self, _onSuccess](
             Error::UniquePtr&& _error, std::shared_ptr<std::vector<std::string>>&& _values) {
@@ -183,7 +183,7 @@ void LedgerStorage::asyncGetCommittedProposals(
 
 void LedgerStorage::asyncGetLatestCommittedProposalIndex()
 {
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_storage->asyncGet(m_pbftCommitDB, m_maxCommittedProposalKey,
         [self](Error::UniquePtr&& _error, std::string_view&& _value) {
             try
@@ -194,7 +194,7 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
                     storage->m_signalled.notify_all();
                     return;
                 }
-                if (_value.size() == 0)
+                if (_value.empty())
                 {
                     storage->m_maxCommittedProposalIndexFetched = true;
                     storage->m_signalled.notify_all();
@@ -254,7 +254,7 @@ void LedgerStorage::asyncPutProposal(std::string const& _dbName, std::string con
     bytesPointer _committedData, BlockNumber _proposalIndex, size_t _retryTime)
 {
     auto startT = utcTime();
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     // TODO: optimize here to decrease copy overhead
     // Note: asyncPut now is a sync implementation, but no need to async here since this
     // timeout-head is only between 5-10ms
@@ -319,7 +319,7 @@ void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stab
                    << LOG_KV("proofSize", signatureList->size())
                    << LOG_KV("blockProofSize", blockSignatureList.size());
     // Note: enqueue here to increase the performance since commitBlock is a sync implementation
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_commitBlockWorker->enqueue([self, blockHeader, _stableProposal]() {
         auto storage = self.lock();
         if (!storage)
@@ -354,7 +354,7 @@ void LedgerStorage::onStableCheckPointCommitted(
 void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal,
     BlockHeader::Ptr _blockHeader, Block::Ptr _blockInfo)
 {
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     auto startT = utcTime();
     m_scheduler->commitBlock(_blockHeader, [_stableProposal, _blockHeader, _blockInfo, startT,
                                                self](Error::Ptr&& _error,

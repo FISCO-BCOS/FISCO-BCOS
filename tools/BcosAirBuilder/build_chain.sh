@@ -34,7 +34,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.1"
+default_version="v3.1.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -393,7 +393,7 @@ download_monitor_bin()
     fi
     mtail_binary_path="bin/${mtail_binary_name}"
     package_name="${mtail_binary_name}_${compatibility_mtail_version}_${mtail_postfix}.tar.gz"
-    
+
     local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/mtail/${package_name}"
     local github_link="https://github.com/google/mtail/releases/download/v${compatibility_mtail_version}/${package_name}"
     # the binary can obtained from the cos
@@ -672,7 +672,7 @@ generate_lightnode_scripts() {
     local output=${1}
     local lightnode_binary_name=${2}
 
-    generate_script_template "$output/start.sh"      
+    generate_script_template "$output/start.sh"
     generate_script_template "$output/stop.sh"
     chmod u+x "${output}/stop.sh"
 
@@ -1137,7 +1137,7 @@ generate_config_ini() {
     local disable_ssl="${6}"
 
     local disable_ssl_content=";disable_ssl=true"
-    if [[ "${disable_ssl}" == "true" ]]; then 
+    if [[ "${disable_ssl}" == "true" ]]; then
         disable_ssl_content="disable_ssl=true"
     fi
 
@@ -1179,14 +1179,6 @@ generate_common_ini() {
     LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
-[chain]
-    ; use SM crypto or not, should nerver be changed
-    sm_crypto=${sm_mode}
-    ; the group id, should nerver be changed
-    group_id=${default_group}
-    ; the chain id, should nerver be changed
-    chain_id=${default_chainid}
-
 [security]
     private_key_path=conf/node.pem
 
@@ -1206,6 +1198,9 @@ generate_common_ini() {
     enable_cache=true
     ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
     key_page_size=${key_page_size}
+    pd_ssl_ca_path=
+    pd_ssl_cert_path=
+    pd_ssl_key_path=
 
 [txpool]
     ; size of the txpool, default is 15000
@@ -1217,15 +1212,27 @@ generate_common_ini() {
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
 
-[log]
-    enable=true
-    log_path=./log
-    ; info debug trace
-    level=info
-    ; MB
-    max_log_file_size=200
+[redis]
+    ; redis server ip
+    ;server_ip=127.0.0.1
+    ; redis server port
+    ;server_port=6379
+    ; redis request timeout, unit ms
+    ;request_timeout=3000
+    ; redis connection pool size
+    ;connection_pool_size=16
+    ; redis password, default empty
+    ;password=
+    ; redis db, default 0th
+    ;db=0
 
 [flow_control]
+    ; the switch for distributed rate limit
+    ; enable_distributed_ratelimit=false
+
+    ; rate limiter stat reporter interval, unit: ms
+    ; stat_reporter_interval=60000
+
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
@@ -1241,18 +1248,28 @@ generate_common_ini() {
     ;
     ; conn_outgoing_bw_limit=2
     ;
-    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
-    ;   ip_192.108.0.1=3
-    ;   ip_192.108.0.2=3
-    ;   ip_192.108.0.3=3
+    ; specify IP to limit bandwidth, format: conn_outgoing_bw_limit_x.x.x.x=n
+    ;   conn_outgoing_bw_limit_192.108.0.1=3
+    ;   conn_outgoing_bw_limit_192.108.0.2=3
+    ;   conn_outgoing_bw_limit_192.108.0.3=3
     ;
     ; default bandwidth limit for the group
     ; group_outgoing_bw_limit=2
     ;
-    ; specify group to limit bandwidth, group_groupName=n
-    ;   group_group0=2
-    ;   group_group1=2
-    ;   group_group2=2
+    ; specify group to limit bandwidth, group_outgoing_bw_limit_groupName=n
+    ;   group_outgoing_bw_limit_group0=2
+    ;   group_outgoing_bw_limit_group1=2
+    ;   group_outgoing_bw_limit_group2=2
+
+[log]
+    enable=true
+    ; print the log to std::cout or not, default print to the log files
+    enable_console_output = false
+    log_path=./log
+    ; info debug trace
+    level=info
+    ; MB
+    max_log_file_size=200
 EOF
 }
 
@@ -1265,7 +1282,7 @@ generate_sm_config_ini() {
     local disable_ssl="${6}"
 
     local disable_ssl_content=";disable_ssl=true"
-    if [[ "${disable_ssl}" == "true" ]]; then 
+    if [[ "${disable_ssl}" == "true" ]]; then
         disable_ssl_content="disable_ssl=true"
     fi
 
@@ -1315,7 +1332,7 @@ generate_p2p_connected_conf() {
     else
         local ip_array=(${ip_params//,/ })
         local ip_length=${#ip_array[@]}
-    
+
         local i=0
         for (( ; i < ip_length; i++)); do
             local ip=${ip_array[i]}
@@ -1389,6 +1406,14 @@ generate_genesis_config() {
     local node_list=${2}
 
     cat <<EOF >"${output}"
+[chain]
+    ; use SM crypto or not, should nerver be changed
+    sm_crypto=${sm_mode}
+    ; the group id, should nerver be changed
+    group_id=${default_group}
+    ; the chain id, should nerver be changed
+    chain_id=${default_chainid}
+        
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft)
     consensus_type=pbft
@@ -1403,8 +1428,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.0.0
-    compatibility_version=3.0.0
+    ; the default is 3.1.0
+    compatibility_version=3.1.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
@@ -1734,12 +1759,12 @@ generate_template_package()
     local genesis_conf_path="${3}"
     local output_dir="${4}"
 
-    # do not support docker 
+    # do not support docker
     if [ -n "${docker_mode}" ];then
         LOG_FATAL "Docker mode is not supported on building template install package"
     fi
 
-    # do not support monitor 
+    # do not support monitor
     if "${monitor_mode}" ;then
         LOG_FATAL "Monitor mode is not support on building template install package"
     fi

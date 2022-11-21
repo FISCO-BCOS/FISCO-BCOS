@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.0.1",
+  "version-string": "3.1.0",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -25,8 +25,10 @@
     "boost-multiprecision",
     "boost-program-options",
     "ms-gsl",
+    "zstd",
     "tbb",
     "zlib",
+    "redis-plus-plus",
     "jsoncpp",
     "protobuf",
     "cryptopp",
@@ -75,7 +77,11 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "cpprestsdk"
+        "etcd-cpp-apiv3",
+        {
+          "name": "grpc",
+          "version>=": "1.44.0"
+        }
       ]
     },
     "tcmalloc": {

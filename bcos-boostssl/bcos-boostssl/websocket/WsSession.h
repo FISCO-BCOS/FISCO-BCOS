@@ -171,9 +171,8 @@ protected:
     virtual void onWsAccept(boost::beast::error_code _ec);
 
     virtual void asyncRead();
-    virtual void onRead(boost::system::error_code ec, std::size_t bytes_transferred);
-
     virtual void asyncWrite(std::shared_ptr<bcos::bytes> _buffer);
+    
     virtual void send(std::shared_ptr<bcos::bytes> _buffer);
 
     // async read

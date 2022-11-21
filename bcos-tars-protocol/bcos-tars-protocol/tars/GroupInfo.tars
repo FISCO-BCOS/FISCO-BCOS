@@ -20,5 +20,6 @@ struct GroupInfo
     3 require vector<ChainNodeInfo> nodeList;
     4 optional string genesisConfig;
     5 optional string iniConfig;
+    6 optional int isWasm;
 };
 };

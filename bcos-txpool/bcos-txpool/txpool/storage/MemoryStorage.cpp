@@ -19,9 +19,13 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
+#include <tbb/pipeline.h>
+#include <boost/throw_exception.hpp>
 #include <memory>
 #include <tuple>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -69,27 +73,72 @@ void MemoryStorage::stop()
     }
 }
 
-TransactionStatus MemoryStorage::submitTransaction(
-    bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
+task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
+    protocol::Transaction::Ptr transaction)
 {
-    try
+    transaction->setImportTime(utcTime());
+    struct Awaitable
     {
-        auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
-        tx->setImportTime(utcTime());
-        auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true, true);
-        if (result != TransactionStatus::None)
+        constexpr bool await_ready() { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
         {
-            notifyInvalidReceipt(tx->hash(), result, _txSubmitCallback);
+            try
+            {
+                auto result = m_self->verifyAndSubmitTransaction(
+                    std::move(m_transaction),
+                    [this, m_handle = handle](Error::Ptr error,
+                        bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                        if (error)
+                        {
+                            m_submitResult.emplace<Error::Ptr>(std::move(error));
+                        }
+                        else
+                        {
+                            m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
+                                std::move(result));
+                        }
+                        if (m_handle)
+                        {
+                            m_handle.resume();
+                        }
+                    },
+                    true, true);
+
+                if (result != TransactionStatus::None)
+                {
+                    TXPOOL_LOG(ERROR) << "Submit transaction error! " << result;
+                    m_submitResult.emplace<Error::Ptr>(
+                        BCOS_ERROR_PTR((int32_t)result, "Invalid transaction"));
+                    handle.resume();
+                }
+            }
+            catch (std::exception& e)
+            {
+                m_submitResult.emplace<Error::Ptr>(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Invalid transaction"));
+                handle.resume();
+            }
         }
-        return result;
-    }
-    catch (std::exception const& e)
-    {
-        TXPOOL_LOG(WARNING) << LOG_DESC("Invalid transaction for decode exception")
-                            << LOG_KV("error", boost::diagnostic_information(e));
-        notifyInvalidReceipt(HashType(), TransactionStatus::Malform, _txSubmitCallback);
-        return TransactionStatus::Malform;
-    }
+        bcos::protocol::TransactionSubmitResult::Ptr await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+            }
+
+            return std::move(
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+        }
+
+        protocol::Transaction::Ptr m_transaction;
+        std::shared_ptr<MemoryStorage> m_self;
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
+
+    Awaitable awaitable{
+        .m_transaction = transaction, .m_self = shared_from_this(), .m_submitResult = {}};
+    co_return co_await awaitable;
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)
@@ -108,11 +157,16 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     auto txHash = _tx->hash();
     // the transaction has already onChain, reject it
     auto result = m_config->txValidator()->submittedToChain(_tx);
+    auto it = m_txsTable.find(txHash);
+    Transaction::ConstPtr tx = nullptr;
+    if (it != m_txsTable.end())
+    {
+        tx = it->second;
+    }
     if (result == TransactionStatus::NonceCheckFail)
     {
-        if (m_txsTable.count(txHash))
+        if (tx)
         {
-            auto tx = m_txsTable.at(txHash);
             TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
                                 << tx->hash().abridged() << LOG_KV("batchId", tx->batchId())
                                 << LOG_KV("batchHash", tx->batchHash().abridged())
@@ -121,9 +175,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         }
         return TransactionStatus::NonceCheckFail;
     }
-    if (m_txsTable.count(txHash) && m_txsTable[txHash])
+    if (tx)
     {
-        auto tx = m_txsTable[txHash];
         if (!tx->sealed() || tx->batchHash() == HashType())
         {
             if (!tx->sealed())
@@ -209,6 +262,10 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             result = insertWithoutLock(_tx);
         }
     }
+    else
+    {
+        return result;
+    }
     return result;
 }
 
@@ -264,7 +321,7 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
 
 void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
 {
-    auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _tx]() {
         try
         {
@@ -322,16 +379,17 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
 
 Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
 {
-    if (!m_txsTable.count(_txHash))
+    auto it = m_txsTable.find(_txHash);
+    if (it == m_txsTable.end())
     {
         return nullptr;
     }
-    auto tx = m_txsTable.at(_txHash);
+    auto tx = std::move(it->second);
     if (tx && tx->sealed())
     {
-        m_sealedTxsSize--;
+        --m_sealedTxsSize;
     }
-    m_txsTable.unsafe_erase(_txHash);
+    m_txsTable.unsafe_erase(it);
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
     TXPOOL_LOG(DEBUG) << LOG_DESC("remove tx: ") << tx->hash().abridged()
@@ -350,60 +408,51 @@ Transaction::ConstPtr MemoryStorage::remove(HashType const& _txHash)
 }
 
 Transaction::ConstPtr MemoryStorage::removeSubmittedTxWithoutLock(
-    TransactionSubmitResult::Ptr _txSubmitResult, bool _notify)
+    TransactionSubmitResult::Ptr txSubmitResult, bool _notify)
 {
-    auto tx = removeWithoutLock(_txSubmitResult->txHash());
+    auto tx = removeWithoutLock(txSubmitResult->txHash());
     if (!tx)
     {
         return nullptr;
     }
     if (_notify)
     {
-        notifyTxResult(tx, _txSubmitResult);
+        notifyTxResult(*tx, std::move(txSubmitResult));
     }
     return tx;
 }
 
-Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr _txSubmitResult)
+Transaction::ConstPtr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr txSubmitResult)
 {
-    auto tx = remove(_txSubmitResult->txHash());
+    auto tx = remove(txSubmitResult->txHash());
     if (!tx)
     {
         return nullptr;
     }
-    notifyTxResult(tx, _txSubmitResult);
+    notifyTxResult(*tx, std::move(txSubmitResult));
     return tx;
 }
 void MemoryStorage::notifyTxResult(
-    Transaction::ConstPtr _tx, TransactionSubmitResult::Ptr _txSubmitResult)
+    Transaction const& transaction, TransactionSubmitResult::Ptr txSubmitResult)
 {
-    if (!_txSubmitResult)
+    const auto& txSubmitCallback = transaction.submitCallback();
+    if (!txSubmitCallback)
     {
         return;
     }
-    if (!_tx->submitCallback())
+
+    auto txHash = transaction.hash();
+    txSubmitResult->setSender(std::string(transaction.sender()));
+    txSubmitResult->setTo(std::string(transaction.to()));
+    try
     {
-        return;
+        txSubmitCallback(nullptr, std::move(txSubmitResult));
     }
-    auto txSubmitCallback = _tx->submitCallback();
-    // notify the transaction result to RPC
-    auto txHash = _tx->hash();
-    _txSubmitResult->setSender(std::string(_tx->sender()));
-    _txSubmitResult->setTo(std::string(_tx->to()));
-    // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
-    // avoid shared_ptr circular reference
-    m_notifier->enqueue([txHash, _txSubmitResult, txSubmitCallback]() {
-        try
-        {
-            txSubmitCallback(nullptr, _txSubmitResult);
-        }
-        catch (std::exception const& e)
-        {
-            TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed")
-                                << LOG_KV("tx", txHash.abridged())
-                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
+    catch (std::exception const& e)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed") << LOG_KV("tx", txHash.abridged())
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+    }
 }
 
 // TODO: remove this, now just for bug tracing
@@ -437,65 +486,79 @@ void MemoryStorage::printPendingTxs()
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
     m_printed = true;
 }
-void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
+void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults const& txsResult)
 {
     auto startT = utcTime();
-    auto recordT = utcTime();
+    auto recordT = startT;
     int64_t lockT = 0;
-    m_blockNumberUpdatedTime = utcTime();
+    m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
     NonceListPtr nonceList = std::make_shared<NonceList>();
-    {
-        // batch remove
-        WriteGuard l(x_txpoolMutex);
-        lockT = utcTime() - startT;
-        for (auto txResult : _txsResult)
-        {
-            auto tx = removeSubmittedTxWithoutLock(txResult);
 
+    std::vector<std::tuple<Transaction::ConstPtr, TransactionSubmitResult::Ptr>> results;
+    results.reserve(txsResult.size());
+    {
+        WriteGuard lock(x_txpoolMutex);
+        for (const auto& it : txsResult)
+        {
+            auto const& txResult = it;
+            auto tx = removeWithoutLock(txResult->txHash());
             if (!tx && txResult->nonce() != NonceType(-1))
             {
                 nonceList->emplace_back(txResult->nonce());
             }
             else if (tx)
             {
-                succCount++;
+                ++succCount;
                 nonceList->emplace_back(tx->nonce());
             }
+            results.emplace_back(std::tuple{std::move(tx), txResult});
         }
-        // Note: must update the blockNumber after the txs removed
-        if (_batchId > m_blockNumber)
+
+        if (batchId > m_blockNumber)
         {
-            m_blockNumber = _batchId;
+            m_blockNumber = batchId;
         }
-        m_onChainTxsCount += _txsResult.size();
-        // stop stat the tps when there has no pending txs
-        if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
-        {
-            auto totalTime = (utcTime() - m_tpsStatstartTime);
-            if (totalTime > 0)
-            {
-                auto tps = (m_onChainTxsCount * 1000) / totalTime;
-                TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
-                                 << LOG_KV("totalTime", totalTime);
-            }
-            m_tpsStatstartTime.store(0);
-            m_onChainTxsCount.store(0);
-        }
+        lockT = utcTime() - startT;
     }
+
+    m_onChainTxsCount += txsResult.size();
+    // stop stat the tps when there has no pending txs
+    if (m_tpsStatstartTime.load() > 0 && m_txsTable.size() == 0)
+    {
+        auto totalTime = (utcTime() - m_tpsStatstartTime);
+        if (totalTime > 0)
+        {
+            auto tps = (m_onChainTxsCount * 1000) / totalTime;
+            TXPOOL_LOG(INFO) << METRIC << LOG_DESC("StatTPS") << LOG_KV("tps", tps)
+                             << LOG_KV("totalTime", totalTime);
+        }
+        m_tpsStatstartTime.store(0);
+        m_onChainTxsCount.store(0);
+    }
+
     auto removeT = utcTime() - startT;
     startT = utcTime();
     notifyUnsealedTxsSize();
     // update the ledger nonce
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceList);
     auto updateLedgerNonceT = utcTime() - startT;
     startT = utcTime();
     // update the txpool nonce
     m_config->txPoolNonceChecker()->batchRemove(*nonceList);
     auto updateTxPoolNonceT = utcTime() - startT;
+
+    for (auto& [tx, txResult] : results)
+    {
+        if (tx)
+        {
+            notifyTxResult(*tx, std::move(txResult));
+        }
+    }
+
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
-                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
-                     << LOG_KV("batchId", _batchId) << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("expectedSize", txsResult.size()) << LOG_KV("succCount", succCount)
+                     << LOG_KV("batchId", batchId) << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
@@ -508,14 +571,23 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
     _missedTxs.clear();
     for (auto const& hash : _txs)
     {
-        if (!m_txsTable.count(hash))
+        auto it = m_txsTable.find(hash);
+        if (it == m_txsTable.end())
         {
             _missedTxs.emplace_back(hash);
             continue;
         }
-        auto tx = m_txsTable[hash];
+        auto tx = it->second;
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
+    if (c_fileLogLevel <= TRACE)
+        [[unlikely]]
+        {
+            for (auto const& tx : _missedTxs)
+            {
+                TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
+            }
+        }
     return fetchedTxs;
 }
 
@@ -523,16 +595,14 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
+    fetchedTxs->reserve(_txsLimit);
+
     for (auto const& it : m_txsTable)
     {
-        auto tx = it.second;
+        auto& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
-        if (!tx)
-        {
-            continue;
-        }
-        if (tx->synced())
+        if (!tx || tx->synced())
         {
             continue;
         }
@@ -588,7 +658,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             // add to m_invalidTxs to be deleted
             m_invalidTxs.insert(txHash);
-            m_invalidTxs.insert(tx->nonce());
+            m_invalidNonces.insert(tx->nonce());
             continue;
         }
         /// check nonce again when obtain transactions
@@ -603,7 +673,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             transaction->takeSubmitCallback();
             // add to m_invalidTxs to be deleted
             m_invalidTxs.insert(txHash);
-            m_invalidTxs.insert(tx->nonce());
+            m_invalidNonces.insert(tx->nonce());
             continue;
         }
         // blockLimit expired
@@ -664,7 +734,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
 void MemoryStorage::removeInvalidTxs()
 {
-    auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_notifier->enqueue([self]() {
         try
         {
@@ -726,11 +796,12 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     ReadGuard l(x_txpoolMutex);
     for (auto txHash : _txsHashList)
     {
-        if (!m_txsTable.count(txHash))
+        auto it = m_txsTable.find(txHash);
+        if (it == m_txsTable.end())
         {
             continue;
         }
-        auto tx = m_txsTable[txHash];
+        auto tx = it->second;
         if (!tx)
         {
             continue;
@@ -784,13 +855,14 @@ void MemoryStorage::batchMarkTxsWithoutLock(
     ssize_t successCount = 0;
     for (auto txHash : _txsHashList)
     {
-        if (!m_txsTable.count(txHash))
+        auto it = m_txsTable.find(txHash);
+        if (it == m_txsTable.end())
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
                               << LOG_KV("tx", txHash.abridged()) << LOG_KV("sealFlag", _sealFlag);
             continue;
         }
-        auto tx = m_txsTable[txHash];
+        auto tx = it->second;
         if (!tx)
         {
             continue;
@@ -883,8 +955,10 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
     {
         return;
     }
+
     auto unsealedTxsSize = unSealedTxsSizeWithoutLock();
-    m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, this](Error::Ptr _error) {
+    auto self = weak_from_this();
+    m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, self](Error::Ptr _error) {
         if (_error == nullptr)
         {
             return;
@@ -892,11 +966,16 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
         TXPOOL_LOG(WARNING) << LOG_DESC("notifyUnsealedTxsSize failed")
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMsg", _error->errorMessage());
-        if (_retryTime >= c_maxRetryTime)
+        auto memoryStorage = self.lock();
+        if (!memoryStorage)
         {
             return;
         }
-        this->notifyUnsealedTxsSize((_retryTime + 1));
+        if (_retryTime >= memoryStorage->c_maxRetryTime)
+        {
+            return;
+        }
+        memoryStorage->notifyUnsealedTxsSize((_retryTime + 1));
     });
 }
 
@@ -1019,12 +1098,15 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
+            TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed")
+                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("error", ret);
             continue;
         }
         successCount++;
     }
+    notifyUnsealedTxsSize();
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchImportTxs success") << LOG_KV("importTxs", successCount)
-                      << LOG_KV("totalTxs", _txs->size())
+                      << LOG_KV("totalTxs", _txs->size()) << LOG_KV("pendingTxs", m_txsTable.size())
                       << LOG_KV("timecost", (utcTime() - recordT));
 }
 

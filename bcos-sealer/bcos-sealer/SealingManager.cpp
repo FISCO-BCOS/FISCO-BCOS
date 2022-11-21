@@ -27,7 +27,8 @@ void SealingManager::resetSealing()
 {
     SEAL_LOG(INFO) << LOG_DESC("resetSealing") << LOG_KV("startNum", m_startSealingNumber)
                    << LOG_KV("endNum", m_endSealingNumber) << LOG_KV("sealingNum", m_sealingNumber)
-                   << LOG_KV("pendingTxs", pendingTxsSize());
+                   << LOG_KV("pendingTxs", pendingTxsSize())
+                   << LOG_KV("unsealedTxs", m_unsealedTxsSize);
     m_sealingNumber = m_endSealingNumber + 1;
     clearPendingTxs();
 }
@@ -78,15 +79,15 @@ void SealingManager::clearPendingTxs()
     SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
                    << LOG_KV("size", pendingTxsSize);
     HashListPtr unHandledTxs = std::make_shared<HashList>();
-    for (auto txMetaData : *m_pendingTxs)
+    for (const auto& txMetaData : *m_pendingTxs)
     {
         unHandledTxs->emplace_back(txMetaData->hash());
     }
-    for (auto txMetaData : *m_pendingSysTxs)
+    for (const auto& txMetaData : *m_pendingSysTxs)
     {
         unHandledTxs->emplace_back(txMetaData->hash());
     }
-    auto self = std::weak_ptr<SealingManager>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, unHandledTxs]() {
         try
         {
@@ -147,7 +148,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
-    blockHeader->setTimestamp(utcTime());
+    blockHeader->setTimestamp(m_config->nodeTimeMaintenance()->getAlignedTime());
     block->setBlockHeader(blockHeader);
     auto txsSize =
         std::min((size_t)m_maxTxsPerBlock, (m_pendingTxs->size() + m_pendingSysTxs->size()));
@@ -178,7 +179,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
     // Note: When the last block(N) sealed by this node contains system transactions,
     //       if other nodes do not wait until block(N) is committed and directly seal block(N+1),
     //       will cause system exceptions.
-    return std::pair(containSysTxs, block);
+    return {containSysTxs, block};
 }
 
 size_t SealingManager::pendingTxsSize()
@@ -241,7 +242,7 @@ void SealingManager::fetchTransactions()
     m_fetchingTxs = true;
     ssize_t startSealingNumber = m_startSealingNumber;
     ssize_t endSealingNumber = m_endSealingNumber;
-    auto self = std::weak_ptr<SealingManager>(shared_from_this());
+    auto self = weak_from_this();
     m_config->txpool()->asyncSealTxs(txsToFetch, nullptr,
         [self, startSealingNumber, endSealingNumber](
             Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {

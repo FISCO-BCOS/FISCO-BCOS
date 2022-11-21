@@ -18,7 +18,9 @@
  * @author: octopus
  * @date: 2021-07-09
  */
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -30,17 +32,18 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/Base64.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include <exception>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -70,28 +73,47 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto req = std::string_view((const char*)buffer->data(), buffer->size());
 
     auto start = std::chrono::high_resolution_clock::now();
+    auto endpoint = _session->endPoint();
+    auto seq = _msg->seq();
+    auto version = _msg->version();
+    auto ext = _msg->ext();
 
-    onRPCRequest(req, [m_buffer = std::move(buffer), _msg, _session, start](bcos::bytes resp) {
-        if (_session && _session->isConnected())
+    auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
+    auto messageFactory = m_wsService->messageFactory();
+
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp) {
+        auto session = weakptrSession.lock();
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+        if (!session)
+        {
+            BCOS_LOG(TRACE) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                            << LOG_DESC("unable to send response for session has been destroyed")
+                            << LOG_KV("seq", seq) << LOG_KV("totalTime", total);
+            return;
+        }
+
+        if (session->isConnected())
         {
             // TODO: no need to copy resp
             auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
-            _msg->setPayload(buffer);
-            _session->asyncSendMessage(_msg);
+
+            auto msg = messageFactory->buildMessage();
+            msg->setPayload(buffer);
+            msg->setVersion(version);
+            msg->setSeq(seq);
+            msg->setExt(ext);
+            session->asyncSendMessage(msg);
         }
         else
         {
-            auto end = std::chrono::high_resolution_clock::now();
-            auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-            // remove the callback
-            BCOS_LOG(WARNING)
-                << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                << LOG_DESC("unable to send response for session has been inactive")
-                << LOG_KV("req", std::string_view((const char*)m_buffer->data(), m_buffer->size()))
-                << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
-                << LOG_KV("seq", _msg->seq()) << LOG_KV("totalTime", total)
-                << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
+            BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                              << LOG_DESC("unable to send response for session has been inactive")
+                              << LOG_KV("seq", seq) << LOG_KV("totalTime", total)
+                              << LOG_KV("endpoint", session->endPoint())
+                              << LOG_KV("refCount", session.use_count());
         }
     });
 }
@@ -217,19 +239,46 @@ void JsonRpcImpl_2_0::toJsonResp(
 }
 
 void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
-    bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr)
+    bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
+    crypto::Hash& hashImpl)
 {
-    jResp["version"] = _transactionReceiptPtr->version();
-    jResp["contractAddress"] = string(_transactionReceiptPtr->contractAddress());
-    jResp["gasUsed"] = _transactionReceiptPtr->gasUsed().str(16);
-    jResp["status"] = _transactionReceiptPtr->status();
-    jResp["blockNumber"] = _transactionReceiptPtr->blockNumber();
-    jResp["output"] = toHexStringWithPrefix(_transactionReceiptPtr->output());
-    jResp["message"] = _transactionReceiptPtr->message();
+    jResp["version"] = transactionReceipt.version();
+
+    std::string contractAddress = string(transactionReceipt.contractAddress());
+
+    if (!contractAddress.empty() && !_isWasm)
+    {
+        std::string checksumContractAddr = contractAddress;
+        toChecksumAddress(checksumContractAddr, hashImpl.hash(contractAddress).hex());
+
+        if (!contractAddress.starts_with("0x") && !contractAddress.starts_with("0X"))
+        {
+            contractAddress = "0x" + contractAddress;
+        }
+
+        if (!checksumContractAddr.starts_with("0x") && !checksumContractAddr.starts_with("0X"))
+        {
+            checksumContractAddr = "0x" + checksumContractAddr;
+        }
+
+        jResp["contractAddress"] = contractAddress;
+        jResp["checksumContractAddress"] = checksumContractAddr;
+    }
+    else
+    {
+        jResp["contractAddress"] = contractAddress;
+        jResp["checksumContractAddress"] = contractAddress;
+    }
+
+    jResp["gasUsed"] = transactionReceipt.gasUsed().str(16);
+    jResp["status"] = transactionReceipt.status();
+    jResp["blockNumber"] = transactionReceipt.blockNumber();
+    jResp["output"] = toHexStringWithPrefix(transactionReceipt.output());
+    jResp["message"] = transactionReceipt.message();
     jResp["transactionHash"] = std::string(_txHash);
-    jResp["hash"] = _transactionReceiptPtr->hash().hexPrefixed();
+    jResp["hash"] = transactionReceipt.hash().hexPrefixed();
     jResp["logEntries"] = Json::Value(Json::arrayValue);
-    for (const auto& logEntry : _transactionReceiptPtr->logEntries())
+    for (const auto& logEntry : transactionReceipt.logEntries())
     {
         Json::Value jLog;
         jLog["address"] = std::string(logEntry.address());
@@ -338,7 +387,6 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
     auto transaction =
         transactionFactory->createTransaction(0, _to, decodeData(_data), u256(0), 0, "", "", 0);
-
     nodeService->scheduler()->call(std::move(transaction),
         [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
             Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
@@ -361,93 +409,93 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
         });
 }
 
-void JsonRpcImpl_2_0::sendTransaction(std::string_view _groupID, std::string_view _nodeName,
-    std::string_view _data, bool _requireProof, RespFunc _respFunc)
+void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view nodeName,
+    std::string_view data, bool requireProof, RespFunc respFunc)
 {
-    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
-    auto transactionData = decodeData(_data);
-    auto nodeService = getNodeService(_groupID, _nodeName, "sendTransaction");
-    auto txpool = nodeService->txpool();
-    checkService(txpool, "txpool");
+    task::wait(
+        [](JsonRpcImpl_2_0* self, std::string_view groupID, std::string_view nodeName,
+            std::string_view data, bool requireProof, RespFunc respFunc) -> task::Task<void> {
+            auto nodeService = self->getNodeService(groupID, nodeName, "sendTransaction");
 
-    // Note: avoid call tx->sender() or tx->verify() here in case of verify the same transaction
-    // more than once
-    auto tx = nodeService->blockFactory()->transactionFactory()->createTransaction(
-        transactionData, false);
-    Json::Value jResp;
-    jResp["input"] = toHexStringWithPrefix(tx->input());
-    RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", _groupID)
-                        << LOG_KV("node", _nodeName);
-
-    auto start = utcTime();
-    auto sendTxTimeout = m_sendTxTimeout;
-
-    // Note: In order to avoid taking up too much memory at runtime, it is not recommended to pass
-    // tx to lamba expressions for the tx will only be released when submitCallback is called
-    auto submitCallback =
-        [m_jResp = std::move(jResp), _requireProof, respFunc = std::move(_respFunc), start,
-            sendTxTimeout, self](Error::Ptr _error,
-            bcos::protocol::TransactionSubmitResult::Ptr _transactionSubmitResult) mutable {
-            auto rpc = self.lock();
-            if (!rpc)
+            auto txpool = nodeService->txpool();
+            if (!txpool) [[unlikely]]
             {
-                return;
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
             }
 
-            if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
+            auto groupInfo = self->m_groupManager->getGroupInfo(groupID);
+            if (!groupInfo) [[unlikely]]
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("sendTransaction") << LOG_KV("requireProof", _requireProof)
-                    << LOG_KV("hash", _transactionSubmitResult ?
-                                          _transactionSubmitResult->txHash().abridged() :
-                                          "unknown")
-                    << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("message", _error->errorMessage());
-
-                respFunc(_error, m_jResp);
-
-                return;
+                BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+                    "The group " + std::string(groupID) + " does not exist!"));
             }
 
-            if (_transactionSubmitResult->transactionReceipt())
+            auto isWasm = groupInfo->wasm();
+            auto transactionData = decodeData(data);
+            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
+                transactionData, false);
+
+            RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
+                                << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+            auto start = utcTime();
+            auto sendTxTimeout = self->m_sendTxTimeout;
+
+            Json::Value jResp;
+            try
             {
-                // get transaction receipt
-                auto txHash = _transactionSubmitResult->txHash();
+                auto submitResult = co_await txpool->submitTransaction(transaction);
+
+                auto txHash = submitResult->txHash();
                 auto hexPreTxHash = txHash.hexPrefixed();
 
                 auto end = utcTime();
                 auto totalTime = end - start;  // ms
-                if (sendTxTimeout > 0 && totalTime > sendTxTimeout)
+                if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
                 {
                     RPC_IMPL_LOG(WARNING)
                         << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
                         << LOG_KV("hexPreTxHash", hexPreTxHash)
-                        << LOG_KV("requireProof", _requireProof) << LOG_KV("txCostTime", totalTime);
+                        << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
                 }
                 else
                 {
                     RPC_IMPL_LOG(TRACE)
                         << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
                         << LOG_KV("hexPreTxHash", hexPreTxHash)
-                        << LOG_KV("requireProof", _requireProof) << LOG_KV("txCostTime", totalTime);
+                        << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
                 }
 
-                if (_transactionSubmitResult->status() !=
-                    (int32_t)bcos::protocol::TransactionStatus::None)
+                if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
                     std::stringstream errorMsg;
-                    errorMsg << (bcos::protocol::TransactionStatus)(
-                        _transactionSubmitResult->status());
-                    m_jResp["errorMessage"] = errorMsg.str();
+                    errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
+                    jResp["errorMessage"] = errorMsg.str();
                 }
-                toJsonResp(m_jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());
-                m_jResp["to"] = string(_transactionSubmitResult->to());
-                m_jResp["from"] = toHexStringWithPrefix(_transactionSubmitResult->sender());
-                // TODO: notify transactionProof
-                respFunc(nullptr, m_jResp);
+
+                toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
+                    *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
+                jResp["to"] = string(submitResult->to());
+                jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+
+                // TODO: check if needed
+                // jResp["input"] = toHexStringWithPrefix(transaction->input());
+
+                respFunc(nullptr, jResp);
             }
-        };
-    txpool->asyncSubmit(std::make_shared<bcos::bytes>(std::move(transactionData)), submitCallback);
+            catch (bcos::Error& e)
+            {
+                auto info = boost::diagnostic_information(e);
+                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << info;
+                respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
+            }
+            catch (std::exception& e)
+            {
+                auto info = boost::diagnostic_information(e);
+                RPC_IMPL_LOG(WARNING) << "RPC common error: " << info;
+                respFunc(std::make_shared<bcos::Error>(-1, std::move(info)), jResp);
+            }
+        }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));
 }
 
 
@@ -549,12 +597,25 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getTransactionReceipt");
     auto ledger = nodeService->ledger();
+
     checkService(ledger, "ledger");
+    auto hashImpl = nodeService->blockFactory()->cryptoSuite()->hashImpl();
+
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    bool isWasm = groupInfo->wasm();
+
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     ledger->asyncGetTransactionReceiptByHash(hash, _requireProof,
         [m_group = std::string(_groupID), m_nodeName = std::string(_nodeName),
             m_txHash = std::string(_txHash), hash, _requireProof, m_respFunc = std::move(_respFunc),
-            self](Error::Ptr _error, protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
+            self, hashImpl, isWasm](Error::Ptr _error,
+            protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
             ledger::MerkleProofPtr _merkleProofPtr) {
             auto rpc = self.lock();
             if (!rpc)
@@ -574,7 +635,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                 return;
             }
 
-            toJsonResp(jResp, hash.hexPrefixed(), _transactionReceiptPtr);
+            toJsonResp(jResp, hash.hexPrefixed(), *_transactionReceiptPtr, isWasm, *hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)
@@ -742,10 +803,25 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getCode");
 
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    auto isWasm = groupInfo->wasm();
+    // trim 0x prefix for solidity contract
+    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    {
+        _contractAddress = _contractAddress.substr(2);
+    }
+
+    auto lowerAddress = boost::to_lower_copy(std::string(_contractAddress));
+
     auto scheduler = nodeService->scheduler();
-    scheduler->getCode(std::string_view(_contractAddress),
-        [m_contractAddress = std::string(_contractAddress), callback = std::move(_callback)](
-            Error::Ptr _error, bcos::bytes _codeData) {
+    scheduler->getCode(std::string_view(lowerAddress),
+        [lowerAddress, callback = std::move(_callback)](Error::Ptr _error, bcos::bytes _codeData) {
             std::string code;
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
@@ -760,7 +836,7 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("getCode") << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
-                    << LOG_KV("contractAddress", m_contractAddress);
+                    << LOG_KV("contractAddress", lowerAddress);
             }
 
             Json::Value jResp = std::move(code);
@@ -776,16 +852,32 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
 
     auto nodeService = getNodeService(_groupID, _nodeName, "getABI");
 
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    if (!groupInfo) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
+            "The group " + std::string(_groupID) + " does not exist!"));
+    }
+
+    auto isWasm = groupInfo->wasm();
+    // trim 0x prefix for solidity contract address
+    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    {
+        _contractAddress = _contractAddress.substr(2);
+    }
+
+
+    auto lowerAddress = boost::to_lower_copy(std::string(_contractAddress));
+
     auto scheduler = nodeService->scheduler();
-    scheduler->getABI(std::string_view(_contractAddress),
-        [m_contractAddress = std::string(_contractAddress), callback = std::move(_callback)](
-            Error::Ptr _error, std::string _abi) {
+    scheduler->getABI(std::string_view(lowerAddress),
+        [lowerAddress, callback = std::move(_callback)](Error::Ptr _error, std::string _abi) {
             if (_error)
             {
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("getABI") << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
-                    << LOG_KV("contractAddress", m_contractAddress);
+                    << LOG_KV("contractAddress", lowerAddress);
             }
             Json::Value jResp = std::move(_abi);
             callback(_error, jResp);
@@ -1158,8 +1250,11 @@ void JsonRpcImpl_2_0::gatewayInfoToJson(
 {
     auto p2pInfo = _gatewayInfo->p2pInfo();
     _response["p2pNodeID"] = p2pInfo.p2pID;
-    _response["endPoint"] =
-        p2pInfo.nodeIPEndpoint.address() + ":" + std::to_string(p2pInfo.nodeIPEndpoint.port());
+    if (!p2pInfo.nodeIPEndpoint.address().empty())
+    {
+        _response["endPoint"] =
+            p2pInfo.nodeIPEndpoint.address() + ":" + std::to_string(p2pInfo.nodeIPEndpoint.port());
+    }
     // set the groupNodeIDInfo
     auto groupNodeIDInfo = _gatewayInfo->nodeIDInfo();
     Json::Value groupInfo(Json::arrayValue);

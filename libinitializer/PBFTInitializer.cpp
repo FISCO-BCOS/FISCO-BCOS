@@ -61,15 +61,17 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
-    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService)
+    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
   : m_nodeArchType(_nodeArchType),
-    m_nodeConfig(_nodeConfig),
-    m_protocolInitializer(_protocolInitializer),
-    m_txpool(_txpool),
-    m_ledger(_ledger),
-    m_scheduler(_scheduler),
-    m_storage(_storage),
-    m_frontService(_frontService)
+    m_nodeConfig(std::move(_nodeConfig)),
+    m_protocolInitializer(std::move(_protocolInitializer)),
+    m_txpool(std::move(_txpool)),
+    m_ledger(std::move(_ledger)),
+    m_scheduler(std::move(_scheduler)),
+    m_storage(std::move(_storage)),
+    m_frontService(std::move(_frontService)),
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     createSealer();
@@ -132,6 +134,7 @@ void PBFTInitializer::initChainNodeInfo(
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
+    m_groupInfo->setWasm(_nodeConfig->isWasm());
     int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
     {
@@ -376,8 +379,8 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
 void PBFTInitializer::createSealer()
 {
     // create sealer
-    auto sealerFactory = std::make_shared<SealerFactory>(
-        m_protocolInitializer->blockFactory(), m_txpool, m_nodeConfig->minSealTime());
+    auto sealerFactory = std::make_shared<SealerFactory>(m_protocolInitializer->blockFactory(),
+        m_txpool, m_nodeConfig->minSealTime(), m_nodeTimeMaintenance);
     m_sealer = sealerFactory->createSealer();
 }
 
@@ -401,7 +404,7 @@ void PBFTInitializer::createSync()
     auto keyPair = m_protocolInitializer->keyPair();
     auto blockSyncFactory = std::make_shared<BlockSyncFactory>(keyPair->publicKey(),
         m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(), m_ledger,
-        m_txpool, m_frontService, m_scheduler, m_pbft);
+        m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance);
     m_blockSync = blockSyncFactory->createBlockSync();
 }
 
@@ -510,8 +513,8 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 #ifdef WITH_TIKV
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
-        m_nodeConfig->leaseTTL());
-
+        m_nodeConfig->leaseTTL(), m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(),
+        m_nodeConfig->pdKeyPath());
 
     // register the handler
     m_leaderElection->registerOnCampaignHandler(

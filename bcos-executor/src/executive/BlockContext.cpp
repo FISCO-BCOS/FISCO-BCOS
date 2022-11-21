@@ -41,9 +41,9 @@ using namespace bcos::precompiled;
 using namespace std;
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-    crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
-    uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
-    bool _isAuthCheck)
+    LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
+    bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
+    uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
     m_timeStamp(timestamp),
@@ -52,15 +52,19 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_isWasm(_isWasm),
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
-    m_hashImpl(_hashImpl)
+    m_hashImpl(_hashImpl),
+    m_ledgerCache(ledgerCache)
 {}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-    crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
-    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
-  : BlockContext(storage, _hashImpl, _current->number(), _current->hash(), _current->timestamp(),
-        _current->version(), _schedule, _isWasm, _isAuthCheck)
-{}
+    LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
+    protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
+    bool _isAuthCheck, std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
+  : BlockContext(storage, ledgerCache, _hashImpl, _current->number(), _current->hash(),
+        _current->timestamp(), _current->version(), _schedule, _isWasm, _isAuthCheck)
+{
+    m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
+}
 
 
 ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)
@@ -85,4 +89,49 @@ void BlockContext::setExecutiveFlow(
 {
     bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
+}
+
+void BlockContext::suicide(std::string_view contract2Suicide)
+{
+    {
+        bcos::WriteGuard l(x_suicides);
+        m_suicides.emplace(contract2Suicide);
+    }
+
+    EXECUTOR_LOG(TRACE) << LOG_BADGE("SUICIDE")
+                        << "Add suicide: " << LOG_KV("table2Suicide", contract2Suicide)
+                        << LOG_KV("suicides.size", m_suicides.size())
+                        << LOG_KV("blockNumber", m_blockNumber);
+}
+
+void BlockContext::killSuicides()
+{
+    bcos::ReadGuard l(x_suicides);
+    if (m_suicides.empty())
+    {
+        return;
+    }
+
+    auto emptyCodeHash = m_hashImpl->hash("");
+    for (std::string_view table2Suicide : m_suicides)
+    {
+        auto contractTable = storage()->openTable(table2Suicide);
+
+        if (contractTable)
+        {
+            // set codeHash
+            bcos::storage::Entry emptyCodeHashEntry;
+            emptyCodeHashEntry.importFields({emptyCodeHash.asBytes()});
+            contractTable->setRow(ACCOUNT_CODE_HASH, std::move(emptyCodeHashEntry));
+
+            // delete binary
+            bcos::storage::Entry emptyCodeEntry;
+            emptyCodeEntry.importFields({std::move("")});
+            contractTable->setRow(ACCOUNT_CODE, std::move(emptyCodeEntry));
+        }
+
+        EXECUTOR_LOG(TRACE) << LOG_BADGE("SUICIDE")
+                            << "Kill contract: " << LOG_KV("contract2Suicide", table2Suicide)
+                            << LOG_KV("blockNumber", m_blockNumber);
+    }
 }

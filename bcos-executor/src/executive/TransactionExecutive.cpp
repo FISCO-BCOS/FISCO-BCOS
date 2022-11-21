@@ -21,8 +21,10 @@
 
 #include "TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
+#include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
+#include "../vm/DelegateHostContext.h"
 #include "../vm/EVMHostInterface.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
@@ -30,12 +32,15 @@
 #include "../vm/VMInstance.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "BlockContext.h"
+#include "ExecutiveFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Exceptions.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -45,6 +50,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+
 
 using namespace std;
 using namespace bcos;
@@ -80,14 +86,19 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    }
     auto newSeq = seq() + 1;
     bool isCreate = input->create;
     input->seq = newSeq;
     input->contextID = m_contextID;
 
     std::string newAddress;
-    if (isCreate && !m_blockContext.lock()->isWasm())
+    // if internalCreate, sometimes it will use given address, if receiveAddress is empty then give
+    // a new address
+    if (isCreate && !m_blockContext.lock()->isWasm() && std::empty(input->receiveAddress))
     {
         if (input->createSalt)
         {
@@ -106,26 +117,94 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         input->codeAddress = newAddress;
     }
 
-    auto executive = std::make_shared<TransactionExecutive>(
-        m_blockContext, input->codeAddress, m_contextID, newSeq, m_gasInjector);
+    if (input->delegateCall)
+    {
+        assert(!m_blockContext.lock()->isWasm());
+        auto tableName = getContractTableName(input->codeAddress, false);
 
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_evmPrecompiled);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
+        // get codeHash in contract table
+        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        if (!codeHashEntry || codeHashEntry->get().empty())
+        {
+            auto& output = input;
+            EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            output->status = (int32_t)TransactionStatus::RevertInstruction;
+            output->evmStatus = EVMC_REVERT;
+            return std::move(output);
+        }
+
+        auto codeHash = codeHashEntry->getField(0);
+
+        // get code in code binary table
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
+        if (!entry || entry->get().empty())
+        {
+            auto& output = input;
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            output->status = (int32_t)TransactionStatus::RevertInstruction;
+            output->evmStatus = EVMC_REVERT;
+            return std::move(output);
+        }
+        input->delegateCallCode = toBytes(entry->get());
+    }
+
+    if (input->data == bcos::protocol::GET_CODE_INPUT_BYTES)
+    {
+        EXECUTIVE_LOG(DEBUG) << "Get external code request"
+                             << LOG_KV("codeAddress", input->codeAddress);
+
+        auto tableName = getContractTableName(input->codeAddress, false);
+
+        auto& output = input;
+        // get codeHash in contract table
+        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
+        if (!codeHashEntry || codeHashEntry->get().empty())
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not get external code hash from local storage"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            return std::move(output);
+        }
+
+        auto codeHash = codeHashEntry->getField(0);
+
+        // get code in code binary table
+        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
+        if (!entry || entry->get().empty())
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
+                                 << LOG_KV("codeAddress", input->codeAddress);
+            output->data = bytes();
+            return std::move(output);
+        }
+        output->data = toBytes(entry->get());
+        return std::move(output);
+    }
+
+    auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
+        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+    auto executive = executiveFactory->build(input->codeAddress, m_contextID, newSeq, false);
 
     auto output = executive->start(std::move(input));
 
     // update seq
     m_seq = executive->seq();
 
-    EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
+    }
     return output;
 }
 
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE)
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
                              << LOG_KV("callParameters", callParameters->toFullString())
@@ -152,7 +231,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE)
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute finished")
                              << LOG_KV("callResults", callResults->toFullString())
@@ -171,43 +250,31 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
 
     EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("executive call")
-                         << LOG_KV("contract", callParameters->codeAddress)
+                         << LOG_KV("contract", callParameters->receiveAddress)
                          << LOG_KV("sender", callParameters->senderAddress)
-                         << LOG_KV("internalCall", callParameters->internalCall);
+                         << LOG_KV("internalCall", callParameters->internalCall)
+                         << LOG_KV("delegateCall", callParameters->delegateCall)
+                         << LOG_KV("codeAddress", callParameters->codeAddress);
 
-    if (isPrecompiled(callParameters->codeAddress) || callParameters->internalCall)
+    auto tableName = getContractTableName(callParameters->receiveAddress, blockContext->isWasm());
+    // delegateCall is just about to replace code, no need to check permission beforehand
+    if (callParameters->delegateCall)
+    {
+        auto hostContext = make_unique<DelegateHostContext>(
+            std::move(callParameters), shared_from_this(), std::move(tableName));
+        return {std::move(hostContext), nullptr};
+    }
+    // check permission first
+    if (blockContext->isAuthCheck() && !checkAuth(callParameters))
+    {
+        revert();
+        return {nullptr, std::move(callParameters)};
+    }
+    if (isPrecompiled(callParameters->receiveAddress) || callParameters->internalCall)
     {
         return {nullptr, callPrecompiled(std::move(callParameters))};
     }
-    auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
-    // check permission first
-    if (blockContext->isAuthCheck())
-    {
-        if (!checkContractAvailable(callParameters))
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Contract is frozen";
-            callParameters->data.clear();
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("tableName", tableName)
-                                << LOG_KV("origin", callParameters->origin);
-            return {nullptr, std::move(callParameters)};
-        }
-        if (!checkAuth(callParameters, false))
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Call permission denied";
-            callParameters->data.clear();
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("tableName", tableName)
-                                << LOG_KV("origin", callParameters->origin);
-            return {nullptr, std::move(callParameters)};
-        }
-    }
+
     auto hostContext = make_unique<HostContext>(
         std::move(callParameters), shared_from_this(), std::move(tableName));
     return {std::move(hostContext), nullptr};
@@ -231,12 +298,17 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         execPrecompiled(precompiledCallParams);
 
-        if (precompiledCallParams->m_gas < 0)
+        if (precompiledCallParams->m_gasLeft < 0)
         {
             revert();
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
+            if (versionCompareTo(
+                    blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput("Call precompiled out of gas.", *callParameters);
+            }
             return callParameters;
         }
         precompiledCallParams->takeDataToCallParameter(callParameters);
@@ -299,28 +371,26 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                          << LOG_KV("abi len", extraData->abi.size())
                          << LOG_KV("sender", callParameters->senderAddress)
                          << LOG_KV("internalCreate", callParameters->internalCreate);
-    if (callParameters->internalCreate)
-    {
-        return {nullptr, internalCreate(std::move(callParameters))};
-    }
 
     // check permission first
-    if (blockContext->isAuthCheck())
+    if (blockContext->isAuthCheck() && !checkAuth(callParameters))
     {
-        if (!checkAuth(callParameters, true))
-        {
-            revert();
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Create permission denied";
-            callParameters->create = false;
-            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
-                                << LOG_KV("newAddress", newAddress)
-                                << LOG_KV("origin", callParameters->origin);
-            return {nullptr, std::move(callParameters)};
-        }
+        revert();
+        return {nullptr, std::move(callParameters)};
     }
-
+    if (callParameters->internalCreate)
+    {
+        callParameters->abi = std::move(extraData->abi);
+        auto sender = callParameters->senderAddress;
+        auto response = internalCreate(std::move(callParameters));
+        if (blockContext->isAuthCheck() &&
+            blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+        {
+            // Create auth table
+            creatAuthTable(tableName, response->origin, std::move(sender));
+        }
+        return {nullptr, std::move(response)};
+    }
     // Create table
     try
     {
@@ -340,6 +410,10 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         callParameters->status = (int32_t)TransactionStatus::ContractAddressAlreadyUsed;
         callParameters->type = CallParameters::REVERT;
         callParameters->message = e.what();
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Contract address already used.", *callParameters);
+        }
         EXECUTIVE_LOG(INFO) << "Revert transaction: " << LOG_DESC("createTable failed")
                             << callParameters->message << LOG_KV("tableName", tableName);
         return {nullptr, std::move(callParameters)};
@@ -362,6 +436,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "the code is not wasm bytecode";
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callResults->message;
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput(
+                    "WASM bytecode invalid or use unsupported opcode.", *callResults);
+            }
             return {nullptr, std::move(callResults)};
         }
 
@@ -378,6 +457,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callResults->type = CallParameters::REVERT;
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
             callResults->message = "wasm bytecode invalid or use unsupported opcode";
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput(
+                    "WASM bytecode invalid or use unsupported opcode.", *callResults);
+            }
             // use wrong wasm code
             EXECUTIVE_LOG(WARNING) << "Revert transaction: " << callResults->message;
             return {nullptr, std::move(callResults)};
@@ -406,7 +490,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     std::string tableName;
     std::string codeString;
     codec.decode(ref(callParameters->data), tableName, codeString);
-    EXECUTIVE_LOG(TRACE) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress)
                          << LOG_KV("codeString", codeString);
 
     if (blockContext->isWasm())
@@ -420,6 +504,10 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
+            }
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
                                 << LOG_KV("newAddress", newAddress);
             return buildCallResults;
@@ -442,13 +530,17 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput("Error occurs in building BFS dir.", *buildCallResults);
+            }
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
                                 << LOG_KV("newAddress", newAddress);
             return buildCallResults;
         }
 
         /// create link table
-        m_storageWrapper->createTable(tableName, STORAGE_VALUE);
+        auto linkTable = m_storageWrapper->createTable(tableName, STORAGE_VALUE);
 
         /// create code index contract
         auto codeTable = getContractTableName(newAddress, false);
@@ -458,14 +550,15 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         Entry entry = {};
         entry.importFields({codeString});
         m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
+        if (!callParameters->abi.empty())
+        {
+            Entry abiEntry = {};
+            abiEntry.importFields({std::move(callParameters->abi)});
+            m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
+        }
 
         /// set link data
-        Entry addressEntry = {};
-        addressEntry.importFields({newAddress});
-        m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
-        Entry typeEntry = {};
-        typeEntry.importFields({FS_TYPE_LINK});
-        m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
+        tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
     }
     callParameters->type = CallParameters::FINISHED;
     callParameters->status = (int32_t)TransactionStatus::None;
@@ -563,12 +656,20 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
-            if (callResults->origin != callResults->senderAddress)
+            if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
             {
                 EXECUTIVE_LOG(TRACE)
-                    << "clear logEntries"
-                    << LOG_KV("beforeClearLogSize", callResults->logEntries.size());
-                callResults->logEntries.clear();
+                    << "logEntries" << LOG_KV("LogSize", callResults->logEntries.size());
+            }
+            else
+            {
+                if (callResults->origin != callResults->senderAddress)
+                {
+                    EXECUTIVE_LOG(TRACE)
+                        << "clear logEntries"
+                        << LOG_KV("beforeClearLogSize", callResults->logEntries.size());
+                    callResults->logEntries.clear();
+                }
             }
             callResults = parseEVMCResult(std::move(callResults), ret);
 
@@ -596,6 +697,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
                     " limit: " +
                     boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
+                if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                {
+                    writeErrInfoToOutput("Deploy code is too large.", *callResults);
+                }
                 EXECUTIVE_LOG(DEBUG)
                     << "Revert transaction: " << LOG_DESC("deploy failed code too large")
                     << LOG_KV("message", callResults->message);
@@ -611,6 +716,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
                     callResults->message = "exceptionalFailedCodeDeposit";
+                    if (versionCompareTo(
+                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                    {
+                        writeErrInfoToOutput("Exceptional Failed Code Deposit", *callResults);
+                    }
                     EXECUTIVE_LOG(INFO)
                         << "Revert transaction: " << LOG_DESC("deploy failed OutOfGas")
                         << LOG_KV("message", callResults->message);
@@ -630,6 +740,12 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     buildCallResults->type = CallParameters::REVERT;
                     buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
                     buildCallResults->message = "Error occurs in build BFS dir";
+                    if (versionCompareTo(
+                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                    {
+                        writeErrInfoToOutput(
+                            "Error occurs in building BFS dir.", *buildCallResults);
+                    }
                     EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << buildCallResults->message
                                          << LOG_KV("tableName", tableName);
                     return buildCallResults;
@@ -651,7 +767,17 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     // Clear the creation flag
                     callResults->create = false;
                     // Clear the data
-                    callResults->data.clear();
+                    if (versionCompareTo(
+                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                    {
+                        writeErrInfoToOutput(
+                            "Create contract with empty code, invalid code input.", *callResults);
+                    }
+                    else if (versionCompareTo(
+                                 blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+                    {
+                        callResults->data.clear();
+                    }
                     revert();
                     return callResults;
                 }
@@ -679,6 +805,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 callResult->type = CallParameters::REVERT;
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
                 callResult->message = "Error contract address.";
+                if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+                {
+                    writeErrInfoToOutput("Call address error.", *callResult);
+                }
                 EXECUTIVE_LOG(INFO) << "Revert transaction: "
                                     << LOG_DESC("call address error, maybe address not exist")
                                     << LOG_KV("address", callResult->codeAddress)
@@ -706,7 +836,12 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 
-            // clear unnecessary logs
+            if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+            {
+                EXECUTIVE_LOG(TRACE)
+                    << "logEntries" << LOG_KV("LogSize", callResults->logEntries.size());
+                return callResults;
+            }
             if (callResults->origin != callResults->senderAddress)
             {
                 EXECUTIVE_LOG(TRACE)
@@ -727,8 +862,14 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
+        if (versionCompareTo(blockContext().lock()->blockVersion(), BlockVersion::V3_1_VERSION) >=
+            0)
+        {
+            writeErrInfoToOutput(e.errorMessage(), *callResults);
+        }
 
         revert();
+
 
         if (e.errorCode() == DEAD_LOCK)
         {
@@ -736,6 +877,17 @@ CallParameters::UniquePtr TransactionExecutive::go(
             EXECUTOR_LOG(DEBUG) << "Revert by dead lock, sender: " << callResults->senderAddress
                                 << " receiver: " << callResults->receiveAddress;
         }
+        /*else if (StorageError::UnknownError <= e.errorCode() &&
+                 StorageError::TimestampMismatch <= e.errorCode())
+        {
+            // is storage error
+            EXECUTOR_LOG(DEBUG)
+                << "Storage exception during tx execute. trigger switch(if this tx is not call). e:"
+                << diagnostic_information(e);
+            auto blockContext = m_blockContext.lock();
+            blockContext->triggerSwitch();
+        }
+         */
         else
         {
             EXECUTIVE_LOG(ERROR) << "BCOS Error: " << diagnostic_information(e);
@@ -806,19 +958,17 @@ CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
 std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPrecompiled(
     precompiled::PrecompiledExecResult::Ptr const& _precompiledParams)
 {
-    auto p = getPrecompiled(_precompiledParams->m_precompiledAddress);
+    auto precompiled = getPrecompiled(_precompiledParams->m_precompiledAddress);
 
-    if (p)
+    if (precompiled)
     {
-        auto execResult = p->call(shared_from_this(), _precompiledParams);
+        auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
         return execResult;
     }
-    else
-    {
-        EXECUTIVE_LOG(ERROR) << LOG_DESC("[call]Can't find precompiled address")
-                             << LOG_KV("address", _precompiledParams->m_precompiledAddress);
-        BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));
-    }
+    [[unlikely]] EXECUTIVE_LOG(ERROR)
+        << LOG_DESC("[call]Can't find precompiled address")
+        << LOG_KV("address", _precompiledParams->m_precompiledAddress);
+    BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));
 }
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
@@ -881,9 +1031,11 @@ void TransactionExecutive::revert()
 CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     CallParameters::UniquePtr callResults, const Result& _result)
 {
+    auto blockContext = m_blockContext.lock();
     callResults->type = CallParameters::REVERT;
     // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm
     // need this
+    callResults->evmStatus = _result.status();
     auto outputRef = _result.output();
     switch (_result.status())
     {
@@ -923,6 +1075,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("gas", _result.gasLeft());
         callResults->status = (int32_t)TransactionStatus::OutOfGas;
         callResults->gas = _result.gasLeft();
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Execution out of gas.", *callResults);
+        }
         break;
     }
     case EVMC_FAILURE:
@@ -932,6 +1088,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMTrap;
         callResults->gas = _result.gasLeft();
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Execution failure.", *callResults);
+        }
         break;
     }
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
@@ -939,9 +1099,12 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION")
                             << LOG_KV("to", callResults->receiveAddress);
-        // m_remainGas = 0; //TODO: why set remainGas to 0?
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Execution invalid/undefined opcode.", *callResults);
+        }
         break;
     }
     case EVMC_BAD_JUMP_DESTINATION:
@@ -950,6 +1113,11 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput(
+                "Execution has violated the jump destination restrictions.", *callResults);
+        }
         revert();
         break;
     }
@@ -959,6 +1127,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Execution stack overflow.", *callResults);
+        }
         revert();
         break;
     }
@@ -966,8 +1138,11 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_STACK_UNDERFLOW")
                             << LOG_KV("to", callResults->receiveAddress);
-        // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Execution needs more items on EVM stack.", *callResults);
+        }
         revert();
         break;
     }
@@ -977,6 +1152,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, BufferOverrun")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Execution tried to read outside memory bounds.", *callResults);
+        }
         revert();
         break;
     }
@@ -985,6 +1164,12 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         // m_remainGas = 0;
         EXECUTIVE_LOG(INFO) << LOG_DESC("VM error, DisallowedStateChange")
                             << LOG_KV("to", callResults->receiveAddress);
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput(
+                "Execution tried to execute an operation which is restricted in static mode.",
+                *callResults);
+        }
         callResults->status = (int32_t)TransactionStatus::Unknown;
         revert();
         break;
@@ -995,6 +1180,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.")
             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("Contract validation has failed.", *callResults);
+        }
         revert();
         break;
     }
@@ -1003,6 +1192,13 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         EXECUTIVE_LOG(INFO) << LOG_DESC("WASM Argument Out Of Range")
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::WASMArgumentOutOfRange;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput(
+                "An argument to a state accessing method has a value outside of the accepted range "
+                "of values.",
+                *callResults);
+        }
         revert();
         break;
     }
@@ -1013,6 +1209,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            writeErrInfoToOutput("A WebAssembly trap has been hit during execution.", *callResults);
+        }
         revert();
         break;
     }
@@ -1044,8 +1244,8 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.substr(0, 5) == USER_SYS_PREFIX ||
-        getContractTableName(_sender, false).substr(0, 5) == USER_SYS_PREFIX)
+    if (_tableName.starts_with(USER_SYS_PREFIX) ||
+        getContractTableName(_sender, false).starts_with(USER_SYS_PREFIX))
     {
         return;
     }
@@ -1067,25 +1267,7 @@ void TransactionExecutive::creatAuthTable(
 
     if (table)
     {
-        Entry adminEntry(table->tableInfo());
-        adminEntry.importFields({admin});
-        m_storageWrapper->setRow(authTableName, ADMIN_FIELD, std::move(adminEntry));
-
-        Entry statusEntry(table->tableInfo());
-        statusEntry.importFields({CONTRACT_NORMAL});
-        m_storageWrapper->setRow(authTableName, STATUS_FIELD, std::move(statusEntry));
-
-        Entry emptyType;
-        emptyType.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_TYPE, std::move(emptyType));
-
-        Entry emptyWhite;
-        emptyWhite.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_WHITE, std::move(emptyWhite));
-
-        Entry emptyBlack;
-        emptyBlack.importFields({""});
-        m_storageWrapper->setRow(authTableName, METHOD_AUTH_BLACK, std::move(emptyBlack));
+        tool::BfsFileFactory::buildAuth(table.value(), admin);
     }
 }
 
@@ -1101,22 +1283,131 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
     return response == (int)precompiled::CODE_SUCCESS;
 }
 
-bool TransactionExecutive::checkAuth(
-    const CallParameters::UniquePtr& callParameters, bool _isCreate)
+bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParameters)
 {
-    if (callParameters->staticCall)
-        return true;
     auto blockContext = m_blockContext.lock();
-    auto authMgrAddress =
+    // check account first
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        uint8_t accountStatus = checkAccountAvailable(callParameters);
+        if (accountStatus == AccountStatus::freeze)
+        {
+            writeErrInfoToOutput("Account is frozen.", *callParameters);
+            callParameters->status = (int32_t)TransactionStatus::AccountFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Account's status is abnormal";
+            callParameters->create = false;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+        else if (accountStatus == AccountStatus::abolish)
+        {
+            writeErrInfoToOutput("Account is abolished.", *callParameters);
+            callParameters->status = (int32_t)TransactionStatus::AccountAbolished;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Account's status is abnormal";
+            callParameters->create = false;
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+    }
+    if (callParameters->create)
+    {
+        // if create contract, then
+        //      check exec auth
+        if (!checkExecAuth(callParameters))
+        {
+            auto newAddress = string(callParameters->codeAddress);
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Create permission denied";
+            callParameters->create = false;
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput("Create permission denied.", *callParameters);
+            }
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("newAddress", newAddress)
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+    }
+    else
+    {
+        // if internal call, then not check auth
+        if (callParameters->internalCall)
+        {
+            return true;
+        }
+        auto tableName =
+            getContractTableName(callParameters->receiveAddress, blockContext->isWasm());
+        // if call contract, then
+        //      check contract available
+        //      check exec auth
+        if (!checkContractAvailable(callParameters))
+        {
+            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Contract is frozen";
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput("Contract is frozen.", *callParameters);
+            }
+            else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <=
+                     0)
+            {
+                callParameters->data.clear();
+            }
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("tableName", tableName)
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+        if (!checkExecAuth(callParameters))
+        {
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->type = CallParameters::REVERT;
+            callParameters->message = "Call permission denied";
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            {
+                writeErrInfoToOutput("Call permission denied.", *callParameters);
+            }
+            else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <=
+                     0)
+            {
+                callParameters->data.clear();
+            }
+            EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
+                                << LOG_KV("tableName", tableName)
+                                << LOG_KV("origin", callParameters->origin);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callParameters)
+{
+    // static call does not have 'origin', so return true for now
+    // precompiled return true by default
+    if (callParameters->staticCall || isPrecompiled(callParameters->receiveAddress))
+    {
+        return true;
+    }
+    auto blockContext = m_blockContext.lock();
+    const auto* authMgrAddress =
         blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     std::string address = callParameters->origin;
-    auto path = callParameters->codeAddress;
+    auto path = callParameters->receiveAddress;
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
-                         << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
+                         << LOG_KV("isCreate", callParameters->create)
+                         << LOG_KV("originAddress", address);
     bool result = true;
-    if (_isCreate)
+    if (callParameters->create)
     {
         /// external call authMgrAddress to check deploy auth
         auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
@@ -1130,8 +1421,7 @@ bool TransactionExecutive::checkAuth(
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(
-            shared_from_this(), std::move(path), func, address);
+        result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
     }
     EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
                          << LOG_KV("result", result);
@@ -1140,11 +1430,33 @@ bool TransactionExecutive::checkAuth(
 
 bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
 {
+    // precompiled always available
+    if (isPrecompiled(callParameters->receiveAddress) ||
+        c_systemTxsAddress.contains(callParameters->receiveAddress))
+    {
+        return true;
+    }
     auto blockContext = m_blockContext.lock();
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    auto path = callParameters->codeAddress;
-    EXECUTIVE_LOG(TRACE) << "check contract status" << LOG_KV("codeAddress", path);
+    auto path = callParameters->receiveAddress;
 
     return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
+}
+
+uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
+{
+    if (callParameters->staticCall || callParameters->origin != callParameters->senderAddress ||
+        callParameters->internalCall)
+    {
+        // static call sender and origin will be empty
+        // contract calls, pass through
+        return 0;
+    }
+    auto blockContext = m_blockContext.lock();
+    AccountPrecompiled::Ptr accountPrecompiled =
+        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
+            m_constantPrecompiled->at(ACCOUNT_ADDRESS));
+
+    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

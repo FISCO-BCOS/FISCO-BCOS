@@ -22,8 +22,13 @@
 #include "ExecutiveFactory.h"
 #include "CoroutineTransactionExecutive.h"
 #include "TransactionExecutive.h"
+#include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
 
 using namespace bcos::executor;
+using namespace bcos::precompiled;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
@@ -44,7 +49,28 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     executive->setEVMPrecompiled(m_precompiledContract);
     executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
+    registerExtPrecompiled(executive);
+    return executive;
+}
+void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
+{
+    auto blockContext = m_blockContext.lock();
+    if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        if (!executive->isPrecompiled(ACCOUNT_MGR_ADDRESS) &&
+            !executive->isPrecompiled(ACCOUNT_MANAGER_NAME))
+        {
+            executive->setConstantPrecompiled(
+                blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
+                std::make_shared<AccountManagerPrecompiled>());
+        }
+
+        if (!executive->isPrecompiled(ACCOUNT_ADDRESS))
+        {
+            executive->setConstantPrecompiled(
+                ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>());
+        }
+    }
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
-    return executive;
 }

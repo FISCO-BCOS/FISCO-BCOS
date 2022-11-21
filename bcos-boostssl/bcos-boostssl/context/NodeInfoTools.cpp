@@ -55,7 +55,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> NodeInfoTools::newV
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                NODEINFO_LOG(WARNING) << LOG_DESC("Get cert failed");
+                NODEINFO_LOG(INFO) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -70,7 +70,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> NodeInfoTools::newV
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                NODEINFO_LOG(WARNING) << LOG_DESC("Get ca basic failed");
+                NODEINFO_LOG(INFO) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
 

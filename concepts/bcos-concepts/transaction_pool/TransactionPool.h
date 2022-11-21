@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../Basic.h"
-#include "../Receipt.h"
-#include "../Transaction.h"
+#include "../protocol/Receipt.h"
+#include "../protocol/Transaction.h"
 
 namespace bcos::concepts::transacton_pool
 {
@@ -10,10 +10,10 @@ template <class Impl>
 class TransactionPoolBase
 {
 public:
-    void submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
+    auto submitTransaction(bcos::concepts::transaction::Transaction auto transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        impl().impl_submitTransaction(std::move(transaction), receipt);
+        return impl().impl_submitTransaction(transaction, receipt);
     }
 
 private:

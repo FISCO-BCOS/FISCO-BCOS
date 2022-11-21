@@ -28,7 +28,7 @@ using namespace bcos::protocol;
 void BlockValidator::asyncCheckBlock(
     Block::Ptr _block, std::function<void(Error::Ptr, bool)> _onVerifyFinish)
 {
-    auto self = std::weak_ptr<BlockValidator>(shared_from_this());
+    auto self = weak_from_this();
     m_taskPool->enqueue([self, _block, _onVerifyFinish]() {
         auto blockHeader = _block->blockHeader();
         // ignore the genesis block

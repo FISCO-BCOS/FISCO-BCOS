@@ -1,5 +1,6 @@
 #pragma once
 #include "bcos-tars-protocol/bcos-tars-protocol/impl/TarsServantProxyCallback.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <servant/Application.h>
@@ -107,10 +108,11 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
     TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler())
 {
     auto prx = communicator->stringToProxy<S>(_serviceName);
-    BCOS_LOG(INFO) << LOG_DESC("createServantProxy ") << _serviceName;
+    BCOS_LOG(INFO) << LOG_DESC("createServantProxy ") << LOG_KV("serviceName", _serviceName)
+                   << LOG_KV("proxy addr", prx.get());
     if (!prx->tars_get_push_callback())
     {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
+        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName);
 
         if (_connectHandler)
         {
@@ -123,8 +125,11 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
         }
 
         prx->tars_set_push_callback(proxyCallback);
-        proxyCallback->startTimer();
     }
+
+    prx->tars_async_ping();
+    prx->tars_reconnect(5);
+
     return prx;
 }
 

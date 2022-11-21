@@ -30,7 +30,7 @@ public:
     using Ptr = std::shared_ptr<ProposalInterface>;
     using ConstPtr = std::shared_ptr<ProposalInterface const>;
     ProposalInterface() = default;
-    virtual ~ProposalInterface() {}
+    virtual ~ProposalInterface() = default;
 
     virtual bytesPointer encode() const = 0;
     virtual void decode(bytesConstRef _data) = 0;

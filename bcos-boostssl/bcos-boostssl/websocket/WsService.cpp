@@ -153,7 +153,7 @@ void WsService::reportConnectedNodes()
         }
         catch (std::exception const& e)
         {
-            BOOST_SSL_LOG(WARNING) << LOG_DESC("reportConnectedNodes exception")
+            BOOST_SSL_LOG(WARNING) << LOG_DESC("connected nodes exception")
                                    << LOG_KV("error", boost::diagnostic_information(e));
         }
     });
@@ -405,11 +405,11 @@ std::shared_ptr<WsSession> WsService::newSession(
             }
         });
     session->setRecvMessageHandler(
-        [self](std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+        [self](std::shared_ptr<boostssl::MessageFace> message, std::shared_ptr<WsSession> session) {
             auto wsService = self.lock();
             if (wsService)
             {
-                wsService->onRecvMessage(_msg, _session);
+                wsService->onRecvMessage(std::move(message), std::move(session));
             }
         });
 
@@ -537,29 +537,29 @@ void WsService::onDisconnect(Error::Ptr _error, std::shared_ptr<WsSession> _sess
 }
 
 void WsService::onRecvMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
+    std::shared_ptr<boostssl::MessageFace> message, std::shared_ptr<WsSession> session)
 {
-    auto seq = _msg->seq();
+    auto& seq = message->seq();
 
     WEBSOCKET_SERVICE(TRACE) << LOG_BADGE("onRecvMessage")
                              << LOG_DESC("receive message from server")
-                             << LOG_KV("type", _msg->packetType()) << LOG_KV("seq", seq)
-                             << LOG_KV("endpoint", _session->endPoint())
-                             << LOG_KV("data size", _msg->payload()->size())
-                             << LOG_KV("use_count", _session.use_count());
+                             << LOG_KV("type", message->packetType()) << LOG_KV("seq", seq)
+                             << LOG_KV("endpoint", session->endPoint())
+                             << LOG_KV("data size", message->payload()->size())
+                             << LOG_KV("use_count", session.use_count());
 
-    auto typeHandler = getMsgHandler(_msg->packetType());
+    auto typeHandler = getMsgHandler(message->packetType());
     if (typeHandler)
     {
-        typeHandler(_msg, _session);
+        typeHandler(std::move(message), std::move(session));
     }
     else
     {
         WEBSOCKET_SERVICE(WARNING)
             << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
-            << LOG_KV("type", _msg->packetType()) << LOG_KV("endpoint", _session->endPoint())
-            << LOG_KV("seq", seq) << LOG_KV("data size", _msg->payload()->size())
-            << LOG_KV("use_count", _session.use_count());
+            << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
+            << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+            << LOG_KV("use_count", session.use_count());
     }
 }
 

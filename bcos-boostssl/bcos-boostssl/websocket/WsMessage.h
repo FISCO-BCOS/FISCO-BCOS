@@ -19,7 +19,9 @@
  */
 #pragma once
 
+#include "bcos-boostssl/websocket/Common.h"
 #include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -50,13 +52,25 @@ namespace ws
 class WsMessage : public boostssl::MessageFace
 {
 public:
-
     // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
     const static size_t MESSAGE_MIN_LENGTH;
 
     using Ptr = std::shared_ptr<WsMessage>;
-    WsMessage() { m_payload = std::make_shared<bcos::bytes>(); }
-    virtual ~WsMessage() {}
+    WsMessage()
+    {
+        m_payload = std::make_shared<bcos::bytes>();
+        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+        {
+            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][WsMessage]", this);
+        }
+    }
+    virtual ~WsMessage()
+    {
+        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+        {
+            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[DELOBJ][WsMessage]", this);
+        }
+    }
 
 
     virtual uint16_t version() const override { return m_version; }
@@ -79,8 +93,11 @@ public:
     virtual bool encode(bcos::bytes& _buffer) override;
     virtual int64_t decode(bytesConstRef _buffer) override;
 
-    bool isRespPacket() const override { return (m_ext & MessageExtFieldFlag::Response) != 0; }
-    void setRespPacket() override { m_ext |= MessageExtFieldFlag::Response; }
+    bool isRespPacket() const override
+    {
+        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
+    }
+    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
 
     virtual uint32_t length() const override { return m_length; }
 

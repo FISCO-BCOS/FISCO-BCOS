@@ -82,8 +82,8 @@ public:
     }
     void asyncNotify(
         std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
-            std::function<void(Error::Ptr)>)>& notifier,
-        std::function<void(Error::Ptr)> _callback)
+            std::function<void(Error::Ptr)>)>&,
+        std::function<void(Error::Ptr)> _callback) override
     {
         // do nothing
         _callback(nullptr);
@@ -152,7 +152,6 @@ private:
     bcos::test::MockLedger3::Ptr m_ledger;
     size_t m_gasLimit = TRANSACTION_GAS;
     bool m_isSysBlock;
-    bool m_running = false;
     bool m_syncBlock = false;
 
 public:

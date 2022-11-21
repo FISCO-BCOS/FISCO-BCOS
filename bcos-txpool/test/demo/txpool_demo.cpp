@@ -26,7 +26,8 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
@@ -61,10 +62,7 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         {
             auto tx = fakeTransaction(_cryptoSuite, 1000 + i,
                 ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
-            bcos::bytes encodedData;
-            tx->encode(encodedData);
-            auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-            txpool->asyncSubmit(txData, [](Error::Ptr, TransactionSubmitResult::Ptr) {});
+            ~txpool->submitTransaction(tx);
             auto result = std::make_shared<TransactionSubmitResultImpl>();
             result->setTxHash(tx->hash());
             (*txsResult)[i] = result;

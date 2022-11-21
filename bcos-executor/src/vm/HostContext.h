@@ -22,8 +22,11 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executive/BlockContext.h"
+#include "../executive/TransactionExecutive.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/storage/Table.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
@@ -47,7 +50,7 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext(){
+    virtual ~HostContext(){
         // auto total = utcTimeUs() - m_startTime;
         // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
         //                      << LOG_KV("storageTimeProportion",
@@ -57,6 +60,8 @@ public:
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
+    HostContext(HostContext&&) = delete;
+    HostContext& operator=(HostContext&&) = delete;
 
     std::string get(const std::string_view& _key);
 
@@ -88,10 +93,13 @@ public:
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
 
+    evmc_status_code toEVMStatus(std::unique_ptr<CallParameters> const& _response,
+        evmc_result _result, std::shared_ptr<BlockContext> _blockContext);
+
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
 
-    bool setCode(bytes code);
+    virtual bool setCode(bytes code);
 
     void setCodeAndAbi(bytes code, std::string abi);
 
@@ -106,26 +114,34 @@ public:
     VMSchedule const& vmSchedule() const;
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    h256 blockHash() const;
+    h256 blockHash(int64_t _number) const;
     int64_t blockNumber() const;
+    uint32_t blockVersion() const;
     int64_t timestamp() const;
     int64_t blockGasLimit() const
     {
-        return 3000000000;  // TODO: add config
+        if (m_executive->blockContext().lock()->blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            // FISCO BCOS only has tx Gas limit. We use it as block gas limit
+            return m_executive->blockContext().lock()->txGasLimit();
+        }
+        else
+        {
+            return 3000000000;  // TODO: add config
+        }
     }
-
-    bool isPermitted();
 
     /// Revert any changes made (by any of the other calls).
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
     std::string_view myAddress() const;
-    std::string_view caller() const { return m_callParameters->senderAddress; }
+    virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
-    std::optional<storage::Entry> code();
+    virtual std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
     h256 codeHash();
     u256 salt() const { return m_salt; }
@@ -133,8 +149,29 @@ public:
     bool isCreate() const { return m_callParameters->create; }
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
+    void suicide()
+    {
+        if (m_executive->blockContext().lock()->blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            m_executive->blockContext().lock()->suicide(m_tableName);
+        }
+    }
 
-    CallParameters::UniquePtr&& takeCallParameters() { return std::move(m_callParameters); }
+    CallParameters::UniquePtr&& takeCallParameters()
+    {
+        if (m_executive->blockContext().lock()->blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            for (const auto& response : m_responseStore)
+            {
+                m_callParameters->logEntries.insert(m_callParameters->logEntries.end(),
+                    std::make_move_iterator(response->logEntries.begin()),
+                    std::make_move_iterator(response->logEntries.end()));
+            }
+        }
+        return std::move(m_callParameters);
+    }
 
     static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
@@ -142,6 +179,10 @@ public:
     uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
 
     bool isWasm();
+
+protected:
+    const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
+    virtual bcos::bytes externalCodeRequest(const std::string_view& _a);
 
 private:
     void depositFungibleAsset(

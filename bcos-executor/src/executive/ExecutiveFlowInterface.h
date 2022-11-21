@@ -66,11 +66,11 @@ public:
     }
 
 protected:
-    template <class S, class F>
-    void asyncTo(S self, F f)
+    template <class F>
+    void asyncTo(F f)
     {
         // f();
-        getPoolInstance()->enqueue([self = std::move(self), f = std::move(f)]() { f(); });
+        getPoolInstance()->enqueue([f = std::move(f)]() { f(); });
     }
 
 private:

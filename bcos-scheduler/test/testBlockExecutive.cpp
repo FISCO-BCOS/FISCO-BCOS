@@ -26,18 +26,17 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/storage/Table.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/write_batch.h>
-#include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <future>
@@ -361,13 +360,13 @@ BOOST_AUTO_TEST_CASE(dagTest)
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
     blockExecutive->start();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(!error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
@@ -399,13 +398,13 @@ BOOST_AUTO_TEST_CASE(dagTest2)
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
     blockExecutive->start();
     blockExecutive->asyncExecute(
-        [this](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
+        [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
             BOOST_CHECK(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
@@ -434,10 +433,10 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
-    blockExecutive->asyncExecute([this](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+    blockExecutive->asyncExecute([](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                      bool) { BOOST_CHECK(error); });
     blockExecutive->start();
-    blockExecutive->asyncExecute([this](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+    blockExecutive->asyncExecute([](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
                                      bool) { BOOST_CHECK(!error); });
 }
 

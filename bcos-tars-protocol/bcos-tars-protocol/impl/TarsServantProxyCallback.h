@@ -58,11 +58,8 @@ public:
     using UniquePtr = std::unique_ptr<const TarsServantProxyCallback>;
 
 public:
-    TarsServantProxyCallback(const std::string& _serviceName, tars::ServantProxy& _servantProxy)
-      : m_serviceName(_serviceName), m_servantProxy(_servantProxy)
+    TarsServantProxyCallback(const std::string& _serviceName) : m_serviceName(_serviceName)
     {
-        m_timer = std::make_shared<bcos::Timer>(TARS_PING_PERIOD, "tars_ping");
-
         BCOS_LOG(INFO) << LOG_BADGE("[NEWOBJ][TarsServantProxyCallback]")
                        << LOG_KV("_serviceName", _serviceName) << LOG_KV("this", this);
     }
@@ -74,10 +71,8 @@ public:
 
     ~TarsServantProxyCallback() override
     {
-        if (m_timer)
-        {
-            m_timer->stop();
-        }
+        // BCOS_LOG(INFO) << LOG_BADGE("[DELOBJ][TarsServantProxyCallback]") << LOG_KV("this",
+        // this);
     }
 
 public:
@@ -117,21 +112,6 @@ public:
     }
 
 public:
-    void startTimer()
-    {
-        if (!m_timer)
-        {
-            return;
-        }
-
-        m_timer->registerTimeoutHandler([this]() {
-            ping();
-            report();
-        });
-
-        m_timer->start();
-    }
-
     const std::string& serviceName() const { return m_serviceName; }
 
     auto activeEndpoints()
@@ -189,41 +169,8 @@ public:
 
     bool available() { return !activeEndpoints().empty(); }
 
-    void ping()
-    {
-        try
-        {
-            m_servantProxy.tars_async_ping();
-        }
-        catch (const std::exception& _e)
-        {
-            BCOS_LOG(ERROR) << LOG_BADGE("ServantProxyCallback::tars_async_ping")
-                            << LOG_KV("serviceName", m_serviceName)
-                            << LOG_KV("e", boost::diagnostic_information(_e));
-        }
-    }
-
-    void report()
-    {
-        // BCOS_LOG(TRACE) << LOG_BADGE("ServantProxyCallback") << LOG_DESC("report endpoint")
-        //                 << LOG_KV("serviceName", m_serviceName)
-        //                 << LOG_KV("activeEndpoints size", activeEndpoints().size())
-        //                 << LOG_KV("inactiveEndpoints size", inactiveEndpoints().size());
-
-        if (m_timer)
-        {
-            m_timer->restart();
-        }
-    }
-
 private:
     std::string m_serviceName;
-
-    // tars ServantProxy which the TarsServantProxyCallback belongs to
-    tars::ServantProxy& m_servantProxy;
-
-    // timer for ping and report
-    std::shared_ptr<bcos::Timer> m_timer;
 
     // lock for m_activeEndpoints and m_inactiveEndpoints
     mutable std::shared_mutex x_endpoints;
@@ -235,5 +182,35 @@ private:
     std::function<void(const tars::TC_Endpoint& ep)> m_onConnectHandler;
     std::function<void(const tars::TC_Endpoint& ep)> m_onCloseHandler;
 };
+
+template <typename T>
+bool checkConnection(std::string const& _module, std::string const& _func, const T& prx,
+    std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
+{
+    auto cb = prx->tars_get_push_callback();
+    assert(cb);
+    auto* tarsServantProxyCallback = (TarsServantProxyCallback*)cb.get();
+
+    if (tarsServantProxyCallback->available())
+    {
+        return true;
+    }
+
+    if (_errorCallback && _callsErrorCallback)
+    {
+        std::string errorMessage =
+            _module + " calls interface " + _func + " failed for empty connection";
+        _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
+    }
+    return false;
+}
+
+template <typename T>
+auto tarsProxyAvailableEndPoints(const T& prx)
+{
+    auto cb = prx->tars_get_push_callback();
+    assert(cb);
+    return ((TarsServantProxyCallback*)cb.get())->activeEndpoints();
+}
 
 }  // namespace bcostars

@@ -41,9 +41,10 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
-    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService)
+    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
-        _storage, _frontService)
+        _storage, _frontService, _nodeTimeMaintenance)
 {
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
 
@@ -85,8 +86,8 @@ void ProPBFTInitializer::reportNodeInfo()
         if (_error)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("reportNodeInfo to rpc error") << LOG_KV("code", _error->errorCode())
-                << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("asyncNotifyGroupInfo to rpc error")
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
 
@@ -95,7 +96,7 @@ void ProPBFTInitializer::reportNodeInfo()
         if (_error)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("reportNodeInfo to gateway error")
+                << LOG_DESC("asyncNotifyGroupInfo to gateway error")
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
@@ -154,7 +155,7 @@ void ProPBFTInitializer::init()
             INITIALIZER_LOG(INFO) << LOG_DESC("OnElectionClusterException")
                                   << LOG_KV("nodeName", m_nodeConfig->nodeName());
         });
-        m_leaderElection->registerOnElectionClusterRecover([this]() {
+        m_leaderElection->registerOnElectionClusterRecover([]() {
             INITIALIZER_LOG(INFO) << LOG_DESC(
                 "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
         });

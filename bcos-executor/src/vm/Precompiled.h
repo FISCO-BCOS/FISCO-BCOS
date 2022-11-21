@@ -30,6 +30,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <functional>
 #include <unordered_map>
+#include <utility>
 
 namespace bcos
 {
@@ -139,7 +140,7 @@ class Precompiled : public std::enable_shared_from_this<Precompiled>
 public:
     using Ptr = std::shared_ptr<Precompiled>;
 
-    Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl)
+    Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(std::move(_hashImpl))
     {
         assert(m_hashImpl);
         m_precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();

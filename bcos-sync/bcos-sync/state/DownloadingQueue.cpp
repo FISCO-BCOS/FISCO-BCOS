@@ -217,7 +217,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 
     sealerListStr << "size: " << _header->sealerList().size();
     signatureListStr << "size: " << _header->signatureList().size();
-    if (c_fileLogLevel >= TRACE)
+    if (c_fileLogLevel <= TRACE)
     {
         auto sealerList = _header->sealerList();
         sealerListStr << ", sealer list: ";
@@ -277,7 +277,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
         return;
     }
     auto startT = utcTime();
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->scheduler()->executeBlock(_block, true,
         [self, startT, _block](
             Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader, bool _sysBlock) {
@@ -403,7 +403,7 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
                       << LOG_KV("currentNumber", m_config->blockNumber())
                       << LOG_KV("hash", blockHeader->hash().abridged());
 
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->consensus()->asyncCheckBlock(_block, [self, _block, blockHeader](
                                                        Error::Ptr _error, bool _ret) {
         try
@@ -515,7 +515,7 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
             }
         });
     auto startT = utcTime();
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->ledger()->asyncStoreTransactions(
         txsData, txsHashList, [self, startT, _block, blockHeader](Error::Ptr _error) {
             try
@@ -528,11 +528,13 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
                 // store transaction failed
                 if (_error)
                 {
-                    downloadingQueue->onCommitFailed(_error, _block);
                     BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock: store transactions failed")
                                          << LOG_KV("number", blockHeader->number())
                                          << LOG_KV("hash", blockHeader->hash().abridged())
-                                         << LOG_KV("txsSize", _block->transactionsSize());
+                                         << LOG_KV("txsSize", _block->transactionsSize())
+                                         << LOG_KV("code", _error->errorCode())
+                                         << LOG_KV("message", _error->errorMessage());
+                    downloadingQueue->onCommitFailed(_error, _block);
                     return;
                 }
                 BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlock: store transactions success")
@@ -556,7 +558,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
     BLKSYNC_LOG(INFO) << LOG_DESC("commitBlockState") << LOG_KV("number", blockHeader->number())
                       << LOG_KV("hash", blockHeader->hash().abridged());
     auto startT = utcTime();
-    auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
+    auto self = weak_from_this();
     m_config->scheduler()->commitBlock(blockHeader, [self, startT, _block, blockHeader](
                                                         Error::Ptr&& _error,
                                                         LedgerConfig::Ptr&& _ledgerConfig) {

@@ -7,6 +7,7 @@
 namespace bcos::concepts::hash
 {
 
+// ADL-based customization points
 template <class ObjectType>
 concept Hashable = requires(ObjectType object, std::string out1, std::vector<char> out2,
     std::vector<unsigned char> out3, std::vector<std::byte> out4)
