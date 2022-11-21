@@ -257,9 +257,9 @@ void TarsRemoteExecutorManager::update(EndPointSet endPointSet, bool needNotifyC
     }
 
     // trigger handler to notify scheduler
-    if (needNotifyChange && m_onRemoteExecutorChange != nullptr)
+    if (needNotifyChange && executorChangeHandler() != nullptr)
     {
-        m_onRemoteExecutorChange();
+        executorChangeHandler()();
     }
 }
 

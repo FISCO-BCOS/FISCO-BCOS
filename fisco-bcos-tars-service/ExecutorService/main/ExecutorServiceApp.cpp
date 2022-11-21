@@ -116,10 +116,14 @@ void ExecutorServiceApp::createAndInitExecutor()
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
     auto schedulerServiceName = m_nodeConfig->schedulerServiceName();
+
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::SCHEDULER_NAME, endPoints);
+
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create SchedulerServiceClient")
                                << LOG_KV("schedulerServiceName", schedulerServiceName);
 
-    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(schedulerServiceName);
+    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(
+        withoutTarsFramework, schedulerServiceName, endPoints);
 
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(
         schedulerPrx, m_protocolInitializer->cryptoSuite());

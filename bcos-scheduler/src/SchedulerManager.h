@@ -9,15 +9,15 @@ namespace bcos::scheduler
 class SchedulerManager : public SchedulerInterface
 {
 public:
-    SchedulerManager(int64_t schedulerSeq, SchedulerFactory::Ptr factory,
-        TarsRemoteExecutorManager::Ptr remoteExecutorManager)
+    SchedulerManager(
+        int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager)
       : m_factory(factory),
         m_schedulerTerm(schedulerSeq),
-        m_remoteExecutorManager(remoteExecutorManager),
+        m_executorManager(executorManager),
         m_pool("SchedulerManager", 1),  // Must set to 1 for serial execution
         m_status(INITIALING)
     {
-        remoteExecutorManager->setRemoteExecutorChangeHandler([this]() {
+        executorManager->setExecutorChangeHandler([this]() {
             // trigger switch
             asyncSelfSwitchTerm();
         });
@@ -120,7 +120,11 @@ public:
         {
             m_scheduler->stop();
         }
-        m_remoteExecutorManager->stop();
+
+        if (m_executorManager)
+        {
+            m_executorManager->stop();
+        }
 
         // waiting for stopped
         while (m_scheduler.use_count() > 1)
@@ -146,7 +150,7 @@ private:
     SchedulerImpl::Ptr m_scheduler;
     SchedulerFactory::Ptr m_factory;
     SchedulerTerm m_schedulerTerm;
-    TarsRemoteExecutorManager::Ptr m_remoteExecutorManager;
+    ExecutorManager::Ptr m_executorManager;
     std::vector<std::function<void(bcos::protocol::BlockNumber)>> m_onSwitchTermHandlers;
 
     bcos::ThreadPool m_pool;

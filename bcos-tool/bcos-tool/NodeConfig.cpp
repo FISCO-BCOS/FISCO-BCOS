@@ -211,6 +211,13 @@ void NodeConfig::loadNodeServiceConfig(
 
 void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
 {
+    if (!m_tarsSN2EndPoints.empty())
+    {
+        NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig")
+                             << LOG_DESC("tars proxy config has been loaded");
+        return;
+    }
+
     boost::property_tree::ptree pt;
     try
     {
@@ -226,7 +233,7 @@ void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
         loadServiceTarsProxyConfig("ledger", pt);
 
         NodeConfig_LOG(INFO) << LOG_BADGE("loadTarsProxyConfig")
-                             << LOG_KV("service endpoints size", m_tarsSN2EndPoints.size());
+                             << LOG_KV("tars service endpoints size", m_tarsSN2EndPoints.size());
     }
     catch (const std::exception& e)
     {

@@ -107,6 +107,13 @@ public:
         }
     }
 
+    virtual void setExecutorChangeHandler(std::function<void()> _handler)
+    {
+        m_executorChangeHandler = _handler;
+    }
+
+    std::function<void()> executorChangeHandler() { return m_executorChangeHandler; }
+
     struct ExecutorInfo
     {
         using Ptr = std::shared_ptr<ExecutorInfo>;
@@ -120,7 +127,7 @@ public:
     ExecutorInfo::Ptr getExecutorInfoByName(const std::string_view& name)
     {
         return m_name2Executors[name];
-    };
+    }
 
 private:
     struct ExecutorInfoComp
@@ -135,6 +142,8 @@ private:
     {
         return boost::algorithm::hex_lower(std::string(address));
     }
+
+    std::function<void()> m_executorChangeHandler;
 
     tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
         m_contract2ExecutorInfo;
