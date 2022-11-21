@@ -1415,19 +1415,18 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
         blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    std::string address = callParameters->origin;
-    auto path = callParameters->receiveAddress;
-    EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
-                         << LOG_KV("originAddress", address);
+                         << LOG_KV("originAddress", callParameters->origin);
     bool result = true;
     if (callParameters->create)
     {
         /// external call authMgrAddress to check deploy auth
         auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-        auto input = blockContext->isWasm() ?
-                         codec.encodeWithSig("hasDeployAuth(string)", address) :
-                         codec.encodeWithSig("hasDeployAuth(address)", Address(address));
+        auto input =
+            blockContext->isWasm() ?
+                codec.encodeWithSig("hasDeployAuth(string)", callParameters->origin) :
+                codec.encodeWithSig("hasDeployAuth(address)", Address(callParameters->origin));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
             callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
         codec.decode(ref(response->data), result);
@@ -1435,9 +1434,17 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
+        result = contractAuthPrecompiled->checkMethodAuth(
+            shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
+        {
+            auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+                callParameters->receiveAddress, func, callParameters->senderAddress);
+            result = result && senderCheck;
+        }
     }
-    EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth finished"
+                         << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("result", result);
     return result;
 }
@@ -1453,9 +1460,10 @@ bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePt
     auto blockContext = m_blockContext.lock();
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    auto path = callParameters->receiveAddress;
-
-    return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
+    // if status is normal, then return 1; else if status is abnormal, then return 0
+    // if return <0, it means status row not exist, check pass by default in this case
+    return contractAuthPrecompiled->getContractStatus(
+               shared_from_this(), callParameters->receiveAddress) != 0;
 }
 
 uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
