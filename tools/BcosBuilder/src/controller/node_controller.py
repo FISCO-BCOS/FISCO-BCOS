@@ -20,8 +20,8 @@ class NodeController:
             self.node_generator = NodeConfigGenerator(
                 self.config, node_type, output_dir)
 
-    def generate_all_config(self, is_build_opr=False):
-        return self.node_generator.generate_all_config(False, is_build_opr)
+    def generate_all_config(self):
+        return self.node_generator.generate_all_config(False)
 
     def generate_all_executor_config(self):
         return self.node_generator.generate_all_executor_config()
@@ -75,7 +75,7 @@ class NodeController:
         """
         generate expand config
         """
-        if self.node_generator.generate_all_config(True, False) is False:
+        if self.node_generator.generate_all_config(True) is False:
             return False
         return True
 
