@@ -95,8 +95,6 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
-    bool preStoreTxs() const override { return m_preStoreTxs; }
-
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(
         bcos::protocol::Transaction::Ptr transaction);
@@ -123,8 +121,6 @@ protected:
 
     virtual void removeInvalidTxs(bool lock);
 
-    virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr transaction);
-
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
 
@@ -134,7 +130,6 @@ protected:
 
 protected:
     TxPoolConfig::Ptr m_config;
-    ThreadPool::Ptr m_worker;
 
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
         std::hash<bcos::crypto::HashType>>
@@ -167,8 +162,5 @@ protected:
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
-
-    // bool m_preStoreTxs = {true};
-    bool m_preStoreTxs = false;
 };
 }  // namespace bcos::txpool

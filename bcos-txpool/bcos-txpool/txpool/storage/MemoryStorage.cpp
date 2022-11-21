@@ -36,9 +36,8 @@ using namespace bcos::protocol;
 
 MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
     int64_t _txsExpirationTime, bool _preStoreTxs)
-  : m_config(_config), m_txsExpirationTime(_txsExpirationTime), m_preStoreTxs(_preStoreTxs)
+  : m_config(_config), m_txsExpirationTime(_txsExpirationTime)
 {
-    m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
     m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer = std::make_shared<Timer>(3000, "txpoolTimer");
@@ -47,7 +46,7 @@ MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpriationTime", m_txsExpirationTime)
-                     << LOG_KV("preStoreTxs", m_preStoreTxs);
+                     << LOG_KV("preStoreTxs", "false");
 }
 
 void MemoryStorage::start()
@@ -60,10 +59,6 @@ void MemoryStorage::start()
 
 void MemoryStorage::stop()
 {
-    if (m_worker)
-    {
-        m_worker->stop();
-    }
     if (m_cleanUpTimer)
     {
         m_cleanUpTimer->stop();
@@ -308,53 +303,9 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
-    if (m_preStoreTxs && !transaction->storeToBackend())
-    {
-        preCommitTransaction(std::move(transaction));
-    }
+
     notifyUnsealedTxsSize();
     return TransactionStatus::None;
-}
-
-void MemoryStorage::preCommitTransaction(Transaction::ConstPtr transaction)
-{
-    auto self = weak_from_this();
-    m_worker->enqueue([self, transaction = std::move(transaction)]() {
-        try
-        {
-            auto txpoolStorage = self.lock();
-            if (!txpoolStorage)
-            {
-                return;
-            }
-
-            bcos::bytes encodeData;
-            transaction->encode(encodeData);
-            auto txsToStore = std::make_shared<std::vector<bytesConstPtr>>();
-            txsToStore->emplace_back(std::make_shared<bytes>(std::move(encodeData)));
-            auto txsHash = std::make_shared<HashList>();
-            auto txHash = transaction->hash();
-            txsHash->emplace_back(txHash);
-            txpoolStorage->m_config->ledger()->asyncStoreTransactions(
-                txsToStore, txsHash, [transaction, txHash](Error::Ptr _error) {
-                    if (_error == nullptr)
-                    {
-                        transaction->setStoreToBackend(true);
-                        return;
-                    }
-                    TXPOOL_LOG(WARNING) << LOG_DESC("asyncPreStoreTransaction failed")
-                                        << LOG_KV("errorCode", _error->errorCode())
-                                        << LOG_KV("errorMsg", _error->errorMessage())
-                                        << LOG_KV("tx", txHash.abridged());
-                });
-        }
-        catch (std::exception const& e)
-        {
-            TXPOOL_LOG(WARNING) << LOG_DESC("preCommitTransaction exception")
-                                << LOG_KV("error", boost::diagnostic_information(e))
-                                << LOG_KV("tx", transaction->hash().abridged());
-        }
-    });
 }
 
 void MemoryStorage::batchInsert(Transactions const& _txs)
@@ -636,11 +587,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             continue;
         }
-        // only seal the txs have been stored to the backend
-        if (m_preStoreTxs && !tx->storeToBackend())
-        {
-            continue;
-        }
+
         auto txHash = tx->hash();
         auto it2 = m_invalidTxs.find(txHash);
         if (it2 != m_invalidTxs.end())
@@ -751,9 +698,9 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         {
             auto txResult = m_config->txResultFactory()->createTxSubmitResult();
             txResult->setTxHash(txHash);
-            txResult->setStatus((uint32_t)TransactionStatus::BlockLimitCheckFail);
+            txResult->setStatus(static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
 
-            removeSubmittedTxWithoutLock(txResult, true);
+            removeSubmittedTxWithoutLock(std::move(txResult), true);
         }
         notifyUnsealedTxsSize();
         // remove invalid nonce
