@@ -41,7 +41,7 @@ public:
         {
             std::cout << "init GatewayService failed, error: " << boost::diagnostic_information(e)
                       << std::endl;
-            throw e;
+            exit(-1);
         }
     }
 

@@ -159,14 +159,15 @@ void AccountManagerPrecompiled::setAccountStatus(
             PRECOMPILED_LOG(INFO)
                 << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountManagerPrecompiled")
                 << LOG_DESC("account table already exist in /apps, maybe this is a contract.")
-                << LOG_KV("account", accountStr) << LOG_KV("status", status);
+                << LOG_KV("account", accountStr) << LOG_KV("status", std::to_string(status));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_ALREADY_EXIST)));
             return;
         }
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                               << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("setAccountStatus table not exist, create first")
-                              << LOG_KV("account", accountStr) << LOG_KV("status", status);
+                              << LOG_KV("account", accountStr)
+                              << LOG_KV("status", std::to_string(status));
         // create table
         createAccountWithStatus(_executive, _callParameters, codec, accountStr, status);
         return;
@@ -211,7 +212,7 @@ std::vector<Address> AccountManagerPrecompiled::getGovernorList(
     const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec) const
 {
     auto blockContext = _executive->blockContext().lock();
-    auto sender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    const auto* sender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
     auto getCommittee = codec.encodeWithSig("_committee()");
     auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
         _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,
@@ -238,8 +239,8 @@ std::vector<Address> AccountManagerPrecompiled::getGovernorList(
                                << LOG_KV("committee", committee.hex());
         BOOST_THROW_EXCEPTION(PrecompiledError("Get committee info failed."));
     }
-    uint8_t participatesRate;
-    uint8_t winRate;
+    uint8_t participatesRate = 0;
+    uint8_t winRate = 0;
     std::vector<Address> governors;
     std::vector<uint32_t> weights;
     codec.decode(ref(getInfoResponse->data), participatesRate, winRate, governors, weights);

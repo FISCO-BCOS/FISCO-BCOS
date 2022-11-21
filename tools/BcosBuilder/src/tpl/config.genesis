@@ -1,3 +1,10 @@
+[chain]
+    ; use SM crypto or not, should never be changed
+    sm_crypto=false
+    ; the group id, should never be changed
+    group_id=group0
+    ; the chain id, should never be changed
+    chain_id=chain0
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft)
     consensus_type=pbft

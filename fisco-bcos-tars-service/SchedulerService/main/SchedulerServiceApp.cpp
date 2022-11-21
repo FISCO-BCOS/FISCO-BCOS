@@ -53,7 +53,7 @@ void SchedulerServiceApp::initialize()
     {
         std::cout << "init SchedulerService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
@@ -136,8 +136,8 @@ void SchedulerServiceApp::initConfig()
 
     m_nodeConfig =
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadGenesisConfig(genesisPt);
+    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadServiceConfig(pt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol

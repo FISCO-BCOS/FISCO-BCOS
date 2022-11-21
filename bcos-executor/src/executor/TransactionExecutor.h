@@ -39,6 +39,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-executor/src/executive/LedgerCache.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
@@ -213,6 +214,7 @@ protected:
     createExternalFunctionCall(std::function<void(
             bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>& callback);
 
+
     void removeCommittedState();
 
     // execute transactions with criticals and return in executionResults
@@ -316,10 +318,11 @@ protected:
     bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
+    void initTestPrecompiled(storage::StorageInterface::Ptr storage);
 
     std::function<void()> f_onNeedSwitchEvent;
 
-    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
+    LedgerCache::Ptr m_ledgerCache;
 };
 
 }  // namespace executor

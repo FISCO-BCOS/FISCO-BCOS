@@ -21,7 +21,7 @@
 #pragma once
 
 #include "Common.h"
-#include <bcos-codec/scale/Scale.h>
+#include <bcos-codec/bcos-codec/scale/Scale.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
 #include <tbb/concurrent_vector.h>
