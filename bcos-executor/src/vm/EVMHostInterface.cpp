@@ -99,24 +99,14 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
 
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   return hostContext.codeSizeAt(fromEvmC(*_addr));
-
-    // always return 1
-    (void)_context;
-    (void)_addr;
-    return 1;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return hostContext.codeSizeAt(fromEvmC(*_addr));
 }
 
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
-
-    // always return 0
-    (void)_context;
-    (void)_addr;
-    return toEvmC(h256());
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
 }
 
 /**
@@ -152,12 +142,14 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
     //   return numToCopy;
 }
 
-void selfdestruct(evmc_host_context*, const evmc_address*, const evmc_address*) noexcept
+void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
+    const evmc_address* _beneficiary) noexcept
 {
-    //   (void)_addr;
-    //   auto &hostContext = static_cast<HostContext &>(*_context);
-    //   assert(fromEvmC(*_addr) == hostContext.myAddress());
-    //   hostContext.suicide(fromEvmC(*_beneficiary));
+    (void)_addr;
+    (void)_beneficiary;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+
+    hostContext.suicide();  // FISCO BCOS has no _beneficiary
 }
 
 void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* _data,
@@ -213,11 +205,8 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 
 evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 {
-    (void)_number;
-
     auto& hostContext = static_cast<HostContext&>(*_txContextPtr);
-    // return toEvmC(hostContext.blockHash(_number));
-    return toEvmC(hostContext.blockHash());
+    return toEvmC(hostContext.blockHash(_number));
 }
 
 // evmc_result create(HostContext& _txContext, evmc_message const* _msg) noexcept

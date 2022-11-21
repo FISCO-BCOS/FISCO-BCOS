@@ -64,7 +64,7 @@ inline void toCheckSumAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashI
     toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
 }
 
-inline void toAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashImpl)
+inline void toAddress(std::string& _hexAddress, [[maybe_unused]] crypto::Hash::Ptr _hashImpl)
 {
     boost::algorithm::to_lower(_hexAddress);
     // toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex()); notice :

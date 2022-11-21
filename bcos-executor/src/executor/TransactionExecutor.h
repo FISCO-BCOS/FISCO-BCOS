@@ -39,9 +39,10 @@
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-executor/src/executive/LedgerCache.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
-#include <tbb/spin_mutex.h>
 #include <boost/function.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -96,8 +97,7 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
-        std::shared_ptr<const std::set<std::string, std::less<>>> keyPageIgnoreTables,
-        std::string name);
+        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;
 
@@ -159,7 +159,6 @@ public:
 
     // drop all status
     void reset(std::function<void(bcos::Error::Ptr)> callback) override;
-
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
     void getABI(std::string_view contract,
@@ -167,6 +166,8 @@ public:
 
     void start() override { m_isRunning = true; }
     void stop() override;
+
+    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
 
 protected:
     void executeTransactionsInternal(std::string contractAddress,
@@ -187,13 +188,9 @@ protected:
         const protocol::BlockHeader::ConstPtr& currentHeader,
         storage::StateStorageInterface::Ptr tableFactory);
 
-    virtual std::shared_ptr<BlockContext> createBlockContext(
+    virtual std::shared_ptr<BlockContext> createBlockContextForCall(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
         int32_t blockVersion, storage::StateStorageInterface::Ptr tableFactory);
-
-    std::shared_ptr<TransactionExecutive> createExecutive(
-        const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
-        int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
         bcos::protocol::ExecutionMessage::UniquePtr input, bool useCoroutine,
@@ -217,6 +214,7 @@ protected:
     createExternalFunctionCall(std::function<void(
             bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>& callback);
 
+
     void removeCommittedState();
 
     // execute transactions with criticals and return in executionResults
@@ -238,6 +236,9 @@ protected:
         bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
 
     protocol::BlockNumber getBlockNumberInStorage();
+    protocol::BlockHeader::Ptr getBlockHeaderInStorage(protocol::BlockNumber number);
+    std::string getCodeHash(
+        std::string_view tableName, storage::StateStorageInterface::Ptr const& stateStorage);
 
     std::string m_name;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -263,7 +264,9 @@ protected:
         bcos::storage::StateStorageInterface::Ptr storage;
     };
     std::list<State> m_stateStorages;
-    bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
+
+    bcos::protocol::BlockHeader::Ptr m_lastCommittedBlockHeader =
+        getBlockHeaderInStorage(getBlockNumberInStorage());
 
     struct HashCombine
     {
@@ -305,15 +308,21 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
+    uint32_t m_blockVersion = 0;
     size_t m_keyPageSize = 0;
     VMSchedule m_schedule = FiscoBcosScheduleV4;
-    std::shared_ptr<const std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
+    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
 
     bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
+    void initTestPrecompiled(storage::StorageInterface::Ptr storage);
+
+    std::function<void()> f_onNeedSwitchEvent;
+
+    LedgerCache::Ptr m_ledgerCache;
 };
 
 }  // namespace executor

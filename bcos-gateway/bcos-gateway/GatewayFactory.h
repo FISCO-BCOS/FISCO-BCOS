@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -12,6 +13,8 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
+#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
+#include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
 
 namespace bcos
@@ -53,26 +56,56 @@ public:
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
         bool _server, const GatewayConfig::SMCertConfig& _smCertConfig);
+
     //
-    std::shared_ptr<ratelimit::RateLimiterManager> buildRateLimitManager(
-        const GatewayConfig::RateLimitConfig& _rateLimitConfig);
+    std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
+        std::shared_ptr<sw::redis::Redis> _redis);
 
     /**
-     * @brief: construct Gateway
-     * @param _configPath: config.ini paths
-     * @return void
+     * @brief construct Gateway
+     *
+     * @param _configPath
+     * @param _airVersion
+     * @param _entryPoint
+     * @param _gatewayServiceName
+     * @return Gateway::Ptr
      */
     Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion,
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
         std::string const& _gatewayServiceName);
+
     /**
-     * @brief: construct Gateway
-     * @param _config: config parameter object
-     * @return void
+     * @brief construct Gateway
+     *
+     * @param _config
+     * @param _airVersion
+     * @param _entryPoint
+     * @param _gatewayServiceName
+     * @return Gateway::Ptr
      */
     Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
         std::string const& _gatewayServiceName);
+
+    /**
+     * @brief
+     *
+     * @param _rateLimiterConfig
+     * @param _redisConfig
+     * @return std::shared_ptr<ratelimiter::GatewayRateLimiter>
+     */
+    std::shared_ptr<ratelimiter::GatewayRateLimiter> buildGatewayRateLimiter(
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
+        const GatewayConfig::RedisConfig& _redisConfig);
+
+    /**
+     * @brief
+     *
+     * @param _redisConfig
+     * @return std::shared_ptr<sw::redis::Redis>
+     */
+    std::shared_ptr<sw::redis::Redis> initRedis(const GatewayConfig::RedisConfig& _redisConfig);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(

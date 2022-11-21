@@ -26,15 +26,14 @@
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/string.hpp>
 #include <boost/serialization/vector.hpp>
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _codec)
 {
@@ -48,17 +47,27 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
 
 inline std::string getTableName(const std::string_view& _tableName)
 {
-    if (_tableName.substr(0, strlen(executor::USER_TABLE_PREFIX)) == executor::USER_TABLE_PREFIX)
+    if (_tableName.starts_with(executor::USER_TABLE_PREFIX))
     {
         return std::string(_tableName);
     }
     auto tableName = (_tableName[0] == '/') ? _tableName.substr(1) : _tableName;
-    return executor::USER_TABLE_PREFIX + std::string(tableName);
+    return std::string(executor::USER_TABLE_PREFIX) + std::string(tableName);
 }
 
 inline std::string getActualTableName(const std::string& _tableName)
 {
     return "u_" + _tableName;
+}
+
+inline std::string getAccountTableName(std::string_view _account)
+{
+    if (_account.starts_with(executor::USER_USR_PREFIX))
+    {
+        return std::string(_account);
+    }
+    auto tableName = (_account[0] == '/') ? _account.substr(1) : _account;
+    return std::string(executor::USER_USR_PREFIX) + std::string(tableName);
 }
 
 inline std::string getDynamicPrecompiledCodeString(
@@ -105,6 +114,19 @@ bool checkPathValid(std::string const& _absolutePath);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 
+inline std::string_view getPathBaseName(std::string_view _absolutePath)
+{
+    if (_absolutePath == tool::FS_ROOT)
+    {
+        return _absolutePath;
+    }
+    if (_absolutePath.ends_with('/'))
+    {
+        return {};
+    }
+    return _absolutePath.substr(_absolutePath.find_last_of('/') + 1);
+}
+
 inline bool checkSenderFromAuth(std::string_view _sender)
 {
     return _sender == precompiled::AUTH_COMMITTEE_ADDRESS;
@@ -113,10 +135,9 @@ inline bool checkSenderFromAuth(std::string_view _sender)
 executor::CallParameters::UniquePtr externalRequest(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
     std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft, bool _isInternalCall = false);
+    bool _isCreate, int64_t gasLeft, bool _isInternalCall = false, std::string const& _abi = "");
 
 s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _origin, std::string_view _sender, std::string_view _filePath,
     std::string_view _fileType, int64_t gasLeft);
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

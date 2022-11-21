@@ -71,7 +71,8 @@ enum JsonRpcError : int32_t
     GroupAlreadyExists = -32001,
     NodeAlreadyExists = -32002,
     OperationNotAllowed = -32003,
-    ServiceNotInitCompleted = -320004,
+    ServiceNotInitCompleted = -32004,
+    GroupNotExist = -32005,
 };
 
 struct JsonRequest

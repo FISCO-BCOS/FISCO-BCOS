@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-sync/BlockSync.h"
 #include "bcos-sync/BlockSyncConfig.h"
+#include "bcos-tool/NodeTimeMaintenance.h"
 
 namespace bcos
 {
@@ -36,7 +37,8 @@ public:
         bcos::ledger::LedgerInterface::Ptr _ledger, bcos::txpool::TxPoolInterface::Ptr _txpool,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-        bcos::consensus::ConsensusInterface::Ptr _consensus);
+        bcos::consensus::ConsensusInterface::Ptr _consensus,
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
     virtual ~BlockSyncFactory() {}
 
     virtual BlockSync::Ptr createBlockSync();
@@ -50,6 +52,7 @@ protected:
     bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
+    bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };
 }  // namespace sync
 }  // namespace bcos

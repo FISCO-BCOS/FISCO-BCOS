@@ -19,13 +19,15 @@
  */
 
 #pragma once
+#include "FakeBlockHeader.h"
 #include "bcos-protocol/Common.h"
-#include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
@@ -40,7 +42,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     SignatureList _signatureList)
 {
     BlockHeaderFactory::Ptr blockHeaderFactory =
-        std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
     BlockHeader::Ptr blockHeader = blockHeaderFactory->createBlockHeader();
     blockHeader->setVersion(_version);
     blockHeader->setParentInfo(_parentInfo);

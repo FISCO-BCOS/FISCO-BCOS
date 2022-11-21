@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+#include "../mock/MockLedger.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
@@ -54,8 +55,10 @@ public:
                 std::make_shared<SM3>(), std::make_shared<SM2Crypto>(), nullptr);
         }
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
-        m_blockContext = std::make_shared<BlockContext>(nullptr, m_cryptoSuite->hashImpl(), 0,
-            h256(), utcTime(), _blockVersion, FiscoBcosScheduleV4, false, false);
+        m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
+        m_blockContext =
+            std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
+                h256(), utcTime(), _blockVersion, FiscoBcosScheduleV4, false, false);
         std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
             std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
@@ -64,6 +67,7 @@ public:
 
     ~VRFPrecompiledFixture() {}
 
+    LedgerCache::Ptr m_ledgerCache;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     BlockContext::Ptr m_blockContext;
     TransactionExecutive::Ptr m_executive;
@@ -155,12 +159,12 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
 
 BOOST_AUTO_TEST_CASE(testCurve25519VRFVerify)
 {
-    VRFPrecompiledFixture fixture(false, (uint32_t)(bcos::protocol::Version::V3_0_VERSION));
+    VRFPrecompiledFixture fixture(false, (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION));
     testVRFVerify(fixture);
 }
 BOOST_AUTO_TEST_CASE(testSMCurve25519VRFVerify)
 {
-    VRFPrecompiledFixture fixture(true, (uint32_t)(bcos::protocol::Version::V3_0_VERSION));
+    VRFPrecompiledFixture fixture(true, (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION));
     testVRFVerify(fixture);
 }
 BOOST_AUTO_TEST_SUITE_END()

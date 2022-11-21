@@ -36,6 +36,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
+#include <bcos-tool/BfsFileFactory.h>
 #include <bcos-tool/ConsensusNode.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
@@ -54,6 +55,7 @@ using namespace bcos::ledger;
 using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
+using namespace bcos::tool;
 
 
 void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
@@ -234,12 +236,15 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // hash 2 receipts
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
+
+    std::vector<std::tuple<bcos::crypto::HashType, Entry>> receiptDatas(block->receiptsSize());
     tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
-        [&storage, &transactionsBlock, &block, &failedCount, &totalCount, &setRowCallback](
+        [&transactionsBlock, &block, &failedCount, &totalCount, &receiptDatas](
             const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto hash = transactionsBlock->transactionHash(i);
+                auto& [hash, entry] = receiptDatas[i];
+                hash = transactionsBlock->transactionHash(i);
 
                 auto receipt = block->receipt(i);
                 if (receipt->status() != 0)
@@ -251,14 +256,17 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 bytes receiptBuffer;
                 receipt->encode(receiptBuffer);
 
-                Entry receiptEntry;
-                receiptEntry.importFields({std::move(receiptBuffer)});
-                storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash),
-                    std::move(receiptEntry), [setRowCallback](auto&& error) {
-                        setRowCallback(std::forward<decltype(error)>(error));
-                    });
+                entry.importFields({std::move(receiptBuffer)});
             }
         });
+
+    for (auto& [hash, entry] : receiptDatas)
+    {
+        storage->asyncSetRow(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash),
+            std::move(entry), [setRowCallback](auto&& error) {
+                setRowCallback(std::forward<decltype(error)>(error));
+            });
+    }
 
     LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
@@ -351,16 +359,14 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
     }
 
     auto total = _txToStore->size();
-    std::vector<std::string> keys(total);
-    std::vector<std::string> values(total);
+    std::vector<std::string_view> keys(total);
+    std::vector<std::string_view> values(total);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto& binHash = _txHashList->at(i);
-                keys[i].assign(binHash.begin(), binHash.end());
-                values[i] =
-                    std::string((char*)(_txToStore->at(i)->data()), _txToStore->at(i)->size());
+                keys[i] = bcos::concepts::bytebuffer::toView((*_txHashList)[i]);
+                values[i] = bcos::concepts::bytebuffer::toView((*(*_txToStore)[i]));
             }
         });
     // Note: transactions must be submitted serially, because transaction submissions are
@@ -702,7 +708,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
     LEDGER_LOG(TRACE) << "GetTransactionReceiptByHash" << LOG_KV("hash", key);
 
     asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(key),
-        [this, callback = std::move(_onGetTx), key, _withProof](
+        [this, callback = std::move(_onGetTx), _withProof](
             Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)
             {
@@ -1408,12 +1414,62 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     {
         // genesis block exists, quit
         LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
-        return true;
+        std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+        // get genesisBlockHeader
+        asyncGetBlockDataByNumber(
+            0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+                if (error)
+                {
+                    LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
+                    blockHeaderFuture.set_value(nullptr);
+                }
+                else
+                {
+                    blockHeaderFuture.set_value(block->blockHeader());
+                }
+            });
+        bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
+            blockHeaderFuture.get_future().get();
+        auto initialGenesisData = m_genesisBlockHeader->extraData().toString();
+        // check genesisData whether inconsistent with initialGenesisData
+        if (initialGenesisData == _genesisData)
+        {
+            auto version = bcos::tool::toVersionNumber(_compatibilityVersion);
+            if (version > (uint32_t)protocol::BlockVersion::MAX_VERSION ||
+                version < (uint32_t)protocol::BlockVersion::MIN_VERSION)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                          "Current genesis compatibilityVersion is " +
+                                          _compatibilityVersion + ", No support this version"));
+            }
+            else
+            {
+                return true;
+            }
+        }
+        else
+        {
+            // GetBlockDataByNumber success but not consistent with initialGenesisData
+            if (m_genesisBlockHeader)
+            {
+                std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
+                             "Initial Genesis Data is :"
+                          << std::endl
+                          << initialGenesisData << std::endl;
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "The Genesis Data is inconsistent with the initial Genesis Data"));
+            }
+            else
+            {
+                LEDGER_LOG(INFO) << "error! initialGenesisDate is null";
+            }
+        }
     }
-
+    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     // clang-format off
-    std::string_view tables[] = {
-        SYS_CONFIG, "value,enable_number",
+    std::vector<std::string_view> tables {
+        SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
         SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
         SYS_HASH_2_TX, SYS_VALUE,
@@ -1424,8 +1480,22 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
     };
+
+    if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        std::vector<std::string_view> moreTables{
+            SYS_CODE_BINARY, SYS_VALUE,
+            SYS_CONTRACT_ABI, SYS_VALUE
+        };
+
+        for (auto v : moreTables)
+        {
+            tables.push_back(v);
+        }
+    }
     // clang-format on
-    size_t total = sizeof(tables) / sizeof(std::string_view);
+
+    size_t total = tables.size();
 
     for (size_t i = 0; i < total; i += 2)
     {
@@ -1441,7 +1511,14 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         }
     }
 
-    createFileSystemTables();
+
+    createFileSystemTables(versionNumber);
+    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                  "The genesis compatibilityVersion is " + _compatibilityVersion +
+                                  ", high than support maxVersion"));
+    }
 
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
@@ -1454,6 +1531,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
+    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        header->setVersion(versionNumber);
+    }
     header->setExtraData(bcos::bytes(_genesisData.begin(), _genesisData.end()));
 
     auto block = m_blockFactory->createBlock();
@@ -1505,7 +1586,6 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-    auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
     LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
                      << LOG_KV("versionNumber", versionNumber);
     // write compatibility version
@@ -1534,13 +1614,13 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     ConsensusNodeList consensusNodeList;
 
-    for (auto& node : _ledgerConfig->consensusNodeList())
+    for (const auto& node : _ledgerConfig->consensusNodeList())
     {
         consensusNodeList.emplace_back(
             node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
     }
 
-    for (auto& node : _ledgerConfig->observerNodeList())
+    for (const auto& node : _ledgerConfig->observerNodeList())
     {
         consensusNodeList.emplace_back(
             node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_OBSERVER}, "0");
@@ -1595,53 +1675,64 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     return true;
 }
 
-void Ledger::createFileSystemTables()
+void Ledger::createFileSystemTables(uint32_t blockVersion)
 {
-    // create / dir
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
-    m_storage->asyncCreateTable(
-        FS_ROOT, SYS_VALUE, [&createPromise](auto&& error, std::optional<Table>&& _table) {
-            createPromise.set_value({std::forward<decltype(error)>(error), std::move(_table)});
-        });
-    auto [createError, rootTable] = createPromise.get_future().get();
-    if (createError)
-    {
-        BOOST_THROW_EXCEPTION(*createError);
-    }
+    std::array<std::string_view, 4> rootSubNames = {
+        tool::FS_APPS, tool::FS_USER, tool::FS_USER_TABLE, tool::FS_SYS_BIN};
 
+    /// blockVersion >= 3.1.0, use executor build
+    if (blockVersion >= (uint32_t)BlockVersion::V3_1_VERSION)
+    {
+        return;
+    }
+    buildDir(tool::FS_ROOT, blockVersion);
     // root table must exist
 
-    Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-    std::map<std::string, std::string> newSubMap;
-    newSubMap.insert(std::make_pair("usr", FS_TYPE_DIR));
-    newSubMap.insert(std::make_pair("apps", FS_TYPE_DIR));
-    newSubMap.insert(std::make_pair("sys", FS_TYPE_DIR));
-    newSubMap.insert(std::make_pair("tables", FS_TYPE_DIR));
+    Entry rootSubEntry;
+    std::map<std::string, std::string> rootSubMap;
+    for (const auto& sub : rootSubNames | RANGES::views::transform(
+                                              [](std::string_view const& sub) -> std::string_view {
+                                                  return sub.substr(1);
+                                              }))
+    {
+        rootSubMap.insert(std::make_pair(sub, FS_TYPE_DIR));
+    }
+    rootSubEntry.importFields({asString(codec::scale::encode(rootSubMap))});
+    std::promise<Error::UniquePtr> setPromise;
+    m_storage->asyncSetRow(
+        FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
+            setPromise.set_value(std::forward<decltype(error)>(error));
+        });
+    auto setError = setPromise.get_future().get();
+    if (setError)
+    {
+        BOOST_THROW_EXCEPTION(*setError);
+    }
 
-    tEntry.importFields({FS_TYPE_DIR});
-    newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-    aclTypeEntry.importFields({"0"});
-    aclWEntry.importFields({""});
-    aclBEntry.importFields({""});
-    extraEntry.importFields({""});
-    rootTable->setRow(FS_KEY_TYPE, std::move(tEntry));
-    rootTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
-    rootTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
-    rootTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
-    rootTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
-    rootTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
-
-    buildDir(FS_USER);
-    buildDir(FS_SYS_BIN);
-    buildDir(FS_APPS);
-    buildDir(FS_USER_TABLE);
+    buildDir(tool::FS_USER, blockVersion);
+    buildDir(tool::FS_APPS, blockVersion);
+    buildDir(tool::FS_USER_TABLE, blockVersion);
+    auto sysTable = buildDir(tool::FS_SYS_BIN, blockVersion);
+    Entry sysSubEntry;
+    std::map<std::string, std::string> sysSubMap;
+    for (const auto& contract :
+        precompiled::BFS_SYS_SUBS |
+            RANGES::views::transform([](std::string_view const& sub) -> std::string_view {
+                return sub.substr(tool::FS_SYS_BIN.length() + 1);
+            }))
+    {
+        sysSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
+    }
+    sysSubEntry.importFields({asString(codec::scale::encode(sysSubMap))});
+    sysTable->setRow(FS_KEY_SUB, std::move(sysSubEntry));
 }
 
-void Ledger::buildDir(const std::string& _absoluteDir)
+std::optional<storage::Table> Ledger::buildDir(
+    const std::string_view& _absoluteDir, uint32_t blockVersion, std::string valueField)
 {
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
-    m_storage->asyncCreateTable(
-        _absoluteDir, SYS_VALUE, [&createPromise](auto&& error, std::optional<Table>&& _table) {
+    m_storage->asyncCreateTable(std::string(_absoluteDir), std::move(valueField),
+        [&createPromise](auto&& error, std::optional<Table>&& _table) {
             createPromise.set_value({std::forward<decltype(error)>(error), std::move(_table)});
         });
     auto [createError, table] = createPromise.get_future().get();
@@ -1649,28 +1740,21 @@ void Ledger::buildDir(const std::string& _absoluteDir)
     {
         BOOST_THROW_EXCEPTION(*createError);
     }
-    Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
-    std::map<std::string, std::string> newSubMap;
-    if (_absoluteDir == FS_SYS_BIN)
+    if (blockVersion >= (uint32_t)BlockVersion::V3_1_VERSION)
     {
-        // clang-format off
-        std::vector<std::string> sysContracts({
-            getSysBaseName(precompiled::SYS_CONFIG_NAME),
-            getSysBaseName(precompiled::CONSENSUS_NAME),
-            getSysBaseName(precompiled::AUTH_MANAGER_NAME),
-            getSysBaseName(precompiled::KV_TABLE_NAME),
-            getSysBaseName(precompiled::CRYPTO_NAME),
-            getSysBaseName(precompiled::BFS_NAME),
-            getSysBaseName(precompiled::TABLE_MANAGER_NAME)
-        });
-        // clang-format on
-        for (const auto& contract : sysContracts)
-        {
-            newSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
-        }
+        // >= 3.1.0 logic
+        return table;
     }
-    tEntry.importFields({FS_TYPE_DIR});
+    // 3.0.0 logic
+    Entry tEntry;
+    Entry newSubEntry;
+    Entry aclTypeEntry;
+    Entry aclWEntry;
+    Entry aclBEntry;
+    Entry extraEntry;
+    std::map<std::string, std::string> newSubMap;
     newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+    tEntry.importFields({std::string(FS_TYPE_DIR)});
     aclTypeEntry.importFields({"0"});
     aclWEntry.importFields({""});
     aclBEntry.importFields({""});
@@ -1681,4 +1765,5 @@ void Ledger::buildDir(const std::string& _absoluteDir)
     table->setRow(FS_ACL_WHITE, std::move(aclWEntry));
     table->setRow(FS_ACL_BLACK, std::move(aclBEntry));
     table->setRow(FS_KEY_EXTRA, std::move(extraEntry));
+    return table;
 }

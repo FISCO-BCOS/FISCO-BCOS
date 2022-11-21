@@ -41,7 +41,8 @@ bool DmcExecutor::prepare()
             return true;
         });
 
-    bool hasScheduleOut = !m_executivePool.empty(MessageHint::NEED_SCHEDULE_OUT);
+    bool hasScheduleOut = !m_executivePool.empty(MessageHint::NEED_SCHEDULE_OUT) ||
+                          !m_executivePool.empty(MessageHint::NEED_PREPARE);
 
     // handle schedule out message
     m_executivePool.forEach(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT,
@@ -335,6 +336,24 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::MESSAGE:
     case protocol::ExecutionMessage::TXHASH:
     {
+        if (executiveState->message->data().toBytes() == bcos::protocol::GET_CODE_INPUT_BYTES)
+        {
+            auto newSeq = executiveState->currentSeq++;
+            executiveState->callStack.push(newSeq);
+            executiveState->message->setSeq(newSeq);
+
+            // getCode
+            DMC_LOG(DEBUG) << "Get external code in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress());
+            bytes code = f_onGetCodeEvent(executiveState->message->delegateCallAddress());
+            DMC_LOG(TRACE) << "Get external code success in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress())
+                           << LOG_KV("codeSize", code.size());
+            executiveState->message->setData(code);
+            executiveState->message->setType(protocol::ExecutionMessage::FINISHED);
+            return MessageHint::NEED_PREPARE;
+        }
+
         // update my key locks in m_keyLocks
         m_keyLocks->batchAcquireKeyLock(
             message->from(), message->keyLocks(), message->contextID(), message->seq());
@@ -342,6 +361,25 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         auto newSeq = executiveState->currentSeq++;
         executiveState->callStack.push(newSeq);
         executiveState->message->setSeq(newSeq);
+
+        if (executiveState->message->delegateCall())
+        {
+            bytes code = f_onGetCodeEvent(message->delegateCallAddress());
+            if (code.empty())
+            {
+                DMC_LOG(DEBUG)
+                    << "Could not getCode() from correspond executor during delegateCall: "
+                    << message->toString();
+                message->setType(protocol::ExecutionMessage::REVERT);
+                message->setCreate(false);
+                message->setKeyLocks({});
+                return MessageHint::NEED_PREPARE;
+            }
+            else
+            {
+                executiveState->message->setDelegateCallCode(code);
+            }
+        }
 
         return MessageHint::NEED_SEND;
     }

@@ -20,7 +20,6 @@
 
 #pragma once
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
@@ -36,8 +35,6 @@
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
-#include <servant/Application.h>
-#include <tup/Tars.h>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -78,10 +75,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -100,14 +94,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -165,6 +153,7 @@ inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(
     groupInfo->setGroupID(_tarsGroupInfo.groupID);
     groupInfo->setGenesisConfig(_tarsGroupInfo.genesisConfig);
     groupInfo->setIniConfig(_tarsGroupInfo.iniConfig);
+    groupInfo->setWasm(_tarsGroupInfo.isWasm);
     for (auto const& tarsNodeInfo : _tarsGroupInfo.nodeList)
     {
         groupInfo->appendNodeInfo(toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo));
@@ -211,6 +200,7 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
     tarsGroupInfo.groupID = _groupInfo->groupID();
     tarsGroupInfo.genesisConfig = _groupInfo->genesisConfig();
     tarsGroupInfo.iniConfig = _groupInfo->iniConfig();
+    tarsGroupInfo.isWasm = _groupInfo->wasm() ? 1 : 0;
     // set nodeList
     std::vector<bcostars::ChainNodeInfo> tarsNodeList;
     auto bcosNodeList = _groupInfo->nodeInfos();
@@ -281,6 +271,10 @@ inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
 inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
 {
     bcostars::LedgerConfig ledgerConfig;
+    if (!_ledgerConfig)
+    {
+        return ledgerConfig;
+    }
     auto hash = _ledgerConfig->hash().asBytes();
     ledgerConfig.hash.assign(hash.begin(), hash.end());
     ledgerConfig.blockNumber = _ledgerConfig->blockNumber();
@@ -361,36 +355,6 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
     return bcosGatewayInfo;
 }
 
-template <typename T>
-bool checkConnection(std::string const& _module, std::string const& _func, const T& prx,
-    std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
-{
-    auto cb = prx->tars_get_push_callback();
-    assert(cb);
-    auto* tarsServantProxyCallback = (TarsServantProxyCallback*)cb.get();
-
-    if (tarsServantProxyCallback->available())
-    {
-        return true;
-    }
-
-    if (_errorCallback && _callsErrorCallback)
-    {
-        std::string errorMessage =
-            _module + " calls interface " + _func + " failed for empty connection";
-        _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
-    }
-    return false;
-}
-
-template <typename T>
-auto tarsProxyAvailableEndPoints(const T& prx)
-{
-    auto cb = prx->tars_get_push_callback();
-    assert(cb);
-    return ((TarsServantProxyCallback*)cb.get())->activeEndpoints();
-}
-
 inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)
 {
     bcostars::LogEntry logEntry;
@@ -418,9 +382,8 @@ inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const
 {
     bcos::protocol::TwoPCParams bcosTwoPCParams;
     bcosTwoPCParams.number = _param.blockNumber;
-    bcosTwoPCParams.primaryTableName = _param.primaryTableName;
-    bcosTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    bcosTwoPCParams.timestamp = _param.startTS;
+    bcosTwoPCParams.primaryKey = _param.primaryKey;
+    bcosTwoPCParams.timestamp = _param.timePoint;
     return bcosTwoPCParams;
 }
 
@@ -428,9 +391,8 @@ inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _para
 {
     bcostars::TwoPCParams tarsTwoPCParams;
     tarsTwoPCParams.blockNumber = _param.number;
-    tarsTwoPCParams.primaryTableName = _param.primaryTableName;
-    tarsTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    tarsTwoPCParams.startTS = _param.timestamp;
+    tarsTwoPCParams.primaryKey = _param.primaryKey;
+    tarsTwoPCParams.timePoint = _param.timestamp;
     return tarsTwoPCParams;
 }
 }  // namespace bcostars

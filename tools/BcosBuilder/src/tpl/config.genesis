@@ -1,3 +1,10 @@
+[chain]
+    ; use SM crypto or not, should never be changed
+    sm_crypto=false
+    ; the group id, should never be changed
+    group_id=group0
+    ; the chain id, should never be changed
+    chain_id=chain0
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft)
     consensus_type=pbft
@@ -10,8 +17,8 @@
     
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.0.0-rc4
-    compatibility_version=3.0.0-rc4
+    ; the default is 3.1.0
+    compatibility_version=3.1.0
 
 [tx]
     ; transaction gas limit

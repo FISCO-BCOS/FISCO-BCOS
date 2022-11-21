@@ -61,16 +61,28 @@ public:
     virtual void asyncSendMessageByNodeID(int _moduleId, NodeIDPtr _fromNode, NodeIDPtr _nodeId,
         bytesConstRef _data, uint32_t, CallbackFunc _responseCallback)
     {
-        m_uuid++;
-        auto id = std::to_string(m_uuid);
-        insertCallback(id, _responseCallback);
+        std::string id;
+        {
+            Guard l(m_mutex);
+            m_uuid++;
+            id = std::to_string(m_uuid);
+            if (_responseCallback)
+            {
+                m_uuidToCallback[id] = _responseCallback;
+            }
+            if (_responseCallback)
+            {
+                std::cout << "asyncSendMessageByNodeID, from: " << _fromNode
+                          << _fromNode->shortHex() << ", to: " << _nodeId->shortHex()
+                          << ", id:" << id << std::endl;
+            }
+        }
 
         if (_moduleId == ModuleID::TxsSync && m_nodeId2TxPool.count(_nodeId))
         {
             auto txpool = m_nodeId2TxPool[_nodeId];
             txpool->asyncNotifyTxsSyncMessage(nullptr, id, _fromNode, _data, nullptr);
         }
-
         if (_moduleId == ModuleID::ConsTxsSync && m_nodeId2TxPool.count(_nodeId))
         {
             auto txpool = m_nodeId2TxPool[_nodeId];
@@ -90,30 +102,27 @@ public:
     }
 
     virtual void asyncSendResponse(const std::string& _id, int, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _responseData, ReceiveMsgFunc)
+        bytesConstRef _responseData, ReceiveMsgFunc _receiveCallback)
     {
-        if (m_uuidToCallback.count(_id))
+        CallbackFunc callback = nullptr;
         {
-            auto callback = m_uuidToCallback[_id];
-            removeCallback(_id);
-            if (callback)
+            Guard l(m_mutex);
+            if (m_uuidToCallback.count(_id))
             {
-                callback(nullptr, _nodeID, _responseData, "", nullptr);
+                callback = m_uuidToCallback[_id];
+                m_uuidToCallback.erase(_id);
             }
         }
-    }
-
-    void insertCallback(std::string const& _id, CallbackFunc _callback)
-    {
-        Guard l(m_mutex);
-        m_uuidToCallback[_id] = _callback;
-    }
-
-    void removeCallback(std::string const& _id)
-    {
-        Guard l(m_mutex);
-
-        m_uuidToCallback.erase(_id);
+        if (callback)
+        {
+            callback(nullptr, _nodeID, _responseData, "", nullptr);
+            std::cout << "### find callback, id: " << _id << std::endl;
+        }
+        else
+        {
+            std::cout << "### not find callback for the id: " << _id << std::endl;
+        }
+        _receiveCallback(nullptr);
     }
 
 private:

@@ -73,9 +73,6 @@ public:
                     createPromise.set_value(std::move(_e));
                 });
             Error::UniquePtr _e = createPromise.get_future().get();
-            BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "create smallbank table"
-                            << LOG_KV("table", _tableName)
-                            << (_e == nullptr ? "" : " withError: " + _e->errorMessage());
             std::string&& address = getAddress(id);
             registeredMap->insert({std::move(address),
                 std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl, _tableName)});

@@ -28,6 +28,7 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+
 using namespace bcos::node;
 using namespace bcos::initializer;
 using namespace bcos::gateway;
@@ -49,8 +50,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // Note: this NodeConfig is used to create Gateway which not init the nodeName
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
-    nodeConfig->loadConfig(_configFilePath);
     nodeConfig->loadGenesisConfig(_genesisFile);
+    nodeConfig->loadConfig(_configFilePath);
 
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);

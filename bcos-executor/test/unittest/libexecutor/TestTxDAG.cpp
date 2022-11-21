@@ -220,32 +220,18 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
 
     runDagTest(txDag, total, id2CriticalFun, beforeRunCheck, afterRunCheck);
 }
-/*
-BOOST_AUTO_TEST_CASE(TestRun1)
-{
-    // ./test-bcos-executor --run_test=TestTxDAG/TestRun1
-    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG>();
-    txDagTest(txDag);
-}
-*/
 BOOST_AUTO_TEST_CASE(TestRun2)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
     txDagTest(txDag);
 }
-#if 0
-BOOST_AUTO_TEST_CASE(TestRun3)
-{
-    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG>();
-    txDagDeepTreeTest(txDag);
-}
 
 BOOST_AUTO_TEST_CASE(TestRun4)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
-    txDagDeepTreeTest(txDag);
+    // FIXME
+    // txDagDeepTreeTest(txDag);
 }
-#endif
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

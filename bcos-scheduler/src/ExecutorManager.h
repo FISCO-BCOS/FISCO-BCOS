@@ -4,7 +4,6 @@
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
-#include <tbb/parallel_for.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/range/any_range.hpp>
@@ -33,6 +32,9 @@ public:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchExecutor(
         const std::string_view& contract);
 
+    // return nullptr if there is no executor dispatched in this contract before
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchCorrespondExecutor(
+        const std::string_view& contract);
 
     void removeExecutor(const std::string_view& name);
 
@@ -128,6 +130,11 @@ private:
             return lhs->contracts.size() > rhs->contracts.size();
         }
     };
+
+    inline std::string toLowerAddress(const std::string_view& address)
+    {
+        return boost::algorithm::hex_lower(std::string(address));
+    }
 
     tbb::concurrent_unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
         m_contract2ExecutorInfo;

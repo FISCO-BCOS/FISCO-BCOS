@@ -23,9 +23,7 @@
 #include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
 
-namespace bcos
-{
-namespace sealer
+namespace bcos::sealer
 {
 class Sealer : public Worker, public SealerInterface, public std::enable_shared_from_this<Sealer>
 {
@@ -37,7 +35,7 @@ public:
         m_sealingManager = std::make_shared<SealingManager>(_sealerConfig);
         m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
     }
-    virtual ~Sealer() {}
+    ~Sealer() override = default;
 
     void start() override;
     void stop() override;
@@ -68,5 +66,4 @@ protected:
     // mutex to access m_signalled
     boost::mutex x_signalled;
 };
-}  // namespace sealer
 }  // namespace bcos

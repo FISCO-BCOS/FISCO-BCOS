@@ -21,6 +21,8 @@
 #include "bcos-framework/consensus/ConsensusInterface.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-tool/NodeTimeMaintenance.h"
+
 namespace bcos
 {
 namespace sealer
@@ -29,9 +31,11 @@ class SealerConfig
 {
 public:
     using Ptr = std::shared_ptr<SealerConfig>;
-    SealerConfig(
-        bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::txpool::TxPoolInterface::Ptr _txpool)
-      : m_txpool(_txpool), m_blockFactory(_blockFactory)
+    SealerConfig(bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txpool,
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+      : m_txpool(_txpool), m_blockFactory(_blockFactory),
+        m_nodeTimeMaintenance(_nodeTimeMaintenance)
     {}
     virtual ~SealerConfig() {}
 
@@ -46,11 +50,13 @@ public:
 
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
     bcos::consensus::ConsensusInterface::Ptr consensus() { return m_consensus; }
+    bcos::tool::NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
 
 protected:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
+    bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     unsigned m_minSealTime = 500;
 };
 }  // namespace sealer

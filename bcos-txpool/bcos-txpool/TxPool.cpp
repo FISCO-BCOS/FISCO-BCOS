@@ -35,7 +35,7 @@ void TxPool::start()
 {
     if (m_running)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("The txpool has already been started!");
+        TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been started!");
         return;
     }
     m_transactionSync->start();
@@ -48,7 +48,7 @@ void TxPool::stop()
 {
     if (!m_running)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("The txpool has already been stopped!");
+        TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been stopped!");
         return;
     }
     if (m_worker)
@@ -64,31 +64,11 @@ void TxPool::stop()
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");
 }
 
-void TxPool::asyncSubmit(bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
+
+task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
+    protocol::Transaction::Ptr transaction)
 {
-    // verify and try to submit the valid transaction
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
-    m_worker->enqueue([self, _txData, _txSubmitCallback]() {
-        try
-        {
-            auto txpool = self.lock();
-            if (!txpool)
-            {
-                return;
-            }
-            auto txpoolStorage = txpool->m_txpoolStorage;
-            if (!txpool->checkExistsInGroup(_txSubmitCallback))
-            {
-                return;
-            }
-            txpoolStorage->submitTransaction(_txData, _txSubmitCallback);
-        }
-        catch (std::exception const& e)
-        {
-            TXPOOL_LOG(WARNING) << LOG_DESC("asyncSubmit exception")
-                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
+    co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
@@ -112,7 +92,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
     std::function<void(Error::Ptr, Block::Ptr, Block::Ptr)> _sealCallback)
 {
     // Note: not block seal new block here
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_sealer->enqueue([self, _txsLimit, _avoidTxs, _sealCallback]() {
         auto txpool = self.lock();
         if (!txpool)
@@ -126,16 +106,17 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
     });
 }
 
-void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
-    TransactionSubmitResultsPtr _txsResult, std::function<void(Error::Ptr)> _onNotifyFinished)
+void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
+    std::function<void(Error::Ptr)> _onNotifyFinished)
 {
+    m_worker->enqueue([this, txsResult = std::move(txsResult), _blockNumber]() {
+        m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
+    });
+
     if (_onNotifyFinished)
     {
         _onNotifyFinished(nullptr);
     }
-    m_txsResultNotifier->enqueue([this, _blockNumber, _txsResult]() {
-        m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
-    });
 }
 
 void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _block,
@@ -148,7 +129,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                      << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null");
     // Note: here must have thread pool for lock in the callback
     // use single thread here to decrease thread competition
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_verifier->enqueue([self, _generatedNodeID, blockHeader, block, _onVerifyFinished]() {
         try
         {
@@ -233,7 +214,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
 void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uuid,
     NodeIDPtr _nodeID, bytesConstRef _data, std::function<void(Error::Ptr _error)> _onRecv)
 {
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_transactionSync->onRecvSyncMessage(
         _error, _nodeID, _data, [self, _uuid, _nodeID](bytesConstRef _respData) {
             try
@@ -286,7 +267,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
     std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
     // fetch from the local ledger
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _txsHash, _missedTxs, _onBlockFilled]() {
         auto txpool = self.lock();
         if (!txpool)
@@ -322,7 +303,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
 void TxPool::asyncFillBlock(
     HashListPtr _txsHash, std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     m_filler->enqueue([self, _txsHash, _onBlockFilled]() {
         auto txpool = self.lock();
         if (!txpool)
@@ -446,11 +427,12 @@ void TxPool::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        TXPOOL_LOG(WARNING) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                            << LOG_KV("module", std::to_string(_moduleID))
-                                            << LOG_KV("dst", _dstNode->shortHex())
-                                            << LOG_KV("code", _error->errorCode())
-                                            << LOG_KV("msg", _error->errorMessage());
+                        TXPOOL_LOG(WARNING)
+                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                            << LOG_KV("module", std::to_string(_moduleID))
+                            << LOG_KV("dst", _dstNode->shortHex())
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }
@@ -477,7 +459,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
         txsHashList->emplace_back(_block->transactionHash(i));
     }
 
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    auto self = weak_from_this();
     auto startT = utcTime();
     asyncFillBlock(
         txsHashList, [self, startT, blockHeader, _block](Error::Ptr _error, TransactionsPtr _txs) {
@@ -505,6 +487,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
                             << LOG_KV("hash", blockHeader->hash().abridged())
                             << LOG_KV("msg", _error->errorMessage())
                             << LOG_KV("code", _error->errorCode());
+                        return;
                     }
                     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock success")
                                      << LOG_KV("consNum", blockHeader->number())

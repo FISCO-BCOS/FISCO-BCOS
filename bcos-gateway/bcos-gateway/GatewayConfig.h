@@ -43,9 +43,38 @@ public:
         std::string enNodeKey;
     };
 
-    // config for rate limit
-    struct RateLimitConfig
+    // config for redis
+    struct RedisConfig
     {
+        // redis server ip
+        std::string host;
+        // redis server port
+        uint16_t port;
+        // redis request timeout
+        int32_t timeout = -1;
+        // redis connection pool size, default 16
+        int32_t connectionPoolSize = 16;
+        // redis password, default empty
+        std::string password;
+        // redis db, default 0th
+        int db = 0;
+    };
+
+    // config for rate limit
+    struct RateLimiterConfig
+    {
+        bool enableGroupRateLimit = false;
+        bool enableConRateLimit = false;
+
+        // if turn on distributed ratelimit
+        bool enableDistributedRatelimit = false;
+        //
+        bool enableDistributedRateLimitCache = true;
+        //
+        int32_t distributedRateLimitCachePercent = 20;
+        // stat reporter interval, unit: ms
+        int32_t statInterval = 60000;
+
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
 
@@ -60,10 +89,10 @@ public:
         std::unordered_map<std::string, int64_t> group2BwLimit;
 
         // the message of modules that do not limit bandwidth
-        std::set<uint16_t> modulesWithNoBwLimit;
+        std::set<uint16_t> modulesWithoutLimit;
 
         // whether any configuration takes effect
-        bool isConfigEffect() const
+        bool enableRateLimit() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
@@ -109,7 +138,9 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRatelimitConfig(const boost::property_tree::ptree& _pt);
+    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
+    // loads redis config
+    void initRedisConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
     void checkFileExist(const std::string& _path);
     // load p2p connected peers
@@ -117,12 +148,13 @@ public:
 
     std::string listenIP() const { return m_listenIP; }
     uint16_t listenPort() const { return m_listenPort; }
-    uint32_t threadPoolSize() { return m_threadPoolSize; }
+    uint32_t threadPoolSize() const { return m_threadPoolSize; }
     bool smSSL() const { return m_smSSL; }
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
-    RateLimitConfig rateLimitConfig() const { return m_rateLimitConfig; }
+    RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
+    RedisConfig redisConfig() const { return m_redisConfig; }
 
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
@@ -145,7 +177,8 @@ private:
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;
 
-    RateLimitConfig m_rateLimitConfig;
+    RateLimiterConfig m_rateLimiterConfig;
+    RedisConfig m_redisConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

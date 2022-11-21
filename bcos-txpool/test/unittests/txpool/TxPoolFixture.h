@@ -19,7 +19,9 @@
  * @date 2021-05-25
  */
 #pragma once
-#include "bcos-protocol/protobuf/PBTransactionMetaData.h"
+#include <bcos-tars-protocol/testutil/FakeBlock.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
@@ -30,10 +32,11 @@
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/protobuf/PBBlockFactory.h>
-#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -103,11 +106,13 @@ public:
         m_blockLimit(_blockLimit),
         m_fakeGateWay(_fakeGateWay)
     {
-        auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
-        auto txFactory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
-        auto receiptFactory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-        m_blockFactory =
-            std::make_shared<PBBlockFactory>(blockHeaderFactory, txFactory, receiptFactory);
+        auto blockHeaderFactory =
+            std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
+        auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
+        auto receiptFactory =
+            std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
+        m_blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+            _cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
 
@@ -214,32 +219,43 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     size_t expectedTxSize, bool _needWaitResult = true, bool _waitNothing = false,
     bool _maybeExpired = false)
 {
-    std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    bcos::bytes encodedData;
-    _tx->encode(encodedData);
-    auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-    _txpool->asyncSubmit(txData, [verifyFinish, _expectedTxHash, _expectedStatus, _maybeExpired](
-                                     Error::Ptr, TransactionSubmitResult::Ptr _result) {
-        std::cout << "#### expectedTxHash:" << _expectedTxHash.abridged() << std::endl;
-        std::cout << "##### receipt txHash:" << _result->txHash().abridged() << std::endl;
-        BOOST_CHECK(_result->txHash() == _expectedTxHash);
-        std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
-        std::cout << "##### receiptStatus:" << std::to_string(_result->status()) << std::endl;
-        if (_maybeExpired)
-        {
-            BOOST_CHECK((_result->status() == _expectedStatus) ||
-                        (_result->status() == (int32_t)TransactionStatus::BlockLimitCheckFail));
-        }
-        *verifyFinish = true;
-    });
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+
+    bcos::task::wait(_txpool->submitTransaction(std::move(_tx)),
+        [_expectedTxHash = _expectedTxHash, _expectedStatus = _expectedStatus,
+            _maybeExpired = _maybeExpired, promise](auto&& submitResult) {
+            using ResultType = std::decay_t<decltype(submitResult)>;
+            if constexpr (!std::is_same_v<ResultType, std::exception_ptr>)
+            {
+                if (submitResult->txHash() != _expectedTxHash)
+                {
+                    // do something
+                    std::cout << "Mismatch!" << std::endl;
+                }
+                BOOST_CHECK_EQUAL(submitResult->txHash(), _expectedTxHash);
+                std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus)
+                          << std::endl;
+                std::cout << "##### receiptStatus:" << std::to_string(submitResult->status())
+                          << std::endl;
+                if (_maybeExpired)
+                {
+                    BOOST_CHECK((submitResult->status() == _expectedStatus) ||
+                                (submitResult->status() ==
+                                    (int32_t)TransactionStatus::BlockLimitCheckFail));
+                }
+            }
+
+            promise->set_value();
+        });
+
     if (_waitNothing)
     {
         return;
     }
-    while (!*verifyFinish && _needWaitResult)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
+
+    future.get();
+
     if (!_needWaitResult)
     {
         while (_storage->size() != expectedTxSize)

@@ -97,7 +97,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     }
     // curve25519VRFVerify
     else if (funcSelector == name2Selector[CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR] &&
-             (version >= (uint32_t)(bcos::protocol::Version::V3_0_VERSION)))
+             (version >= (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION)))
     {
         curve25519VRFVerify(_executive, paramData, _callParameters);
     }
@@ -110,7 +110,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
             bcos::protocol::PrecompiledError("CryptoPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 

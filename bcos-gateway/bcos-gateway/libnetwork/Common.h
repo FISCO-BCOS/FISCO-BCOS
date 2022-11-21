@@ -30,11 +30,6 @@ namespace bcos
 {
 namespace gateway
 {
-enum MessageExtFieldFlag
-{
-    Response = 0x0001,
-};
-
 enum MessageDecodeStatus
 {
     MESSAGE_ERROR = -1,

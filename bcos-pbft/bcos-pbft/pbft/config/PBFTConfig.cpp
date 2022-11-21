@@ -19,6 +19,9 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
+#include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
+#include "bcos-txpool/sync/interfaces/TxsSyncMsgFactory.h"
+#include "bcos-txpool/sync/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -73,9 +76,9 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
     {
         PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
-                       << LOG_KV("version", (bcos::protocol::Version)m_compatibilityVersion)
-                       << LOG_KV("updatedVersion",
-                              (bcos::protocol::Version)(_ledgerConfig->compatibilityVersion()));
+                       << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
+                       << LOG_KV("updatedVersion", (bcos::protocol::BlockVersion)(
+                                                       _ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {
@@ -188,7 +191,7 @@ void PBFTConfig::reNotifySealer(bcos::protocol::BlockNumber _index)
 
 bool PBFTConfig::canHandleNewProposal()
 {
-    ReadGuard l(x_committedProposal);
+    ReadGuard lock(x_committedProposal);
     bcos::protocol::BlockNumber committedIndex = 0;
     if (m_committedProposal)
     {
@@ -211,14 +214,10 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     {
         return true;
     }
-    ReadGuard l(x_committedProposal);
+    ReadGuard lock(x_committedProposal);
     auto committedIndex = m_committedProposal->index();
-    if (_msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
-        _msg->index() <= m_waitResealUntil)
-    {
-        return true;
-    }
-    return false;
+    return _msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
+           _msg->index() <= m_waitResealUntil;
 }
 
 bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
@@ -229,7 +228,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     }
     auto nodeList = connectedNodeList();
     // empty connection
-    if (nodeList.size() == 0)
+    if (nodeList.empty())
     {
         return false;
     }
@@ -249,7 +248,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
         return false;
     }
     // Note: must register m_faultyDiscriminator before start the PBFTEngine
-    if (nodeList.count(leaderNodeInfo->nodeID()) &&
+    if (nodeList.contains(leaderNodeInfo->nodeID()) &&
         !m_faultyDiscriminator(leaderNodeInfo->nodeID()))
     {
         return false;
@@ -265,7 +264,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
-    RecursiveGuard l(m_mutex);
+    RecursiveGuard lock(m_mutex);
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -323,7 +322,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
         // notify the leader to seal when all txs of all proposals have been resetted
-        auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+        auto self = weak_from_this();
         m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
             auto config = self.lock();
             if (!config)
@@ -358,7 +357,7 @@ void PBFTConfig::asyncNotifySealProposal(
     {
         return;
     }
-    auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+    auto self = weak_from_this();
     m_sealProposalNotifier(_proposalIndex, _proposalEndIndex, _maxTxsToSeal,
         [_proposalIndex, _proposalEndIndex, _maxTxsToSeal, self, _retryTime](Error::Ptr _error) {
             if (_error == nullptr)
@@ -398,8 +397,8 @@ uint64_t PBFTConfig::minRequiredQuorum() const
 void PBFTConfig::updateQuorum()
 {
     m_totalQuorum.store(0);
-    ReadGuard l(x_consensusNodeList);
-    for (auto consensusNode : *m_consensusNodeList)
+    ReadGuard lock(x_consensusNodeList);
+    for (const auto& consensusNode : *m_consensusNodeList)
     {
         m_totalQuorum += consensusNode->weight();
     }
@@ -432,7 +431,7 @@ IndexType PBFTConfig::leaderIndexInNewViewPeriod(
 
 PBFTProposalInterface::Ptr PBFTConfig::populateCommittedProposal()
 {
-    ReadGuard l(x_committedProposal);
+    ReadGuard lock(x_committedProposal);
     if (!m_committedProposal)
     {
         return nullptr;
@@ -460,4 +459,19 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
                  << LOG_KV("nodeId", nodeID()->shortHex());
     return stringstream.str();
+}
+
+void PBFTConfig::broadCastEmptyTxsReq()
+{
+    if (m_unsealedTxsSize > 0 || m_timer->running())
+    {
+        return;
+    }
+    std::unique_ptr<bcos::sync::TxsSyncMsgFactory> syncMsgFactory =
+        std::make_unique<bcos::sync::TxsSyncMsgFactoryImpl>();
+    auto emptyStat = syncMsgFactory->createTxsSyncMsg(
+        sync::TxsSyncPacketType::TxsStatusPacket, bcos::crypto::HashList({}));
+    auto reqData = emptyStat->encode();
+    m_frontService->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, protocol::ModuleID::TxsSync, ref(*reqData));
 }

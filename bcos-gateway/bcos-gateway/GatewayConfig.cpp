@@ -153,7 +153,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
-        initRatelimitConfig(pt);
+        initRateLimitConfig(pt);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -353,10 +353,18 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
 }
 
 // loads rate limit configuration items from the configuration file
-void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
+void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
 {
     /*
     [flow_control]
+    ; the switch for distributed rate limit
+    ; enable_distributed_ratelimit=true
+    ; enable_distributed_ratelimit_cache=true
+    ; distributed_ratelimit_cache_percent=15
+    ;
+    ; rate limiter stat reporter interval, unit: ms
+    ; stat_reporter_interval=60000
+
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
@@ -372,30 +380,43 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     ;
     ; conn_outgoing_bw_limit=2
     ;
-    ; specify IP to limit bandwidth, format: ip_x.x.x.x=n
-    ;   ip_192.108.0.1=3
-    ;   ip_192.108.0.2=3
-    ;   ip_192.108.0.3=3
+    ; specify IP to limit bandwidth, format: conn_outgoing_bw_limit_x.x.x.x=n
+    ;   conn_outgoing_bw_limit_192.108.0.1=3
+    ;   conn_outgoing_bw_limit_192.108.0.2=3
+    ;   conn_outgoing_bw_limit_192.108.0.3=3
     ;
     ; default bandwidth limit for the group
     ; group_outgoing_bw_limit=2
     ;
-    ; specify group to limit bandwidth, group_groupName=n
-    ;   group_group0=2
-    ;   group_group1=2
-    ;   group_group2=2
+    ; specify group to limit bandwidth, group_outgoing_bw_limit_groupName=n
+    ;   group_outgoing_bw_limit_group0=2
+    ;   group_outgoing_bw_limit_group1=2
+    ;   group_outgoing_bw_limit_group2=2
     */
 
+    // enable_distributed_ratelimit=false
+    bool enableDistributedRatelimit =
+        _pt.get<bool>("flow_control.enable_distributed_ratelimit", false);
+    // enable_distributed_ratelimit=false
+    bool enableDistributedRateLimitCache =
+        _pt.get<bool>("flow_control.enable_distributed_ratelimit_cache", true);
+    // enable_distributed_ratelimit=false
+    int32_t distributedRateLimitCachePercent =
+        _pt.get<int32_t>("flow_control.distributed_ratelimit_cache_percent", 20);
+    // stat_reporter_interval=60000
+    int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
+
     // modules_without_bw_limit=raft,pbft
-    std::string strNoLimitModules =
+    std::string strModulesWithoutLimit =
         _pt.get<std::string>("flow_control.modules_without_bw_limit", "raft,pbft,cons_txs_sync");
 
     std::set<uint16_t> moduleIDs;
     std::vector<std::string> modules;
 
-    if (!strNoLimitModules.empty())
+    if (!strModulesWithoutLimit.empty())
     {
-        boost::split(modules, strNoLimitModules, boost::is_any_of(","), boost::token_compress_on);
+        boost::split(
+            modules, strModulesWithoutLimit, boost::is_any_of(","), boost::token_compress_on);
 
         for (auto module : modules)
         {
@@ -430,6 +451,10 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                                  << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit);
     }
 
+
+    bool enableGroupRateLimit = false;
+    bool enableConRateLimit = false;
+
     int64_t connOutgoingBwLimit = -1;
     // conn_outgoing_bw_limit
     value = _pt.get<std::string>("flow_control.conn_outgoing_bw_limit", "");
@@ -439,7 +464,8 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     }
     else
     {
-        double bw = boost::lexical_cast<double>(value);
+        enableConRateLimit = true;
+        auto bw = boost::lexical_cast<double>(value);
         connOutgoingBwLimit = doubleMBToBit(bw);
 
         GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the conn_outgoing_bw_limit has been initialized")
@@ -456,7 +482,8 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
     }
     else
     {
-        double bw = boost::lexical_cast<double>(value);
+        enableGroupRateLimit = true;
+        auto bw = boost::lexical_cast<double>(value);
         groupOutgoingBwLimit = doubleMBToBit(bw);
 
         GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the group_outgoing_bw_limit has been initialized")
@@ -475,42 +502,50 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
             boost::trim(key);
             boost::trim(value);
 
-            if (boost::starts_with(key, "ip_"))
+            if (boost::starts_with(key, "conn_outgoing_bw_limit_"))
             {
-                // ip_x.x.x.x =
-                std::string ip = key.substr(3);
+                enableConRateLimit = true;
+                // ip_outgoing_bw_x.x.x.x =
+                std::string ip = key.substr(strlen("conn_outgoing_bw_limit_"));
                 if (!isValidIP(ip))
                 {
                     BOOST_THROW_EXCEPTION(
                         InvalidParameter() << errinfo_comment(
-                            "flow_control.ip_x.x.x.x config, invalid ip format, ip: " + ip));
+                            "flow_control.ip_outgoing_bw_x.x.x.x config, invalid ip format, ip: " +
+                            ip));
                 }
-                double bw = boost::lexical_cast<double>(value);
-                m_rateLimitConfig.ip2BwLimit[ip] = doubleMBToBit(bw);
+                auto bw = boost::lexical_cast<double>(value);
+                m_rateLimiterConfig.ip2BwLimit[ip] = doubleMBToBit(bw);
 
                 GATEWAY_CONFIG_LOG(INFO)
-                    << LOG_BADGE("initRateLimitConfig") << LOG_DESC("add ip bandwidth limit")
+                    << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add ip bandwidth limit")
                     << LOG_KV("ip", ip) << LOG_KV("bandwidth", bw);
-            }
-            else if (boost::starts_with(key, "group_") &&
-                     !boost::starts_with(key, "group_outgoing"))
+            }  // group_outgoing_bw_group0
+            else if (boost::starts_with(key, "group_outgoing_bw_limit_"))
             {
+                enableGroupRateLimit = true;
                 // group_xxxx =
-                std::string group = key.substr(6);
-                double bw = boost::lexical_cast<double>(value);
-                m_rateLimitConfig.group2BwLimit[group] = doubleMBToBit(bw);
+                std::string group = key.substr(strlen("group_outgoing_bw_limit_"));
+                auto bw = boost::lexical_cast<double>(value);
+                m_rateLimiterConfig.group2BwLimit[group] = doubleMBToBit(bw);
 
                 GATEWAY_CONFIG_LOG(INFO)
-                    << LOG_BADGE("initRateLimitConfig") << LOG_DESC("add group bandwidth limit")
+                    << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add group bandwidth limit")
                     << LOG_KV("group", group) << LOG_KV("bandwidth", bw);
             }
         }
     }
 
-    m_rateLimitConfig.modulesWithNoBwLimit = moduleIDs;
-    m_rateLimitConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
-    m_rateLimitConfig.connOutgoingBwLimit = connOutgoingBwLimit;
-    m_rateLimitConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
+    m_rateLimiterConfig.statInterval = statInterval;
+    m_rateLimiterConfig.modulesWithoutLimit = moduleIDs;
+    m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
+    m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
+    m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
+    m_rateLimiterConfig.enableDistributedRatelimit = enableDistributedRatelimit;
+    m_rateLimiterConfig.enableDistributedRateLimitCache = enableDistributedRateLimitCache;
+    m_rateLimiterConfig.distributedRateLimitCachePercent = distributedRateLimitCachePercent;
+    m_rateLimiterConfig.enableGroupRateLimit = enableGroupRateLimit;
+    m_rateLimiterConfig.enableConRateLimit = enableConRateLimit;
 
     if (totalOutgoingBwLimit > 0 && connOutgoingBwLimit > 0 &&
         connOutgoingBwLimit > totalOutgoingBwLimit)
@@ -528,14 +563,95 @@ void GatewayConfig::initRatelimitConfig(const boost::property_tree::ptree& _pt)
                                   "than flow_control.total_outgoing_bw_limit"));
     }
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimitConfig")
-                             << LOG_KV("rateLimitConfigEffect", m_rateLimitConfig.isConfigEffect())
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimiterConfig")
+                             << LOG_KV("enableRateLimit", m_rateLimiterConfig.enableRateLimit())
+                             << LOG_KV("statInterval", statInterval)
+                             << LOG_KV("enableDistributedRatelimit", enableDistributedRatelimit)
+                             << LOG_KV("enableDistributedRateLimitCache",
+                                    enableDistributedRateLimitCache)
+                             << LOG_KV("distributedRateLimitCachePercent",
+                                    distributedRateLimitCachePercent)
+                             << LOG_KV("enableGroupRateLimit", enableGroupRateLimit)
+                             << LOG_KV("enableConRateLimit", enableConRateLimit)
                              << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit)
                              << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit)
                              << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
                              << LOG_KV("moduleIDs", boost::join(modules, ","))
-                             << LOG_KV("ips size", m_rateLimitConfig.ip2BwLimit.size())
-                             << LOG_KV("groups size", m_rateLimitConfig.group2BwLimit.size());
+                             << LOG_KV("ips size", m_rateLimiterConfig.ip2BwLimit.size())
+                             << LOG_KV("groups size", m_rateLimiterConfig.group2BwLimit.size());
+
+    if (m_rateLimiterConfig.enableDistributedRatelimit)
+    {
+        GATEWAY_CONFIG_LOG(INFO)
+            << LOG_BADGE("initRateLimiterConfig")
+            << LOG_DESC(
+                   "distributed ratelimit switch is turn on, then load the redis configurations");
+
+        initRedisConfig(_pt);
+    }
+}
+
+// loads redis config
+void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
+{
+    /*
+    [redis]
+        server_ip=
+        server_port=
+        request_timeout=
+        connection_pool_size=
+        password=
+        db=
+     */
+
+    // server_ip
+    std::string redisServerIP = _pt.get<std::string>("redis.server_ip", "");
+    if (redisServerIP.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "initRedisConfig: invalid redis.server_ip! Must be non-empty!"));
+    }
+
+    if (!isValidIP(redisServerIP))
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "initRedisConfig: invalid redis.server_ip! Invalid ip format!"));
+    }
+
+    // server_port
+    uint16_t redisServerPort = _pt.get<uint16_t>("redis.server_port", 0);
+    if (!isValidPort(redisServerPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("initRedisConfig: invalid redis.server_port! "
+                                                  "redis port must be in range (1024,65535]!"));
+    }
+
+    // request_timeout
+    int32_t redisTimeout = _pt.get<int32_t>("redis.request_timeout", -1);
+
+    // connection_pool_size
+    int32_t redisPoolSize = _pt.get<int32_t>("redis.connection_pool_size", 16);
+
+    // password
+    std::string redisPassword = _pt.get<std::string>("redis.password", "");
+
+    // db
+    int redisDB = _pt.get<int>("redis.db", 0);
+
+    m_redisConfig.host = redisServerIP;
+    m_redisConfig.port = redisServerPort;
+    m_redisConfig.timeout = redisTimeout;
+    m_redisConfig.connectionPoolSize = redisPoolSize;
+    m_redisConfig.password = redisPassword;
+    m_redisConfig.db = redisDB;
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRedisConfig")
+                             << LOG_KV("redisServerIP", redisServerIP)
+                             << LOG_KV("redisServerPort", redisServerPort)
+                             << LOG_KV("redisDB", redisDB) << LOG_KV("redisTimeout", redisTimeout)
+                             << LOG_KV("redisPoolSize", redisPoolSize)
+                             << LOG_KV("redisPassword", redisPassword);
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)

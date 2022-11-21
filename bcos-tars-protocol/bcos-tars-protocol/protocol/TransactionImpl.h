@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "../Common.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Transaction.h>

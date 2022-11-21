@@ -26,7 +26,7 @@ using namespace bcos::protocol;
 using namespace bcos::crypto;
 
 PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
-  : m_config(_config), m_index(_index)
+  : m_config(std::move(_config)), m_index(_index)
 {}
 
 void PBFTCache::onCheckPointTimeout()
@@ -36,7 +36,7 @@ void PBFTCache::onCheckPointTimeout()
     {
         return;
     }
-    if (m_committedIndexNotifier && m_config->timer()->running() == false)
+    if (m_committedIndexNotifier && !m_config->timer()->running())
     {
         m_committedIndexNotifier(m_config->committedProposal()->index());
     }

@@ -26,6 +26,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/bind/bind.hpp>
+#include <utility>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
@@ -49,7 +50,7 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
 
     m_config->storage()->registerOnStableCheckPointCommitFailed(
         [this](Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal) {
-            onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
+            onStableCheckPointCommitFailed(std::move(_error), std::move(_stableProposal));
         });
 
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
@@ -111,7 +112,7 @@ void PBFTEngine::start()
     // when the node setup, start the timer for view recovery
     m_config->timer()->start();
     // register timeout handler
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     m_timer->registerTimeoutHandler([self]() {
         try
         {
@@ -183,7 +184,7 @@ void PBFTEngine::stop()
 void PBFTEngine::onLoadAndVerifyProposalFinish(
     bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal)
 {
-    // loadAnadVerify proposal failed
+    // loadAndVerify proposal failed
     if (_error || !_verifyResult)
     {
         RecursiveGuard l(m_mutex);
@@ -241,7 +242,6 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
     }
     m_config->setExpectedCheckPoint(m_config->committedProposal()->index() + 1);
     m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
-    return;
 }
 
 void PBFTEngine::onProposalApplySuccess(
@@ -297,7 +297,7 @@ void PBFTEngine::onProposalApplySuccess(
 void PBFTEngine::onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
     PBFTProposalInterface::Ptr _executedProposal)
 {
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     m_worker->enqueue([self, _errorCode, _proposal, _executedProposal]() {
         try
         {
@@ -447,24 +447,25 @@ void PBFTEngine::asyncNotifyNewBlock(
 void PBFTEngine::onReceivePBFTMessage(
     bcos::Error::Ptr _error, std::string const& _id, NodeIDPtr _nodeID, bytesConstRef _data)
 {
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
-    onReceivePBFTMessage(_error, _nodeID, _data, [_id, _nodeID, self](bytesConstRef _respData) {
-        try
-        {
-            auto engine = self.lock();
-            if (!engine)
+    auto self = weak_from_this();
+    onReceivePBFTMessage(
+        std::move(_error), _nodeID, _data, [_id, _nodeID, self](bytesConstRef _respData) {
+            try
             {
-                return;
+                auto engine = self.lock();
+                if (!engine)
+                {
+                    return;
+                }
+                engine->m_sendResponseHandler(_id, ModuleID::PBFT, _nodeID, _respData);
             }
-            engine->m_sendResponseHandler(_id, ModuleID::PBFT, _nodeID, _respData);
-        }
-        catch (std::exception const& e)
-        {
-            PBFT_LOG(WARNING) << LOG_DESC("onReceivePBFTMessage exception")
-                              << LOG_KV("fromNode", _nodeID->hex()) << LOG_KV("uuid", _id)
-                              << LOG_KV("error", boost::diagnostic_information(e));
-        }
-    });
+            catch (std::exception const& e)
+            {
+                PBFT_LOG(WARNING) << LOG_DESC("onReceivePBFTMessage exception")
+                                  << LOG_KV("fromNode", _nodeID->hex()) << LOG_KV("uuid", _id)
+                                  << LOG_KV("error", boost::diagnostic_information(e));
+            }
+        });
 }
 
 void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, bytesConstRef _data,
@@ -491,7 +492,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         // the committed proposal request message
         if (pbftMsg->packetType() == PacketType::CommittedProposalRequest)
         {
-            auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
                 try
                 {
@@ -513,7 +514,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         // the precommitted proposals request message
         if (pbftMsg->packetType() == PacketType::PreparedProposalRequest)
         {
-            auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
                 try
                 {
@@ -664,7 +665,7 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         PBFT_LOG(WARNING) << LOG_DESC("handleMsg: unknown PBFT message")
                           << LOG_KV("type", std::to_string(_msg->packetType()))
                           << LOG_KV("genIdx", _msg->generatedFrom())
-                          << LOG_KV("nodesef", m_config->nodeID()->hex());
+                          << LOG_KV("nodeSelf", m_config->nodeID()->hex());
         return;
     }
     }
@@ -856,7 +857,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         return true;
     }
     // verify the proposal
-    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    auto self = weak_from_this();
     auto leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
     if (!leaderNodeInfo)
     {
@@ -1070,7 +1071,7 @@ void PBFTEngine::sendViewChange(bcos::crypto::NodeIDPtr _dstNode)
     auto encodedData = m_config->codec()->encode(viewChangeReq);
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, _dstNode, ref(*encodedData), 0, nullptr);
+        ModuleID::PBFT, std::move(_dstNode), ref(*encodedData), 0, nullptr);
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1157,8 +1158,8 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
                           << printPBFTProposal(m_config->committedProposal());
         return false;
     }
-    // check the precommmitted proposals
-    for (auto precommitMsg : _viewChangeMsg->preparedProposals())
+    // check the precommitted proposals
+    for (const auto& precommitMsg : _viewChangeMsg->preparedProposals())
     {
         if (precommitMsg->view() > _viewChangeMsg->view())
         {
@@ -1237,7 +1238,7 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
     // check the viewchange
     uint64_t weight = 0;
     auto viewChangeList = _newViewMsg->viewChangeMsgList();
-    for (auto viewChangeReq : viewChangeList)
+    for (const auto& viewChangeReq : viewChangeList)
     {
         if (!isValidViewChangeMsg(_newViewMsg->from(), viewChangeReq))
         {
@@ -1303,7 +1304,8 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
     m_config->notifyResetSealing();
     auto const& prePrepareList = _newViewReq->prePrepareList();
     auto maxProposalIndex = m_config->committedProposal()->index();
-    for (auto prePrepare : prePrepareList)
+    auto self = weak_from_this();
+    for (const auto& prePrepare : prePrepareList)
     {
         // empty block proposal
         if (prePrepare->consensusProposal()->data().size() > 0)
@@ -1330,16 +1332,22 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
         // miss the cache, request to from node
         auto from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
         m_logSync->requestPrecommitData(
-            from->nodeID(), prePrepare, [this](PBFTMessageInterface::Ptr _prePrepare) {
+            from->nodeID(), prePrepare, [self](PBFTMessageInterface::Ptr _prePrepare) {
+                auto engine = self.lock();
+                if (!engine)
+                {
+                    return;
+                }
                 PBFT_LOG(INFO) << LOG_DESC(
                                       "reHandlePrePrepareProposals: get the "
                                       "missed proposal and handle now")
-                               << printPBFTMsgInfo(_prePrepare) << m_config->printCurrentState();
-                RecursiveGuard l(m_mutex);
-                handlePrePrepareMsg(_prePrepare, true, true, false);
+                               << printPBFTMsgInfo(_prePrepare)
+                               << engine->m_config->printCurrentState();
+                RecursiveGuard l(engine->m_mutex);
+                engine->handlePrePrepareMsg(_prePrepare, true, true, false);
             });
     }
-    if (prePrepareList.size() > 0)
+    if (!prePrepareList.empty())
     {
         // Note: in case of the reHandled proposals have system transactions, must
         // wait to reseal until all reHandled proposal committed
@@ -1364,7 +1372,13 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     // tried to commit the stable checkpoint
     m_cacheProcessor->removeConsensusedCache(m_config->view(), _ledgerConfig->blockNumber());
     m_cacheProcessor->tryToCommitStableCheckPoint();
-    m_cacheProcessor->resetTimer();
+    // Note: only the consensus-triggered finalize should resetTimer
+    // resetTimer will try to trigger-fast-viewchange when the leader disconnected or
+    // falling-far-behind
+    if (!_syncedBlock)
+    {
+        m_cacheProcessor->resetTimer();
+    }
 }
 
 bool PBFTEngine::handleCheckPointMsg(std::shared_ptr<PBFTMessageInterface> _checkPointMsg)
@@ -1473,8 +1487,14 @@ void PBFTEngine::onReceiveCommittedProposalRequest(
         sendCommittedProposalResponse(proposalList, _sendResponse);
         return;
     }
+    auto self = weak_from_this();
     m_config->storage()->asyncGetCommittedProposals(pbftRequest->index(), pbftRequest->size(),
-        [this, pbftRequest, _sendResponse](PBFTProposalListPtr _proposalList) {
+        [self, pbftRequest, _sendResponse](PBFTProposalListPtr _proposalList) {
+            auto engine = self.lock();
+            if (!engine)
+            {
+                return;
+            }
             // empty case
             if (!_proposalList || _proposalList->size() == 0)
             {
@@ -1487,7 +1507,7 @@ void PBFTEngine::onReceiveCommittedProposalRequest(
                 return;
             }
             // hit case
-            sendCommittedProposalResponse(*_proposalList, _sendResponse);
+            engine->sendCommittedProposalResponse(*_proposalList, _sendResponse);
         });
 }
 
@@ -1619,7 +1639,8 @@ void PBFTEngine::fetchAndUpdateLedgerConfig()
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
     m_ledgerFetcher->fetchBlockNumberAndHash();
     m_ledgerFetcher->fetchConsensusNodeList();
-    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to txpool
+    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
+    // txpool
     m_ledgerFetcher->fetchObserverNodeList();
     m_ledgerFetcher->fetchBlockTxCountLimit();
     m_ledgerFetcher->fetchConsensusLeaderPeriod();

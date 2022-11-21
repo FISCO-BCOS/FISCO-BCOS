@@ -33,7 +33,6 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/coroutine2/coroutine.hpp>
 #include <functional>
 #include <variant>
 
@@ -114,18 +113,15 @@ public:
     {
         std::stringstream prefix;
         prefix << std::setfill('0') << std::setw(36) << "0";
-        if (_a.find(prefix.str()) != 0)
-            return false;
-        return m_builtInPrecompiled->find(_a) != m_builtInPrecompiled->end();
+        return _a.starts_with(prefix.str()) && m_builtInPrecompiled->contains(_a);
     }
 
     inline bool isEthereumPrecompiled(const std::string& _a) const
     {
         std::stringstream prefix;
         prefix << std::setfill('0') << std::setw(39) << "0";
-        if (!m_evmPrecompiled || _a.find(prefix.str()) != 0)
-            return false;
-        return m_evmPrecompiled->find(_a) != m_evmPrecompiled->end();
+        return m_evmPrecompiled != nullptr && _a.starts_with(prefix.str()) &&
+               m_evmPrecompiled->contains(_a);
     }
 
     std::pair<bool, bytes> executeOriginPrecompiled(const std::string& _a, bytesConstRef _in) const;
@@ -178,7 +174,7 @@ protected:
 
         if (blockContext->isAuthCheck())
         {
-            if (_address.find(precompiled::SYS_ADDRESS_PREFIX) == 0)
+            if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
             {
                 return std::string(USER_SYS_PREFIX).append(_address);
             }
@@ -198,8 +194,10 @@ protected:
         return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
-    bool checkAuth(const CallParameters::UniquePtr& callParameters, bool _isCreate);
+    bool checkAuth(const CallParameters::UniquePtr& callParameters);
+    bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     bool checkContractAvailable(const CallParameters::UniquePtr& callParameters);
+    uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
 
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
@@ -222,7 +220,7 @@ protected:
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
 
     bcos::storage::Recoder::Ptr m_recoder;
-    std::shared_ptr<StorageWrapper> m_storageWrapper;
+    std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
 };
 
 }  // namespace executor

@@ -31,9 +31,7 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTConfig : public ConsensusConfig, public std::enable_shared_from_this<PBFTConfig>
 {
@@ -45,19 +43,22 @@ public:
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage)
-      : ConsensusConfig(_keyPair), m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
+      : ConsensusConfig(std::move(_keyPair)),
+        m_cryptoSuite(std::move(_cryptoSuite)),
+        m_pbftMessageFactory(std::move(_pbftMessageFactory)),
+        m_codec(std::move(_codec)),
+        m_validator(std::move(_validator)),
+        m_frontService(std::move(_frontService)),
+        m_stateMachine(std::move(_stateMachine)),
+        m_storage(std::move(_storage)),
+        m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
     {
-        m_cryptoSuite = _cryptoSuite;
-        m_pbftMessageFactory = _pbftMessageFactory;
-        m_codec = _codec;
-        m_validator = _validator;
-        m_frontService = _frontService;
-        m_stateMachine = _stateMachine;
-        m_storage = _storage;
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
+        m_pullTxsTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pullTxsTimer");
+        m_pullTxsTimer->registerTimeoutHandler(std::bind(&PBFTConfig::broadCastEmptyTxsReq, this));
     }
 
-    ~PBFTConfig() override {}
+    ~PBFTConfig() override = default;
 
     virtual void stop()
     {
@@ -70,6 +71,10 @@ public:
         if (m_timer)
         {
             m_timer->destroy();
+        }
+        if (m_pullTxsTimer)
+        {
+            m_pullTxsTimer->destroy();
         }
     }
     virtual void resetConfig(
@@ -209,7 +214,7 @@ public:
         {
             return;
         }
-        if (m_startRecovered.load() == false)
+        if (!m_startRecovered.load())
         {
             m_startRecovered.store(true);
         }
@@ -236,10 +241,12 @@ public:
         if (m_unsealedTxsSize > 0)
         {
             m_timer->restart();
+            m_pullTxsTimer->stop();
         }
         else
         {
             m_timer->stop();
+            m_pullTxsTimer->restart();
         }
     }
 
@@ -247,38 +254,44 @@ public:
         std::function<void(size_t, size_t, size_t, std::function<void(Error::Ptr)>)>
             _sealProposalNotifier)
     {
-        m_sealProposalNotifier = _sealProposalNotifier;
+        m_sealProposalNotifier = std::move(_sealProposalNotifier);
     }
 
     void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber)> _stateNotifier)
     {
-        m_stateNotifier = _stateNotifier;
+        m_stateNotifier = std::move(_stateNotifier);
     }
 
     void registerNewBlockNotifier(
         std::function<void(bcos::ledger::LedgerConfig::Ptr, std::function<void(Error::Ptr)>)>
             _newBlockNotifier)
     {
-        m_newBlockNotifier = _newBlockNotifier;
+        m_newBlockNotifier = std::move(_newBlockNotifier);
     }
 
     void registerSealerResetNotifier(
         std::function<void(std::function<void(Error::Ptr)>)> _sealerResetNotifier)
     {
-        m_sealerResetNotifier = _sealerResetNotifier;
+        m_sealerResetNotifier = std::move(_sealerResetNotifier);
     }
 
     void registerFaultyDiscriminator(
         std::function<bool(bcos::crypto::NodeIDPtr)> _faultyDiscriminator)
     {
-        m_faultyDiscriminator = _faultyDiscriminator;
+        m_faultyDiscriminator = std::move(_faultyDiscriminator);
     }
 
     virtual void notifyResetSealing(bcos::protocol::BlockNumber _consIndex)
     {
-        notifyResetSealing([this, _consIndex]() {
+        auto self = weak_from_this();
+        notifyResetSealing([self, _consIndex]() {
+            auto config = self.lock();
+            if (!config)
+            {
+                return;
+            }
             // notify the sealer to reseal
-            reNotifySealer(_consIndex);
+            config->reNotifySealer(_consIndex);
         });
     }
 
@@ -322,7 +335,7 @@ public:
 
     void registerFastViewChangeHandler(std::function<void()> _fastViewChangeHandler)
     {
-        m_fastViewChangeHandler = _fastViewChangeHandler;
+        m_fastViewChangeHandler = std::move(_fastViewChangeHandler);
     }
 
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet&& _connectedNodeList)
@@ -355,6 +368,8 @@ protected:
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
         size_t _maxTxsToSeal, size_t _retryTime = 0);
 
+    void broadCastEmptyTxsReq();
+
 
 protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
@@ -368,8 +383,12 @@ protected:
     std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
     StateMachineInterface::Ptr m_stateMachine;
     PBFTStorage::Ptr m_storage;
-    // Timer
+    // Timer, for pbft consensus
     PBFTTimer::Ptr m_timer;
+    // only for pull txs
+    //  trigger start: when m_timer.stop() && unsealTxs.size()==0
+    //  trigger stop: m_timer.start()
+    PBFTTimer::Ptr m_pullTxsTimer;
     // notify the sealer seal Proposal
     std::function<void(size_t, size_t, size_t, std::function<void(Error::Ptr)>)>
         m_sealProposalNotifier;
@@ -419,5 +438,4 @@ protected:
 
     mutable RecursiveMutex m_mutex;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

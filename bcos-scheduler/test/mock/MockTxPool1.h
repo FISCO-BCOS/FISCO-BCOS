@@ -1,13 +1,13 @@
 #pragma once
 
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-scheduler/src/Common.h"
+#include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -21,7 +21,12 @@ public:
     using Ptr = std::shared_ptr<MockTxPool1>();
     void start() override {}
     void stop() override {}
-    void asyncSubmit(bytesPointer, bcos::protocol::TxSubmitCallback) override {}
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override
+    {
+        co_return nullptr;
+    }
+
     void asyncSealTxs(uint64_t, bcos::txpool::TxsHashSetPtr,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
         override

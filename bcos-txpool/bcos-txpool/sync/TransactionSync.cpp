@@ -74,6 +74,7 @@ void TransactionSync::executeWorker()
     }
     if (m_config->existsInGroup() && downloadTxsBufferEmpty() && m_newTransactions.load())
     {
+        // TODO: Disable maintain transactions
         maintainTransactions();
     }
     if (!m_config->existsInGroup() || (!m_newTransactions && downloadTxsBufferEmpty()))
@@ -112,7 +113,7 @@ void TransactionSync::onRecvSyncMessage(
         // receive txs request, and response the transactions
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsRequestPacket)
         {
-            auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+            auto self = weak_from_this();
             m_worker->enqueue([self, txsSyncMsg, _sendResponse, _nodeID]() {
                 try
                 {
@@ -133,7 +134,7 @@ void TransactionSync::onRecvSyncMessage(
         }
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
         {
-            auto self = std::weak_ptr<TransactionSync>(shared_from_this());
+            auto self = weak_from_this();
             m_txsRequester->enqueue([self, _nodeID, txsSyncMsg]() {
                 try
                 {
@@ -206,18 +207,25 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
     auto missedTxsSet =
         std::make_shared<std::set<HashType>>(_missedTxs->begin(), _missedTxs->end());
     auto startT = utcTime();
+    auto self = weak_from_this();
     m_config->ledger()->asyncGetBatchTxsByHashList(_missedTxs, false,
-        [this, startT, _verifiedProposal, missedTxsSet, _generatedNodeID, _onVerifyFinished](
+        [self, startT, _verifiedProposal, missedTxsSet, _generatedNodeID, _onVerifyFinished](
             Error::Ptr _error, TransactionsPtr _fetchedTxs,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>>) {
+            auto txsSync = self.lock();
+            if (!txsSync)
+            {
+                return;
+            }
             // hit all the txs
-            auto missedTxsSize = this->onGetMissedTxsFromLedger(
+            auto missedTxsSize = txsSync->onGetMissedTxsFromLedger(
                 *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished);
             if (missedTxsSize == 0)
             {
                 return;
             }
-            if (!_generatedNodeID || _generatedNodeID->data() == m_config->nodeID()->data())
+            if (!_generatedNodeID ||
+                _generatedNodeID->data() == txsSync->m_config->nodeID()->data())
             {
                 SYNC_LOG(WARNING)
                     << LOG_DESC("requestMissedTxs failed from the ledger for Transaction missing")
@@ -242,7 +250,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                 << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeader() ?
                                       _verifiedProposal->blockHeader()->hash().abridged() :
                                       "null");
-            this->requestMissedTxsFromPeer(
+            txsSync->requestMissedTxsFromPeer(
                 _generatedNodeID, ledgerMissedTxs, _verifiedProposal, _onVerifyFinished);
         });
 }
@@ -259,7 +267,7 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
         return _missedTxs.size();
     }
     // import and verify the transactions
-    auto ret = this->importDownloadedTxs(m_config->nodeID(), _fetchedTxs, _verifiedProposal);
+    auto ret = importDownloadedTxs(m_config->nodeID(), _fetchedTxs, _verifiedProposal);
     if (!ret)
     {
         SYNC_LOG(WARNING) << LOG_DESC("onGetMissedTxsFromLedger: verify tx failed");
@@ -292,13 +300,12 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
 void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
     Block::Ptr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
-    auto startT = utcTime();
     BlockHeader::Ptr proposalHeader = nullptr;
     if (_verifiedProposal)
     {
         proposalHeader = _verifiedProposal->blockHeader();
     }
-    if (_missedTxs->size() == 0 && _onVerifyFinished)
+    if (_missedTxs->empty() && _onVerifyFinished)
     {
         _onVerifyFinished(nullptr, true);
         return;
@@ -310,9 +317,9 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     auto txsRequest =
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
     auto encodedData = txsRequest->encode();
-    startT = utcTime();
-    auto self = std::weak_ptr<TransactionSync>(shared_from_this());
-    m_config->frontService()->asyncSendMessageByNodeID(protocolID, _generatedNodeID,
+    auto startT = utcTime();
+    auto self = weak_from_this();
+    m_config->frontService()->asyncSendMessageByNodeID(protocolID, std::move(_generatedNodeID),
         ref(*encodedData), m_config->networkTimeout(),
         [self, startT, _missedTxs, _verifiedProposal, proposalHeader, _onVerifyFinished](
             Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data, const std::string&,
@@ -412,7 +419,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("hash",
                               (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
                        << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1);
-        // response the verify result
+        // response to verify result
         _onVerifyFinished(
             std::make_shared<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
             false);
@@ -463,14 +470,20 @@ void TransactionSync::maintainDownloadingTransactions()
             << LOG_KV("shardSize", m_downloadTxsBuffer->size());
         return;
     }
+    auto self = weak_from_this();
     for (size_t i = 0; i < localBuffer->size(); ++i)
     {
         auto txsBuffer = (*localBuffer)[i];
         auto transactions =
             m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
         // async here to accelerate the txs process
-        m_worker->enqueue([this, txsBuffer, transactions]() {
-            importDownloadedTxs(txsBuffer->from(), transactions);
+        m_worker->enqueue([self, txsBuffer, transactions]() {
+            auto txsSync = self.lock();
+            if (!txsSync)
+            {
+                return;
+            }
+            txsSync->importDownloadedTxs(txsBuffer->from(), transactions);
         });
     }
 }
@@ -483,13 +496,13 @@ bool TransactionSync::importDownloadedTxs(
     {
         txs->emplace_back(std::const_pointer_cast<Transaction>(_txsBuffer->transaction(i)));
     }
-    return importDownloadedTxs(_fromNode, txs, _verifiedProposal);
+    return importDownloadedTxs(std::move(_fromNode), txs, std::move(_verifiedProposal));
 }
 
 bool TransactionSync::importDownloadedTxs(
     NodeIDPtr _fromNode, TransactionsPtr _txs, Block::Ptr _verifiedProposal)
 {
-    if (_txs->size() == 0)
+    if (_txs->empty())
     {
         return true;
     }
@@ -507,8 +520,8 @@ bool TransactionSync::importDownloadedTxs(
     // verify the transactions
     std::atomic_bool verifySuccess = {true};
     tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, txsSize), [&](const tbb::blocked_range<size_t>& _r) {
-            for (size_t i = _r.begin(); i < _r.end(); i++)
+        tbb::blocked_range<size_t>(0, txsSize), [&](const tbb::blocked_range<size_t>& _range) {
+            for (size_t i = _range.begin(); i < _range.end(); i++)
             {
                 auto tx = (*_txs)[i];
                 if (!tx)
@@ -572,7 +585,7 @@ void TransactionSync::maintainTransactions()
     auto consensusNodeList = m_config->consensusNodeList();
     auto connectedNodeList = m_config->connectedNodeList();
     // only one node
-    if (connectedNodeList.size() == 0)
+    if (connectedNodeList.empty())
     {
         m_newTransactions = false;
         return;
@@ -584,7 +597,7 @@ void TransactionSync::maintainTransactions()
         return;
     }
     auto txs = m_config->txpoolStorage()->fetchNewTxs(c_maxSendTransactions);
-    if (txs->size() == 0)
+    if (txs->empty())
     {
         m_newTransactions = false;
         return;
@@ -599,7 +612,7 @@ void TransactionSync::forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connecte
 {
     auto expectedPeers = (_connectedPeers.size() * m_config->forwardPercent() + 99) / 100;
     std::map<NodeIDPtr, HashListPtr, KeyCompare> peerToForwardedTxs;
-    for (auto tx : *_txs)
+    for (const auto& tx : *_txs)
     {
         // Note: in some cases the tx may be a empty shared_ptr with _vptr.Transaction to be 0x0
         // add determination here to in case of coredump
@@ -613,7 +626,7 @@ void TransactionSync::forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connecte
             continue;
         }*/
         auto selectedPeers = selectPeers(tx, _connectedPeers, _consensusNodeList, expectedPeers);
-        for (auto peer : *selectedPeers)
+        for (const auto& peer : *selectedPeers)
         {
             if (!peerToForwardedTxs.count(peer))
             {
@@ -627,7 +640,7 @@ void TransactionSync::forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connecte
     {
         auto peer = it.first;
         auto txsHash = it.second;
-        if (txsHash->size() == 0)
+        if (txsHash->empty())
         {
             continue;
         }
@@ -647,11 +660,11 @@ NodeIDListPtr TransactionSync::selectPeers(Transaction::ConstPtr _tx,
     size_t _expectedSize)
 {
     auto selectedPeers = std::make_shared<NodeIDs>();
-    for (auto consensusNode : _consensusNodeList)
+    for (const auto& consensusNode : _consensusNodeList)
     {
         auto nodeId = consensusNode->nodeID();
         // check connection
-        if (!_connectedPeers.count(nodeId))
+        if (!_connectedPeers.contains(nodeId))
         {
             continue;
         }
@@ -681,7 +694,7 @@ void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
 {
     auto block = m_config->blockFactory()->createBlock();
     // get the transactions from RPC
-    for (auto tx : *_txs)
+    for (const auto& tx : *_txs)
     {
         if (!tx->submitCallback())
         {
@@ -689,7 +702,7 @@ void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
         }
         for (auto const& node : _consensusNodeList)
         {
-            if (!_connectedPeers.count(node->nodeID()))
+            if (!_connectedPeers.contains(node->nodeID()))
             {
                 continue;
             }
@@ -721,13 +734,13 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
     {
         maintainDownloadingTransactions();
     }
-    if (_txsStatus->txsHash().size() == 0)
+    if (_txsStatus->txsHash().empty())
     {
         responseTxsStatus(_fromNode);
         return;
     }
     auto requestTxs = m_config->txpoolStorage()->filterUnknownTxs(_txsStatus->txsHash(), _fromNode);
-    if (requestTxs->size() == 0)
+    if (requestTxs->empty())
     {
         return;
     }
@@ -740,7 +753,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
 {
     auto txsHash = m_config->txpoolStorage()->getAllTxsHash();
-    if (txsHash->size() == 0)
+    if (txsHash->empty())
     {
         return;
     }

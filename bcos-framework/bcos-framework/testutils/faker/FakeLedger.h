@@ -22,8 +22,6 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
-#include "bcos-protocol/testutils/protocol/FakeBlock.h"
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include <bcos-utilities/ThreadPool.h>
 
 using namespace bcos;
@@ -165,6 +163,7 @@ public:
         {
             auto txData = (*_txToStore)[i];
             m_txsHashToData[hash] = txData;
+            i++;
         }
         _onTxStored(nullptr);
     }
