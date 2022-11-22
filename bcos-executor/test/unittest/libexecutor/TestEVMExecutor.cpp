@@ -186,6 +186,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -260,6 +261,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
+    blockHeader2->setParentInfo({{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}});
     ledger->setBlockNumber(blockHeader2->number() - 1);
     std::promise<void> nextPromise2;
     executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
@@ -421,6 +423,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -808,6 +811,7 @@ BOOST_AUTO_TEST_CASE(performance)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
+        blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1020,6 +1024,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1136,6 +1141,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
+        blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1317,7 +1323,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
-
+        blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
 
         std::promise<void> nextPromise;
@@ -1473,6 +1479,7 @@ contract DelegateCallTest {
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
+    blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1555,6 +1562,207 @@ contract DelegateCallTest {
     BOOST_CHECK_EQUAL(result->delegateCallAddress(), "0000000000000000000000000000000000001001");
     BOOST_CHECK_EQUAL(result->delegateCallSender(), sender);
     BOOST_CHECK(result->keyLocks().empty());
+}
+
+BOOST_AUTO_TEST_CASE(selfdestruct)
+{
+    // test-bcos-executor -t TestTransactionExecutor/selfdestruct
+
+    /*
+   pragma solidity>=0.6.10 <0.8.20;
+
+contract HelloWorld {
+    string name;
+
+    constructor() public {
+        name = "Hello, World!";
+    }
+
+    function get() public view returns (string memory) {
+        return name;
+    }
+
+    function set(string memory n) public {
+        name = n;
+    }
+
+    function selfdestructTest() public {
+        selfdestruct(payable(address(0)));
+    }
+}
+
+{
+    "6d4ce63c": "get()",
+    "fa967e1f": "selfdestructTest()",
+    "4ed3885e": "set(string)"
+}
+        */
+
+    std::string codeBin =
+        "608060405234801561001057600080fd5b506040518060400160405280600d81526020017f48656c6c6f2c2057"
+        "6f726c6421000000000000000000000000000000000000008152506000908051906020019061005c9291906100"
+        "62565b50610166565b82805461006e90610105565b90600052602060002090601f016020900481019282610090"
+        "57600085556100d7565b82601f106100a957805160ff19168380011785556100d7565b82800160010185558215"
+        "6100d7579182015b828111156100d65782518255916020019190600101906100bb565b5b5090506100e4919061"
+        "00e8565b5090565b5b808211156101015760008160009055506001016100e9565b5090565b6000600282049050"
+        "600182168061011d57607f821691505b6020821081141561013157610130610137565b5b50919050565b7f4e48"
+        "7b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b61"
+        "04d7806101756000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c"
+        "80634ed3885e146100465780636d4ce63c14610062578063fa967e1f14610080575b600080fd5b610060600480"
+        "360381019061005b9190610263565b61008a565b005b61006a6100a4565b60405161007791906102e5565b6040"
+        "5180910390f35b610088610136565b005b80600090805190602001906100a0929190610150565b5050565b6060"
+        "600080546100b3906103bb565b80601f0160208091040260200160405190810160405280929190818152602001"
+        "8280546100df906103bb565b801561012c5780601f106101015761010080835404028352916020019161012c56"
+        "5b820191906000526020600020905b81548152906001019060200180831161010f57829003601f168201915b50"
+        "50505050905090565b600073ffffffffffffffffffffffffffffffffffffffff16ff5b82805461015c906103bb"
+        "565b90600052602060002090601f01602090048101928261017e57600085556101c5565b82601f106101975780"
+        "5160ff19168380011785556101c5565b828001600101855582156101c5579182015b828111156101c457825182"
+        "55916020019190600101906101a9565b5b5090506101d291906101d6565b5090565b5b808211156101ef576000"
+        "8160009055506001016101d7565b5090565b60006102066102018461032c565b610307565b9050828152602081"
+        "0184848401111561022257610221610481565b5b61022d848285610379565b509392505050565b600082601f83"
+        "011261024a5761024961047c565b5b813561025a8482602086016101f3565b91505092915050565b6000602082"
+        "840312156102795761027861048b565b5b600082013567ffffffffffffffff8111156102975761029661048656"
+        "5b5b6102a384828501610235565b91505092915050565b60006102b78261035d565b6102c18185610368565b93"
+        "506102d1818560208601610388565b6102da81610490565b840191505092915050565b60006020820190508181"
+        "0360008301526102ff81846102ac565b905092915050565b6000610311610322565b905061031d82826103ed56"
+        "5b919050565b6000604051905090565b600067ffffffffffffffff8211156103475761034661044d565b5b6103"
+        "5082610490565b9050602081019050919050565b600081519050919050565b6000828252602082019050929150"
+        "50565b82818337600083830152505050565b60005b838110156103a65780820151818401526020810190506103"
+        "8b565b838111156103b5576000848401525b50505050565b600060028204905060018216806103d357607f8216"
+        "91505b602082108114156103e7576103e661041e565b5b50919050565b6103f682610490565b810181811067ff"
+        "ffffffffffffff821117156104155761041461044d565b5b80604052505050565b7f4e487b7100000000000000"
+        "000000000000000000000000000000000000000000600052602260045260246000fd5b7f4e487b710000000000"
+        "0000000000000000000000000000000000000000000000600052604160045260246000fd5b600080fd5b600080"
+        "fd5b600080fd5b600080fd5b6000601f19601f830116905091905056fea2646970667358221220b86cdade4230"
+        "cd8c479fc0822250b79a3f731a0e6d2dd04df1f043536198e02464736f6c63430008070033";
+
+
+    bytes input;
+    boost::algorithm::unhex(codeBin, std::back_inserter(input));
+
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310f");
+    std::string address = addressCreate.hex().substr(0, 40);
+    params->setTo(address);
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::MESSAGE);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+    blockHeader->setNumber(1);
+    blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------------
+    // Deploy
+    // --------------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+
+    auto result = executePromise.get_future().get();
+
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+
+
+    // --------------------------------
+    // Get code
+    // --------------------------------
+    std::promise<bcos::bytes> executePromise1;
+    executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
+        BOOST_CHECK(!error);
+        BOOST_CHECK(!code.empty());
+        BOOST_CHECK_GT(code.size(), 0);
+        executePromise1.set_value(code);
+    });
+    auto code = executePromise1.get_future().get();
+
+    // --------------------------------
+    // selfdestruct
+    // --------------------------------
+    std::string testFailedSelector = "fa967e1f";
+    input = bcos::bytes();
+    boost::algorithm::unhex(testFailedSelector, std::back_inserter(input));
+
+    tx = fakeTransaction(cryptoSuite, keyPair, "", input, 102, 100002, "1", "1");
+    sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(101);
+    params->setSeq(1001);
+    params->setDepth(0);
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+    // The contract address
+    params->setTo(address);
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::MESSAGE);
+    params->setTransactionHash(hash);
+    params->setCreate(false);
+    params->setDelegateCall(false);
+    params->setDelegateCallCode(code);
+    params->setDelegateCallSender(sender);
+    params->setDelegateCallAddress(address);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
+    executePromise2.get_future().get();
+
+    // --------------------------------
+    // Get code again(should not get)
+    // --------------------------------
+    std::promise<bcos::bytes> executePromise3;
+    executor->getHash(1, [&](bcos::Error::UniquePtr, crypto::HashType) {
+        executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(code.empty());
+            BOOST_CHECK_EQUAL(code.size(), 0);
+            executePromise3.set_value(code);
+        });
+    });
+
+    executePromise3.get_future().get();
 }
 
 

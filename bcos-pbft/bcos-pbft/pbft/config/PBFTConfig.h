@@ -31,10 +31,7 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 
-#include <utility>
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTConfig : public ConsensusConfig, public std::enable_shared_from_this<PBFTConfig>
 {
@@ -57,6 +54,8 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
     {
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
+        m_pullTxsTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pullTxsTimer");
+        m_pullTxsTimer->registerTimeoutHandler(std::bind(&PBFTConfig::broadCastEmptyTxsReq, this));
     }
 
     ~PBFTConfig() override = default;
@@ -72,6 +71,10 @@ public:
         if (m_timer)
         {
             m_timer->destroy();
+        }
+        if (m_pullTxsTimer)
+        {
+            m_pullTxsTimer->destroy();
         }
     }
     virtual void resetConfig(
@@ -238,10 +241,12 @@ public:
         if (m_unsealedTxsSize > 0)
         {
             m_timer->restart();
+            m_pullTxsTimer->stop();
         }
         else
         {
             m_timer->stop();
+            m_pullTxsTimer->restart();
         }
     }
 
@@ -363,6 +368,8 @@ protected:
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
         size_t _maxTxsToSeal, size_t _retryTime = 0);
 
+    void broadCastEmptyTxsReq();
+
 
 protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
@@ -376,8 +383,12 @@ protected:
     std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
     StateMachineInterface::Ptr m_stateMachine;
     PBFTStorage::Ptr m_storage;
-    // Timer
+    // Timer, for pbft consensus
     PBFTTimer::Ptr m_timer;
+    // only for pull txs
+    //  trigger start: when m_timer.stop() && unsealTxs.size()==0
+    //  trigger stop: m_timer.start()
+    PBFTTimer::Ptr m_pullTxsTimer;
     // notify the sealer seal Proposal
     std::function<void(size_t, size_t, size_t, std::function<void(Error::Ptr)>)>
         m_sealProposalNotifier;
@@ -427,5 +438,4 @@ protected:
 
     mutable RecursiveMutex m_mutex;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

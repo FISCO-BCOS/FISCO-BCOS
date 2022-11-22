@@ -22,6 +22,7 @@
 #include "../../../src/executive/ExecutiveStackFlow.h"
 #include "../../../src/executive/ExecutiveState.h"
 #include "../mock/MockExecutiveFactory.h"
+#include "../mock/MockLedger.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -72,8 +73,10 @@ struct ExecutiveStackFlowFixture
             }
         }
 
+        LedgerCache::Ptr ledgerCache =
+            std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
-            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
             blockContext, nullptr, nullptr, nullptr, nullptr);
@@ -86,12 +89,12 @@ struct ExecutiveStackFlowFixture
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestExecutiveStackFlow, ExecutiveStackFlowFixture)
-
 BOOST_AUTO_TEST_CASE(RunTest)
 {
-#if 0
+    /*
     EXECUTOR_LOG(DEBUG) << "RunTest begin";
-    std::shared_ptr<std::vector<int64_t>> sequence = make_shared<std::vector<int64_t>>();
+    //    std::shared_ptr<std::vector<int64_t>> sequence = make_shared<std::vector<int64_t>>();
+    auto sequence = std::make_shared<tbb::concurrent_vector<int64_t>>();
     ExecutiveStackFlow::Ptr executiveStackFlow =
         std::make_shared<ExecutiveStackFlow>(executiveFactory);
     BOOST_CHECK(executiveStackFlow != nullptr);
@@ -104,6 +107,8 @@ BOOST_AUTO_TEST_CASE(RunTest)
     executiveStackFlow->submit(std::move(input1));
     EXECUTOR_LOG(DEBUG) << "submit 1 transaction success!";
 
+    std::promise<void> finish1;
+    std::promise<void> finish2;
 
     executiveStackFlow->asyncRun(
         // onTxReturn
@@ -113,7 +118,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
             sequence->push_back(output->contextID);
         },
         // onFinished
-        [sequence](bcos::Error::UniquePtr error) {
+        [sequence,&finish1](bcos::Error::UniquePtr error) {
             if (error != nullptr)
             {
                 EXECUTOR_LOG(ERROR)
@@ -128,6 +133,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
                 EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
                 BOOST_CHECK_EQUAL(sequence->size(), 15);
             }
+            finish1.set_value();
         });
 
     executiveStackFlow->asyncRun(
@@ -138,7 +144,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
             sequence->push_back(output->contextID);
         },
         // onFinished
-        [sequence](bcos::Error::UniquePtr error) {
+        [sequence,&finish2](bcos::Error::UniquePtr error) {
             if (error != nullptr)
             {
                 EXECUTOR_LOG(ERROR)
@@ -152,7 +158,11 @@ BOOST_AUTO_TEST_CASE(RunTest)
             {
                 EXECUTOR_LOG(DEBUG) << "all transaction perform end.";
             }
+            finish2.set_value();
         });
+
+    finish1.get_future().get();
+    finish2.get_future().get();
 
     EXECUTOR_LOG(DEBUG) << "asyncRun end. " << LOG_KV("the sequence size is :", sequence->size());
     [[maybe_unused]] bool flag = true;
@@ -175,8 +185,9 @@ BOOST_AUTO_TEST_CASE(RunTest)
             }
         }
     }
+    /// FIXME
     // BOOST_CHECK(flag);
-#endif
+    */
 }
 
 BOOST_AUTO_TEST_SUITE_END()

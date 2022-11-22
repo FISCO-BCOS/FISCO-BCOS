@@ -130,11 +130,11 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isWasm(isWasm),
     m_keyPageSize(keyPageSize),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
-    m_ledgerFetcher(std::make_shared<bcos::tool::LedgerConfigFetcher>(ledger))
+    m_ledgerCache(std::make_shared<LedgerCache>(ledger))
 {
     assert(m_backendStorage);
-    m_ledgerFetcher->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+    m_ledgerCache->fetchCompatibilityVersion();
+    m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -227,11 +227,6 @@ void TransactionExecutor::initEvmEnvironment()
     m_constantPrecompiled->insert(
         {RING_SIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    storage::StorageInterface::Ptr storage = m_backendStorage;
-    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
-    DagTransferPrecompiled::createDagTable(storage);
-
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 
@@ -277,10 +272,6 @@ void TransactionExecutor::initWasmEnvironment()
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    storage::StorageInterface::Ptr storage = m_backendStorage;
-    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
-    DagTransferPrecompiled::createDagTable(storage);
 
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
@@ -289,12 +280,19 @@ void TransactionExecutor::initWasmEnvironment()
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
 }
 
+void TransactionExecutor::initTestPrecompiled(storage::StorageInterface::Ptr storage)
+{
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
+    DagTransferPrecompiled::createDagTable(storage);
+}
+
 BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, currentHeader,
-        m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
+        currentHeader, m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
 
     if (f_onNeedSwitchEvent)
     {
@@ -308,8 +306,8 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
+        blockNumber, blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
 
     return context;
 }
@@ -334,7 +332,11 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
-                                << LOG_KV("schedulerTermId", schedulerTermId);
+                                << LOG_KV("schedulerTermId", schedulerTermId)
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo()[0].blockHash.abridged() :
+                                           "null");
         m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -401,10 +403,26 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage);
             m_stateStorages.emplace_back(blockHeader->number(), stateStorage);
+
+            if (blockHeader->number() == 0)
+            {
+                initTestPrecompiled(stateStorage);
+            }
+        }
+
+        // cache parentHash
+        if (blockHeader->number() > 0)
+        {
+            m_ledgerCache->setBlockNumber2Hash(
+                blockHeader->number() - 1, blockHeader->parentInfo()[0].blockHash);
         }
 
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
-                                << LOG_KV("number", blockHeader->number());
+                                << LOG_KV("number", blockHeader->number())
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo()[0].blockHash.abridged() :
+                                           "null");
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -1013,6 +1031,9 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
 
         return;
     }
+
+    // remove suicides beforehand
+    m_blockContext->killSuicides();
 
     auto hash = last.storage->hash(m_hashImpl);
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
@@ -1762,8 +1783,8 @@ void TransactionExecutor::commit(
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
-        m_ledgerFetcher->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerFetcher->ledgerConfig()->compatibilityVersion();
+        m_ledgerCache->fetchCompatibilityVersion();
+        m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
 
         removeCommittedState();
 
@@ -1858,7 +1879,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
         }
     }
     // create temp state storage
@@ -1976,7 +1997,7 @@ void TransactionExecutor::getABI(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.front().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
         }
     }
     // create temp state storage
@@ -2430,6 +2451,8 @@ void TransactionExecutor::removeCommittedState()
             it->storage->setPrev(m_backendStorage);
         }
     }
+
+    m_ledgerCache->clearCacheByNumber(number);
 }
 
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
@@ -2469,8 +2492,15 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
-    callParameters->origin = input.origin();
-    callParameters->senderAddress = input.from();
+    constexpr static auto addressSize = Address::SIZE * 2;
+    if (staticCall)
+    {
+        // padding zero
+        callParameters->origin = std::string(addressSize - input.origin().size(), '0');
+        callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
+    }
+    callParameters->origin += input.origin();
+    callParameters->senderAddress += input.from();
     callParameters->receiveAddress = input.to();
     callParameters->codeAddress = input.to();
     callParameters->create = input.create();
@@ -2494,6 +2524,20 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     if (input.delegateCall())
     {
         callParameters->codeAddress = input.delegateCallAddress();
+    }
+
+    if (!m_isWasm)
+    {
+        if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->codeAddress.insert(
+                0, callParameters->codeAddress.size() - addressSize, '0');
+        }
+        if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->receiveAddress.insert(
+                0, callParameters->receiveAddress.size() - addressSize, '0');
+        }
     }
 
     return callParameters;
@@ -2524,6 +2568,21 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
+
+    if (!m_isWasm)
+    {
+        constexpr static auto addressSize = Address::SIZE * 2;
+        if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->codeAddress.insert(
+                0, callParameters->codeAddress.size() - addressSize, '0');
+        }
+        if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
+        {
+            callParameters->receiveAddress.insert(
+                0, callParameters->receiveAddress.size() - addressSize, '0');
+        }
+    }
     return callParameters;
 }
 

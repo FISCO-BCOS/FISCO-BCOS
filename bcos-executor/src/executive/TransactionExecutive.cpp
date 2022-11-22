@@ -90,7 +90,10 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    }
     auto newSeq = seq() + 1;
     bool isCreate = input->create;
     input->seq = newSeq;
@@ -195,7 +198,10 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     // update seq
     m_seq = executive->seq();
 
-    EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
+    }
     return output;
 }
 

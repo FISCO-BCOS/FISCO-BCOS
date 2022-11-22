@@ -24,6 +24,7 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-ledger/src/libledger/utilities/Common.h>
 #include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -271,6 +272,20 @@ void SystemConfigPrecompiled::upgradeChain(
                                   << LOG_DESC("rebuildBfs failed")
                                   << LOG_KV("status", response->status);
             BOOST_THROW_EXCEPTION(PrecompiledError("Rebuild BFS error."));
+        }
+
+        // create new system tables of 3.1.0
+        // clang-format off
+            std::string_view tables[] = {
+                SYS_CODE_BINARY, bcos::ledger::SYS_VALUE,
+                SYS_CONTRACT_ABI, bcos::ledger::SYS_VALUE,
+            };
+        // clang-format on
+        size_t total = sizeof(tables) / sizeof(std::string_view);
+
+        for (size_t i = 0; i < total; i += 2)
+        {
+            _executive->storage().createTable(std::string(tables[i]), std::string(tables[i + 1]));
         }
     }
 }

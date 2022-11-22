@@ -159,7 +159,7 @@ public:
         auto params2 = std::make_unique<NativeExecutionMessage>();
         params2->setTransactionHash(hash);
         params2->setContextID(_number);
-        params2->setSeq(1000);
+        params2->setSeq(1001);
         params2->setDepth(0);
         params2->setFrom(sender);
         params2->setTo(helloAddress);
@@ -812,6 +812,64 @@ BOOST_AUTO_TEST_CASE(abolishTest)
     }
 }
 
+BOOST_AUTO_TEST_CASE(parallelSetTest)
+{
+    Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
+    BlockNumber number = 2;
+
+    // setAccountStatus account not exist
+    {
+        auto response = setAccountStatus(number++, newAccount, 0);
+        BOOST_CHECK(response->status() == 0);
+        int32_t result = -1;
+        codec->decode(response->data(), result);
+        BOOST_CHECK(result == 0);
+    }
+
+    // use account to deploy
+    {
+        auto response1 = deployHelloInAuthCheck(helloAddress, number++, newAccount);
+        BOOST_CHECK(response1->status() == 0);
+        auto response2 = helloSet(number++, "test1", 0, newAccount);
+        BOOST_CHECK(response2->status() == 0);
+        auto response3 = helloGet(number++, 0, newAccount);
+        std::string hello;
+        codec->decode(response3->data(), hello);
+        BOOST_CHECK(hello == "test1");
+    }
+
+    // setAccountStatus account exist, freeze account, in the same block, still can call
+    {
+        auto num = number++;
+        nextBlock(num);
+        auto response = setAccountStatus(-1, newAccount, 1, 0, true);
+        BOOST_CHECK(response->status() == 0);
+        int32_t result = -1;
+        codec->decode(response->data(), result);
+        BOOST_CHECK(result == 0);
+
+        // get last status
+        auto rsp2 = getAccountStatus(-1, newAccount);
+        BOOST_CHECK(rsp2->status() == 0);
+        uint8_t status = UINT8_MAX;
+        codec->decode(rsp2->data(), status);
+        BOOST_CHECK(status == 0);
+
+        auto response2 = helloSet(-1, "test2", 0, newAccount);
+        BOOST_CHECK(response2->status() == 0);
+        auto response3 = helloGet(-1, 0, newAccount);
+        std::string hello;
+        codec->decode(response3->data(), hello);
+        BOOST_CHECK(hello == "test2");
+        commitBlock(num);
+    }
+
+    // next block will be frozen
+    {
+        auto response2 = helloSet(number++, "test2", 0, newAccount);
+        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::AccountFrozen);
+    }
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

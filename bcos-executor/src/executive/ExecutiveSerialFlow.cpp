@@ -40,10 +40,15 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
 {
     try
     {
-        asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+        auto self = std::weak_ptr<ExecutiveSerialFlow>(shared_from_this());
+        asyncTo([self, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
             try
             {
-                run(onTxReturn, onFinished);
+                auto flow = self.lock();
+                if (flow)
+                {
+                    flow->run(onTxReturn, onFinished);
+                }
             }
             catch (std::exception& e)
             {

@@ -34,6 +34,7 @@ using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
 static const char* const SYS_VALUE = "value";
 static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
+static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
 
 // FileSystem paths
 static const char* const FS_ROOT = "/";
