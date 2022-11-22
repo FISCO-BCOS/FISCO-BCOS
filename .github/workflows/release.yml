@@ -121,7 +121,7 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2022-07-28
           override: true
       - name: configure and compile
         run: |
