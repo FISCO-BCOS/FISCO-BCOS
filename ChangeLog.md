@@ -1,3 +1,50 @@
+### 3.1.0
+
+(2022-11-22)
+
+**新增**
+
+* 账户冻结解冻功能
+* 网关分布式限流功能
+* 网络压缩功能
+* 共识对时功能
+* 合约二进制与ABI存储优化
+* 出块时间可配
+* 适配EVM的delegatecall，extcodeHash，blockHash等接口
+
+**更改**
+
+* DBHash 计算逻辑更新，提升校验稳定性
+* chain配置项从config.ini中挪出，修改为在config.genesis创世块中配置
+
+**修复**
+
+* 虚拟机接口功能问题： [#2598](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2598), [#3118](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3118)
+* tikv client 问题：[#2600](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2598)
+* 依赖库使用：[#2625](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2625)
+* CRUD接口问题：[#2910](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2910)
+* docker 镜像：[#3051](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3051)
+
+**兼容性**
+
+* 历史链数据
+
+  当前链已有数据为如下版本时，是否可替换节点二进制完成升级
+
+  * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需在所有节点二进制替换完成后用[控制台将链版本升级为当前版本](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/console/console_commands.html#setsystemconfigbykey)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.1.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.1.0     | 3.0.0                    |                                    |
+| CPP SDK    | 3.0.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
 ### 3.0.1 
 
 (2022-09-23)
