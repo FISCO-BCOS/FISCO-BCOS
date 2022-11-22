@@ -34,8 +34,6 @@ set(HSM_INCLUDE_DIR ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${HSM_INCLUDE_DIR})  # Must exist.
 
 set(SDF_LIB "${SOURCE_DIR}/lib/${SDF_LIB_NAME}")
-message(status "##### HSM_INCLUDE_DIR: ${HSM_INCLUDE_DIR}")
-message("#### SDF_LIB: ${SDF_LIB}")
 find_library(GMT0018 gmt0018)
 if(NOT GMT0018)
     message(FATAL " Can not find library libgmt0018.so under default library path, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
