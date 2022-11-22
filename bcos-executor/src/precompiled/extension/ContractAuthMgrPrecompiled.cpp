@@ -26,6 +26,7 @@ using namespace bcos;
 using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::storage;
+using namespace bcos::protocol;
 
 /// contract ACL
 /// wasm
@@ -155,7 +156,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
             {
                 PRECOMPILED_LOG(TRACE)
                     << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("call function")
-                    << LOG_KV("minVersion", minVersion);
+                    << LOG_KV("func", func) << LOG_KV("minVersion", minVersion);
             }
             return _callParameters;
         }
@@ -674,6 +675,22 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_NOT_EXIST, codec);
         return;
     }
+    auto existEntry = table->getRow(STATUS_FIELD);
+    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+        existEntry.has_value())
+    {
+        auto existStatus = existEntry->get();
+        // account already abolish, should not set any status to it
+        if (existStatus == CONTRACT_ABOLISH)
+        {
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                                  << LOG_BADGE("ContractAuthMgrPrecompiled")
+                                  << LOG_DESC("contract already abolish, should not set any status")
+                                  << LOG_KV("contract", path);
+            BOOST_THROW_EXCEPTION(
+                protocol::PrecompiledError("Contract already abolish, should not set any status."));
+        }
+    }
     auto status = isFreeze ? CONTRACT_FROZEN : CONTRACT_NORMAL;
     Entry entry = {};
     entry.importFields({std::string(status)});
@@ -684,8 +701,6 @@ void ContractAuthMgrPrecompiled::setContractStatus(
 void ContractAuthMgrPrecompiled::setContractStatus32(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
-
-
 {
     /// setContractStatus(address _addr, uint8) => int256
     std::string address;
@@ -724,7 +739,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
     auto existEntry = table->getRow(STATUS_FIELD);
     if (existEntry.has_value())
     {
-        auto existStatus = std::string(existEntry->get());
+        auto existStatus = existEntry->get();
         // account already abolish, should not set any status to it
         if (existStatus == CONTRACT_ABOLISH && statusStr != CONTRACT_ABOLISH)
         {
@@ -734,7 +749,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
                                   << LOG_KV("contract", path)
                                   << LOG_KV("status", statusStr);
             BOOST_THROW_EXCEPTION(
-               protocol::PrecompiledError("Contract already abolish, should not set any status."));
+                protocol::PrecompiledError("Contract already abolish, should not set any status."));
         }
     }
 
@@ -766,12 +781,13 @@ void ContractAuthMgrPrecompiled::contractAvailable(
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("contractAvailable") << LOG_KV("address", address);
-    auto result = getContractStatus(_executive, address);
+    auto status = getContractStatus(_executive, address);
     // result !=0 && result != 1
-    if (result >> 1)
+    if (status < 0)
     {
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot get contract status"));
     }
+    bool result = (status == (uint8_t)ContractStatus::Available);
     _callParameters->setExecResult(codec.encode(result));
 }
 
@@ -800,5 +816,6 @@ int32_t ContractAuthMgrPrecompiled::getContractStatus(
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("get contract status success") << LOG_KV("contract", path)
                            << LOG_KV("status", status);
-    return status == CONTRACT_NORMAL;
+    auto result = static_cast<uint8_t>(StatusFromString(status));
+    return result;
 }

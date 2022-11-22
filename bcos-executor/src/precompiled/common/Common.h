@@ -49,7 +49,7 @@ struct Conditions
     std::vector<ConditionTuple>     cond;
     std::vector<ConditionTupleV320> cond_v320;
 };
-/// Precompiled reserved code field 
+/// Precompiled reserved code field
 static constexpr const char* const PRECOMPILED_CODE_FIELD = "[PRECOMPILED]";
 static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
 
@@ -162,13 +162,30 @@ enum PrecompiledErrorCode : int
     CODE_SUCCESS = 0
 };
 
-enum ContractStatus
+enum ContractStatus : uint8_t
 {
-    Available,
-    Frozen,
-    AddressNonExistent,
-    NotContractAddress,
-    Count
+    Available = 0,
+    Frozen = 1,
+    Abolish = 2,
+    AddressNonExistent = 3,
+    NotContractAddress = 4,
 };
+
+static constexpr inline ContractStatus StatusFromString(std::string_view _status) noexcept
+{
+    if (_status == executor::CONTRACT_NORMAL)
+    {
+        return ContractStatus::Available;
+    }
+    else if (_status == executor::CONTRACT_FROZEN)
+    {
+        return ContractStatus::Frozen;
+    }
+    else if (_status == executor::CONTRACT_ABOLISH)
+    {
+        return ContractStatus::Abolish;
+    }
+    return ContractStatus::Available;
+}
 }  // namespace precompiled
 }  // namespace bcos

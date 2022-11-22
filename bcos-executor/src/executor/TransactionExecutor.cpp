@@ -218,7 +218,7 @@ void TransactionExecutor::initEvmEnvironment()
     if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
-            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
@@ -267,8 +267,8 @@ void TransactionExecutor::initWasmEnvironment()
         {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
     if (m_isAuthCheck)
     {
-        m_constantPrecompiled->insert(
-            {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_MANAGER_NAME,
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
