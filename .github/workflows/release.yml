@@ -129,6 +129,7 @@ jobs:
           source /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
           source /opt/rh/llvm-toolset-7/enable
+          alias cmake='cmake3'
           cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF
           make -j4
           make tar
