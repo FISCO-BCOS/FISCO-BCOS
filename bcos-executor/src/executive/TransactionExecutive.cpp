@@ -1366,12 +1366,23 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
         // if call contract, then
         //      check contract available
         //      check exec auth
-        if (!checkContractAvailable(callParameters))
+        auto contractStatus = checkContractAvailable(callParameters);
+        if (contractStatus != static_cast<uint8_t>(ContractStatus::Available))
         {
             callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Contract is frozen";
-            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
+            {
+                if (contractStatus == static_cast<uint8_t>(ContractStatus::Abolish))
+                {
+                    callParameters->status = (int32_t)TransactionStatus::ContractAbolished;
+                    callParameters->message = "Contract is abolished";
+                    writeErrInfoToOutput("Contract is abolished.", *callParameters);
+                }
+            }
+            else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >=
+                     0)
             {
                 writeErrInfoToOutput("Contract is frozen.", *callParameters);
             }
@@ -1455,21 +1466,23 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     return result;
 }
 
-bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
+int32_t TransactionExecutive::checkContractAvailable(
+    const CallParameters::UniquePtr& callParameters)
 {
     // precompiled always available
     if (isPrecompiled(callParameters->receiveAddress) ||
         c_systemTxsAddress.contains(callParameters->receiveAddress))
     {
-        return true;
+        return 0;
     }
     auto blockContext = m_blockContext.lock();
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    // if status is normal, then return 1; else if status is abnormal, then return 0
+    // if status is normal, then return 0; else if status is abnormal, then return else
     // if return <0, it means status row not exist, check pass by default in this case
-    return contractAuthPrecompiled->getContractStatus(
-               shared_from_this(), callParameters->receiveAddress) != 0;
+    auto status = contractAuthPrecompiled->getContractStatus(
+        shared_from_this(), callParameters->receiveAddress);
+    return status < 0 ? 0 : status;
 }
 
 uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)
