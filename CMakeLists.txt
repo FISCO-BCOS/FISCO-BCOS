@@ -44,6 +44,10 @@ if(FULLNODE)
     endif()
     include(ProjectGroupSig)
 
+    if(USE_HSM_SDF)
+        include(ProjectSDF)
+    endif()
+
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)

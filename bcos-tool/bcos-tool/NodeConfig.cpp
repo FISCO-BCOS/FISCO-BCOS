@@ -529,7 +529,18 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
+    m_hsmEnable = _pt.get<bool>("security.enable_hsm", false);
+    if (m_hsmEnable)
+    {
+        m_keyIndex = _pt.get<int>("security.key_index");
+        m_password = _pt.get<std::string>("security.password", "");
+        NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig HSM")
+                             << LOG_KV("key_index", m_keyIndex)
+                             << LOG_KV("password", m_password);
+    }
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
+                         << LOG_KV("enable_hsm", m_hsmEnable)
                          << LOG_KV("privateKeyPath", m_privateKeyPath);
 }
 
@@ -592,7 +603,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
     m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
-    if(m_enableArchive)
+    if (m_enableArchive)
     {
         m_archiveListenIP = _pt.get<std::string>("storage.archive_ip");
         m_archiveListenPort = _pt.get<uint16_t>("storage.archive_port");
