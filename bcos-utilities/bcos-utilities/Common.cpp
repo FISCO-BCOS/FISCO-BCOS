@@ -40,7 +40,7 @@ bytes const NullBytes;
 /// get utc time(ms)
 uint64_t utcTime()
 {
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000000;
+    return std::chrono::system_clock::now().time_since_epoch().count() / 1000000;
 }
 
 // getSteadyTime(ms)
@@ -53,13 +53,7 @@ uint64_t utcSteadyTime()
 /// get utc time(us)
 uint64_t utcTimeUs()
 {
-#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;
-#else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
-#endif
+    return std::chrono::system_clock::now().time_since_epoch().count() / 1000;
 }
 
 uint64_t utcSteadyTimeUs()
