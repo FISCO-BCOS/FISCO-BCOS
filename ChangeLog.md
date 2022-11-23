@@ -4,18 +4,19 @@
 
 **新增**
 
-* 账户冻结解冻功能
+* 账户冻结、解冻、废止功能
 * 网关分布式限流功能
 * 网络压缩功能
 * 共识对时功能
 * 合约二进制与ABI存储优化
-* 出块时间可配
 * 适配EVM的delegatecall，extcodeHash，blockHash等接口
+* BFS新增查询分页功能
 
 **更改**
 
 * DBHash 计算逻辑更新，提升校验稳定性
 * chain配置项从config.ini中挪出，修改为在config.genesis创世块中配置
+* BFS 目录表结构性能优化
 
 **修复**
 
