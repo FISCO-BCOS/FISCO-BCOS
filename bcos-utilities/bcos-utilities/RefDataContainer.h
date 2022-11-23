@@ -99,7 +99,7 @@ public:
             (char const*)m_dataPointer, ((char const*)m_dataPointer) + m_dataCount * sizeof(T));
     }
 
-    bool empty() { return (m_dataCount == 0); }
+    bool empty() const { return (m_dataCount == 0); }
     RefDataContainer<T> getCroppedData(size_t _startIndex, size_t _count) const
     {
         if (m_dataPointer && _startIndex <= m_dataCount && _count <= m_dataCount &&

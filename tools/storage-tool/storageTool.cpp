@@ -22,9 +22,11 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tool/bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
+#include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/StorageInitializer.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -47,9 +49,11 @@
 #include <cstdlib>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -75,7 +79,10 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         po::value<std::vector<std::string>>()->multitoken(),
         "[TableName] [Key] [Value]")("iterate,i", po::value<std::string>(), "[TableName]")("hex,H",
         po::value<bool>()->default_value(false),
-        "if read display value use hex, if write decode hex value")("config,c",
+        "if read display value use hex, if write decode hex value")("compare,C",
+        po::value<std::vector<std::string>>()->multitoken(),
+        "[RocksDB] [path] or [TiKV] [pd addresses] [ca path if use ssl] [cert path if use ssl] "
+        "[key path if use ssl]")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path")("genesis,g",
         boost::program_options::value<std::string>()->default_value("./config.genesis"),
@@ -86,9 +93,9 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         po::store(po::parse_command_line(argc, argv, main_options), varMap);
         po::notify(varMap);
     }
-    catch (...)
+    catch (std::exception& e)
     {
-        std::cout << "parse_command_line failed" << std::endl;
+        std::cout << "parse_command_line failed:" << e.what() << std::endl;
         std::cout << main_options << std::endl;
         exit(0);
     }
@@ -259,6 +266,139 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     return storage;
 }
 
+bool compareTables(StorageInterface::Ptr local, StorageInterface::Ptr remote,
+    const std::string& table, auto blockFactory)
+{
+    std::promise<std::vector<std::string>> localKeysPromise;
+    local->asyncGetPrimaryKeys(table, std::nullopt,
+        [&localKeysPromise](Error::UniquePtr error, std::vector<std::string> keys) {
+            if (error)
+            {
+                std::cout << "get local primary keys failed: " << error << std::endl;
+                exit(1);
+            }
+            localKeysPromise.set_value(std::move(keys));
+        });
+    std::promise<std::vector<std::string>> remoteKeysPromise;
+    remote->asyncGetPrimaryKeys(table, std::nullopt,
+        [&remoteKeysPromise](Error::UniquePtr error, std::vector<std::string> keys) {
+            if (error)
+            {
+                std::cout << "get local primary keys failed: " << error << std::endl;
+                exit(1);
+            }
+            remoteKeysPromise.set_value(std::move(keys));
+        });
+    // TODO: batch compare keys
+    auto localKeys = localKeysPromise.get_future().get();
+    auto remoteKeys = remoteKeysPromise.get_future().get();
+    std::sort(localKeys.begin(), localKeys.end());
+    std::sort(remoteKeys.begin(), remoteKeys.end());
+    if (localKeys != remoteKeys)
+    {
+        std::cout << table << ", local keys not equal to remote keys" << std::endl;
+        return false;
+    }
+    std::promise<std::vector<std::optional<Entry>>> localValuesPromise;
+    local->asyncGetRows(table, localKeys,
+        [&localValuesPromise](Error::UniquePtr error, std::vector<std::optional<Entry>> values) {
+            if (error)
+            {
+                std::cout << "get local values failed: " << error << std::endl;
+                exit(1);
+            }
+            localValuesPromise.set_value(std::move(values));
+        });
+    std::promise<std::vector<std::optional<Entry>>> remoteValuesPromise;
+    remote->asyncGetRows(table, localKeys,
+        [&remoteValuesPromise](Error::UniquePtr error, std::vector<std::optional<Entry>> values) {
+            if (error)
+            {
+                std::cout << "get local values failed: " << error << std::endl;
+                exit(1);
+            }
+            remoteValuesPromise.set_value(std::move(values));
+        });
+    auto localValues = localValuesPromise.get_future().get();
+    auto remoteValues = remoteValuesPromise.get_future().get();
+    bool equal = true;
+    auto transactionFactory = blockFactory->transactionFactory();
+
+    for (size_t i = 0; i < localValues.size(); ++i)
+    {
+        if (localValues[i]->get().compare(remoteValues[i]->get()) != 0)
+        {
+            if (table == std::string(ledger::SYS_HASH_2_TX))
+            {
+                auto lView = localValues[i]->get();
+                auto rView = remoteValues[i]->get();
+                auto localTx = dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(
+                    transactionFactory->createTransaction(
+                        bytesConstRef((unsigned char*)lView.data(), lView.size()), false));
+                auto remoteTx = dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(
+                    transactionFactory->createTransaction(
+                        bytesConstRef((unsigned char*)rView.data(), rView.size()), false));
+                if (localTx->hash() == remoteTx->hash())
+                {
+#if 0
+                    std::cout << "localTx equal to remoteTx" << std::endl;
+                    std::cout << "localTx :"
+                              //   << LOG_KV("signatureData", toHex(localTx->signatureData()))
+                              //   << LOG_KV("sender", toHex(localTx->sender()))
+                              << LOG_KV("importTime", localTx->importTime())
+                              << LOG_KV("attribute", localTx->attribute())
+                              << LOG_KV("source", localTx->source()) << std::endl;
+                    std::cout << "remoteTx:"
+                              //   << LOG_KV("signatureData", toHex(remoteTx->signatureData()))
+                              //   << LOG_KV("sender", toHex(remoteTx->sender()))
+                              << LOG_KV("importTime", remoteTx->importTime())
+                              << LOG_KV("attribute", remoteTx->attribute())
+                              << LOG_KV("source", remoteTx->source()) << std::endl;
+#endif
+                }
+                else
+                {
+                    std::cout << table << ", local value not equal to remote value, key: "
+                              << toHex(localKeys[i])
+                              << LOG_KV("localValue", toHex(localValues[i]->get()))
+                              << LOG_KV("remoteValue", toHex(remoteValues[i]->get())) << std::endl;
+                    std::cout << "localTx not equal to remoteTx" << std::endl;
+                    return false;
+                }
+            }
+            else if (table == std::string(ledger::SYS_NUMBER_2_BLOCK_HEADER))
+            {
+                auto lView = localValues[i]->get();
+                auto rView = remoteValues[i]->get();
+                auto headerFactory = blockFactory->blockHeaderFactory();
+                auto localBlockHeader = headerFactory->createBlockHeader(
+                    bytesConstRef((unsigned char*)lView.data(), lView.size()));
+                auto remoteBlockHeader = headerFactory->createBlockHeader(
+                    bytesConstRef((unsigned char*)rView.data(), rView.size()));
+                if (localBlockHeader->hash() != remoteBlockHeader->hash())
+                {
+                    std::cout << table << ", local value not equal to remote value, key: "
+                              << toHex(localKeys[i])
+                              << LOG_KV("localValue", toHex(localValues[i]->get()))
+                              << LOG_KV("remoteValue", toHex(remoteValues[i]->get())) << std::endl;
+                    std::cout << "localBlock not equal to remoteBlock" << std::endl;
+                    return false;
+                }
+            }
+            else
+            {
+                std::cout << table
+                          << ", local value not equal to remote value, key: " << toHex(localKeys[i])
+                          << LOG_KV("localValue", toHex(localValues[i]->get()))
+                          << LOG_KV("remoteValue", toHex(remoteValues[i]->get())) << std::endl;
+                return false;
+            }
+        }
+    }
+    cout << "The data of table " << std::setw(64) << table << " is same\r" << flush;
+    return equal;
+}
+
 int main(int argc, const char* argv[])
 {
     boost::property_tree::ptree pt;
@@ -305,10 +445,10 @@ int main(int argc, const char* argv[])
         dataEncryption->init();
     }
 
-
     auto keyPageSize = nodeConfig->keyPageSize();
     auto keyPageIgnoreTables = getKeyPageIgnoreTables(nodeConfig->compatibilityVersion());
     std::string secondaryPath = "./rocksdb_secondary/";
+    std::string remoteSecondaryPath = "./rocksdb_secondary/";
     if (params.count("read"))
     {  // read
         auto readParameters = params["read"].as<vector<string>>();
@@ -385,18 +525,6 @@ int main(int argc, const char* argv[])
         else
         {
             value = writeParameters[2];
-        }
-
-        rocksdb::DB* db;
-        rocksdb::Options options;
-        options.create_if_missing = false;
-        options.enable_blob_files = keyPageSize > 1;
-        options.compression = rocksdb::kZSTD;
-        rocksdb::Status status = rocksdb::DB::Open(options, nodeConfig->storagePath(), &db);
-        if (!status.ok())
-        {
-            cerr << "open rocksDB to write failed, err:" << status.ToString() << endl;
-            return -1;
         }
         TransactionalStorageInterface::Ptr rocksdbStorage =
             dynamic_pointer_cast<TransactionalStorageInterface>(
@@ -622,9 +750,78 @@ int main(int argc, const char* argv[])
 #endif
         }
     }
-    else if (params.count("compare"))
+    else if (params.count("compare") != 0U)
     {
-        // TODO: compare data from two databases
+        auto protocolInitializer = std::make_shared<ProtocolInitializer>();
+        protocolInitializer->init(nodeConfig);
+        auto blockFactory = protocolInitializer->blockFactory();
+        auto compareParameters = params["compare"].as<vector<string>>();
+        // compare data with tikv is not supported for now
+        StorageInterface::Ptr localStorage =
+            createBackendStorage(nodeConfig, logInitializer->logPath());
+        StorageInterface::Ptr remoteStorage = nullptr;
+        auto DBtype = compareParameters[0];
+        if (boost::iequals(DBtype, "RocksDB"))
+        {
+            auto remoteDBPath = compareParameters[1];
+            std::cout << "remoteDBPath:" << remoteDBPath << std::endl;
+            auto* rocksdb = createSecondaryRocksDB(remoteDBPath, remoteSecondaryPath);
+            remoteStorage =
+                std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(rocksdb), nullptr);
+        }
+        else if (boost::iequals(DBtype, "TiKV"))
+        {
+#ifdef WITH_TIKV
+            vector<string> pdAddrs;
+            std::cout << "pdAddrs:" << compareParameters[1] << std::endl;
+            boost::algorithm::split(pdAddrs, compareParameters[1], boost::is_any_of(","));
+            std::string caPath;
+            std::string cert;
+            std::string key;
+            if (compareParameters.size() == 5)
+            {
+                caPath = compareParameters[2];
+                cert = compareParameters[3];
+                key = compareParameters[4];
+            }
+            remoteStorage =
+                StorageInitializer::build(pdAddrs, logInitializer->logPath(), caPath, cert, key);
+#endif
+        }
+        else
+        {
+            throw std::runtime_error("storage type not support");
+        }
+        // compare SYS_TABLES
+        auto s_tables = std::string(StorageInterface::SYS_TABLES);
+        if (!compareTables(localStorage, remoteStorage, s_tables, blockFactory))
+        {
+            std::cout << "compare SYS_TABLES failed" << std::endl;
+            return -1;
+        }
+
+        // get all table list and compare
+        std::promise<std::vector<std::string>> localKeysPromise;
+        localStorage->asyncGetPrimaryKeys(s_tables, std::nullopt,
+            [&localKeysPromise](Error::UniquePtr error, std::vector<std::string> keys) {
+                if (error)
+                {
+                    std::cout << "get local primary keys failed: " << error << std::endl;
+                    exit(1);
+                }
+                localKeysPromise.set_value(std::move(keys));
+            });
+        auto tableList = localKeysPromise.get_future().get();
+        // iterate the list and compare every table
+        for (auto& tableName : tableList)
+        {
+            if (!compareTables(localStorage, remoteStorage, tableName, blockFactory))
+            {
+                std::cout << "compare " << tableName << " failed" << std::endl;
+                return -1;
+            }
+        }
+        std::cout << std::endl << "compare data success, all data is same" << std::endl;
     }
     else
     {
@@ -633,9 +830,14 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+
     if (fs::exists(secondaryPath))
     {
         fs::remove_all(secondaryPath);
+    }
+    if (fs::exists(remoteSecondaryPath))
+    {
+        fs::remove_all(remoteSecondaryPath);
     }
     return 0;
 }
