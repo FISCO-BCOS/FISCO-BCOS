@@ -63,7 +63,7 @@ void NodeConfig::loadConfig(
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt,_enforceGroupId);
+        loadChainConfig(_pt, _enforceGroupId);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
@@ -87,7 +87,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig,true);
+        loadChainConfig(_genesisConfig, true);
     }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
@@ -536,7 +536,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The chainId must be number or digit"));
     }
-    m_blockLimit = checkAndGetValue(_pt, "chain.block_limit","1000");
+    m_blockLimit = checkAndGetValue(_pt, "chain.block_limit", "1000");
     if (m_blockLimit <= 0 || m_blockLimit > MAX_BLOCK_LIMIT)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
