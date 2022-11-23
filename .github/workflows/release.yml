@@ -146,7 +146,7 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
-          cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=Off -DCOVERAGE=Off -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=Off -DWITH_TIKV=On -DWITH_TARS_SERVICES=On .. || cat *.log
+          cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=OFF -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
       - name: tar fisco-bcos for CentOS
         run:  mkdir bin && mv build/fisco-bcos-air/fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
