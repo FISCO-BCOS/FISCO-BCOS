@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
@@ -53,7 +54,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
     const std::optional<Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback)
 {
-    auto start = utcTime();
+    auto start = utcSteadyTime();
     std::vector<std::string> result;
 
     std::string keyPrefix;
@@ -61,7 +62,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
 
     ReadOptions read_options;
     read_options.total_order_seek = true;
-    auto iter = m_db->NewIterator(read_options);
+    auto iter = std::unique_ptr<rocksdb::Iterator>(m_db->NewIterator(read_options));
 
     // FIXME: check performance and add limit of primary keys
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
@@ -74,13 +75,14 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
             result.emplace_back(iter->key().ToString().substr(start));
         }
     }
-    delete iter;
-    auto end = utcTime();
+    auto end = utcSteadyTime();
+    iter.reset();
+
     _callback(nullptr, std::move(result));
     STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
                                << LOG_KV("count", result.size())
                                << LOG_KV("read time(ms)", end - start)
-                               << LOG_KV("callback time(ms)", utcTime() - end);
+                               << LOG_KV("callback time(ms)", utcSteadyTime() - end);
 }
 
 void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
@@ -95,7 +97,6 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), {});
             return;
         }
-        auto start = utcTime();
         std::string value;
         auto dbKey = toDBKey(_table, _key);
 
@@ -133,8 +134,6 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 
             return;
         }
-        auto end = utcTime();
-        auto end2 = utcTime();
 
         std::optional<Entry> entry((Entry()));
 
@@ -142,11 +141,8 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 
         _callback(nullptr, entry);
 
-        STORAGE_ROCKSDB_LOG(TRACE)
-            << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-            << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
-            << LOG_KV("read time(ms)", end - start) << LOG_KV("tableInfo time(ms)", end2 - end)
-            << LOG_KV("callback time(ms)", utcTime() - end2);
+        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
+                                   << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
     }
     catch (const std::exception& e)
     {
@@ -172,7 +168,6 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
             return;
         }
-        auto start = utcTime();
         std::visit(
             [&](auto const& keys) {
                 std::vector<std::optional<Entry>> entries(keys.size());
@@ -192,7 +187,6 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                 std::vector<Status> statusList(keys.size());
                 m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(),
                     slices.data(), values.data(), statusList.data());
-                auto end = utcTime();
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i)
@@ -232,11 +226,8 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             }
                         }
                     });
-                auto decode = utcTime();
-                STORAGE_ROCKSDB_LOG(TRACE)
-                    << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
-                    << LOG_KV("count", entries.size()) << LOG_KV("read time(ms)", end - start)
-                    << LOG_KV("decode time(ms)", decode - end);
+                auto decode = utcSteadyTime();
+                STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
                 _callback(nullptr, std::move(entries));
             },
             _keys);
@@ -311,7 +302,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
     try
     {
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
-        auto start = utcTime();
+        auto start = utcSteadyTime();
         {
             std::unique_lock lock(m_writeBatchMutex);
             if (!m_writeBatch)
@@ -412,13 +403,13 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0, "");
             return;
         }
-        auto end = utcTime();
+        auto end = utcSteadyTime();
         callback(nullptr, 0, "");
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
                                   << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("time(ms)", end - start)
-                                  << LOG_KV("callback time(ms)", utcTime() - end);
+                                  << LOG_KV("callback time(ms)", utcSteadyTime() - end);
     }
     catch (const std::exception& e)
     {
@@ -430,7 +421,7 @@ void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback)
 {
     size_t count = 0;
-    auto start = utcTime();
+    auto start = utcSteadyTime();
     std::ignore = params;
     {
         std::unique_lock lock(m_writeBatchMutex);
@@ -446,7 +437,7 @@ void RocksDBStorage::asyncCommit(
                 STORAGE_ROCKSDB_LOG(WARNING)
                     << LOG_DESC("asyncCommit failed") << LOG_KV("number", params.number)
                     << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
-                    << LOG_KV("time(ms)", utcTime() - start);
+                    << LOG_KV("time(ms)", utcSteadyTime() - start);
                 lock.release();
                 callback(err, 0);
                 return;
@@ -454,31 +445,31 @@ void RocksDBStorage::asyncCommit(
             m_writeBatch = nullptr;
         }
     }
-    auto end = utcTime();
+    auto end = utcSteadyTime();
     callback(nullptr, 0);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
                               << LOG_KV("startTS", params.timestamp)
-                              << LOG_KV("time(ms)", utcTime() - start)
-                              << LOG_KV("callback time(ms)", utcTime() - end)
+                              << LOG_KV("time(ms)", utcSteadyTime() - start)
+                              << LOG_KV("callback time(ms)", utcSteadyTime() - end)
                               << LOG_KV("count", count);
 }
 
 void RocksDBStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
 {
-    auto start = utcTime();
+    auto start = utcSteadyTime();
 
     std::ignore = params;
     {
         std::unique_lock lock(m_writeBatchMutex);
         m_writeBatch = nullptr;
     }
-    auto end = utcTime();
+    auto end = utcSteadyTime();
     callback(nullptr);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
                               << LOG_KV("startTS", params.timestamp)
-                              << LOG_KV("time(ms)", utcTime() - start)
-                              << LOG_KV("callback time(ms)", utcTime() - end);
+                              << LOG_KV("time(ms)", utcSteadyTime() - start)
+                              << LOG_KV("callback time(ms)", utcSteadyTime() - end);
 }
 
 bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,

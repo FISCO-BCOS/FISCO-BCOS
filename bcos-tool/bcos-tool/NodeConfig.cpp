@@ -592,17 +592,17 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
     m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
-    if(m_enableArchive)
+    if (m_enableArchive)
     {
         m_archiveListenIP = _pt.get<std::string>("storage.archive_ip");
         m_archiveListenPort = _pt.get<uint16_t>("storage.archive_port");
     }
 
-    if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
-    }
+    // if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
+    // {
+    //     BOOST_THROW_EXCEPTION(
+    //         InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
+    // }
     auto pd_addrs = _pt.get<std::string>("storage.pd_addrs", "127.0.0.1:2379");
     boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);

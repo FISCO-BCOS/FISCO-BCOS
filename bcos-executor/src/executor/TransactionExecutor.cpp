@@ -2401,7 +2401,7 @@ void TransactionExecutor::removeCommittedState()
         return;
     }
 
-    bcos::protocol::BlockNumber number;
+    bcos::protocol::BlockNumber number = 0;
     bcos::storage::StateStorageInterface::Ptr storage;
 
     {
