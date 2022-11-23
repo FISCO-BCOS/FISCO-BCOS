@@ -890,10 +890,94 @@ public:
         return result5;
     };
 
+    ExecutionMessage::UniquePtr setContractStatus32(protocol::BlockNumber _number,
+        Address const& _path, ContractStatus status, int _errorCode = 0)
+    {
+        nextBlock(_number, m_blockVersion);
+        bytes in = codec->encodeWithSig(
+            "setContractStatus(address,uint8)", _path, static_cast<uint8_t>(status));
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(1000);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->dmcExecuteTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+
+        result->setSeq(1001);
+
+        /// internal call get admin
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->dmcExecuteTransaction(std::move(result),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        /// callback to precompiled
+        result2->setSeq(1000);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->dmcExecuteTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1002);
+
+        /// internal call set contract status
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->dmcExecuteTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
+        result4->setSeq(1000);
+
+        /// callback to precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise5;
+        executor->dmcExecuteTransaction(std::move(result4),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise5.set_value(std::move(result));
+            });
+        auto result5 = executePromise5.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result5->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result5;
+    };
+
     ExecutionMessage::UniquePtr contractAvailable(
         protocol::BlockNumber _number, Address const& _path, int _errorCode = 0)
     {
-        nextBlock(_number);
+        nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("contractAvailable(address)", _path);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         auto hash = tx->hash();
@@ -1886,6 +1970,84 @@ BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
         auto errorAddress = "123456";
         auto result2 = contractAvailable(_number++, Address(errorAddress));
         BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testContractAbolish)
+{
+    setIsWasm(false, true, true, BlockVersion::V3_2_VERSION);
+
+    deployHello();
+    BlockNumber _number = 3;
+    // frozen
+    {
+        auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Frozen);
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+
+        auto r2 = contractAvailable(_number++, Address(helloAddress));
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+    }
+    // frozen, revert
+    {
+        auto result = helloGet(_number++, 1000);
+        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractFrozen);
+
+        auto result2 = helloSet(_number++, 1000, "");
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
+    }
+    // switch normal
+    {
+        auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Available);
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        auto r2 = contractAvailable(_number++, Address(helloAddress));
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(true));
+    }
+    // normal
+    {
+        auto result = helloGet(_number++, 1000);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+
+        auto result2 = helloSet(_number++, 1000, "test");
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::None);
+
+        auto result3 = helloGet(_number++, 1000);
+        BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string("test")));
+    }
+
+    // contract address not found
+    {
+        auto errorAddress = "123456";
+        auto result2 = contractAvailable(_number++, Address(errorAddress));
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // abolish
+    {
+        auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Abolish);
+        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+
+        auto r2 = contractAvailable(_number++, Address(helloAddress));
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+    }
+    // abolish, revert
+    {
+        auto result = helloGet(_number++, 1000);
+        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractAbolished);
+
+        auto result2 = helloSet(_number++, 1000, "");
+        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractAbolished);
+    }
+
+    // frozen again, return error
+    {
+        auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Frozen);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        auto r2 = contractAvailable(_number++, Address(helloAddress));
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+
+        auto r3 = setContractStatus(_number++, Address(helloAddress), true);
+        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 

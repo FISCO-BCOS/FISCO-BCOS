@@ -196,7 +196,7 @@ protected:
 
     bool checkAuth(const CallParameters::UniquePtr& callParameters);
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
-    bool checkContractAvailable(const CallParameters::UniquePtr& callParameters);
+    int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
 
     void creatAuthTable(

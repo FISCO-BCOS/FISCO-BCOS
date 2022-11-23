@@ -539,7 +539,8 @@ public:
     ExecutionMessage::UniquePtr listPage(protocol::BlockNumber _number, std::string const& path,
         uint32_t offset, uint32_t count, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
+        bytes in =
+            codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();

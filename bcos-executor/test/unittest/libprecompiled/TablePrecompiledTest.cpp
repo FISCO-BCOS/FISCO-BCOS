@@ -47,7 +47,7 @@ public:
         const std::string& tableName, const std::string& key, const std::vector<std::string>& value,
         const std::string& callAddress, int _errorCode = 0, bool errorInTableManager = false)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         TableInfoTuple tableInfoTuple = std::make_tuple(key, value);
         bytes in = codec->encodeWithSig(
             "createTable(string,(string,string[]))", tableName, tableInfoTuple);
@@ -143,7 +143,7 @@ public:
     ExecutionMessage::UniquePtr appendColumns(protocol::BlockNumber _number,
         const std::string& tableName, const std::vector<std::string>& values, int _errorCode = 0)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("appendColumns(string,string[])", tableName, values);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -199,7 +199,7 @@ public:
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
         params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
@@ -219,7 +219,7 @@ public:
 
     ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, std::string const& tableName)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("desc(string)", tableName);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -254,7 +254,7 @@ public:
     ExecutionMessage::UniquePtr insert(protocol::BlockNumber _number, const std::string& key,
         const std::vector<std::string>& values, const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         EntryTuple entryTuple = {key, values};
         bytes in = codec->encodeWithSig("insert((string,string[]))", entryTuple);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -309,7 +309,7 @@ public:
     ExecutionMessage::UniquePtr selectByKey(
         protocol::BlockNumber _number, const std::string& key, const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("select(string)", key);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -345,7 +345,7 @@ public:
         const std::vector<ConditionTuple>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("select((uint8,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -380,7 +380,7 @@ public:
     ExecutionMessage::UniquePtr count(protocol::BlockNumber _number,
         const std::vector<ConditionTuple>& keyCond, const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("count((uint8,string)[])", keyCond);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -416,7 +416,7 @@ public:
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
         const std::string& callAddress, bool _isErrorInTable = false)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("update(string,(string,string)[])", key, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -480,7 +480,7 @@ public:
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
         const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in =
             codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(string,string)[])",
                 conditions, _limit, _updateFields);
@@ -543,7 +543,7 @@ public:
     ExecutionMessage::UniquePtr removeByKey(
         protocol::BlockNumber _number, const std::string& key, const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("remove(string)", key);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -579,7 +579,7 @@ public:
         const std::vector<ConditionTuple>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number);
+        nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("remove((uint8,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
