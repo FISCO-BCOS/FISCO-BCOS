@@ -63,7 +63,7 @@ void NodeConfig::loadConfig(
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt, true);
+        loadChainConfig(_pt, _enforceNoGroupId);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
@@ -519,15 +519,15 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
         m_groupId = _pt.get<std::string>("chain.group_id");
     }
     m_chainId = _pt.get<std::string>("chain.chain_id");
-    if(m_groupId.empty())
+    if(m_groupId.empty()&&!_enforceNoGroupId)
     {
         BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("groupId is null, please set chain.chainId to positive!"));
+            InvalidConfig() << errinfo_comment("groupId is null, please set chain.groupId to positive!"));
     }
     if(m_chainId.empty())
     {
         BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("chainId is null, please set chain.groupID to positive!"));
+            InvalidConfig() << errinfo_comment("chainId is null, please set chain.chainId to positive!"));
     }
     if (!isalNumStr(m_chainId))
     {
