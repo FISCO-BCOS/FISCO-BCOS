@@ -2,9 +2,9 @@
 pragma solidity^0.6.10;
 
 interface  CounterPrecompiled {
-    function init(string memory _keyAddr) external;
-    function increment(string memory _keyAddr) external;
-    function incrementBy(string memory _keyAddr, uint256 _value) external;
-    function reset(string memory _keyAddr) external;
-    function get(string memory _keyAddr) external view returns(uint256);
+    function init(string memory _key) external;
+    function increment(string memory _key) external;
+    function incrementBy(string memory _key, uint256 _value) external;
+    function reset(string memory _key) external;
+    function get(string memory _key) external view returns(uint256);
 }
