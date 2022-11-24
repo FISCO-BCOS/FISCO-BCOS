@@ -56,14 +56,14 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 {}
 
 void NodeConfig::loadConfig(
-    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig, bool _enforceGroupId)
+    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig, bool _enforceNoGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
-    if (_enforceChainConfig || _enforceGroupId ||
+    if (_enforceChainConfig  ||
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt, _enforceGroupId);
+        loadChainConfig(_pt, _enforceNoGroupId);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
@@ -87,7 +87,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig, true);
+        loadChainConfig(_genesisConfig, false);
     }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
@@ -504,7 +504,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
-void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
+void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceNoGroupId)
 {
     try
     {
@@ -515,11 +515,9 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
             "smCryptoType is null, please set chain.smCryptoType to positive!"));
     }
-
-    if(_enforceGroupId){
+    if(!_enforceNoGroupId){
         m_groupId = _pt.get<std::string>("chain.group_id");
     }
-
     m_chainId = _pt.get<std::string>("chain.chain_id");
     if(m_groupId.empty())
     {
