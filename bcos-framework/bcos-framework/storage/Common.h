@@ -69,6 +69,9 @@ struct Condition
     // string compare, "12" < "2"
     void LT(const std::string& value) { m_conditions.emplace_back(Comparator::LT, value); }
     void LE(const std::string& value) { m_conditions.emplace_back(Comparator::LE, value); }
+    void STARTS_WITH(const std::string& value) { m_conditions.emplace_back(Comparator::STARTS_WITH, value); }
+    void ENDS_WITH(const std::string& value) { m_conditions.emplace_back(Comparator::ENDS_WITH, value); }
+    void CONTAINS(const std::string& value) { m_conditions.emplace_back(Comparator::CONTAINS, value); }
     void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
@@ -115,6 +118,24 @@ struct Condition
                     return false;
                 }
                 break;
+            case Comparator::STARTS_WITH:
+                if (!key.starts_with(cond.value))
+                {
+                    return false;
+                }
+                break;
+            case Comparator::ENDS_WITH:
+                if (!key.ends_with(cond.value))
+                {
+                    return false;
+                }
+                break;
+            case Comparator::CONTAINS:
+                if (key.find(cond.value) == std::string::npos)
+                {
+                    return false;
+                }
+                break;
             default:
                 // undefined Comparator
                 break;
@@ -131,6 +152,9 @@ struct Condition
         GE,
         LT,
         LE,
+        STARTS_WITH,
+        ENDS_WITH,
+        CONTAINS
     };
     struct cond
     {
@@ -161,6 +185,15 @@ struct Condition
             case Comparator::LE:
                 cmpStr = "LE";
                 break;
+            case Comparator::STARTS_WITH:
+                cmpStr = "STARTS_WITH";
+                break;
+            case Comparator::ENDS_WITH:
+                cmpStr = "ENDS_WITH";
+                break;
+            case Comparator::CONTAINS:
+                cmpStr = "CONTAINS";
+                break;                
             }
             return cmpStr + " " + value;
         }
