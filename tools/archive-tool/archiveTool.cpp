@@ -485,9 +485,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                         {
                             topics.push_back(h256(k.asString()));
                         }
-                        auto addr = bytes(logEntryJson["address"].asString().data(),
-                            logEntryJson["address"].asString().data() +
-                                logEntryJson["address"].asString().size());
+                        auto address = logEntryJson["address"].asString();
+                        auto addr = bytes(address.data(), address.data() + address.size());
                         logEntries->emplace_back(addr, topics, data);
                     }
                     auto receipt = receiptFactory->createReceipt(gasUsed, contractAddress,

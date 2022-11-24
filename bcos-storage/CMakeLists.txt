@@ -27,9 +27,3 @@ if(TESTS)
   set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
   add_subdirectory(test)
 endif()
-
-option(TOOLS "build tools" OFF)
-
-if(TOOLS)
-  add_subdirectory(tools)
-endif()

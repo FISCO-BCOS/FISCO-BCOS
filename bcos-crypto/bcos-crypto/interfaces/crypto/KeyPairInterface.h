@@ -30,7 +30,8 @@ enum class KeyPairType : int
 {
     Secp256K1 = 0,
     SM2 = 1,
-    Ed25519 = 2
+    Ed25519 = 2,
+    HsmSM2 = 3
 };
 class KeyPairInterface
 {
