@@ -1458,9 +1458,9 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             if (m_genesisBlockHeader)
             {
                 std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
-                             "Initial Genesis Data is :"
                           << std::endl
-                          << initialGenesisData << std::endl;
+                          << LOG_KV("initialGenesisData", initialGenesisData) << std::endl
+                          << LOG_KV("genesisData", _genesisData) << std::endl;
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "The Genesis Data is inconsistent with the initial Genesis Data"));

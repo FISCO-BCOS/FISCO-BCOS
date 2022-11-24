@@ -47,6 +47,7 @@ enum class TransactionStatus : int32_t
     ContractFrozen = 21,
     AccountFrozen = 22,
     AccountAbolished = 23,
+    ContractAbolished = 24,
     WASMValidationFailure = 32,
     WASMArgumentOutOfRange = 33,
     WASMUnreachableInstruction = 34,

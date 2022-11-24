@@ -127,9 +127,10 @@ async fn main() -> tide::Result<()> {
             }
 
             let keys: Vec<Vec<u8>>;
+            let hex_keys: Vec<String>;
             let table;
 
-            if method == "getTransaction" || method == "getTransactions" {
+            if method == "getTransactionByHash" || method == "getTransactions" {
                 table = "s_hash_2_tx:".as_bytes();
             } else if method == "getTransactionReceipt" || method == "getTransactionReceipts" {
                 table = "s_hash_2_receipt:".as_bytes();
@@ -148,8 +149,9 @@ async fn main() -> tide::Result<()> {
                     .content_type("application/json")
                     .build());
             };
-            if method == "getTransaction" || method == "getTransactionReceipt" {
+            if method == "getTransactionReceipt" || method == "getTransactionReceipt" {
                 let hash = request_json.params.as_array().unwrap()[0].as_str().unwrap();
+                hex_keys = vec![hash.to_string()];
                 keys = vec![table
                     .to_vec()
                     .into_iter()
@@ -161,18 +163,21 @@ async fn main() -> tide::Result<()> {
                     )
                     .collect()];
             } else {
-                let hex_keys = request_json.params.as_array().unwrap()[0]
+                hex_keys = request_json.params.as_array().unwrap()[0]
                     .as_array()
-                    .unwrap();
+                    .unwrap()
+                    .into_iter()
+                    .map(|s| s.as_str().unwrap().to_string())
+                    .collect();
                 debug!("hex_keys: {:?}", hex_keys);
                 keys = hex_keys
-                    .into_iter()
+                    .iter()
                     .map(|s| {
                         table
                             .to_vec()
                             .into_iter()
                             .chain(
-                                prefix_hex::decode::<Vec<u8>>(s.as_str().unwrap())
+                                prefix_hex::decode::<Vec<u8>>(s.as_str())
                                     .unwrap()
                                     .to_owned()
                                     .into_iter(),
@@ -188,9 +193,6 @@ async fn main() -> tide::Result<()> {
             let database = req.state().lock().await;
             match &*database {
                 Storage::RocksDB(db) => {
-                    let hash_list = request_json.params.as_array().unwrap()[0]
-                        .as_array()
-                        .unwrap();
                     let values: Vec<String> = db
                         .multi_get(keys)
                         .into_iter()
@@ -203,7 +205,7 @@ async fn main() -> tide::Result<()> {
                         })
                         .collect();
                     // debug!("values: {:?}", values);
-                    result = zip(hash_list, values)
+                    result = zip(hex_keys, values)
                         .map(|(k, v)| (k.to_string(), v))
                         .collect();
                 }

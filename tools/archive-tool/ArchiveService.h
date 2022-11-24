@@ -111,6 +111,7 @@ public:
                     callback(nullptr, result);
                 }
             };
+        // TODO: should call compaction
         m_httpServer->setHttpReqHandler([this](auto&& PH1, auto&& PH2) {
             handleHttpRequest(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2));
         });
@@ -155,7 +156,7 @@ public:
                     {
                         ARCHIVE_SERVICE_LOG(WARNING)
                             << LOG_BADGE("delete transactions") << LOG_KV("number", blockNumber)
-                            << LOG_KV("number", err->errorMessage());
+                            << LOG_KV("message", err->errorMessage());
                         promise.set_value(error);
                         return;
                     }
@@ -164,7 +165,7 @@ public:
                     {
                         ARCHIVE_SERVICE_LOG(WARNING)
                             << LOG_BADGE("delete receipts") << LOG_KV("number", blockNumber)
-                            << LOG_KV("number", err->errorMessage());
+                            << LOG_KV("message", err->errorMessage());
                         promise.set_value(error);
                         return;
                     }
@@ -175,7 +176,7 @@ public:
             {
                 ARCHIVE_SERVICE_LOG(WARNING)
                     << LOG_BADGE("deleteArchivedData failed") << LOG_KV("number", blockNumber)
-                    << LOG_KV("number", error->errorMessage());
+                    << LOG_KV("message", error->errorMessage());
                 return error;
             }
         }
