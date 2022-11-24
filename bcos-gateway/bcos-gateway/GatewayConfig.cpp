@@ -10,6 +10,7 @@
 #include <bcos-security/bcos-security/KeyCenter.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -153,6 +154,8 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
+        initPeerBlacklistConfig(pt);
+        initPeerWhitelistConfig(pt);
         initRateLimitConfig(pt);
         if (m_smSSL)
         {
@@ -652,6 +655,100 @@ void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("redisDB", redisDB) << LOG_KV("redisTimeout", redisTimeout)
                              << LOG_KV("redisPoolSize", redisPoolSize)
                              << LOG_KV("redisPassword", redisPassword);
+}
+
+void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _pt)
+{
+    std::string certBlacklistSection{"crl"};
+    if (_pt.get_child_optional("certificate_blacklist"))
+    {
+        certBlacklistSection = "certificate_blacklist";
+    }
+
+    bool enableBlacklist{false};
+    // CRL means certificate rejected list, CRL optional in config.ini
+    if (_pt.get_child_optional(certBlacklistSection))
+    {
+        for (auto it : _pt.get_child(certBlacklistSection))
+        {
+            if (0 == it.first.find("crl."))
+            {
+                try
+                {
+                    std::string nodeID{boost::to_upper_copy(it.second.data())};
+                    GATEWAY_CONFIG_LOG(TRACE) << LOG_BADGE("GatewayConfig")
+                                              << LOG_DESC("get certificate rejected by nodeID")
+                                              << LOG_KV("nodeID", nodeID);
+                    bool isNodeIDValid = (false == m_smSSL? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
+                    if (true == isNodeIDValid)
+                    {
+                        m_enableBlacklist = true;
+                        m_certBlacklist.emplace(std::move(nodeID));
+                    }
+                    else
+                    {
+                        GATEWAY_CONFIG_LOG(ERROR)
+                            << LOG_BADGE("GatewayConfig")
+                            << LOG_DESC("get certificate accepted by nodeID failed, illegal nodeID")
+                            << LOG_KV("nodeID", nodeID);
+                    }
+                }
+                catch (std::exception& e)
+                {
+                    GATEWAY_CONFIG_LOG(ERROR)
+                        << LOG_BADGE("GatewayConfig") << LOG_DESC("get certificate rejected failed")
+                        << LOG_KV("EINFO", boost::diagnostic_information(e));
+                }
+            }
+        }
+    }
+}
+
+void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _pt)
+{
+    std::string certWhitelistSection{"cal"};
+    if (_pt.get_child_optional("certificate_whitelist"))
+    {
+        certWhitelistSection = "certificate_whitelist";
+    }
+
+    bool enableWhiteList{false};
+    // CAL means certificate accepted list, CAL optional in config.ini
+    if (_pt.get_child_optional(certWhitelistSection))
+    {
+        for (auto it : _pt.get_child(certWhitelistSection))
+        {
+            if (0 == it.first.find("cal."))
+            {
+                try
+                {
+                    std::string nodeID{boost::to_upper_copy(it.second.data())};
+                    GATEWAY_CONFIG_LOG(DEBUG) << LOG_BADGE("GatewayConfig")
+                                              << LOG_BADGE("get certificate accepted by nodeID")
+                                              << LOG_KV("nodeID", nodeID);
+                    bool isNodeIDValid = (false == m_smSSL? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
+                    if (true == isNodeIDValid)
+                    {
+                        m_enableWhitelist = true;
+                        m_certWhitelist.emplace(std::move(nodeID));
+                    }
+                    else
+                    {
+                        GATEWAY_CONFIG_LOG(ERROR)
+                            << LOG_BADGE("GatewayConfig")
+                            << LOG_DESC("get certificate accepted by nodeID failed, illegal nodeID")
+                            << LOG_KV("nodeID", nodeID);
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    GATEWAY_CONFIG_LOG(ERROR)
+                        << LOG_BADGE("GatewayConfig") << LOG_DESC("get certificate accepted failed")
+                        << LOG_KV("EINFO", boost::diagnostic_information(e));
+                }
+            }
+        }
+    }
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)

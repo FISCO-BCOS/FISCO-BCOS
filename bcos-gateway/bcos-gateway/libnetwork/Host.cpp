@@ -126,7 +126,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
-            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get()))
+            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
             }
@@ -150,9 +150,25 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
 
             BASIC_CONSTRAINTS_free(basic);
-            // if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get())) {
-            //   return preverified;
-            // }
+
+            std::string nodeID = boost::to_upper_copy(*nodeIDOut);
+
+            // If the node ID exists in the black and white lists at the same time, the black list takes precedence
+            if (nullptr != hostPtr->peerBlacklist() &&
+                true == hostPtr->peerBlacklist()->has(nodeID))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
+                               << LOG_KV("nodeID", NodeID(nodeID).abridged());
+                return false;
+            }
+
+            if (nullptr != hostPtr->peerWhitelist() &&
+                false == hostPtr->peerWhitelist()->has(nodeID))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
+                               << LOG_KV("nodeID", NodeID(nodeID).abridged());
+                return false;
+            }
 
             /// append cert-name and issuer name after node ID
             /// get subject name
@@ -166,6 +182,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             nodeIDOut->append(certName);
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
+
             return preverified;
         }
         catch (std::exception& e)
