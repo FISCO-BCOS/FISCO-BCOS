@@ -55,47 +55,48 @@ constexpr const char* const AUTH_METHOD_GET_CONTRACT = "contractAvailable(addres
 ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm)
   : bcos::precompiled::Precompiled(std::move(_hashImpl))
 {
-    const auto *getAdminStr = _isWasm ? AUTH_METHOD_GET_ADMIN : AUTH_METHOD_GET_ADMIN_ADD;
+    const auto* getAdminStr = _isWasm ? AUTH_METHOD_GET_ADMIN : AUTH_METHOD_GET_ADMIN_ADD;
     registerFunc(getFuncSelector(getAdminStr), [this](auto&& _executive, auto&& _callParameters) {
         getAdmin(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto *resetAdminStr = _isWasm ? AUTH_METHOD_SET_ADMIN : AUTH_METHOD_SET_ADMIN_ADD;
+    const auto* resetAdminStr = _isWasm ? AUTH_METHOD_SET_ADMIN : AUTH_METHOD_SET_ADMIN_ADD;
     registerFunc(getFuncSelector(resetAdminStr), [this](auto&& _executive, auto&& _callParameters) {
         resetAdmin(std::forward<decltype(_executive)>(_executive),
             std::forward<decltype(_callParameters)>(_callParameters));
     });
 
-    const auto *setMethodAuthTypeStr = _isWasm ? AUTH_METHOD_SET_AUTH_TYPE : AUTH_METHOD_SET_AUTH_TYPE_ADD;
+    const auto* setMethodAuthTypeStr =
+        _isWasm ? AUTH_METHOD_SET_AUTH_TYPE : AUTH_METHOD_SET_AUTH_TYPE_ADD;
     registerFunc(
         getFuncSelector(setMethodAuthTypeStr), [this](auto&& _executive, auto&& _callParameters) {
             setMethodAuthType(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto *openMethodAuthStr = _isWasm ? AUTH_METHOD_OPEN_AUTH : AUTH_METHOD_OPEN_AUTH_ADD;
+    const auto* openMethodAuthStr = _isWasm ? AUTH_METHOD_OPEN_AUTH : AUTH_METHOD_OPEN_AUTH_ADD;
     registerFunc(
         getFuncSelector(openMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
             openMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto *closeMethodAuthStr = _isWasm ? AUTH_METHOD_CLOSE_AUTH : AUTH_METHOD_CLOSE_AUTH_ADD;
+    const auto* closeMethodAuthStr = _isWasm ? AUTH_METHOD_CLOSE_AUTH : AUTH_METHOD_CLOSE_AUTH_ADD;
     registerFunc(
         getFuncSelector(closeMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
             closeMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto *checkMethodAuthStr = _isWasm ? AUTH_METHOD_CHECK_AUTH : AUTH_METHOD_CHECK_AUTH_ADD;
+    const auto* checkMethodAuthStr = _isWasm ? AUTH_METHOD_CHECK_AUTH : AUTH_METHOD_CHECK_AUTH_ADD;
     registerFunc(
         getFuncSelector(checkMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
             checkMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto *getMethodAuthStr = _isWasm ? AUTH_METHOD_GET_AUTH : AUTH_METHOD_GET_AUTH_ADD;
+    const auto* getMethodAuthStr = _isWasm ? AUTH_METHOD_GET_AUTH : AUTH_METHOD_GET_AUTH_ADD;
     registerFunc(
         getFuncSelector(getMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
             getMethodAuth(std::forward<decltype(_executive)>(_executive),
@@ -130,7 +131,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
 
     auto blockContext = _executive->blockContext().lock();
-    const auto *authAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    const auto* authAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext->number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("call")
@@ -278,11 +279,11 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     uint8_t type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
-                           << LOG_BADGE("ContractAuthMgrPrecompiled")
-                           << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
-                           << LOG_KV("func", toHexStringWithPrefix(func))
-                           << LOG_KV("type", (uint32_t)type);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("ContractAuthMgrPrecompiled")
+                          << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
+                          << LOG_KV("func", toHexStringWithPrefix(func))
+                          << LOG_KV("type", (uint32_t)type);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
@@ -499,10 +500,10 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         codec.decode(_callParameters->params(), path, _func, account);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
-                           << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
-                           << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
-                           << LOG_KV("account", account);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
+                          << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
+                          << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
@@ -519,7 +520,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         getTypeStr = METHOD_AUTH_WHITE;
     else if (authType == (int)AuthType::BLACK_LIST_MODE)
         getTypeStr = METHOD_AUTH_BLACK;
-    else
+    else [[unlikely]]
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("error auth type") << LOG_KV("path", path)
@@ -565,8 +566,8 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         }
         catch (...)
         {
-            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                                   << LOG_DESC("auth map parse error") << LOG_KV("path", path);
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
+                                  << LOG_DESC("auth map parse error") << LOG_KV("path", path);
             getErrorCodeOut(
                 _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
             return;
@@ -662,7 +663,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         codec.decode(_callParameters->params(), contractAddress, isFreeze);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("setContractStatus") << LOG_KV("address", address)
                            << LOG_KV("isFreeze", isFreeze);
@@ -717,7 +718,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
         codec.decode(_callParameters->params(), contractAddress, status);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("setContractStatus") << LOG_KV("address", address)
                            << LOG_KV("status", std::to_string(status));
@@ -746,8 +747,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
             PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
                                   << LOG_BADGE("ContractAuthMgrPrecompiled")
                                   << LOG_DESC("contract already abolish, should not set any status")
-                                  << LOG_KV("contract", path)
-                                  << LOG_KV("status", statusStr);
+                                  << LOG_KV("contract", path) << LOG_KV("status", statusStr);
             BOOST_THROW_EXCEPTION(
                 protocol::PrecompiledError("Contract already abolish, should not set any status."));
         }
