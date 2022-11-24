@@ -63,7 +63,7 @@ void NodeConfig::loadConfig(
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt, _enforceNoGroupId);
+        loadChainConfig(_pt, true);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
