@@ -1111,12 +1111,18 @@ bool PBFTCacheProcessor::checkAndTryToRecover()
     {
         return false;
     }
+    // the node has already been recovered
+    if (!m_config->timeout())
+    {
+        return false;
+    }
     m_config->resetNewViewState(recoveredView);
     resetCacheAfterViewChange(recoveredView, m_config->committedProposal()->index());
     // clear the recoverReqCache
     m_recoverReqCache.clear();
     m_recoverCacheWeight.clear();
     // try to preCommit/commit after no-timeout
+    // Note: the checkAndPreCommit and checkAndCommit will trigger fast-view-change
     checkAndPreCommit();
     checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("checkAndTryToRecoverView: reachNewView")
