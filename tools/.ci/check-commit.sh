@@ -17,7 +17,7 @@ file_limit=35
 insert_limit=300
 license_line=20
 
-skip_check_words="sync code"
+skip_check_words="sync code|release"
 
 LOG_ERROR() {
     content=${1}
@@ -58,7 +58,7 @@ function check_codeFormat() {
 
 function check_PR_limit() {
     if [ "${PR_TITLE}" != "" ]; then
-        local skip=$(echo ${PR_TITLE} | grep "${skip_check_words}")
+        local skip=$(echo ${PR_TITLE} | grep -iaE "${skip_check_words}")
         if [ ! -z "${skip}" ]; then
             LOG_INFO "sync code PR, skip PR limit check!"
             exit 0
