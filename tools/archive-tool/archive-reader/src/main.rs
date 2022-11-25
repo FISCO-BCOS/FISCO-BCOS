@@ -149,7 +149,7 @@ async fn main() -> tide::Result<()> {
                     .content_type("application/json")
                     .build());
             };
-            if method == "getTransactionReceipt" || method == "getTransactionReceipt" {
+            if method == "getTransactionByHash" || method == "getTransactionReceipt" {
                 let hash = request_json.params.as_array().unwrap()[0].as_str().unwrap();
                 hex_keys = vec![hash.to_string()];
                 keys = vec![table

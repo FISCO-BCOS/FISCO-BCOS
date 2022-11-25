@@ -384,6 +384,12 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
         _onGetBlock(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Wrong argument"), nullptr);
         return;
     }
+    if (((_blockFlag & TRANSACTIONS) != 0) && ((_blockFlag & TRANSACTIONS_HASH) != 0))
+    {
+        LEDGER_LOG(INFO) << "GetBlockDataByNumber, wrong argument, transaction already has hash";
+        _onGetBlock(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Wrong argument"), nullptr);
+        return;
+    }
 
     std::list<std::function<void()>> fetchers;
     auto block = m_blockFactory->createBlock();
@@ -426,7 +432,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 block, _blockNumber, [finally](Error::Ptr&& error) { finally(std::move(error)); });
         });
     }
-    if ((_blockFlag & TRANSACTIONS) != 0)
+    if ((_blockFlag & TRANSACTIONS) != 0 || (_blockFlag & TRANSACTIONS_HASH) != 0)
     {
         ++(*total);
     }
@@ -434,8 +440,8 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     {
         ++(*total);
     }
-
-    if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
+    if (((_blockFlag & TRANSACTIONS) != 0) || ((_blockFlag & RECEIPTS) != 0) ||
+        (_blockFlag & TRANSACTIONS_HASH) != 0)
     {
         fetchers.push_back([this, block, _blockNumber, finally, _blockFlag]() {
             asyncGetBlockTransactionHashes(_blockNumber, [this, _blockFlag, block, finally](
@@ -443,17 +449,23 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                                                              std::vector<std::string>&& hashes) {
                 if (error)
                 {
-                    if (_blockFlag & TRANSACTIONS)
+                    // if flag has both TRANSACTIONS and RECEIPTS, then the finally need to be
+                    // called twice, so has below if logic
+                    if ((_blockFlag & TRANSACTIONS) != 0 || (_blockFlag & TRANSACTIONS_HASH) != 0)
+                    {
                         finally(std::move(error));
-                    if (_blockFlag & RECEIPTS)
+                    }
+                    if ((_blockFlag & RECEIPTS) != 0)
+                    {
                         finally(std::move(error));
+                    }
                     return;
                 }
 
                 LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
 
                 auto hashesPtr = std::make_shared<std::vector<std::string>>(std::move(hashes));
-                if (_blockFlag & TRANSACTIONS)
+                if ((_blockFlag & TRANSACTIONS) != 0)
                 {
                     asyncBatchGetTransactions(
                         hashesPtr, [block, finally](Error::Ptr&& error,
@@ -473,7 +485,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             finally(std::move(error));
                         });
                 }
-                if (_blockFlag & RECEIPTS)
+                if ((_blockFlag & RECEIPTS) != 0)
                 {
                     asyncBatchGetReceipts(
                         hashesPtr, [block, finally](Error::Ptr&& error,
@@ -484,6 +496,17 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             }
                             finally(std::move(error));
                         });
+                }
+                if ((_blockFlag & TRANSACTIONS_HASH) != 0)
+                {
+                    for (auto& hash : *hashesPtr)
+                    {
+                        auto txMeta = m_blockFactory->createTransactionMetaData();
+                        txMeta->setHash(bcos::crypto::HashType(
+                            hash, bcos::crypto::HashType::StringDataType::FromBinary));
+                        block->appendTransactionMetaData(std::move(txMeta));
+                    }
+                    finally(nullptr);
                 }
             });
         });

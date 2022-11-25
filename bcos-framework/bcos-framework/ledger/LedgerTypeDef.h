@@ -28,8 +28,9 @@ using MerkleProof = std::vector<std::pair<std::vector<std::string>, std::vector<
 using MerkleProofPtr = std::shared_ptr<const MerkleProof>;
 
 // get block flag
-constexpr static int32_t FULL_BLOCK = 0xFFFF;
+constexpr static int32_t FULL_BLOCK = 0xFFFE;
 constexpr static int32_t HEADER = 0x0008;
+constexpr static int32_t TRANSACTIONS_HASH = 0x0001;
 constexpr static int32_t TRANSACTIONS = 0x0004;
 constexpr static int32_t RECEIPTS = 0x0002;
 
