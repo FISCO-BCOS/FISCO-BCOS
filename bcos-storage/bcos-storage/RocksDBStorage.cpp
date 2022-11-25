@@ -310,7 +310,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
     std::ignore = param;
     try
     {
-        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number);
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare")
+                                  << LOG_KV("blockNumber", param.number);
         auto start = utcTime();
         {
             std::unique_lock lock(m_writeBatchMutex);
@@ -408,14 +409,15 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 m_writeBatch = nullptr;
             }
             STORAGE_ROCKSDB_LOG(ERROR)
-                << LOG_DESC("asyncPrepare invalidTable") << LOG_KV("number", param.number);
+                << LOG_DESC("asyncPrepare invalidTable") << LOG_KV("blockNumber", param.number);
             callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0, "");
             return;
         }
         auto end = utcTime();
         callback(nullptr, 0, "");
-        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
-                                  << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare finished")
+                                  << LOG_KV("blockNumber", param.number) << LOG_KV("put", putCount)
+                                  << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("time(ms)", end - start)
                                   << LOG_KV("callback time(ms)", utcTime() - end);
@@ -444,7 +446,7 @@ void RocksDBStorage::asyncCommit(
             if (err)
             {
                 STORAGE_ROCKSDB_LOG(WARNING)
-                    << LOG_DESC("asyncCommit failed") << LOG_KV("number", params.number)
+                    << LOG_DESC("asyncCommit failed") << LOG_KV("blockNumber", params.number)
                     << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("time(ms)", utcTime() - start);
                 lock.release();
@@ -456,7 +458,8 @@ void RocksDBStorage::asyncCommit(
     }
     auto end = utcTime();
     callback(nullptr, 0);
-    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit finished")
+                              << LOG_KV("blockNumber", params.number)
                               << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end)
@@ -475,7 +478,7 @@ void RocksDBStorage::asyncRollback(
     }
     auto end = utcTime();
     callback(nullptr);
-    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number)
                               << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", utcTime() - start)
                               << LOG_KV("callback time(ms)", utcTime() - end);
